@@ -22,6 +22,10 @@ Paths are relative to `/home/daylon/projects/canopi`; use them absolute in comma
 - **PRs**: a same-repo PR from main or the v2 branch (PR 33) runs neither workflow; the push run's checks on its head commit show on the PR, so nothing tests v2 merged with main before the merge lands: merge main into v2 and push first.
 - **Packaging targets**: a v2 push packages Linux `.deb` and macOS arm, and adds Windows NSIS and Intel macOS (with their sidecar smoke and Common Controls check) when it changes a packaging input: `Cargo.lock`, a `Cargo.toml`, `rust-toolchain.toml`, `desktop/build.rs`, `desktop/windows-app-manifest.xml`, `desktop/icons/`, the Tauri config, `desktop/binaries/`, the sidecar build or smoke script, `check_windows_manifest.py`, the npm manifests or `.github/`. Main, other same-repo PRs and Release Candidate package all four in every format; fork PRs package nothing.
 
+## Design check
+
+A planned cut or behaviour whose design-check entry says users notice nothing names the screen surfaces it touches (ghosts and previews, Esc layers, field sizes, menus, focus) and gets a live-check scenario; a planned interaction is checked against what that screen draws. Phase 2's audit said P3, P8 and P27 changed nothing visible, and its plan had the overview band-select objects the overview never draws: the user answered seven more decision batches (U35–U40) after the build, each a fix round.
+
 ## Review lenses
 
 Each stream's lens names the resources its code spends (disk space, memory, the executor lane, worker time) and the numerical assumptions it rests on (scale factors, tolerances, units), besides its inputs and states: U-crs stream B had two review rounds and still shipped a too-small free-space check and a zoom that ignored the projection's scale, both found only by the pre-push review.
