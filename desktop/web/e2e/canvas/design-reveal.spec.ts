@@ -128,8 +128,8 @@ test('the transparent chrome of a hidden Design takes no pointer input, even whe
   await openFixture(page)
 
   // The hidden window lasts until the first scene is drawn, too short to sample reliably, so the canvas area is given the
-  // attribute the reveal sets: what is under test is the cascade. Rulers set pointer-events: auto inline, and the probe stands
-  // for chrome whose stylesheet does (the place card row, the map notice's Retry).
+  // attribute the reveal sets: what is under test is the cascade. The probe sets pointer-events: auto inline and stands for
+  // chrome whose stylesheet does (the place card row, the map notice's Retry).
   const takesPointer = await page.evaluate(() => {
     const area = document.querySelector('[data-testid="web-canvas-workspace-surface"]')!.parentElement!
     const probe = document.createElement('div')
