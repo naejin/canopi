@@ -108,9 +108,8 @@ export interface ToolHostDeps {
      *  own element handler. */
     isTextEntryOpen(): boolean
     setTooltip(t: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null): void   // chrome/hover-tooltip.ts
-    /** The handle that holds keyboard focus (HandleLayer.focusedHandle), read when Delete reaches the tool. Optional until
-     *  the session wires it (S1's merge); without it only the last pressed corner is Delete's. */
-    focusedHandle?(): ToolHandleId | null
+    /** The handle that holds keyboard focus (HandleLayer.focusedHandle), read when Delete reaches the tool. */
+    focusedHandle(): ToolHandleId | null
   }
   readonly menu: ContextMenuPort                                // opened only by the host (menuAt)
   readonly focus: CanvasFocusPort                               // ToolEffects.requestFocus

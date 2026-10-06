@@ -73,6 +73,7 @@ describe('SceneInteractionSession', () => {
     createTestSession,
     openContextMenu,
     openContextMenuFromKeyboard,
+    keyCommands,
   } = installSceneInteractionFixture(
     (f) => {
       ({ container, testView, store, events } = f)
@@ -2534,6 +2535,44 @@ describe('SceneInteractionSession', () => {
     expect(container.querySelector('[data-canvas-handle-active="true"]')?.getAttribute('data-canvas-handle')).toBe('vertex:polygon-1:1')
     expect(session.keyboard.command({ kind: 'delete-handle' })).toBe(true)
     expect(store.persisted.zones[0]!.points).toEqual(square)
+    session.dispose()
+  })
+
+  it('Delete on a Tab-focused polygon corner removes that corner, not the last pressed one or the zone; with 3 corners nothing goes', () => {
+    const pentagon = [{ x: 20, y: 20 }, { x: 120, y: 20 }, { x: 140, y: 80 }, { x: 70, y: 130 }, { x: 0, y: 80 }]
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone', locked: false, id: 'polygon-1', name: 'polygon-1', zoneType: 'polygon', rotationDeg: 0,
+        points: pentagon, fillColor: null, notes: null,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, testView)
+    const session = createTestSession(deps)
+    session.setTool('select')
+    events.pointerDown({ x: 70, y: 70 }, { button: 0 })
+    events.pointerUp({ x: 70, y: 70 }, { button: 0 })
+    const corner = (index: number) => container.querySelector<HTMLElement>(`[data-canvas-handle="vertex:polygon-1:${index}"]`)!
+
+    // A press on corner 1 focuses it and makes it the selected corner; Tab then moves focus to corner 3.
+    events.pointerDown({ x: 120, y: 20 }, { button: 0, target: corner(1) })
+    events.pointerUp({ x: 120, y: 20 }, { button: 0 })
+    corner(1).focus()
+    corner(3).focus()
+    events.keyDown({ key: 'Delete', code: 'Delete', target: corner(3) })
+
+    expect(store.persisted.zones).toHaveLength(1)
+    expect(store.persisted.zones[0]!.points).toEqual([pentagon[0], pentagon[1], pentagon[2], pentagon[4]])
+    expect(keyCommands).not.toHaveBeenCalledWith('canvas.deleteSelected')
+
+    corner(0).focus()
+    events.keyDown({ key: 'Delete', code: 'Delete', target: corner(0) })
+    expect(store.persisted.zones[0]!.points).toEqual([pentagon[1], pentagon[2], pentagon[4]])
+
+    // Three corners left: Delete on a corner removes nothing, the zone included.
+    corner(1).focus()
+    events.keyDown({ key: 'Delete', code: 'Delete', target: corner(1) })
+    expect(store.persisted.zones[0]!.points).toEqual([pentagon[1], pentagon[2], pentagon[4]])
+    expect(keyCommands).not.toHaveBeenCalledWith('canvas.deleteSelected')
     session.dispose()
   })
 

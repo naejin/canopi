@@ -9,9 +9,9 @@
 
 import { isEditableTarget } from '../../canvas/runtime/input/editable-target'
 
-/** modal: a modal dialog holds the keys; text: a text field; map: the map host or a non-control inside it, or nothing
- *  focused after a press on the map; other: rail buttons, dock lists, menus, controls inside the map, and nothing focused
- *  after a press anywhere else (or none yet). */
+/** modal: a modal dialog holds the keys; text: a text field; map: the map host, a non-control or a zone corner inside
+ *  it, or nothing focused after a press on the map; other: rail buttons, dock lists, menus, controls inside the map, and
+ *  nothing focused after a press anywhere else (or none yet). */
 export type FocusClass = 'modal' | 'text' | 'map' | 'other'
 
 /** The side-panel dock's root (SidePanelDock) and the phone sheet's (PhoneSheet) carry `data-key-region="dock"`. */
@@ -31,6 +31,11 @@ const CONTROL_SELECTOR = [
   '[role="dialog"]',
   'dialog',
 ].join(',')
+
+/** A zone corner or midpoint dot of the handle layer (canvas/runtime/chrome/handle-layer.ts): a `role="button"` the map
+ *  keeps the keys of, so Delete reaches the Tab-focused corner and Esc and undo still reach the map after a press on one.
+ *  The rotate button stays a control. */
+const MAP_HANDLE_SELECTOR = '[data-canvas-handle]:not([data-canvas-handle-glyph="rotate"])'
 
 /** Roles whose widgets move their own focus or value with the arrows (spec §1.6, "arrow-owning widget"). */
 const ARROW_OWNING_SELECTOR = [
@@ -76,7 +81,8 @@ export function classifyKeyTarget(
   const element = elementOf(target)
   // jsdom leaves isContentEditable undefined on plain elements.
   const text = isEditableTarget(target) === true
-  const control = (element?.closest(CONTROL_SELECTOR) ?? null) !== null
+  const closestControl = element?.closest(CONTROL_SELECTOR) ?? null
+  const control = closestControl !== null && !closestControl.matches(MAP_HANDLE_SELECTOR)
   const unfocused = !element || element === document.body || element === document.documentElement
   const dock = unfocused ? last.inDock : isInDock(element)
   if (modal) return { focus: 'modal', text, unfocused: false, dock }
