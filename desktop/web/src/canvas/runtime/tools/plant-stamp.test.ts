@@ -9,6 +9,7 @@ import {
   type ToolHarnessOptions,
 } from '../../../__tests__/support/tool-harness'
 import { t } from '../../../i18n'
+import { getStratumColor } from '../../plants'
 import type { PlantStampSourceInput } from '../../plant-stamp-source'
 import type { WorldPoint } from '../view/types'
 import type { DraftShape } from './draft'
@@ -204,6 +205,15 @@ describe('Place plants tool', () => {
       // The preview replaces the hover restyle and the plant tooltip.
       expect(h.chrome.tooltip).toBeNull()
       expect(h.store.persisted).toEqual(before)
+    })
+
+    it('the Place plants ghost of a species not in the Design shows its stratum colour', () => {
+      // A Favorite or recent pick: no plant of it in the Design and no species-cache entry, so only the source has its stratum.
+      const h = stampHarness({ ...APPLE, stratum: 'emergent' }, { scale: 10 })
+
+      h.hover({ x: 130, y: 140 })
+
+      expect(ghostPlant(h)?.color).toBe(getStratumColor('emergent'))
     })
 
     it('has no ring without a mature width and no guide to a plant beyond 320 px', () => {

@@ -9,6 +9,7 @@
 // hides when the pointer leaves the map and when the map enters overview.
 
 import type { PlantStampSourceInput } from '../../plant-stamp-source'
+import { speciesPlacementAppearance } from '../species-key'
 import { formatMetricDistance } from '../zone-measurements'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import type { WorldPoint } from '../view/types'
@@ -191,7 +192,11 @@ function previewShapes(ctx: ToolContext, species: PlantStampSourceInput, world: 
     })
   }
 
-  const plant = plantEntityFromStampSource(scene.persisted, species, world, PREVIEW_PLANT_ID)
+  // The ghost takes the species' placement colour: a pick not yet in the Design has no species-cache entry for its stratum.
+  const plant = {
+    ...plantEntityFromStampSource(scene.persisted, species, world, PREVIEW_PLANT_ID),
+    color: speciesPlacementAppearance(scene.persisted, { canonicalName: species.canonical_name, stratum: species.stratum }).color,
+  }
   const nearest = scene.nearestPlant(world)
   if (nearest && view.screenDistance(world, nearest.plant.position) <= NEAREST_PLANT_MAX_SCREEN_PX) {
     const name = scene.plantPresentation(nearest.plant).commonName
