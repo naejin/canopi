@@ -429,7 +429,8 @@ export const SEQUENCES = {
   // 5.5 Touch and trackpad gestures
   E1: seq('E1 One-finger tap', ANDROID, [
     down(100, 100, { pointer: 'touch' }),
-    up(100, 100, { pointer: 'touch' }),
+    move(104, 103, { pointer: 'touch', buttons: 1 }),
+    up(105, 104, { pointer: 'touch' }),
   ]),
   E2: seq('E2 One-finger drag', ANDROID, [
     down(100, 100, { pointer: 'touch' }),
@@ -488,15 +489,6 @@ export const SEQUENCES = {
     gesture('change', 12),
     gesture('change', 20),
     gesture('end', 20),
-  ]),
-  E11: seq('E11 Touch behaves like today', ANDROID, [
-    down(100, 100, { pointer: 'touch', id: 1 }),
-    move(120, 100, { pointer: 'touch', id: 1, buttons: 1 }),
-    down(200, 200, { pointer: 'touch', id: 2 }),
-    move(210, 200, { pointer: 'touch', id: 2, buttons: 1 }),
-    move(140, 100, { pointer: 'touch', id: 1, buttons: 1 }),
-    up(210, 200, { pointer: 'touch', id: 2 }),
-    up(140, 100, { pointer: 'touch', id: 1 }),
   ]),
   E12: seq('E12 iOS gesture events alongside pointers', IOS, [
     down(100, 100, { pointer: 'touch', id: 1 }),

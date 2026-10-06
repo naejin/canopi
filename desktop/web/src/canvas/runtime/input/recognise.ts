@@ -15,7 +15,10 @@
 // held, with the wheel ignored while a pointer rotate lives;
 // a button-less move over owned chrome, the text entry or a handle ends the hover; wheels, over the map or a handle, zoom
 // or pan by the pointing-device setting; a WebKit trackpad twist rotating past 10° as a session of its own; no touch gestures or pen
-// barrel. Touch gestures and the long press arrive in phase 3.
+// barrel. A touch press is held (spec §2.2 "Touch", A2): the host hears nothing until the finger passes 8 px (its press at
+// the down point, then the drag) or lifts (its press and tap at the down point), so a pinch never reaches a tool; a
+// second finger before the slop ends the held press silently, and one after the drag started cancels it ('multitouch');
+// the fingers left resume nothing until every one is up.
 
 import type { CancelReason, Modifiers, PointerKind } from '../interaction-types'
 import { ROTATE_DEG_PER_PX } from '../view/navigation-policy'
@@ -30,8 +33,9 @@ export interface PointerSession {
   readonly role: ButtonRole
   /** 'pending' is a primary press within slop; 'secondary' a secondary press within 3 px (a menu on release, a pan past
    *  it); 'primary' a primary drag past slop; 'pan' a navigation pan; 'rotate' a rotate, which turns the view only once
-   *  `slopPassed` (until then it is pending and silent, and a secondary one still opens the menu on release). */
-  readonly mode: 'pending' | 'secondary' | 'primary' | 'pan' | 'rotate'
+   *  `slopPassed` (until then it is pending and silent, and a secondary one still opens the menu on release); 'held' a
+   *  touch press within its slop, which the host has not heard; 'spent' a finger that does nothing more until it lifts. */
+  readonly mode: 'pending' | 'secondary' | 'primary' | 'pan' | 'rotate' | 'held' | 'spent'
   readonly start: ScreenPoint
   readonly last: ScreenPoint
   readonly slopPassed: boolean
@@ -47,6 +51,9 @@ export interface PointerSession {
   /** The PointerEvent.buttons bit of the button the press holds: the primary one for a consumed Mac Control press. A
    *  navigation or still secondary session whose move lacks it lost its release (spec §2.2 "Drag end"). */
   readonly buttonBit: number
+  /** A held touch press's press, sent when it resolves (past its slop or at its lift); null when the host hears none (an
+   *  overview or Space pan). */
+  readonly heldPress: { readonly target: PressTarget; readonly mods: Modifiers } | null
 }
 
 export interface TouchPair {
@@ -132,10 +139,14 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
   if (input.target.kind === 'owned-text' || input.target.kind === 'owned-chrome' || input.target.kind === 'foreign') return
 
   const live = step.state.sessions.get(input.id)
-  // One pointer session at a time: a second pointer (a second touch) is ignored for the rest of the session.
-  if (step.state.sessions.size > 0 && !live) return
   // A down for a live pointer id: its up was lost. End that session first.
   if (live) endSession(step, live, 'pointercancel')
+  if (input.pointer === 'touch' && input.role === 'primary' && step.state.sessions.size > 0) {
+    otherFinger(step, input)
+    return
+  }
+  // One pointer session at a time: a second pointer is ignored for the rest of the session.
+  if (step.state.sessions.size > 0) return
 
   const clickCount = clickCountOf(step, input, config)
   const { context, held } = step.state
@@ -148,6 +159,7 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
     slopPassed: false,
     clickCount,
     buttonBit: input.ctrlConsumed ? BUTTON_BITS.primary : BUTTON_BITS[input.role],
+    heldPress: null,
   } as const
 
   const pressTarget: PressTarget = input.target.kind === 'handle' ? { kind: 'handle', id: input.target.id } : { kind: 'surface' }
@@ -191,6 +203,18 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
 
   // A primary or middle press is always default-prevented (no text selection, autoscroll or Linux paste) and captured.
   step.effects.push({ kind: 'prevent-default' }, { kind: 'capture', pointerId: input.id })
+  if (input.pointer === 'touch' && input.role === 'primary') {
+    // The finger's press waits for its slop or its lift (A2); a pan of its own starts only past the slop.
+    putSession(step, {
+      ...base,
+      mode: 'held',
+      captured: true,
+      navigation,
+      pressed: false,
+      heldPress: pressed ? { target: pressTarget, mods: input.mods } : null,
+    })
+    return
+  }
   putSession(step, {
     ...base,
     mode: navigation ? 'pan' : 'pending',
@@ -213,10 +237,12 @@ function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void 
   // A navigation or still secondary session whose move lacks its button lost its release (MapLibre's isValidMoveEvent):
   // it ends as a release would, then the host hears the press end. A primary session waits for the next down instead,
   // so a Mac Control-drag is never cut short (spec §2.2 "Drag end").
-  if (session.mode !== 'pending' && session.mode !== 'primary' && (input.buttonMask & session.buttonBit) === 0) {
+  if (session.mode !== 'pending' && session.mode !== 'primary' && session.mode !== 'held' && session.mode !== 'spent'
+    && (input.buttonMask & session.buttonBit) === 0) {
     endWithLostRelease(step, session)
     return
   }
+  if (session.mode === 'spent') return
   // Any other button added or dropped mid-session changes nothing (the session keeps its mode until its up).
   if (session.mode === 'rotate') {
     rotateMove(step, session, input, config.platform)
@@ -231,6 +257,21 @@ function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void 
       { kind: 'pan', phase: 'start', deltaPx: ZERO, source: 'secondary-drag', at: session.start },
       { kind: 'pan', phase: 'move', deltaPx: { x: input.at.x - session.start.x, y: input.at.y - session.start.y }, source: 'secondary-drag', at: input.at },
     )
+    return
+  }
+  if (session.mode === 'held') {
+    if (!slopPassed) return
+    if (session.navigation) {
+      // Overview, the Pan tool or Space: the pan starts at the press, and its first move carries the whole travel so far.
+      putSession(step, { ...session, mode: 'pan', last: input.at, slopPassed: true, heldPress: null })
+      step.gestures.push(
+        { kind: 'pan', phase: 'start', deltaPx: ZERO, source: session.navigation, at: session.start },
+        { kind: 'pan', phase: 'move', deltaPx: { x: input.at.x - session.start.x, y: input.at.y - session.start.y }, source: session.navigation, at: input.at },
+      )
+      return
+    }
+    putSession(step, { ...session, mode: 'primary', last: input.at, slopPassed: true, pressed: true, heldPress: null })
+    step.gestures.push(heldPressOf(session), { kind: 'drag-start', id: session.pointerId, at: input.at, mods: input.mods })
     return
   }
   if (session.mode === 'pan') {
@@ -257,6 +298,14 @@ function up(step: Step, input: RawOf<'up'>, config: RecogniserConfig): void {
   const session = step.state.sessions.get(input.id)
   if (!session) return
   dropSession(step, session)
+  if (session.mode === 'spent') return
+  if (session.mode === 'held') {
+    // A lift within the slop: the press and its tap, both at the down point (A2), unless the host hears none.
+    if (session.heldPress) {
+      step.gestures.push(heldPressOf(session), { kind: 'tap', id: session.pointerId, at: session.start, pointer: session.pointer, mods: input.mods, clickCount: session.clickCount })
+    }
+    return
+  }
   if (session.role === 'secondary' && !session.slopPassed) {
     // A still secondary click: the menu at the release point (convention), Shift or not; overview has none.
     if (step.state.context.mode !== 'overview') step.gestures.push({ kind: 'menu-request', at: input.at, source: 'mouse' })
@@ -400,6 +449,43 @@ function clickCountOf(step: Step, input: RawOf<'down'>, config: RecogniserConfig
   return count
 }
 
+/**
+ * A touch down while another pointer is live (spec §2.2 "Touch"): a second finger on a held press ends it silently, the
+ * host having heard nothing; on a finger past its slop it cancels the drag or pan ('multitouch'). Either way every finger
+ * then does nothing more until it lifts. A third finger, or a finger beside a mouse or pen session, is ignored.
+ */
+function otherFinger(step: Step, input: RawOf<'down'>): void {
+  const others = [...step.state.sessions.values()]
+  const first = others[0]!
+  if (others.length > 1 || first.pointer !== 'touch' || first.mode === 'spent') return
+  if (first.mode !== 'held') endGestures(step, first, 'multitouch')
+  putSession(step, { ...first, mode: 'spent', heldPress: null })
+  // A tap after the pair is a first click.
+  step.state = { ...step.state, lastPrimaryPress: null }
+  step.effects.push({ kind: 'prevent-default' }, { kind: 'capture', pointerId: input.id })
+  putSession(step, {
+    pointerId: input.id,
+    pointer: input.pointer,
+    role: input.role,
+    mode: 'spent',
+    start: input.at,
+    last: input.at,
+    slopPassed: false,
+    captured: true,
+    navigation: null,
+    pressed: false,
+    clickCount: 0,
+    buttonBit: BUTTON_BITS.primary,
+    heldPress: null,
+  })
+}
+
+/** A held touch press as the host hears it once it resolves: at the down point, with the down's modifiers and target. */
+function heldPressOf(session: PointerSession): Gesture {
+  const held = session.heldPress!
+  return { kind: 'press', id: session.pointerId, at: session.start, pointer: session.pointer, mods: held.mods, clickCount: session.clickCount, target: held.target }
+}
+
 function pressOf(input: RawOf<'down'>, target: PressTarget, clickCount: number): Gesture {
   return { kind: 'press', id: input.id, at: input.at, pointer: input.pointer, mods: input.mods, clickCount, target }
 }
@@ -441,6 +527,7 @@ function platformGesture(step: Step, input: RawOf<'platform-gesture'>, config: R
       pressed: false,
       clickCount: 0,
       buttonBit: 0,
+      heldPress: null,
     })
     step.state = { ...step.state, trackpadTwistDeg: 0 }
     return
@@ -522,9 +609,14 @@ function tapOf(session: PointerSession, input: RawOf<'up'>): Gesture {
   }
 }
 
-/** Ends a session without completing it: a pan ends where it is, then the host hears the cancel. */
+/** Ends a session without completing it: a pan ends where it is, then the host hears the cancel. A held touch press or a
+ *  spent finger ends silently: the host heard no press of it. */
 function endSession(step: Step, session: PointerSession, reason: CancelReason): void {
   dropSession(step, session)
+  if (session.mode !== 'held' && session.mode !== 'spent') endGestures(step, session, reason)
+}
+
+function endGestures(step: Step, session: PointerSession, reason: CancelReason): void {
   if (session.mode === 'pan' && session.navigation) step.gestures.push(panEndOf(session))
   // The router restores the camera the rotate started from; the input router does not cancel it on a plain cancel.
   if (session.mode === 'rotate' && session.slopPassed) step.gestures.push(rotateOf(session, 'cancel', session.last, false))

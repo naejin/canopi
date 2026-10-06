@@ -214,6 +214,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _refreshing = false
   /** The pointer of the press being routed whose capture waits for the host's admission (ToolHostDeps.capturePress). */
   private _pressCapture: number | null = null
+  /** The pointer of a press being routed on its own release (a touch tap, held until the lift, A3): its session has
+   *  ended, and the press still runs. */
+  private _pressAtRelease: number | null = null
   /** The map's focus again on the frame after a drop, once the browser's drag end has run (today's). */
   private _dropFocusFrame: number | null = null
   private _disposed = false
@@ -544,10 +547,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     // A press the host hears takes its capture once admitted, before the tool (ToolHostDeps.capturePress), as today's
     // order; a pan's press, which the host never hears, takes it with the rest. The effects before the held capture (the
     // release of the same pointer's session whose up was lost) apply first, so they cannot undo the new press's capture.
-    const pressed = input.kind === 'down'
-      && result.gestures.some((gesture) => gesture.kind === 'press' && gesture.id === input.id)
-      ? input.id
-      : null
+    const press = result.gestures.find((gesture) => gesture.kind === 'press')
+    const pressed = input.kind === 'down' && press?.kind === 'press' && press.id === input.id ? input.id : null
     const heldAt = pressed === null
       ? -1
       : result.effects.findIndex((effect) => effect.kind === 'capture' && effect.pointerId === pressed)
@@ -556,6 +557,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (heldCapture) this._source.apply(result.effects.slice(0, heldAt))
     let outcome: GestureOutcome = {}
     this._pressCapture = heldCapture ? pressed : null
+    this._pressAtRelease = input.kind === 'up' && press?.kind === 'press' ? press.id : null
     try {
       for (const gesture of result.gestures) {
         this._followNavigation(gesture)
@@ -563,10 +565,12 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       }
     } finally {
       this._pressCapture = null
+      this._pressAtRelease = null
     }
     this._source.apply(outcomeEffects(wheel ? [] : effects, outcome))
-    if (outcome.rejectSession && input.kind === 'down') {
-      const rejected = recognise(this._recogniser, { kind: 'reject', t: input.t, id: input.id }, this._config)
+    // A refused press ends its session, whichever input resolved it (a held touch press resolves on a move or an up).
+    if (outcome.rejectSession && press?.kind === 'press') {
+      const rejected = recognise(this._recogniser, { kind: 'reject', t: input.t, id: press.id }, this._config)
       this._recogniser = rejected.state
       this._source.apply(rejected.effects)
     }
@@ -734,7 +738,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       this._pressCapture = null
       this._source.apply([{ kind: 'capture', pointerId }])
     }
-    return this._recogniser.sessions.has(pointerId)
+    return this._recogniser.sessions.has(pointerId) || this._pressAtRelease === pointerId
   }
 
   // ── Keys, the navigation cursor and camera moves ───────────────────────────────────────────────────────────────

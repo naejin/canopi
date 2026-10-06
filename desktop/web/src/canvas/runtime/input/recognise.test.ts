@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Gesture } from './gestures'
 import {
+  ANDROID,
   FOREIGN,
   MAC,
   MAC_GESTURES,
@@ -18,6 +19,7 @@ import {
   keyState,
   lostCapture,
   move,
+  pointerCancel,
   reject,
   runSequence,
   seq,
@@ -34,6 +36,7 @@ function kinds(gestures: readonly Gesture[]): string[] {
 }
 
 const NAVIGATION = new Set(['pan', 'zoom', 'rotate'])
+const NO_MODS = Object.freeze({ shift: false, ctrl: false, alt: false, meta: false })
 
 function expectNoNavigation(gestures: readonly Gesture[]): void {
   expect(gestures.filter((gesture) => NAVIGATION.has(gesture.kind))).toEqual([])
@@ -318,32 +321,55 @@ describe('recognise: 5.4 pen', () => {
 })
 
 describe('recognise: 5.5 touch and trackpad gestures', () => {
-  it('E1 One-finger tap: a tap, no hover left behind', () => {
+  it('E1 One-finger tap: nothing at the down; the press and its tap at the lift, both at the down point (A2); no hover left behind', () => {
     const result = run(SEQUENCES.E1)
-    expect(kinds(result.gestures)).toEqual(['press', 'tap'])
-    expect(result.gestures[0]).toMatchObject({ pointer: 'touch' })
+    expect(result.steps.map((step) => kinds(step.gestures))).toEqual([[], [], ['press', 'tap']])
+    expect(result.gestures).toEqual([
+      { kind: 'press', id: 1, at: { x: 100, y: 100 }, pointer: 'touch', mods: NO_MODS, clickCount: 1, target: { kind: 'surface' } },
+      { kind: 'tap', id: 1, at: { x: 100, y: 100 }, pointer: 'touch', mods: NO_MODS, clickCount: 1 },
+    ])
+    // The finger is held and captured from the down, so its moves reach the map.
+    expect(result.steps[0]!.effects).toEqual([{ kind: 'prevent-default' }, { kind: 'capture', pointerId: 1 }])
   })
 
-  it('E2 One-finger drag: a primary drag, never a pan', () => {
-    expect(kinds(run(SEQUENCES.E2).gestures)).toEqual(['press', 'drag-start', 'drag-move', 'drag-move', 'drag-end'])
+  it('E2 One-finger drag: nothing until 8 px, then the press at the down point and the drag, never a pan', () => {
+    const result = run(SEQUENCES.E2)
+    expect(result.steps.map((step) => kinds(step.gestures))).toEqual([[], ['press', 'drag-start'], ['drag-move'], ['drag-move'], ['drag-end']])
+    expect(result.gestures[0]).toMatchObject({ kind: 'press', at: { x: 100, y: 100 } })
+    const slow = run(seq('a slow finger', ANDROID, [
+      down(100, 100, { pointer: 'touch' }),
+      move(107, 100, { pointer: 'touch', buttons: 1 }),
+      move(108, 100, { pointer: 'touch', buttons: 1 }),
+    ]))
+    expect(slow.steps.map((step) => kinds(step.gestures))).toEqual([[], [], ['press', 'drag-start']])
+    expect(slow.gestures[1]).toMatchObject({ kind: 'drag-start', at: { x: 108, y: 100 } })
   })
 
   it('E3 Browser steals the touch: cancelled, no half band committed', () => {
     const result = run(SEQUENCES.E3)
-    expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-move', 'cancel'])
+    expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'cancel'])
     expect(result.gestures.at(-1)).toEqual({ kind: 'cancel', reason: 'pointercancel' })
+    // A finger the browser takes before its slop: the host heard nothing, so nothing ends.
+    const early = run(seq('stolen early', ANDROID, [down(100, 100, { pointer: 'touch' }), pointerCancel({ pointer: 'touch' })]))
+    expect(early.gestures).toEqual([])
+    expect(early.state.sessions.size).toBe(0)
   })
 
-  it('E4 Two fingers: the second touch is ignored and the first draws', () => {
+  it('E4 Two fingers: a second finger before the slop sends the host nothing; the fingers resume nothing', () => {
     const result = run(SEQUENCES.E4)
-    expectNoNavigation(result.gestures)
-    expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-move', 'drag-end'])
-    expect(result.gestures.every((gesture) => !('id' in gesture) || gesture.id === 1)).toBe(true)
+    expect(result.gestures.filter((gesture) => !NAVIGATION.has(gesture.kind))).toEqual([])
+    // The second finger is captured too, and both lifts end their sessions.
+    expect(result.steps[1]!.effects).toEqual([{ kind: 'prevent-default' }, { kind: 'capture', pointerId: 2 }])
+    expect(result.state.sessions.size).toBe(0)
   })
 
-  it('E5 Second finger after a drag started: ignored; the drag continues', () => {
+  it('E5 Second finger after a drag started: the drag is cancelled (multitouch), and nothing resumes', () => {
     const result = run(SEQUENCES.E5)
-    expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-move', 'drag-move', 'drag-move', 'drag-end'])
+    expect(result.steps.map((step) => kinds(step.gestures))).toEqual([
+      [], ['press', 'drag-start'], ['drag-move'], ['drag-move'], ['cancel'], [], [], [], [],
+    ])
+    expect(result.gestures.at(-1)).toEqual({ kind: 'cancel', reason: 'multitouch' })
+    expect(result.state.sessions.size).toBe(0)
   })
 
   it('E6 Long press on Android: no menu before phase 3 (the native contextmenu opens nothing), a tap', () => {
@@ -443,24 +469,19 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
     expect(pressDuringTwist.steps[2]!.effects).toEqual([])
   })
 
-  it('E11 Touch behaves like today: a primary drag; the second touch is ignored; no long press', () => {
-    const result = run(SEQUENCES.E11)
-    expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-move', 'drag-end'])
-  })
-
-  it('E12 iOS gesture events alongside pointers: one source of truth, the first pointer; gesture events prevented', () => {
+  it('E12 iOS gesture events alongside pointers: one source of truth, the pointers; gesture events prevented', () => {
     const result = run(SEQUENCES.E12)
-    expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-end'])
+    expect(result.gestures.filter((gesture) => !NAVIGATION.has(gesture.kind))).toEqual([])
+    expect(result.gestures.some((gesture) => gesture.kind === 'rotate' && gesture.source === 'trackpad-twist')).toBe(false)
     for (const index of [2, 3, 6]) expect(result.steps[index]!.effects).toEqual([{ kind: 'prevent-default' }])
   })
 
   it.each([
     ['Plant stamp', SEQUENCES.E13_PLANT_STAMP],
     ['Polygon', SEQUENCES.E13_POLYGON],
-  ])('E13 Press-acting tools under a pinch (%s): the first finger presses (today), the second is ignored', (_tool, sequence) => {
+  ])('E13 Press-acting tools under a pinch (%s): no press reaches the host', (_tool, sequence) => {
     const result = run(sequence)
-    expectNoNavigation(result.gestures)
-    expect(kinds(result.gestures)).toEqual(['press', 'drag-start'])
+    expect(result.gestures.filter((gesture) => !NAVIGATION.has(gesture.kind))).toEqual([])
   })
 
   it('E14 Press-acting tools under a long press: no menu, a press and a tap', () => {
@@ -640,14 +661,22 @@ describe('recognise: 5.7 middle button and Space', () => {
     expect(clicked.gestures.some((gesture) => gesture.kind === 'press' || gesture.kind === 'tap')).toBe(false)
   })
 
-  it.each([
-    ['pen tip', SEQUENCES.G8_PEN],
-    ['touch', SEQUENCES.G8_TOUCH],
-  ])('G8 Pan tool, %s drag: a primary-drag pan; the press ends with cancel(navigate)', (_pointer, sequence) => {
-    const result = run(sequence)
+  it('G8 Pan tool, pen tip drag: a primary-drag pan; the press ends with cancel(navigate)', () => {
+    const result = run(SEQUENCES.G8_PEN)
     expect(kinds(result.gestures)).toEqual(['press', 'pan:start', 'pan:move', 'pan:move', 'pan:end', 'cancel'])
     expect(pansOf(result.gestures)[0]!.source).toBe('primary-drag')
     expect(result.gestures.at(-1)).toEqual({ kind: 'cancel', reason: 'navigate' })
+  })
+
+  it('G8 Pan tool, touch drag: past 8 px a primary-drag pan whose first move carries the whole travel; no press (A2)', () => {
+    const result = run(SEQUENCES.G8_TOUCH)
+    expect(result.steps.map((step) => kinds(step.gestures))).toEqual([[], ['pan:start', 'pan:move'], ['pan:move'], ['pan:end']])
+    const pans = pansOf(result.gestures)
+    expect(pans[0]).toMatchObject({ source: 'primary-drag', at: { x: 100, y: 100 } })
+    expect(pans[1]!.deltaPx).toEqual({ x: 20, y: 10 })
+    // A still Pan-tool tap reaches the host as a press and a tap at the lift.
+    const tapped = run(seq('Pan-tool touch tap', ANDROID, [down(100, 100, { pointer: 'touch' }), up(102, 101, { pointer: 'touch' })], { tool: 'hand' }))
+    expect(tapped.steps.map((step) => kinds(step.gestures))).toEqual([[], ['press', 'tap']])
   })
 
   it('G9 Shift+middle-drag rotates: nothing until 3 px, then +16° at 20 px, measured from the press', () => {
@@ -801,6 +830,23 @@ describe('recognise: sessions', () => {
     expect(result.steps.map((step) => kinds(step.gestures))).toEqual([
       ['hover'], ['hover-end'], ['hover-end'], ['hover-end'], ['hover'],
     ])
+  })
+
+  it('a 7 px finger jitter is a tap at the down point; 8 px starts a drag', () => {
+    const jitter = run(seq('touch jitter', ANDROID, [
+      down(100, 100, { pointer: 'touch' }),
+      move(107, 100, { pointer: 'touch', buttons: 1 }),
+      move(100, 107, { pointer: 'touch', buttons: 1 }),
+      up(104, 104, { pointer: 'touch' }),
+    ]))
+    expect(kinds(jitter.gestures)).toEqual(['press', 'tap'])
+    expect(jitter.gestures[1]).toMatchObject({ kind: 'tap', at: { x: 100, y: 100 } })
+    const dragged = run(seq('touch drag', ANDROID, [
+      down(100, 100, { pointer: 'touch' }),
+      move(108, 100, { pointer: 'touch', buttons: 1 }),
+      up(108, 100, { pointer: 'touch' }),
+    ]))
+    expect(kinds(dragged.gestures)).toEqual(['press', 'drag-start', 'drag-end'])
   })
 
   it('a 2 px mouse or pen jitter is a tap; 3 px starts a drag', () => {

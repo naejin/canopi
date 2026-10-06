@@ -1,0 +1,144 @@
+// The canvas interaction end to end through the session with touch input (canvas v2 phase 3, spec §2.2 "Touch" and
+// §3.4): the recogniser holds every touch press until 8 px, the lift or 500 ms, so a tap acts at the lift at the down
+// point and a pinch never reaches a tool. Real tools, the real recogniser and the real DOM source, in jsdom.
+// Shared fakes, helpers and fixture: support/canvas-interaction-setup.ts.
+import { beforeEach, describe, expect, it } from 'vitest'
+import { selectPlantStampSource } from '../canvas/plant-stamp-source'
+import { currentCanvasSelection } from '../canvas/session-state'
+import type { SceneStore } from '../canvas/runtime/scene'
+import type { ScenePoint } from '../canvas/runtime/scene'
+import type {
+  SceneInteractionSession,
+  SceneInteractionSessionDeps,
+} from '../canvas/runtime/interaction-session'
+import { createRecordingRenderer, type RecordingRenderer } from './support/recording-renderer'
+import type { SceneInteractionEventHarness } from './support/canvas-interaction-events'
+import type { TestView } from './support/test-view'
+import {
+  createInteractionDeps,
+  installSceneInteractionFixture,
+  makePlant,
+  plantTarget,
+} from './support/canvas-interaction-setup'
+import './support/camera-tolerance'
+
+describe('SceneInteractionSession: touch', () => {
+  let container: HTMLDivElement
+  let testView: TestView
+  let store: SceneStore
+  let events: SceneInteractionEventHarness
+  let renderer: RecordingRenderer
+
+  const fixture = installSceneInteractionFixture(
+    (f) => {
+      ({ container, testView, store, events } = f)
+    },
+    () => ({ events }),
+  )
+
+  beforeEach(() => {
+    renderer = createRecordingRenderer()
+  })
+
+  function createTestSession(deps: SceneInteractionSessionDeps): SceneInteractionSession {
+    return fixture.createTestSession({ ...deps, renderer })
+  }
+
+  /** A finger, as a browser sends it: pointerType touch, the primary button, contact while it moves. */
+  const finger = (id: number, timeStamp?: number) => ({ pointerType: 'touch', pointerId: id, isPrimary: id === 1, timeStamp })
+  const touchDown = (at: ScenePoint, id = 1, timeStamp?: number) => events.pointerDown(at, { ...finger(id, timeStamp), button: 0, buttons: 1 })
+  const touchMove = (at: ScenePoint, id = 1, timeStamp?: number) => events.pointerMove(at, { ...finger(id, timeStamp), button: -1, buttons: 1 })
+  const touchUp = (at: ScenePoint, id = 1, timeStamp?: number) => events.pointerUp(at, { ...finger(id, timeStamp), button: 0, buttons: 0 })
+
+  /** Two fingers spread apart, then lifted: a pinch with nothing armed for it. */
+  function pinch(first: ScenePoint, second: ScenePoint): void {
+    touchDown(first, 1, 0)
+    touchDown(second, 2, 40)
+    touchMove({ x: first.x - 10, y: first.y }, 1, 60)
+    touchMove({ x: second.x + 20, y: second.y }, 2, 70)
+    touchMove({ x: first.x - 20, y: first.y }, 1, 80)
+    touchMove({ x: second.x + 40, y: second.y }, 2, 90)
+    touchUp({ x: second.x + 40, y: second.y }, 2, 100)
+    touchUp({ x: first.x - 20, y: first.y }, 1, 110)
+  }
+
+  /** The polygon draft's corner markers. */
+  function draftCorners(): number {
+    return (renderer.lastDraft()?.shapes ?? []).filter((shape) => shape.kind === 'circle-px').length
+  }
+
+  function choosePlant(): void {
+    selectPlantStampSource({ canonical_name: 'Malus domestica', common_name: 'Apple', stratum: 'high', width_max_m: 4 })
+  }
+
+  it('a touch tap with Plant stamp places one plant at the down point', () => {
+    choosePlant()
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('plant-stamp')
+
+    // A rolling tap: the finger moves 5 px and lifts 4 px from where it landed, within the 8 px touch slop.
+    touchDown({ x: 100, y: 100 })
+    touchMove({ x: 104, y: 103 })
+    touchUp({ x: 103, y: 104 })
+
+    expect(store.persisted.plants).toHaveLength(1)
+    expect(store.persisted.plants[0]!.position).toEqual({ x: 100, y: 100 })
+    session.dispose()
+  })
+
+  it('a finger that slides past 8 px with Plant stamp places one plant at the press point', () => {
+    choosePlant()
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('plant-stamp')
+
+    touchDown({ x: 100, y: 100 })
+    expect(store.persisted.plants).toHaveLength(0)
+    touchMove({ x: 112, y: 100 })
+    touchUp({ x: 112, y: 100 })
+
+    expect(store.persisted.plants.map((plant) => plant.position)).toEqual([{ x: 100, y: 100 }])
+    session.dispose()
+  })
+
+  it('E13 a pinch with Plant stamp places nothing', () => {
+    choosePlant()
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('plant-stamp')
+
+    pinch({ x: 100, y: 100 }, { x: 200, y: 100 })
+
+    expect(store.persisted.plants).toHaveLength(0)
+    session.dispose()
+  })
+
+  it('E13 a pinch during a Polygon draft adds no corner', () => {
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('polygon')
+    events.pointerDown({ x: 20, y: 20 }, { timeStamp: 0 })
+    events.pointerUp({ x: 20, y: 20 }, { timeStamp: 10 })
+    events.pointerDown({ x: 80, y: 20 }, { timeStamp: 1000 })
+    events.pointerUp({ x: 80, y: 20 }, { timeStamp: 1010 })
+    expect(draftCorners()).toBe(2)
+
+    pinch({ x: 150, y: 150 }, { x: 250, y: 150 })
+
+    expect(draftCorners()).toBe(2)
+    expect(store.persisted.zones).toHaveLength(0)
+    session.dispose()
+  })
+
+  it('E13 a pinch from empty ground with Select keeps the selection', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const deps = createInteractionDeps(container, store, testView)
+    const session = createTestSession(deps)
+    session.setTool('select')
+    deps.setSelection([plantTarget('plant-1')])
+
+    pinch({ x: 200, y: 200 }, { x: 300, y: 200 })
+
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
+    session.dispose()
+  })
+})
