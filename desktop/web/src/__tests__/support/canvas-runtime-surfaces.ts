@@ -37,6 +37,7 @@ export function createTestCanvasKeyboardPort(overrides: Partial<CanvasKeyboardPo
     escape: () => {},
     command: () => false,
     keyState: () => 'pass',
+    holdsSelectionDeletes: () => false,
     ...overrides,
   }
 }

@@ -54,6 +54,7 @@ import { DesktopPanelRail } from '../src/components/panels/DesktopPanelRail'
 import { SettingsDialog } from '../src/components/shared/SettingsDialog'
 import { getAppFolders, showAppFolder } from '../src/ipc/settings'
 import { KeyboardShortcutsDialog } from '../src/components/shared/KeyboardShortcutsDialog'
+import type { InputPlatform } from '../src/canvas/runtime/input/platform'
 import { WelcomeScreen } from '../src/components/shared/WelcomeScreen'
 import { DegradedBanner } from '../src/components/shared/DegradedBanner'
 import { BrowserAppShell } from '../src/web/BrowserAppShell'
@@ -109,6 +110,12 @@ const plantDb = params.get('plantDb')
 plantDbStatus.value = plantDb === 'corrupt' || plantDb === 'missing' ? plantDb : 'available'
 // `bearing=30` turns the map 30° clockwise from north once the Design is fitted (compass, turned grid).
 const requestedBearing = Number(params.get('bearing') ?? 0)
+// `platform=mac|linux`: F1 (Help › Keyboard shortcuts) lists the gestures as on a Mac whose WebKit delivers gesture
+// events (Control-click, the trackpad twist), or as on Linux with Desktop's pinch note. Only F1 reads it.
+const requestedPlatform = params.get('platform')
+const shortcutsPlatform: Pick<InputPlatform, 'os' | 'gestureEvents'> | undefined = requestedPlatform === 'mac'
+  ? { os: 'mac', gestureEvents: true }
+  : requestedPlatform === 'linux' ? { os: 'linux', gestureEvents: false } : undefined
 const bearingDeg = Number.isFinite(requestedBearing) ? requestedBearing : 0
 
 const workspaceSurfaces: WorkspaceSurfaces = edition === 'web'
@@ -261,7 +268,13 @@ function GalleryDesktopFrame() {
     {selectedSurface.value === 'workspace' && <DesktopPanelRail />}
     {selectedSurface.value === 'workspace' && <WorkspaceDialogs />}
     <SettingsDialog folders={{ load: getAppFolders, show: showAppFolder }} />
-    {keyboardShortcutsDialogOpen.value && <KeyboardShortcutsDialog menus={appCommandGraphChromeProjection.value.menus} />}
+    {keyboardShortcutsDialogOpen.value && (
+      <KeyboardShortcutsDialog
+        menus={appCommandGraphChromeProjection.value.menus}
+        platform={shortcutsPlatform}
+        linuxPinchNote={shortcutsPlatform?.os === 'linux'}
+      />
+    )}
   </>
 }
 
@@ -278,7 +291,8 @@ function GalleryWebFrame({ children }: { readonly children: preact.ComponentChil
     </BrowserAppShell>
     <WorkspaceDialogs />
     <SettingsDialog />
-    {keyboardShortcutsDialogOpen.value && <KeyboardShortcutsDialog menus={projection.workspaceMenus} />}
+    {/* Browsers on Linux deliver a trackpad pinch as Ctrl + wheel: no Linux note on the Web Edition. */}
+    {keyboardShortcutsDialogOpen.value && <KeyboardShortcutsDialog menus={projection.workspaceMenus} platform={shortcutsPlatform} />}
   </>
 }
 

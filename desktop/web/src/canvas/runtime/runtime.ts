@@ -341,9 +341,8 @@ export interface CanvasKeyboardPort {
   keyState(k: CanvasKeyState): CanvasKeyVerdict
   /** A key that deletes the selection (Delete, Backspace's fallback, Ctrl+X) runs nothing while this holds (U33,
    *  canopi-f47t.21): a live pointer session, or a tool transient (a draft, a Plant a row source, Place plants' waiting
-   *  point, a held stamp pick; the re-origin hold's, an open note entry included). Absent: nothing holds them (a port
-   *  before an interaction session exists). */
-  holdsSelectionDeletes?(): boolean
+   *  point, a held stamp pick; the re-origin hold's, an open note entry included). */
+  holdsSelectionDeletes(): boolean
   readonly host: HTMLElement
 }
 export interface CanvasKeyState {

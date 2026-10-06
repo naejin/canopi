@@ -291,8 +291,9 @@ export interface CameraDriverHost {
 
 // canvas/runtime/view/driver-host.ts
 export interface CameraDriverHostOptions {
-  /** The zoom range and overview threshold; the reference latitude is options.plane()'s, rebuilt once per plane. */
-  readonly policy: WorkspaceCameraPolicy
+  /** Default WORKSPACE_MAP_MAX_ZOOM: a test lowers it to compare both drivers at the zoom-in clamp. The navigation policy's
+   *  reference latitude is options.plane()'s, rebuilt once per plane. */
+  readonly maxZoom?: number
   readonly reducedMotion: ReadonlySignal<boolean>   // from phase 1 a live matchMedia signal from app/canvas-runtime/app-adapter.ts
   readonly plane: () => SessionPlane
   readonly screen?: ViewScreen
@@ -321,15 +322,14 @@ The map's `transformConstrain` is an adapter over `constrainCamera`, which needs
 // canvas/runtime/view/navigation-policy.ts  (pure; shared by both drivers)
 
 /**
- * Built by createNavigationPolicy(base, reducedMotion) from today's WorkspaceCameraPolicy (canvas/workspace-camera-policy.ts,
- * kept: pure, and P4 lets view/ import it). The reference latitude turns zooms into px/m (cameraScaleBoundsForPolicy → ViewFrame.scaleBounds).
+ * Built by createNavigationPolicy(referenceLatitudeDeg, reducedMotion) from the workspace camera's limits
+ * (canvas/workspace-camera-policy.ts: pure, and P4 lets view/ import it). The reference latitude turns zooms into px/m (scaleBoundsAt →
+ * ViewFrame.scaleBounds).
  */
 export interface NavigationPolicy {
   readonly referenceLatitudeDeg: number    // the session plane's latitude (the host's, rebuilt once per plane)
   readonly minZoom: number                 // 0
   readonly maxZoom: number                 // 27
-  readonly overviewPixelsPerMetre: number  // 0.1
-  readonly referencePixelsPerMetre: number // 20 px/m = 100 %
   /** prefers-reduced-motion: reduce, a live matchMedia signal made in app/canvas-runtime/app-adapter.ts, declared on canvas/runtime/app-adapter.ts and
    *  passed to createCameraDriverHost; app/saved-views/current-view.ts reads the same source. view/ never calls matchMedia (P4). Flights become jumps while true. */
   readonly reducedMotion: ReadonlySignal<boolean>
@@ -343,7 +343,9 @@ export interface NavigationPolicy {
  * screen only, never on the centre, because MapLibre calls the guard on intermediate (old centre, new zoom) states.
  */
 export function constrainCamera(camera: ViewCamera, screen: ViewScreen, policy: NavigationPolicy): ViewCamera
-export function createNavigationPolicy(base: WorkspaceCameraPolicy, reducedMotion: ReadonlySignal<boolean>): NavigationPolicy
+export function createNavigationPolicy(referenceLatitudeDeg: number, reducedMotion: ReadonlySignal<boolean>): NavigationPolicy
+/** ViewFrame.scaleBounds: the policy's zoom range with the world floor, in px/m at the reference latitude. */
+export function scaleBoundsAt(screen: ViewScreen, policy: NavigationPolicy): { readonly min: number; readonly max: number }
 /** The world floor: log2(hypot(width, height) / 512), so the screen diagonal never exceeds one world (U34). */
 export function worldZoomFloor(screen: ViewScreen): number
 
@@ -455,8 +457,8 @@ export interface TestViewOptions {
   readonly camera?: Partial<ViewCamera>
   /** Default createSessionPlane({ lon: 0, lat: 0 }). */
   readonly plane?: SessionPlane
-  /** The host gives it the plane's latitude. */
-  readonly policy?: WorkspaceCameraPolicy
+  /** The host's zoom-in limit; default WORKSPACE_MAP_MAX_ZOOM. */
+  readonly maxZoom?: number
   readonly insets?: ScreenInsets
 }
 
@@ -1442,9 +1444,9 @@ export function armCanvasTool(
   tool: ToolId,
   options: {
     /** Each caller passes its own: the rail, menus, palette and both editions' keys no longer share one 'command' value. They
-     *  reach arming through shared dispatch, so F threads `from` as an argument through dispatchCanvasCommandIntent,
-     *  CanvasCommandIntentAdapter.selectTool, runCatalogCommand and the projected action(from) to
-     *  app/workspace-commands/canvas-actions.ts. A drop arms in the runtime, with no from. */
+     *  reach arming through shared dispatch, so F threads `from` as an argument through runCatalogCommand and the
+     *  projected action(from) to runCanvasIntent (app/workspace-commands/canvas-actions.ts). A drop arms in the runtime,
+     *  with no from. */
     readonly from: 'rail' | 'menu' | 'palette' | 'panel' | 'card' | 'shortcut' | 'start-card'
     readonly source?: ToolSource
   },

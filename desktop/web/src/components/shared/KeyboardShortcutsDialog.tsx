@@ -112,7 +112,7 @@ export function KeyboardShortcutsDialog({ menus, platform, linuxPinchNote = fals
               {section.rows.map((row) => (
                 <div key={row.id} className={styles.row}>
                   <dt>{row.label}</dt>
-                  <dd><kbd className={styles.key}>{row.shortcut}</kbd></dd>
+                  <dd><kbd className={section.id === 'gestures' ? `${styles.key} ${styles.wraps}` : styles.key}>{row.shortcut}</kbd></dd>
                 </div>
               ))}
             </dl>

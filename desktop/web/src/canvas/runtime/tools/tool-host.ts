@@ -386,7 +386,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       settings: deps.settings,
       snap: (point) => snap(point, false),
       now: () => deps.timers.clock(),
-      focusedHandle: () => deps.chrome.focusedHandle?.() ?? null,
+      focusedHandle: () => deps.chrome.focusedHandle(),
       translate: deps.translate,
     }
   }

@@ -218,6 +218,6 @@ export function createForwardingCanvasKeyboardPort(
     escape: (layer) => current()?.escape(layer),
     command: (c) => current()?.command(c) ?? false,
     keyState: (state) => current()?.keyState(state) ?? 'pass',
-    holdsSelectionDeletes: () => current()?.holdsSelectionDeletes?.() ?? false,
+    holdsSelectionDeletes: () => current()?.holdsSelectionDeletes() ?? false,
   }
 }

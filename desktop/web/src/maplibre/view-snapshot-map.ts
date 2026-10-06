@@ -388,7 +388,8 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
       current.broken = new Error(`The snapshot map cannot place its camera: ${failure.message}`)
       throw current.broken
     }
-    background.update(request.background)
+    // No Retry button here: each capture is one, so a Basemap that failed while offline downloads again (ADR 0004).
+    background.retry(request.background)
     const scenePresentedBefore = sceneLayer.diagnostics.sceneSyncCount
     sceneLayer.setSnapshot(request.scene.build(driver.frames.viewFrame.peek().view))
 

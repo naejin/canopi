@@ -806,6 +806,13 @@ describe('command registry canvas tool switching', () => {
     expect(rotateBy.mock.calls).toEqual([[-1], [1]])
   })
 
+  it('places Open recent right after Open in the File menu', () => {
+    const file = menus().find((menu) => menu.id === 'file')!
+    const ids = file.items.flatMap((entry) => entry.type === 'separator' ? [] : [entry.id])
+    expect(ids[ids.indexOf('file.open') + 1]).toBe('file.openRecent')
+    expect(ids.filter((id) => id === 'file.openRecent')).toHaveLength(1)
+  })
+
   it('marks checkable View items with their state and groups Export, Arrange, Saved views and Background as submenus', () => {
     theme.value = 'dark'
     gridVisible.value = true

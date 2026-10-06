@@ -251,7 +251,7 @@ const DELETES_SELECTION: ReadonlySet<ShellCommandId | CanvasCommandId> = new Set
  *  for it to settle and land after the release, or a tool transient (a draft, a row source, Place plants' waiting point,
  *  a held stamp pick). From any focus, since a canvas row's fallback passes here too. */
 function runSink(deps: KeyRouterDeps, port: CanvasKeyboardPort | null, command: ShellCommandId | CanvasCommandId): boolean {
-  if (DELETES_SELECTION.has(command) && (port?.holdsSelectionDeletes?.() ?? false)) return true
+  if (DELETES_SELECTION.has(command) && (port?.holdsSelectionDeletes() ?? false)) return true
   return deps.commands.run(command)
 }
 

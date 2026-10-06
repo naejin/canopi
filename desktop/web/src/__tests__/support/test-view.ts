@@ -1,8 +1,8 @@
 // __tests__/support/test-view.ts  (test support)
 //
 // createTestView: the one way tests build a camera (spec §1.1b). A driver host starting on a HeadlessCameraDriver, built with the
-// production factories, and the navigation over it. Tweens and the settle run on the window's animation frames and timers: a test
-// that steps time uses Vitest fake timers.
+// production factories, and the navigation over it. The settle runs on the window's timers: a test that steps time uses Vitest
+// fake timers.
 
 import { signal } from '@preact/signals'
 import type { ScenePersistedState } from '../../canvas/runtime/scene'
