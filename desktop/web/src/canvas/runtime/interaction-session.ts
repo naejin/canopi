@@ -491,7 +491,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   private _receive(input: RawInput): void {
     if (this._disposed) return
-    // Every bit the pointer reports, a pen's barrel or eraser that LEGACY ignores as a press included, as today's lens read it.
+    // Every bit the pointer reports, a pen's eraser that no press takes included, as today's lens read it.
     this._buttonHeld = input.kind === 'move' && input.buttonMask !== 0
     try {
       this._dispatch(input)

@@ -40,7 +40,7 @@ export interface PointerSession {
   /** True when a `press` reached the host, which owes it one end: a `tap` within slop, else `cancel('navigate')` for a pan
    *  (the Pan tool's press). */
   readonly pressed: boolean
-  /** The platform's pointerdown `detail`, as delivered (never counted here under LEGACY). */
+  /** The platform's pointerdown `detail`, as delivered (never counted here). */
   readonly clickCount: number
   /** The PointerEvent.buttons bit of the button the press holds: the primary one for a consumed Mac Control press. A
    *  navigation or still secondary session whose move lacks it lost its release (spec §2.2 "Drag end"). */
@@ -116,7 +116,7 @@ export function recognise(
       // The session ends the nudge series (ToolHost.endNudgeSeries); no pointer state changes.
       break
     case 'tick':
-      // Deadlines (the long press, phase 3) are all null under LEGACY.
+      // The one deadline (the long press) is phase 3's; it stays null until then.
       break
   }
   return { state: step.state, gestures: step.gestures, effects: step.effects }

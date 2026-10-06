@@ -1,17 +1,17 @@
 // canvas/runtime/input/dom-input-source.ts
 //
 // Owns every DOM listener for canvas input: the map host's pointer (hover moves included), wheel, drag and focus events,
-// the one document-capture contextmenu listener, WebKit's gesture events (only on a platform that has them), the window blur, the window pointer listeners while it owns a pointer and the copied GeoLibre selection-drag
-// guard on the host (keys are the key router's, app/keyboard). A press it delivers on the map owns that pointer until
-// its release, its cancel or a window blur: only then does it listen on window, and only to that pointer, so presses,
-// moves and releases that start elsewhere in the app reach the page untouched. It turns
-// each event into host-relative, classified fields for `normalise`, hands the raw input to the sink, and applies the
-// effects the sink sends back to the event being handled: prevent-default, stop-propagation, pointer capture, the drop
-// effect. The native contextmenu reaches no sink: the listener only prevents it where a canvas press made it, or over the
-// map (spec §2.2 "Native menu", U34), and the canvas menu opens from the secondary release instead. Detaching releases
-// every capture it still holds. A sink that throws on a press on the map host quarantines that event, then rethrows; on
-// any other event it rethrows and leaves the event to the app. It is the one module of input/ that touches the browser
-// (policy P7); the input core stays pure.
+// the one document-capture contextmenu listener, WebKit's gesture events (only on a platform that has them), the window
+// blur, the window pointer listeners while it owns a pointer and the copied GeoLibre selection-drag guard on the host
+// (keys are the key router's, app/keyboard). A press it delivers on the map owns that pointer until its release, its
+// cancel or a window blur: only then does it listen on window, and only to that pointer, so presses, moves and releases
+// that start elsewhere in the app reach the page untouched. It turns each event into host-relative, classified fields
+// for `normalise`, hands the raw input to the sink, and applies the effects the sink sends back to the event being
+// handled: prevent-default, stop-propagation, pointer capture, the drop effect. The native contextmenu reaches no sink:
+// the listener only prevents it where a canvas press made it, or over the map (spec §2.2 "Native menu", U34), and the
+// canvas menu opens from the secondary release instead. Detaching releases every capture it still holds. A sink that
+// throws on a press on the map host quarantines that event, then rethrows; on any other event it rethrows and leaves
+// the event to the app. It is the one module of input/ that touches the browser (policy P7); the input core stays pure.
 
 import { hasPlantStampDragData, readPlantStampDropSource } from '../../plant-stamp-source'
 import {
