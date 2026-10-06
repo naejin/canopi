@@ -6,25 +6,17 @@
 // 'interaction-object-stamp' edit that selects the copies, while the source is still unlocked on open layers. The ghost of
 // what a press would place follows the pointer from the pick on and stays when the pointer leaves the map; the tool card
 // names the pick. A pick starts at 0, so copies keep their source's orientation like Paste and Duplicate (spec §4.7); `[`
-// and `]` turn it (rotate-held commands), and the tool card shows that turn; Esc leaves for Select at once under LEGACY
-// (spec §3.7). A release and every cancellation (a blur, K again, overview) hide the ghost until the next hover and keep
-// the pick, as today's pointerup and cancellation hid the preview; a re-origin hides it until the next hover (the host).
+// and `]` turn it (rotate-held commands), and the tool card shows that turn. The pick is the tool's transient: it holds
+// re-origin, it keeps Delete and Ctrl+X from deleting the selection, and Esc drops it first, the card asking for a pick
+// again; with nothing held Esc leaves through the Esc chain's tool layer (spec §3.7). A release and every other
+// cancellation (a blur, K again, overview) hide the ghost until the next hover and keep the pick; a re-origin hides it
+// until the next hover (the host).
 
 import type { CanvasStampGuidance } from '../../session-state'
 import type { SceneDesignObjectTarget } from '../scene/design-object-targets'
-import {
-  cloneSceneObjectGroupMembers,
-  resolveSceneObjectGroupMembers,
-  sceneObjectGroupMemberLayerName,
-} from '../scene/group-members'
+import { resolveSceneObjectGroupMembers, sceneObjectGroupMemberLayerName } from '../scene/group-members'
 import { isSceneDesignObjectLocked } from '../scene/locks'
-import type {
-  SceneAnnotationEntity,
-  SceneObjectGroupEntity,
-  ScenePersistedState,
-  ScenePlantEntity,
-  SceneZoneEntity,
-} from '../scene/types'
+import type { ScenePersistedState, ScenePlantEntity } from '../scene/types'
 import {
   createSceneArrangementPlacement,
   type SceneArrangementPlacement,
@@ -34,42 +26,12 @@ import type { WorldPoint } from '../view/types'
 import { stampGhostShapes, stampTemplateAt, turnStampRotation } from './stamp-rotation'
 import type { CanvasTool, HitTarget, ToolContext } from './tool'
 
-interface ObjectStampPlantSource {
-  kind: 'plant'
-  sourceId: string
-  plant: ScenePlantEntity
-  anchorWorld: WorldPoint
+/** The pick: what was pressed, where, and the objects a press places, read once at the pick. */
+interface ObjectStampPick {
+  readonly target: SceneDesignObjectTarget
+  readonly anchorWorld: WorldPoint
+  readonly template: SceneArrangementTemplate
 }
-
-interface ObjectStampZoneSource {
-  kind: 'zone'
-  sourceId: string
-  zone: SceneZoneEntity
-  anchorWorld: WorldPoint
-}
-
-interface ObjectStampAnnotationSource {
-  kind: 'annotation'
-  sourceId: string
-  annotation: SceneAnnotationEntity
-  anchorWorld: WorldPoint
-}
-
-interface ObjectStampGroupSource {
-  kind: 'group'
-  sourceId: string
-  group: SceneObjectGroupEntity
-  plants: ScenePlantEntity[]
-  zones: SceneZoneEntity[]
-  annotations: SceneAnnotationEntity[]
-  anchorWorld: WorldPoint
-}
-
-type ObjectStampSource =
-  | ObjectStampPlantSource
-  | ObjectStampZoneSource
-  | ObjectStampAnnotationSource
-  | ObjectStampGroupSource
 
 const ORIGIN: WorldPoint = Object.freeze({ x: 0, y: 0 })
 
@@ -79,7 +41,7 @@ const SOURCE_LAYER = { plant: 'plants', zone: 'zones', annotation: 'annotations'
 export function createObjectStampTool(): CanvasTool {
   let ctx: ToolContext | null = null
   let placement: SceneArrangementPlacement | null = null
-  let objectStampSource: ObjectStampSource | null = null
+  let pick: ObjectStampPick | null = null
   let rotationDeg = 0
   /** Where the ghost's anchor was last drawn: `[` and `]` redraw it there. */
   let lastAnchor: WorldPoint | null = null
@@ -92,36 +54,39 @@ export function createObjectStampTool(): CanvasTool {
   }
 
   /** A press with nothing picked: `hit` is the host's unfiltered hit under the raw point (today's hitTestTopLevel). */
-  function sampleObjectStampSource(world: WorldPoint, hit: HitTarget | null): void {
+  function pickAt(world: WorldPoint, hit: HitTarget | null): void {
     rotationDeg = 0
     if (hit?.kind !== 'object') return
     const persisted = context().scene.persisted
     if (isSceneDesignObjectLocked(persisted, hit.target)) return
-    const source = objectStampSourceAt(persisted, hit.target, world)
-    if (!source) return
-    objectStampSource = source
+    const picked = objectStampPickAt(persisted, hit.target, world)
+    if (!picked) return
+    pick = picked
     showGhostAt(world)
     publishGuidance()
   }
 
   function placeObjectStamp(anchorWorld: WorldPoint): void {
-    const source = objectStampSource
-    if (!source || !placement || !canUseObjectStampSource(source)) return
+    const held = pick
+    if (!held || !placement || !canPlace(held)) return
     placement.place({
-      template: stampTemplateAt(objectStampArrangementTemplate(source), source.anchorWorld, anchorWorld, rotationDeg),
+      template: stampTemplateAt(held.template, held.anchorWorld, anchorWorld, rotationDeg),
       translateBy: ORIGIN,
       historyType: 'interaction-object-stamp',
       onCommitted: () => showGhostAt(anchorWorld),
     })
   }
 
-  /** Today's check at each placement: the source is not locked now and every layer it adds to is open. */
-  function canUseObjectStampSource(source: ObjectStampSource): boolean {
+  /** The check at each placement: the source is not locked now and every layer it adds to is open. A group resolves its
+   *  picked entity's members against the scene now, so a pick whose members were all removed (an undo) refuses, and only
+   *  the surviving members' layers are checked. */
+  function canPlace(held: ObjectStampPick): boolean {
     const { scene } = context()
     const persisted = scene.persisted
-    if (isSceneDesignObjectLocked(persisted, { kind: source.kind, id: source.sourceId })) return false
-    if (source.kind !== 'group') return scene.isLayerOpenForCreation(SOURCE_LAYER[source.kind])
-    const members = resolveSceneObjectGroupMembers(persisted, source.group)
+    if (isSceneDesignObjectLocked(persisted, held.target)) return false
+    const group = held.template.groups[0]?.entity
+    if (!group) return scene.isLayerOpenForCreation(SOURCE_LAYER[held.target.kind as keyof typeof SOURCE_LAYER])
+    const members = resolveSceneObjectGroupMembers(persisted, group)
     return members.length > 0
       && members.every((member) => scene.isLayerOpenForCreation(sceneObjectGroupMemberLayerName(member)))
   }
@@ -129,12 +94,12 @@ export function createObjectStampTool(): CanvasTool {
   /** Ghosts of what a press would place, the stamp's anchor at `anchorWorld`, turned by the held angle. */
   function showGhostAt(anchorWorld: WorldPoint): void {
     lastAnchor = anchorWorld
-    const source = objectStampSource
-    if (!source) {
+    const held = pick
+    if (!held) {
       hideGhost()
       return
     }
-    const shapes = stampGhostShapes(stampTemplateAt(objectStampArrangementTemplate(source), source.anchorWorld, anchorWorld, rotationDeg))
+    const shapes = stampGhostShapes(stampTemplateAt(held.template, held.anchorWorld, anchorWorld, rotationDeg))
     ghostShown = true
     context().effects.setDraft({ shapes })
   }
@@ -144,34 +109,35 @@ export function createObjectStampTool(): CanvasTool {
     context().effects.setDraft(null)
   }
 
-  function describeSource(): CanvasStampGuidance | null {
-    const source = objectStampSource
-    if (!source) return null
-    const { scene } = context()
-    const plantName = (plant: ScenePlantEntity): string => scene.plantPresentation(plant).commonName
-    if (source.kind === 'plant') {
-      return { kind: 'plant', name: plantName(source.plant), plants: 1, species: 1 }
+  /** The tool card's pick, a plant's name in the scene's current language. */
+  function describePick(): CanvasStampGuidance | null {
+    const held = pick
+    if (!held) return null
+    const plants = held.template.plants.map(({ entity }) => entity)
+    const kind = held.target.kind
+    if (kind === 'plant') {
+      return { kind: 'plant', name: context().scene.plantPresentation(plants[0]!).commonName, plants: 1, species: 1 }
     }
-    if (source.kind === 'group') {
+    if (kind === 'group') {
       return {
         kind: 'group',
-        name: source.group.name?.trim() || null,
-        plants: source.plants.length,
-        species: new Set(source.plants.map((plant) => plant.canonicalName)).size,
+        name: held.template.groups[0]?.entity.name?.trim() || null,
+        plants: plants.length,
+        species: new Set(plants.map((plant) => plant.canonicalName)).size,
       }
     }
-    return { kind: source.kind, name: null, plants: 0, species: 0 }
+    return { kind: kind === 'zone' ? 'zone' : 'annotation', name: null, plants: 0, species: 0 }
   }
 
   function publishGuidance(): void {
     context().effects.setGuidance({
-      stamp: describeSource(),
-      stampRotationDeg: objectStampSource ? rotationDeg : null,
+      stamp: describePick(),
+      stampRotationDeg: pick ? rotationDeg : null,
     })
   }
 
   function clear(): void {
-    objectStampSource = null
+    pick = null
     rotationDeg = 0
     lastAnchor = null
     ghostShown = false
@@ -188,14 +154,14 @@ export function createObjectStampTool(): CanvasTool {
       switch (g.kind) {
         case 'press':
           // Every press acts, so a double-click places twice (today).
-          if (objectStampSource) placeObjectStamp(g.point.snapped)
-          else sampleObjectStampSource(g.point.world, g.hit)
+          if (pick) placeObjectStamp(g.point.snapped)
+          else pickAt(g.point.world, g.hit)
           return 'handled'
         case 'hover':
         case 'drag-start':
         case 'drag-move':
           // While a pick is held the ghost is the hover: the passive hover stays off.
-          if (!objectStampSource) return 'pass'
+          if (!pick) return 'pass'
           showGhostAt(g.point.snapped)
           return 'handled'
         case 'tap':
@@ -211,24 +177,26 @@ export function createObjectStampTool(): CanvasTool {
     },
     command(c) {
       if (c.kind === 'rotate-held') {
-        if (!objectStampSource) return 'pass'
+        if (!pick) return 'pass'
         rotationDeg = turnStampRotation(rotationDeg, c.stepDeg)
         if (lastAnchor) showGhostAt(lastAnchor)
         publishGuidance()
         return 'handled'
       }
       if (c.kind === 'escape') {
-        // Under LEGACY Esc leaves for Select at once, pick and all, even mid-press (spec §3.7; phase 2 drops the pick first).
-        context().effects.requestTool('select')
+        if (!pick) return 'pass'
+        clear()
+        hideGhost()
+        publishGuidance()
         return 'handled'
       }
       return 'pass'
     },
     sceneChanged() {
       // The tool card names the pick in the scene's current language.
-      if (objectStampSource) publishGuidance()
+      if (pick) publishGuidance()
     },
-    hasTransient: () => false,
+    hasTransient: () => pick !== null,
     cancelTransient() {
       // The pick and its angle outlive every cancellation, as today; each hides the ghost until the next hover, as today's
       // cancellation and overview reset hid the preview element.
@@ -241,144 +209,49 @@ export function createObjectStampTool(): CanvasTool {
   }
 }
 
-function objectStampSourceAt(
+/** The pick of `target` pressed at `world`: its objects read once (a plant's copy never shows its name pinned), or null
+ *  for a measurement guide or a group with no members. */
+function objectStampPickAt(
   scene: ScenePersistedState,
   target: SceneDesignObjectTarget,
   world: WorldPoint,
-): ObjectStampSource | null {
+): ObjectStampPick | null {
   const anchorWorld = { x: world.x, y: world.y }
+  const picked = (entries: Partial<SceneArrangementTemplate>): ObjectStampPick => ({
+    target,
+    anchorWorld,
+    template: { plants: [], zones: [], annotations: [], measurementGuides: [], groups: [], ...entries },
+  })
+  const stampedPlant = (plant: ScenePlantEntity) => ({ sourceId: plant.id, entity: { ...plant, pinnedName: false } })
   if (target.kind === 'plant') {
     const plant = scene.plants.find((entry) => entry.id === target.id)
-    return plant ? { kind: 'plant', sourceId: plant.id, plant: clonePlantForObjectStamp(plant), anchorWorld } : null
+    return plant ? picked({ plants: [stampedPlant(plant)] }) : null
   }
   if (target.kind === 'zone') {
     const zone = scene.zones.find((entry) => entry.id === target.id)
-    return zone ? { kind: 'zone', sourceId: zone.id, zone: cloneZoneForObjectStamp(zone), anchorWorld } : null
+    return zone ? picked({ zones: [{ sourceId: zone.id, entity: zone }] }) : null
   }
   if (target.kind === 'annotation') {
     const annotation = scene.annotations.find((entry) => entry.id === target.id)
-    return annotation
-      ? { kind: 'annotation', sourceId: annotation.id, annotation: cloneAnnotationForObjectStamp(annotation), anchorWorld }
-      : null
+    return annotation ? picked({ annotations: [{ sourceId: annotation.id, entity: annotation }] }) : null
   }
   if (target.kind === 'group') {
     const group = scene.groups.find((entry) => entry.id === target.id)
     if (!group) return null
-    const members = cloneGroupMembersForObjectStamp(group, scene)
-    if (members.plants.length + members.zones.length + members.annotations.length === 0) return null
-    return { kind: 'group', sourceId: group.id, group: cloneGroupForObjectStamp(group), ...members, anchorWorld }
+    const plants: SceneArrangementTemplate['plants'][number][] = []
+    const zones: SceneArrangementTemplate['zones'][number][] = []
+    const annotations: SceneArrangementTemplate['annotations'][number][] = []
+    for (const member of resolveSceneObjectGroupMembers(scene, group)) {
+      const plant = member.kind === 'plant' ? scene.plants.find((entry) => entry.id === member.id) : undefined
+      const zone = member.kind === 'zone' ? scene.zones.find((entry) => entry.id === member.id) : undefined
+      const annotation = member.kind === 'annotation' ? scene.annotations.find((entry) => entry.id === member.id) : undefined
+      if (plant) plants.push(stampedPlant(plant))
+      else if (zone) zones.push({ sourceId: zone.id, entity: zone })
+      else if (annotation) annotations.push({ sourceId: annotation.id, entity: annotation })
+    }
+    if (plants.length + zones.length + annotations.length === 0) return null
+    return picked({ plants, zones, annotations, groups: [{ sourceId: group.id, entity: group }] })
   }
   // A measurement guide is not stamped.
   return null
-}
-
-function clonePlantForObjectStamp(plant: ScenePlantEntity): ScenePlantEntity {
-  return {
-    ...plant,
-    pinnedName: false,
-    position: { ...plant.position },
-  }
-}
-
-function cloneZoneForObjectStamp(zone: SceneZoneEntity): SceneZoneEntity {
-  return {
-    ...zone,
-    points: zone.points.map((point) => ({ ...point })),
-  }
-}
-
-function cloneAnnotationForObjectStamp(annotation: SceneAnnotationEntity): SceneAnnotationEntity {
-  return {
-    ...annotation,
-    position: { ...annotation.position },
-  }
-}
-
-function cloneGroupForObjectStamp(group: SceneObjectGroupEntity): SceneObjectGroupEntity {
-  return {
-    ...group,
-    members: cloneSceneObjectGroupMembers(group.members),
-  }
-}
-
-function cloneGroupMembersForObjectStamp(
-  group: SceneObjectGroupEntity,
-  scene: ScenePersistedState,
-): Pick<ObjectStampGroupSource, 'plants' | 'zones' | 'annotations'> {
-  const plants: ScenePlantEntity[] = []
-  const zones: SceneZoneEntity[] = []
-  const annotations: SceneAnnotationEntity[] = []
-
-  for (const member of resolveSceneObjectGroupMembers(scene, group)) {
-    const plant = member.kind === 'plant' ? scene.plants.find((entry) => entry.id === member.id) : null
-    if (plant) {
-      plants.push(clonePlantForObjectStamp(plant))
-      continue
-    }
-
-    const zone = member.kind === 'zone' ? scene.zones.find((entry) => entry.id === member.id) : null
-    if (zone) {
-      zones.push(cloneZoneForObjectStamp(zone))
-      continue
-    }
-
-    const annotation = member.kind === 'annotation'
-      ? scene.annotations.find((entry) => entry.id === member.id)
-      : null
-    if (annotation) annotations.push(cloneAnnotationForObjectStamp(annotation))
-  }
-
-  return { plants, zones, annotations }
-}
-
-function objectStampArrangementTemplate(source: ObjectStampSource): SceneArrangementTemplate {
-  if (source.kind === 'plant') {
-    return emptySceneArrangementTemplate({
-      plants: [{ sourceId: source.sourceId, entity: clonePlantForObjectStamp(source.plant) }],
-    })
-  }
-  if (source.kind === 'zone') {
-    return emptySceneArrangementTemplate({
-      zones: [{ sourceId: source.sourceId, entity: cloneZoneForObjectStamp(source.zone) }],
-    })
-  }
-  if (source.kind === 'annotation') {
-    return emptySceneArrangementTemplate({
-      annotations: [{
-        sourceId: source.sourceId,
-        entity: cloneAnnotationForObjectStamp(source.annotation),
-      }],
-    })
-  }
-  return {
-    plants: source.plants.map((plant) => ({
-      sourceId: plant.id,
-      entity: clonePlantForObjectStamp(plant),
-    })),
-    zones: source.zones.map((zone) => ({
-      sourceId: zone.id,
-      entity: cloneZoneForObjectStamp(zone),
-    })),
-    annotations: source.annotations.map((annotation) => ({
-      sourceId: annotation.id,
-      entity: cloneAnnotationForObjectStamp(annotation),
-    })),
-    measurementGuides: [],
-    groups: [{
-      sourceId: source.sourceId,
-      entity: cloneGroupForObjectStamp(source.group),
-    }],
-  }
-}
-
-function emptySceneArrangementTemplate(
-  entries: Partial<SceneArrangementTemplate>,
-): SceneArrangementTemplate {
-  return {
-    plants: entries.plants ?? [],
-    zones: entries.zones ?? [],
-    annotations: entries.annotations ?? [],
-    measurementGuides: entries.measurementGuides ?? [],
-    groups: entries.groups ?? [],
-  }
 }

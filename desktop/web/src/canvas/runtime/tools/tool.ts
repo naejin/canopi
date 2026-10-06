@@ -32,23 +32,26 @@ import type { SavedObjectStampPayload } from '../../saved-object-stamp-payload'
 
 /** Modifiers by meaning, resolved per platform and per phase by the ToolHost. */
 export interface ToolModifiers {
-  /** Toggle into the selection: Shift, or mod (Cmd on Mac, Ctrl elsewhere). */
+  /** Toggle into the selection: Shift, Ctrl or Cmd (a Mac Ctrl press is a right-click and never reaches a tool). */
   readonly additive: boolean
-  /** Remove from the selection: Alt (phase 2). */
+  /** Remove from the selection: Alt. */
   readonly subtractive: boolean
-  /** Shift. Every phase: Polygon and Plant a row 45° steps; the rotate handle's 15° steps from the press angle. Phase 2 adds square/circle for Rectangle and Ellipse and 45° screen steps for Line and Measure. */
+  /** Shift: 45° screen steps for Polygon, Plant a row, Line and Measure; a square or a circle for Rectangle and Ellipse;
+   *  the rotate handle's 15° steps from the press angle, and every handle drag. */
   readonly constrain: boolean
-  /** Plant a row only. LEGACY/ROTATION: Shift. Phase 2: mod held during the drag. */
+  /** Plant a row only: Ctrl or Cmd held (on every OS). */
   readonly noSnap: boolean
 }
 
 export interface ToolPoint {
   readonly world: WorldPoint       // raw plane metres (for a tool with clampsToView, from the screen point clamped to the view)
-  /** world snapped to grid and guides without the constraint: Polygon's close test under LEGACY (today snap(raw)). Equals world when snap is off. */
+  /** world snapped to the grid without the constraint: Polygon's close test. Equals world when snap is off. */
   readonly free: WorldPoint
   /** world after the tool's constraint (CanvasTool.constraint, Shift): 'direction' turns origin → point to the step and keeps the length; 'rotation-delta' turns the point about the pivot so the angle since the press is a step multiple. Equals world when none applies. */
   readonly constrained: WorldPoint
-  /** Grid and guides on world axes (user). Order per §2.3: LEGACY and ROTATION keep today's (Polygon snaps, then constrains; a Plant a row Shift is also no-snap); V2 constrains, then snaps the length along the ray. Equals constrained when snap is off, noSnap is held or the constraint is 'rotation-delta'. */
+  /** The grid on world axes (user); under a 'direction' constraint the constraint wins and the length along its ray is
+   *  rounded to the grid interval (spec §2.3, one order for every tool). Equals constrained when snap is off, noSnap is
+   *  held or the constraint is 'rotation-delta'. */
   readonly snapped: WorldPoint
   readonly modifiers: ToolModifiers
   readonly pointer: PointerKind
@@ -67,6 +70,11 @@ export interface HitFilter {
   /** hitAt: answers only the nearest zone edge within this many CSS px ("Turn view to this edge", spec §4.16), converted at
    *  the frame's pixelsPerMetre. hitAt only: a band has no tolerance. */
   readonly toleranceScreenPx?: number
+  /** hitAt: when nothing else hits, the topmost zone whose fill holds the point (or its group). Read only by Select and the
+   *  overview selector (spec §3.2); plain hitAt callers (stamp pick, hover, menu target) keep outline hits. */
+  readonly fill?: true
+  /** Overview hides plants: hitAt and hitInQuad skip them and every group with a plant member (spec §3.2). */
+  readonly overview?: true
 }
 /** The selection read model: today's CanvasDesignObjectSelectionModel (canvas/runtime/runtime.ts:48), unchanged. */
 export type SelectionReadModel = CanvasDesignObjectSelectionModel
@@ -106,7 +114,8 @@ export type ToolGesture =
   | { readonly kind: 'press'; readonly point: ToolPoint; readonly hit: HitTarget | null; readonly clickCount: number }
   | { readonly kind: 'tap'; readonly point: ToolPoint; readonly hit: HitTarget | null; readonly clickCount: number }
   | { readonly kind: 'drag-start' | 'drag-move' | 'drag-end'; readonly point: ToolPoint; readonly start: ToolPoint; readonly startHit: HitTarget | null }
-  | { readonly kind: 'handle-drag'; readonly phase: 'start' | 'move' | 'end'; readonly handle: ToolHandleId; readonly point: ToolPoint; readonly start: ToolPoint }
+  /** clickCount: the press's (a double-click on a polygon's edge midpoint adds a corner), carried by every phase. */
+  | { readonly kind: 'handle-drag'; readonly phase: 'start' | 'move' | 'end'; readonly handle: ToolHandleId; readonly point: ToolPoint; readonly start: ToolPoint; readonly clickCount: number }
   | { readonly kind: 'cancel'; readonly reason: CancelReason }
 // Drops are not tool gestures: the host's shared drop handler serves every tool (§1.4).
 
@@ -165,7 +174,9 @@ export interface ToolEffects {
   /** History-free, dirty-free selection: click, band, clearing (today's session setSelection; a transaction's setSelection records an undo step). */
   setSelection(targets: readonly SceneDesignObjectTarget[]): void
   setDraft(draft: DraftPresentation | null): void           // world-space; drawn by the renderer
-  setHandles(handles: readonly ToolHandle[]): void          // DOM handle layer; hit by the source
+  /** DOM handle layer; hit by the source. `active`: the handle the tool marks active (Select's selected corner); the
+   *  host's live handle drag wins over it. */
+  setHandles(handles: readonly ToolHandle[], active?: ToolHandleId | null): void
   setGuidance(guidance: Partial<CanvasToolGuidance> | null): void
   requestTool(id: ToolId): void
   /** Opens the host's text entry; submit runs on Enter and on blur and keeps the field open on 'keep' (a refused commit);
@@ -189,6 +200,8 @@ export interface ToolContext {
   snap(point: WorldPoint): WorldPoint
   /** The host's clock in ms (ToolHostDeps.timers.clock): for double-click and similar windows; tests inject it. */
   now(): number
+  /** The handle that holds keyboard focus now (a tabbed-to zone corner), or null. */
+  focusedHandle(): ToolHandleId | null
   readonly translate: (key: string, options?: Readonly<Record<string, unknown>>) => string
 }
 
@@ -215,6 +228,9 @@ export interface CanvasTool {
   /** A camera frame on which the host re-emitted nothing (the pointer off the map): rebuild a draft whose look depends on the
    *  scale, such as the polygon's edge chips hidden below 36 px (today's refreshViewportDependent). */
   viewChanged?(): void
+  /** True when the draft can finish now (a polygon with 3 or more corners): the canvas menu then leads with "Finish
+   *  shape", which sends the tool 'confirm'. */
+  canFinish?(): boolean
   /** True while the tool holds a draft, pick, row source or Place plants' waiting point: Esc drops it first unless
    *  `escapeLeaves`, and it holds re-origin (§4.19). */
   hasTransient(): boolean

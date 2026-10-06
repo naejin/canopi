@@ -63,12 +63,13 @@ export interface DomInputSource {
  * app's CanvasContextMenuRequest (canvas/runtime/app-adapter.ts: anchor, world, retargeted selection, commands,
  * placePlantsAt, saveSelectionAsObjectStamp, returnFocus) and hands it to CanvasRuntimeAppAdapter.contextMenu.
  * The host fills the optional entries from its hit and tool state, and the controller carries them onto the request
- * (CanvasContextMenuRequest.turnViewToEdge). finishShape joins in phase 2 with its first caller; there is no highlightEdge (U4).
+ * (CanvasContextMenuRequest.finishShape, .turnViewToEdge); there is no highlightEdge (U4).
  */
 export interface ContextMenuPort {
   open(request: {
     readonly at: WorldPoint | 'selection'
     readonly screen: ScreenPoint | null
+    readonly finishShape?: () => void                           // the armed tool can finish its draft (CanvasTool.canFinish)
     readonly turnViewToEdge?: () => void                        // a zone-edge hit within the source's tolerance (§4.16)
   }): void
   close(): void
@@ -108,6 +109,9 @@ export interface ToolHostDeps {
      *  own element handler. */
     isTextEntryOpen(): boolean
     setTooltip(t: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null): void   // chrome/hover-tooltip.ts
+    /** The handle that holds keyboard focus (HandleLayer.focusedHandle), read when Delete reaches the tool. Optional until
+     *  the session wires it (S1's merge); without it only the last pressed corner is Delete's. */
+    focusedHandle?(): ToolHandleId | null
   }
   readonly menu: ContextMenuPort                                // opened only by the host (menuAt)
   readonly focus: CanvasFocusPort                               // ToolEffects.requestFocus
@@ -176,8 +180,9 @@ export interface ToolHost {
   rawPress(button: 'primary' | 'secondary' | 'middle', target: TargetClass, pointerId?: number): void
   /**
    * Where the pointer is during a pointer-source pan (the router, from the pan's `at`): updates the host's stored resting
-   * pointer and emits nothing; the next camera frame re-emits at the updated point, so a ghost stays under the pointer (today
-   * it keeps its world point). Wheel and key pans leave the resting pointer where it is. null: no pointer rests on the map.
+   * pointer and re-emits there at once, as each camera frame does, so a draft or a ghost stays under the pointer whatever
+   * the order of the pan's frame and this call. Wheel and key pans leave the resting pointer where it is. null: no pointer
+   * rests on the map.
    */
   notePointer(screen: ScreenPoint | null): void
   /** Scene or selection changed outside a tool call (select all, undo, menu commands, nudges): refresh handles and decorations. */

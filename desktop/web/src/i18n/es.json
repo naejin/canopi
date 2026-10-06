@@ -166,6 +166,7 @@
       "setUnitCost": "Fijar el coste unitario…",
       "placePlantsHere": "Colocar plantas aquí",
       "turnViewToEdge": "Girar la vista a este borde",
+      "finishShape": "Terminar la forma",
       "renameZone": "Renombrar zona…"
     },
     "rotationHandle": {
@@ -173,6 +174,9 @@
     },
     "zoneControlPoint": {
       "label": "Punto de control de zona {{index}}"
+    },
+    "zoneEdgeMidpoint": {
+      "label": "Añadir una esquina en el lado {{index}}"
     },
     "guideEnd": {
       "label": "Extremo de la guía de medida {{index}}"
@@ -776,22 +780,28 @@
       "escStopPlacing": "Esc para dejar de colocar",
       "escCancel": "Esc para cancelar",
       "escSelect": "Esc para volver a Seleccionar",
-      "selectHint": "Arrastra para seleccionar · Mayús-clic añade · Espacio + arrastrar o H desplaza el mapa · la rueda hace zoom",
-      "selectHintPan": "Arrastra para seleccionar · Mayús-clic añade · Espacio + arrastrar o H desplaza el mapa · pellizcar hace zoom",
+      "escClearRow": "Esc para borrar la fila",
+      "escClearStamp": "Esc para borrar el sello",
+      "selectHint": "Arrastra para seleccionar · Mayús-clic añade · Alt-clic quita · arrastrar con el botón derecho desplaza el mapa · la rueda hace zoom",
+      "selectHintPan": "Arrastra para seleccionar · Mayús-clic añade · Alt-clic quita · dos dedos desplazan el mapa · pellizcar hace zoom",
+      "panHint": "Arrastra para mover el mapa",
       "stampPick": "Haz clic en una planta, zona, nota o grupo para copiarlo",
       "stampPlace": "haz clic para colocar",
       "stampZone": "Zona",
       "stampGroup": "Grupo",
-      "polygon": "Haz clic para añadir vértices. Haz clic en el primer vértice o pulsa Intro para terminar.",
+      "polygon": "Haz clic para añadir vértices. Haz clic en el primer vértice, haz doble clic o pulsa Intro para terminar.",
       "polygonKeys": "Retroceso quita el último vértice · Mayús mantiene ángulos de 45°",
       "rectangle": "Arrastra sobre el mapa para dibujar el rectángulo.",
+      "rectangleKeys": "Mayús dibuja un cuadrado",
       "ellipse": "Arrastra sobre el mapa para dibujar la elipse.",
+      "ellipseKeys": "Mayús dibuja un círculo",
       "line": "Arrastra sobre el mapa para dibujar la línea.",
+      "lineKeys": "Mayús mantiene ángulos de 45°",
       "textPlace": "Haz clic en el mapa donde va la nota.",
       "textType": "Escribe la nota. Intro para terminar.",
       "textKeys": "Mayús Intro para una línea nueva",
       "measure": "Arrastra de un punto a otro para medir. La línea queda como guía.",
-      "rowKeys": "Mayús mantiene ángulos de 45°",
+      "rowKeys": "Mayús mantiene ángulos de 45° · {{mod}} desactiva el ajuste",
       "plants_one": "{{count, number}} planta",
       "species_one": "{{count, number}} especie",
       "plants_few": "{{count, number}} plantas",

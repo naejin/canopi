@@ -98,6 +98,11 @@ export interface CanvasContextMenuRequest {
    */
   readonly placePlantsAt?: (world: ScenePoint) => void
   /**
+   * Finish shape: present only while the armed polygon's draft has 3 or more corners; the menu's first entry. Finishes
+   * the draft as Enter does.
+   */
+  readonly finishShape?: () => void
+  /**
    * Turn view to this edge: present only when the menu opened on a zone's edge (spec §4.16). Turns the view the smaller
    * way until that edge is level on screen.
    */

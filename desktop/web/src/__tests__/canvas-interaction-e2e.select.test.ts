@@ -2505,6 +2505,62 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('adds a polygon corner from a double-clicked midpoint dot and deletes the last pressed corner, keeping 3', () => {
+    const square = [{ x: 20, y: 20 }, { x: 120, y: 20 }, { x: 120, y: 120 }, { x: 20, y: 120 }]
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone', locked: false, id: 'polygon-1', name: 'polygon-1', zoneType: 'polygon', rotationDeg: 0,
+        points: square, fillColor: null, notes: null,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, testView)
+    const session = createTestSession(deps)
+    session.setTool('select')
+    events.pointerDown({ x: 70, y: 20 }, { button: 0 })
+    events.pointerUp({ x: 70, y: 20 }, { button: 0 })
+
+    const dot = container.querySelector<HTMLElement>('[data-canvas-handle="edge-mid:polygon-1:0"]')!
+    expect(dot.dataset.canvasHandleGlyph).toBe('midpoint')
+    events.pointerDown({ x: 70, y: 20 }, { button: 0, detail: 1, target: dot })
+    events.pointerUp({ x: 70, y: 20 }, { button: 0, detail: 1 })
+    expect(store.persisted.zones[0]!.points).toHaveLength(4)
+    events.pointerDown({ x: 70, y: 20 }, { button: 0, detail: 2, target: dot })
+    events.pointerUp({ x: 70, y: 20 }, { button: 0, detail: 2 })
+    expect(store.persisted.zones[0]!.points).toEqual([square[0], { x: 70, y: 20 }, square[1], square[2], square[3]])
+
+    const corner = container.querySelector<HTMLElement>('[data-canvas-handle="vertex:polygon-1:1"]')!
+    events.pointerDown({ x: 70, y: 20 }, { button: 0, target: corner })
+    events.pointerUp({ x: 70, y: 20 }, { button: 0 })
+    expect(container.querySelector('[data-canvas-handle-active="true"]')?.getAttribute('data-canvas-handle')).toBe('vertex:polygon-1:1')
+    expect(session.keyboard.command({ kind: 'delete-handle' })).toBe(true)
+    expect(store.persisted.zones[0]!.points).toEqual(square)
+    session.dispose()
+  })
+
+  it('leaves the short edges of a selected polygon without midpoint dots until a zoom makes room, and draws dots under the corners', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone', locked: false, id: 'polygon-1', name: 'polygon-1', zoneType: 'polygon', rotationDeg: 0,
+        points: [{ x: 20, y: 20 }, { x: 50, y: 20 }, { x: 50, y: 100 }, { x: 20, y: 100 }], fillColor: null, notes: null,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, testView)
+    const session = createTestSession(deps)
+    session.setTool('select')
+    events.pointerDown({ x: 50, y: 60 }, { button: 0 })
+    events.pointerUp({ x: 50, y: 60 }, { button: 0 })
+    const dots = () => [...container.querySelectorAll<HTMLElement>('[data-canvas-handle-glyph="midpoint"]')]
+      .map((dot) => dot.dataset.canvasHandle).sort()
+    expect(dots()).toEqual(['edge-mid:polygon-1:1', 'edge-mid:polygon-1:3'])
+
+    testView.setViewport({ x: 0, y: 0, scale: 2 })
+    expect(dots()).toEqual(['edge-mid:polygon-1:0', 'edge-mid:polygon-1:1', 'edge-mid:polygon-1:2', 'edge-mid:polygon-1:3'])
+    const corner = container.querySelector<HTMLElement>('[data-canvas-handle="vertex:polygon-1:0"]')!
+    const dot = container.querySelector<HTMLElement>('[data-canvas-handle="edge-mid:polygon-1:0"]')!
+    expect(Number(dot.style.zIndex)).toBeLessThan(Number(corner.style.zIndex))
+    session.dispose()
+  })
+
   it('shows selected polygonal zone edge measurements and area', () => {
     store.updatePersisted((draft) => {
       draft.zones = [{
@@ -2934,14 +2990,15 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('selects Zones by boundary proximity while interior clicks pass through', () => {
+  it('selects a Zone by its outline or a click in its fill, and a drag in its fill bands without moving it', () => {
+    const corners = [
+      { x: 10, y: 10 },
+      { x: 110, y: 10 },
+      { x: 110, y: 90 },
+      { x: 10, y: 90 },
+    ]
     store.updatePersisted((draft) => {
-      draft.zones = [makeRectZone('zone-1', [
-        { x: 10, y: 10 },
-        { x: 110, y: 10 },
-        { x: 110, y: 90 },
-        { x: 10, y: 90 },
-      ])]
+      draft.zones = [makeRectZone('zone-1', corners)]
     })
     const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
@@ -2949,13 +3006,21 @@ describe('SceneInteractionSession', () => {
 
     events.pointerDown({ x: 60, y: 50 }, { button: 0 })
     events.pointerUp({ x: 60, y: 50 }, { button: 0 })
+    expect(currentCanvasSelection.value).toEqual(new Set(['zone-1']))
 
+    events.pointerDown({ x: 200, y: 200 }, { button: 0 })
+    events.pointerUp({ x: 200, y: 200 }, { button: 0 })
     expect(currentCanvasSelection.value).toEqual(new Set())
-    expect(deps.setSelection).not.toHaveBeenCalledWith([zoneTarget('zone-1')])
 
     events.pointerDown({ x: 10, y: 50 }, { button: 0 })
     events.pointerUp({ x: 10, y: 50 }, { button: 0 })
+    expect(currentCanvasSelection.value).toEqual(new Set(['zone-1']))
 
+    // A drag from inside the selected zone's fill bands: the press clears, the band selects what it touches.
+    events.pointerDown({ x: 40, y: 40 }, { button: 0 })
+    events.pointerMove({ x: 70, y: 70 }, { buttons: 1 })
+    events.pointerUp({ x: 70, y: 70 }, { button: 0 })
+    expect(store.persisted.zones[0]!.points).toEqual(corners)
     expect(currentCanvasSelection.value).toEqual(new Set(['zone-1']))
     session.dispose()
   })

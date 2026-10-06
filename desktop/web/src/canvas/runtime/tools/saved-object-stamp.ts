@@ -6,8 +6,8 @@
 // edit that selects the copies, then returns to Select, whose leaving drops the stamp from the read model. Its ghost
 // follows the pointer and stays when the pointer leaves the map. A stamp starts level to the screen (its pick starts at the
 // bearing when it is chosen, spec §4.7) and keeps that ground angle when the view turns, as an Object stamp pick does; `[`
-// and `]` turn it from there (rotate-held commands), and the tool card shows that turn; Esc leaves for Select at once under
-// LEGACY (spec §3.7). A release, another stamp and every cancellation (a blur, the tool armed again, overview) hide the
+// and `]` turn it from there (rotate-held commands), and the tool card shows that turn. The held stamp is no transient: Esc
+// leaves for Select at once through the Esc chain's tool layer (spec §3.7; a one-shot tool, U34). A release, another stamp and every cancellation (a blur, the tool armed again, overview) hide the
 // ghost until the next hover and keep the stamp, as today's pointerup and cancellation hid the preview, and the host hides it
 // on a re-origin until the next hover. The ghosts come from tools/stamp-rotation.ts.
 
@@ -143,11 +143,6 @@ export function createSavedObjectStampTool(): CanvasTool {
         publishGuidance()
         return 'handled'
       }
-      if (c.kind === 'escape') {
-        // Under LEGACY Esc leaves for Select at once, even mid-press (spec §3.7; phase 2 drops the stamp first).
-        context().effects.requestTool('select')
-        return 'handled'
-      }
       return 'pass'
     },
     hasTransient: () => false,
@@ -177,7 +172,7 @@ export function savedObjectStampGhostShapes(
   scene: StampScene,
   stamp: SavedObjectStampPayload,
   at: WorldPoint,
-  rotationDeg = 0,
+  rotationDeg: number,
 ): DraftShape[] | null {
   if (!canPlaceSavedObjectStamp(scene, stamp)) return null
   return stampGhostShapes(stampTemplateAt(savedObjectStampArrangementTemplate(stamp), stamp.anchor, at, rotationDeg))
@@ -193,11 +188,11 @@ export function placeSavedObjectStamp(
   scene: StampScene,
   stamp: SavedObjectStampPayload,
   at: WorldPoint,
-  options: { readonly rotationDeg?: number; readonly onCommitted: () => void },
+  options: { readonly rotationDeg: number; readonly onCommitted: () => void },
 ): void {
   if (!canPlaceSavedObjectStamp(scene, stamp)) return
   createSceneArrangementPlacement({ sceneEdits: edits }).place({
-    template: stampTemplateAt(savedObjectStampArrangementTemplate(stamp), stamp.anchor, at, options.rotationDeg ?? 0),
+    template: stampTemplateAt(savedObjectStampArrangementTemplate(stamp), stamp.anchor, at, options.rotationDeg),
     translateBy: ORIGIN,
     historyType: 'interaction-saved-object-stamp',
     onCommitted: options.onCommitted,

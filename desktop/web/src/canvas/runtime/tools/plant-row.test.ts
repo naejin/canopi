@@ -146,8 +146,10 @@ describe('Plant a row tool', () => {
     h.release({ x: 26, y: 30 })
     expect(added(h)).toEqual([])
 
-    expect(h.host.command({ kind: 'escape' })).toBe('handled')
-    expect(h.toolState.peek()).toBe('select')
+    // Nothing held: the tool's Esc passes, and the chain's tool layer leaves.
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
+    expect(h.host.command({ kind: 'escape' })).toBe('pass')
+    expect(h.toolState.peek()).toBe('plant-spacing')
   })
 
   it('a blur keeps the row source and its preview', () => {
@@ -345,6 +347,19 @@ describe('Plant a row tool', () => {
     expect(end.x - source.x).toBeCloseTo(Math.hypot(31, 12), 6)
   })
 
+  it('Ctrl or Cmd turns snapping off', () => {
+    for (const mods of [{ ctrl: true }, { meta: true }]) {
+      const { h } = rowHarness({ intervalM: 2, snapping: { grid: true } })
+      h.click({ x: 20, y: 30 })
+
+      // Scale 1: the grid is 20 m, so a snapped end would sit at (80, 40); the held key leaves it at the pointer.
+      h.hover({ x: 73, y: 37 }, mods)
+      expect(shapesOf(h, 'polyline')[0]!.points[1]).toEqual({ x: 73, y: 37 })
+      h.hover({ x: 73, y: 37 })
+      expect(shapesOf(h, 'polyline')[0]!.points[1]).toEqual({ x: 80, y: 40 })
+    }
+  })
+
   it('a row of 100 plants commits without confirmation', () => {
     const { h } = rowHarness({ intervalM: 1, plants: [sourcePlant({ x: 10, y: 10 })] })
     h.click({ x: 10, y: 10 })
@@ -455,6 +470,22 @@ describe('Plant a row tool', () => {
     expect(h.renderer.lastDraft()).toBeNull()
     expect(h.record.focus.at(-1)).toBe('map')
     expect(h.toolState.peek()).toBe('plant-spacing')
+  })
+
+  it('an invalid interval at release focuses the spacing field and commits nothing', () => {
+    const { h } = rowHarness({ intervalM: 2 })
+    h.click({ x: 20, y: 30 })
+    const picked = row(h).focusRequest
+    h.host.command({ kind: 'spacing-input', text: '0' })
+
+    // The press commits too, and asks for the field as the release does.
+    h.press({ x: 20, y: 30 })
+    expect(row(h).focusRequest).toBe(picked + 1)
+    h.move({ x: 26, y: 30 })
+    h.release({ x: 26, y: 30 })
+
+    expect(added(h)).toEqual([])
+    expect(row(h)).toMatchObject({ phase: 'row', intervalValid: false, count: 0, focusRequest: picked + 2 })
   })
 
   it('a clamped endpoint stays at the view\'s edge', () => {

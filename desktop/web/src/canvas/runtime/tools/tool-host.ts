@@ -5,13 +5,14 @@
 // and guide snapping, and runs the interceptors (admission, handles, the inspection probe) before the tool; every raw
 // press first commits the nudge series and, as today's pointerdown, closes the menu and moves focus to the map. A drag
 // starts at the press's world point, and every camera frame re-emits the live drag or the resting pointer, which a
-// pointer pan moves (plan §1, exception 1). It holds re-origin while a press, a tool transient or the text entry is open,
-// and a plane change with no pointer resting on the map hides the tool's draft until the next hover, so no tool
-// re-projects a world point it keeps (spec §4.19). The text entry's state is the chrome's, read live. It owns the passive
-// hover, the selection decorations, the arrow-nudge series, transient history and the Esc queries, and merges the
-// tool's draft with its decorations and the drop preview for the renderer. One drop route serves every tool (spec §1.4
-// "Drops"): a species drop places a plant with Place plants' placement, a saved stamp with the saved stamp's, then arms
-// Select. Tools are plain objects listed in tools/registry.ts, which lists every tool id.
+// pointer pan moves (plan §1, exception 1). It holds re-origin while a press, a tool transient or the text entry is
+// open, and a plane change with no pointer resting on the map hides the tool's draft until the next hover, so no tool
+// re-projects a world point it keeps (spec §4.19). In overview a primary press reaches no tool: the host's overview
+// selector (select/overview.ts) selects zones and notes by click and band. The text entry's state is the chrome's, read
+// live. It owns the passive hover, the selection decorations, the arrow-nudge series, transient history and the Esc
+// queries, and merges the tool's draft with its decorations and the drop preview for the renderer. One drop route
+// serves every tool (spec §1.4 "Drops"): a species drop places a plant with Place plants' placement, a saved stamp with
+// the saved stamp's, then arms Select. Tools are plain objects listed in tools/registry.ts, which lists every tool id.
 // The module re-exports createToolScene and builds the context-menu port, so interaction-session.ts imports nothing else
 // from tools/ (P5b).
 
@@ -41,8 +42,9 @@ import { placePlantFromSpecies } from './plant-stamp'
 import { TOOL_REGISTRY } from './registry'
 import { placeSavedObjectStamp, savedObjectStampGhostShapes } from './saved-object-stamp'
 import { bandDraft } from './select/band'
+import { createOverviewSelector } from './select/overview'
 import { selectionScreenHull } from './select/selection-hull'
-import { snapWorldPoint, type SnapSettings } from './snapping'
+import { snapAlongRay, snapWorldPoint, type SnapSettings } from './snapping'
 import type {
   CanvasTool,
   HitTarget,
@@ -86,18 +88,25 @@ const NUDGE_STEP_M = 0.1
 const NUDGE_LARGE_STEP_M = 1
 /** A pause this long ends a nudge series, so its edit commits. */
 const NUDGE_SERIES_IDLE_MS = 800
+/** The tools whose points Shift constrains (spec §2.3); handle drags too. */
+const SHIFT_CONSTRAINS: ReadonlySet<ToolId> = new Set<ToolId>([
+  'polygon', 'plant-spacing', 'line', 'measurement-guide', 'rectangle', 'ellipse',
+])
 /** The drawing tools whose draft chips replace the selected zone's (today both shared one overlay). */
 const ZONE_DRAFT_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>(['line', 'rectangle', 'ellipse', 'polygon'])
 
 /** A press the host routed, from press to release or cancel (today's _pointerGesture). */
 interface LiveGesture {
   readonly id: number
-  readonly kind: 'tool' | 'handle'
+  /** 'overview': a press in overview, which the host's overview selector owns whatever tool is armed (spec §3.2). */
+  readonly kind: 'tool' | 'handle' | 'overview'
   readonly pointer: PointerKind
   /** The press as a world point, converted once at the press, so the drag start stays on the ground (plan §1, exception 1). */
   start: ToolPoint
   readonly startHit: HitTarget | null
   readonly handle: ToolHandleId | null
+  /** The press's click count, carried by a handle drag's every phase. */
+  readonly clickCount: number
   /** Where the pointer last was, re-emitted on a camera frame while the drag is live. */
   lastScreen: ScreenPoint
   lastMods: Modifiers
@@ -148,7 +157,10 @@ export function createContextMenuPort(options: ContextMenuPortOptions): ContextM
       controller.openAtPointer(
         screen,
         target ? selectionModel() : visible ? EMPTY_SELECTION_MODEL : null,
-        request.turnViewToEdge,
+        {
+          ...(request.finishShape ? { finishShape: request.finishShape } : {}),
+          ...(request.turnViewToEdge ? { turnViewToEdge: request.turnViewToEdge } : {}),
+        },
       )
     },
     close: () => controller.close(),
@@ -169,6 +181,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let activeSource: ToolSource | null = null
   let toolDraft: DraftPresentation | null = null
   let toolHandles: readonly ToolHandle[] = NO_HANDLES
+  /** The handle the tool marks active (Select's selected corner). */
+  let toolActiveHandle: ToolHandleId | null = null
   let toolGuidance: Parameters<ToolEffects['setGuidance']>[0] = null
   let live: LiveGesture | null = null
   let lastHover: StillPointer | null = null
@@ -181,6 +195,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let draftHidden = false
   /** What a drop would place, while a panel drag is over the map: a species' band cue or a saved stamp's ghosts. */
   let dropPreview: readonly DraftShape[] | null = null
+  /** The overview selector's band. */
+  let overviewDraft: DraftPresentation | null = null
   let nudging = false
   let nudgeTimer: number | null = null
   let callDepth = 0
@@ -201,6 +217,23 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function frame(): ViewFrame {
     return deps.frames.viewFrame.peek()
   }
+
+  const overviewSelector = createOverviewSelector({
+    scene: deps.scene,
+    get view() {
+      return view
+    },
+    effects: {
+      setSelection(targets) {
+        deps.setSelection(targets)
+        notifySceneChanged()
+      },
+      setDraft(draft) {
+        overviewDraft = draft
+        changed()
+      },
+    },
+  })
 
   const view: ToolView = {
     /** In [0, 360) by the ViewCamera contract, so a tool can store it as a rotation (a note, a saved stamp's pick). */
@@ -311,10 +344,11 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         toolDraft = draft
         changed()
       },
-      setHandles(handles) {
+      setHandles(handles, active = null) {
         // The same handles again (a refresh after a camera frame or a scene change) change nothing and redraw nothing.
-        if (!owns() || sameHandles(toolHandles, handles)) return
+        if (!owns() || (sameHandles(toolHandles, handles) && active === toolActiveHandle)) return
         toolHandles = handles
+        toolActiveHandle = active
         changed()
       },
       setGuidance(guidance) {
@@ -355,6 +389,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       settings: deps.settings,
       snap: (point) => snap(point, false),
       now: () => deps.timers.clock(),
+      focusedHandle: () => deps.chrome.focusedHandle?.() ?? null,
       translate: deps.translate,
     }
   }
@@ -425,14 +460,13 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     return snapWorldPoint(point, noSnap ? NO_SNAP : deps.snapping(), frame().view.pixelsPerMetre)
   }
 
-  /** Modifiers by meaning (spec §2.3, the LEGACY and ROTATION column; phase 2 adds the V2 column). */
+  /** Modifiers by meaning (spec §2.3), read from the event that carries them, with no platform dependency. */
   function resolveModifiers(mods: Modifiers, handleDrag: boolean): ToolModifiers {
-    const shiftConstrains = currentId === 'polygon' || currentId === 'plant-spacing' || handleDrag
     return {
       additive: mods.shift || mods.ctrl || mods.meta,
-      subtractive: false,
-      constrain: mods.shift && shiftConstrains,
-      noSnap: mods.shift && currentId === 'plant-spacing',
+      subtractive: mods.alt,
+      constrain: mods.shift && (handleDrag || SHIFT_CONSTRAINS.has(currentId)),
+      noSnap: (mods.ctrl || mods.meta) && currentId === 'plant-spacing',
     }
   }
 
@@ -454,11 +488,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (constraint.kind === 'rotation-delta') {
       return { world, free, constrained, snapped: constrained, modifiers, pointer }
     }
-    // Today's order, keyed by tool id: Polygon snaps, then constrains, so a Shift corner may be off the grid
-    // (today's (a4c86d39) zone-drawing-tool.ts:226); Plant a row constrains the raw point, and its Shift is also no-snap.
-    const snapped = currentId === 'polygon'
-      ? applyToolConstraint(constraint, free, axes)
-      : snap(constrained, modifiers.noSnap)
+    // One order for every tool: the constraint, then the length along its ray rounded to the grid's interval.
+    const snapped = snapAlongRay(constraint.origin, constrained, modifiers.noSnap ? NO_SNAP : deps.snapping(), frame().view.pixelsPerMetre)
     return { world, free, constrained, snapped, modifiers, pointer }
   }
 
@@ -470,7 +501,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   /** The tool's draft, the drop preview and the host's decorations, merged for the renderer. */
   function publishDraft(): void {
-    const shownToolDraft = draftHidden ? null : toolDraft
+    // In overview the tool's draft is dropped and the overview selector's band takes its place.
+    const shownToolDraft = overviewDraft ?? (draftHidden ? null : toolDraft)
     const decorations = decorationShapes()
     const key = decorations.length > 0 ? JSON.stringify(decorations) : ''
     if (shownToolDraft === publishedToolDraft && dropPreview === publishedDropPreview && key === publishedDecorations) return
@@ -500,7 +532,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   function publishHandles(): void {
     const handles = shownHandles()
-    const active = live?.kind === 'handle' ? live.handle : null
+    const active = live?.kind === 'handle' ? live.handle : handles === NO_HANDLES ? null : toolActiveHandle
     if (handles === publishedHandles && active === publishedActiveHandle) return
     publishedHandles = handles
     publishedActiveHandle = active
@@ -611,9 +643,11 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   /**
    * Every raw pointerdown on the map host, reported by the session before it routes the press (today's _onPointerDown):
-   * any button commits the nudge series. An admitted primary or middle press outside the text entry, with no live press
-   * from another pointer, also closes the menu and moves focus to the map, so an open text entry commits before the press
-   * reaches the tool (focusMap); a click inside the entry keeps it open. While Text is armed a primary press that so commits
+   * any button commits the nudge series. An admitted press of any button outside the text entry, with no live press from
+   * another pointer, also closes the menu and moves focus to the map, so an open text entry commits before the press
+   * reaches the tool (focusMap) and a right-drag pan or a still right-click closes it; a click inside the entry keeps it
+   * open. A right press closes an open menu, and its still release opens the next one, so a double right-click replaces
+   * the menu (spec §3.1). While Text is armed a primary press that so commits
    * the entry places nothing: no tool hears it, as today's Text field took that click (spec §3.2); under another tool the
    * press goes on. A press on the live press's own pointer (its up was lost) counts, as today's. The host knows only its own
    * live press: a pan lives in the recogniser, which ignores a second pointer anyway.
@@ -622,7 +656,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (disposed) return
     pressCommitsNote = false
     endNudgeSeries(true)
-    if (button === 'secondary') return
     if (live && live.id !== pointerId) return
     if (target.kind === 'owned-text') return
     // Runs only while the Scene is settled; a refused raw press does nothing, and the press that follows asks again.
@@ -643,8 +676,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (live) cancelLive('pointercancel')
     // The pointer is pressed now: a frame re-emits its drag, not the hover before it.
     lastHover = null
-    // Under LEGACY an overview press pans in the recogniser and never reaches the host; nothing here samples or edits.
-    if (frame().mode === 'overview') return NOTHING
+    if (frame().mode === 'overview') return overviewPress(g)
     let claimed = false
     const admitted = deps.admission.runWhenSettled(() => {
       claimed = pressWhenSettled(g, commitsNote)
@@ -667,7 +699,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       const handle = g.target.id
       live = liveGesture(g, 'handle', point, null)
       publishHandles()
-      callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'start', handle, point, start: point }))
+      callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'start', handle, point, start: point, clickCount: g.clickCount }))
       clearPassiveHoverForEdit()
       return false
     }
@@ -680,6 +712,37 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     callTool(() => tool.gesture({ kind: 'press', point, hit, clickCount: g.clickCount }))
     clearPassiveHoverForEdit()
     return false
+  }
+
+  /** An overview press selects through the overview selector, inside the scene's admission; no tool hears it, nothing
+   *  samples it and handles do not show (spec §3.2). */
+  function overviewPress(g: Extract<Gesture, { kind: 'press' }>): GestureOutcome {
+    const admitted = deps.admission.runWhenSettled(() => {
+      if (!deps.capturePress(g.id)) return true
+      const point = pointAt(g.at, g.mods, g.pointer)
+      const hit = deps.scene.hitAt(point.world, { overview: true })
+      live = liveGesture(g, 'overview', point, hit)
+      overviewSelector.press(point, hit)
+      return true
+    }, false)
+    return admitted ? NOTHING : REFUSED_PRESS
+  }
+
+  /** The overview press's drag or release; a release runs when the scene is settled, as Select's band does. */
+  function overviewDrag(g: Extract<Gesture, { kind: 'drag-start' | 'drag-move' | 'drag-end' | 'tap' }>, gesture: LiveGesture): GestureOutcome {
+    const point = pointAt(g.at, g.mods, gesture.pointer)
+    if (g.kind === 'drag-start' || g.kind === 'drag-move') {
+      overviewSelector.drag(point)
+      return NOTHING
+    }
+    live = null
+    const admitted = deps.admission.runWhenSettled(() => {
+      overviewSelector.release(point, g.kind === 'drag-end')
+      return true
+    }, false)
+    if (!admitted) overviewSelector.cancel()
+    endLive()
+    return admitted ? NOTHING : QUARANTINE
   }
 
   /** A press that opened a Scene Edit (a move or a handle drag) clears the passive hover, as today's drag presentation did. */
@@ -701,6 +764,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       start,
       startHit,
       handle: target.kind === 'handle' ? target.id : null,
+      clickCount: g.clickCount,
       lastScreen: g.at,
       lastMods: g.mods,
       dragging: false,
@@ -721,6 +785,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     gesture.dragging = true
     gesture.lastScreen = g.at
     gesture.lastMods = g.mods
+    if (gesture.kind === 'overview') return overviewDrag(g, gesture)
     const tool = activeTool
     if (g.kind !== 'drag-end') {
       deliverDrag(tool, gesture, g.kind)
@@ -761,7 +826,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const start = gesture.start
     if (gesture.kind === 'handle') {
       const phase = kind === 'drag-end' ? 'end' : 'move'
-      callTool(() => tool.gesture({ kind: 'handle-drag', phase, handle: gesture.handle!, point, start }))
+      callTool(() => tool.gesture({ kind: 'handle-drag', phase, handle: gesture.handle!, point, start, clickCount: gesture.clickCount }))
     } else {
       const reply = callTool(() => tool.gesture({ kind, point, start, startHit: gesture.startHit }))
       // A move the tool passes is none of its press's (Plant a row's missed press, a stamp with nothing held, a polygon
@@ -785,13 +850,16 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       return NOTHING
     }
     if (gesture.id !== g.id) return NOTHING
+    if (gesture.kind === 'overview') return overviewDrag(g, gesture)
     const tool = activeTool
     return release(tool, () => {
       live = null
       try {
         const point = pointAt(g.at, g.mods, g.pointer, gesture.kind === 'handle')
         if (gesture.kind === 'handle') {
-          callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'end', handle: gesture.handle!, point, start: gesture.start }))
+          callTool(() => tool.gesture({
+            kind: 'handle-drag', phase: 'end', handle: gesture.handle!, point, start: gesture.start, clickCount: gesture.clickCount,
+          }))
         } else {
           callTool(() => tool.gesture({ kind: 'tap', point, hit: hitAt(point.world), clickCount: g.clickCount }))
         }
@@ -939,6 +1007,10 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const gesture = live
     if (!gesture) return
     live = null
+    if (gesture.kind === 'overview') {
+      overviewSelector.cancel()
+      return
+    }
     const tool = activeTool
     callTool(() => tool.gesture({ kind: 'cancel', reason }))
   }
@@ -1030,6 +1102,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (next.mode !== mode) {
       mode = next.mode
       if (mode === 'overview') enterOverview()
+      // Leaving overview mid-press drops the overview selector's band; the release selects nothing.
+      else if (live?.kind === 'overview') cancelLive('tool-change')
     }
     refreshAtPointer(activeTool)
     flush()
@@ -1067,8 +1141,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   // ── Menus ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  /** Hit, retarget the selection to the object under the pointer (history-free), then open the menu, with "Turn view to
-   *  this edge" when the pointer is on a zone's edge. */
+  /** Hit, retarget the selection to the object under the pointer (history-free), then open the menu, with "Finish shape"
+   *  when the armed tool can finish its draft and "Turn view to this edge" when the pointer is on a zone's edge. */
   function openMenuAt(at: ScreenPoint, source: MenuSource): void {
     const world = frame().view.screenToWorld(at)
     const { target } = contextMenuTargetAt(deps.scene, world)
@@ -1077,7 +1151,21 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       notifySceneChanged()
     }
     const turnViewToEdge = edgeTurnAt(world, source)
-    deps.menu.open({ at: world, screen: at, ...(turnViewToEdge ? { turnViewToEdge } : {}) })
+    const finishShape = activeTool.canFinish?.() ? finishShapeOf(activeTool) : null
+    deps.menu.open({
+      at: world,
+      screen: at,
+      ...(finishShape ? { finishShape } : {}),
+      ...(turnViewToEdge ? { turnViewToEdge } : {}),
+    })
+  }
+
+  /** "Finish shape" (spec §3.2): the draft's Enter, while the tool that offered it is still armed. */
+  function finishShapeOf(tool: CanvasTool): () => void {
+    return () => {
+      if (disposed || activeTool !== tool) return
+      deps.admission.runWhenSettled(() => callTool(() => tool.command({ kind: 'confirm' })), 'pass' as ToolReply)
+    }
   }
 
   /**
@@ -1118,6 +1206,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     draftHidden = false
     toolDraft = null
     toolHandles = NO_HANDLES
+    toolActiveHandle = null
     toolGuidance = null
     publishedGuidance = null
     const tool = TOOL_REGISTRY[id]()
@@ -1266,10 +1355,15 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     rawPress,
     notePointer(screen: ScreenPoint | null): void {
       if (disposed) return
-      // Emits nothing: the next camera frame re-emits at the moved point, where the ground followed the pointer, so a
-      // ghost keeps its world point under it (today's). A pan with nothing resting on the map starts nothing.
+      // A pan with nothing resting on the map starts nothing. Otherwise the resting pointer moves and is re-emitted at
+      // once, and again on each camera frame: the router pans before it notes the pointer, and the driver publishes the
+      // pan's frame synchronously, so a draft or a ghost ends under the pointer whichever comes first.
       if (!screen) lastHover = null
-      else if (lastHover) lastHover = { ...lastHover, screen }
+      else if (lastHover) {
+        lastHover = { ...lastHover, screen }
+        reemit(activeTool)
+        flush()
+      }
     },
     sceneChanged(): void {
       if (!disposed) notifySceneChanged()

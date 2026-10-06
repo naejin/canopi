@@ -34,6 +34,7 @@ import { measureLabelShapes, selectedZoneMeasurementLabels } from './measure-lab
 import type { ToolReply } from './tool'
 import { TOOL_REGISTRY, type ToolFactory } from './registry'
 import { createContextMenuPort, createToolScene } from './tool-host'
+import { createPolygonTool } from './polygon'
 import '../../../__tests__/support/camera-tolerance'
 
 /** Shift at bearing 0: the nearest 45° direction from `origin` against the world axes, its length kept. */
@@ -145,54 +146,48 @@ describe('ToolHost', () => {
       expect(h.renderer.lastDraft()?.shapes).toEqual([{ kind: 'polyline', points: [at, at], style: { token: 'draft', widthPx: 1 } }])
     })
 
-    it('under LEGACY a Polygon Shift point snaps, then constrains', () => {
+    it('constraint wins, then length snaps along the ray', () => {
       const origin = { x: 0, y: 0 }
-      const polygon = stubTool('polygon', { constraint: () => ({ kind: 'direction', origin, stepDeg: 45 }) })
-      useStubTools(polygon)
-      const h = harness({
-        tool: 'polygon',
-        viewport: { x: 0, y: 0, scale: 10 },
-        snapping: { grid: true },
-      })
-      const interval = gridInterval(10).interval
-      const at = { x: 473, y: 191 }
-      const raw = h.world(at)
-      const free = snapToGrid(raw.x, raw.y, interval)
+      for (const id of ['polygon', 'plant-spacing', 'line', 'measurement-guide'] as const) {
+        const tool = stubTool(id, { constraint: () => ({ kind: 'direction', origin, stepDeg: 45 }) })
+        useStubTools(tool)
+        const h = harness({ tool: id, viewport: { x: 0, y: 0, scale: 10 }, snapping: { grid: true } })
+        const interval = gridInterval(10).interval
+        const at = { x: 473, y: 191 }
+        const raw = h.world(at)
+        const constrained = constrainPointTo45Degrees(origin, raw)
+        const length = Math.hypot(constrained.x, constrained.y)
+        const stepped = Math.round(length / interval) * interval
 
-      h.hover(at, { shift: true })
-      const point = polygon.last('hover')!.point
-      expect(point.world).toEqual(raw)
-      expect(point.free).toEqual(free)
-      expect(point.constrained).toEqual(constrainPointTo45Degrees(origin, raw))
-      expect(point.snapped).toEqual(constrainPointTo45Degrees(origin, free))
-      expect(point.modifiers).toMatchObject({ constrain: true, noSnap: false, additive: true })
-      // The Shift corner is off the grid: today's order snaps first.
-      expect(snapToGrid(point.snapped.x, point.snapped.y, interval)).not.toEqual(point.snapped)
+        h.hover(at, { shift: true })
+        const point = tool.last('hover')!.point
+        expect(point.world).toEqual(raw)
+        expect(point.free).toEqual(snapToGrid(raw.x, raw.y, interval))
+        expect(point.constrained).toEqual(constrained)
+        // The Shift point stays on its 45° ray, its length a whole number of grid steps.
+        expect(Math.atan2(point.snapped.y, point.snapped.x)).toBeCloseTo(Math.atan2(constrained.y, constrained.x), 9)
+        expect(Math.hypot(point.snapped.x, point.snapped.y)).toBeCloseTo(stepped, 9)
+        expect(point.modifiers).toMatchObject({ constrain: true, noSnap: false, additive: true })
 
-      h.hover(at)
-      expect(polygon.last('hover')!.point).toMatchObject({ free, constrained: raw, snapped: free })
+        h.hover(at)
+        expect(tool.last('hover')!.point).toMatchObject({ constrained: raw, snapped: snapToGrid(raw.x, raw.y, interval) })
+      }
     })
 
-    it('under LEGACY a Plant a row Shift constrains the raw point and does not snap', () => {
-      const origin = { x: 0, y: 0 }
-      const row = stubTool('plant-spacing', { constraint: () => ({ kind: 'direction', origin, stepDeg: 45 }) })
-      useStubTools(row)
+    it('Ctrl or Cmd is Plant a row\'s no-snap, and Shift constrains only the drawing tools and handle drags', () => {
+      const row = stubTool('plant-spacing')
+      const select = stubTool('select')
+      useStubTools(row, select)
       const h = harness({ tool: 'plant-spacing', viewport: { x: 0, y: 0, scale: 10 }, snapping: { grid: true } })
       const at = { x: 473, y: 191 }
-      const raw = h.world(at)
 
-      h.hover(at, { shift: true })
-      expect(row.last('hover')!.point).toMatchObject({
-        world: raw,
-        free: raw,
-        constrained: constrainPointTo45Degrees(origin, raw),
-        snapped: constrainPointTo45Degrees(origin, raw),
-        modifiers: { constrain: true, noSnap: true },
-      })
-
-      h.hover(at)
-      const interval = gridInterval(10).interval
-      expect(row.last('hover')!.point).toMatchObject({ constrained: raw, snapped: snapToGrid(raw.x, raw.y, interval) })
+      for (const mods of [{ ctrl: true }, { meta: true }]) {
+        h.hover(at, mods)
+        expect(row.last('hover')!.point).toMatchObject({ snapped: h.world(at), modifiers: { noSnap: true, constrain: false } })
+      }
+      h.arm('select')
+      h.hover(at, { shift: true, ctrl: true, alt: true })
+      expect(select.last('hover')!.point.modifiers).toEqual({ additive: true, subtractive: true, constrain: false, noSnap: false })
     })
 
     it('snapping follows the settings at each point', () => {
@@ -270,6 +265,27 @@ describe('ToolHost', () => {
       } finally {
         vi.useRealTimers()
       }
+    })
+
+    it('the draft stays under the cursor through a right-drag pan', () => {
+      useStubTools(createPolygonTool())
+      const h = harness({ tool: 'polygon' })
+      h.click({ x: 100, y: 100 })
+      h.click({ x: 160, y: 100 })
+      const corners = [h.world({ x: 100, y: 100 }), h.world({ x: 160, y: 100 })]
+      h.hover({ x: 200, y: 150 })
+
+      // The right press reaches the host only as a raw press; the recogniser pans while the pointer moves.
+      h.host.rawPress('secondary', { kind: 'surface' })
+      h.pan({ x: 200, y: 150 }, { x: 260, y: 190 })
+
+      const band = h.renderer.lastDraft()!.shapes.find((shape) => shape.kind === 'polyline')
+      const points = band?.kind === 'polyline' ? band.points : []
+      // The corners stay on the ground, and the rubber band ends under the moved pointer.
+      expect(points.slice(0, 2)).toEqual(corners)
+      expect(h.view.view().worldToScreen(points[2]!).x).toBeCloseTo(260, 6)
+      expect(h.view.view().worldToScreen(points[2]!).y).toBeCloseTo(190, 6)
+      expect(h.host.activeToolHasEscapeTransient()).toBe(true)
     })
 
     it('re-emits the drag on a camera frame', () => {
@@ -356,41 +372,41 @@ describe('ToolHost', () => {
       expect(stamp.calls.filter((call) => call === 'viewChanged')).toHaveLength(2)
     })
 
-    it('a pointer pan moves the resting pointer without emitting', () => {
+    it('a pointer pan moves the resting pointer, re-emitted at once and on each camera frame', () => {
       const stamp = stubTool('plant-stamp')
       useStubTools(stamp)
       const h = harness({ tool: 'plant-stamp' })
       const ghost = h.world({ x: 100, y: 100 })
 
       h.hover({ x: 100, y: 100 })
-      // A middle drag: the router notes where the pointer is, then the ground follows it.
-      h.host.notePointer({ x: 150, y: 120 })
-      expect(stamp.count('hover')).toBe(1)
-      expect(h.record.hovers).toHaveLength(1)
-      expect(h.record.pointerWorld).toHaveLength(1)
+      // A middle drag, in either order: the ground follows the pointer, and the router notes where the pointer is.
       h.view.navigation.panByPx({ x: 50, y: 20 })
-
-      // The camera frame re-emits under the moved pointer, so the ghost keeps its world point, as today.
-      expect(stamp.count('hover')).toBe(2)
+      h.host.notePointer({ x: 150, y: 120 })
       const reemitted = stamp.last('hover')!.point.world
       expect(reemitted.x).toBeCloseTo(ghost.x, 6)
       expect(reemitted.y).toBeCloseTo(ghost.y, 6)
+      h.host.notePointer({ x: 200, y: 140 })
+      h.view.navigation.panByPx({ x: 50, y: 20 })
+      const again = stamp.last('hover')!.point.world
+      expect(again.x).toBeCloseTo(ghost.x, 6)
+      expect(again.y).toBeCloseTo(ghost.y, 6)
+      // The pointer's world point is published only by hovers, never by a pan.
       expect(h.record.pointerWorld).toHaveLength(1)
       expect(stamp.calls).not.toContain('viewChanged')
 
       // Past the map's edge nothing is re-emitted; back on the map it is again.
+      const hovers = stamp.count('hover')
       h.host.notePointer({ x: 450, y: 120 })
       h.view.navigation.panByPx({ x: 300, y: 0 })
-      expect(stamp.count('hover')).toBe(2)
+      expect(stamp.count('hover')).toBe(hovers)
       expect(stamp.calls).toEqual(['activate', 'viewChanged'])
       h.host.notePointer({ x: 150, y: 120 })
-      h.view.navigation.panByPx({ x: -300, y: 0 })
-      expect(stamp.count('hover')).toBe(3)
+      expect(stamp.count('hover')).toBe(hovers + 1)
 
       // null: no pointer rests on the map.
       h.host.notePointer(null)
       h.view.navigation.panByPx({ x: 10, y: 0 })
-      expect(stamp.count('hover')).toBe(3)
+      expect(stamp.count('hover')).toBe(hovers + 1)
       expect(stamp.calls.filter((call) => call === 'viewChanged')).toHaveLength(2)
     })
 
@@ -433,7 +449,7 @@ describe('ToolHost', () => {
       expect(polygon.count('press')).toBe(0)
       expect(h.host.hasLiveGesture()).toBe(false)
 
-      // Overview: the press pans in the recogniser; the host neither samples nor edits.
+      // Overview: the press selects through the host's overview selector; nothing samples it and no tool hears it.
       const overview = harness({ tool: 'polygon', viewport: OVERVIEW, inspect })
       inspect.mockClear()
       overview.press({ x: 120, y: 80 })
@@ -780,19 +796,24 @@ describe('ToolHost', () => {
   describe('raw presses', () => {
     const SURFACE = { kind: 'surface' } as const
 
-    it('every raw press commits the nudge series; primary and middle close the menu and focus the map', () => {
+    it('every raw press commits the nudge series and, on any button, closes the menu and focuses the map', () => {
       useStubTools(stubTool('select'))
       const h = harness({ scene: { plants: [appleAt({ x: 10, y: 10 })] } })
       h.select(P1)
       h.menu({ x: 300, y: 250 })
+      h.record.focus.length = 0
 
-      // A right press commits the series and leaves the menu and the focus alone.
+      // A right press commits the series, closes the menu (its release opens the next one) and commits an open entry.
+      h.openTextEntry()
       h.arrow('ArrowRight')
       h.host.rawPress('secondary', SURFACE)
       expect(h.host.hasNudgeSeries()).toBe(false)
       expect(h.record.nudges).toEqual(['nudge:0.1,0', 'end'])
-      expect(h.menuOpen).toBe(true)
-      expect(h.record.focus).toEqual([])
+      expect(h.menuOpen).toBe(false)
+      expect(h.record.focus).toEqual(['map'])
+      expect(h.chrome.textEntry).toBeNull()
+      h.menu({ x: 300, y: 250 })
+      h.record.focus.length = 0
 
       // A press inside the text entry commits the series and keeps the entry open.
       h.openTextEntry()
@@ -813,11 +834,12 @@ describe('ToolHost', () => {
 
       // A primary press: the same, once; the press it becomes moves focus no further.
       h.menu({ x: 300, y: 250 })
+      h.record.focus.length = 0
       h.arrow('ArrowRight')
       h.click({ x: 200, y: 150 })
       expect(h.host.hasNudgeSeries()).toBe(false)
       expect(h.menuOpen).toBe(false)
-      expect(h.record.focus).toEqual(['map', 'map'])
+      expect(h.record.focus).toEqual(['map'])
       expect(h.history.canUndo.value).toBe(true)
     })
 

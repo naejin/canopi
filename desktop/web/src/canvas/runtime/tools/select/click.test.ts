@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   createToolHarness,
   plantEntity,
+  rectZone,
   textNote,
   type ToolHarness,
   type ToolHarnessOptions,
@@ -105,5 +106,48 @@ describe('Select clicks', () => {
     h.advance(400)
     h.click({ x: 105, y: 155 })
     expect(h.chrome.textEntry?.request).toMatchObject({ initialText: 'Prune in March' })
+  })
+
+  it("a click in a zone's fill selects it", () => {
+    const bed = rectZone('bed', [{ x: 100, y: 100 }, { x: 300, y: 100 }, { x: 300, y: 200 }, { x: 100, y: 200 }])
+    const pond = rectZone('pond', [{ x: 400, y: 100 }, { x: 500, y: 100 }, { x: 500, y: 200 }, { x: 400, y: 200 }])
+    const h = harness({ scene: { zones: [bed, pond], plants: [plantEntity('apple', 'Malus domestica', { x: 200, y: 150 })] } })
+    const BED: SceneDesignObjectTarget = { kind: 'zone', id: 'bed' }
+    const POND: SceneDesignObjectTarget = { kind: 'zone', id: 'pond' }
+
+    h.click({ x: 150, y: 130 })
+    expect(h.store.session.selectedTargets).toEqual([BED])
+
+    // Shift or mod toggles the zone; Alt removes it.
+    h.click({ x: 450, y: 150 }, { mods: { shift: true } })
+    expect(h.store.session.selectedTargets).toEqual([BED, POND])
+    h.click({ x: 150, y: 130 }, { mods: { ctrl: true } })
+    expect(h.store.session.selectedTargets).toEqual([POND])
+    h.click({ x: 450, y: 150 }, { mods: { alt: true } })
+    expect(h.store.session.selectedTargets).toEqual([])
+
+    // A plant on top wins over the fill.
+    h.click({ x: 200, y: 150 })
+    expect(h.store.session.selectedTargets).toEqual([APPLE])
+    expect(h.history.canUndo.value).toBe(false)
+  })
+
+  it('Alt+click removes', () => {
+    const h = harness({ scene: orchard() })
+    h.select(APPLE, PEAR)
+
+    h.click({ x: 150, y: 50 }, { mods: { alt: true } })
+    expect(h.store.session.selectedTargets).toEqual([APPLE])
+
+    // An object outside the selection: Alt+click leaves the selection as it was.
+    h.click({ x: 150, y: 50 }, { mods: { alt: true } })
+    expect(h.store.session.selectedTargets).toEqual([APPLE])
+
+    // Alt+drag from a selected object moves the selection as without Alt.
+    h.drag({ x: 50, y: 50 }, { x: 70, y: 60 }, { mods: { alt: true } })
+    expect(h.store.persisted.plants[0]!.position.x).toBeCloseTo(70, 6)
+    expect(h.store.persisted.plants[0]!.position.y).toBeCloseTo(60, 6)
+    expect(h.store.session.selectedTargets).toEqual([APPLE])
+    expect(h.history.canUndo.value).toBe(true)
   })
 })

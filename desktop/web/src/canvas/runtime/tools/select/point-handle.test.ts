@@ -154,3 +154,113 @@ describe('the rotation handle during a zone corner press', () => {
     expect(h.chrome.handles.map((entry) => entry.id)).toEqual(shown)
   })
 })
+
+describe('polygon corners (spec §3.2, U33: every corner route)', () => {
+  const SQUARE = [{ x: 100, y: 100 }, { x: 200, y: 100 }, { x: 200, y: 200 }, { x: 100, y: 200 }]
+  const POLY = { kind: 'zone', id: 'poly' } as const
+  const vertex = (index: number) => `vertex:poly:${index}` as ToolHandleId
+  const midpoint = (index: number) => `edge-mid:poly:${index}` as ToolHandleId
+
+  function polygonHarness(points: readonly WorldPoint[] = SQUARE): ToolHarness {
+    const h = createToolHarness({ scene: { zones: [rectZone('poly', [...points], { zoneType: 'polygon' })] } })
+    harnesses.push(h)
+    h.select(POLY)
+    return h
+  }
+
+  const corners = (h: ToolHarness): readonly WorldPoint[] => h.store.persisted.zones[0]!.points
+
+  function clickHandle(h: ToolHarness, id: ToolHandleId, options: { clickCount?: number; alt?: boolean } = {}): void {
+    const at = h.chrome.handles.find((entry) => entry.id === id)!.anchor
+    h.click(at, { target: { kind: 'handle', id }, clickCount: options.clickCount ?? 1, mods: { alt: options.alt ?? false } })
+  }
+
+  it('a polygon shows a fainter midpoint dot on each edge, labelled with its edge; a rectangle shows none', () => {
+    const h = polygonHarness()
+    const midpoints = h.chrome.handles.filter((entry) => entry.glyph === 'midpoint')
+    expect(midpoints.map((entry) => [entry.id, entry.anchor, entry.label])).toEqual([
+      [midpoint(0), { x: 150, y: 100 }, 'canvas.zoneEdgeMidpoint.label'],
+      [midpoint(1), { x: 200, y: 150 }, 'canvas.zoneEdgeMidpoint.label'],
+      [midpoint(2), { x: 150, y: 200 }, 'canvas.zoneEdgeMidpoint.label'],
+      [midpoint(3), { x: 100, y: 150 }, 'canvas.zoneEdgeMidpoint.label'],
+    ])
+
+    const rect = createToolHarness({ scene: { zones: [rectZone('bed', SQUARE)] } })
+    harnesses.push(rect)
+    rect.select({ kind: 'zone', id: 'bed' })
+    expect(rect.chrome.handles.filter((entry) => entry.glyph === 'midpoint')).toEqual([])
+  })
+
+  it('an edge shows its dot only with room for it and free outline beside it (52 px on screen); a zoom redraws the dots', () => {
+    // At scale 1 the 40 m edges are 40 px: the corners' 10 px and the dot's 16 px would cover the outline that moves the zone.
+    const h = polygonHarness([{ x: 100, y: 100 }, { x: 140, y: 100 }, { x: 140, y: 160 }, { x: 100, y: 160 }])
+    const dots = () => h.chrome.handles.filter((entry) => entry.glyph === 'midpoint').map((entry) => entry.id)
+    expect(dots()).toEqual([midpoint(1), midpoint(3)])
+
+    h.view.setViewport({ x: 0, y: 0, scale: 2 })
+    expect(dots()).toEqual([midpoint(0), midpoint(1), midpoint(2), midpoint(3)])
+
+    h.view.setViewport({ x: 0, y: 0, scale: 0.5 })
+    expect(dots()).toEqual([])
+  })
+
+  it('double-click an edge midpoint adds a corner', () => {
+    const h = polygonHarness()
+
+    clickHandle(h, midpoint(0))
+    expect(corners(h)).toEqual(SQUARE)
+
+    clickHandle(h, midpoint(0), { clickCount: 2 })
+    expect(corners(h)).toEqual([SQUARE[0], { x: 150, y: 100 }, SQUARE[1], SQUARE[2], SQUARE[3]])
+    expect(h.store.session.selectedTargets).toEqual([POLY])
+    // The two 50 px halves of the split edge leave no room for a dot.
+    expect(h.chrome.handles.filter((entry) => entry.glyph === 'midpoint').map((entry) => entry.id))
+      .toEqual([midpoint(2), midpoint(3), midpoint(4)])
+
+    h.undo()
+    expect(corners(h)).toEqual(SQUARE)
+  })
+
+  it('double-click a polygon edge adds a corner', () => {
+    const h = polygonHarness()
+
+    h.click({ x: 130, y: 201 })
+    expect(corners(h)).toEqual(SQUARE)
+    h.click({ x: 130, y: 201 }, { clickCount: 2 })
+    expect(corners(h)).toEqual([SQUARE[0], SQUARE[1], SQUARE[2], { x: 130, y: 200 }, SQUARE[3]])
+    expect(h.store.session.selectedTargets).toEqual([POLY])
+
+    h.undo()
+    expect(corners(h)).toEqual(SQUARE)
+  })
+
+  it('Alt+click on a corner removes it, keeping at least 3', () => {
+    const h = polygonHarness()
+
+    clickHandle(h, vertex(1), { alt: true })
+    expect(corners(h)).toEqual([SQUARE[0], SQUARE[2], SQUARE[3]])
+    clickHandle(h, vertex(0), { alt: true })
+    expect(corners(h)).toEqual([SQUARE[0], SQUARE[2], SQUARE[3]])
+    expect(h.history.canUndo.value).toBe(true)
+  })
+
+  it('Delete on a focused or selected corner keeps at least 3', () => {
+    const h = polygonHarness()
+
+    // No corner pressed or focused: Delete falls back to deleting the selection.
+    expect(h.host.command({ kind: 'delete-handle' })).toBe('pass')
+
+    // The last corner pressed without moving is the selected corner, shown as the active handle.
+    clickHandle(h, vertex(1))
+    expect(h.chrome.activeHandle).toBe(vertex(1))
+    expect(h.host.command({ kind: 'delete-handle' })).toBe('handled')
+    expect(corners(h)).toEqual([SQUARE[0], SQUARE[2], SQUARE[3]])
+    expect(h.chrome.activeHandle).toBeNull()
+
+    // A focused corner: at 3 corners Delete keeps the shape and deletes nothing else.
+    h.chrome.focusedHandle = vertex(0)
+    expect(h.host.command({ kind: 'delete-handle' })).toBe('handled')
+    expect(corners(h)).toEqual([SQUARE[0], SQUARE[2], SQUARE[3]])
+    expect(h.store.persisted.zones).toHaveLength(1)
+  })
+})

@@ -4,6 +4,7 @@ import { armCanvasTool } from '../../app/keyboard/arming'
 import { focusOwner } from '../../app/keyboard/focus-owner'
 import { useEnglishFallbackNames } from '../../app/plant-finder/catalog-names'
 import { toolCardContent, type SavedStampSummary } from '../../app/tool-card/content'
+import { modKeyName } from '../../app/shell-commands/shortcut-text'
 import { siteLocateOpen } from '../../app/site-onboarding/state'
 import { readPlantStampSource, type PlantStampSource } from '../../canvas/plant-stamp-source'
 import { speciesPlacementAppearance } from '../../canvas/runtime/species-key'
@@ -38,7 +39,7 @@ export interface StampChooserProps {
  * The tool card, top left beside the tool rail: the tool's name, the live
  * instruction (naming the chosen species or stamp) and quiet key hints that
  * end with what Esc does now. Select shows its name and one quiet line of
- * modifiers. It hides for Pan, in overview and while "Where is your site?" shows. The text is one polite live region that
+ * modifiers, Pan what a drag does. It hides in overview and while "Where is your site?" shows. The text is one polite live region that
  * stays mounted, so choosing a tool is announced. Place plants carries the
  * species chooser while no species is chosen, or after Change species; Place a
  * stamp opens its saved stamps with Change stamp; Plant a row carries its
@@ -64,6 +65,7 @@ export function ToolCard({ stampChooser: StampChooser }: {
         speciesName: species?.name ?? null,
         savedStamp,
         scrollWheel: scrollWheel.value,
+        modKey: modKeyName(t),
         translate: t,
       })
   const choosing = content?.tool === 'plant-stamp' && (source === null || changingSpecies)

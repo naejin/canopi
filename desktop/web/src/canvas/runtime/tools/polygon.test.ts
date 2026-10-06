@@ -93,6 +93,40 @@ describe('Polygon tool', () => {
     expect(h.undo()).toBe(false)
   })
 
+  it('double-click finishes with 3 corners', () => {
+    const h = harness()
+
+    // With 2 corners the second press of a double-click adds nothing and finishes nothing.
+    h.click({ x: 10, y: 10 })
+    h.click({ x: 60, y: 10 })
+    h.click({ x: 60, y: 10 }, { clickCount: 2 })
+    expect(cornerMarkers(h)).toEqual([{ x: 10, y: 10 }, { x: 60, y: 10 }])
+    expect(h.store.persisted.zones).toEqual([])
+
+    // The first press of the double-click adds the third corner; its second finishes instead of adding one.
+    h.click({ x: 60, y: 50 })
+    h.click({ x: 60, y: 50 }, { clickCount: 2 })
+    expect(h.store.persisted.zones).toHaveLength(1)
+    expect(h.store.persisted.zones[0]!.points).toEqual([{ x: 10, y: 10 }, { x: 60, y: 10 }, { x: 60, y: 50 }])
+    expect(cornerMarkers(h)).toEqual([])
+  })
+
+  it('Finish shape is the first menu entry', () => {
+    const h = harness()
+    h.click({ x: 10, y: 10 })
+    h.click({ x: 60, y: 10 })
+    h.menu({ x: 200, y: 200 })
+    expect(h.record.menus.at(-1)?.finishShape).toBeUndefined()
+
+    h.click({ x: 60, y: 50 })
+    h.menu({ x: 200, y: 200 })
+    const finishShape = h.record.menus.at(-1)?.finishShape
+    expect(finishShape).toBeTypeOf('function')
+    finishShape!()
+    expect(h.store.persisted.zones[0]!.points).toEqual([{ x: 10, y: 10 }, { x: 60, y: 10 }, { x: 60, y: 50 }])
+    expect(cornerMarkers(h)).toEqual([])
+  })
+
   it('Backspace removes the last corner', () => {
     const h = harness()
 

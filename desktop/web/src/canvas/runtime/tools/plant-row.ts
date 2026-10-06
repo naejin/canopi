@@ -5,9 +5,10 @@
 // Scene Edit that selects the source and the new plants. A held press is a drag past the recogniser's slop (spec §1.4); a
 // release inside it is a click.
 // The row's plants repeat the source at the spacing interval of the tool card's field (the spacing commands; Settings keeps
-// the interval). Shift turns the row to 45° steps from the source and turns snapping off (the host's constraint and
-// noSnap), and the host clamps the pointer to the view (clampsToView). A pan, a blur and a tool re-arm keep the source; Esc
-// drops it first, then leaves the tool (today's order, even mid-drag). The draft is the source ring at the plant's
+// the interval). Shift turns the row to 45° steps against the screen from the source, its length then snapped along it
+// (the host's constraint), Ctrl or Cmd turns snapping off (noSnap), and the host clamps the pointer to the view
+// (clampsToView). A pan, a blur and a tool re-arm keep the source; the source is the tool's transient, which Esc drops
+// (the chain's tool-transient layer), and with none the chain's tool layer leaves the tool. The draft is the source ring at the plant's
 // presented radius, the dashed row guide, a disc for each plant the row would add (at most 250) and the guide's length.
 
 import {
@@ -198,8 +199,9 @@ export function createPlantRowTool(): CanvasTool {
     shownCount = { count, density: options.blocked ? 'blocked' : options.dense ? 'dense' : 'normal' }
   }
 
-  function updatePreview(nextEndpoint: WorldPoint): void {
-    if (!source) return
+  /** The row to `nextEndpoint`; answers the interval in metres, or null while the field's text is not a valid one. */
+  function updatePreview(nextEndpoint: WorldPoint): number | null {
+    if (!source) return null
     endpoint = nextEndpoint
     const start = source.plant.position
     const parsed = parsePlantSpacingIntervalInput(intervalText)
@@ -212,6 +214,7 @@ export function createPlantRowTool(): CanvasTool {
       dense: generatedCount > PLANT_ROW_DENSE_WARNING_THRESHOLD,
       blocked: generatedCount > PLANT_ROW_COMMIT_POSITION_LIMIT,
     })
+    return parsed.valid ? parsed.meters : null
   }
 
   /** The row follows the pointer: its snapped point, which the host constrained under Shift. */
@@ -227,19 +230,15 @@ export function createPlantRowTool(): CanvasTool {
       showSourcePicking('source-missed')
       return
     }
-    updatePreview(nextEndpoint)
-    const parsed = parsePlantSpacingIntervalInput(intervalText)
-    if (!intervalValid || !parsed.valid) {
+    const intervalM = updatePreview(nextEndpoint)
+    if (intervalM === null) {
       focusIntervalInput()
       return
     }
-    if (generatedCount === 0) return
-    if (generatedCount > PLANT_ROW_COMMIT_POSITION_LIMIT) {
-      setGeneratedCount(generatedCount, { blocked: true })
-      return
-    }
+    // The preview already reads blocked above the limit.
+    if (generatedCount === 0 || generatedCount > PLANT_ROW_COMMIT_POSITION_LIMIT) return
     const positions = generatedCount > generatedPositions.length
-      ? computePlantSpacingPositions(source.plant.position, nextEndpoint, parsed.meters)
+      ? computePlantSpacingPositions(source.plant.position, nextEndpoint, intervalM)
       : generatedPositions
     commitPositions(source, positions)
   }
@@ -368,13 +367,10 @@ export function createPlantRowTool(): CanvasTool {
     command(c) {
       switch (c.kind) {
         case 'escape':
-          // Today's order: the source first, even mid-drag, then the tool itself.
-          if (source) {
-            clear()
-            publish()
-          } else {
-            context().effects.requestTool('select')
-          }
+          // The source is the transient; with none Esc passes, and the chain's tool layer leaves.
+          if (!source) return 'pass'
+          clear()
+          publish()
           return 'handled'
         case 'spacing-input':
         case 'spacing-commit':

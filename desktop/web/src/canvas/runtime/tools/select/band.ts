@@ -1,17 +1,17 @@
 // canvas/runtime/tools/select/band.ts
 //
-// Owns Select's band (today's (a4c86d39) shared-gestures.ts 'band' mode): a press on empty ground clears the selection unless the
+// Owns Select's band: a press on empty ground clears the selection unless the
 // press is additive, and the drag draws a screen-aligned box from the press to the pointer (the band's `quad` draft:
 // the selection stroke at 2 px over the selection fill). The release selects every object the box touches, tested
 // against its world quad (turned with the view, never widened to its world box; spec §4.9), the locked ones left out,
 // added to the selection when the press was additive; a release within 2 px of the press selects nothing. The release
-// runs when the scene is settled (CanvasTool.settledRelease).
+// runs when the scene is settled (CanvasTool.settledRelease). Overview's band passes its filter (plants hidden).
 
 import { isSceneDesignObjectLocked } from '../../scene/locks'
 import { sceneTargetKey, type SceneDesignObjectTarget } from '../../scene/design-object-targets'
 import type { WorldPoint, WorldQuad } from '../../view/types'
 import type { DraftPresentation } from '../draft'
-import type { ToolContext, ToolView } from '../tool'
+import type { HitFilter, ToolContext, ToolView } from '../tool'
 
 /** A band shorter than this on screen is a click. */
 const BAND_THRESHOLD_PX = 2
@@ -34,13 +34,18 @@ export function bandDraft(view: ToolView, band: Band, end: WorldPoint): DraftPre
 }
 
 /** What the band released at `end` selects, or null when the pointer stayed within the threshold (nothing changes). */
-export function bandSelection(ctx: ToolContext, band: Band, end: WorldPoint): SceneDesignObjectTarget[] | null {
+export function bandSelection(
+  ctx: Pick<ToolContext, 'scene' | 'view'>,
+  band: Band,
+  end: WorldPoint,
+  filter: HitFilter = {},
+): SceneDesignObjectTarget[] | null {
   if (ctx.view.screenDistance(band.start, end) <= BAND_THRESHOLD_PX) return null
   const scene = ctx.scene.persisted
   const selected = new Map<string, SceneDesignObjectTarget>(
     band.additive ? ctx.scene.selection().map((target) => [sceneTargetKey(target), target]) : [],
   )
-  for (const hit of ctx.scene.hitInQuad(screenAlignedQuad(ctx.view, band.start, end))) {
+  for (const hit of ctx.scene.hitInQuad(screenAlignedQuad(ctx.view, band.start, end), filter)) {
     if (hit.kind !== 'object' || isSceneDesignObjectLocked(scene, hit.target)) continue
     selected.set(sceneTargetKey(hit.target), hit.target)
   }

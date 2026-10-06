@@ -166,6 +166,7 @@
       "setUnitCost": "Set unit cost…",
       "placePlantsHere": "Place plants here",
       "turnViewToEdge": "Turn view to this edge",
+      "finishShape": "Finish shape",
       "renameZone": "Rename zone…"
     },
     "rotationHandle": {
@@ -173,6 +174,9 @@
     },
     "zoneControlPoint": {
       "label": "Zone control point {{index}}"
+    },
+    "zoneEdgeMidpoint": {
+      "label": "Add a corner on edge {{index}}"
     },
     "guideEnd": {
       "label": "Measurement guide endpoint {{index}}"
@@ -776,22 +780,28 @@
       "escStopPlacing": "Esc to stop placing",
       "escCancel": "Esc to cancel",
       "escSelect": "Esc to go back to Select",
-      "selectHint": "Drag to select · Shift-click adds · Space + drag or H pans · wheel zooms",
-      "selectHintPan": "Drag to select · Shift-click adds · Space + drag or H pans · pinch zooms",
+      "escClearRow": "Esc to clear the row",
+      "escClearStamp": "Esc to clear the stamp",
+      "selectHint": "Drag to select · Shift-click adds · Alt-click removes · right-drag pans · wheel zooms",
+      "selectHintPan": "Drag to select · Shift-click adds · Alt-click removes · two fingers pan · pinch zooms",
+      "panHint": "Drag to move the map",
       "stampPick": "Click a plant, zone, note or group to copy it",
       "stampPlace": "click to place",
       "stampZone": "Zone",
       "stampGroup": "Group",
-      "polygon": "Click to add corners. Click the first corner or press Enter to finish.",
+      "polygon": "Click to add corners. Click the first corner, double-click or press Enter to finish.",
       "polygonKeys": "Backspace removes the last corner · Shift keeps 45° angles",
       "rectangle": "Drag across the map to draw the rectangle.",
+      "rectangleKeys": "Shift draws a square",
       "ellipse": "Drag across the map to draw the ellipse.",
+      "ellipseKeys": "Shift draws a circle",
       "line": "Drag along the map to draw the line.",
+      "lineKeys": "Shift keeps 45° angles",
       "textPlace": "Click the map where the note goes.",
       "textType": "Type the note. Enter to finish.",
       "textKeys": "Shift Enter for a new line",
       "measure": "Drag from one point to another to measure. The line stays as a guide.",
-      "rowKeys": "Shift keeps 45° angles",
+      "rowKeys": "Shift keeps 45° angles · {{mod}} turns off snapping",
       "plants_one": "{{count, number}} plant",
       "species_one": "{{count, number}} species",
       "plants_few": "{{count, number}} plants",

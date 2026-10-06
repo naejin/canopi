@@ -166,6 +166,7 @@
       "setUnitCost": "단가 설정…",
       "placePlantsHere": "여기에 식물 배치",
       "turnViewToEdge": "이 가장자리에 맞춰 보기 회전",
+      "finishShape": "도형 완성",
       "renameZone": "구역 이름 바꾸기…"
     },
     "rotationHandle": {
@@ -173,6 +174,9 @@
     },
     "zoneControlPoint": {
       "label": "구역 제어점 {{index}}"
+    },
+    "zoneEdgeMidpoint": {
+      "label": "변 {{index}}에 꼭짓점 추가"
     },
     "guideEnd": {
       "label": "측정 가이드 끝점 {{index}}"
@@ -776,22 +780,28 @@
       "escStopPlacing": "Esc로 배치 중지",
       "escCancel": "Esc로 취소",
       "escSelect": "Esc로 선택 도구로 돌아가기",
-      "selectHint": "드래그로 선택 · Shift-클릭으로 추가 · Space + 드래그 또는 H로 이동 · 휠로 확대/축소",
-      "selectHintPan": "드래그로 선택 · Shift-클릭으로 추가 · Space + 드래그 또는 H로 이동 · 핀치로 확대/축소",
+      "escClearRow": "Esc로 줄 지우기",
+      "escClearStamp": "Esc로 스탬프 지우기",
+      "selectHint": "드래그로 선택 · Shift-클릭으로 추가 · Alt-클릭으로 제외 · 오른쪽 드래그로 이동 · 휠로 확대/축소",
+      "selectHintPan": "드래그로 선택 · Shift-클릭으로 추가 · Alt-클릭으로 제외 · 두 손가락으로 이동 · 핀치로 확대/축소",
+      "panHint": "드래그해 지도를 이동",
       "stampPick": "복사할 식물, 구역, 메모 또는 그룹을 클릭하세요",
       "stampPlace": "클릭해 배치",
       "stampZone": "구역",
       "stampGroup": "그룹",
-      "polygon": "클릭해 꼭짓점을 추가합니다. 첫 꼭짓점을 클릭하거나 Enter를 눌러 마칩니다.",
+      "polygon": "클릭해 꼭짓점을 추가합니다. 첫 꼭짓점을 클릭하거나, 두 번 클릭하거나, Enter를 눌러 마칩니다.",
       "polygonKeys": "Backspace로 마지막 꼭짓점 제거 · Shift로 45° 유지",
       "rectangle": "지도 위를 드래그해 사각형을 그립니다.",
+      "rectangleKeys": "Shift로 정사각형",
       "ellipse": "지도 위를 드래그해 타원을 그립니다.",
+      "ellipseKeys": "Shift로 원",
       "line": "지도 위를 드래그해 선을 그립니다.",
+      "lineKeys": "Shift로 45° 유지",
       "textPlace": "메모를 둘 곳의 지도를 클릭하세요.",
       "textType": "메모를 입력하세요. Enter로 마칩니다.",
       "textKeys": "Shift Enter로 줄 바꿈",
       "measure": "한 점에서 다른 점까지 드래그해 측정합니다. 선은 안내선으로 남습니다.",
-      "rowKeys": "Shift로 45° 유지",
+      "rowKeys": "Shift로 45° 유지 · {{mod}}로 맞춤 끄기",
       "plants_one": "식물 {{count, number}}그루",
       "species_one": "{{count, number}}종",
       "plants_few": "식물 {{count, number}}그루",

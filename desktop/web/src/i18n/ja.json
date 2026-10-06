@@ -166,6 +166,7 @@
       "setUnitCost": "単価を設定…",
       "placePlantsHere": "ここに植物を配置",
       "turnViewToEdge": "この辺に合わせてビューを回転",
+      "finishShape": "図形を完成",
       "renameZone": "ゾーン名を変更…"
     },
     "rotationHandle": {
@@ -173,6 +174,9 @@
     },
     "zoneControlPoint": {
       "label": "ゾーンの制御点 {{index}}"
+    },
+    "zoneEdgeMidpoint": {
+      "label": "辺 {{index}} に角を追加"
     },
     "guideEnd": {
       "label": "計測ガイドの端点 {{index}}"
@@ -776,22 +780,28 @@
       "escStopPlacing": "Esc で配置を終了",
       "escCancel": "Esc で取り消し",
       "escSelect": "Esc で選択ツールに戻る",
-      "selectHint": "ドラッグで選択 · Shift-クリックで追加 · Space + ドラッグまたは H でパン · ホイールでズーム",
-      "selectHintPan": "ドラッグで選択 · Shift-クリックで追加 · Space + ドラッグまたは H でパン · ピンチでズーム",
+      "escClearRow": "Esc で列をクリア",
+      "escClearStamp": "Esc でスタンプをクリア",
+      "selectHint": "ドラッグで選択 · Shift-クリックで追加 · Alt-クリックで除外 · 右ドラッグでパン · ホイールでズーム",
+      "selectHintPan": "ドラッグで選択 · Shift-クリックで追加 · Alt-クリックで除外 · 2 本指でパン · ピンチでズーム",
+      "panHint": "ドラッグで地図を移動",
       "stampPick": "コピーする植物、ゾーン、メモ、グループをクリック",
       "stampPlace": "クリックして配置",
       "stampZone": "ゾーン",
       "stampGroup": "グループ",
-      "polygon": "クリックで頂点を追加。最初の頂点をクリックするか Enter で完了。",
+      "polygon": "クリックで頂点を追加。最初の頂点をクリック、ダブルクリック、または Enter で完了。",
       "polygonKeys": "Backspace で最後の頂点を削除 · Shift で 45° に固定",
       "rectangle": "地図上をドラッグして長方形を描きます。",
+      "rectangleKeys": "Shift で正方形",
       "ellipse": "地図上をドラッグして楕円を描きます。",
+      "ellipseKeys": "Shift で正円",
       "line": "地図上をドラッグして線を描きます。",
+      "lineKeys": "Shift で 45° に固定",
       "textPlace": "メモを置く場所で地図をクリックします。",
       "textType": "メモを入力。Enter で完了。",
       "textKeys": "Shift Enter で改行",
       "measure": "2 点間をドラッグして測ります。線はガイドとして残ります。",
-      "rowKeys": "Shift で 45° に固定",
+      "rowKeys": "Shift で 45° に固定 · {{mod}} でスナップをオフ",
       "plants_one": "{{count, number}} 株",
       "species_one": "{{count, number}} 種",
       "plants_few": "{{count, number}} 株",

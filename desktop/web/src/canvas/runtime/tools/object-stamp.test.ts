@@ -342,15 +342,24 @@ describe('object stamp tool', () => {
     expectPoint(ghostPlant(h).position, h.world({ x: 120, y: 80 }))
   })
 
-  it('Esc returns to Select at once under LEGACY, pick and all', () => {
+  it('Esc drops the pick, a second Esc leaves', () => {
     const h = stampHarness({ plants: [smallApple({ x: 40, y: 40 })] })
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
 
     h.click({ x: 40, y: 40 })
-    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
+    // The pick is the tool's transient (the chain's tool-transient layer), and it holds re-origin.
+    expect(h.host.activeToolHasEscapeTransient()).toBe(true)
+    expect(h.host.holdsReorigin()).toBe(true)
     expect(h.host.command({ kind: 'escape' })).toBe('handled')
-
-    expect(h.toolState.value).toBe('select')
+    expect(h.toolState.value).toBe('object-stamp')
     expect(ghosts(h)).toEqual([])
+    expect(h.record.guidance.at(-1)).toMatchObject({ stamp: null, stampRotationDeg: null })
+
+    // Nothing held: the tool's Esc passes, and the chain's tool layer leaves.
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
+    expect(h.host.holdsReorigin()).toBe(false)
+    expect(h.host.command({ kind: 'escape' })).toBe('pass')
+    expect(h.toolState.value).toBe('object-stamp')
   })
 
   it('ignores Measurement Guides in Object Stamp sampling and placement', () => {
@@ -739,6 +748,32 @@ describe('object stamp tool', () => {
     ])
     expect(selected(h)).toEqual([{ kind: 'group', id: cloneGroup.id }])
     expect(commits).toEqual(['interaction-object-stamp'])
+  })
+
+  it('a group pick whose members were all removed refuses the placement', () => {
+    const h = stampHarness({
+      plants: [smallApple({ x: 40, y: 40 }, { canopySpreadM: 4 })],
+      groups: [{
+        kind: 'group',
+        id: 'group-1',
+        name: 'Guild unit',
+        locked: false,
+        members: [{ kind: 'plant', id: 'plant-1' }],
+      }],
+    })
+    const commits = committedEdits(h)
+
+    h.click({ x: 40, y: 40 })
+    expect(h.record.guidance.at(-1)?.stamp).toMatchObject({ kind: 'group', plants: 1 })
+    // An undo or a delete elsewhere removes the group's only member after the pick.
+    h.store.updatePersisted((draft) => {
+      draft.plants = []
+    })
+    h.click({ x: 120, y: 120 })
+
+    expect(h.store.persisted.plants).toEqual([])
+    expect(h.store.persisted.groups).toHaveLength(1)
+    expect(commits).toEqual([])
   })
 
   it('blocks Object Stamp sampling and placement for locked group sources or locked group layers', () => {

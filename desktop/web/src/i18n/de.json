@@ -166,6 +166,7 @@
       "setUnitCost": "Stückkosten festlegen…",
       "placePlantsHere": "Pflanzen hier setzen",
       "turnViewToEdge": "Ansicht nach dieser Kante drehen",
+      "finishShape": "Form abschließen",
       "renameZone": "Zone umbenennen…"
     },
     "rotationHandle": {
@@ -173,6 +174,9 @@
     },
     "zoneControlPoint": {
       "label": "Zonen-Kontrollpunkt {{index}}"
+    },
+    "zoneEdgeMidpoint": {
+      "label": "Ecke an Kante {{index}} hinzufügen"
     },
     "guideEnd": {
       "label": "Endpunkt der Messhilfe {{index}}"
@@ -776,22 +780,28 @@
       "escStopPlacing": "Esc beendet das Setzen",
       "escCancel": "Esc bricht ab",
       "escSelect": "Esc kehrt zu Auswählen zurück",
-      "selectHint": "Ziehen wählt aus · Umschalt-Klick fügt hinzu · Leertaste + Ziehen oder H verschiebt die Karte · Rad zoomt",
-      "selectHintPan": "Ziehen wählt aus · Umschalt-Klick fügt hinzu · Leertaste + Ziehen oder H verschiebt die Karte · Zusammenziehen zoomt",
+      "escClearRow": "Esc verwirft die Reihe",
+      "escClearStamp": "Esc verwirft den Stempel",
+      "selectHint": "Ziehen wählt aus · Umschalt-Klick fügt hinzu · Alt-Klick entfernt · Rechtsziehen verschiebt die Karte · Rad zoomt",
+      "selectHintPan": "Ziehen wählt aus · Umschalt-Klick fügt hinzu · Alt-Klick entfernt · zwei Finger verschieben die Karte · Zusammenziehen zoomt",
+      "panHint": "Ziehen verschiebt die Karte",
       "stampPick": "Klicken Sie auf eine Pflanze, Zone, Notiz oder Gruppe, um sie zu kopieren",
       "stampPlace": "klicken zum Setzen",
       "stampZone": "Zone",
       "stampGroup": "Gruppe",
-      "polygon": "Klicken Sie, um Ecken hinzuzufügen. Klicken Sie auf die erste Ecke oder drücken Sie Eingabe, um abzuschließen.",
+      "polygon": "Klicken Sie, um Ecken hinzuzufügen. Klicken Sie auf die erste Ecke, doppelklicken Sie oder drücken Sie Eingabe, um abzuschließen.",
       "polygonKeys": "Rücktaste entfernt die letzte Ecke · Umschalt hält 45°-Winkel",
       "rectangle": "Ziehen Sie über die Karte, um das Rechteck zu zeichnen.",
+      "rectangleKeys": "Umschalt zeichnet ein Quadrat",
       "ellipse": "Ziehen Sie über die Karte, um die Ellipse zu zeichnen.",
+      "ellipseKeys": "Umschalt zeichnet einen Kreis",
       "line": "Ziehen Sie über die Karte, um die Linie zu zeichnen.",
+      "lineKeys": "Umschalt hält 45°-Winkel",
       "textPlace": "Klicken Sie auf die Karte, wo die Notiz hin soll.",
       "textType": "Geben Sie die Notiz ein. Eingabe zum Abschließen.",
       "textKeys": "Umschalt Eingabe für eine neue Zeile",
       "measure": "Ziehen Sie von einem Punkt zum anderen, um zu messen. Die Linie bleibt als Hilfslinie.",
-      "rowKeys": "Umschalt hält 45°-Winkel",
+      "rowKeys": "Umschalt hält 45°-Winkel · {{mod}} schaltet das Einrasten aus",
       "plants_one": "{{count, number}} Pflanze",
       "species_one": "{{count, number}} Art",
       "plants_few": "{{count, number}} Pflanzen",

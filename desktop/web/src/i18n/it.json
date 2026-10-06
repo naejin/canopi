@@ -166,6 +166,7 @@
       "setUnitCost": "Imposta il costo unitario…",
       "placePlantsHere": "Colloca piante qui",
       "turnViewToEdge": "Ruota la vista su questo bordo",
+      "finishShape": "Completa la forma",
       "renameZone": "Rinomina zona…"
     },
     "rotationHandle": {
@@ -173,6 +174,9 @@
     },
     "zoneControlPoint": {
       "label": "Punto di controllo della zona {{index}}"
+    },
+    "zoneEdgeMidpoint": {
+      "label": "Aggiungi un angolo sul lato {{index}}"
     },
     "guideEnd": {
       "label": "Estremità della guida di misura {{index}}"
@@ -776,22 +780,28 @@
       "escStopPlacing": "Esc per smettere di posizionare",
       "escCancel": "Esc per annullare",
       "escSelect": "Esc per tornare a Seleziona",
-      "selectHint": "Trascina per selezionare · Maiusc-clic aggiunge · Spazio + trascinare o H sposta la mappa · la rotellina ingrandisce",
-      "selectHintPan": "Trascina per selezionare · Maiusc-clic aggiunge · Spazio + trascinare o H sposta la mappa · il pizzico ingrandisce",
+      "escClearRow": "Esc per cancellare il filare",
+      "escClearStamp": "Esc per cancellare il timbro",
+      "selectHint": "Trascina per selezionare · Maiusc-clic aggiunge · Alt-clic rimuove · trascinare col tasto destro sposta la mappa · la rotellina ingrandisce",
+      "selectHintPan": "Trascina per selezionare · Maiusc-clic aggiunge · Alt-clic rimuove · due dita spostano la mappa · il pizzico ingrandisce",
+      "panHint": "Trascina per spostare la mappa",
       "stampPick": "Fai clic su una pianta, zona, nota o gruppo per copiarlo",
       "stampPlace": "fai clic per posizionare",
       "stampZone": "Zona",
       "stampGroup": "Gruppo",
-      "polygon": "Fai clic per aggiungere vertici. Fai clic sul primo vertice o premi Invio per finire.",
+      "polygon": "Fai clic per aggiungere vertici. Fai clic sul primo vertice, fai doppio clic o premi Invio per finire.",
       "polygonKeys": "Backspace rimuove l’ultimo vertice · Maiusc mantiene angoli di 45°",
       "rectangle": "Trascina sulla mappa per disegnare il rettangolo.",
+      "rectangleKeys": "Maiusc disegna un quadrato",
       "ellipse": "Trascina sulla mappa per disegnare l’ellisse.",
+      "ellipseKeys": "Maiusc disegna un cerchio",
       "line": "Trascina sulla mappa per disegnare la linea.",
+      "lineKeys": "Maiusc mantiene angoli di 45°",
       "textPlace": "Fai clic sulla mappa dove va la nota.",
       "textType": "Scrivi la nota. Invio per finire.",
       "textKeys": "Maiusc Invio per una nuova riga",
       "measure": "Trascina da un punto all’altro per misurare. La linea resta come guida.",
-      "rowKeys": "Maiusc mantiene angoli di 45°",
+      "rowKeys": "Maiusc mantiene angoli di 45° · {{mod}} disattiva l’aggancio",
       "plants_one": "{{count, number}} pianta",
       "species_one": "{{count, number}} specie",
       "plants_few": "{{count, number}} piante",

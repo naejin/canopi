@@ -4,7 +4,8 @@
 // hit tests (hit-testing.ts) at the frame's pixelsPerMetre, read at every query; nothing is cached, and an index is
 // later work. hitAt without a filter is hitTestTopLevel exactly, object locks included (the tool rejects them);
 // `includeLocked` is hitTestVisibleTopLevel (the host's hover); with `toleranceScreenPx` it answers only the nearest
-// zone edge within that many pixels (hitZoneEdge, "Turn view to this edge"). hitInQuad tests the band's world quad as a
+// zone edge within that many pixels (hitZoneEdge, "Turn view to this edge"); `fill` falls back to the topmost zone whose
+// fill holds the point, and `overview` skips plants (hit-testing.ts). hitInQuad tests the band's world quad as a
 // polygon, never its world box. nearestPlant is today's Place plants scan (today's (a4c86d39)
 // interaction/plant-placement-preview.ts): the first plant in scene order wins a tie.
 // tools/tool-host.ts re-exports the factory.
@@ -13,7 +14,7 @@ import type { ToolSceneSource } from '../interaction-ports'
 import { buildPlantPresentationEntries, type PlantPresentationContext } from '../plant-presentation'
 import type { ScenePersistedState, ScenePlantEntity } from '../scene/types'
 import type { WorldPoint, WorldQuad } from '../view/types'
-import { hitTestTopLevel, hitTestVisibleTopLevel, hitZoneEdge, queryQuadTopLevel } from './hit-testing'
+import { hitTestTopLevel, hitTestVisibleTopLevel, hitTestZoneFill, hitZoneEdge, queryQuadTopLevel } from './hit-testing'
 import type { HitFilter, HitTarget, ToolScene } from './tool'
 
 export function createToolScene(source: ToolSceneSource): ToolScene {
@@ -32,17 +33,29 @@ export function createToolScene(source: ToolSceneSource): ToolScene {
         const edge = hitZoneEdge(persisted(), world, filter.toleranceScreenPx, source.pixelsPerMetre())
         return edge ? { kind: 'zone-edge', ...edge } : null
       }
-      const hitTest = filter?.includeLocked ? hitTestVisibleTopLevel : hitTestTopLevel
-      const hit = hitTest(
-        persisted(),
-        world,
-        source.pixelsPerMetre(),
-        source.speciesCache(),
-        source.plantContext,
-        source.selection(),
-        source.store.session.hoveredTarget,
-      )
-      return hit ? { kind: 'object', target: hit } : null
+      const overview = filter?.overview === true
+      const hit = filter?.includeLocked
+        ? hitTestVisibleTopLevel(
+          persisted(),
+          world,
+          source.pixelsPerMetre(),
+          source.speciesCache(),
+          source.plantContext,
+          source.selection(),
+          source.store.session.hoveredTarget,
+        )
+        : hitTestTopLevel(
+          persisted(),
+          world,
+          source.pixelsPerMetre(),
+          source.speciesCache(),
+          source.plantContext,
+          source.selection(),
+          source.store.session.hoveredTarget,
+          overview,
+        )
+      const target = hit ?? (filter?.fill ? hitTestZoneFill(persisted(), world, overview) : null)
+      return target ? { kind: 'object', target } : null
     },
     hitInQuad(quad: WorldQuad, filter?: HitFilter): readonly HitTarget[] {
       if (filter?.includeLocked) {
@@ -55,6 +68,7 @@ export function createToolScene(source: ToolSceneSource): ToolScene {
         source.speciesCache(),
         source.plantContext,
         source.selection(),
+        filter?.overview === true,
       ).map((target) => ({ kind: 'object', target }))
     },
     nearestPlant(world: WorldPoint) {

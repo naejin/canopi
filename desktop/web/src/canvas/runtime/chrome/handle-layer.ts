@@ -2,9 +2,11 @@
 //
 // Owns the DOM handles the ToolHost publishes (ToolHostDeps.chrome.setHandles, spec §1.4): each ToolHandle is drawn at its
 // anchor projected through the view frame plus its screen offset, and moves with every camera frame ('overlays'). The
-// points (zone corners and vertices, guide ends) are a 20 px hit box around an 8 px mark that grows under the pointer;
-// the rotate handle is a 28 px button kept inside the visible map area, with its key swallow and click stop (INV-LSN-13).
-// A handle's readout shows as a chip under it, and the handle being dragged is marked active. Presses on a handle are
+// points (zone corners and vertices, guide ends) are a 20 px hit box around an 8 px mark that grows under the pointer,
+// in the tab order, so Delete can reach a focused corner (focusedHandle); a polygon edge's midpoint dot is fainter
+// (opacity 0.5, a 1 px ring: GeoLibre's edge marker), drawn under the corners and left out of the tab order. The rotate handle is a 28 px button
+// kept inside the visible map area, with its key swallow and click stop (INV-LSN-13). A handle's readout shows as a chip
+// under it, and the active handle (the one dragged, or Select's selected corner) is marked and its mark drawn hollow. Presses on a handle are
 // the DOM input source's, which reads data-canvas-handle (input/dom-input-source.ts); the layer listens only on
 // its own elements (P6).
 
@@ -20,6 +22,8 @@ export interface HandleLayerOptions {
 
 export interface HandleLayer {
   setHandles(handles: readonly ToolHandle[], active: ToolHandleId | null): void
+  /** The handle that holds keyboard focus, or null. */
+  focusedHandle(): ToolHandleId | null
   dispose(): void
 }
 
@@ -27,10 +31,17 @@ interface DrawnHandle {
   handle: ToolHandle
   readonly element: HTMLElement
   readonly readout: HTMLElement
+  /** A point's mark; the rotate button has none. */
+  readonly mark: HTMLElement | null
 }
 
 const POINT_MARK_SIZE_PX = 8
+const POINT_RING_PX = 2
+const MIDPOINT_RING_PX = 1
+const MIDPOINT_OPACITY = '0.5'
 const POINT_Z_INDEX = 29
+/** Under the corners, so a corner wins where its target meets a dot's. */
+const MIDPOINT_Z_INDEX = 28
 const ROTATE_SIZE_PX = 28
 const ROTATE_Z_INDEX = 27
 /** The rotate button's distance from the visible map area's edge. */
@@ -68,7 +79,7 @@ export function createHandleLayer(options: HandleLayerOptions): HandleLayer {
     const frame = options.frames.viewFrame.peek()
     for (const handle of handles) {
       const existing = drawn.get(handle.id)
-      const entry = existing && isRotate(existing.handle) === isRotate(handle) ? existing : draw(handle)
+      const entry = existing && existing.handle.glyph === handle.glyph ? existing : draw(handle)
       if (entry !== existing) {
         existing?.element.remove()
         drawn.set(handle.id, entry)
@@ -85,7 +96,7 @@ export function createHandleLayer(options: HandleLayerOptions): HandleLayer {
     for (const entry of drawn.values()) place(entry, frame)
   }
 
-  function decorate({ handle, element, readout }: DrawnHandle): void {
+  function decorate({ handle, element, readout, mark }: DrawnHandle): void {
     element.dataset.canvasHandle = handle.id
     element.dataset.canvasHandleGlyph = handle.glyph
     element.setAttribute('aria-label', handle.label)
@@ -93,12 +104,21 @@ export function createHandleLayer(options: HandleLayerOptions): HandleLayer {
     if (isActive) element.dataset.canvasHandleActive = 'true'
     else delete element.dataset.canvasHandleActive
     if (isRotate(handle)) element.style.cursor = isActive ? 'grabbing' : 'grab'
+    if (mark) {
+      mark.style.background = isActive ? 'var(--color-surface)' : 'var(--color-primary)'
+      mark.style.borderColor = isActive ? 'var(--color-primary)' : 'var(--color-surface)'
+    }
     readout.textContent = handle.readout ?? ''
     readout.style.display = handle.readout ? 'inline-flex' : 'none'
   }
 
   return {
     setHandles,
+    focusedHandle() {
+      const focused = root.ownerDocument.activeElement
+      if (!(focused instanceof HTMLElement) || !root.contains(focused)) return null
+      return (focused.dataset.canvasHandle as ToolHandleId | undefined) ?? null
+    },
     dispose() {
       runCanvasRuntimeCleanups([
         () => stopFollowing(),
@@ -113,13 +133,15 @@ function draw(handle: ToolHandle): DrawnHandle {
   return isRotate(handle) ? drawRotate(handle) : drawPoint(handle)
 }
 
-/** Today's control point: a transparent hit box around a mark that grows under the pointer. */
+/** A point: a transparent hit box around a mark that grows under the pointer; a midpoint's mark is fainter and thinner. */
 function drawPoint(handle: ToolHandle): DrawnHandle {
+  const midpoint = handle.glyph === 'midpoint'
   const element = document.createElement('div')
   element.setAttribute('role', 'button')
+  element.tabIndex = midpoint ? -1 : 0
   Object.assign(element.style, {
     position: 'absolute',
-    zIndex: String(POINT_Z_INDEX),
+    zIndex: String(midpoint ? MIDPOINT_Z_INDEX : POINT_Z_INDEX),
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -137,10 +159,13 @@ function drawPoint(handle: ToolHandle): DrawnHandle {
     width: `${POINT_MARK_SIZE_PX}px`,
     height: `${POINT_MARK_SIZE_PX}px`,
     display: 'block',
-    border: '2px solid var(--color-surface)',
+    borderWidth: `${midpoint ? MIDPOINT_RING_PX : POINT_RING_PX}px`,
+    borderStyle: 'solid',
+    borderColor: 'var(--color-surface)',
     borderRadius: 'var(--radius-full)',
     background: 'var(--color-primary)',
     boxSizing: 'border-box',
+    ...(midpoint ? { opacity: MIDPOINT_OPACITY } : {}),
   })
   element.appendChild(mark)
   element.addEventListener('pointerenter', () => {
@@ -151,7 +176,7 @@ function drawPoint(handle: ToolHandle): DrawnHandle {
   })
   const readout = createReadout()
   element.appendChild(readout)
-  return { handle, element, readout }
+  return { handle, element, readout, mark }
 }
 
 /** Today's rotation handle: a round button that swallows keys and clicks, so neither reaches the map. */
@@ -191,7 +216,7 @@ function drawRotate(handle: ToolHandle): DrawnHandle {
     event.preventDefault()
     event.stopPropagation()
   })
-  return { handle, element, readout }
+  return { handle, element, readout, mark: null }
 }
 
 /** Today's rotation readout chip ('+15°'), under its handle. */

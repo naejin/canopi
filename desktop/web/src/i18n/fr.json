@@ -166,6 +166,7 @@
       "setUnitCost": "Définir le coût unitaire…",
       "placePlantsHere": "Placer des plantes ici",
       "turnViewToEdge": "Tourner la vue sur ce bord",
+      "finishShape": "Terminer la forme",
       "renameZone": "Renommer la zone…"
     },
     "rotationHandle": {
@@ -173,6 +174,9 @@
     },
     "zoneControlPoint": {
       "label": "Point de contrôle de zone {{index}}"
+    },
+    "zoneEdgeMidpoint": {
+      "label": "Ajouter un coin sur le côté {{index}}"
     },
     "guideEnd": {
       "label": "Extrémité du guide de mesure {{index}}"
@@ -776,22 +780,28 @@
       "escStopPlacing": "Échap pour arrêter de placer",
       "escCancel": "Échap pour annuler",
       "escSelect": "Échap pour revenir à Sélection",
-      "selectHint": "Glisser pour sélectionner · Maj-clic ajoute · Espace + glisser ou H déplace la carte · molette zoome",
-      "selectHintPan": "Glisser pour sélectionner · Maj-clic ajoute · Espace + glisser ou H déplace la carte · pincement zoome",
+      "escClearRow": "Échap pour effacer la rangée",
+      "escClearStamp": "Échap pour effacer le tampon",
+      "selectHint": "Glisser pour sélectionner · Maj-clic ajoute · Alt-clic retire · glisser du bouton droit déplace la carte · molette zoome",
+      "selectHintPan": "Glisser pour sélectionner · Maj-clic ajoute · Alt-clic retire · deux doigts déplacent la carte · pincement zoome",
+      "panHint": "Glisser pour déplacer la carte",
       "stampPick": "Cliquez sur une plante, une zone, une note ou un groupe pour le copier",
       "stampPlace": "cliquez pour placer",
       "stampZone": "Zone",
       "stampGroup": "Groupe",
-      "polygon": "Cliquez pour ajouter des sommets. Cliquez sur le premier sommet ou appuyez sur Entrée pour terminer.",
+      "polygon": "Cliquez pour ajouter des sommets. Cliquez sur le premier sommet, double-cliquez ou appuyez sur Entrée pour terminer.",
       "polygonKeys": "Retour arrière retire le dernier sommet · Maj garde des angles de 45°",
       "rectangle": "Faites glisser sur la carte pour tracer le rectangle.",
+      "rectangleKeys": "Maj trace un carré",
       "ellipse": "Faites glisser sur la carte pour tracer l’ellipse.",
+      "ellipseKeys": "Maj trace un cercle",
       "line": "Faites glisser sur la carte pour tracer la ligne.",
+      "lineKeys": "Maj garde des angles de 45°",
       "textPlace": "Cliquez sur la carte à l’endroit de la note.",
       "textType": "Saisissez la note. Entrée pour terminer.",
       "textKeys": "Maj Entrée pour une nouvelle ligne",
       "measure": "Faites glisser d’un point à un autre pour mesurer. La ligne reste comme repère.",
-      "rowKeys": "Maj garde des angles de 45°",
+      "rowKeys": "Maj garde des angles de 45° · {{mod}} désactive le magnétisme",
       "plants_one": "{{count, number}} plante",
       "species_one": "{{count, number}} espèce",
       "plants_few": "{{count, number}} plantes",

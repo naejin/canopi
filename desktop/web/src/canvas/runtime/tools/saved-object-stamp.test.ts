@@ -479,16 +479,14 @@ describe('saved object stamp tool', () => {
     expect(h.store.persisted.plants).toHaveLength(1)
   })
 
-  it('Esc returns to Select at once under LEGACY', () => {
+  it('Esc leaves at once: the held stamp is no transient, so the chain\'s tool layer leaves', () => {
     const h = harness()
     holding(h, GUILD)
     h.hover({ x: 100, y: 120 })
 
     expect(h.host.activeToolHasEscapeTransient()).toBe(false)
-    expect(h.host.command({ kind: 'escape' })).toBe('handled')
-
-    expect(h.toolState.value).toBe('select')
-    expect(ghosts(h)).toEqual([])
+    expect(h.host.command({ kind: 'escape' })).toBe('pass')
+    expect(h.toolState.value).toBe('saved-object-stamp')
   })
 
   describe('drop placement', () => {
@@ -499,12 +497,12 @@ describe('saved object stamp tool', () => {
       const at = { x: 100, y: 120 }
 
       expect(canPlaceSavedObjectStamp(scene, GUILD)).toBe(true)
-      const preview = savedObjectStampGhostShapes(scene, GUILD, at)
+      const preview = savedObjectStampGhostShapes(scene, GUILD, at, 0)
       expect(ghostsIn(preview).map((shape) => shape.opacity)).toEqual([0.62, 0.68])
       expect(templateOf(ghostsIn(preview)[0]).plants[0]!.entity.position).toEqual(at)
 
       const onCommitted = vi.fn()
-      placeSavedObjectStamp(h.edits, scene, GUILD, at, { onCommitted })
+      placeSavedObjectStamp(h.edits, scene, GUILD, at, { rotationDeg: 0, onCommitted })
 
       expect(onCommitted).toHaveBeenCalledOnce()
       expect(commits).toEqual(['interaction-saved-object-stamp'])
@@ -521,9 +519,9 @@ describe('saved object stamp tool', () => {
       expect(canPlaceSavedObjectStamp(scene, empty)).toBe(false)
       lockLayer(h, 'zones')
       expect(canPlaceSavedObjectStamp(scene, LOCKED_ZONE_ONLY)).toBe(false)
-      expect(savedObjectStampGhostShapes(scene, LOCKED_ZONE_ONLY, { x: 10, y: 10 })).toBeNull()
+      expect(savedObjectStampGhostShapes(scene, LOCKED_ZONE_ONLY, { x: 10, y: 10 }, 0)).toBeNull()
       const onCommitted = vi.fn()
-      placeSavedObjectStamp(h.edits, scene, LOCKED_ZONE_ONLY, { x: 10, y: 10 }, { onCommitted })
+      placeSavedObjectStamp(h.edits, scene, LOCKED_ZONE_ONLY, { x: 10, y: 10 }, { rotationDeg: 0, onCommitted })
       expect(onCommitted).not.toHaveBeenCalled()
       h.store.updatePersisted((draft) => {
         draft.layers = draft.layers.map((layer) => layer.name === 'plants' ? { ...layer, visible: false } : layer)
