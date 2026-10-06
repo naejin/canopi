@@ -1,3 +1,4 @@
+import { effect } from '@preact/signals'
 import { describe, expect, it } from 'vitest'
 
 import type { SceneCommand } from '../canvas/runtime/scene-commands'
@@ -72,5 +73,19 @@ describe('Scene history persistence checkpoints', () => {
       expect(history.undo(() => {})).not.toBeNull()
     }
     expect(history.isClean).toBe(true)
+  })
+
+  it('a canUndo observer that throws still lets the clean state be reported', () => {
+    const reports: boolean[] = []
+    const history = new SceneHistory({ reportCleanState: (clean) => reports.push(clean) })
+    const dispose = effect(() => {
+      if (history.canUndo.value) throw new Error('observer failed')
+    })
+    try {
+      expect(() => history.record(command('first'), () => {})).toThrow('observer failed')
+      expect(reports).toEqual([false])
+    } finally {
+      dispose()
+    }
   })
 })

@@ -1,4 +1,5 @@
 import { batch, signal } from '@preact/signals'
+import { runCanvasRuntimeCleanups } from './cleanup'
 import type { SceneCommand } from './scene-commands'
 
 const MAX_HISTORY = 500
@@ -138,11 +139,14 @@ export class SceneHistory {
     return entry.command
   }
 
+  /** Publishes `canUndo`/`canRedo` and the clean state; each step runs once and their errors are rethrown together. */
   private _updateSignals(): void {
-    batch(() => {
-      this.canUndo.value = this._past.length > 0
-      this.canRedo.value = this._future.length > 0
-    })
-    this._reportCleanState(this.isClean)
+    runCanvasRuntimeCleanups([
+      () => batch(() => {
+        this.canUndo.value = this._past.length > 0
+        this.canRedo.value = this._future.length > 0
+      }),
+      () => this._reportCleanState(this.isClean),
+    ], 'Scene history failed to publish')
   }
 }
