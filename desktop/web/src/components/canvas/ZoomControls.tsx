@@ -5,11 +5,11 @@ import { phoneLayout } from '../../app/shell/phone-layout'
 import {
   COMMON_MAP_SCALES,
   formatMapScale,
+  getScaleBarDisplay,
   mapScaleDenominator,
   roundScaleDenominator,
   zoomFactorForScale,
 } from '../../canvas/map-scale'
-import { getScaleBarDisplay } from '../../canvas/scale-bar'
 import { currentCanvasQuerySurface, currentCanvasViewportCommandSurface } from '../../canvas/session'
 import { t } from '../../i18n'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
