@@ -1,8 +1,7 @@
 // canvas/runtime/input/dom-input-source.ts
 //
 // Owns every DOM listener for canvas input: the map host's pointer (hover moves included), wheel, drag and focus events,
-// the one document-capture contextmenu listener, WebKit's gesture events (only with trackpad gestures on a platform that
-// has them), the window blur, the window pointer listeners while it owns a pointer and the copied GeoLibre selection-drag
+// the one document-capture contextmenu listener, WebKit's gesture events (only on a platform that has them), the window blur, the window pointer listeners while it owns a pointer and the copied GeoLibre selection-drag
 // guard on the host (keys are the key router's, app/keyboard). A press it delivers on the map owns that pointer until
 // its release, its cancel or a window blur: only then does it listen on window, and only to that pointer, so presses,
 // moves and releases that start elsewhere in the app reach the page untouched. It turns
@@ -339,7 +338,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
         listen(host, 'drop', onDrop as EventListener)
         listen(host, 'focusout', onFocusOut as EventListener)
         listen(host.ownerDocument, 'contextmenu', onContextMenu as EventListener, { capture: true })
-        if (deps.bindings().trackpadGestures && deps.platform.gestureEvents) {
+        if (deps.platform.gestureEvents) {
           for (const type of ['gesturestart', 'gesturechange', 'gestureend'] as const) listen(host, type, gestureHandler(type))
         }
         // A map drag never selects or drags page text; the note editor and the map's fields keep their own.

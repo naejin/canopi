@@ -781,18 +781,15 @@ describe('createDomInputSource', () => {
     dispose()
   })
 
-  it('gesture listeners attach only with trackpad gestures on WebKit, copy the rotation, prevent the default and detach', () => {
+  it('gesture listeners attach only on WebKit, copy the rotation, prevent the default and detach', () => {
     const MAC_WEBKIT = { os: 'mac', gestureEvents: true } as const
     const GESTURE_TYPES = ['gesturestart', 'gesturechange', 'gestureend']
     const gestureListeners = (spy: { mock: { calls: unknown[][] } }) =>
       listenerCalls(spy).map(([type]) => type).filter((type) => GESTURE_TYPES.includes(type))
-    const without: Bindings = { ...CURRENT_BINDINGS, trackpadGestures: false }
-    for (const [platform, bindings] of [[PLATFORM, CURRENT_BINDINGS], [MAC_WEBKIT, without]] as const) {
-      const add = vi.spyOn(host, 'addEventListener')
-      createDomInputSource(deps({ platform, bindings: () => bindings })).attach(() => {})()
-      expect(gestureListeners(add)).toEqual([])
-      add.mockRestore()
-    }
+    const elsewhere = vi.spyOn(host, 'addEventListener')
+    createDomInputSource(deps({ platform: PLATFORM })).attach(() => {})()
+    expect(gestureListeners(elsewhere)).toEqual([])
+    elsewhere.mockRestore()
 
     const add = vi.spyOn(host, 'addEventListener')
     const remove = vi.spyOn(host, 'removeEventListener')
