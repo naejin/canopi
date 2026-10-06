@@ -12,7 +12,7 @@ import { modKeyName } from '../../app/shell-commands/shortcut-text'
 import { t } from '../../i18n'
 import { ControlIcon } from '../shared/ControlIcon'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
-import { useUnderRail } from '../shared/useMapChrome'
+import { useMapOccluder, useUnderRail } from '../shared/useMapChrome'
 import styles from './InspectionLens.module.css'
 
 /** The lens's arrow steps in preview pixels: plain, and with mod (Cmd on macOS, else Ctrl; spec §4.13). */
@@ -61,6 +61,8 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
   const panel = useRef<HTMLElement>(null)
   const handle = useSignal<CanvasInspectionHandle | null>(null)
   const failed = useSignal(false)
+  // The open panel covers the map's left edge: Home, Fit and framing land right of it (canopi-f47t.28).
+  useMapOccluder(panel, 'left')
   useLayoutEffect(() => {
     if (!preview.current) return
     let view: CanvasInspectionHandle
