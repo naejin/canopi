@@ -115,9 +115,9 @@ describe('Select band', () => {
     const h = harness({ scene: { ...orchard(), zones: [bed] } })
     h.select(plant('c'))
 
-    // The press in the fill clears the selection unless additive, and the drag bands; the zone never moves.
+    // The press in the fill keeps the selection until the band's release replaces it; the zone never moves.
     h.press({ x: 30, y: 30 })
-    expect(h.store.session.selectedTargets).toEqual([])
+    expect(h.store.session.selectedTargets).toEqual([plant('c')])
     h.move({ x: 60, y: 60 })
     expect(h.renderer.lastDraft()?.shapes[0]).toMatchObject({ kind: 'quad' })
     h.move({ x: 100, y: 100 })

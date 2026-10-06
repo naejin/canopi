@@ -6,9 +6,9 @@
 // plant's species, and on a note opens the note for editing; an additive press toggles the hit; any
 // other hit is selected unless it already is and starts a move-drag, and an Alt click on it (subtractive) removes it from
 // the selection the press found; empty ground (or a hit locked through its group or layer) clears the selection unless
-// additive and starts the band. A press inside a zone's fill with nothing else under it (HitFilter.fill) is empty ground
-// that remembers the zone: its click selects the zone (toggles it when additive, removes it on Alt, which leaves the
-// selection as it was at the press), and its drag bands. Additive is Shift, Ctrl or Cmd (ToolModifiers.additive),
+// additive and starts the band. A press inside a zone's fill with nothing else under it (HitFilter.fill) starts the band
+// but keeps the selection until it resolves: its click (a drag shorter than the band's threshold included) selects the
+// zone (toggles it when additive, removes it on Alt), its band replaces the selection, and a cancel leaves it as it was. Additive is Shift, Ctrl or Cmd (ToolModifiers.additive),
 // subtractive is Alt without them.
 
 import {
@@ -50,7 +50,9 @@ export function pressSelection(
 
   if (!hit) {
     const fill = rawHit ? null : selectableFill(ctx, point.world)
-    if (!additive && !(subtractive && fill)) ctx.effects.setSelection([])
+    // A fill press changes nothing until it resolves: its click selects the zone, its band replaces the selection, and a
+    // cancel keeps it.
+    if (!additive && !fill) ctx.effects.setSelection([])
     return { kind: 'band', additive, subtractive, fill }
   }
 

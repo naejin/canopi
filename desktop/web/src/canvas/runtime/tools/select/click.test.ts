@@ -118,6 +118,31 @@ describe('Select clicks', () => {
     expect(h.history.canUndo.value).toBe(false)
   })
 
+  it("a press in a zone's fill changes the selection only at its click: no blank on the selected zone, and Esc keeps it", () => {
+    const bed = rectZone('bed', [{ x: 100, y: 100 }, { x: 300, y: 100 }, { x: 300, y: 200 }, { x: 100, y: 200 }])
+    const pond = rectZone('pond', [{ x: 400, y: 100 }, { x: 500, y: 100 }, { x: 500, y: 200 }, { x: 400, y: 200 }])
+    const h = harness({ scene: { zones: [bed, pond] } })
+    const BED: SceneDesignObjectTarget = { kind: 'zone', id: 'bed' }
+    const POND: SceneDesignObjectTarget = { kind: 'zone', id: 'pond' }
+
+    h.select(BED)
+    const handles = h.chrome.handles.length
+    const before = h.record.selections.length
+    h.press({ x: 150, y: 130 })
+    expect(h.store.session.selectedTargets).toEqual([BED])
+    expect(h.chrome.handles).toHaveLength(handles)
+    h.release({ x: 150, y: 130 })
+    expect(h.record.selections.slice(before)).toEqual([[BED]])
+
+    h.press({ x: 450, y: 150 })
+    h.cancel('escape')
+    expect(h.store.session.selectedTargets).toEqual([BED])
+
+    // A drag shorter than the band's threshold is a click.
+    h.drag({ x: 450, y: 150 }, { x: 451, y: 150 })
+    expect(h.store.session.selectedTargets).toEqual([POND])
+  })
+
   it('Alt+click removes', () => {
     const h = harness({ scene: orchard() })
     h.select(APPLE, PEAR)
