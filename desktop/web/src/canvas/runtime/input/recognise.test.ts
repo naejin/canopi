@@ -356,7 +356,7 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
     expect(early.state.sessions.size).toBe(0)
   })
 
-  it('E4 Two fingers: nothing for the first; the pair pans by its centroid and zooms about it, carrying no point; the finger left resumes nothing', () => {
+  it('E4 Two fingers: a second finger before slop sends the host nothing; the pair pans by its centroid and zooms about it, carrying no point; the finger left resumes nothing', () => {
     const result = run(SEQUENCES.E4)
     expect(result.gestures.filter((gesture) => !NAVIGATION.has(gesture.kind))).toEqual([])
     // The second finger is captured too, and both lifts end their sessions.
@@ -423,7 +423,7 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
     expect(result.state.sessions.size).toBe(0)
   })
 
-  it('E16 blur during a pinch-twist ends the pair in place: the turn ends, never cancels (A6)', () => {
+  it('E16 blur during a pinch-twist keeps the view: the pair ends in place, its turn ends, never cancels (A6)', () => {
     const result = run(SEQUENCES.E16_BLUR)
     expect(kinds(result.steps.at(-1)!.gestures)).toEqual(['pan:end', 'rotate:end', 'cancel'])
     expect(result.gestures.some((gesture) => gesture.kind === 'rotate' && gesture.phase === 'cancel')).toBe(false)
@@ -449,7 +449,7 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
     expect(result.state.sessions.size).toBe(0)
   })
 
-  it('E7 Long press: the menu at the down point from the timer, no press; the spent finger ignores moves, a second finger and its lift', () => {
+  it('E7 Long press: the menu at the down point from the timer, no press; the spent finger ignores moves and a second finger; the lift after a long press emits nothing and stops propagation', () => {
     const result = run(SEQUENCES.E7)
     expect(result.steps[0]!.effects).toEqual([{ kind: 'prevent-default' }, { kind: 'capture', pointerId: 1 }, { kind: 'set-timer', atMs: 500 }])
     expect(result.steps.map((step) => step.gestures)).toEqual([

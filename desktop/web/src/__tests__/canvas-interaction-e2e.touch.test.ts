@@ -199,4 +199,26 @@ describe('SceneInteractionSession: touch', () => {
     expect(document.activeElement).toBe(field)
     session.dispose()
   })
+
+  it('blur during a pinch-twist keeps the view: the turn ends where it is, never restored (A6)', () => {
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('select')
+    const at = (deg: number, sign: 1 | -1) => ({
+      x: 200 + sign * 50 * Math.cos((deg * Math.PI) / 180),
+      y: 150 + sign * 50 * Math.sin((deg * Math.PI) / 180),
+    })
+
+    touchDown(at(0, 1), 1, 0)
+    touchDown(at(0, -1), 2, 10)
+    touchMove(at(40, 1), 1, 20)
+    touchMove(at(40, -1), 2, 30)
+    const turned = testView.view().camera.bearingDeg
+    expect(turned).toBeGreaterThan(300)
+    expect(turned).toBeLessThan(353)
+
+    events.windowBlur()
+
+    expect(testView.view().camera.bearingDeg).toBeCloseTo(turned, 6)
+    session.dispose()
+  })
 })
