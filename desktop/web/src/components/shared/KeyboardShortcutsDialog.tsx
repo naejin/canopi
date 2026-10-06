@@ -7,7 +7,7 @@ import { formatShortcut, modKeyName } from '../../app/shell-commands/shortcut-te
 import { WorkspaceDialog } from './WorkspaceDialog'
 import styles from './KeyboardShortcutsDialog.module.css'
 
-/** The View menu's rotation rows, which F1 shows as its two static rows instead (spec §9.1). */
+/** The View menu's rotation rows (app/canvas-commands/index.ts), which F1 shows as its two static rows instead. */
 const MENU_ROTATION_ROWS: ReadonlySet<string> = new Set(['view.resetNorth', 'view.turnViewLeft', 'view.turnViewRight'])
 
 interface ShortcutRow {
