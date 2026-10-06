@@ -2,16 +2,12 @@ import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import type { CanvasToolbarActionCommand } from '../../app/canvas-commands'
 import { ESCAPE_PRIORITY, registerEscapeLayer } from '../../app/keyboard/escape-chain'
 import type { RotationSession } from '../../canvas/runtime/view/read-surface'
+import { DEFAULT_THRESHOLDS } from '../../canvas/runtime/input/thresholds'
 import { currentCanvasQuerySurface, currentCanvasViewportCommandSurface } from '../../canvas/session'
 import { t } from '../../i18n'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import styles from './Compass.module.css'
 
-/** Travel under this is a click; past it the press turns the view (spec §4.2): 3 px for a mouse or pen, 8 px for a
- *  finger, whose tap rolls further, so a jittery tap still resets north. The 8 px is the touch slop phase 3 gives the
- *  canvas (spec §2.2); the canvas's own touch slop stays 0 until then (`bindings.ts`), so the compass does not read it. */
-const DRAG_START_PX = 3
-const TOUCH_DRAG_START_PX = 8
 /** Within this radius of the centre, on the needle, the pointer's angle is noise: it turns nothing, and the angle is
  *  taken up again where the pointer leaves it. It never decides click or drag; travel alone does. */
 const CENTRE_DEAD_ZONE_PX = 6
@@ -23,7 +19,8 @@ interface Press {
   readonly pointerId: number
   readonly start: ScreenPoint
   readonly centre: ScreenPoint
-  /** Travel that makes the press a drag: DRAG_START_PX, or TOUCH_DRAG_START_PX for a finger. */
+  /** Travel that makes the press a drag: the canvas's drag slop for the pointer kind (U17), 3 px for a mouse or pen and 8 px
+   *  for a finger, whose tap rolls further, so a jittery tap still resets north (spec §4.2). */
   readonly dragStartPx: number
   /** pending: under the drag start's travel, a click; turning: the view follows the pointer; ended: Esc, a lost capture or a window blur
    *  ended it while the pointer is still down, so its release is no click. */
@@ -106,7 +103,7 @@ export function Compass({ command, className }: {
       pointerId: event.pointerId,
       start,
       centre,
-      dragStartPx: event.pointerType === 'touch' ? TOUCH_DRAG_START_PX : DRAG_START_PX,
+      dragStartPx: DEFAULT_THRESHOLDS.dragSlopPx[event.pointerType === 'touch' || event.pointerType === 'pen' ? event.pointerType : 'mouse'],
       phase: 'pending',
       last: outsideDeadZone(centre, start) ? start : null,
       swept: 0,
