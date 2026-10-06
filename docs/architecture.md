@@ -23,7 +23,7 @@ Canopi is a desktop (Tauri) and Web app for designing agroecological sites on a 
 | Scene runtime (`SceneStore` via `SceneCanvasRuntime`) | Design objects: plants, zones, annotations, measurement guides, groups, locks, species colours, symbols and codes, scene layers | Runtime transactions |
 | Design Edit (`app/design-edit/`) | Budget, currency, timeline, consortiums, description, saved views, stories, LiDAR presentation order, extra | Design Edit commands |
 | Map layer store (`app/map-layers/`) | Basemap, satellite, LiDAR items, contours, hillshade: order, visibility, opacity, provider | Layer-store actions |
-| Settings | Last view (with bearing), basemap style, Google key (device-local credential), locale, theme, pointing device, single-key shortcuts, New Design defaults | Settings actions |
+| Settings | Last view (centre and zoom), basemap style, Google key (device-local credential), locale, theme, pointing device, single-key shortcuts, New Design defaults | Settings actions |
 
 - Scene history covers scene runtime edits. A Design Edit is outside scene history unless it opts in (LiDAR presentation order) or offers its own Undo toast (deleting a view or story); map layers and settings are never undoable.
 - Neither document authority duplicates the other's data; save composition goes through the document-session seam, which asks each authority for its part ([design document](guides/design-document.md)).

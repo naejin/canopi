@@ -114,7 +114,7 @@ Phase F cleared the key router, Esc chain, focus owner and arming rows (plan §4
 
 ## 9. Stored data that touches bearing (INV-DATA)
 
-None of these changes the `.canopi` format. Settings gain one defaulted field, `LastView.bearing` (shipped in phase 1; ADR 0021: new settings fields have defaults, which is not a migration); the per-area PDF angle was dropped (U3). Any other stored-format change may be made when it improves the project and is named in the handoff (ADR 0021, "Later format changes").
+None of these changes the `.canopi` format. Settings lose `snap_to_guides` and `LastView.bearing`, which phase 1 added (phase 2's cut stage, U33); the per-area PDF angle was dropped (U3). Any other stored-format change may be made when it improves the project and is named in the handoff (ADR 0021, "Later format changes").
 
 | ID | Where | Today | Fate | Phase |
 |---|---|---|---|---|
@@ -145,7 +145,7 @@ Line numbers are hints at the planning commit. Since U1 every document row is ch
 | INV-DOC-18 | `.interface-design/patterns/canvas-workspace.md:36`, `:41`, `:42`, `:50`, `:54` | Select card "Space + drag or H pans · wheel zooms"; Shift keeps 45°; "Space pans temporarily"; lens source rectangle; stories fly | change: pan hints per bindings, screen-relative constraints, lens and story bearing | release close, 2 |
 | INV-DOC-19 | `.interface-design/patterns/controls-and-shell.md:9`, `:34`, `:56` | View menu without rotation commands; Settings "Scroll wheel"; phone strip Select, Pan, Place plants, Polygon | change: Reset north, Turn view left/right 15° (1); Pointing device (2); phone keeps Pan, adds compass (1) | release close, 2 |
 | INV-DOC-20 | `.interface-design/patterns/controls-and-shell.md:15`, `:42`, `:44` | Recent sketch "north up"; PDF sheet; preview displacement by drag and arrows | keep `:15`; change `:42`, `:44` for Map orientation | release close |
-| INV-DOC-21 | `CONTEXT.md:31`, `:39`, `:41`, `:43`, `:75` | Settings › Canvas names Scroll wheel; "Only the camera moves"; Last view; Saved view "camera position"; right-click menu | change: Pointing device; position and direction; last view keeps the bearing; "a still right-click"; glossary term for the compass | release close, 2 |
+| INV-DOC-21 | `CONTEXT.md:31`, `:39`, `:41`, `:43`, `:75` | Settings › Canvas names Scroll wheel; "Only the camera moves"; Last view; Saved view "camera position"; right-click menu | change: Pointing device; position and direction; last view keeps centre and zoom; "a still right-click"; glossary term for the compass | release close, 2 |
 | INV-DOC-22 | `docs/review-checklist.md:21`, `:24`, `:27`, `:28`, `:87-88` | Pan, zoom, search; Esc; right-click; arrows with Shift; Scroll wheel | change: rotation checks, right-drag, mod large step, Pointing device | release close, 2 |
 | INV-DOC-23 | `docs/release-notes/v2.0.0.md:3`, `:12`, `:14`, `:56` | "Pan, zoom and search move only the view"; right-click; nudge 1 m with Shift; Scroll wheel setting | change in the release that ships each phase (2.0 is on hold) | release close, 2 |
 | INV-DOC-24 | `docs/plans/canvas-controls.md:1-65` | Draft controls plan, superseded by the rotation decision | delete; replaced by `canvas-v2-plan.md`, `canvas-v2-spec.md` and this inventory | plan |
