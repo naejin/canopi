@@ -223,6 +223,26 @@ describe('SceneInteractionSession: touch', () => {
     session.dispose()
   })
 
+  it('a pinch out across the overview threshold keeps zooming to the fingers\' end', () => {
+    // 0.12 px/m is just above overview (0.1 px/m): the pinch's first step enters it, and the camera publishes that frame mid-pinch.
+    testView.setViewport({ x: 200, y: 150, scale: 0.12 })
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('select')
+
+    touchDown({ x: 100, y: 150 }, 1, 0)
+    touchDown({ x: 300, y: 150 }, 2, 10)
+    touchMove({ x: 140, y: 150 }, 1, 20)
+    expect(testView.frames.viewFrame.peek().mode).toBe('overview')
+    touchMove({ x: 260, y: 150 }, 2, 30)
+    touchMove({ x: 150, y: 150 }, 1, 40)
+    touchUp({ x: 150, y: 150 }, 1, 50)
+    touchUp({ x: 260, y: 150 }, 2, 60)
+
+    // 200 px apart to 110: the scale follows the fingers the whole way.
+    expect(testView.viewport().scale).toBeCloseTo(0.12 * (110 / 200), 6)
+    session.dispose()
+  })
+
   it('a finger\'s tap on a polygon gives it 44 px handle boxes and dots on 132 px edges; a mouse move makes them 20 px again (Q1, Q2, Q4)', () => {
     store.updatePersisted((draft) => {
       draft.zones = [{

@@ -392,14 +392,16 @@ function reject(step: Step, id: number): void {
  * The session sends one configure per setTool call, per overview change and per pointing-device change. Each ends the
  * live sessions ('tool-change') except one that, for the same tool, only leaves overview or only changes the pointing
  * device: today's setTool cancels the live gesture whatever the tool, so re-arming the armed tool is a fence too, and
- * entering overview cancels it and releases Space.
+ * entering overview cancels it and releases Space. A touch pair is the exception: its own zoom publishes the overview
+ * frame mid-pinch, so entering overview leaves a pinch going (the pair is the only live session then).
  */
 function configure(step: Step, context: RawOf<'configure'>['context']): void {
   const previous = step.state.context
   const enteringOverview = context.mode === 'overview' && previous.mode !== 'overview'
   const leavingOverview = context.mode !== 'overview' && previous.mode === 'overview'
   const deviceChanged = context.pointingDevice !== previous.pointingDevice
-  const settingOnly = context.tool === previous.tool && !enteringOverview && (leavingOverview || deviceChanged)
+  const settingOnly = context.tool === previous.tool
+    && (enteringOverview ? step.state.touchPair !== null : leavingOverview || deviceChanged)
   if (!settingOnly) endLiveSessions(step, 'tool-change')
   if (enteringOverview) releaseSpace(step)
   step.state = {

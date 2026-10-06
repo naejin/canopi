@@ -601,6 +601,23 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
     expect(zoomsOf(result.gestures).reduce((product, zoom) => product * zoom.factor, 1)).toBeCloseTo(1.4, 9)
   })
 
+  it('E15 a pinch out across the overview threshold keeps zooming: entering overview is no fence for a pair', () => {
+    // The zoom publishes the overview frame mid-pinch, which the session hears as a configure (same tool).
+    const result = run(seq('pinch into overview', ANDROID, [
+      down(100, 100, { pointer: 'touch', id: 1 }),
+      down(200, 100, { pointer: 'touch', id: 2 }),
+      move(130, 100, { pointer: 'touch', id: 1, buttons: 1 }),
+      configure({ tool: 'select', mode: 'overview', pointingDevice: 'mouse' }),
+      move(150, 100, { pointer: 'touch', id: 1, buttons: 1 }),
+      up(150, 100, { pointer: 'touch', id: 1 }),
+      up(200, 100, { pointer: 'touch', id: 2 }),
+    ]))
+    expect(result.steps.map((step) => kinds(step.gestures))).toEqual([
+      [], ['pan:start'], ['pan:move', 'zoom'], [], ['pan:move', 'zoom'], ['pan:end'], [],
+    ])
+    expect(result.state.sessions.size).toBe(0)
+  })
+
   it('E5 the pair starts after the cancelled drag', () => {
     const result = run(seq('drag then pinch', ANDROID, [
       down(100, 100, { pointer: 'touch', id: 1 }),
