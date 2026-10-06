@@ -207,6 +207,22 @@ describe('Keyboard shortcuts dialog', () => {
     expect(keyboardShortcutsDialogOpen.value).toBe(false)
   })
 
+  it('lists Pan once, under Tools, though View lists it too', async () => {
+    const pan = { type: 'action' as const, id: 'canvas.tool.hand', label: 'Pan', shortcut: 'H', disabled: false, action: vi.fn() }
+    const withPan: MenuDefinition[] = [
+      { ...viewMenu, items: [...viewMenu.items, pan] },
+      { id: 'tools', label: 'Tools', items: [...menus[0]!.items, pan] },
+    ]
+    await act(async () => { render(<KeyboardShortcutsDialog menus={withPan} />, container) })
+    await act(async () => { openKeyboardShortcutsDialog() })
+    const rows = [...container.querySelectorAll('section section')].map((section) => [
+      section.querySelector('h3')!.textContent,
+      [...section.querySelectorAll('dt')].map((row) => row.textContent),
+    ])
+    expect(rows.filter(([, labels]) => (labels as string[]).includes('Pan')).map(([heading]) => heading))
+      .toEqual(['Tools (anywhere except text fields)'])
+  })
+
   it('shows static rotation rows in View instead of the menu\'s, and that Shift N always resets north', async () => {
     await act(async () => { render(<KeyboardShortcutsDialog menus={[...menus, viewMenu]} />, container) })
     await act(async () => { openKeyboardShortcutsDialog() })

@@ -485,6 +485,8 @@ export function createCanvasCommandProjection({
   const toolDefinitions = canvasCommandDefinitions.filter(
     (definition): definition is CanvasToolCommandDefinition => definition.kind === 'tool',
   )
+  const panTool = project(toolDefinitions.find((definition) => definition.tool === 'hand')!)
+  const viewPan: CanvasToolbarActionCommand = { ...panTool, id: 'pan', action: () => panTool.action('menu') }
 
   return {
     toolGroups: CANVAS_TOOL_GROUP_ORDER.map((group) => {
@@ -510,8 +512,12 @@ export function createCanvasCommandProjection({
     editActions: canvasCommandDefinitions
       .filter((definition): definition is CanvasEditCommandDefinition => definition.kind === 'edit')
       .map(projectAction),
+    // View › Pan is the Pan tool's own command, after the view turns: Pan is off the main rail, so View and Tools
+    // both list it.
     viewActions: canvasCommandDefinitions
       .filter((definition): definition is CanvasViewCommandDefinition => definition.kind === 'view')
-      .map(projectAction),
+      .flatMap((definition) => definition.id === 'turn-view-right'
+        ? [projectAction(definition), viewPan]
+        : [projectAction(definition)]),
   }
 }

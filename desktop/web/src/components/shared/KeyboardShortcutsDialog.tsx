@@ -37,11 +37,15 @@ export function KeyboardShortcutsDialog({ menus }: { readonly menus: readonly Me
       shortcut: [...singleKeyShortcuts.value ? [key('N')] : [], key('Shift+N'), key('Shift+ArrowUp')].join(' · '),
     },
   ]
+  // A tool command View lists too (Pan) shows once, under Tools.
+  const toolIds = new Set(menus.filter((menu) => menu.id === 'tools').flatMap((menu) => menuRows(menu).map((row) => row.id)))
   const sections = menus
     .map((menu) => ({
       id: menu.id,
       label: menu.id === 'tools' ? t('shortcuts.toolsHeading', { menu: menu.label }) : menu.label,
-      rows: menu.id === 'view' ? withRotationRows(menuRows(menu), rotationRows) : menuRows(menu),
+      rows: menu.id === 'tools' ? menuRows(menu)
+        : menu.id === 'view' ? withRotationRows(menuRows(menu), rotationRows).filter((row) => !toolIds.has(row.id))
+          : menuRows(menu),
     }))
     .filter((section) => section.rows.length > 0)
   // Keys that are not menu commands: moving between areas (F6), nudging or panning on the map and turning a stamp.

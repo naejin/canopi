@@ -3,6 +3,10 @@ import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MenuAction, MenuDefinition } from '../app/shell-commands/menus'
 import { MenuBar } from '../components/shared/MenuBar'
+import { appCommandGraphChromeProjection } from '../commands/graph/projections'
+import { setCurrentCanvasSession } from '../canvas/session'
+import { currentCanvasTool } from '../canvas/session-state'
+import { createTestCanvasCommandSurface, createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 
 function action(id: string, overrides: Partial<MenuAction> = {}): MenuAction {
   return { type: 'action', id, label: id, disabled: false, action: vi.fn(), ...overrides }
@@ -214,5 +218,48 @@ describe('MenuBar keyboard and semantics', () => {
     const map = openMenu()!.querySelector('[data-command-id="map"]')!
     expect(map.getAttribute('role')).toBe('menuitemradio')
     expect(map.getAttribute('aria-checked')).toBe('true')
+  })
+})
+
+describe('MenuBar with the Desktop menus', () => {
+  let container: HTMLDivElement
+  const setTool = vi.fn()
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    setTool.mockReset()
+    currentCanvasTool.value = 'select'
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ commands: createTestCanvasCommandSurface({ tools: { setTool } }) }))
+  })
+
+  afterEach(() => {
+    render(null, container)
+    container.remove()
+    setCurrentCanvasSession(null)
+    currentCanvasTool.value = 'select'
+  })
+
+  const DesktopMenus = () => <MenuBar menus={appCommandGraphChromeProjection.value.menus} label="Menus" />
+  const openMenuItems = async (id: string) => {
+    await act(async () => { container.querySelector<HTMLButtonElement>(`[data-menu-id="${id}"]`)!.click() })
+    return container.querySelector<HTMLElement>('[data-menu-popup="root"]')!
+  }
+
+  it('View › Pan arms the Pan tool', async () => {
+    await act(async () => { render(<DesktopMenus />, container) })
+    const view = await openMenuItems('view')
+    const pan = view.querySelector<HTMLElement>('[data-command-id="canvas.tool.hand"]')!
+    expect(pan.textContent).toBe('PanH')
+    await act(async () => { pan.click() })
+    expect(setTool).toHaveBeenCalledWith('hand')
+    expect(currentCanvasTool.value).toBe('hand')
+  })
+
+  it('the Tools menu still lists Pan', async () => {
+    await act(async () => { render(<DesktopMenus />, container) })
+    const tools = await openMenuItems('tools')
+    expect([...tools.querySelectorAll<HTMLElement>('[data-command-id]')].slice(0, 2).map((item) => item.dataset.commandId))
+      .toEqual(['canvas.tool.select', 'canvas.tool.hand'])
   })
 })

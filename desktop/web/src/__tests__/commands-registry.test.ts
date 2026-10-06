@@ -210,6 +210,16 @@ describe('command registry canvas tool switching', () => {
     expect(currentCanvasTool.value).toBe('plant-spacing')
   })
 
+  it('H arms Pan', () => {
+    const setTool = vi.fn()
+    mountCanvasCommandSurface({ tools: { setTool } })
+
+    expect(pressKey({ key: 'h' }, document.body).defaultPrevented).toBe(true)
+
+    expect(setTool).toHaveBeenCalledWith('hand')
+    expect(currentCanvasTool.value).toBe('hand')
+  })
+
   it('falls back to priming the mirror tool state when no session is mounted', () => {
     getCommand('canvas.tool.text').action()
 
@@ -707,7 +717,7 @@ describe('command registry canvas tool switching', () => {
     ])
     expect(byMenu.view).toEqual([
       'view.zoomIn', 'view.zoomOut', 'view.fitToDesign',
-      'view.resetNorth', 'view.turnViewLeft', 'view.turnViewRight', 'view.searchPlace',
+      'view.resetNorth', 'view.turnViewLeft', 'view.turnViewRight', 'canvas.tool.hand', 'view.searchPlace',
       'view.saveCurrentView', 'view.manageViews',
       'canvas.toggleGrid', 'canvas.toggleSnapToGrid',
       'view.labels:none', 'view.labels:codes', 'view.labels:names', 'view.toggleToolNames',

@@ -64,6 +64,17 @@ describe('Canvas Command Projection', () => {
     expect(ariaKeyShortcuts('Shift+G')).toBe('Shift+G')
   })
 
+  it('the tool groups keep Pan, and View lists it too', () => {
+    const run = vi.fn()
+    const projection = createCanvasCommandProjection({ state: state(), run, translate: (k) => k, characterKeys: true })
+
+    expect(projectedCanvasTools(projection).find((tool) => tool.tool === 'hand')).toMatchObject({ commandId: 'canvas.tool.hand', shortcut: 'H' })
+    const pan = projection.viewActions.find((view) => view.id === 'pan')!
+    expect(pan).toMatchObject({ commandId: 'canvas.tool.hand', label: 'canvas.tools.hand', shortcut: 'H', disabled: false })
+    pan.action()
+    expect(run).toHaveBeenCalledWith({ type: 'select-tool', tool: 'hand' }, 'menu')
+  })
+
   it('dispatches the chosen tool and marks the active one', () => {
     const run = vi.fn()
     const projection = createCanvasCommandProjection({ state: state({ activeTool: 'ellipse' }), run, translate: (k) => `t:${k}`, characterKeys: true })
@@ -127,7 +138,9 @@ describe('Canvas Command Projection', () => {
 
     const noCanvas = createCanvasCommandProjection({ state: state({ canvasAvailable: false }), run: vi.fn(), translate: (k) => k, characterKeys: true })
     expect(noCanvas.editActions.every((edit) => edit.disabled)).toBe(true)
-    expect(noCanvas.viewActions.every((view) => view.disabled)).toBe(true)
+    // View › Pan is the Pan tool, which primes the tool a canvas starts with, like Tools › Pan.
+    expect(noCanvas.viewActions.filter((view) => view.disabled).map((view) => view.id))
+      .toEqual(noCanvas.viewActions.map((view) => view.id).filter((id) => id !== 'pan'))
   })
 
   it('projects history, view commands and pressed view toggles', () => {
@@ -162,6 +175,7 @@ describe('Canvas Command Projection', () => {
       ['reset-north', 'N'],
       ['turn-view-left', 'Shift ←'],
       ['turn-view-right', 'Shift →'],
+      ['pan', 'H'],
       ['search-place', 'Ctrl K'],
       ['cycle-labels', 'Shift L'],
     ])

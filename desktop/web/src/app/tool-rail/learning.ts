@@ -5,9 +5,12 @@ import { mutateSettingsProjection } from '../settings/projection'
 import { toolNamesVisible, usedCanvasTools } from '../settings/state'
 import { toolRailCrowdsMap, visibleMapFrame } from '../shell/visible-map-area'
 
-/** Every tool on the rail; names show until each has been used once on this device. */
+/**
+ * Every tool on the main rail; names show until each has been used once on this device. Pan is not on it: it lives in
+ * View and Tools, the palette, H and the phone strip.
+ */
 export const RAIL_TOOL_IDS: readonly CanvasToolId[] = canvasCommandDefinitions.flatMap(
-  (definition) => definition.kind === 'tool' ? [definition.tool] : [],
+  (definition) => definition.kind === 'tool' && definition.tool !== 'hand' ? [definition.tool] : [],
 )
 
 /** Whether the tool rail shows names and keys: the View › Tool names choice, else first use. */

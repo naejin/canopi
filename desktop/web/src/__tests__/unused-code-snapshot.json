@@ -265,7 +265,6 @@
     "src/app/stories/rich-text.ts#richTextPlainText",
     "src/app/timeline/civil-date.ts#civilWeekStartDay",
     "src/app/timeline/civil-date.ts#startOfCivilWeek",
-    "src/app/tool-rail/learning.ts#RAIL_TOOL_IDS",
     "src/canvas/plant-stamp-source.ts#readPlantStampDragData",
     "src/canvas/runtime/lifecycle-owner.ts#CanvasRuntimeLifecycleBusyError",
     "src/canvas/runtime/measurement-guides.ts#MEASUREMENT_GUIDE_LABEL_OFFSET_PX",

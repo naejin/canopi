@@ -194,7 +194,7 @@ describe('ToolRail', () => {
     await mount()
     const tools = [...container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')]
     expect(tools.map((button) => button.dataset.command)).toEqual([
-      'canvas.tool.select', 'canvas.tool.hand',
+      'canvas.tool.select',
       'canvas.tool.plantStamp', 'canvas.tool.plantSpacing', 'canvas.tool.objectStamp',
       'canvas.tool.polygon', 'canvas.tool.rectangle', 'canvas.tool.ellipse', 'canvas.tool.line',
       'canvas.tool.text', 'canvas.tool.measurementGuide',
@@ -223,12 +223,12 @@ describe('ToolRail', () => {
     await act(async () => {
       railButton('canvas.tool.select').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
     })
-    expect(document.activeElement).toBe(railButton('canvas.tool.hand'))
-    expect(railButton('canvas.tool.hand').tabIndex).toBe(0)
+    expect(document.activeElement).toBe(railButton('canvas.tool.plantStamp'))
+    expect(railButton('canvas.tool.plantStamp').tabIndex).toBe(0)
     expect(setTool).not.toHaveBeenCalled()
 
     await act(async () => {
-      railButton('canvas.tool.hand').dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }))
+      railButton('canvas.tool.plantStamp').dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }))
     })
     expect(document.activeElement).toBe(railButton('edit.redo'))
   })
@@ -286,6 +286,26 @@ describe('ToolRail', () => {
     expect(railButton('edit.undo')).not.toBeNull()
   })
 
+  it('Pan is not on the main rail and stays in the phone strip', async () => {
+    currentCanvasTool.value = 'hand'
+    await mount()
+    const railItems = () => [...container.querySelectorAll<HTMLButtonElement>('[data-rail-item]')]
+    expect(railButton('canvas.tool.hand')).toBeNull()
+    expect(container.querySelector('[data-tool-rail-more]')).toBeNull()
+    // With Pan armed off the rail, the rail keeps its one tab stop on the first tool.
+    expect(railItems().filter((button) => button.tabIndex === 0).map((button) => button.dataset.command)).toEqual(['canvas.tool.select'])
+    // Using every rail tool ends first-use naming without Pan.
+    expect(RAIL_TOOL_IDS).not.toContain('hand')
+    await act(async () => { usedCanvasTools.value = [...RAIL_TOOL_IDS] })
+    expect(container.querySelector('[role="toolbar"]')!.getAttribute('data-tool-rail')).toBe('icons')
+
+    await act(async () => { phoneLayout.value = 'portrait' })
+    expect(railItems().map((button) => button.dataset.command ?? 'more')).toEqual([
+      'canvas.tool.select', 'canvas.tool.hand', 'canvas.tool.plantStamp', 'canvas.tool.polygon', 'more',
+    ])
+    expect(railButton('canvas.tool.hand').getAttribute('aria-pressed')).toBe('true')
+  })
+
   describe('in a short window', () => {
     // The rail's measured layout: 4 px padding, 36 px buttons 2 px apart.
     const RAIL_TOP = 72
@@ -323,7 +343,7 @@ describe('ToolRail', () => {
         await Promise.resolve()
       })
       expect(railItems()).toEqual([
-        'canvas.tool.select', 'canvas.tool.hand', 'canvas.tool.plantStamp', 'canvas.tool.plantSpacing',
+        'canvas.tool.select', 'canvas.tool.plantStamp', 'canvas.tool.plantSpacing', 'canvas.tool.objectStamp',
         'More tools', 'edit.undo', 'edit.redo',
       ])
       const more = container.querySelector<HTMLButtonElement>('[data-tool-rail-more]')!
@@ -331,9 +351,9 @@ describe('ToolRail', () => {
       // Still one tab stop, and the arrows walk through More to Undo without opening it.
       expect(railItems().filter((_, index) => container.querySelectorAll<HTMLButtonElement>('[data-rail-item]')[index]!.tabIndex === 0))
         .toEqual(['canvas.tool.select'])
-      railButton('canvas.tool.plantSpacing').focus()
+      railButton('canvas.tool.objectStamp').focus()
       await act(async () => {
-        railButton('canvas.tool.plantSpacing').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+        railButton('canvas.tool.objectStamp').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
       })
       expect(document.activeElement).toBe(more)
       await act(async () => {
@@ -345,7 +365,6 @@ describe('ToolRail', () => {
       await act(async () => { more.click() })
       const items = Array.from(document.querySelectorAll<HTMLElement>('[role="menu"] [role^="menuitem"]'))
       expect(items.map((item) => item.textContent)).toEqual([
-        expect.stringContaining('Place a stamp'),
         expect.stringContaining('Polygon zone'),
         expect.stringContaining('Rectangle zone'),
         expect.stringContaining('Ellipse zone'),
@@ -353,9 +372,9 @@ describe('ToolRail', () => {
         expect.stringContaining('Text note'),
         expect.stringContaining('Measure'),
       ])
-      expect(items[2]!.textContent).toContain('R')
-      expect(items[2]!.getAttribute('aria-keyshortcuts')).toBe('R')
-      await act(async () => { items[2]!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+      expect(items[1]!.textContent).toContain('R')
+      expect(items[1]!.getAttribute('aria-keyshortcuts')).toBe('R')
+      await act(async () => { items[1]!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
       expect(setTool).toHaveBeenCalledWith('rectangle')
       expect(currentCanvasTool.value).toBe('rectangle')
       // More shows that it holds the active tool.
