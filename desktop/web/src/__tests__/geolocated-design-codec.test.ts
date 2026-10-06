@@ -151,6 +151,23 @@ describe('geolocated design codec', () => {
     }
   })
 
+  it('a point at lon 181 saves as 180 and the file reopens', () => {
+    const file = currentDesign({
+      plants: [plant('east', { lon: 179.5, lat: 0 })],
+      zones: [], annotations: [], measurement_guides: [],
+    })
+    const store = new SceneStore().hydrate(file)
+    const plane = createSessionPlane(file.plants[0]!.position)
+    const target = plane.toPlane({ lon: 181, lat: 0 })
+    store.updatePersisted((draft) => {
+      draft.plants[0]!.position = { x: draft.plants[0]!.position.x + target.x, y: draft.plants[0]!.position.y }
+    })
+    const saved = store.toCanopiFile()
+    expect(saved.plants[0]!.position.lon).toBe(180)
+    const reopened = decodeCanopiDesign(JSON.parse(JSON.stringify(saved)))
+    expect(new SceneStore().hydrate(reopened).toCanopiFile().plants[0]!.position.lon).toBe(180)
+  })
+
   it('writes 10k unedited grid positions and ellipses unchanged across 20 chained re-origins', () => {
     let seed = 0x2f6a91
     const random = () => {

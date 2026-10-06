@@ -34,14 +34,6 @@ export function formatPlantSpacingIntervalInput(meters: number): string {
   return formatMetricLength(normalized)
 }
 
-export function formatPlantSpacingGuideLength(meters: number): string {
-  const normalized = Number.isFinite(meters) && meters > 0
-    ? meters
-    : 0
-
-  return formatMetricLength(normalized)
-}
-
 function formatMetricLength(meters: number): string {
   if (meters < 1) {
     return `${formatDecimal(meters * 100)} cm`
