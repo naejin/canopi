@@ -470,12 +470,14 @@ describe('WorldMapSurface', () => {
     expect(maps[0]!.keyboard.rotationDisabled).toBe(true)
   })
 
-  it('a pinch zooms the World map, which a twist never turns', async () => {
+  it('a pinch zooms the World map, which a twist never turns and two fingers never tilt', async () => {
     await renderWorldMap(container, { templates: [], selectedId: null, onSelect: vi.fn() })
     await vi.waitFor(() => expect(maps).toHaveLength(1))
     // On a phone a pinch over the map zooms the map, not the page; the map stays north-up (spec §4.17).
     expect(maps[0]!.options.touchZoomRotate).not.toBe(false)
     expect(maps[0]!.touchZoomRotate.rotationDisabled).toBe(true)
+    // Two fingers sliding up together would tilt it, and nothing on the World map resets a tilt.
+    expect(maps[0]!.options).toMatchObject({ touchPitch: false, maxPitch: 0 })
   })
 
   it('switches between Basemap and Satellite on the live map instead of rebuilding it', async () => {
