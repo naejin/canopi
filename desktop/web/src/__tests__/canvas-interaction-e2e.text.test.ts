@@ -14,6 +14,7 @@ import {
   createInteractionDeps,
   annotationTarget,
   nextAnimationFrame,
+  enterOverview,
   captureWindowErrors,
   makeTextAnnotation,
   installSceneInteractionFixture,
@@ -203,6 +204,31 @@ describe('SceneInteractionSession', () => {
     expect(container.querySelector('textarea')).toBeNull()
 
     events.pointerDown({ x: 80, y: 90 }, { button: 0 })
+    expect(noteEntry()!.style.left).toBe('80px')
+    session.dispose()
+  })
+
+  it('entering overview with a note whose commit is refused discards it, and Text places the next note (B5)', async () => {
+    const deps = createInteractionDeps(container, store, testView)
+    const session = createTestSession(deps)
+    session.setTool('text')
+    container.tabIndex = 0
+    events.pointerDown({ x: 24, y: 32 }, { button: 0 })
+    events.pointerUp({ x: 24, y: 32 }, { button: 0 })
+    await nextAnimationFrame()
+    noteEntry()!.value = 'Busy note'
+
+    // The scene is busy: overview's commit is refused, and the note is discarded.
+    const busy = deps.sceneEdits.begin('external-preview')
+    const leaveOverview = enterOverview(testView)
+    expect(noteEntry()).toBeNull()
+    busy.abort()
+    leaveOverview()
+    expect(store.persisted.annotations).toHaveLength(0)
+
+    // Text took the discard: the next press opens a new note where it lands.
+    events.pointerDown({ x: 80, y: 90 }, { button: 0 })
+    events.pointerUp({ x: 80, y: 90 }, { button: 0 })
     expect(noteEntry()!.style.left).toBe('80px')
     session.dispose()
   })

@@ -30,6 +30,8 @@ export interface TextEntryHost {
   open(request: TextEntryRequest, submit: (text: string) => 'close' | 'keep', onCancel?: () => void): void
   /** Discards the open entry without submitting it (no onCancel: the caller closed it). */
   close(): void
+  /** Discards the open entry and tells its opener (onCancel), as its own Esc does. */
+  cancel(): void
   /** Submits an open entry that does not hold focus (its blur commit was refused); one that holds focus is left to its blur. */
   submitUnfocused(): void
   isOpen(): boolean
@@ -100,9 +102,7 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
       if (event.key === 'Escape') {
         event.preventDefault()
         event.stopPropagation()
-        if (active !== entry) return
-        closeActive()
-        entry.onCancel?.()
+        if (active === entry) cancelActive()
       } else if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault()
         event.stopPropagation()
@@ -122,6 +122,13 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
     if (entry.submit(entry.textarea.value) === 'close' && active === entry) closeActive()
   }
 
+  function cancelActive(): void {
+    const entry = active
+    if (!entry) return
+    closeActive()
+    entry.onCancel?.()
+  }
+
   function closeActive(): void {
     const entry = active
     if (!entry) return
@@ -135,6 +142,7 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
   return {
     open,
     close: closeActive,
+    cancel: cancelActive,
     submitUnfocused() {
       if (active && active.textarea !== document.activeElement) submitActive()
     },

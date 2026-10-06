@@ -1010,8 +1010,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (deps.chrome.isTextEntryOpen()) deps.chrome.closeTextEntry()
   }
 
-  /** Entering overview commits and closes an open text entry (one whose commit is refused closes all the same), and drops
-   *  the menu and every transient. */
+  /** Entering overview commits and closes an open text entry (one whose commit is refused is discarded through its
+   *  opener's cancel, so the tool resets), and drops the menu and every transient. */
   function enterOverview(): void {
     lastHover = null
     setDropPreview(null)
@@ -1019,7 +1019,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       () => {
         if (!deps.chrome.isTextEntryOpen()) return
         focusMap()
-        closeTextEntry()
+        if (deps.chrome.isTextEntryOpen()) deps.chrome.cancelTextEntry()
       },
       () => cancelTransientInteraction('overview'),
       () => deps.menu.close(),

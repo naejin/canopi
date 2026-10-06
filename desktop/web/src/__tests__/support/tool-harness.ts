@@ -512,6 +512,11 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       closeTextEntry() {
         chrome.textEntry = null
       },
+      cancelTextEntry() {
+        const entry = chrome.textEntry
+        chrome.textEntry = null
+        entry?.onCancel?.()
+      },
       submitUnfocusedTextEntry() {
         const entry = chrome.textEntry
         if (entry && !entry.focused) submitTextEntry(entry)
