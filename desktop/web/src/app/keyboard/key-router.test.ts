@@ -10,6 +10,8 @@ function fakePort(host: HTMLElement) {
     verdict: 'pass' as CanvasKeyVerdict,
     layers: [] as CanvasEscapeLayer[],
     command: (_c: CanvasKeyCommand): boolean => true,
+    /** A pointer session or a tool transient holds the selection's deletes. */
+    holdsDeletes: false,
   }
   const port = {
     host,
@@ -17,6 +19,7 @@ function fakePort(host: HTMLElement) {
     command: vi.fn((c: CanvasKeyCommand) => state.command(c)),
     escapeLayers: vi.fn(() => state.layers),
     escape: vi.fn((_layer: CanvasEscapeLayer) => {}),
+    holdsSelectionDeletes: () => state.holdsDeletes,
   } satisfies CanvasKeyboardPort
   return { port, state }
 }
@@ -669,6 +672,7 @@ describe('key router', () => {
     host.focus()
     fake.state.verdict = 'pass-live'
     fake.state.layers = ['gesture', 'selection']
+    fake.state.holdsDeletes = true
     fake.state.command = () => false
     // A still drag or twist is live: the deletion would wait for it to settle and land after the release.
     expect(press({ key: 'Backspace' }, host).defaultPrevented).toBe(true)
@@ -683,10 +687,37 @@ describe('key router', () => {
 
     fake.state.verdict = 'pass'
     fake.state.layers = ['selection']
+    fake.state.holdsDeletes = false
     fake.state.command = () => false
     press({ key: 'Backspace' }, host)
     press({ key: 'Delete' }, host)
     expect(run.mock.calls.map(([command]) => command)).toEqual(['canvas.deleteSelected', 'canvas.deleteSelected'])
+  })
+
+  it('Delete, Backspace\'s fallback and Ctrl+X delete nothing during a polygon draft, from the map or a map control (canopi-f47t.21)', () => {
+    install()
+    const zoomIn = document.createElement('button')
+    document.body.append(zoomIn)
+    host.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    // A Polygon draft with two corners and a selection: no pointer is pressed, the tool holds a transient.
+    fake.state.holdsDeletes = true
+    fake.state.layers = ['tool-transient', 'tool', 'selection']
+    fake.state.command = () => false
+    host.focus()
+    expect(press({ key: 'Delete' }, host).defaultPrevented).toBe(true)
+    expect(press({ key: 'Backspace' }, host).defaultPrevented).toBe(true)
+    expect(press({ key: 'x', code: 'KeyX', ctrlKey: true }, host).defaultPrevented).toBe(true)
+    zoomIn.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    zoomIn.focus()
+    expect(press({ key: 'Delete' }, zoomIn).defaultPrevented).toBe(true)
+    expect(press({ key: 'x', code: 'KeyX', ctrlKey: true }, zoomIn).defaultPrevented).toBe(true)
+    expect(run).not.toHaveBeenCalled()
+
+    // Once the draft ends, the selection deletes again.
+    fake.state.holdsDeletes = false
+    fake.state.layers = ['selection']
+    press({ key: 'Delete' }, zoomIn)
+    expect(run.mock.calls.map(([command]) => command)).toEqual(['canvas.deleteSelected'])
   })
 
   it('Ctrl+X cuts nothing while a pointer session is live, and cuts once it settles', () => {
@@ -694,6 +725,7 @@ describe('key router', () => {
     host.focus()
     fake.state.verdict = 'pass-live'
     fake.state.layers = ['gesture', 'selection']
+    fake.state.holdsDeletes = true
     fake.state.command = () => false
     // Cut deletes the selection too: the deletion would wait for the session to settle and land after the release.
     expect(press({ key: 'x', code: 'KeyX', ctrlKey: true }, host).defaultPrevented).toBe(true)
@@ -701,6 +733,7 @@ describe('key router', () => {
 
     fake.state.verdict = 'pass'
     fake.state.layers = ['selection']
+    fake.state.holdsDeletes = false
     press({ key: 'x', code: 'KeyX', ctrlKey: true }, host)
     expect(run.mock.calls.map(([command]) => command)).toEqual(['canvas.cut'])
   })

@@ -54,8 +54,10 @@ interface CanvasKeySession {
   clearSelection(): void
 }
 
-/** The session's port: the router's CanvasKeyboardPort, plus the Menu key's time the DOM input source reads. */
+/** The session's port: the router's CanvasKeyboardPort, with its deletes hold, plus the Menu key's time the DOM input source
+ *  reads. */
 interface SessionCanvasKeyboardPort extends CanvasKeyboardPort {
+  holdsSelectionDeletes(): boolean
   /** When the keyboard last opened the canvas menu (event time), for the contextmenu echo; null before. */
   lastKeyboardMenuAt(): number | null
 }
@@ -204,6 +206,7 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionC
       if (MODIFIER_KEYS.has(k.key)) session.keyState({ space: session.spaceHeld(), mods: k.mods })
       return verdict()
     },
+    holdsSelectionDeletes: () => session.pointerSessionLive() || toolHost.holdsReorigin(),
     lastKeyboardMenuAt: () => lastMenuAt,
   }
 }
@@ -225,5 +228,6 @@ export function createForwardingCanvasKeyboardPort(
     escape: (layer) => current()?.escape(layer),
     command: (c) => current()?.command(c) ?? false,
     keyState: (state) => current()?.keyState(state) ?? 'pass',
+    holdsSelectionDeletes: () => current()?.holdsSelectionDeletes?.() ?? false,
   }
 }

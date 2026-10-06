@@ -247,11 +247,12 @@ const DELETES_SELECTION: ReadonlySet<ShellCommandId | CanvasCommandId> = new Set
   'canvas.cut',
 ])
 
-/** A sink command from a key. A command that deletes the selection is consumed and runs nothing while a pointer
- *  session is live (a still drag, twist or rotate included): it would wait for the session to settle and land after
- *  the release. */
+/** A sink command from a key. A command that deletes the selection is consumed and runs nothing while the canvas holds
+ *  it (U33, canopi-f47t.21): a live pointer session (a still drag, twist or rotate included), whose deletion would wait
+ *  for it to settle and land after the release, or a tool transient (a draft, a row source, Place plants' waiting point,
+ *  a held stamp pick). From any focus, since a canvas row's fallback passes here too. */
 function runSink(deps: KeyRouterDeps, port: CanvasKeyboardPort | null, command: ShellCommandId | CanvasCommandId): boolean {
-  if (DELETES_SELECTION.has(command) && (port?.escapeLayers().includes('gesture') ?? false)) return true
+  if (DELETES_SELECTION.has(command) && (port?.holdsSelectionDeletes?.() ?? false)) return true
   return deps.commands.run(command)
 }
 

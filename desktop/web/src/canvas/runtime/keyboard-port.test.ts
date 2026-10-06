@@ -41,12 +41,14 @@ interface Fixture {
   live: boolean
   space: boolean
   transient: boolean
+  /** A tool transient that is no Esc layer (Place plants' waiting point): it holds re-origin only. */
+  waiting: boolean
   port: ReturnType<typeof createCanvasKeyboardPort>
 }
 
 function fixture(options: { readonly tool?: ToolId; readonly reply?: (c: ToolCommand) => ToolReply } = {}): Fixture {
   const tool = signal<ToolId>(options.tool ?? 'select')
-  const state = { selected: false, nudging: false, live: false, space: false, transient: false }
+  const state = { selected: false, nudging: false, live: false, space: false, transient: false, waiting: false }
   const toolHost = {
     nudge: vi.fn((): 'handled' | 'refused' | 'pass' => 'pass'),
     command: vi.fn(options.reply ?? ((): ToolReply => 'pass')),
@@ -61,6 +63,7 @@ function fixture(options: { readonly tool?: ToolId; readonly reply?: (c: ToolCom
     hasNudgeSeries: () => state.nudging,
     activeToolIsSelect: () => tool.peek() === 'select',
     activeToolHasEscapeTransient: () => state.transient,
+    holdsReorigin: () => state.transient || state.waiting,
     textEntryOpen: () => false,
   } as unknown as ToolHost
   const session = {
@@ -94,6 +97,8 @@ function fixture(options: { readonly tool?: ToolId; readonly reply?: (c: ToolCom
     set space(value: boolean) { state.space = value },
     get transient() { return state.transient },
     set transient(value: boolean) { state.transient = value },
+    get waiting() { return state.waiting },
+    set waiting(value: boolean) { state.waiting = value },
     port: undefined as unknown as ReturnType<typeof createCanvasKeyboardPort>,
   }
   result.port = createCanvasKeyboardPort({
@@ -278,6 +283,21 @@ describe('createCanvasKeyboardPort', () => {
     f.live = true
     expect(keyState(f.port, { key: 'a' })).toBe('pass-live')
     expect(keyState(f.port, { type: 'keyup', key: 'a' })).toBe('pass-live')
+  })
+
+  it('holds the selection\'s deletes while a pointer session or a tool transient lives, Place plants\' waiting point included (canopi-f47t.21)', () => {
+    const f = fixture({ tool: 'polygon' })
+    expect(f.port.holdsSelectionDeletes()).toBe(false)
+    f.transient = true
+    expect(f.port.holdsSelectionDeletes()).toBe(true)
+    f.transient = false
+    // A waiting point is no Esc layer, and still holds them.
+    f.waiting = true
+    expect(f.port.escapeLayers()).not.toContain('tool-transient')
+    expect(f.port.holdsSelectionDeletes()).toBe(true)
+    f.waiting = false
+    f.live = true
+    expect(f.port.holdsSelectionDeletes()).toBe(true)
   })
 
   it('in overview only a live or interrupted gesture is an Esc layer, and Space still holds', () => {

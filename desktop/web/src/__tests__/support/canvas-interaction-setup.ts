@@ -25,8 +25,9 @@ import {
 import { createTestCanvasQuerySurface } from './canvas-query-surface'
 import { snapToGridEnabled } from '../../app/canvas-settings/signals'
 import { plantSpacingIntervalM, singleKeyShortcuts } from '../../app/settings/state'
-import type { KeyRouterHandle } from '../../app/keyboard/key-router'
-import { installCanvasKeyRouter } from './key-router'
+import { installKeyRouter, type KeyRouterHandle } from '../../app/keyboard/key-router'
+import { CANVAS_KEYMAP_ROWS } from '../../app/keyboard/keymap'
+import { TEST_KEY_PLATFORM } from './key-router'
 import { t } from '../../i18n'
 import { planarToViewCamera, screenToGeo } from '../../canvas/runtime/view/camera-math'
 import { createSessionPlane } from '../../canvas/session-plane'
@@ -715,6 +716,8 @@ export function installSceneInteractionFixture(
   let flushToolCard: () => void
   let keyRouter: KeyRouterHandle
   let releaseMapRegion: () => void
+  /** The edition's command sink under the canvas rows: records what a key runs there and consumes nothing. */
+  const keyCommands = vi.fn((_command: string): boolean => false)
 
   function createTestSession(deps: SceneInteractionSessionDeps): SceneInteractionSession {
     const session = createSceneInteractionSession(deps)
@@ -797,7 +800,18 @@ export function installSceneInteractionFixture(
     plantSpacingIntervalM.value = 0.5
     singleKeyShortcuts.value = true
     // The app's key router, with the canvas rows only: keys reach the latest session's port as they do in the workspace.
-    keyRouter = installCanvasKeyRouter(() => sessions.at(-1)?.keyboard ?? null)
+    keyCommands.mockClear()
+    keyRouter = installKeyRouter({
+      target: window,
+      keymap: CANVAS_KEYMAP_ROWS,
+      commands: { run: keyCommands },
+      canvas: () => sessions.at(-1)?.keyboard ?? null,
+      singleKeys: singleKeyShortcuts,
+      focus: { cycleRegion: () => false },
+      isModalOpen: () => false,
+      platform: TEST_KEY_PLATFORM,
+      document,
+    })
     assign({ container, testView, store, events, sessions, toolCardHost, flushToolCard })
   })
 
@@ -837,5 +851,6 @@ export function installSceneInteractionFixture(
     typeSpacing,
     openContextMenu,
     openContextMenuFromKeyboard,
+    keyCommands,
   }
 }
