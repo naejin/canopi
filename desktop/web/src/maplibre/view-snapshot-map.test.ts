@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { geoToMercator, mercatorToGeo } from '../canvas/projection'
 import type { MapLibreMapConstructorOptions } from './loader'
-import type { MapBackgroundHandle, MapBackgroundOptions, MapBackgroundPresentation } from './map-background'
+import {
+  mountMapBackground,
+  type MapBackgroundHandle,
+  type MapBackgroundOptions,
+  type MapBackgroundPresentation,
+} from './map-background'
 import { createSharedMapSceneLayer, type SharedMapSceneLayer, type SharedMapSceneLayerOptions } from './shared-scene-layer'
 import { createTestSceneRendererSnapshot } from '../__tests__/support/scene-renderer-snapshot'
 import type { ViewTransform } from '../canvas/runtime/view/types'
@@ -463,6 +468,25 @@ describe('view snapshot map', () => {
     backgrounds[0]!.applied = false
     await vi.advanceTimersByTimeAsync(100)
     await expect(pending).resolves.toMatchObject({ missingTiles: true })
+    await owner.dispose()
+  })
+
+  // The snapshot map has no Retry button, and the workspace sends the same background on every capture: a Basemap
+  // style that failed while offline must download again on the next capture, or every later thumbnail lacks it.
+  it('downloads a Basemap style that failed again on the next capture, through the real background band', async () => {
+    vi.useFakeTimers()
+    const loadStyle = vi.fn(async () => { throw new Error('Basemap style request failed (503).') })
+    const owner = createOwner({ mountBackground: (options) => mountMapBackground({ ...options, loadStyle }) })
+
+    const first = owner.capture(request({ timeoutMs: 100 }))
+    await vi.advanceTimersByTimeAsync(100)
+    await expect(first).resolves.toMatchObject({ missingTiles: true })
+    expect(loadStyle).toHaveBeenCalledTimes(1)
+
+    const second = owner.capture(request({ timeoutMs: 100 }))
+    await vi.advanceTimersByTimeAsync(100)
+    await expect(second).resolves.toMatchObject({ missingTiles: true })
+    expect(loadStyle).toHaveBeenCalledTimes(2)
     await owner.dispose()
   })
 
