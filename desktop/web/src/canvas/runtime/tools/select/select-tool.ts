@@ -46,8 +46,6 @@ import {
 const EDGE_DOUBLE_CLICK_PX = 6
 /** A corner released within this many pixels of its press was pressed without moving (the point drag's threshold). */
 const STILL_CORNER_PX = 2
-/** Where Select reads the view's scale, to tell a zoom from a pan. */
-const PLANE_ORIGIN = { x: 0, y: 0 }
 
 /** What the press started, from the press to its release or cancel. */
 type SelectGesture =
@@ -66,10 +64,10 @@ export function createSelectTool(): CanvasTool {
   let editingNoteId: string | null = null
   /** The turn so far while the rotation handle is dragged: its readout, shown while the host shows the handles. */
   let rotationDeltaDeg: number | null = null
-  /** The view the handles were placed for: a turn moves the rotation handle above the projected hull, and a zoom changes
-   *  which polygon edges have room for a midpoint dot. */
+  /** The bearing the handles were placed at: the rotation handle sits above the projected hull, so a turn moves it. */
   let handlesBearingDeg = 0
-  let handlesMetresPerPixel = 0
+  /** The reshaped zone the handles were drawn for: a zoom changes which of its edges have room for a midpoint dot. */
+  let handlesZone: SceneZoneEntity | null = null
   let reshapePoints = new Map<ToolHandleId, ZoneControlPoint>()
   let edgeMidpoints = new Map<ToolHandleId, ZoneEdgeMidpoint>()
   let guideEndPoints = new Map<ToolHandleId, GuideEnd>()
@@ -91,9 +89,9 @@ export function createSelectTool(): CanvasTool {
     const pointDrag = gesture?.kind === 'reshape' || gesture?.kind === 'guide-end'
     const rotate = pointDrag ? null : rotateHandle(c.scene, selection, c.view, c.translate, rotationDeltaDeg)
     handlesBearingDeg = c.view.bearingDeg
-    handlesMetresPerPixel = c.view.metresPerPixelAt(PLANE_ORIGIN)
     if (rotate) handles.push(rotate)
     const zone = reshapableZone(scene, selection)
+    handlesZone = zone
     const points = zone ? zoneControlPoints(zone) : []
     reshapePoints = new Map(points.map((entry) => [entry.id, entry]))
     handles.push(...zoneControlPointHandles(points, c.translate))
@@ -108,12 +106,14 @@ export function createSelectTool(): CanvasTool {
     c.effects.setHandles(handles, selectedCorner)
   }
 
-  /** A camera frame that turned or zoomed the view redraws the handles; a pan leaves them as they are. The host re-emits a
-   *  hover or a live drag on each camera frame, so both follow it. */
+  /** A camera frame that turned the view, or zoomed it so another set of edges has room for a dot, redraws the handles;
+   *  a pan leaves them as they are. The host re-emits a hover or a live drag on each camera frame, so both follow it. */
   function followView(): void {
     if (!context) return
     const { view } = context
-    if (view.bearingDeg !== handlesBearingDeg || view.metresPerPixelAt(PLANE_ORIGIN) !== handlesMetresPerPixel) refreshHandles()
+    const dots = handlesZone ? zoneEdgeMidpoints(handlesZone, view) : []
+    const dotsChanged = dots.length !== edgeMidpoints.size || dots.some((dot) => !edgeMidpoints.has(dot.id))
+    if (view.bearingDeg !== handlesBearingDeg || dotsChanged) refreshHandles()
   }
 
   function press(point: ToolPoint, hit: HitTarget | null, clickCount: number): void {
