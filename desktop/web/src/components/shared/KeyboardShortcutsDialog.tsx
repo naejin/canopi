@@ -111,10 +111,9 @@ function menuRows(menu: MenuDefinition): ShortcutRow[] {
   ]
 }
 
-/** View's rows with the static rotation rows where the menu's first rotation row was, or last. */
+/** View's rows with the static rotation rows where the menu's first rotation row was (Reset north always shows a key). */
 function withRotationRows(rows: readonly ShortcutRow[], rotation: readonly ShortcutRow[]): ShortcutRow[] {
   const at = rows.findIndex((row) => MENU_ROTATION_ROWS.has(row.id))
   const kept = rows.filter((row) => !MENU_ROTATION_ROWS.has(row.id))
-  const index = at < 0 ? kept.length : at
-  return [...kept.slice(0, index), ...rotation, ...kept.slice(index)]
+  return [...kept.slice(0, at), ...rotation, ...kept.slice(at)]
 }
