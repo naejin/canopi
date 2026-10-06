@@ -21,8 +21,8 @@ export type Gesture =
   | { kind: 'hover'; at: ScreenPoint; pointer: PointerKind; mods: Modifiers; target: TargetClass }
   | { kind: 'hover-end' }
   | { kind: 'press'; id: number; at: ScreenPoint; pointer: PointerKind; mods: Modifiers; clickCount: number; target: PressTarget }
-  | { kind: 'tap'; id: number; at: ScreenPoint; pointer: PointerKind; mods: Modifiers; clickCount: number; target: PressTarget }
-  | { kind: 'drag-start'; id: number; from: ScreenPoint; at: ScreenPoint; pointer: PointerKind; mods: Modifiers; target: PressTarget }
+  | { kind: 'tap'; id: number; at: ScreenPoint; pointer: PointerKind; mods: Modifiers; clickCount: number }
+  | { kind: 'drag-start'; id: number; at: ScreenPoint; mods: Modifiers }
   | { kind: 'drag-move'; id: number; at: ScreenPoint; mods: Modifiers }
   | { kind: 'drag-end'; id: number; at: ScreenPoint; mods: Modifiers }
   | { kind: 'drop'; phase: 'over' | 'leave' | 'drop'; at: ScreenPoint; payload: CanvasDropPayload }

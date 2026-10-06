@@ -574,9 +574,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
   let nextPointerId = 1
   let session: {
     readonly id: number
-    readonly from: ScreenPoint
     readonly pointer: PointerKind
-    readonly target: PressTarget
     readonly clickCount: number
     last: ScreenPoint
     dragged: boolean
@@ -640,7 +638,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       // The session reports the raw pointerdown before it routes what the recogniser made of it.
       host.rawPress('primary', target, id)
       const outcome = route({ kind: 'press', id, at, pointer, mods: mods(pressOptions.mods), clickCount, target })
-      session = outcome.rejectSession ? null : { id, from: at, pointer, target, clickCount, last: at, dragged: false }
+      session = outcome.rejectSession ? null : { id, pointer, clickCount, last: at, dragged: false }
       return outcome
     },
     move(at, partial) {
@@ -649,7 +647,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       live.last = at
       if (!live.dragged) {
         live.dragged = true
-        return route({ kind: 'drag-start', id: live.id, from: live.from, at, pointer: live.pointer, mods: mods(partial), target: live.target })
+        return route({ kind: 'drag-start', id: live.id, at, mods: mods(partial) })
       }
       return route({ kind: 'drag-move', id: live.id, at, mods: mods(partial) })
     },
@@ -659,7 +657,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       session = null
       const point = at ?? live.last
       if (live.dragged) return route({ kind: 'drag-end', id: live.id, at: point, mods: mods(partial) })
-      return route({ kind: 'tap', id: live.id, at: point, pointer: live.pointer, mods: mods(partial), clickCount: live.clickCount, target: live.target })
+      return route({ kind: 'tap', id: live.id, at: point, pointer: live.pointer, mods: mods(partial), clickCount: live.clickCount })
     },
     click(at, pressOptions) {
       const outcome = harness.press(at, pressOptions)

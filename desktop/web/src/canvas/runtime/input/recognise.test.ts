@@ -519,7 +519,6 @@ describe('recognise: 5.7 middle button and Space', () => {
     const result = run(SEQUENCES.G3B)
     expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-move', 'drag-move', 'drag-end'])
     expect(result.gestures[0]).toMatchObject({ kind: 'press', target: { kind: 'handle', id: 'rotate' } })
-    expect(result.gestures[1]).toMatchObject({ kind: 'drag-start', target: { kind: 'handle', id: 'rotate' } })
   })
 
   it('G4 Space then alt-tab: blur releases Space; the later drag is primary', () => {
@@ -707,8 +706,9 @@ describe('recognise: sessions', () => {
         up(103, 100, { pointer }),
       ]))
       expect(kinds(dragged.gestures)).toEqual(['press', 'drag-start', 'drag-end'])
-      // The drag starts where the press was, at the move that passed the threshold.
-      expect(dragged.gestures[1]).toMatchObject({ from: { x: 100, y: 100 }, at: { x: 103, y: 100 } })
+      // The press is where it was; the drag starts at the move that passed the threshold.
+      expect(dragged.gestures[0]).toMatchObject({ kind: 'press', at: { x: 100, y: 100 } })
+      expect(dragged.gestures[1]).toMatchObject({ kind: 'drag-start', at: { x: 103, y: 100 } })
     }
   })
 

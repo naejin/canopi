@@ -21,7 +21,7 @@ import { ROTATE_DEG_PER_PX } from '../view/navigation-policy'
 import type { ScreenPoint } from '../view/types'
 import type { Gesture, NavigationSource, PressTarget } from './gestures'
 import type { InputPlatform } from './platform'
-import type { AdapterEffect, ButtonRole, RawInput, RecogniserConfig, RecogniserState, TargetClass } from './raw-input'
+import type { AdapterEffect, ButtonRole, RawInput, RecogniserConfig, RecogniserState } from './raw-input'
 
 export interface PointerSession {
   readonly pointerId: number
@@ -32,11 +32,8 @@ export interface PointerSession {
   readonly mode: 'pending' | 'primary' | 'pan' | 'rotate' | 'ignored'
   readonly start: ScreenPoint
   readonly last: ScreenPoint
-  readonly target: TargetClass
   readonly slopPassed: boolean
   readonly captured: boolean
-  /** The press target its editing gestures carry. */
-  readonly pressTarget: PressTarget
   /** The pan's or the rotate's source while `mode` is 'pan' or 'rotate'. */
   readonly navigation: NavigationSource | null
   /** True when a `press` reached the host, which owes it one end: a `tap` within slop, else `cancel('navigate')` for a pan
@@ -141,7 +138,6 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
     role: input.role,
     start: input.at,
     last: input.at,
-    target: input.target,
     slopPassed: false,
     clickCount: input.detail,
   } as const
@@ -153,7 +149,7 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
     // Shift+middle (checked before overview, fixture G9c): a pending rotate, silent until it passes its slop, so a still
     // click turns nothing (G9b). Shift at the press decides the mode for the whole session.
     step.effects.push({ kind: 'prevent-default' }, { kind: 'capture', pointerId: input.id })
-    putSession(step, { ...base, mode: 'rotate', captured: true, pressTarget, navigation: 'auxiliary-drag', pressed: false })
+    putSession(step, { ...base, mode: 'rotate', captured: true, navigation: 'auxiliary-drag', pressed: false })
     return
   }
 
@@ -183,7 +179,6 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
     ...base,
     mode: navigation ? 'pan' : 'pending',
     captured: true,
-    pressTarget,
     navigation,
     pressed,
   })
@@ -216,15 +211,7 @@ function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void 
   if (session.mode === 'pending') {
     if (!slopPassed) return
     putSession(step, { ...session, mode: 'primary', last: input.at, slopPassed: true })
-    step.gestures.push({
-      kind: 'drag-start',
-      id: session.pointerId,
-      from: session.start,
-      at: input.at,
-      pointer: session.pointer,
-      mods: input.mods,
-      target: session.pressTarget,
-    })
+    step.gestures.push({ kind: 'drag-start', id: session.pointerId, at: input.at, mods: input.mods })
     return
   }
   if (session.mode === 'primary') {
@@ -399,10 +386,8 @@ function platformGesture(step: Step, input: RawOf<'platform-gesture'>, config: R
       mode: 'rotate',
       start: input.at,
       last: input.at,
-      target: { kind: 'surface' },
       slopPassed: false,
       captured: false,
-      pressTarget: { kind: 'surface' },
       navigation: 'trackpad-twist',
       pressed: false,
       clickCount: 0,
@@ -484,7 +469,6 @@ function tapOf(session: PointerSession, input: RawOf<'up'>): Gesture {
     pointer: session.pointer,
     mods: input.mods,
     clickCount: session.clickCount,
-    target: session.pressTarget,
   }
 }
 
