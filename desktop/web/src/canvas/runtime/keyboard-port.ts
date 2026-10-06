@@ -56,12 +56,7 @@ interface CanvasKeySession {
   clearSelection(): void
 }
 
-/** The session's port: the router's CanvasKeyboardPort, with its deletes hold. */
-interface SessionCanvasKeyboardPort extends CanvasKeyboardPort {
-  holdsSelectionDeletes(): boolean
-}
-
-export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionCanvasKeyboardPort {
+export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): CanvasKeyboardPort {
   const { host, toolHost, session } = deps
 
   /** The arrow's rule after the host's nudge (spec §3.6): a handled or refused nudge takes the key, and on 'pass' the map
