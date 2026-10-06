@@ -214,13 +214,29 @@ function autosize({ textarea }: OpenEntry): void {
   textarea.style.height = `${Math.max(textarea.scrollHeight + topAndBottomBorders, MIN_HEIGHT_PX)}px`
 }
 
-/** The scroll width of the text, or of the placeholder held as the text for the measure while the field is empty. */
+/** The scroll width of the text or, while the field is empty, its placeholder's width with the field's padding, measured
+ *  in a hidden mirror of the field's font: writing the placeholder into the value would reset the field's undo history. */
 function contentWidth(textarea: HTMLTextAreaElement): number {
   if (textarea.value !== '' || textarea.placeholder === '') return textarea.scrollWidth
-  textarea.value = textarea.placeholder
-  const width = textarea.scrollWidth
-  textarea.value = ''
-  return width
+  const field = getComputedStyle(textarea)
+  const mirror = textarea.ownerDocument.createElement('span')
+  mirror.textContent = textarea.placeholder
+  Object.assign(mirror.style, {
+    position: 'absolute',
+    visibility: 'hidden',
+    whiteSpace: 'pre',
+    fontFamily: field.fontFamily,
+    fontSize: field.fontSize,
+    fontStyle: field.fontStyle,
+    fontWeight: field.fontWeight,
+    letterSpacing: field.letterSpacing,
+    paddingLeft: field.paddingLeft,
+    paddingRight: field.paddingRight,
+  })
+  textarea.ownerDocument.body.append(mirror)
+  const width = mirror.offsetWidth
+  mirror.remove()
+  return Math.max(width, textarea.clientWidth)
 }
 
 function noteFontSize(request: TextEntryRequest): number {

@@ -134,22 +134,36 @@ describe('the text-entry host', () => {
     expect(textarea.style.height).toBe(`${2 * 20 + 4 + 2}px`)
   })
 
-  it('a long placeholder widens the empty field, measured as its text would be, never narrower than 120 px', () => {
+  it('a long placeholder widens the empty field, measured as its text would be without writing the field, never narrower than 120 px', () => {
     const entries = mount()
     entries.open(NEW_NOTE, () => 'close')
     const textarea = entry()!
-    // The browser's measure of what the field holds: 10 px a character, 8 px of padding, 1 px borders outside.
+    // The browser's measure: 10 px a character, 8 px of padding, 1 px borders outside; the placeholder is measured in a
+    // hidden mirror of the field's font and padding.
     Object.defineProperty(textarea, 'offsetWidth', { get: () => parseFloat(textarea.style.width) })
     Object.defineProperty(textarea, 'clientWidth', { get: () => textarea.offsetWidth - 2 })
     Object.defineProperty(textarea, 'scrollWidth', {
       get: () => Math.max(textarea.value.length * 10 + 8, textarea.clientWidth),
+    })
+    const offsetWidth = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (this: HTMLElement) {
+      return (this.textContent ?? '').length * 10 + 8
+    })
+    // Writing the field's value would reset its native undo history: the measure never does.
+    const valueSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
+    const writes: string[] = []
+    Object.defineProperty(textarea, 'value', {
+      get: Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.get,
+      set(next: string) {
+        writes.push(next)
+        valueSetter.call(this, next)
+      },
     })
     // A placeholder as long as Russian's 'Введите заметку' at a wide glyph measure: wider than 120 px.
     textarea.placeholder = 'Введите заметку'
 
     textarea.dispatchEvent(new Event('input'))
     expect(textarea.style.width).toBe(`${15 * 10 + 8 + 2}px`)
-    expect(textarea.value).toBe('')
+    expect(writes).toEqual([])
 
     textarea.value = 'Bed'
     textarea.dispatchEvent(new Event('input'))
@@ -162,6 +176,9 @@ describe('the text-entry host', () => {
     textarea.placeholder = 'Note'
     textarea.dispatchEvent(new Event('input'))
     expect(textarea.style.width).toBe('120px')
+    expect(writes).toEqual(['Bed', ''])
+    expect(document.querySelectorAll('body > span')).toHaveLength(0)
+    offsetWidth.mockRestore()
   })
 
   it('opens a note\'s in-place editor at the note, sized by its text, turned by its rotation, all selected', async () => {
