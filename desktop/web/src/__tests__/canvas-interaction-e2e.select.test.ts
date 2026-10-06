@@ -2505,6 +2505,38 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('adds a polygon corner from a double-clicked midpoint dot and deletes the last pressed corner, keeping 3', () => {
+    const square = [{ x: 20, y: 20 }, { x: 120, y: 20 }, { x: 120, y: 120 }, { x: 20, y: 120 }]
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone', locked: false, id: 'polygon-1', name: 'polygon-1', zoneType: 'polygon', rotationDeg: 0,
+        points: square, fillColor: null, notes: null,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, testView)
+    const session = createTestSession(deps)
+    session.setTool('select')
+    events.pointerDown({ x: 70, y: 20 }, { button: 0 })
+    events.pointerUp({ x: 70, y: 20 }, { button: 0 })
+
+    const dot = container.querySelector<HTMLElement>('[data-canvas-handle="edge-mid:polygon-1:0"]')!
+    expect(dot.dataset.canvasHandleGlyph).toBe('midpoint')
+    events.pointerDown({ x: 70, y: 20 }, { button: 0, detail: 1, target: dot })
+    events.pointerUp({ x: 70, y: 20 }, { button: 0, detail: 1 })
+    expect(store.persisted.zones[0]!.points).toHaveLength(4)
+    events.pointerDown({ x: 70, y: 20 }, { button: 0, detail: 2, target: dot })
+    events.pointerUp({ x: 70, y: 20 }, { button: 0, detail: 2 })
+    expect(store.persisted.zones[0]!.points).toEqual([square[0], { x: 70, y: 20 }, square[1], square[2], square[3]])
+
+    const corner = container.querySelector<HTMLElement>('[data-canvas-handle="vertex:polygon-1:1"]')!
+    events.pointerDown({ x: 70, y: 20 }, { button: 0, target: corner })
+    events.pointerUp({ x: 70, y: 20 }, { button: 0 })
+    expect(container.querySelector('[data-canvas-handle-active="true"]')?.getAttribute('data-canvas-handle')).toBe('vertex:polygon-1:1')
+    expect(session.keyboard.command({ kind: 'delete-handle' })).toBe(true)
+    expect(store.persisted.zones[0]!.points).toEqual(square)
+    session.dispose()
+  })
+
   it('shows selected polygonal zone edge measurements and area', () => {
     store.updatePersisted((draft) => {
       draft.zones = [{

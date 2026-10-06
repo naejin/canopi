@@ -98,6 +98,8 @@ interface LiveGesture {
   start: ToolPoint
   readonly startHit: HitTarget | null
   readonly handle: ToolHandleId | null
+  /** The press's click count, carried by a handle drag's every phase. */
+  readonly clickCount: number
   /** Where the pointer last was, re-emitted on a camera frame while the drag is live. */
   lastScreen: ScreenPoint
   lastMods: Modifiers
@@ -169,6 +171,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let activeSource: ToolSource | null = null
   let toolDraft: DraftPresentation | null = null
   let toolHandles: readonly ToolHandle[] = NO_HANDLES
+  /** The handle the tool marks active (Select's selected corner). */
+  let toolActiveHandle: ToolHandleId | null = null
   let toolGuidance: Parameters<ToolEffects['setGuidance']>[0] = null
   let live: LiveGesture | null = null
   let lastHover: StillPointer | null = null
@@ -311,10 +315,11 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         toolDraft = draft
         changed()
       },
-      setHandles(handles) {
+      setHandles(handles, active = null) {
         // The same handles again (a refresh after a camera frame or a scene change) change nothing and redraw nothing.
-        if (!owns() || sameHandles(toolHandles, handles)) return
+        if (!owns() || (sameHandles(toolHandles, handles) && active === toolActiveHandle)) return
         toolHandles = handles
+        toolActiveHandle = active
         changed()
       },
       setGuidance(guidance) {
@@ -355,6 +360,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       settings: deps.settings,
       snap: (point) => snap(point, false),
       now: () => deps.timers.clock(),
+      focusedHandle: () => deps.chrome.focusedHandle?.() ?? null,
       translate: deps.translate,
     }
   }
@@ -500,7 +506,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   function publishHandles(): void {
     const handles = shownHandles()
-    const active = live?.kind === 'handle' ? live.handle : null
+    const active = live?.kind === 'handle' ? live.handle : handles === NO_HANDLES ? null : toolActiveHandle
     if (handles === publishedHandles && active === publishedActiveHandle) return
     publishedHandles = handles
     publishedActiveHandle = active
@@ -667,7 +673,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       const handle = g.target.id
       live = liveGesture(g, 'handle', point, null)
       publishHandles()
-      callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'start', handle, point, start: point }))
+      callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'start', handle, point, start: point, clickCount: g.clickCount }))
       clearPassiveHoverForEdit()
       return false
     }
@@ -701,6 +707,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       start,
       startHit,
       handle: target.kind === 'handle' ? target.id : null,
+      clickCount: g.clickCount,
       lastScreen: g.at,
       lastMods: g.mods,
       dragging: false,
@@ -761,7 +768,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const start = gesture.start
     if (gesture.kind === 'handle') {
       const phase = kind === 'drag-end' ? 'end' : 'move'
-      callTool(() => tool.gesture({ kind: 'handle-drag', phase, handle: gesture.handle!, point, start }))
+      callTool(() => tool.gesture({ kind: 'handle-drag', phase, handle: gesture.handle!, point, start, clickCount: gesture.clickCount }))
     } else {
       const reply = callTool(() => tool.gesture({ kind, point, start, startHit: gesture.startHit }))
       // A move the tool passes is none of its press's (Plant a row's missed press, a stamp with nothing held, a polygon
@@ -791,7 +798,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       try {
         const point = pointAt(g.at, g.mods, g.pointer, gesture.kind === 'handle')
         if (gesture.kind === 'handle') {
-          callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'end', handle: gesture.handle!, point, start: gesture.start }))
+          callTool(() => tool.gesture({
+            kind: 'handle-drag', phase: 'end', handle: gesture.handle!, point, start: gesture.start, clickCount: gesture.clickCount,
+          }))
         } else {
           callTool(() => tool.gesture({ kind: 'tap', point, hit: hitAt(point.world), clickCount: g.clickCount }))
         }
@@ -1118,6 +1127,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     draftHidden = false
     toolDraft = null
     toolHandles = NO_HANDLES
+    toolActiveHandle = null
     toolGuidance = null
     publishedGuidance = null
     const tool = TOOL_REGISTRY[id]()

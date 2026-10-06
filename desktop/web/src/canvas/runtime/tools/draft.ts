@@ -22,7 +22,7 @@ export type DraftFill = { readonly token: 'draft-fill' | 'selection-fill' }
 export interface DraftPresentation { readonly shapes: readonly DraftShape[] }
 
 export interface ToolHandle {
-  readonly id: ToolHandleId              // unique across objects: 'rotate', 'vertex:<zone id>:<index>', 'rect-corner:<id>:ne', 'guide-end:<id>:a', 'edge-mid:<zone id>:<index>'
+  readonly id: ToolHandleId              // unique across objects: 'rotate', 'vertex:<zone id>:<index>', 'rect-corner:<id>:ne', 'guide-end:<id>:a', 'edge-mid:<zone id>:<edge index>'
   readonly anchor: WorldPoint
   readonly offsetPx?: ScreenPoint        // rotate handle: 42 px above the selection's projected hull
   readonly hitRadiusPx: number           // 10 today; 22 on touch (44 px target, ADR 0010)

@@ -111,7 +111,8 @@ export type ToolGesture =
   | { readonly kind: 'press'; readonly point: ToolPoint; readonly hit: HitTarget | null; readonly clickCount: number }
   | { readonly kind: 'tap'; readonly point: ToolPoint; readonly hit: HitTarget | null; readonly clickCount: number }
   | { readonly kind: 'drag-start' | 'drag-move' | 'drag-end'; readonly point: ToolPoint; readonly start: ToolPoint; readonly startHit: HitTarget | null }
-  | { readonly kind: 'handle-drag'; readonly phase: 'start' | 'move' | 'end'; readonly handle: ToolHandleId; readonly point: ToolPoint; readonly start: ToolPoint }
+  /** clickCount: the press's (a double-click on a polygon's edge midpoint adds a corner), carried by every phase. */
+  | { readonly kind: 'handle-drag'; readonly phase: 'start' | 'move' | 'end'; readonly handle: ToolHandleId; readonly point: ToolPoint; readonly start: ToolPoint; readonly clickCount: number }
   | { readonly kind: 'cancel'; readonly reason: CancelReason }
 // Drops are not tool gestures: the host's shared drop handler serves every tool (§1.4).
 
@@ -170,7 +171,9 @@ export interface ToolEffects {
   /** History-free, dirty-free selection: click, band, clearing (today's session setSelection; a transaction's setSelection records an undo step). */
   setSelection(targets: readonly SceneDesignObjectTarget[]): void
   setDraft(draft: DraftPresentation | null): void           // world-space; drawn by the renderer
-  setHandles(handles: readonly ToolHandle[]): void          // DOM handle layer; hit by the source
+  /** DOM handle layer; hit by the source. `active`: the handle the tool marks active (Select's selected corner); the
+   *  host's live handle drag wins over it. */
+  setHandles(handles: readonly ToolHandle[], active?: ToolHandleId | null): void
   setGuidance(guidance: Partial<CanvasToolGuidance> | null): void
   requestTool(id: ToolId): void
   /** Opens the host's text entry; submit runs on Enter and on blur and keeps the field open on 'keep' (a refused commit);
@@ -194,6 +197,8 @@ export interface ToolContext {
   snap(point: WorldPoint): WorldPoint
   /** The host's clock in ms (ToolHostDeps.timers.clock): for double-click and similar windows; tests inject it. */
   now(): number
+  /** The handle that holds keyboard focus now (a tabbed-to zone corner), or null. */
+  focusedHandle(): ToolHandleId | null
   readonly translate: (key: string, options?: Readonly<Record<string, unknown>>) => string
 }
 

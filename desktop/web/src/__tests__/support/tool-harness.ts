@@ -352,6 +352,8 @@ export interface ToolHarnessTextEntry {
 export interface ToolHarnessChrome {
   readonly handles: readonly ToolHandle[]
   readonly activeHandle: ToolHandleId | null
+  /** The handle that holds keyboard focus, as the handle layer reports it; a test sets it. */
+  focusedHandle: ToolHandleId | null
   readonly cursor: string
   readonly tooltip: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null
   /** The open text entry, which ToolHostDeps.chrome.isTextEntryOpen reports; it commits on the map's focus (its blur) while it
@@ -468,6 +470,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
   const chrome = {
     handles: [] as readonly ToolHandle[],
     activeHandle: null as ToolHandleId | null,
+    focusedHandle: null as ToolHandleId | null,
     cursor: 'default',
     tooltip: null as ToolHarnessChrome['tooltip'],
     textEntry: null as ToolHarnessTextEntry | null,
@@ -512,6 +515,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
         if (entry && !entry.focused) submitTextEntry(entry)
       },
       isTextEntryOpen: () => chrome.textEntry !== null,
+      focusedHandle: () => chrome.focusedHandle,
       setTooltip(tooltip) {
         chrome.tooltip = tooltip
       },

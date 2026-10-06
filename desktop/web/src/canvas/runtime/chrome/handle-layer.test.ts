@@ -31,6 +31,14 @@ const ROTATE: ToolHandle = {
   label: 'Rotate selection',
 }
 
+const MIDPOINT: ToolHandle = {
+  id: id('edge-mid:zone-1:0'),
+  anchor: { x: 25, y: 20 },
+  hitRadiusPx: 8,
+  glyph: 'midpoint',
+  label: 'Add a corner on edge 1',
+}
+
 let container: HTMLDivElement
 let view: TestView
 let layer: HandleLayer | null = null
@@ -224,5 +232,37 @@ describe('the handle layer', () => {
     expect(() => createHandleLayer({ container, frames })).toThrow('frame subscription failed')
 
     expect(container.children).toHaveLength(0)
+  })
+
+  it("draws a polygon edge's midpoint as a fainter, smaller dot than a corner, out of the tab order", () => {
+    mount().setHandles([VERTEX, MIDPOINT], null)
+    const dot = handle(MIDPOINT.id)!
+    const mark = dot.firstElementChild as HTMLElement
+    const cornerMark = handle(VERTEX.id)!.firstElementChild as HTMLElement
+
+    expect(dot.getAttribute('aria-label')).toBe('Add a corner on edge 1')
+    expect(dot.dataset.canvasHandleGlyph).toBe('midpoint')
+    expect(mark.style.opacity).toBe('0.5')
+    expect(mark.style.width).toBe('8px')
+    expect(parseFloat(mark.style.borderWidth)).toBeLessThan(parseFloat(cornerMark.style.borderWidth))
+    expect(dot.tabIndex).toBe(-1)
+  })
+
+  it('corners are tabbable, report the focused one and draw the active one filled', () => {
+    const drawn = mount()
+    drawn.setHandles([VERTEX, CORNER, ROTATE], id('vertex:zone-1:2'))
+    expect(handle(VERTEX.id)!.tabIndex).toBe(0)
+    expect(handle(CORNER.id)!.tabIndex).toBe(0)
+    expect(handle(ROTATE.id)!.tabIndex).toBe(-1)
+    expect(drawn.focusedHandle()).toBeNull()
+
+    handle(CORNER.id)!.focus()
+    expect(drawn.focusedHandle()).toBe(CORNER.id)
+
+    const active = handle(VERTEX.id)!.firstElementChild as HTMLElement
+    const idle = handle(CORNER.id)!.firstElementChild as HTMLElement
+    expect(active.style.background).toBe('var(--color-surface)')
+    expect(active.style.borderColor).toBe('var(--color-primary)')
+    expect(idle.style.background).toBe('var(--color-primary)')
   })
 })

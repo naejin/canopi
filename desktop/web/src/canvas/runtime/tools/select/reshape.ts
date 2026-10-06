@@ -3,7 +3,10 @@
 // Owns the reshape handles of the one selected zone under Select: a line's two ends and a polygon's vertices ('vertex'), a rectangle's four corners ('corner') and an ellipse's four
 // axis ends ('vertex'), as ToolHandle data the host shows through the handle layer, and the geometry of dragging one
 // (a 0.5 m minimum side, a 0.25 m² minimum polygon area). The drag itself is point-handle.ts's, edit type
-// 'interaction-zone-control-point'. Each handle's label is translated ('canvas.zoneControlPoint.label').
+// 'interaction-zone-control-point'. A polygon also shows a fainter midpoint dot on each edge ('edge-mid'), and its
+// corners are added and removed here (edit type 'interaction-zone-corner'), keeping at least 3; rectangles, ellipses
+// and lines keep their own reshape. Each handle's label is translated ('canvas.zoneControlPoint.label',
+// 'canvas.zoneEdgeMidpoint.label').
 
 import type { ToolHandleId } from '../../interaction-types'
 import type { CanvasDesignObjectSelectionModel } from '../../runtime'
@@ -38,6 +41,11 @@ const MIN_POLYGON_AREA_M2 = 0.25
 const GEOMETRY_EPSILON = 0.000001
 /** A 20 px target. */
 const POINT_HIT_RADIUS_PX = 10
+/** A midpoint dot's target: a 16 px box around its fainter mark, so the corners beside it win at small edges. */
+const MIDPOINT_HIT_RADIUS_PX = 8
+/** A polygon keeps at least this many corners. */
+const MIN_POLYGON_CORNERS = 3
+const CORNER_EDIT = 'interaction-zone-corner'
 const RECT_CORNER_NAMES = ['nw', 'ne', 'se', 'sw'] as const
 const ELLIPSE_AXIS_NAMES = { 'ellipse-east': 'east', 'ellipse-west': 'west', 'ellipse-north': 'north', 'ellipse-south': 'south' } as const
 
@@ -86,6 +94,85 @@ export function zoneControlPointHandles(points: readonly ZoneControlPoint[], tra
     glyph: entry.kind === 'rect-corner' ? 'corner' : 'vertex',
     label: translate('canvas.zoneControlPoint.label', { index: entry.index + 1 }),
   }))
+}
+
+/** One edge's midpoint dot of a polygon: a double-click adds a corner there. */
+export interface ZoneEdgeMidpoint {
+  readonly id: ToolHandleId
+  readonly zoneId: string
+  readonly edgeIndex: number
+  readonly world: WorldPoint
+}
+
+/** A polygon's edge midpoints, edge i running from corner i to the next; none for other zones. */
+export function zoneEdgeMidpoints(zone: SceneZoneEntity): ZoneEdgeMidpoint[] {
+  if (zone.zoneType !== 'polygon' || zone.points.length < MIN_POLYGON_CORNERS) return []
+  return zone.points.map((start, edgeIndex) => ({
+    id: `edge-mid:${zone.id}:${edgeIndex}` as ToolHandleId,
+    zoneId: zone.id,
+    edgeIndex,
+    world: midpoint(start, zone.points[(edgeIndex + 1) % zone.points.length]!),
+  }))
+}
+
+/** The handles the host draws for `midpoints`. */
+export function zoneEdgeMidpointHandles(midpoints: readonly ZoneEdgeMidpoint[], translate: ToolContext['translate']): ToolHandle[] {
+  return midpoints.map((entry) => ({
+    id: entry.id,
+    anchor: entry.world,
+    hitRadiusPx: MIDPOINT_HIT_RADIUS_PX,
+    glyph: 'midpoint',
+    label: translate('canvas.zoneEdgeMidpoint.label', { index: entry.edgeIndex + 1 }),
+  }))
+}
+
+/** True when `controlPoint` is a polygon's corner, which can be removed. */
+export function isPolygonCorner(controlPoint: ZoneControlPoint): boolean {
+  return controlPoint.kind === 'polygon-vertex'
+}
+
+/** Adds a corner to the polygon on edge `edgeIndex`, at the point of the edge nearest `at`, as one undo step. */
+export function addPolygonCorner(ctx: ToolContext, zoneId: string, edgeIndex: number, at: WorldPoint): void {
+  editPolygon(ctx, zoneId, (points) => {
+    const start = points[edgeIndex]
+    const end = points[(edgeIndex + 1) % points.length]
+    if (!start || !end) return null
+    return [...points.slice(0, edgeIndex + 1), cleanPoint(nearestOnSegment(at, start, end)), ...points.slice(edgeIndex + 1)]
+  })
+}
+
+/** Removes corner `index` of the polygon as one undo step; true when it did. A polygon of 3 corners keeps them all. */
+export function removePolygonCorner(ctx: ToolContext, zoneId: string, index: number): boolean {
+  return editPolygon(ctx, zoneId, (points) => {
+    if (points.length <= MIN_POLYGON_CORNERS || index < 0 || index >= points.length) return null
+    const next = points.filter((_, pointIndex) => pointIndex !== index)
+    return Math.abs(polygonArea(next)) < MIN_POLYGON_AREA_M2 ? null : next
+  })
+}
+
+function editPolygon(
+  ctx: ToolContext,
+  zoneId: string,
+  change: (points: readonly WorldPoint[]) => WorldPoint[] | null,
+): boolean {
+  const zone = ctx.scene.persisted.zones.find((entry) => entry.id === zoneId)
+  const points = zone?.zoneType === 'polygon' ? change(zone.points) : null
+  if (!points) return false
+  ctx.effects.edits.run(CORNER_EDIT, (tx) => {
+    tx.mutate((draft) => {
+      draft.zones = draft.zones.map((entry) => entry.id === zoneId ? { ...entry, points, rotationDeg: 0 } : entry)
+    })
+  })
+  return true
+}
+
+function nearestOnSegment(point: WorldPoint, start: WorldPoint, end: WorldPoint): WorldPoint {
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const lengthSquared = dx * dx + dy * dy
+  if (lengthSquared <= 0) return start
+  const t = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared))
+  return { x: start.x + t * dx, y: start.y + t * dy }
 }
 
 /** What dragging `controlPoint` edits. */

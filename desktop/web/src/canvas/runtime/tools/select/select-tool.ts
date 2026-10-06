@@ -18,7 +18,19 @@ import { draggableGuide, guideEndHandles, guideEnds, guideEndSubject, guideLengt
 import { abortMoveDrag, beginMoveDrag, commitMoveDrag, hasMoved, moveSelection, type MoveDrag } from './move-drag'
 import { noteExists, openNoteEntry, selectedEditableNoteId } from './note-edit'
 import { beginPointHandleDrag, type PointHandleDrag } from './point-handle'
-import { reshapableZone, zoneControlPointHandles, zoneControlPoints, zoneReshapeSubject, type ZoneControlPoint } from './reshape'
+import {
+  addPolygonCorner,
+  isPolygonCorner,
+  removePolygonCorner,
+  reshapableZone,
+  zoneControlPointHandles,
+  zoneControlPoints,
+  zoneEdgeMidpointHandles,
+  zoneEdgeMidpoints,
+  zoneReshapeSubject,
+  type ZoneControlPoint,
+  type ZoneEdgeMidpoint,
+} from './reshape'
 import {
   abortRotation,
   applyRotation,
@@ -29,6 +41,11 @@ import {
   rotationConstraint,
   type RotationDrag,
 } from './rotate-handle'
+
+/** A double-click this close to the selected polygon's edge adds a corner there: the outline's own hit tolerance. */
+const EDGE_DOUBLE_CLICK_PX = 6
+/** A corner released within this many pixels of its press was pressed without moving (the point drag's threshold). */
+const STILL_CORNER_PX = 2
 
 /** What the press started, from the press to its release or cancel. */
 type SelectGesture =
@@ -50,7 +67,10 @@ export function createSelectTool(): CanvasTool {
   /** The bearing the handles were placed at: the rotation handle sits above the projected hull, so a turn moves it. */
   let handlesBearingDeg = 0
   let reshapePoints = new Map<ToolHandleId, ZoneControlPoint>()
+  let edgeMidpoints = new Map<ToolHandleId, ZoneEdgeMidpoint>()
   let guideEndPoints = new Map<ToolHandleId, GuideEnd>()
+  /** The selected corner: the polygon corner last pressed without moving, shown as the active handle; Delete removes it. */
+  let selectedCorner: ToolHandleId | null = null
 
   function ctx(): ToolContext {
     if (!context) throw new Error('The Select tool is not active.')
@@ -72,11 +92,15 @@ export function createSelectTool(): CanvasTool {
     const points = zone ? zoneControlPoints(zone) : []
     reshapePoints = new Map(points.map((entry) => [entry.id, entry]))
     handles.push(...zoneControlPointHandles(points, c.translate))
+    const midpoints = zone ? zoneEdgeMidpoints(zone) : []
+    edgeMidpoints = new Map(midpoints.map((entry) => [entry.id, entry]))
+    handles.push(...zoneEdgeMidpointHandles(midpoints, c.translate))
     const guide = draggableGuide(scene, selection)
     const ends = guide ? guideEnds(guide) : []
     guideEndPoints = new Map(ends.map((entry) => [entry.id, entry]))
     handles.push(...guideEndHandles(ends, c.translate))
-    c.effects.setHandles(handles)
+    if (selectedCorner && !reshapePoints.has(selectedCorner)) selectedCorner = null
+    c.effects.setHandles(handles, selectedCorner)
   }
 
   /** A camera frame that turned the view moves the rotation handle; a pan or a zoom leaves it where it is. The host
@@ -87,6 +111,13 @@ export function createSelectTool(): CanvasTool {
 
   function press(point: ToolPoint, hit: HitTarget | null, clickCount: number): void {
     const c = ctx()
+    selectedCorner = null
+    if (clickCount >= 2 && addCornerOnEdge(point)) {
+      lastClick = null
+      gesture = { kind: 'done' }
+      refreshHandles()
+      return
+    }
     const result = pressSelection(c, point, hit, clickCount, lastClick, c.now())
     switch (result.kind) {
       case 'band': {
@@ -113,6 +144,17 @@ export function createSelectTool(): CanvasTool {
         break
     }
     refreshHandles()
+  }
+
+  /** A double-click on an edge of the selected polygon adds a corner there (reusing hitZoneEdge's edge). */
+  function addCornerOnEdge(point: ToolPoint): boolean {
+    const c = ctx()
+    if (point.modifiers.additive || point.modifiers.subtractive) return false
+    const edge = c.scene.hitAt(point.world, { toleranceScreenPx: EDGE_DOUBLE_CLICK_PX })
+    const zone = reshapableZone(c.scene.persisted, c.scene.selectionModel())
+    if (edge?.kind !== 'zone-edge' || zone?.zoneType !== 'polygon' || edge.zoneId !== zone.id) return false
+    addPolygonCorner(c, zone.id, edge.edgeIndex, point.world)
+    return true
   }
 
   function dragTo(point: ToolPoint): void {
@@ -158,7 +200,7 @@ export function createSelectTool(): CanvasTool {
   function handleDrag(g: Extract<ToolGesture, { kind: 'handle-drag' }>): void {
     const c = ctx()
     if (g.phase === 'start') {
-      startHandleDrag(g.handle, g.start)
+      startHandleDrag(g)
       refreshHandles()
       return
     }
@@ -178,6 +220,10 @@ export function createSelectTool(): CanvasTool {
     try {
       if (current.kind === 'rotate') finishRotation(current.drag, g.point)
       else if (current.kind === 'reshape' || current.kind === 'guide-end') current.drag.finish(g.point)
+      // A polygon corner released where it was pressed becomes the selected corner.
+      const still = c.view.screenDistance(g.start.world, g.point.world) <= STILL_CORNER_PX
+      const corner = current.kind === 'reshape' ? reshapePoints.get(g.handle) : undefined
+      selectedCorner = still && corner && isPolygonCorner(corner) ? g.handle : null
     } finally {
       if (!('drag' in current) || !current.drag.open) gesture = null
       rotationDeltaDeg = null
@@ -186,10 +232,25 @@ export function createSelectTool(): CanvasTool {
     }
   }
 
-  function startHandleDrag(handle: ToolHandleId, start: ToolPoint): void {
+  function startHandleDrag(g: Extract<ToolGesture, { kind: 'handle-drag' }>): void {
+    const { handle, start } = g
     const c = ctx()
     const scene = c.scene.persisted
     const selection = c.scene.selectionModel()
+    // A double-click on an edge's midpoint dot adds a corner there; its single click and its drag do nothing.
+    const edgeMidpoint = edgeMidpoints.get(handle)
+    if (edgeMidpoint) {
+      if (g.clickCount >= 2) addPolygonCorner(c, edgeMidpoint.zoneId, edgeMidpoint.edgeIndex, edgeMidpoint.world)
+      gesture = { kind: 'done' }
+      return
+    }
+    // Alt+click on a polygon corner removes it, keeping at least 3.
+    const pressedCorner = reshapePoints.get(handle)
+    if (pressedCorner && isPolygonCorner(pressedCorner) && start.modifiers.subtractive) {
+      removePolygonCorner(c, pressedCorner.zoneId, pressedCorner.index)
+      gesture = { kind: 'done' }
+      return
+    }
     if (handle === ROTATE_HANDLE_ID) {
       const drag = beginRotation(c, scene, start)
       if (!drag) return
@@ -221,6 +282,18 @@ export function createSelectTool(): CanvasTool {
     rotationDeltaDeg = null
     ctx().effects.setDraft(null)
     refreshHandles()
+  }
+
+  /** Delete on the focused corner, else the selected one: removed, keeping at least 3; with neither, Delete passes. */
+  function deleteCorner(): ToolReply {
+    const focused = ctx().focusedHandle()
+    const id = focused && reshapePoints.has(focused) ? focused : selectedCorner
+    const corner = id ? reshapePoints.get(id) : undefined
+    if (!corner || !isPolygonCorner(corner)) return 'pass'
+    selectedCorner = null
+    removePolygonCorner(ctx(), corner.zoneId, corner.index)
+    refreshHandles()
+    return 'handled'
   }
 
   function editNote(annotationId: string): boolean {
@@ -278,6 +351,7 @@ export function createSelectTool(): CanvasTool {
       followBearing()
     },
     command(c): ToolReply {
+      if (c.kind === 'delete-handle') return deleteCorner()
       if (c.kind !== 'edit-text') return 'pass'
       const noteId = selectedEditableNoteId(ctx())
       return noteId && editNote(noteId) ? 'handled' : 'pass'
@@ -301,7 +375,9 @@ export function createSelectTool(): CanvasTool {
       editingNoteId = null
       rotationDeltaDeg = null
       reshapePoints = new Map()
+      edgeMidpoints = new Map()
       guideEndPoints = new Map()
+      selectedCorner = null
     },
   }
 }
