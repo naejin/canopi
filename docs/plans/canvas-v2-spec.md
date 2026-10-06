@@ -496,8 +496,8 @@ export function detectPlatform(nav: Pick<Navigator, 'userAgent' | 'platform' | '
 // Called by platform/desktop.ts and web/browser-shell-commands.ts for KeyRouterDeps.platform, and by interaction-session.ts
 // when its deps carry none. Injected everywhere else.
 
-// No bindings constant (deleted in phase 3, A7; P11 tombstones `Bindings`, `CURRENT_BINDINGS`, `DomInputSourceDeps.bindings`
-// and F's `LEGACY_BINDINGS`). Phase 2 hard-coded its final fields (A19); phase 3 makes touch unconditional and moves the drag slop
+// No bindings constant (deleted in phase 3, A7; P11 tombstones `Bindings`, `CURRENT_BINDINGS`, `DomInputSourceDeps.bindings`,
+// phase 2's `PanContext` and F's `LEGACY_BINDINGS`). Phase 2 hard-coded its final fields (A19); phase 3 makes touch unconditional and moves the drag slop
 // into Thresholds. F1's gesture rows are a static list with three platform notes (Linux pinch, Mac Control-click, the pen button; §9.3)
 // and the Touch section (§9.4), not generated from bindings (audit 1.7).
 ```
