@@ -80,7 +80,10 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
     options.container.appendChild(textarea)
     autosize(entry)
 
-    textarea.addEventListener('input', () => autosize(entry))
+    textarea.addEventListener('input', () => {
+      place(entry, options.frames.viewFrame.peek())
+      autosize(entry)
+    })
     textarea.addEventListener('blur', () => {
       if (active === entry) submitActive()
     })
@@ -173,12 +176,13 @@ function styleEntry({ request, textarea }: OpenEntry): void {
   })
 }
 
-/** At the anchor projected through the frame, in the note's text frame, turned with the note. */
+/** At the anchor projected through the frame, in the frame of the text typed so far, turned with the note: the width
+ *  follows the text, so its start stays in view, and never drops below 120 px. */
 function place({ request, textarea }: OpenEntry, frame: ViewFrame): void {
   const origin = frame.view.worldToScreen(request.anchor)
   const rotationDeg = request.rotationDeg - frame.view.camera.bearingDeg
   const text = annotationScreenFrameAt(
-    { text: request.initialText, fontSize: noteFontSize(request), rotationDeg },
+    { text: textarea.value, fontSize: noteFontSize(request), rotationDeg },
     origin,
   )
   Object.assign(textarea.style, {

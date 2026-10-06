@@ -74,7 +74,8 @@ describe('the text-entry host', () => {
     expect(textarea.getAttribute('aria-label')).toBe('t:canvas.tools.text')
     expectScreenPx(textarea.style.left, 65)
     expectScreenPx(textarea.style.top, 87)
-    // A new note's default 16 px, at 1.25 em, as the note is drawn: one empty line.
+    // A new note's default 16 px, at 1.25 em, as the note is drawn: one empty line, at the 120 px minimum until the text
+    // grows past it.
     expect(textarea.style.fontSize).toBe('16px')
     expect(textarea.style.lineHeight).toBe('1.25')
     expect(textarea.style.width).toBe('120px')
@@ -85,6 +86,21 @@ describe('the text-entry host', () => {
 
     await nextAnimationFrame()
     expect(document.activeElement).toBe(textarea)
+  })
+
+  it('a new note\'s field widens with its text as the user types, never narrower than 120 px', () => {
+    const entries = mount()
+    entries.open(NEW_NOTE, () => 'close')
+    const textarea = entry()!
+
+    textarea.value = 'Raised bed by the pond'
+    textarea.dispatchEvent(new Event('input'))
+    // 22 characters at 0.6 em of 16 px, plus the 8 px of padding: the start stays in view.
+    expect(textarea.style.width).toBe(`${22 * 16 * 0.6 + 8}px`)
+
+    textarea.value = 'Bed'
+    textarea.dispatchEvent(new Event('input'))
+    expect(textarea.style.width).toBe('120px')
   })
 
   it('opens a note\'s in-place editor at the note, sized by its text, turned by its rotation, all selected', async () => {
