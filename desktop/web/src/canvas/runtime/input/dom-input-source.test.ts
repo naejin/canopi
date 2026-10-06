@@ -886,20 +886,29 @@ describe('createDomInputSource', () => {
     dispose()
   })
 
-  it('a press, a drag and a wheel leave the host\'s CSS as it was', () => {
+  it('the map host has touch-action none and no callout while attached (A13)', () => {
     const before = host.getAttribute('style')
+    const setProperty = vi.spyOn(host.style, 'setProperty')
+    const removeProperty = vi.spyOn(host.style, 'removeProperty')
     const source = createDomInputSource(deps())
     const dispose = attachRecording(source, (input) => {
       if (input.kind === 'down') source.apply([{ kind: 'prevent-default' }, { kind: 'capture', pointerId: input.id }])
       if (input.kind === 'up') source.apply([{ kind: 'release-capture', pointerId: input.id }])
     })
+    // The browser neither scrolls, zooms nor pulls the page under a finger on the map, and shows no callout there (WebKit).
+    expect(host.style.touchAction).toBe('none')
+    expect(setProperty).toHaveBeenCalledWith('-webkit-touch-callout', 'none')
+    const attached = host.getAttribute('style')
     events.pointerDown({ x: 10, y: 10 })
     events.pointerMove({ x: 20, y: 10 }, { buttons: 1 })
     events.pointerUp({ x: 20, y: 10 })
     events.wheel({ x: 20, y: 10 }, { deltaY: 5 })
-    expect(host.getAttribute('style')).toBe(before)
+    expect(host.getAttribute('style')).toBe(attached)
     dispose()
     expect(host.getAttribute('style')).toBe(before)
+    expect(removeProperty).toHaveBeenCalledWith('-webkit-touch-callout')
+    setProperty.mockRestore()
+    removeProperty.mockRestore()
   })
 
   describe('touch (spec §2.2 "Touch" and "Long press")', () => {

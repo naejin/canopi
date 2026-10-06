@@ -88,6 +88,17 @@ describe('the text-entry host', () => {
     expect(document.activeElement).toBe(textarea)
   })
 
+  it('the entry keeps the native callout the map host turns off, so a long press selects its text (A13)', () => {
+    const setProperty = vi.spyOn(CSSStyleDeclaration.prototype, 'setProperty')
+    const entries = mount()
+
+    entries.open(NEW_NOTE, () => 'close')
+
+    expect(setProperty.mock.contexts.some((style, index) => style === entry()!.style
+      && setProperty.mock.calls[index]![0] === '-webkit-touch-callout' && setProperty.mock.calls[index]![1] === 'default')).toBe(true)
+    setProperty.mockRestore()
+  })
+
   it('a new note\'s field widens to its measured text as the user types, never narrower than 120 px', () => {
     const entries = mount()
     entries.open(NEW_NOTE, () => 'close')

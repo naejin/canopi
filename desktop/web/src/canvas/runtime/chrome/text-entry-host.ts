@@ -180,6 +180,8 @@ function styleEntry({ request, textarea }: OpenEntry): void {
     whiteSpace: 'pre',
     transformOrigin: 'top left',
   })
+  // The map host turns WebKit's callout off; a long press in the note still selects its text (A13).
+  textarea.style.setProperty('-webkit-touch-callout', 'default')
 }
 
 /** At the anchor projected through the frame, turned with the note; autosize gives its size. */
