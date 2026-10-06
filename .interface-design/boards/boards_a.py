@@ -86,7 +86,7 @@ def rules():
                       'Esc does one thing at a time, the active tool first: close the open menu or dialog → cancel text entry → cancel the gesture in progress → drop a held stamp, row source or draft → return to Select → clear the selection.',
                       'Enter never commits while an input method is composing (Chinese, Japanese, Korean).',
                       'The Web Edition avoids keys browsers reserve (Ctrl N, W, Q, T).']),
-        ('Moving and turning the map', ['Left click and left drag always select or draw. Right-drag, middle-drag and Space + drag pan in every tool; right- and middle-drag also pan mid-drawing; a still right-click opens the menu. Only the Pan tool (H) pans with a left drag.',
+        ('Moving and turning the map', ['Left click and left drag always select or draw. Right-drag, middle-drag and Space + drag pan in every tool; a right or middle press during a drawing, move or band drag is ignored; a still right-click opens the menu. Only the Pan tool (H) pans with a left drag.',
                                         'The map turns only on purpose: Shift + right-drag, Shift + middle-drag, the compass, Shift ← / →, two fingers, a trackpad twist. Add Ctrl (Cmd on Mac) during a turn drag for 15° steps. Within 7° of north a free turn settles on north.',
                                         'Plant symbols, names, measurements and chrome stay upright; zones, notes and the grid turn with the map.',
                                         'The compass is always in the zoom group: click to reset north, drag to turn. N, Shift N and Shift ↑ reset north too.']),
@@ -106,7 +106,7 @@ def rules():
                             'Matches are highlighted in the names, counted, and shown on the map with a ring; one action selects them all or zooms to them.',
                             'A selection on the map filters any open panel with “Selected on map”, so the list and the map always point at the same plants.',
                             'Large lists can be grouped by stratum or form and sorted by name, count or total; the choice is kept per panel.']),
-        ('Motion and platform', ['Fly-to (place search, Fit to Design, Return to Design) and turning the view jump instead of animating when reduced motion is requested.',
+        ('Motion and platform', ['Fly-to (place search, Fit to Design, Return to Design) jumps instead of animating when reduced motion is requested; turning the view always jumps.',
                                  'macOS uses the native menu bar; Windows and Linux show the in-window menus.',
                                  'Touch: 44 px targets, bottom sheet with peek, half and full heights, safe-area insets, a side sheet in landscape.']),
     ]
