@@ -332,8 +332,8 @@ export interface CanvasKeyboardPort {
   escapeLayers(): readonly CanvasEscapeLayer[]            // live canvas layers now, by Esc priority (spec §3.7)
   /** Runs a live layer; app/keyboard/escape-chain.ts decides which, from the focus. */
   escape(layer: CanvasEscapeLayer): void
-  /** False when nothing consumed it. confirm, remove-last, rotate-held, edit-text and context-menu return false in overview;
-   *  edit-text only under Select, and confirm under Select edits the one selected note (Enter). */
+  /** False when nothing consumed it. confirm, remove-last, delete-handle, rotate-held, edit-text and context-menu return false
+   *  in overview; edit-text only under Select, and confirm under Select edits the one selected note (Enter). */
   command(c: CanvasKeyCommand): boolean
   /** The key router's first call for every keydown (capture) and keyup: the nudge commit on any key but an arrow, a
    *  modifier or Esc, and the Space hold (code Space, not text, and a live pointer
