@@ -165,7 +165,7 @@ function gestureRows(platform: Pick<InputPlatform, 'os' | 'gestureEvents'> | und
     },
     { id: 'compass', label: g('compassAction'), shortcut: g('compass') },
     { id: 'menu', label: g('menu'), shortcut: [g('rightClick'), ...mac ? [g('macCtrlClick')] : []].join(' · ') },
-    { id: 'zoom', label: g('zoom'), shortcut: [g('wheel'), g('pinch')].join(' · ') },
+    { id: 'zoom', label: g('zoom'), shortcut: g('pinch') },
     { id: 'remove', label: g('removeFromSelection'), shortcut: g('altClick') },
     { id: 'pen', label: `${g('pan')} · ${g('menu')}`, shortcut: g('penButton') },
   ]
