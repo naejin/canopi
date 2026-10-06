@@ -479,16 +479,14 @@ describe('saved object stamp tool', () => {
     expect(h.store.persisted.plants).toHaveLength(1)
   })
 
-  it('Esc returns to Select at once under LEGACY', () => {
+  it('Esc leaves at once: the held stamp is no transient, so the chain\'s tool layer leaves', () => {
     const h = harness()
     holding(h, GUILD)
     h.hover({ x: 100, y: 120 })
 
     expect(h.host.activeToolHasEscapeTransient()).toBe(false)
-    expect(h.host.command({ kind: 'escape' })).toBe('handled')
-
-    expect(h.toolState.value).toBe('select')
-    expect(ghosts(h)).toEqual([])
+    expect(h.host.command({ kind: 'escape' })).toBe('pass')
+    expect(h.toolState.value).toBe('saved-object-stamp')
   })
 
   describe('drop placement', () => {

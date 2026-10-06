@@ -6,9 +6,11 @@
 // 'interaction-object-stamp' edit that selects the copies, while the source is still unlocked on open layers. The ghost of
 // what a press would place follows the pointer from the pick on and stays when the pointer leaves the map; the tool card
 // names the pick. A pick starts at 0, so copies keep their source's orientation like Paste and Duplicate (spec §4.7); `[`
-// and `]` turn it (rotate-held commands), and the tool card shows that turn; Esc leaves for Select at once under LEGACY
-// (spec §3.7). A release and every cancellation (a blur, K again, overview) hide the ghost until the next hover and keep
-// the pick, as today's pointerup and cancellation hid the preview; a re-origin hides it until the next hover (the host).
+// and `]` turn it (rotate-held commands), and the tool card shows that turn. The pick is the tool's transient: it holds
+// re-origin, it keeps Delete and Ctrl+X from deleting the selection, and Esc drops it first, the card asking for a pick
+// again; with nothing held Esc leaves through the Esc chain's tool layer (spec §3.7). A release and every other
+// cancellation (a blur, K again, overview) hide the ghost until the next hover and keep the pick; a re-origin hides it
+// until the next hover (the host).
 
 import type { CanvasStampGuidance } from '../../session-state'
 import type { SceneDesignObjectTarget } from '../scene/design-object-targets'
@@ -182,8 +184,10 @@ export function createObjectStampTool(): CanvasTool {
         return 'handled'
       }
       if (c.kind === 'escape') {
-        // Under LEGACY Esc leaves for Select at once, pick and all, even mid-press (spec §3.7; phase 2 drops the pick first).
-        context().effects.requestTool('select')
+        if (!pick) return 'pass'
+        clear()
+        hideGhost()
+        publishGuidance()
         return 'handled'
       }
       return 'pass'
@@ -192,7 +196,7 @@ export function createObjectStampTool(): CanvasTool {
       // The tool card names the pick in the scene's current language.
       if (pick) publishGuidance()
     },
-    hasTransient: () => false,
+    hasTransient: () => pick !== null,
     cancelTransient() {
       // The pick and its angle outlive every cancellation, as today; each hides the ghost until the next hover, as today's
       // cancellation and overview reset hid the preview element.

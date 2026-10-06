@@ -60,7 +60,7 @@ describe('SceneInteractionSession', () => {
     container.dispatchEvent(event)
   }
 
-  it('clears loaded Object Stamp source and returns to select on Escape', () => {
+  it('Esc drops the pick, a second Esc leaves', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
@@ -85,11 +85,18 @@ describe('SceneInteractionSession', () => {
 
     events.pointerDown({ x: 40, y: 40 }, { button: 0 })
     events.pointerUp({ x: 40, y: 40 }, { button: 0 })
+    // The held pick is the tool's transient: the first Esc drops it and the tool stays armed.
+    expect(session.keyboard.escapeLayers()).toEqual(['tool-transient', 'tool'])
     events.keyDown({ key: 'Escape' })
+    expect(setTool).not.toHaveBeenCalledWith('select')
     events.pointerDown({ x: 90, y: 90 }, { button: 0 })
-
-    expect(setTool).toHaveBeenCalledWith('select')
+    events.pointerUp({ x: 90, y: 90 }, { button: 0 })
     expect(store.persisted.plants).toHaveLength(1)
+
+    // With nothing held, Esc leaves for Select.
+    expect(session.keyboard.escapeLayers()).toEqual(['tool'])
+    events.keyDown({ key: 'Escape' })
+    expect(setTool).toHaveBeenCalledWith('select')
     session.dispose()
   })
 

@@ -342,15 +342,24 @@ describe('object stamp tool', () => {
     expectPoint(ghostPlant(h).position, h.world({ x: 120, y: 80 }))
   })
 
-  it('Esc returns to Select at once under LEGACY, pick and all', () => {
+  it('Esc drops the pick, a second Esc leaves', () => {
     const h = stampHarness({ plants: [smallApple({ x: 40, y: 40 })] })
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
 
     h.click({ x: 40, y: 40 })
-    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
+    // The pick is the tool's transient (the chain's tool-transient layer), and it holds re-origin.
+    expect(h.host.activeToolHasEscapeTransient()).toBe(true)
+    expect(h.host.holdsReorigin()).toBe(true)
     expect(h.host.command({ kind: 'escape' })).toBe('handled')
-
-    expect(h.toolState.value).toBe('select')
+    expect(h.toolState.value).toBe('object-stamp')
     expect(ghosts(h)).toEqual([])
+    expect(h.record.guidance.at(-1)).toMatchObject({ stamp: null, stampRotationDeg: null })
+
+    // Nothing held: the tool's Esc passes, and the chain's tool layer leaves.
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
+    expect(h.host.holdsReorigin()).toBe(false)
+    expect(h.host.command({ kind: 'escape' })).toBe('pass')
+    expect(h.toolState.value).toBe('object-stamp')
   })
 
   it('ignores Measurement Guides in Object Stamp sampling and placement', () => {
