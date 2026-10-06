@@ -457,6 +457,22 @@ describe('Plant a row tool', () => {
     expect(h.toolState.peek()).toBe('plant-spacing')
   })
 
+  it('an invalid interval at release focuses the spacing field and commits nothing', () => {
+    const { h } = rowHarness({ intervalM: 2 })
+    h.click({ x: 20, y: 30 })
+    const picked = row(h).focusRequest
+    h.host.command({ kind: 'spacing-input', text: '0' })
+
+    // The press commits too, and asks for the field as the release does.
+    h.press({ x: 20, y: 30 })
+    expect(row(h).focusRequest).toBe(picked + 1)
+    h.move({ x: 26, y: 30 })
+    h.release({ x: 26, y: 30 })
+
+    expect(added(h)).toEqual([])
+    expect(row(h)).toMatchObject({ phase: 'row', intervalValid: false, count: 0, focusRequest: picked + 2 })
+  })
+
   it('a clamped endpoint stays at the view\'s edge', () => {
     const { h } = rowHarness({ intervalM: 100 })
     h.click({ x: 20, y: 30 })

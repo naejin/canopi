@@ -198,8 +198,9 @@ export function createPlantRowTool(): CanvasTool {
     shownCount = { count, density: options.blocked ? 'blocked' : options.dense ? 'dense' : 'normal' }
   }
 
-  function updatePreview(nextEndpoint: WorldPoint): void {
-    if (!source) return
+  /** The row to `nextEndpoint`; answers the interval in metres, or null while the field's text is not a valid one. */
+  function updatePreview(nextEndpoint: WorldPoint): number | null {
+    if (!source) return null
     endpoint = nextEndpoint
     const start = source.plant.position
     const parsed = parsePlantSpacingIntervalInput(intervalText)
@@ -212,6 +213,7 @@ export function createPlantRowTool(): CanvasTool {
       dense: generatedCount > PLANT_ROW_DENSE_WARNING_THRESHOLD,
       blocked: generatedCount > PLANT_ROW_COMMIT_POSITION_LIMIT,
     })
+    return parsed.valid ? parsed.meters : null
   }
 
   /** The row follows the pointer: its snapped point, which the host constrained under Shift. */
@@ -227,19 +229,15 @@ export function createPlantRowTool(): CanvasTool {
       showSourcePicking('source-missed')
       return
     }
-    updatePreview(nextEndpoint)
-    const parsed = parsePlantSpacingIntervalInput(intervalText)
-    if (!intervalValid || !parsed.valid) {
+    const intervalM = updatePreview(nextEndpoint)
+    if (intervalM === null) {
       focusIntervalInput()
       return
     }
-    if (generatedCount === 0) return
-    if (generatedCount > PLANT_ROW_COMMIT_POSITION_LIMIT) {
-      setGeneratedCount(generatedCount, { blocked: true })
-      return
-    }
+    // The preview already reads blocked above the limit.
+    if (generatedCount === 0 || generatedCount > PLANT_ROW_COMMIT_POSITION_LIMIT) return
     const positions = generatedCount > generatedPositions.length
-      ? computePlantSpacingPositions(source.plant.position, nextEndpoint, parsed.meters)
+      ? computePlantSpacingPositions(source.plant.position, nextEndpoint, intervalM)
       : generatedPositions
     commitPositions(source, positions)
   }
