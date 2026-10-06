@@ -160,10 +160,11 @@ describe('visible map area', () => {
       { rect: rect(ZOOM_GROUP), side: 'bottom' },
     ])).toBe(608)
     expect(measureBottomBandRoom(rect(WINDOW), [])).toBe(1280)
-    // Chrome standing wholly above the band, wider than the view chip, takes none of its room.
+    // The expanded calendar dock (800 px, over 60 % of the map) reads as bottom chrome, but it stops above the band and
+    // takes none of its room.
     expect(measureBottomBandRoom(rect(WINDOW), [
       { rect: rect(viewChip), side: 'bottom' },
-      { rect: rect({ left: 12, top: 700, width: 380, height: 36 }), side: 'bottom' },
+      { rect: rect({ left: 404, top: 72, width: 800, height: 664 }) },
       { rect: rect(ZOOM_GROUP), side: 'bottom' },
     ])).toBe(608)
 
