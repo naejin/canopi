@@ -169,6 +169,7 @@ export const contextMenuHost = {
 export function contextMenuEntryOptions() {
   return {
     translate: t,
+    characterKeyShortcuts: true,
     openPlantAppearance: vi.fn(),
     summary: null,
     openSpeciesDetail: vi.fn(),

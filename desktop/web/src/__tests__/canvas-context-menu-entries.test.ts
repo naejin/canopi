@@ -104,7 +104,7 @@ function build(
   }
   const entries = buildCanvasContextMenuEntries(request, {
     translate: t,
-    ...(options.characterKeyShortcuts === undefined ? {} : { characterKeyShortcuts: options.characterKeyShortcuts }),
+    characterKeyShortcuts: options.characterKeyShortcuts ?? true,
     openPlantAppearance,
     summary: options.summary === undefined ? (model ? APPLE_SUMMARY : null) : options.summary,
     openSpeciesDetail,

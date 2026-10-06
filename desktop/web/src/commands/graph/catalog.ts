@@ -120,7 +120,7 @@ function canvasAppCommandDefinition(
     label: () => t(definition.labelKey),
     // Read when shown: the language and Settings › Keyboard can change.
     get shortcut() {
-      const shortcut = canvasCommandDisplayKey(definition, { characterKeys: singleKeyShortcuts.value })
+      const shortcut = canvasCommandDisplayKey(definition, singleKeyShortcuts.value)
       return shortcut ? formatShortcut(shortcut, t) : undefined
     },
     palette: definition.palette,

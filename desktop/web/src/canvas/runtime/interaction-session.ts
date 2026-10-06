@@ -128,7 +128,7 @@ export interface SceneInteractionSessionDeps {
   readonly renderer: Pick<SceneRenderer, 'setDraft'>
   /** The app's focus port (CanvasRuntimeAppAdapter.focus); absent, the session focuses the map host itself, as today. */
   readonly focus?: CanvasFocusPort
-  /** Injected for tests; detected from the browser otherwise (0C moves the call to the platform modules). */
+  /** Injected for tests; otherwise the session detects it from the browser, as the editions' key routers detect theirs. */
   readonly platform?: InputPlatform
 }
 

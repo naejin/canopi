@@ -50,8 +50,8 @@ export interface DomInputSourceDeps {
 export interface DomInputSource {
   /** Installs the listeners; returns the disposer that removes every listener it added (tested: exactly once each) and
    *  releases every pointer capture the source still holds (a press live at disposal), after the sink is gone. A sink
-   *  that throws on a press on the map, a release, a contextmenu, a dragover or a drop quarantines that event, then rethrows;
-   *  on any other event it rethrows and the event goes on (today's handlers quarantined only around their admitted work). */
+   *  that throws on a press on the map host quarantines that event, then rethrows; on any other event it rethrows and the
+   *  event goes on, so a failing hover never stops every pointermove in the app. */
   attach(sink: (input: RawInput) => void): () => void
   /** Applies effects to the event being handled: the recogniser's, and a GestureOutcome's as 'prevent-default',
    *  'stop-propagation' and 'drop-effect'. */

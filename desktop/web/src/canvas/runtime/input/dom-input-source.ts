@@ -8,9 +8,9 @@
 // moves and releases that start elsewhere in the app reach the page untouched. It turns
 // each event into host-relative, classified fields for `normalise`, hands the raw input to the sink, and applies the
 // effects the sink sends back to the event being handled: prevent-default, stop-propagation, pointer capture, the drop
-// effect. Detaching releases every capture it still holds. A sink that throws on a press on the map, a release, a context menu, a dragover or a drop quarantines that event
-// first, as today's handlers did around their admitted work; any other event's error leaves the event to the app. It is
-// the one module of input/ that touches the browser (policy P7); the input core stays pure.
+// effect. Detaching releases every capture it still holds. A sink that throws on a press on the map host quarantines that
+// event, then rethrows; on any other event it rethrows and leaves the event to the app. It is the one module of input/
+// that touches the browser (policy P7); the input core stays pure.
 
 import { hasPlantStampDragData, readPlantStampDropSource } from '../../plant-stamp-source'
 import {

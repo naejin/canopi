@@ -108,8 +108,7 @@ export function dismissStoryUndo(toast?: StoryUndo): void {
  * field keeps its own undo.
  */
 export function registerStoryUndoToast(): () => void {
-  const scope = pushKeyScope({ id: 'stories-undo-toast', handle: (_event, chord) => runStoryUndoShortcut(chord) })
-  return () => scope.dispose()
+  return pushKeyScope(runStoryUndoShortcut)
 }
 
 /** True when Ctrl Z undid the delete the toast offers. */

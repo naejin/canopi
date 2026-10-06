@@ -1093,6 +1093,7 @@ describe('scene canvas runtime', () => {
     const request = canvasContextMenuRequest.value!
     const unlock = buildCanvasContextMenuEntries(request, {
       translate: (key) => key,
+      characterKeyShortcuts: true,
       openPlantAppearance: () => {},
       summary: null,
       openSpeciesDetail: () => {},

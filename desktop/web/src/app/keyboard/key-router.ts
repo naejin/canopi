@@ -174,8 +174,9 @@ function keyDownBubble(deps: KeyRouterDeps, where: Where, event: KeyboardEventLi
     return
   }
   // Step 7: the pushed scopes, the latest first.
-  for (const scope of pushedKeyScopes()) {
-    if (!scope.handle(event, chord)) continue
+  const scopes = pushedKeyScopes()
+  for (let index = scopes.length - 1; index >= 0; index -= 1) {
+    if (!scopes[index]!(chord)) continue
     consume(event)
     return
   }

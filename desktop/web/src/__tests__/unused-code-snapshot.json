@@ -8,7 +8,6 @@
     "src/app/budget/price-request.ts#BudgetPriceRequest",
     "src/app/budget/workbench.ts#BudgetItemWorkbench",
     "src/app/budget/workbench.ts#BudgetPriceDraftResult",
-    "src/app/canvas-commands/index.ts#CanvasShortcutOptions",
     "src/app/canvas-layer-presentation/presentation.ts#CanvasLayerPresentation",
     "src/app/canvas-map-surface/map-notice.ts#MapNoticeReadModelInput",
     "src/app/canvas-map-surface/workspace-activation-snapshot.ts#WorkspaceActivationSnapshotReaderOptions",

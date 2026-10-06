@@ -142,5 +142,5 @@ export const workspaceCanvasCommandProjection = computed(() => createCanvasComma
   state: readWorkspaceCanvasProjectionState(),
   intents: workspaceCanvasIntentAdapter,
   translate: t,
-  shortcuts: { characterKeys: singleKeyShortcuts.value },
+  characterKeys: singleKeyShortcuts.value,
 }))

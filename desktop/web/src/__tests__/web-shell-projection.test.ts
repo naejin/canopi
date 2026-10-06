@@ -37,6 +37,7 @@ function canvasProjection(): CanvasCommandProjection {
       edit: vi.fn(), view: vi.fn(),
     },
     translate: (key) => key,
+    characterKeys: true,
   })
 }
 
