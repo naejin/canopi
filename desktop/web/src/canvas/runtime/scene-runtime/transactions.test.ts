@@ -773,34 +773,46 @@ describe('A Scene operation runs its steps once', () => {
     expect(coordinator.undo()).toBe(false)
   })
 
-  it('a hydration that throws releases and rethrows, and the next command runs', () => {
-    const invalidate = vi.fn<(kind: SceneEditInvalidationKind) => void>()
-      .mockImplementationOnce(() => { throw new Error('hydration invalidation failed') })
-    const { coordinator, store } = createAdmissionHarness({ invalidate })
+  const expectSceneClosed = (coordinator: SceneRuntimeEditCoordinator, store: SceneStore) => {
+    const before = store.persisted
+    expect(coordinator.runWhenSettled(() => 'pressed', 'refused')).toBe('refused')
+    expect(coordinator.run('next-command', moveFirstPlant)).toBe(false)
+    expect(coordinator.undo()).toBe(false)
+    expect(coordinator.canUndo.value).toBe(false)
+    expect(store.persisted).toEqual(before)
+  }
+
+  it('after an open whose replace throws, a press, an edit and undo are refused until the next successful open, which takes over', () => {
+    const { coordinator, store } = createAdmissionHarness()
+    expect(coordinator.run('move', moveFirstPlant)).toBe(true)
+    vi.spyOn(store, 'hydrate').mockImplementationOnce(() => { throw new Error('replacement hydrate failed') })
+
+    expect(() => coordinator.replaceDocument(makeFile(), {
+      token: createCanvasDocumentReplacementToken(),
+      prepare: () => {},
+    })).toThrow('replacement hydrate failed')
+
+    expectSceneClosed(coordinator, store)
     const next = makeFile()
     next.plants[0]!.position = geoAt(55, 66)
-
-    expect(() => coordinator.hydrate(next)).toThrow('hydration invalidation failed')
-
+    coordinator.hydrate(next)
     expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(55, 66))
-    expect(invalidate).toHaveBeenCalledOnce()
     expectNextCommandRuns(coordinator, store)
   })
 
-  it('a replacement that throws releases and rethrows, and the next command runs', () => {
-    const { coordinator, store } = createAdmissionHarness()
-    const next = makeFile()
-    next.plants[0]!.position = geoAt(55, 66)
-    const finalizeReplacement = vi.fn(() => { throw new Error('replacement finalizer failed') })
+  it('a hydration that throws keeps the Scene closed until a replace takes over', () => {
+    const invalidate = vi.fn<(kind: SceneEditInvalidationKind) => void>()
+      .mockImplementationOnce(() => { throw new Error('hydration invalidation failed') })
+    const { coordinator, store } = createAdmissionHarness({ invalidate })
 
-    expect(() => coordinator.replaceDocument(next, {
+    expect(() => coordinator.hydrate(makeFile())).toThrow('hydration invalidation failed')
+
+    expect(invalidate).toHaveBeenCalledOnce()
+    expectSceneClosed(coordinator, store)
+    expect(coordinator.replaceDocument(makeFile(), {
       token: createCanvasDocumentReplacementToken(),
       prepare: () => {},
-      finalizeReplacement,
-    })).toThrow('replacement finalizer failed')
-
-    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(55, 66))
-    expect(finalizeReplacement).toHaveBeenCalledOnce()
+    })).toBe(false)
     expectNextCommandRuns(coordinator, store)
   })
 })

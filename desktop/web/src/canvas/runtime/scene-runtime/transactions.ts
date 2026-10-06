@@ -123,7 +123,8 @@ interface SceneRuntimeEditCoordinatorOptions {
 
 /**
  * One Scene operation (an edit, an undo or redo, a hydration or replacement). Each runs its steps once (ADR 0018, spec
- * §1.4 "Admission"): on a throw it restores what it must, releases the Scene and rethrows; nothing resumes it.
+ * §1.4 "Admission"): on a throw an edit or replay restores what it must, releases the Scene and rethrows; a hydration or
+ * replacement keeps the Scene until the next open or replace succeeds. Nothing resumes an operation.
  */
 interface SceneAuthorityOperation {
   readonly type: string
@@ -310,7 +311,7 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
     file: CanopiFile,
     syncDocumentSignals: (file: CanopiFile) => void = () => {},
   ): void {
-    if (this._active) throw new SceneEditBusyError(this._active.type)
+    if (this._active && !isFailedSettlement(this._active)) throw new SceneEditBusyError(this._active.type)
     const ownedFile = cloneDocument(file)
     const hydration = new SceneHydrationSettlement({
       type: 'document-hydration',
@@ -333,7 +334,9 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       throw new SceneEditBusyError(this._replacementHandoff.successor.type)
     }
     const predecessor = this._active
-    if (predecessor && !(predecessor instanceof SceneRuntimeEditTransaction && predecessor.isOpen)) {
+    // A failed open keeps the Scene through `prepare`; this replacement takes it over once admitted.
+    const failedOpen = isFailedSettlement(predecessor) ? predecessor : null
+    if (predecessor && !failedOpen && !(predecessor instanceof SceneRuntimeEditTransaction && predecessor.isOpen)) {
       throw new SceneEditBusyError(predecessor.type)
     }
     const ownedFile = cloneDocument(file)
@@ -354,14 +357,15 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
     })
 
     // An open edit (a drag) hands the Scene to the replacement when `prepare` ends it.
-    if (predecessor) {
+    if (predecessor instanceof SceneRuntimeEditTransaction) {
       this._replacementHandoff = { predecessor, successor: replacement }
-    } else {
+    } else if (!failedOpen) {
       this._acquire(replacement)
     }
 
     try {
       stages.prepare()
+      if (failedOpen && this._active === failedOpen) this._acquire(replacement)
       if (this._active !== replacement) {
         throw new SceneEditBusyError(predecessor?.type ?? replacement.type)
       }
@@ -504,13 +508,15 @@ interface SceneHydrationSettlementOptions {
 }
 
 /**
- * A hydration or replacement. Its steps run once, in order; a throw stops it, restores nothing, releases the Scene and
- * rethrows (history clears its stacks before it publishes, so an old Design's undo never survives). The document
- * surface stays settling until a later open or replace succeeds, and the document session's retry is a fresh replace.
+ * A hydration or replacement. Its steps run once, in order; a throw stops it, restores nothing and rethrows, and the
+ * Scene stays closed to presses, edits and undo (the document surface `settling`) until the next open or replace
+ * succeeds and takes it over; the document session's retry is a fresh replace.
  */
 class SceneHydrationSettlement implements SceneAuthorityOperation {
   readonly type: SceneHydrationSettlementOptions['type']
   private readonly _options: SceneHydrationSettlementOptions
+  /** A step threw: the settlement keeps the Scene until the next open or replace takes it over. */
+  failed = false
 
   constructor(options: SceneHydrationSettlementOptions) {
     this._options = options
@@ -528,10 +534,16 @@ class SceneHydrationSettlement implements SceneAuthorityOperation {
       options.invalidate('scene')
       options.incrementSceneRevision()
       options.finalizeReplacement?.()
-    } finally {
-      options.release(this)
+    } catch (error) {
+      this.failed = true
+      throw error
     }
+    options.release(this)
   }
+}
+
+function isFailedSettlement(operation: SceneAuthorityOperation | null): operation is SceneHydrationSettlement {
+  return operation instanceof SceneHydrationSettlement && operation.failed
 }
 
 interface SceneRuntimeEditTransactionOptions {
