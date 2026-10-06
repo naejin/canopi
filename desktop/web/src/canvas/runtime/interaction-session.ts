@@ -31,7 +31,6 @@ import { createHandleLayer, type HandleLayer } from './chrome/handle-layer'
 import { createHoverTooltip, type HoverTooltipController } from './chrome/hover-tooltip'
 import { createTextEntryHost, type TextEntryHost } from './chrome/text-entry-host'
 import { runCanvasRuntimeCleanups, throwCanvasRuntimeCleanupErrors } from './cleanup'
-import { CURRENT_BINDINGS } from './input/bindings'
 import { createDomInputSource, outcomeEffects } from './input/dom-input-source'
 import type { Gesture } from './input/gestures'
 import { createInputRouter } from './input/input-router'
@@ -221,7 +220,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   constructor(private readonly _deps: SceneInteractionSessionDeps) {
     const platform = _deps.platform ?? detectPlatform(navigator, window as unknown as { readonly GestureEvent?: unknown })
-    this._config = { platform, bindings: CURRENT_BINDINGS, thresholds: DEFAULT_THRESHOLDS }
+    this._config = { platform, thresholds: DEFAULT_THRESHOLDS }
     this._pointingDevice = this._readPointingDevice()
     const navigation = _deps.viewNavigation
     this._frames = _deps.frames
@@ -358,7 +357,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       this._source = createDomInputSource({
         host: container,
         platform,
-        bindings: () => CURRENT_BINDINGS,
         timers: {
           set: (delayMs, callback) => window.setTimeout(callback, delayMs),
           clear: (id) => window.clearTimeout(id),

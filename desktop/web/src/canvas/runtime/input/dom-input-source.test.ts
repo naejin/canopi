@@ -6,14 +6,13 @@ import {
 } from '../../../__tests__/support/canvas-interaction-events'
 import { writePlantStampDragData } from '../../plant-stamp-source'
 import type { DomInputSourceDeps } from '../interaction-ports'
-import { CURRENT_BINDINGS, type Bindings } from './bindings'
 import { createDomInputSource, outcomeEffects } from './dom-input-source'
 import type { RawInput, RecogniserConfig } from './raw-input'
 import { initialRecogniserState, recognise } from './recognise'
 import { DEFAULT_THRESHOLDS } from './thresholds'
 
 const PLATFORM = { os: 'linux', gestureEvents: false } as const
-const RECOGNISER_CONFIG: RecogniserConfig = { platform: PLATFORM, bindings: CURRENT_BINDINGS, thresholds: DEFAULT_THRESHOLDS }
+const RECOGNISER_CONFIG: RecogniserConfig = { platform: PLATFORM, thresholds: DEFAULT_THRESHOLDS }
 
 let host: HTMLDivElement
 let events: SceneInteractionEventHarness
@@ -37,7 +36,6 @@ function deps(overrides: Partial<DomInputSourceDeps> = {}): DomInputSourceDeps {
   return {
     host,
     platform: PLATFORM,
-    bindings: () => CURRENT_BINDINGS,
     timers: { set: vi.fn(() => 1), clear: vi.fn() },
     ...overrides,
   }
@@ -887,7 +885,7 @@ describe('createDomInputSource', () => {
     dispose()
   })
 
-  it('host CSS is unchanged while touch gestures are off', () => {
+  it('a press, a drag and a wheel leave the host\'s CSS as it was', () => {
     const before = host.getAttribute('style')
     const source = createDomInputSource(deps())
     const dispose = attachRecording(source, (input) => {
@@ -900,13 +898,6 @@ describe('createDomInputSource', () => {
     events.wheel({ x: 20, y: 10 }, { deltaY: 5 })
     expect(host.getAttribute('style')).toBe(before)
     dispose()
-    expect(host.getAttribute('style')).toBe(before)
-
-    // A binding with touch gestures takes the host's touch-action for the time it is attached.
-    const touch: Bindings = { ...CURRENT_BINDINGS, touch: { gestures: true, longPressMenu: true, hostTouchActionNone: true } }
-    const detach = createDomInputSource(deps({ bindings: () => touch })).attach(() => {})
-    expect(host.style.touchAction).toBe('none')
-    detach()
     expect(host.getAttribute('style')).toBe(before)
   })
 

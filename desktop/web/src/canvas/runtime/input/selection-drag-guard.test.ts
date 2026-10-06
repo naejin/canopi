@@ -3,7 +3,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DomInputSourceDeps } from '../interaction-ports'
-import { CURRENT_BINDINGS } from './bindings'
 import { createDomInputSource } from './dom-input-source'
 import { installSelectionDragGuard } from './selection-drag-guard'
 
@@ -27,7 +26,6 @@ function deps(): DomInputSourceDeps {
   return {
     host,
     platform: { os: 'linux', gestureEvents: false },
-    bindings: () => CURRENT_BINDINGS,
     timers: { set: vi.fn(() => 1), clear: vi.fn() },
   }
 }

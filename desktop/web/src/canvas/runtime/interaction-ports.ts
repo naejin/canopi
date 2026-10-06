@@ -3,7 +3,6 @@
 import type { ReadonlySignal } from '@preact/signals'
 import type { CanvasToolGuidance } from '../session-state'
 import type { CanvasFocusPort } from './app-adapter'
-import type { Bindings } from './input/bindings'
 import type { Gesture, MenuSource } from './input/gestures'
 import type { InputPlatform } from './input/platform'
 import type { AdapterEffect, RawInput, TargetClass } from './input/raw-input'
@@ -42,7 +41,6 @@ export interface GestureOutcome {
 export interface DomInputSourceDeps {
   readonly host: HTMLElement                                    // the map host; listeners attach here and on window (0B: from attach, as today; from F only during an owned session)
   readonly platform: InputPlatform
-  readonly bindings: () => Bindings                             // CURRENT_BINDINGS in production
   /** `set` waits `delayMs`: the source measures a deadline from the last input's time, base-free (A1). */
   readonly timers: { set(delayMs: number, cb: () => void): number; clear(id: number): void }
 }

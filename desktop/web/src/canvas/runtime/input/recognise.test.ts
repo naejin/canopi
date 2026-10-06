@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { CURRENT_BINDINGS } from './bindings'
 import type { Gesture } from './gestures'
 import {
   FOREIGN,
@@ -27,7 +26,7 @@ import {
   type Sequence,
 } from './__fixtures__/sequences'
 
-const run = (sequence: Sequence) => runSequence(sequence, CURRENT_BINDINGS)
+const run = (sequence: Sequence) => runSequence(sequence)
 
 /** Gesture kinds, pans with their phase. */
 function kinds(gestures: readonly Gesture[]): string[] {

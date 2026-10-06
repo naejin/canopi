@@ -1,11 +1,11 @@
 // canvas/runtime/input/recognise.ts  (the recogniser: its two state types and its two functions)
 //
 // Owns gesture recognition: a pure reducer from one RawInput to gestures and the effects the DOM source applies to the
-// event it is handling. No clock, timer or DOM: time is `RawInput.t`, the platform and bindings come in the config.
+// event it is handling. No clock, timer or DOM: time is `RawInput.t`, the platform and thresholds come in the config.
 // PointerSession and TouchPair are type exports imported only inside input/; RecogniserState is opaque to callers.
 // raw-input.ts and recognise.ts import each other's types with `import type` only (no runtime cycle).
 //
-// It implements the input of CURRENT_BINDINGS (spec §2.2 and §5): one pointer session at a time;
+// It implements spec §2.2 and §5 (fixtures in __fixtures__/sequences.ts): one pointer session at a time;
 // a secondary press (the right button, a Mac Control-click, a pen's barrel) pending until it passes 3 px: a still release
 // opens the menu at the release point (none in overview), a drag pans, and with Shift at the press it turns the view,
 // stepped while mod is held; no native contextmenu reaches it (the DOM source's listener prevents them); a middle drag, a
@@ -374,7 +374,7 @@ function withoutNegativeZero(point: ScreenPoint): ScreenPoint {
 }
 
 function passesSlop(session: PointerSession, at: ScreenPoint, config: RecogniserConfig): boolean {
-  const slop = config.bindings.dragSlopPx[session.pointer]
+  const slop = config.thresholds.dragSlopPx[session.pointer]
   const distance = Math.hypot(at.x - session.start.x, at.y - session.start.y)
   return distance >= slop && distance > 0
 }

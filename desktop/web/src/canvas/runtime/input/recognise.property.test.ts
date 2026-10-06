@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import type { ToolHandleId, ToolId } from '../interaction-types'
-import { CURRENT_BINDINGS } from './bindings'
 import type { Gesture } from './gestures'
 import type { InputPlatform } from './platform'
 import type { ButtonRole, RawInput, RecogniserConfig, RecogniserState, TargetClass } from './raw-input'
@@ -8,7 +7,7 @@ import { initialRecogniserState, recognise, type PointerSession } from './recogn
 import { DEFAULT_THRESHOLDS } from './thresholds'
 
 const PLATFORM: InputPlatform = { os: 'linux', gestureEvents: false }
-const CONFIG: RecogniserConfig = { platform: PLATFORM, bindings: CURRENT_BINDINGS, thresholds: DEFAULT_THRESHOLDS }
+const CONFIG: RecogniserConfig = { platform: PLATFORM, thresholds: DEFAULT_THRESHOLDS }
 const RUNS = 400
 const STEPS = 60
 

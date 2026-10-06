@@ -324,7 +324,6 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     attach(nextSink) {
       if (sink) throw new Error('The DOM input source is already attached')
       sink = nextSink
-      const previousTouchAction = host.style.touchAction
       const removals: Array<() => void> = []
       const listen = (
         target: EventTarget,
@@ -347,9 +346,6 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
           // the sink is gone first, so the loss a release dispatches reaches nobody.
           ...[...captured].map((pointerId) => () => release(pointerId)),
           ...pending,
-          () => {
-            if (host.style.touchAction !== previousTouchAction) host.style.touchAction = previousTouchAction
-          },
         ], 'DOM input source listener removal failed')
       }
       try {
@@ -369,7 +365,6 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
         }
         // A map drag never selects or drags page text; the note editor and the map's fields keep their own.
         removals.push(installSelectionDragGuard(host, (target) => keepsTextSelection(target, host)))
-        if (deps.bindings().touch.hostTouchActionNone) host.style.touchAction = 'none'
         listenOnWindow = () => {
           const windowRemovals: Array<() => void> = []
           const listenWindow = (type: string, listener: EventListener): void => {

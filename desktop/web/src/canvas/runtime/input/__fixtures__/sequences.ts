@@ -1,16 +1,15 @@
 // canvas/runtime/input/__fixtures__/sequences.ts
 //
 // Owns the synthetic event sequences of spec §5: each is named by its id and title and runs through `normalise` and
-// `recognise` with an injected platform, clock (each step's timeStamp) and bindings constant. A sequence holds DOM-shaped
+// `recognise` with an injected platform, clock (each step's timeStamp) and thresholds. A sequence holds DOM-shaped
 // literals (`DomEventLike`, with host-relative points and classified targets, as the DOM source hands them over) and the
 // raw inputs that come from elsewhere (key state from the keyboard, escape from the Esc chain, the session's configure
 // and reject). A spec sequence's native contextmenu never reaches the recogniser (the source's one listener prevents it,
 // spec §2.2 "Native menu"), so the fixtures leave it out and dom-input-source.test.ts holds its orderings (A1, A3, A8,
-// A11, A15, B7, C1–C5, D1). The expectations live in recognise.test.ts, under CURRENT_BINDINGS.
+// A11, A15, B7, C1–C5, D1). The expectations live in recognise.test.ts.
 
 import type { CanvasDropPayload, ToolHandleId, ToolId } from '../../interaction-types'
 import type { Gesture } from '../gestures'
-import type { Bindings } from '../bindings'
 import { normalise, type DomEventLike } from '../normalise'
 import type { InputPlatform } from '../platform'
 import type { AdapterEffect, RawInput, RecogniserState, TargetClass } from '../raw-input'
@@ -233,8 +232,8 @@ export interface SequenceRun {
 }
 
 /** Runs a sequence through normalise and recognise, configuring its context first. Each step without a `t` is 16 ms on. */
-export function runSequence(sequence: Sequence, bindings: Bindings, thresholds: Thresholds = DEFAULT_THRESHOLDS): SequenceRun {
-  const config = { platform: sequence.platform, bindings, thresholds }
+export function runSequence(sequence: Sequence, thresholds: Thresholds = DEFAULT_THRESHOLDS): SequenceRun {
+  const config = { platform: sequence.platform, thresholds }
   let state = recognise(initialRecogniserState(), {
     kind: 'configure',
     t: 0,
@@ -269,7 +268,7 @@ export function runSequence(sequence: Sequence, bindings: Bindings, thresholds: 
 
 const SPECIES_PAYLOAD: CanvasDropPayload = Object.freeze({ kind: 'species', species: null })
 
-/** Every sequence of spec §5 that exists under CURRENT_BINDINGS, keyed by its id. */
+/** Every sequence of spec §5, keyed by its id. */
 export const SEQUENCES = {
   // 5.1 Secondary button
   A1: seq('A1 Windows right-click', WINDOWS, [

@@ -2,7 +2,6 @@
 
 import type { CanvasDropPayload, Modifiers, PointerKind, ToolHandleId, ToolId } from '../interaction-types'
 import type { ScreenPoint } from '../view/types'
-import type { Bindings } from './bindings'
 import type { InputPlatform } from './platform'
 import type { PointerSession, TouchPair } from './recognise'
 import type { Thresholds } from './thresholds'
@@ -38,7 +37,6 @@ export type RawInput =
 
 export interface RecogniserConfig {
   readonly platform: InputPlatform
-  readonly bindings: Bindings
   readonly thresholds: Thresholds
 }
 
