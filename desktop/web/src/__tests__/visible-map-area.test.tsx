@@ -274,6 +274,56 @@ describe('visible map area', () => {
     }
   })
 
+  it.each([
+    // Names to icons: the lens moves from 248..638 (198 px of map left) to 76..466 (370 px left), so it starts covering.
+    { name: 'names to icons', from: 'named', to: 'icons', before: 236, after: 466 },
+    // Icons to names: the lens moves from 76..466 to 248..638, so it stops covering and the selection chip keeps its room.
+    { name: 'icons to names', from: 'icons', to: 'named', before: 466, after: 236 },
+  ] as const)('in a 900 px window the open lens measures its room again when the tool rail switches $name', async ({ from, to, before, after }) => {
+    const view: CanvasInspectionHandle = {
+      state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true, frame: { width: 390, height: 350 }, plants: [] }),
+      sourceQuad: signal(null),
+      inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panByScreen: vi.fn(), zoomBy: vi.fn(),
+      highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
+    }
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ attachInspectionTo: () => view }) }))
+    // The lens stands at the tool card's left: 76 px beside the icon rail, 248 px beside the named rail.
+    const rails = { icons: { left: 12, width: 52 }, named: { left: 12, width: 224 } }
+    const lensLeft = { icons: 76, named: 248 }
+    let shown: 'icons' | 'named' = from
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.tagName === 'SECTION' && this.hasAttribute('data-expanded')) return rect({ left: lensLeft[shown], top: 72, width: 390, height: 420 })
+      return rect(boxes.get(this) ?? { left: 0, top: 0, width: 0, height: 0 })
+    })
+    const map = { left: 0, top: 0, width: 900, height: 800 }
+    const area = element(map)
+    const releaseArea = registerMapArea(area)
+    const rail = element({ ...rails[from], top: 72, height: 480 })
+    const releaseRail = registerMapOccluder(rail, 'left')
+    const releaseRight = registerMapOccluder(element({ left: 836, top: 72, width: 52, height: 420 }), 'right')
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    try {
+      await act(async () => render(<InspectionLens canvasRef={{ current: element(map) }} />, container))
+      await act(async () => container.querySelector<HTMLButtonElement>('[data-inspection-launcher]')!.click())
+      refreshVisibleMapArea()
+      expect(visibleMapFrame.value.left).toBe(before)
+
+      // The rail switches; its resize recomputes the frame while the lens keeps its size.
+      shown = to
+      boxes.set(rail, { ...rails[to], top: 72, height: 480 })
+      await act(async () => refreshVisibleMapArea())
+      refreshVisibleMapArea()
+      expect(visibleMapFrame.value.left).toBe(after)
+    } finally {
+      render(null, container)
+      container.remove()
+      releaseRight()
+      releaseRail()
+      releaseArea()
+    }
+  })
+
   it('frames temporary focus and Fit to Design inside the visible map area', () => {
     const insets = { top: 60, right: 456, bottom: 56, left: 236 }
     expect(framingRect({ width: 1280, height: 800 }, insets)).toEqual({ x: 236, y: 60, width: 588, height: 684 })

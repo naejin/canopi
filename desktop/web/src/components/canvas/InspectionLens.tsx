@@ -65,13 +65,15 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
   // The open panel covers the map's left edge: Home, Fit and framing land right of it (canopi-f47t.28), when it leaves
   // the labelled tool rail's least map width before the right chrome. With less (a phone, a tablet, a window beside the
   // open dock) it stays out, or the chips would squeeze off screen and framing would fall back to the whole window.
-  // Reads only the frame's width and right edge (the map fills the window), so its own cover cannot feed back.
+  // Measures on every render: the panel also moves without resizing when the tool rail switches between names and icons
+  // (the tool card's left follows it), and that switch re-renders the lens through the frame's left edge. Reads only the
+  // frame's width and right edge (the map fills the window), so its own cover cannot feed back.
   const frame = visibleMapFrame.value
   const [covers, setCovers] = useState(false)
   useLayoutEffect(() => {
     const edge = panel.current?.getBoundingClientRect().right
     setCovers(edge !== undefined && !toolRailCrowdsMap(frame, edge))
-  }, [frame.width, frame.right, expanded])
+  })
   useMapOccluder(panel, 'left', covers)
   useLayoutEffect(() => {
     if (!preview.current) return
