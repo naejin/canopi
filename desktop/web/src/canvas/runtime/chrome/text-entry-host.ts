@@ -176,8 +176,7 @@ function styleEntry({ request, textarea }: OpenEntry): void {
   })
 }
 
-/** At the anchor projected through the frame, in the frame of the text typed so far, turned with the note: the width
- *  follows the text, so its start stays in view, and never drops below 120 px. */
+/** At the anchor projected through the frame, in the frame of the text typed so far, turned with the note. */
 function place({ request, textarea }: OpenEntry, frame: ViewFrame): void {
   const origin = frame.view.worldToScreen(request.anchor)
   const rotationDeg = request.rotationDeg - frame.view.camera.bearingDeg
@@ -188,14 +187,17 @@ function place({ request, textarea }: OpenEntry, frame: ViewFrame): void {
   Object.assign(textarea.style, {
     left: `${text.origin.x}px`,
     top: `${text.origin.y}px`,
-    width: `${Math.max(text.widthPx + 8, MIN_WIDTH_PX)}px`,
     minHeight: `${Math.max(text.heightPx + 4, MIN_HEIGHT_PX)}px`,
     transform: text.rotationDeg === 0 ? '' : `rotate(${text.rotationDeg}deg)`,
   })
 }
 
-/** The field follows its content and never shrinks below one line. */
+/** The field follows its content: as wide as the browser measures its text, borders included (the field is border-box),
+ *  so the text's start stays in view, never below 120 px; as tall as its lines, never below one. */
 function autosize({ textarea }: OpenEntry): void {
+  textarea.style.width = `${MIN_WIDTH_PX}px`
+  const borders = textarea.offsetWidth - textarea.clientWidth
+  textarea.style.width = `${Math.max(textarea.scrollWidth + borders, MIN_WIDTH_PX)}px`
   textarea.style.height = 'auto'
   textarea.style.height = `${Math.max(textarea.scrollHeight, MIN_HEIGHT_PX)}px`
 }

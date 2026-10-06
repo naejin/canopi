@@ -88,17 +88,25 @@ describe('the text-entry host', () => {
     expect(document.activeElement).toBe(textarea)
   })
 
-  it('a new note\'s field widens with its text as the user types, never narrower than 120 px', () => {
+  it('a new note\'s field widens to its measured text as the user types, never narrower than 120 px', () => {
     const entries = mount()
     entries.open(NEW_NOTE, () => 'close')
     const textarea = entry()!
+    // The browser's measure of the typed text: 1 px borders outside the content box (the field is border-box), and the
+    // content's scroll width with its 8 px of padding, never less than the box itself.
+    let textPx = 0
+    Object.defineProperty(textarea, 'offsetWidth', { get: () => parseFloat(textarea.style.width) })
+    Object.defineProperty(textarea, 'clientWidth', { get: () => textarea.offsetWidth - 2 })
+    Object.defineProperty(textarea, 'scrollWidth', { get: () => Math.max(textPx + 8, textarea.clientWidth) })
 
-    textarea.value = 'Raised bed by the pond'
+    // Eleven full-width glyphs at 1 em of 16 px: far wider than 0.6 em a character, and all of it stays in view.
+    textarea.value = '池の縁に植える低木です'
+    textPx = 176
     textarea.dispatchEvent(new Event('input'))
-    // 22 characters at 0.6 em of 16 px, plus the 8 px of padding: the start stays in view.
-    expect(textarea.style.width).toBe(`${22 * 16 * 0.6 + 8}px`)
+    expect(textarea.style.width).toBe(`${176 + 8 + 2}px`)
 
     textarea.value = 'Bed'
+    textPx = 27
     textarea.dispatchEvent(new Event('input'))
     expect(textarea.style.width).toBe('120px')
   })
@@ -117,7 +125,7 @@ describe('the text-entry host', () => {
     expectScreenPx(textarea.style.top, 47)
     expect(textarea.style.fontSize).toBe('20px')
     expect(textarea.style.lineHeight).toBe('1.25')
-    // Nine characters at 0.6 em and two lines at 1.25 em, as the note is drawn.
+    // Two lines at 1.25 em, as the note is drawn; the width is the browser's measure, at least 120 px.
     expect(textarea.style.width).toBe('120px')
     expect(textarea.style.minHeight).toBe('54px')
     expect(textarea.style.transform).toBe('rotate(30deg)')
