@@ -80,11 +80,19 @@ describe('Settings dialog', () => {
     opener.remove()
   })
 
-  it('the single-key hint names N and Shift L, says Shift N always resets north and names the mod key', () => {
+  it('the single-key hint names N, Shift L and Shift 2 (no Shift R), says Shift N always resets north and + and − stay on the map, and names the mod key', () => {
     expect(t('settings.singleKeyShortcutsHint', { mod: 'Cmd' })).toBe(
-      'Tool keys such as V, P and Z, N to reset north, brackets and Shift G, S, R, L. Shift N always resets north. '
-      + 'Off keeps Cmd shortcuts, Delete, Esc, arrows and F keys.',
+      'Tool keys such as V, P and Z, N to reset north, brackets and Shift G, S, L, 2. Shift N always resets north. '
+      + 'Off keeps Cmd shortcuts, Delete, Esc, arrows, F keys, and + and − on the map.',
     )
+    // Every language names Shift 2 and the map's + and −, and no longer Shift R.
+    for (const [code, messages] of Object.entries(import.meta.glob<{ settings: { singleKeyShortcutsHint: string } }>('../i18n/*.json', { eager: true }))) {
+      const hint = messages.settings.singleKeyShortcutsHint
+      expect(hint, code).toMatch(/L, 2|L・2|L、2/)
+      expect(hint, code).toContain('+')
+      expect(hint, code).toContain('−')
+      expect(hint, code).not.toMatch(/S, R|S・R|S、R/)
+    }
   })
 
   it('fills the single-key hint with the platform mod key', async () => {

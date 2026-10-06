@@ -1808,7 +1808,7 @@
     "openOnSatellite": "Abrir no satélite",
     "openOnSatelliteHint": "Desativado, mantém o último fundo usado.",
     "singleKeyShortcuts": "Atalhos de uma tecla",
-    "singleKeyShortcutsHint": "Teclas de ferramentas como V, P e Z, N para redefinir o norte, colchetes e Shift G, S, R, L. Shift N sempre redefine o norte. Desativados, ficam os atalhos com {{mod}}, Delete, Esc, as setas e as teclas F.",
+    "singleKeyShortcutsHint": "Teclas de ferramentas como V, P e Z, N para redefinir o norte, colchetes e Shift G, S, L, 2. Shift N sempre redefine o norte. Desativados, ficam os atalhos com {{mod}}, Delete, Esc, as setas, as teclas F, e + e − no mapa.",
     "remapLater": "Os atalhos ainda não podem ser alterados.",
     "allShortcuts": "Ver todos os atalhos",
     "filesIntro": "O Canopi mantém estas pastas neste computador. Os designs que você salva são arquivos onde você escolheu.",

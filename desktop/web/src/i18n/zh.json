@@ -1808,7 +1808,7 @@
     "openOnSatellite": "以卫星影像打开",
     "openOnSatelliteHint": "关闭时保留上次使用的背景。",
     "singleKeyShortcuts": "单键快捷键",
-    "singleKeyShortcutsHint": "工具键如 V、P 和 Z，重置为正北的 N，方括号以及 Shift G、S、R、L。Shift N 始终重置为正北。关闭后仍保留 {{mod}} 快捷键、Delete、Esc、方向键和 F 键。",
+    "singleKeyShortcutsHint": "工具键如 V、P 和 Z，重置为正北的 N，方括号以及 Shift G、S、L、2。Shift N 始终重置为正北。关闭后仍保留 {{mod}} 快捷键、Delete、Esc、方向键、F 键，以及地图上的 + 和 −。",
     "remapLater": "快捷键暂时无法更改。",
     "allShortcuts": "显示全部快捷键",
     "filesIntro": "Canopi 在这台电脑上保留这些文件夹。你保存的设计是你所选位置中的文件。",

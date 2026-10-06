@@ -1808,7 +1808,7 @@
     "openOnSatellite": "Abrir en satélite",
     "openOnSatelliteHint": "Desactivado, se mantiene el último fondo usado.",
     "singleKeyShortcuts": "Atajos de una tecla",
-    "singleKeyShortcutsHint": "Teclas de herramientas como V, P y Z, N para restablecer el norte, los corchetes y Mayús G, S, R, L. Mayús N siempre restablece el norte. Desactivados, quedan los atajos con {{mod}}, Supr, Esc, las flechas y las teclas F.",
+    "singleKeyShortcutsHint": "Teclas de herramientas como V, P y Z, N para restablecer el norte, los corchetes y Mayús G, S, L, 2. Mayús N siempre restablece el norte. Desactivados, quedan los atajos con {{mod}}, Supr, Esc, las flechas, las teclas F, y + y − en el mapa.",
     "remapLater": "Los atajos aún no se pueden cambiar.",
     "allShortcuts": "Ver todos los atajos",
     "filesIntro": "Canopi guarda estas carpetas en este ordenador. Los diseños que guardas son archivos donde los elegiste.",

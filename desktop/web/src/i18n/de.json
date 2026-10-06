@@ -1808,7 +1808,7 @@
     "openOnSatellite": "Auf Satellitenbild öffnen",
     "openOnSatelliteHint": "Aus behält den zuletzt verwendeten Hintergrund.",
     "singleKeyShortcuts": "Kurzbefehle mit einer Taste",
-    "singleKeyShortcutsHint": "Werkzeugtasten wie V, P und Z, N zum Ausrichten nach Norden, eckige Klammern und Umschalt G, S, R, L. Umschalt N richtet immer nach Norden aus. Aus lässt {{mod}}-Kurzbefehle, Entf, Esc, Pfeile und F-Tasten.",
+    "singleKeyShortcutsHint": "Werkzeugtasten wie V, P und Z, N zum Ausrichten nach Norden, eckige Klammern und Umschalt G, S, L, 2. Umschalt N richtet immer nach Norden aus. Aus lässt {{mod}}-Kurzbefehle, Entf, Esc, Pfeile, F-Tasten sowie + und − auf der Karte.",
     "remapLater": "Kurzbefehle lassen sich noch nicht ändern.",
     "allShortcuts": "Alle Kurzbefehle anzeigen",
     "filesIntro": "Canopi hält diese Ordner auf diesem Computer. Gespeicherte Designs sind Dateien dort, wo Sie sie abgelegt haben.",

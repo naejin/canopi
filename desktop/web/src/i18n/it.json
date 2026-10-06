@@ -1808,7 +1808,7 @@
     "openOnSatellite": "Apri sul satellite",
     "openOnSatelliteHint": "Disattivato, resta l’ultimo sfondo usato.",
     "singleKeyShortcuts": "Scorciatoie a un tasto",
-    "singleKeyShortcutsHint": "Tasti degli strumenti come V, P e Z, N per ripristinare il nord, le parentesi quadre e Maiusc G, S, R, L. Maiusc N ripristina sempre il nord. Disattivate, restano le scorciatoie con {{mod}}, Canc, Esc, le frecce e i tasti F.",
+    "singleKeyShortcutsHint": "Tasti degli strumenti come V, P e Z, N per ripristinare il nord, le parentesi quadre e Maiusc G, S, L, 2. Maiusc N ripristina sempre il nord. Disattivate, restano le scorciatoie con {{mod}}, Canc, Esc, le frecce, i tasti F, e + e − sulla mappa.",
     "remapLater": "Le scorciatoie non si possono ancora modificare.",
     "allShortcuts": "Mostra tutte le scorciatoie",
     "filesIntro": "Canopi tiene queste cartelle su questo computer. I progetti che salvi sono file dove li hai scelti.",

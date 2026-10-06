@@ -71,9 +71,10 @@ pub struct Settings {
     /// View › Tool names: `None` follows first use, `Some` is the user's choice.
     pub tool_names_visible: Option<bool>,
     /// Settings › Keyboard: character-key shortcuts (tool keys such as V or
-    /// P, N, Shift G, Shift L, brackets). Off leaves only shortcuts with Ctrl
-    /// or Cmd, Alt or a named key (Delete, Esc, arrows, F keys), plus Shift N,
-    /// which always resets north.
+    /// P, N, Shift G, Shift L, Shift 2, brackets). Off leaves only shortcuts
+    /// with Ctrl or Cmd, Alt or a named key (Delete, Esc, arrows, F keys),
+    /// plus Shift N, which always resets north, and + and − while the map has
+    /// focus.
     pub single_key_shortcuts: bool,
     /// Settings › Canvas: what a plain wheel or two-finger scroll does on the
     /// map. Pinch and Ctrl wheel always zoom; Shift wheel always pans.

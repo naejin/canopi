@@ -960,9 +960,10 @@ export type Settings = {
 	tool_names_visible: boolean | null,
 	/**
 	 *  Settings › Keyboard: character-key shortcuts (tool keys such as V or
-	 *  P, N, Shift G, Shift L, brackets). Off leaves only shortcuts with Ctrl
-	 *  or Cmd, Alt or a named key (Delete, Esc, arrows, F keys), plus Shift N,
-	 *  which always resets north.
+	 *  P, N, Shift G, Shift L, Shift 2, brackets). Off leaves only shortcuts
+	 *  with Ctrl or Cmd, Alt or a named key (Delete, Esc, arrows, F keys),
+	 *  plus Shift N, which always resets north, and + and − while the map has
+	 *  focus.
 	 */
 	single_key_shortcuts: boolean,
 	/**

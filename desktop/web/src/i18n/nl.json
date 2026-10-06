@@ -1808,7 +1808,7 @@
     "openOnSatellite": "Openen op satelliet",
     "openOnSatelliteHint": "Uit houdt de laatst gebruikte achtergrond.",
     "singleKeyShortcuts": "Sneltoetsen met één toets",
-    "singleKeyShortcutsHint": "Gereedschapstoetsen zoals V, P en Z, N om het noorden te herstellen, vierkante haken en Shift G, S, R, L. Shift N herstelt altijd het noorden. Uit houdt {{mod}}-sneltoetsen, Delete, Esc, pijltjes en F-toetsen.",
+    "singleKeyShortcutsHint": "Gereedschapstoetsen zoals V, P en Z, N om het noorden te herstellen, vierkante haken en Shift G, S, L, 2. Shift N herstelt altijd het noorden. Uit houdt {{mod}}-sneltoetsen, Delete, Esc, pijltjes, F-toetsen, en + en − op de kaart.",
     "remapLater": "Sneltoetsen kunnen nog niet worden gewijzigd.",
     "allShortcuts": "Alle sneltoetsen tonen",
     "filesIntro": "Canopi bewaart deze mappen op deze computer. Ontwerpen die je opslaat zijn bestanden waar je ze koos.",

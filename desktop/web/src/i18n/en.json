@@ -1808,7 +1808,7 @@
     "openOnSatellite": "Open on satellite",
     "openOnSatelliteHint": "Off keeps the background you used last.",
     "singleKeyShortcuts": "Single-key shortcuts",
-    "singleKeyShortcutsHint": "Tool keys such as V, P and Z, N to reset north, brackets and Shift G, S, R, L. Shift N always resets north. Off keeps {{mod}} shortcuts, Delete, Esc, arrows and F keys.",
+    "singleKeyShortcutsHint": "Tool keys such as V, P and Z, N to reset north, brackets and Shift G, S, L, 2. Shift N always resets north. Off keeps {{mod}} shortcuts, Delete, Esc, arrows, F keys, and + and − on the map.",
     "remapLater": "Shortcuts can’t be changed yet.",
     "allShortcuts": "Show all shortcuts",
     "filesIntro": "Canopi keeps these folders on this computer. Designs you save are files wherever you chose.",

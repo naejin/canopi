@@ -1808,7 +1808,7 @@
     "openOnSatellite": "衛星画像で開く",
     "openOnSatelliteHint": "オフにすると、最後に使った背景のままになります。",
     "singleKeyShortcuts": "1 キーのショートカット",
-    "singleKeyShortcutsHint": "V、P、Z などのツールキー、北を上にする N、角かっこ、Shift G・S・R・L。Shift N はいつでも北を上にします。オフでも {{mod}} のショートカット、Delete、Esc、矢印キー、F キーは使えます。",
+    "singleKeyShortcutsHint": "V、P、Z などのツールキー、北を上にする N、角かっこ、Shift G・S・L・2。Shift N はいつでも北を上にします。オフでも {{mod}} のショートカット、Delete、Esc、矢印キー、F キー、地図上の + と − は使えます。",
     "remapLater": "ショートカットはまだ変更できません。",
     "allShortcuts": "すべてのショートカットを表示",
     "filesIntro": "Canopi はこれらのフォルダーをこのコンピューターに保存します。保存したデザインは、選んだ場所にあるファイルです。",

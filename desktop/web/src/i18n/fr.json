@@ -1808,7 +1808,7 @@
     "openOnSatellite": "Ouvrir sur le satellite",
     "openOnSatelliteHint": "Désactivé, le dernier fond utilisé est conservé.",
     "singleKeyShortcuts": "Raccourcis à une touche",
-    "singleKeyShortcutsHint": "Touches d’outils comme V, P et Z, N pour rétablir le nord, les crochets et Maj G, S, R, L. Maj N rétablit toujours le nord. Désactivés, les raccourcis {{mod}}, Suppr, Échap, les flèches et les touches F restent.",
+    "singleKeyShortcutsHint": "Touches d’outils comme V, P et Z, N pour rétablir le nord, les crochets et Maj G, S, L, 2. Maj N rétablit toujours le nord. Désactivés, les raccourcis {{mod}}, Suppr, Échap, les flèches, les touches F, et + et − sur la carte restent.",
     "remapLater": "Les raccourcis ne peuvent pas encore être modifiés.",
     "allShortcuts": "Voir tous les raccourcis",
     "filesIntro": "Canopi garde ces dossiers sur cet ordinateur. Les Designs que vous enregistrez sont des fichiers là où vous les avez placés.",

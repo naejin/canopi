@@ -1808,7 +1808,7 @@
     "openOnSatellite": "위성 영상으로 열기",
     "openOnSatelliteHint": "끄면 마지막으로 사용한 배경을 유지합니다.",
     "singleKeyShortcuts": "한 키 단축키",
-    "singleKeyShortcutsHint": "V, P, Z 같은 도구 키, 북쪽을 위로 하는 N, 대괄호, Shift G, S, R, L. Shift N 키는 항상 북쪽을 위로 합니다. 꺼도 {{mod}} 단축키, Delete, Esc, 화살표, F 키는 남습니다.",
+    "singleKeyShortcutsHint": "V, P, Z 같은 도구 키, 북쪽을 위로 하는 N, 대괄호, Shift G, S, L, 2. Shift N 키는 항상 북쪽을 위로 합니다. 꺼도 {{mod}} 단축키, Delete, Esc, 화살표, F 키, 지도의 + 및 − 키는 남습니다.",
     "remapLater": "단축키는 아직 바꿀 수 없습니다.",
     "allShortcuts": "모든 단축키 보기",
     "filesIntro": "Canopi는 이 폴더들을 이 컴퓨터에 둡니다. 저장한 디자인은 선택한 위치에 있는 파일입니다.",
