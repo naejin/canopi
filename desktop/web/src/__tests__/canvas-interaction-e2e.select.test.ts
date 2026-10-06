@@ -2576,6 +2576,40 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it("Backspace, the Mac's delete key, removes a focused or selected polygon corner, not the zone; with no corner it deletes the selection", () => {
+    const pentagon = [{ x: 20, y: 20 }, { x: 120, y: 20 }, { x: 140, y: 80 }, { x: 70, y: 130 }, { x: 0, y: 80 }]
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone', locked: false, id: 'polygon-1', name: 'polygon-1', zoneType: 'polygon', rotationDeg: 0,
+        points: pentagon, fillColor: null, notes: null,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, testView)
+    const session = createTestSession(deps)
+    session.setTool('select')
+    events.pointerDown({ x: 70, y: 70 }, { button: 0 })
+    events.pointerUp({ x: 70, y: 70 }, { button: 0 })
+    const corner = (index: number) => container.querySelector<HTMLElement>(`[data-canvas-handle="vertex:polygon-1:${index}"]`)!
+
+    // Tab-focused corner 3.
+    corner(3).focus()
+    events.keyDown({ key: 'Backspace', code: 'Backspace', target: corner(3) })
+    expect(store.persisted.zones[0]!.points).toEqual([pentagon[0], pentagon[1], pentagon[2], pentagon[4]])
+
+    // A press on corner 1 selects it; focus then returns to the map.
+    events.pointerDown({ x: 120, y: 20 }, { button: 0, target: corner(1) })
+    events.pointerUp({ x: 120, y: 20 }, { button: 0 })
+    corner(1).blur()
+    events.keyDown({ key: 'Backspace', code: 'Backspace' })
+    expect(store.persisted.zones[0]!.points).toEqual([pentagon[0], pentagon[2], pentagon[4]])
+    expect(keyCommands).not.toHaveBeenCalledWith('canvas.deleteSelected')
+
+    // No corner focused or selected: the selection goes, as before.
+    events.keyDown({ key: 'Backspace', code: 'Backspace' })
+    expect(keyCommands).toHaveBeenCalledWith('canvas.deleteSelected')
+    session.dispose()
+  })
+
   it('leaves the short edges of a selected polygon without midpoint dots until a zoom makes room, and draws dots under the corners', () => {
     store.updatePersisted((draft) => {
       draft.zones = [{

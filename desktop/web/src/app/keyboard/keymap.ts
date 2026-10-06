@@ -58,8 +58,8 @@ export interface CommandSink {
  */
 const CANVAS_KEY_ROWS: readonly KeymapRow[] = [
   keyRow({ kind: 'confirm' }, ['Enter']),
+  // Both remove a focused or selected zone corner in Select (Backspace is the Mac's delete key); with none the selection goes.
   keyRow({ kind: 'remove-last' }, ['Backspace'], { fallback: 'canvas.deleteSelected' }),
-  // A selected zone corner first; with none the selection goes, as from away from the map.
   keyRow({ kind: 'delete-handle' }, ['Delete'], { fallback: 'canvas.deleteSelected' }),
   keyRow({ kind: 'edit-text' }, ['F2'], { fallback: 'file.rename' }),
   keyRow({ kind: 'context-menu' }, ['ContextMenu', 'Shift+F10']),

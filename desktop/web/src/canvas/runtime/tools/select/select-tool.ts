@@ -291,7 +291,7 @@ export function createSelectTool(): CanvasTool {
     refreshHandles()
   }
 
-  /** Delete on the focused corner, else the selected one: removed, keeping at least 3; with neither, Delete passes. */
+  /** Delete or Backspace on the focused corner, else the selected one: removed, keeping at least 3; with neither, the key passes. */
   function deleteCorner(): ToolReply {
     const focused = ctx().focusedHandle()
     const id = focused && reshapePoints.has(focused) ? focused : selectedCorner
@@ -358,7 +358,8 @@ export function createSelectTool(): CanvasTool {
       followView()
     },
     command(c): ToolReply {
-      if (c.kind === 'delete-handle') return deleteCorner()
+      // Backspace is the Mac's delete key, so it removes a corner as Delete does.
+      if (c.kind === 'delete-handle' || c.kind === 'remove-last') return deleteCorner()
       if (c.kind !== 'edit-text') return 'pass'
       const noteId = selectedEditableNoteId(ctx())
       return noteId && editNote(noteId) ? 'handled' : 'pass'
