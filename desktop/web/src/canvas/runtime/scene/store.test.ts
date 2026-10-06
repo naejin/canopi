@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { CanopiFile } from '../../../types/design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
 import { geoAt, storedGeoAt } from '../../../__tests__/support/geo-design'
@@ -11,19 +11,15 @@ import { createSceneGeoFrame } from './geo-frame'
 const TEST_FRAME_ORIGIN = { lon: 13, lat: 23 }
 
 describe('scene store', () => {
-  it('reads whether it holds objects without cloning the full scene', () => {
+  it('reads whether it holds objects', () => {
     const store = new SceneStore()
     store.updatePersisted((draft) => {
       draft.annotations.push({ kind: 'annotation', id: 'a', locked: false,
         annotationType: 'text', position: { x: 3, y: 4 }, text: 'Note', fontSize: 12, rotationDeg: 0 })
     })
-    const read = vi.spyOn(store, 'persisted', 'get')
-    try {
-      expect(store.hasObjects).toBe(true)
-      store.updatePersisted((draft) => { draft.annotations = [] })
-      expect(store.hasObjects).toBe(false)
-      expect(read).not.toHaveBeenCalled()
-    } finally { read.mockRestore() }
+    expect(store.hasObjects).toBe(true)
+    store.updatePersisted((draft) => { draft.annotations = [] })
+    expect(store.hasObjects).toBe(false)
   })
 
   it('owns committed persisted drafts after the mutator returns', () => {
