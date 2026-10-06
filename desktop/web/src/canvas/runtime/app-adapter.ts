@@ -107,6 +107,12 @@ export interface CanvasContextMenuRequest {
    * way until that edge is level on screen.
    */
   readonly turnViewToEdge?: () => void
+  /**
+   * Present while a press, a tool transient (a polygon draft, a row source, Place plants' waiting point, a held stamp
+   * pick) or a text entry is live (U39): the selection was kept, not retargeted, and Cut and Delete are disabled, as key
+   * admission refuses Delete and Ctrl+X then.
+   */
+  readonly holdsSelectionDeletes?: true
   /** Gives keyboard focus back to the map. */
   returnFocus(): void
   /**

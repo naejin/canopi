@@ -132,7 +132,8 @@ export type ContextMenuPortOptions = Parameters<typeof createCanvasContextMenu>[
  * ToolHostDeps.menu over today's controller. The host hits and retargets the selection first; open() then rebuilds
  * today's three menu states: the selection's menu from the keyboard, the empty-map menu, and a right-clicked object's menu,
  * disabled when the object is on a locked layer or locked through its group (today's _retargetContextMenuSelection). A
- * pointer menu carries the host's "Turn view to this edge" onto the app's request.
+ * pointer menu carries the host's "Turn view to this edge" onto the app's request. A menu opened during the host's
+ * re-origin hold (U39) kept the selection: an object hit gets the kept selection's menu, or the empty map's with none.
  */
 export function createContextMenuPort(options: ContextMenuPortOptions): ContextMenuPort {
   const { scene, selectionModel, ...controllerOptions } = options
@@ -141,19 +142,24 @@ export function createContextMenuPort(options: ContextMenuPortOptions): ContextM
 
   return {
     open(request) {
+      const held = request.holdsSelectionDeletes ? { holdsSelectionDeletes: true as const } : {}
       if (request.at === 'selection') {
         const selection = selectionModel()
-        controller.openFromKeyboard(selection, selectionScreenHull(scene, selection, controllerOptions.view()))
+        controller.openFromKeyboard(selection, selectionScreenHull(scene, selection, controllerOptions.view()), held)
         return
       }
       const screen = request.screen ?? controllerOptions.view().worldToScreen(request.at)
       const { visible, target } = contextMenuTargetAt(scene, request.at)
+      const selection = target ? selectionModel() : null
+      const kept = request.holdsSelectionDeletes && selection
+        && selection.editableTargets.length + selection.lockedTargets.length === 0 ? null : selection
       controller.openAtPointer(
         screen,
-        target ? selectionModel() : visible ? EMPTY_SELECTION_MODEL : null,
+        kept ?? (visible && !target ? EMPTY_SELECTION_MODEL : null),
         {
           ...(request.finishShape ? { finishShape: request.finishShape } : {}),
           ...(request.turnViewToEdge ? { turnViewToEdge: request.turnViewToEdge } : {}),
+          ...held,
         },
       )
     },
@@ -1090,6 +1096,11 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     return true
   }
 
+  /** A live press, a tool transient or an open text entry: re-origin waits, and the selection's deletes are held (U39). */
+  function holdsReorigin(): boolean {
+    return live !== null || activeTool.hasTransient() || deps.chrome.isTextEntryOpen()
+  }
+
   /** The last hover while it rests on the map in site mode; a pointer pan may have carried it past the map's edge. */
   function restingPointer(): StillPointer | null {
     const still = lastHover
@@ -1099,11 +1110,12 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   // ── Menus ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
   /** Hit, retarget the selection to the object under the pointer (history-free), then open the menu, with "Finish shape"
-   *  when the armed tool can finish its draft and "Turn view to this edge" when the pointer is on a zone's edge. */
-  function openMenuAt(at: ScreenPoint, source: MenuSource): void {
+   *  when the armed tool can finish its draft and "Turn view to this edge" when the pointer is on a zone's edge. During the
+   *  re-origin hold (`held`, U39) the selection is kept and the menu disables Cut and Delete. */
+  function openMenuAt(at: ScreenPoint, source: MenuSource, held: boolean): void {
     const world = frame().view.screenToWorld(at)
     const { target } = contextMenuTargetAt(deps.scene, world)
-    if (target && !includesSceneDesignObjectTarget(deps.scene.selection(), target)) {
+    if (!held && target && !includesSceneDesignObjectTarget(deps.scene.selection(), target)) {
       deps.setSelection([target])
       notifySceneChanged()
     }
@@ -1114,6 +1126,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       screen: at,
       ...(finishShape ? { finishShape } : {}),
       ...(turnViewToEdge ? { turnViewToEdge } : {}),
+      ...(held ? { holdsSelectionDeletes: true as const } : {}),
     })
   }
 
@@ -1296,8 +1309,10 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
           return true
         }
         if (deps.chrome.isTextEntryOpen()) focusMap()
-        if (at === 'selection') deps.menu.open({ at, screen: null })
-        else openMenuAt(at, source)
+        // A press, a tool transient or an entry its commit left open keeps the selection and its deletes (U39).
+        const held = holdsReorigin()
+        if (at === 'selection') deps.menu.open({ at, screen: null, ...(held ? { holdsSelectionDeletes: true as const } : {}) })
+        else openMenuAt(at, source, held)
         return true
       }, false)
       return !admitted || duringEdit ? QUARANTINE : NOTHING
@@ -1326,8 +1341,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       if (!disposed) notifySceneChanged()
     },
     textEntryOpen: () => !disposed && deps.chrome.isTextEntryOpen(),
-    holdsReorigin: () => !disposed
-      && (live !== null || activeTool.hasTransient() || deps.chrome.isTextEntryOpen()),
+    holdsReorigin: () => !disposed && holdsReorigin(),
     hasLiveGesture: () => live !== null,
     activeToolHasEscapeTransient: () => activeTool.hasTransient() && !activeTool.escapeLeaves,
     activeToolIsSelect: () => currentId === 'select',

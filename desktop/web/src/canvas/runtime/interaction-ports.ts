@@ -62,7 +62,7 @@ export interface DomInputSource {
  * app's CanvasContextMenuRequest (canvas/runtime/app-adapter.ts: anchor, world, retargeted selection, commands,
  * placePlantsAt, saveSelectionAsObjectStamp, returnFocus) and hands it to CanvasRuntimeAppAdapter.contextMenu.
  * The host fills the optional entries from its hit and tool state, and the controller carries them onto the request
- * (CanvasContextMenuRequest.finishShape, .turnViewToEdge); there is no highlightEdge (U4).
+ * (CanvasContextMenuRequest.finishShape, .turnViewToEdge, .holdsSelectionDeletes); there is no highlightEdge (U4).
  */
 export interface ContextMenuPort {
   open(request: {
@@ -70,6 +70,7 @@ export interface ContextMenuPort {
     readonly screen: ScreenPoint | null
     readonly finishShape?: () => void                           // the armed tool can finish its draft (CanvasTool.canFinish)
     readonly turnViewToEdge?: () => void                        // a zone-edge hit within the source's tolerance (§4.16)
+    readonly holdsSelectionDeletes?: true                       // the host's re-origin hold at the open: Cut and Delete disabled (U39)
   }): void
   close(): void
   readonly isOpen: () => boolean

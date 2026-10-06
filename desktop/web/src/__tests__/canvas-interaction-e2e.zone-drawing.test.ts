@@ -25,8 +25,10 @@ import { createTestView, type TestView } from './support/test-view'
 import {
   storedGeo,
   contextMenuCommand,
+  contextMenuHost,
   contextMenuItemIds,
   createInteractionDeps,
+  makePlant,
   createSelectionCommands,
   plantTarget,
   createAbortFailingSceneEdits,
@@ -50,7 +52,7 @@ describe('SceneInteractionSession', () => {
     },
     () => ({ events }),
   )
-  const { openContextMenu } = fixture
+  const { openContextMenu, openContextMenuFromKeyboard } = fixture
 
   beforeEach(() => {
     renderer = createRecordingRenderer()
@@ -804,6 +806,44 @@ describe('SceneInteractionSession', () => {
     contextMenuCommand('finish-shape').run()
     expect(store.persisted.zones).toHaveLength(2)
     expect(store.persisted.zones[1]!.points).toEqual([{ x: 110, y: 10 }, { x: 160, y: 10 }, { x: 160, y: 50 }])
+    session.dispose()
+  })
+
+  it('U39 a still right-click during a polygon draft keeps the selection, and the menu disables Cut and Delete', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [
+        makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }),
+        makePlant('plant-2', 'Malus domestica', { x: 300, y: 250 }),
+      ]
+    })
+    const deps = createInteractionDeps(container, store, testView)
+    const session = createTestSession(deps)
+    session.setTool('polygon')
+    events.pointerDown({ x: 110, y: 110 }, { button: 0, detail: 1 })
+    events.pointerDown({ x: 160, y: 110 }, { button: 0, detail: 1 })
+    events.pointerDown({ x: 160, y: 150 }, { button: 0, detail: 1 })
+    // The first corner cleared the selection; a panel selects during the draft.
+    deps.setSelection([plantTarget('plant-1')])
+
+    openContextMenu({ x: 300, y: 250 })
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
+    expect(contextMenuHost.current?.selection?.editableTargets).toEqual([plantTarget('plant-1')])
+    expect(contextMenuItemIds()[0]).toBe('finish-shape')
+    expect(contextMenuCommand('cut').disabled).toBe(true)
+    expect(contextMenuCommand('delete').disabled).toBe(true)
+    expect(contextMenuCommand('copy').disabled).toBe(false)
+
+    openContextMenuFromKeyboard()
+    expect(contextMenuHost.current?.selection?.editableTargets).toEqual([plantTarget('plant-1')])
+    expect(contextMenuCommand('cut').disabled).toBe(true)
+    expect(contextMenuCommand('delete').disabled).toBe(true)
+    expect(store.persisted.plants).toHaveLength(2)
+
+    events.keyDown({ key: 'Escape' })
+    openContextMenu({ x: 300, y: 250 })
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-2']))
+    expect(contextMenuCommand('cut').disabled).toBe(false)
+    expect(contextMenuCommand('delete').disabled).toBe(false)
     session.dispose()
   })
 

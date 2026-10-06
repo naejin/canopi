@@ -8,8 +8,9 @@ import type { CanvasDesignObjectSelectionModel } from '../runtime'
 import type { ScenePoint } from '../scene'
 import type { ViewTransform, WorldQuad } from '../view/types'
 
-/** The optional entries a pointer menu carries onto its request. */
-type PointerMenuEntries = Pick<CanvasContextMenuRequest, 'finishShape' | 'turnViewToEdge'>
+/** The optional entries the host carries onto a request; the keyboard menu never has Turn view to this edge. */
+type PointerMenuEntries = Pick<CanvasContextMenuRequest, 'finishShape' | 'turnViewToEdge' | 'holdsSelectionDeletes'>
+type KeyboardMenuEntries = Omit<PointerMenuEntries, 'turnViewToEdge'>
 
 interface CanvasContextMenuOptions {
   readonly container: HTMLElement
@@ -29,12 +30,12 @@ interface CanvasContextMenuOptions {
 export interface CanvasContextMenuController {
   /** `screen` is container-relative; `selection` is null on the empty map. `entries`: the request's optional entries from
    *  the host, Finish shape (a polygon draft that can finish) and Turn view to this edge (the pointer on a zone's edge,
-   *  spec §4.16). */
+   *  spec §4.16), and holdsSelectionDeletes (U39). */
   openAtPointer(screen: ScenePoint, selection: CanvasDesignObjectSelectionModel | null, entries?: PointerMenuEntries): void
   /** Menu key or Shift F10: beside the selection's projected hull (`hull`, the world quad of the screen box of the shapes it
    *  draws, tools/select/selection-hull.ts; tool-host.test.ts "the keyboard menu opens beside a shape drawn level at 45"),
    *  else mid-map (the empty-map menu without a selection). */
-  openFromKeyboard(selection: CanvasDesignObjectSelectionModel, hull: WorldQuad | null): void
+  openFromKeyboard(selection: CanvasDesignObjectSelectionModel, hull: WorldQuad | null, entries?: KeyboardMenuEntries): void
   /** True from an open until the app closes the menu (the request's `closed`) or close() closes it. */
   isOpen(): boolean
   close(): void
@@ -63,6 +64,7 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
       ...(options.placePlantsAt ? { placePlantsAt: options.placePlantsAt } : {}),
       ...(entries.finishShape ? { finishShape: entries.finishShape } : {}),
       ...(entries.turnViewToEdge ? { turnViewToEdge: entries.turnViewToEdge } : {}),
+      ...(entries.holdsSelectionDeletes ? { holdsSelectionDeletes: true as const } : {}),
       returnFocus: options.returnFocus,
       closed: () => {
         if (openRequest === request) openRequest = null
@@ -85,7 +87,7 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
       const y = origin.top + screen.y
       open({ left: x, top: y, right: x, bottom: y }, world, selection, entries)
     },
-    openFromKeyboard(selection, hull) {
+    openFromKeyboard(selection, hull, entries) {
       const origin = containerOrigin()
       const target = hasSelectedObjects(selection) ? selection : null
       const bounds = target?.bounds ?? null
@@ -95,7 +97,7 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
         const world = view.screenToWorld(centre)
         const x = origin.left + centre.x
         const y = origin.top + centre.y
-        open({ left: x, top: y, right: x, bottom: y }, world, target)
+        open({ left: x, top: y, right: x, bottom: y }, world, target, entries)
         return
       }
       // The hull's four projected corners: two would miss its box on a turned map.
@@ -111,6 +113,7 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
         },
         { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 },
         selection,
+        entries,
       )
     },
     isOpen: () => openRequest !== null,

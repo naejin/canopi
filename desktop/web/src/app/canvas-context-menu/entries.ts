@@ -80,7 +80,8 @@ const SEPARATOR = { separator: true } as const
  * Every command runs on the request's scene-edit surface. During a polygon
  * draft that can finish, Finish shape leads every menu. On a zone's edge,
  * Turn view to this edge leads the empty map's menu and comes before Lock in
- * the selection's.
+ * the selection's. While a gesture or tool transient is live, Cut and Delete
+ * are disabled (U39).
  */
 export function buildCanvasContextMenuEntries(
   request: CanvasContextMenuRequest,
@@ -131,6 +132,8 @@ export function buildCanvasContextMenuEntries(
   }
 
   const can = selectionCommandAvailability(selection)
+  // Cut and Delete wait while a gesture or tool transient is live, as Delete and Ctrl+X do (U39).
+  const deletable = can.copy && !request.holdsSelectionDeletes
   const appearance = (kind: PlantAppearanceKind, labelKey: string): CanvasContextMenuCommand => ({
     id: kind === 'color' ? 'plant-color' : 'plant-symbol',
     label: options.translate(labelKey),
@@ -215,7 +218,7 @@ export function buildCanvasContextMenuEntries(
 
   return [
     ...finishEntries,
-    edit('cut', !can.copy, () => {
+    edit('cut', !deletable, () => {
       commands.copy()
       commands.deleteSelected()
     }),
@@ -244,7 +247,7 @@ export function buildCanvasContextMenuEntries(
     edit('lock', !can.edit, () => commands.lockSelected()),
     edit('unlock', !can.unlock, () => commands.unlockSelected()),
     SEPARATOR,
-    edit('delete', !can.copy, () => commands.deleteSelected(), { danger: true }),
+    edit('delete', !deletable, () => commands.deleteSelected(), { danger: true }),
   ]
 }
 
