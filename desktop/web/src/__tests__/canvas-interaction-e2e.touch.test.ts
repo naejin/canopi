@@ -221,4 +221,35 @@ describe('SceneInteractionSession: touch', () => {
     expect(testView.view().camera.bearingDeg).toBeCloseTo(turned, 6)
     session.dispose()
   })
+
+  it('a finger\'s tap on a polygon gives it 44 px handle boxes and dots on 132 px edges; a mouse move makes them 20 px again (Q1, Q2, Q4)', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone', locked: false, id: 'polygon-1', name: 'polygon-1', zoneType: 'polygon', rotationDeg: 0,
+        points: [{ x: 40, y: 60 }, { x: 240, y: 60 }, { x: 240, y: 160 }, { x: 40, y: 160 }], fillColor: null, notes: null,
+      }]
+    })
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('select')
+    const box = (selector: string) => [...container.querySelectorAll<HTMLElement>(selector)].map((element) =>
+      `${element.style.width}×${element.style.height}`)
+
+    touchDown({ x: 140, y: 110 })
+    touchUp({ x: 141, y: 111 })
+
+    expect(currentCanvasSelection.value).toEqual(new Set(['polygon-1']))
+    expect(box('[data-canvas-handle^="vertex:"]')).toEqual(['44px×44px', '44px×44px', '44px×44px', '44px×44px'])
+    // The 200 px edges show their 44 px dots; the 100 px ones are under 132 px.
+    expect(box('[data-canvas-handle^="edge-mid:"]')).toEqual(['44px×44px', '44px×44px'])
+    const rotate = container.querySelector<HTMLElement>('[data-canvas-handle="rotate"]')!
+    expect(`${rotate.style.width}×${rotate.style.height}`).toBe('44px×44px')
+    expect((rotate.firstElementChild as HTMLElement).style.width).toBe('28px')
+
+    events.pointerMove({ x: 300, y: 250 }, { pointerType: 'mouse', buttons: 0 })
+
+    expect(box('[data-canvas-handle^="vertex:"]')).toEqual(['20px×20px', '20px×20px', '20px×20px', '20px×20px'])
+    expect(box('[data-canvas-handle^="edge-mid:"]')).toEqual(['16px×16px', '16px×16px', '16px×16px', '16px×16px'])
+    expect(rotate.style.width).toBe('28px')
+    session.dispose()
+  })
 })

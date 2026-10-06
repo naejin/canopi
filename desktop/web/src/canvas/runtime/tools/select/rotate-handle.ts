@@ -1,7 +1,7 @@
 // canvas/runtime/tools/select/rotate-handle.ts
 //
 // Owns Select's rotation handle: the 'rotate' ToolHandle, a 28 px button centred 28 px above the selection's projected
-// hull (14 px clear of it; spec §4.9): the screen box of
+// hull (14 px clear of it; spec §4.9), its hit box sized for the last pointer (handle-size.ts): the screen box of
 // the shapes it draws (select/selection-hull.ts), so on a turned map it sits above what the user sees, centred on it. The
 // handle layer keeps it inside the visible map area. It is shown for a rotatable selection
 // (scene-runtime/selection-rotation.ts), and its drag: one
@@ -24,11 +24,12 @@ import type { ScenePersistedState } from '../../scene/types'
 import type { WorldPoint } from '../../view/types'
 import type { ToolHandle } from '../draft'
 import type { ToolConstraint, ToolContext, ToolPoint, ToolScene, ToolView } from '../tool'
+import type { HandleSize } from './handle-size'
 import { selectionScreenHull } from './selection-hull'
 
 export const ROTATE_HANDLE_ID = 'rotate' as ToolHandleId
 
-/** A 28 px button, 14 px above the selection's top edge. */
+/** The look: a 28 px button, 14 px above the selection's top edge, whatever its hit box. */
 const HANDLE_RADIUS_PX = 14
 const HANDLE_GAP_PX = 14
 const STEP_DEG = 15
@@ -53,6 +54,7 @@ export function rotateHandle(
   view: ToolView,
   translate: ToolContext['translate'],
   deltaDeg: number | null,
+  size: HandleSize,
 ): ToolHandle | null {
   if (!isRotatableSelection(selection)) return null
   const hull = selectionScreenHull(scene, selection, view)
@@ -62,7 +64,7 @@ export function rotateHandle(
     id: ROTATE_HANDLE_ID,
     anchor: { x: (topLeft.x + topRight.x) / 2, y: (topLeft.y + topRight.y) / 2 },
     offsetPx: { x: 0, y: -(HANDLE_GAP_PX + HANDLE_RADIUS_PX) },
-    hitRadiusPx: HANDLE_RADIUS_PX,
+    hitRadiusPx: size.rotateRadiusPx,
     glyph: 'rotate',
     label: translate('canvas.rotationHandle.label'),
     ...(deltaDeg === null ? {} : { readout: rotationReadout(deltaDeg) }),
