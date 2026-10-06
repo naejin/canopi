@@ -435,7 +435,7 @@ describe('saved object stamp tool', () => {
     holding(h, mulchStamp())
     const tool = builtTools.at(-1)!
 
-    for (const reason of ['tool-change', 'navigate', 'escape', 'document-replaced', 'overview'] as const) {
+    for (const reason of ['tool-change', 'navigate', 'document-replaced', 'overview'] as const) {
       h.hover({ x: 100, y: 100 })
       expect(ghosts(h)).toHaveLength(2)
       tool.cancelTransient(reason)

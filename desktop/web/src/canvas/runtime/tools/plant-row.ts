@@ -357,11 +357,8 @@ export function createPlantRowTool(): CanvasTool {
     sceneChanged: publish,
     viewChanged: publish,
     hasTransient: () => source !== null,
-    cancelTransient(reason) {
-      if (reason !== 'escape' || !source) return
-      clear()
-      publish()
-    },
+    // The picked source outlives every cancellation (a pan, a blur, overview); Esc drops it through command 'escape'.
+    cancelTransient() {},
     deactivate() {
       clear()
       ctx?.effects.setDraft(null)

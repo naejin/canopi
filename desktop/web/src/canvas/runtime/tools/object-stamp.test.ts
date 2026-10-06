@@ -311,7 +311,7 @@ describe('object stamp tool', () => {
     h.click({ x: 40, y: 40 })
     const tool = builtTools.at(-1)!
 
-    for (const reason of ['tool-change', 'navigate', 'escape', 'document-replaced', 'overview'] as const) {
+    for (const reason of ['tool-change', 'navigate', 'document-replaced', 'overview'] as const) {
       h.hover({ x: 90, y: 90 })
       expect(ghosts(h)).toHaveLength(1)
       tool.cancelTransient(reason)
