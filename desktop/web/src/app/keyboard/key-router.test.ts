@@ -600,7 +600,7 @@ describe('key router', () => {
     expect(run).not.toHaveBeenCalled()
   })
 
-  it('with the lens open and the host focused, ArrowUp nudges and Esc clears (canopi-f47t.24)', async () => {
+  it('opening the lens from a focused launcher hands focus to the map, so ArrowUp nudges and Esc clears (canopi-f47t.24)', async () => {
     install()
     const root = document.createElement('div')
     document.body.append(root)
@@ -613,10 +613,12 @@ describe('key router', () => {
     }))
     try {
       await act(async () => render(h(InspectionLens, { canvasRef: { current: host } }), root))
-      host.focus()
-      host.dispatchEvent(new Event('pointerdown', { bubbles: true }))
-      // The launcher's click opens the lens; the lens takes no focus on open, so the map keeps its keys.
-      await act(async () => root.querySelector<HTMLButtonElement>('button[aria-expanded]')!.click())
+      // A real press on the launcher (outside the map host) focuses it, as WebView2, WebKitGTK and Tab-then-Enter do;
+      // the launcher hides as the lens opens, so the map host must take focus or the keys reach neither map nor lens.
+      const launcher = root.querySelector<HTMLButtonElement>('button[aria-expanded]')!
+      launcher.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+      launcher.focus()
+      await act(async () => launcher.click())
       expect(root.querySelector('[data-inspection-frame]')).not.toBeNull()
       expect(document.activeElement).toBe(host)
       fake.state.command = (c) => c.kind === 'arrow'

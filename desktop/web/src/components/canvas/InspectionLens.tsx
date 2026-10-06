@@ -28,7 +28,10 @@ export function InspectionLens({ canvasRef }: { canvasRef: RefObject<HTMLDivElem
   const launcher = useRef<HTMLButtonElement>(null)
   const wasOpen = useRef(false)
   const id = useId()
+  // Opening hands focus to the map host, not the lens (U34, canopi-f47t.24): the launcher hides as the lens opens, and the
+  // map keeps its arrows and Esc until a click or Tab moves focus into the lens. Closing returns focus to the launcher.
   useLayoutEffect(() => {
+    if (open && !wasOpen.current) canvasRef.current?.focus({ preventScroll: true })
     if (wasOpen.current && !open) launcher.current?.focus()
     wasOpen.current = open
   }, [open])
@@ -64,8 +67,6 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
     try { view = documents.attachInspectionTo(preview.current) }
     catch (error) { console.error('Unable to open the inspection lens:', error); failed.value = true; return }
     handle.value = view
-    // The lens takes no focus on open (U34, canopi-f47t.24): the map keeps its arrows and Esc until a click or Tab moves
-    // focus into the lens, whose own keys (its arrows, Esc closing it) then apply.
     const frame = panel.current?.querySelector<HTMLElement>('[data-inspection-frame]')
     let drag: { id: number; x: number; y: number } | null = null
     const stop = () => {
