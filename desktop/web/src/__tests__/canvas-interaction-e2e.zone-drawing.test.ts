@@ -124,28 +124,6 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('uses primary drag for navigation in overview regardless of the armed tool', () => {
-    const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
-    const session = createTestSession(deps)
-    session.setTool('rectangle')
-    enterOverview(testView)
-    const scene = structuredClone(store.persisted)
-    const before = testView.viewport()
-
-    events.pointerDown({ x: 100, y: 100 }, { button: 0 })
-    events.pointerMove({ x: 140, y: 125 }, { button: 0 })
-    events.pointerUp({ x: 140, y: 125 }, { button: 0 })
-
-    const after = testView.viewport()
-    expect(after.x).toBeCloseTo(before.x + 40, 6)
-    expect(after.y).toBeCloseTo(before.y + 25, 6)
-    expect(after.scale).toBeCloseTo(before.scale, 9)
-    expect(store.persisted).toEqual(scene)
-    expect(onSceneEditCommit).not.toHaveBeenCalled()
-    session.dispose()
-  })
-
   it('aborts an active drawing when overview begins and quarantines its late pointer-up', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })

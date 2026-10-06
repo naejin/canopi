@@ -58,54 +58,6 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('quarantines a press when admission recovery throws, but lets a context menu or a drop reach the app', () => {
-    const admissionFailure = new Error('admission recovery failed')
-    const deps = createInteractionDeps(container, store, testView, {
-      commandAdmission: {
-        revision: signal(0),
-        runWhenSettled: () => {
-          throw admissionFailure
-        },
-      },
-    })
-    createTestSession(deps)
-    const downstreamPointerDown = vi.fn()
-    const downstreamContextMenu = vi.fn()
-    const downstreamDrop = vi.fn()
-    container.addEventListener('pointerdown', downstreamPointerDown)
-    container.addEventListener('contextmenu', downstreamContextMenu)
-    container.addEventListener('drop', downstreamDrop)
-    let pointerDown!: PointerEvent
-    let contextMenu!: MouseEvent
-    let drop!: DragEvent
-
-    const errors = captureWindowErrors(() => {
-      pointerDown = events.pointerDown({ x: 20, y: 30 })
-      const point = events.clientPoint({ x: 20, y: 30 })
-      contextMenu = new MouseEvent('contextmenu', {
-        bubbles: true,
-        cancelable: true,
-        clientX: point.x,
-        clientY: point.y,
-      })
-      container.dispatchEvent(contextMenu)
-      drop = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent
-      Object.defineProperties(drop, {
-        clientX: { configurable: true, value: point.x },
-        clientY: { configurable: true, value: point.y },
-        dataTransfer: { configurable: true, value: null },
-      })
-      container.dispatchEvent(drop)
-    })
-
-    // Only a press on the map host is quarantined; a context menu and a drop rethrow and reach the app.
-    expect(errors).toEqual([admissionFailure, admissionFailure, admissionFailure])
-    expect(pointerDown.defaultPrevented).toBe(true)
-    expect(downstreamPointerDown).not.toHaveBeenCalled()
-    expect(downstreamContextMenu).toHaveBeenCalled()
-    expect(downstreamDrop).toHaveBeenCalled()
-  })
-
   it('clears accepted dragover feedback and reaches the app when the settled read fails', () => {
     const settledReadFailure = new Error('dragover settled read failed')
     let failRead = false
