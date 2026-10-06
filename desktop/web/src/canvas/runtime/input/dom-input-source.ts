@@ -246,39 +246,19 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     const like: DomEventLike = { ...domEventLike(event, type, rect, classifyTarget(event.target, host)), dropPayload: dropPayloadOf(event, type) }
     deliver(event, rect, normalise(like, deps.platform, rect))
   }
-  /**
-   * True from a gesturestart the canvas does not take to its gestureend. A twist starts only over the map, as a wheel is
-   * handled (MapLibre's controls count as map), and never while the text entry is open (spec §3.8: no canvas turn is live
-   * then, and its Esc is the entry's); the source prevents that twist's events and delivers none of them. An entry that
-   * opens during a twist (F2 or Enter under Select) ends it on its next event, at the last rotation delivered, so the
-   * turn made before the entry stays and the rest of the twist is ignored the same way.
-   */
+  /** True from a gesturestart the canvas does not take (over the note editor or the canvas's own chrome; MapLibre's
+   *  controls count as map, as for a wheel) to its gestureend: the source prevents that twist's events and delivers none. */
   let ignoringTwist = false
-  /** The last gesture event delivered of the live twist: the end the source gives it when the entry opens. */
-  let lastTwist: DomEventLike | null = null
   /** WebKit's trackpad gesture events (WKWebView and Safari); the recogniser prevents each one and uses its rotation. */
   const gestureHandler = (type: 'gesturestart' | 'gesturechange' | 'gestureend') => (event: Event): void => {
-    const entryOpen = host.querySelector(TEXT_ENTRY_SELECTOR) !== null
-    if (type === 'gesturestart') {
-      lastTwist = null
-      ignoringTwist = classifyTarget(event.target, host, 'surface').kind !== 'surface' || entryOpen
-    }
-    if (!ignoringTwist && entryOpen && lastTwist) {
-      const end: DomEventLike = { ...lastTwist, type: 'gestureend', timeStamp: event.timeStamp }
-      lastTwist = null
-      ignoringTwist = true
-      const rect = host.getBoundingClientRect()
-      deliver(event, rect, normalise(end, deps.platform, rect))
-    }
+    if (type === 'gesturestart') ignoringTwist = classifyTarget(event.target, host, 'surface').kind !== 'surface'
     if (ignoringTwist) {
       event.preventDefault()
       if (type === 'gestureend') ignoringTwist = false
       return
     }
     const rect = host.getBoundingClientRect()
-    const like = gestureEventLike(event, type, rect)
-    lastTwist = type === 'gestureend' ? null : like
-    deliver(event, rect, normalise(like, deps.platform, rect))
+    deliver(event, rect, normalise(gestureEventLike(event, type, rect), deps.platform, rect))
   }
   const onDragOver = dragHandler('dragover')
   const onDragLeave = dragHandler('dragleave')

@@ -832,7 +832,7 @@ describe('createDomInputSource', () => {
     remove.mockRestore()
   })
 
-  it('a twist that starts over the text entry or owned chrome, or while the text entry is open, is prevented and never delivered', () => {
+  it('a twist that starts over the text entry or owned chrome is prevented and never delivered; over the map it turns the view, the entry open or not (P31)', () => {
     const MAC_WEBKIT = { os: 'mac', gestureEvents: true } as const
     const config: RecogniserConfig = { ...RECOGNISER_CONFIG, platform: MAC_WEBKIT }
     let state = initialRecogniserState()
@@ -862,63 +862,18 @@ describe('createDomInputSource', () => {
     entry.setAttribute('data-canvas-text-entry', 'create')
     host.append(surface, chrome, entry)
 
-    // Over the entry, over owned chrome, and over the map while the entry is open (spec §3.8: no canvas turn is live).
-    const ignored = [...twist(entry), ...twist(chrome), ...twist(surface)]
+    // Over the entry and over owned chrome: the page never zooms or turns, and nothing reaches the recogniser.
+    const ignored = [...twist(entry), ...twist(chrome)]
     expect(received).toEqual([])
     expect(turns).toEqual([])
     expect(ignored.every((event) => event.defaultPrevented)).toBe(true)
 
-    // Once the entry closes, a twist over the map turns the view again.
+    // Over the map the view turns with the entry open (the entry follows its note), and after it closes.
+    twist(surface)
     entry.remove()
     twist(surface)
-    expect(received.map((input) => input.kind)).toEqual(['platform-gesture', 'platform-gesture', 'platform-gesture'])
-    expect(turns).toEqual([0, -20, -20])
-    dispose()
-  })
-
-  it('a live twist ends where it was when the text entry opens, and the rest of it is prevented and never delivered', () => {
-    const MAC_WEBKIT = { os: 'mac', gestureEvents: true } as const
-    const config: RecogniserConfig = { ...RECOGNISER_CONFIG, platform: MAC_WEBKIT }
-    let state = initialRecogniserState()
-    const turns: Array<[string, number]> = []
-    const source = createDomInputSource(deps({ platform: MAC_WEBKIT }))
-    const dispose = attachRecording(source, (input) => {
-      const result = recognise(state, input, config)
-      state = result.state
-      source.apply(result.effects)
-      for (const gesture of result.gestures) if (gesture.kind === 'rotate') turns.push([gesture.phase, gesture.totalDeltaDeg])
-    })
-    const dispatch = (target: Element, type: string, rotation: number): Event => {
-      const event = new Event(type, { bubbles: true, cancelable: true })
-      Object.defineProperties(event, {
-        clientX: { value: 210 }, clientY: { value: 170 }, scale: { value: 1 }, rotation: { value: rotation },
-        shiftKey: { value: false }, ctrlKey: { value: false }, altKey: { value: false }, metaKey: { value: false },
-      })
-      target.dispatchEvent(event)
-      return event
-    }
-    const surface = document.createElement('canvas')
-    host.append(surface)
-    dispatch(surface, 'gesturestart', 0)
-    dispatch(surface, 'gesturechange', 30)
-    expect(turns).toEqual([['start', 0], ['move', -20]])
-
-    // F2 under Select opens the entry mid-twist (spec §3.8: no canvas turn is live while it is open).
-    const entry = document.createElement('textarea')
-    entry.setAttribute('data-canvas-text-entry', 'edit')
-    host.append(entry)
-    const rest = [dispatch(surface, 'gesturechange', 50), dispatch(surface, 'gesturechange', 70), dispatch(surface, 'gestureend', 70)]
-    expect(turns).toEqual([['start', 0], ['move', -20], ['end', -20]])
-    expect(state.sessions.size).toBe(0)
-    expect(received.filter((input) => input.kind === 'platform-gesture').map((input) => input.kind === 'platform-gesture' && input.phase))
-      .toEqual(['start', 'change', 'end'])
-    expect(rest.every((event) => event.defaultPrevented)).toBe(true)
-
-    // The entry closing (its Esc) leaves no twist to resume: the next twist starts fresh.
-    entry.remove()
-    dispatch(surface, 'gesturestart', 0)
-    dispatch(surface, 'gesturechange', 15)
-    expect(turns.at(-1)).toEqual(['move', -5])
+    expect(received.map((input) => input.kind)).toEqual(Array(6).fill('platform-gesture'))
+    expect(turns).toEqual([0, -20, -20, 0, -20, -20])
     dispose()
   })
 
