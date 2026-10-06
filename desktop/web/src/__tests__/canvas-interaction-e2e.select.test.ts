@@ -1346,6 +1346,7 @@ describe('SceneInteractionSession', () => {
         blockedTargets: [],
         bounds: { minX: 160, minY: 100, maxX: 220, maxY: 150 },
         sameSpeciesReferenceCanonicalName: null,
+        plantNamePinning: { plantIds: [], allPinned: false },
       }),
     }
     const session = createTestSession(deps)
@@ -1510,6 +1511,7 @@ describe('SceneInteractionSession', () => {
       blockedTargets: [],
       bounds: { minX: 20, minY: 20, maxX: 24, maxY: 24 },
       sameSpeciesReferenceCanonicalName: null,
+      plantNamePinning: { plantIds: [], allPinned: false },
     }
     const baseDeps = createInteractionDeps(container, store, testView, {
       getDesignObjectSelection: () => selectionModel,
@@ -1554,6 +1556,7 @@ describe('SceneInteractionSession', () => {
       }],
       bounds: { minX: 20, minY: 20, maxX: 60, maxY: 24 },
       sameSpeciesReferenceCanonicalName: null,
+      plantNamePinning: { plantIds: [], allPinned: false },
     }
     const commands = createSelectionCommands({ canPaste: vi.fn(() => true) })
     const session = createTestSession(createInteractionDeps(container, store, testView, {

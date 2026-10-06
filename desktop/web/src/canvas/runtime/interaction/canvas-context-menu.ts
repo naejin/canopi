@@ -120,5 +120,5 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
 }
 
 function hasSelectedObjects(selection: CanvasDesignObjectSelectionModel): boolean {
-  return selection.editableTargets.length + (selection.lockedTargets?.length ?? 0) > 0
+  return selection.editableTargets.length + selection.lockedTargets.length > 0
 }

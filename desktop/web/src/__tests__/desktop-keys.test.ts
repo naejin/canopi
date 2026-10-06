@@ -349,6 +349,7 @@ describe('Desktop keys', () => {
       blockedTargets: [],
       bounds: { minX: 0, minY: 0, maxX: 10, maxY: 10 },
       sameSpeciesReferenceCanonicalName: null,
+      plantNamePinning: { plantIds: [], allPinned: false },
     })
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       commands: createTestCanvasCommandSurface({ sceneEdits: { rotateSelected } }),

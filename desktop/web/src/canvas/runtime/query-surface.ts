@@ -22,7 +22,7 @@ import type {
 import type { PointerWorld } from './interaction-ports'
 import type { SceneRuntimeMutationController } from './scene-runtime/mutations'
 import type { SceneRuntimePresentationController } from './scene-runtime/presentation'
-import { getDesignObjectSelectionModel } from './scene-runtime/selection'
+import { EMPTY_SELECTION_MODEL, getDesignObjectSelectionModel } from './scene-runtime/selection'
 import type { SettledSceneReader } from './scene-runtime/transactions'
 import { createViewReadSurface } from './view/frame-source'
 import type { ViewReadSurface } from './view/read-surface'
@@ -135,13 +135,7 @@ class SceneCanvasQueryRole implements SceneCanvasQuerySurface {
   }
   getDesignObjectSelection(): CanvasDesignObjectSelectionModel {
     const selectedTargets = this.options.sceneStore.session.selectedTargets
-    if (selectedTargets.length === 0) {
-      return {
-        editableTargets: [], lockedTargets: [], blockedTargets: [], bounds: null,
-        sameSpeciesReferenceCanonicalName: null,
-        plantNamePinning: { plantIds: [], allPinned: false },
-      }
-    }
+    if (selectedTargets.length === 0) return EMPTY_SELECTION_MODEL
     const viewportScale = this.options.frames.viewFrame.peek().view.pixelsPerMetre
     const scene = this.options.sceneStore.persisted
     return getDesignObjectSelectionModel(

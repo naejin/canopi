@@ -270,8 +270,8 @@ function editCommand(
  * map" target, editable plants only), else at one lone zone; null otherwise.
  */
 function calendarTargetFor(selection: CanvasDesignObjectSelectionModel): CalendarAddTarget | null {
-  if ((selection.plantNamePinning?.plantIds.length ?? 0) > 0) return { kind: 'selected-plants' }
-  const targets = [...selection.editableTargets, ...selection.lockedTargets ?? []]
+  if (selection.plantNamePinning.plantIds.length > 0) return { kind: 'selected-plants' }
+  const targets = [...selection.editableTargets, ...selection.lockedTargets]
   const [only] = targets
   return targets.length === 1 && only?.kind === 'zone' ? { kind: 'zone', zoneId: only.id } : null
 }

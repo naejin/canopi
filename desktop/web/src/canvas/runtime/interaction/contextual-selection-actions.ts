@@ -27,11 +27,11 @@ export interface SelectionCommandAvailability {
 export function selectionCommandAvailability(
   selection: CanvasDesignObjectSelectionModel,
 ): SelectionCommandAvailability {
-  const locked = lockedTargets(selection).length > 0
+  const locked = selection.lockedTargets.length > 0
   const structurallyBlocked = hasStructuralSelectionBlocker(selection)
   const editable = selection.editableTargets.length > 0
   const unblocked = selection.blockedTargets.length === 0
-  const plantIds = selection.plantNamePinning?.plantIds ?? []
+  const { plantIds, allPinned } = selection.plantNamePinning
   return {
     copy: editable && !locked && unblocked,
     edit: editable && !locked && !structurallyBlocked,
@@ -43,7 +43,7 @@ export function selectionCommandAvailability(
     unlock: locked,
     selectSameSpecies: unblocked && selection.sameSpeciesReferenceCanonicalName !== null,
     plantAppearance: unblocked && plantIds.length > 0,
-    plantNamesPinned: plantIds.length > 0 && selection.plantNamePinning?.allPinned === true,
+    plantNamesPinned: plantIds.length > 0 && allPinned,
     saveAsStamp: canSaveSelectionAsObjectStamp(selection),
   }
 }
@@ -51,30 +51,26 @@ export function selectionCommandAvailability(
 /** The selection holds plants, editable or locked, so plant commands belong in its menu. */
 export function selectionIncludesPlants(selection: CanvasDesignObjectSelectionModel): boolean {
   return selection.editableTargets.some((target) => target.kind === 'plant')
-    || lockedTargets(selection).some((target) => target.kind === 'plant')
+    || selection.lockedTargets.some((target) => target.kind === 'plant')
 }
 
 export function canSaveSelectionAsObjectStamp(selection: CanvasDesignObjectSelectionModel): boolean {
-  return selection.editableTargets.length + lockedTargets(selection).length > 0
+  return selection.editableTargets.length + selection.lockedTargets.length > 0
     && !hasMeasurementGuideTarget(selection)
     && !hasStructuralSelectionBlocker(selection)
 }
 
 function hasStructuralSelectionBlocker(selection: CanvasDesignObjectSelectionModel): boolean {
-  const lockedKeys = new Set(lockedTargets(selection).map(targetKey))
+  const lockedKeys = new Set(selection.lockedTargets.map(targetKey))
   return selection.blockedTargets.some((blocked) =>
     blocked.reason !== 'locked-design-object'
     || !lockedKeys.has(targetKey(blocked.target)),
   )
 }
 
-function lockedTargets(selection: CanvasDesignObjectSelectionModel): readonly { kind: string; id: string }[] {
-  return selection.lockedTargets ?? []
-}
-
 function hasMeasurementGuideTarget(selection: CanvasDesignObjectSelectionModel): boolean {
   return selection.editableTargets.some((target) => target.kind === 'measurement-guide')
-    || lockedTargets(selection).some((target) => target.kind === 'measurement-guide')
+    || selection.lockedTargets.some((target) => target.kind === 'measurement-guide')
 }
 
 function targetKey(target: { kind: string; id: string }): string {

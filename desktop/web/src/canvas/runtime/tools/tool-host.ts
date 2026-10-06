@@ -30,6 +30,7 @@ import {
 import { resolveSceneObjectGroupMembers, sceneObjectGroupMemberLayerName } from '../scene/group-members'
 import { isDirectSceneDesignObjectLocked, isSceneDesignObjectLocked } from '../scene/locks'
 import type { ScenePersistedState } from '../scene/types'
+import { EMPTY_SELECTION_MODEL } from '../scene-runtime/selection'
 import type { SceneEditCoordinator, SceneEditRunOptions, SceneEditTransaction } from '../scene-runtime/transactions'
 import type { ScreenPoint, ViewFrame, ViewScreen, ViewTransform, WorldPoint } from '../view/types'
 import { applyToolConstraint, type ScreenAxes } from './constraints'
@@ -146,7 +147,7 @@ export function createContextMenuPort(options: ContextMenuPortOptions): ContextM
       const { visible, target } = contextMenuTargetAt(scene, request.at)
       controller.openAtPointer(
         screen,
-        target ? selectionModel() : visible ? disabledContextMenuSelection() : null,
+        target ? selectionModel() : visible ? EMPTY_SELECTION_MODEL : null,
         request.turnViewToEdge,
       )
     },
@@ -1432,16 +1433,6 @@ function contextMenuTargetAt(
   const hit = objectTarget(scene.hitAt(world))
   if (!hit || isContextMenuTargetStructurallyBlocked(persisted, hit)) return { visible, target: null }
   return { visible: visible ?? hit, target: hit }
-}
-
-function disabledContextMenuSelection(): CanvasDesignObjectSelectionModel {
-  return {
-    editableTargets: [],
-    lockedTargets: [],
-    blockedTargets: [],
-    bounds: null,
-    sameSpeciesReferenceCanonicalName: null,
-  }
 }
 
 function isContextMenuTargetStructurallyBlocked(scene: ScenePersistedState, target: SceneDesignObjectTarget): boolean {

@@ -43,6 +43,7 @@ function createQuerySurface() {
       blockedTargets: [],
       bounds: null,
       sameSpeciesReferenceCanonicalName: null,
+      plantNamePinning: { plantIds: [], allPinned: false },
     }),
     getSelectedPlantColorContext: () => ({
       plantIds: [],

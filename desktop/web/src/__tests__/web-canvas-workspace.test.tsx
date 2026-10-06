@@ -964,6 +964,7 @@ function fakeQuerySurface(): CanvasQuerySurface {
       blockedTargets: [],
       bounds: null,
       sameSpeciesReferenceCanonicalName: null,
+      plantNamePinning: { plantIds: [], allPinned: false },
     })),
     getSelectedPlantColorContext: vi.fn(() => ({
       plantIds: [],

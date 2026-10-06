@@ -9,6 +9,7 @@
 
 import { getSceneGroupedMemberKeys, sceneObjectGroupMemberKey } from '../../scene/group-members'
 import { isSceneDesignObjectLocked } from '../../scene/locks'
+import { singleEditableTarget } from '../../scene-runtime/selection'
 import type { SceneAnnotationEntity, ScenePersistedState } from '../../scene/types'
 import type { TextEntryRequest, ToolContext } from '../tool'
 
@@ -16,14 +17,7 @@ const EDIT_TYPE = 'interaction-annotation-text'
 
 /** The note Enter or F2 edits: the one editable text note selected, nothing locked or blocked. */
 export function selectedEditableNoteId(ctx: ToolContext): string | null {
-  const selection = ctx.scene.selectionModel()
-  if (
-    selection.editableTargets.length !== 1
-    || (selection.lockedTargets?.length ?? 0) > 0
-    || (selection.blockedTargets?.length ?? 0) > 0
-  ) return null
-  const target = selection.editableTargets[0]
-  return target?.kind === 'annotation' ? target.id : null
+  return singleEditableTarget(ctx.scene.selectionModel(), 'annotation')?.id ?? null
 }
 
 /** Opens the entry of the text note `annotationId`; false when there is no such note. */

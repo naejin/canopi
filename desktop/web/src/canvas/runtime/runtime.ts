@@ -51,7 +51,7 @@ export interface CanvasDesignObjectSelectionModel {
   readonly blockedTargets: readonly CanvasDesignObjectSelectionBlockedTarget[]
   readonly bounds: SceneBounds | null
   readonly sameSpeciesReferenceCanonicalName: string | null
-  readonly plantNamePinning?: {
+  readonly plantNamePinning: {
     readonly plantIds: readonly string[]
     readonly allPinned: boolean
   }
