@@ -2,6 +2,8 @@ import type { RefObject } from 'preact'
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import { t } from '../../i18n'
 import type { MapNoticeReadModel } from '../../app/canvas-map-surface/map-notice'
+import { phoneLayout } from '../../app/shell/phone-layout'
+import { useMapOccluder } from '../shared/useMapChrome'
 import styles from '../panels/Panels.module.css'
 
 interface MapNoticeProps {
@@ -15,11 +17,14 @@ interface MapNoticeProps {
  * The map's status chip, the same in both editions: a fixed sentence, with Retry when the map or basemap can be
  * rebuilt. Only the sentence is the live region. A press on Retry always takes Retry away (the map or basemap shows
  * it loading, or Retry is refused), so focus moves to the chip first instead of falling to the page; when the chip
- * itself goes while holding focus (the map recovered), focus moves to the map.
+ * itself goes while holding focus (the map recovered), focus moves to the map. While it shows it is bottom chrome on the
+ * visible-map-area seam, so the map credits fold into their (i) button instead of sitting under it; on a phone it is
+ * placed from the visible map frame itself, so it registers nothing there.
  */
 export function MapNotice({ notice, onRetry, canvasRef }: MapNoticeProps) {
   const chip = useRef<HTMLDivElement>(null)
   const handOff = useRef(false)
+  useMapOccluder(chip, 'bottom', notice.visible && phoneLayout.value === null)
   // Read before the commit removes the chip: afterwards focus has already fallen to the page.
   if (!notice.visible && chip.current?.contains(document.activeElement)) handOff.current = true
   useLayoutEffect(() => {

@@ -224,6 +224,21 @@ describe('visible map area', () => {
     expect(mapAttributionFolded.value).toBe(false)
   })
 
+  it('a centred bottom notice takes the credits\' room', () => {
+    // The credits sit right of the band's middle, beside the zoom group, so a notice centred on the map bounds them on
+    // the left: only the room between the notice and the zoom group is theirs.
+    const viewChip = { rect: rect({ left: 12, top: 744, width: 280, height: 44 }), side: 'bottom' as const }
+    const notice = { rect: rect({ left: 460, top: 748, width: 360, height: 40 }), side: 'bottom' as const }
+    expect(measureBottomBandRoom(rect(WINDOW), [viewChip, { rect: rect(ZOOM_GROUP), side: 'bottom' }, notice])).toBe(80)
+    // A wide window leaves the credits their one line beside the notice.
+    const wide = { left: 0, top: 0, width: 1920, height: 800 }
+    expect(measureBottomBandRoom(rect(wide), [
+      viewChip,
+      { rect: rect({ left: 1540, top: 744, width: 368, height: 44 }), side: 'bottom' },
+      { rect: rect({ left: 780, top: 748, width: 360, height: 40 }), side: 'bottom' },
+    ])).toBe(400)
+  })
+
   it('measures the room the panel rail has above the chrome under its column', () => {
     // The inspection launcher sits in the rail's column, above the zoom group.
     const launcher = { left: 1228, top: 696, width: 40, height: 40 }
