@@ -37,7 +37,7 @@ One setting: Pointing device as a segmented Mouse: the wheel zooms / Trackpad: t
 ## Keyboard shortcuts (F1)
 
 - Keys: the tools heading reads "(anywhere except text fields)"; Map and workspace adds Turn the view 15° (Shift ← · Shift →), Reset north (N · Shift N · Shift ↑), nudge 10 cm on screen (arrows) and 1 m (Ctrl or Cmd + arrows), Labels (Shift L), zoom one step (+ · −), Fit the Design (Home · Shift F · Ctrl 0), Zoom to selection (Shift 2).
-- Mouse, trackpad and pen: Right-drag, middle-drag or Space + drag · Pan the map; Shift + right-drag or Shift + middle-drag · Turn the view, add Ctrl (Cmd on Mac) for 15° steps; Compass · Click to reset north, drag to turn the view; Right-click (Control-click on Mac) · Open the menu; Scroll wheel, Pinch or Ctrl + wheel · Zoom; Alt + click · Remove from the selection.
+- Mouse, trackpad and pen: Right-drag, middle-drag or Space + drag · Pan the map; Shift + right-drag or Shift + middle-drag · Turn the view, add Ctrl (Cmd on Mac) for 15° steps; Compass · Click to reset north, drag to turn the view; Right-click (Control-click on Mac) · Open the menu; Pinch or Ctrl + wheel · Zoom; Alt + click · Remove from the selection.
 - Touch (touch devices only): Two fingers · Pan, zoom and turn the view; Press and hold · Open the menu.
 - Notes under the lists: "Shift N works even when single-key shortcuts are off."; the Linux pinch note on Linux only. Rows come from the active bindings, so the dialog never lists a gesture the build does not have.
 

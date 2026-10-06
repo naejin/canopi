@@ -543,7 +543,7 @@ def shortcuts():
                         ('Search a place', 'Ctrl K'), ('Search in the open panel', 'Ctrl F'), ('Labels: none, codes, names', 'Shift L'), ('Grid · Snap to grid', 'Shift G · Shift S'),
                         ('Layers · Plants · Catalog · Favorites', 'Ctrl 1 · 2 · 3 · 4'), ('Calendar · Budget · Consortium · Notebook', 'Ctrl 5 · 6 · 7 · 8')]),
               ('Mouse, trackpad and pen', [('Pan the map', 'Right-drag · Middle-drag · Space + drag'), ('Turn the view; add Ctrl (Cmd on Mac) for 15° steps', 'Shift + right-drag · Shift + middle-drag'),
-                                           ('Click to reset north, drag to turn the view', 'Compass'), ('Open the menu', 'Right-click'), ('Zoom', 'Scroll wheel · Pinch · Ctrl + wheel'), ('Remove from the selection', 'Alt + click')]),
+                                           ('Click to reset north, drag to turn the view', 'Compass'), ('Open the menu', 'Right-click'), ('Zoom', 'Pinch or Ctrl + wheel'), ('Remove from the selection', 'Alt + click')]),
               ('File and help', [('New Design', 'Ctrl N'), ('Open Design', 'Ctrl O'), ('Rename', 'F2'), ('Save as', 'Ctrl Shift S'), ('Export planting plan', 'Ctrl P'), ('Settings', 'Ctrl ,'), ('Keyboard shortcuts', 'F1')])]
     cols = ''.join(f'<section style="display: flex; flex-direction: column; gap: 2px;"><h3 class="lbl" style="padding: 0 0 6px;">{g}</h3>'
                    + ''.join(f'<div style="display: flex; justify-content: space-between; gap: 12px; min-height: 30px; align-items: center; border-bottom: 1px solid var(--line);"><span>{a}</span><span style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end;">{"".join(kbd(x) for x in b.split(" · "))}</span></div>' for a, b in items)
