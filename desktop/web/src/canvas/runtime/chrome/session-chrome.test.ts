@@ -114,7 +114,6 @@ describe('the session\'s chrome', () => {
       rotationDeg: 0,
       initialText: '',
       placeholderKey: 'canvas.textNote.placeholder',
-      mode: 'create',
     }
     const text = stubTool('text', {
       gesture: (gesture) => {
@@ -161,7 +160,6 @@ describe('the session\'s chrome', () => {
             rotationDeg: 0,
             initialText: '',
             placeholderKey: 'canvas.textNote.placeholder',
-            mode: 'create',
           }, () => 'close', cancelled)
         }
         return 'pass'
@@ -206,7 +204,7 @@ describe('the session\'s chrome', () => {
       gesture: (gesture) => {
         if (gesture.kind === 'press') {
           rectangle.ctx().effects.requestTextEntry({
-            anchor: { x: 0, y: 0 }, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.textNote.placeholder', mode: 'create',
+            anchor: { x: 0, y: 0 }, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.textNote.placeholder',
           }, () => 'close')
         }
         return 'pass'

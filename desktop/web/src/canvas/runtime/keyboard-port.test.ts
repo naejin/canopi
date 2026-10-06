@@ -62,7 +62,7 @@ function fixture(options: { readonly tool?: ToolId; readonly reply?: (c: ToolCom
     hasNudgeSeries: () => state.nudging,
     activeToolIsSelect: () => tool.peek() === 'select',
     activeToolHasTransient: () => state.transient,
-    openTextEntryMode: () => null,
+    textEntryOpen: () => false,
   } as unknown as ToolHost
   const session = {
     pointerSessionLive: () => state.live,

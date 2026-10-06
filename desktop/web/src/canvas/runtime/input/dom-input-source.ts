@@ -27,8 +27,8 @@ import type { AdapterEffect, RawInput, TargetClass } from './raw-input'
 import { installSelectionDragGuard } from './selection-drag-guard'
 import { DEFAULT_THRESHOLDS } from './thresholds'
 
-/** The note editor: D1's text-entry host, and today's inline annotation editor until it moves there. */
-const TEXT_ENTRY_SELECTOR = '[data-canvas-text-entry], [data-annotation-inline-editor]'
+/** The note's text entry (chrome/text-entry-host.ts). */
+const TEXT_ENTRY_SELECTOR = '[data-canvas-text-entry]'
 /** The canvas's own controls and fields inside the map: the inspection lens's skip set and the chrome. */
 const OWNED_CHROME_SELECTOR = [
   '[data-canvas-chrome]',

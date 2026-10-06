@@ -35,7 +35,6 @@ export function openNoteEntry(ctx: ToolContext, annotationId: string, onClosed: 
     rotationDeg: annotation.rotationDeg ?? 0,
     initialText: annotation.text,
     placeholderKey: 'canvas.textNote.placeholder',
-    mode: 'edit',
     fontSizePx: annotation.fontSize,
   }
   ctx.effects.requestTextEntry(request, (text) => {

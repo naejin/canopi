@@ -100,9 +100,8 @@ export interface TextEntryRequest {
   readonly rotationDeg: number                     // stored note rotation; the host draws the textarea at rotationDeg − bearing
   readonly initialText: string
   readonly placeholderKey: string
-  /** 'create': today's new-note field (--text-base, line-height 1.4); 'edit': the in-place editor (the note's font size, line-height 1.25, select-all). */
-  readonly mode: 'create' | 'edit'
-  readonly fontSizePx?: number                     // 'edit': the note's stored font size
+  /** One mode: the field is drawn at the note's font size and line height, where the note will draw. */
+  readonly fontSizePx?: number                     // the note's stored font size; a new note's default 16 px
 }
 
 export type ToolGesture =

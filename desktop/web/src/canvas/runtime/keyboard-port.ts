@@ -83,8 +83,8 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionC
   function holdsSpace(k: CanvasKeyState): boolean {
     if (k.code !== 'Space' || session.spaceHeld() || k.text) return false
     if (!k.onCanvas && !session.pointerSessionLive()) return false
-    // A new note's field, focused or not, keeps Space from arming a pan, as today's Text adapter kept the shared keys.
-    if (!session.overview() && toolHost.openTextEntryMode() === 'create') return false
+    // An open text entry, focused or not, keeps Space from arming a pan, as today's Text adapter kept the shared keys.
+    if (toolHost.textEntryOpen()) return false
     session.keyState({ space: true, mods: k.mods })
     return true
   }

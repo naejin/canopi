@@ -186,10 +186,9 @@ export interface ToolHost {
   notePointer(screen: ScreenPoint | null): void
   /** Scene or selection changed outside a tool call (select all, undo, menu commands, nudges): refresh handles and decorations. */
   sceneChanged(): void
-  /** The open text entry's mode, from the request that opened it ('create': a new note's field, 'edit': the in-place
-   *  editor), or null with none open. The keyboard port's Space reads it: a new note's field, focused or not, arms no pan,
-   *  as today's Text adapter kept its shared keys while the field was open. */
-  openTextEntryMode(): 'create' | 'edit' | null
+  /** True while a note's text entry is open. The keyboard port's Space reads it: an open entry, focused or not, arms no
+   *  pan, as today's Text adapter kept its shared keys while the field was open. */
+  textEntryOpen(): boolean
   /** The re-origin hold (§4.19): a live press, the active tool's transient or an open text entry. */
   holdsReorigin(): boolean
   // Esc chain queries (CanvasKeyboardPort reads these)

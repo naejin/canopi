@@ -378,7 +378,7 @@ function selectPort(host: HTMLElement, canvas: { selected: boolean, tool: string
     endNudgeSeries: () => {},
     activeToolIsSelect: () => canvas.tool === 'select',
     activeToolHasTransient: () => false,
-    openTextEntryMode: () => null,
+    textEntryOpen: () => false,
     interrupted: () => {},
   } as unknown as ToolHost
   return createCanvasKeyboardPort({

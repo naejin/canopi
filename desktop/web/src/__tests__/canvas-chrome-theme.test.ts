@@ -90,11 +90,10 @@ describe('canvas chrome fonts', () => {
       rotationDeg: 0,
       initialText: 'Pond edge',
       placeholderKey: 'canvas.textNote.placeholder',
-      mode: 'edit',
       fontSizePx: 16,
     }, () => 'close')
 
-    const textarea = container.querySelector<HTMLTextAreaElement>('[data-annotation-inline-editor="true"]')!
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea[data-canvas-text-entry]')!
     expect(textarea.style.fontFamily.replace(/"/g, "'")).toBe(CANVAS_CHROME_FONT_FAMILY)
     entries.dispose()
     view.dispose()

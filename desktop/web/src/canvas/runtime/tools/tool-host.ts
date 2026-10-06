@@ -46,7 +46,6 @@ import { snapWorldPoint, type SnapSettings } from './snapping'
 import type {
   CanvasTool,
   HitTarget,
-  TextEntryRequest,
   ToolCommand,
   ToolContext,
   ToolEffects,
@@ -174,10 +173,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let toolCursor: string | null = null
   let live: LiveGesture | null = null
   let lastHover: StillPointer | null = null
-  /** The mode of the text entry a tool last asked for, read only while the chrome reports an entry open: each tool asks for
-   *  one mode (Text 'create', Select 'edit'), and a tool change closes the entry. */
-  let textEntryMode: TextEntryRequest['mode'] | null = null
-  /** The raw press found a new note's entry open: its focus move committed the note, and the press places nothing. */
+  /** Under Text, the raw press found the note's entry open: its focus move committed the note, and the press places
+   *  nothing. */
   let pressCommitsNote = false
   /** The tool's draft is hidden until the pointer next hovers or presses over the map: a panel drag passed over the map, whose
    *  drop preview replaces it (today's one preview element, which a dragover took over and a pointermove gave back), or a
@@ -336,7 +333,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       },
       requestTextEntry(request, submit, onCancel) {
         if (!owns()) return
-        textEntryMode = request.mode
         deps.chrome.requestTextEntry(request, (text) => {
           const reply = callTool(() => submit(text))
           // A closed entry shows Select's handles again at once (today's editor refreshed them after its commit), and ends
@@ -624,10 +620,10 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
    * Every raw pointerdown on the map host, reported by the session before it routes the press (today's _onPointerDown):
    * any button commits the nudge series. An admitted primary or middle press outside the text entry, with no live press
    * from another pointer, also closes the menu and moves focus to the map, so an open text entry commits before the press
-   * reaches the tool (focusMap); a click inside the entry keeps it open. A primary press that so commits a new note's entry ('create') places nothing: no tool hears it, as today's Text
-   * field took that click (spec §3.2); an in-place editor's ('edit') press goes on, as today's. A press on the live press's
-   * own pointer (its up was lost) counts, as today's. The host knows only its own live press: a pan
-   * lives in the recogniser, which ignores a second pointer anyway.
+   * reaches the tool (focusMap); a click inside the entry keeps it open. While Text is armed a primary press that so commits
+   * the entry places nothing: no tool hears it, as today's Text field took that click (spec §3.2); under another tool the
+   * press goes on. A press on the live press's own pointer (its up was lost) counts, as today's. The host knows only its own
+   * live press: a pan lives in the recogniser, which ignores a second pointer anyway.
    */
   function rawPress(button: 'primary' | 'secondary' | 'middle', target: TargetClass, pointerId?: number): void {
     if (disposed) return
@@ -640,7 +636,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     deps.admission.runWhenSettled(() => {
       deps.menu.close()
       // Today's Text took the click that found its note field open to commit the note, and placed nothing (spec §3.2).
-      pressCommitsNote = button === 'primary' && openTextEntryMode() === 'create'
+      pressCommitsNote = button === 'primary' && currentId === 'text' && deps.chrome.isTextEntryOpen()
       focusMap()
       return true
     }, false)
@@ -1011,18 +1007,16 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (deps.chrome.isTextEntryOpen()) deps.chrome.closeTextEntry()
   }
 
-  function openTextEntryMode(): TextEntryRequest['mode'] | null {
-    return deps.chrome.isTextEntryOpen() ? textEntryMode : null
-  }
-
-  /** Entering overview drops an in-place editor ('edit'), the menu and every transient. A new note's entry ('create') stays:
-   *  the next press commits it. */
+  /** Entering overview commits and closes an open text entry (one whose commit is refused closes all the same), and drops
+   *  the menu and every transient. */
   function enterOverview(): void {
     lastHover = null
     setDropPreview(null)
     runCanvasRuntimeCleanups([
       () => {
-        if (openTextEntryMode() !== 'create') closeTextEntry()
+        if (!deps.chrome.isTextEntryOpen()) return
+        focusMap()
+        closeTextEntry()
       },
       () => cancelTransientInteraction('overview'),
       () => deps.menu.close(),
@@ -1289,7 +1283,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     sceneChanged(): void {
       if (!disposed) notifySceneChanged()
     },
-    openTextEntryMode: () => (disposed ? null : openTextEntryMode()),
+    textEntryOpen: () => !disposed && deps.chrome.isTextEntryOpen(),
     holdsReorigin: () => !disposed
       && (live !== null || activeTool.hasTransient() || deps.chrome.isTextEntryOpen()),
     hasLiveGesture: () => live !== null,

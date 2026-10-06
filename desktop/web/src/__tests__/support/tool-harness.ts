@@ -703,7 +703,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
     undo: () => coordinator.undo(),
     openTextEntry() {
       chrome.textEntry = {
-        request: { anchor: { x: 0, y: 0 }, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note', mode: 'edit' },
+        request: { anchor: { x: 0, y: 0 }, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note' },
         submit: () => 'close',
         onCancel: null,
         text: '',

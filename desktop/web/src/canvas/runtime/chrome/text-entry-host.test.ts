@@ -11,7 +11,6 @@ const NOTE: TextEntryRequest = {
   rotationDeg: 30,
   initialText: 'Pond edge\nwet',
   placeholderKey: 'canvas.textNote.placeholder',
-  mode: 'edit',
   fontSizePx: 20,
 }
 const NEW_NOTE: TextEntryRequest = {
@@ -19,7 +18,6 @@ const NEW_NOTE: TextEntryRequest = {
   rotationDeg: 0,
   initialText: '',
   placeholderKey: 'canvas.textNote.placeholder',
-  mode: 'create',
 }
 
 let container: HTMLDivElement
@@ -64,7 +62,7 @@ afterEach(() => {
 })
 
 describe('the text-entry host', () => {
-  it('opens a new-note field at its anchor with today\'s look, focused on the next frame', async () => {
+  it('a new note\'s field draws at the note\'s font size and line height, where the note will draw, focused on the next frame', async () => {
     const entries = mount()
 
     entries.open(NEW_NOTE, () => 'close')
@@ -72,13 +70,15 @@ describe('the text-entry host', () => {
     const textarea = entry()!
     expect(entries.isOpen()).toBe(true)
     expect(textarea.hasAttribute('data-canvas-text-entry')).toBe(true)
-    expect(textarea.hasAttribute('data-annotation-inline-editor')).toBe(false)
     expect(textarea.placeholder).toBe('t:canvas.textNote.placeholder')
     expect(textarea.getAttribute('aria-label')).toBe('t:canvas.tools.text')
     expectScreenPx(textarea.style.left, 65)
     expectScreenPx(textarea.style.top, 87)
-    expect(textarea.style.fontSize).toBe('var(--text-base)')
-    expect(textarea.style.lineHeight).toBe('1.4')
+    // A new note's default 16 px, at 1.25 em, as the note is drawn: one empty line.
+    expect(textarea.style.fontSize).toBe('16px')
+    expect(textarea.style.lineHeight).toBe('1.25')
+    expect(textarea.style.width).toBe('120px')
+    expect(textarea.style.minHeight).toBe('24px')
     expect(textarea.style.transform).toBe('')
     expect(textarea.style.fontFamily.replace(/"/g, "'")).toBe(CANVAS_CHROME_FONT_FAMILY)
     expect(document.activeElement).not.toBe(textarea)
@@ -95,10 +95,8 @@ describe('the text-entry host', () => {
 
     const textarea = entry()!
     expect(textarea.value).toBe('Pond edge\nwet')
-    expect(textarea.dataset.annotationInlineEditor).toBe('true')
     expect(textarea.dataset.preserveOverlays).toBe('true')
     expect(textarea.hasAttribute('data-canvas-text-entry')).toBe(true)
-    expect(textarea.placeholder).toBe('')
     expectScreenPx(textarea.style.left, 25)
     expectScreenPx(textarea.style.top, 47)
     expect(textarea.style.fontSize).toBe('20px')
@@ -323,7 +321,7 @@ describe('the text-entry host', () => {
     entries.open(NEW_NOTE, second)
     expect(container.querySelectorAll('textarea')).toHaveLength(1)
     expect(entry()).not.toBe(kept)
-    expect(entry()!.hasAttribute('data-annotation-inline-editor')).toBe(false)
+    expect(entry()!.value).toBe('')
   })
 
   it('the same note asked again keeps its field and selects its text', async () => {

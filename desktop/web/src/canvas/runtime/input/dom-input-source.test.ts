@@ -276,7 +276,7 @@ describe('createDomInputSource', () => {
     const plainHandle = child('<div data-canvas-handle="vertex:zone-1:2"></div>')
     const rotation = child('<div data-canvas-handle="rotate"><span data-canvas-handle-readout="true">+15°</span></div>')
     const controlPoint = child('<button data-canvas-handle="rect-corner:zone-1:ne"></button>')
-    const editor = child('<textarea data-annotation-inline-editor="true" data-preserve-overlays="true"></textarea>')
+    const editor = child('<textarea data-canvas-text-entry data-preserve-overlays="true"></textarea>')
     const chrome = child('<div data-canvas-chrome><span>©</span></div>')
     const surface = child('<canvas></canvas>')
     const outside = document.createElement('div')

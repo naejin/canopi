@@ -1,10 +1,11 @@
 // canvas/runtime/chrome/text-entry-host.ts
 //
 // Owns the note's text entry (ToolHostDeps.chrome.requestTextEntry, spec §1.4): one textarea over the map, which the host
-// opens for a tool and whose state it reads live (isOpen). 'create' is today's new-note field, 'edit' today's in-place
-// editor of a note (its font size, its text's frame, select-all). Enter and a blur hand the text to the tool's submit, which
-// closes the entry or keeps the same field open while its commit is refused; an entry whose blur commit was refused no
-// longer holds focus, so the press or menu that would have blurred it submits it instead (submitUnfocused). Esc is the
+// opens for a tool and whose state it reads live (isOpen). One entry for a new note and a note edited in place: drawn at
+// the note's font size and line height in its text's frame, where the note will draw, its text all selected. Enter and a
+// blur hand the text to the tool's submit, which closes the entry or keeps the same field open while its commit is
+// refused; an entry whose blur commit was refused no longer holds focus, so the press or menu that would have blurred it
+// submits it instead (submitUnfocused). Esc is the
 // entry's own handler and discards it before any canvas key handling hears it (spec §3.7), then tells the opener
 // (onCancel), so a tool can follow the cancel. Closing a focused entry returns focus to the map
 // (focusMap). The field stays on its anchor through camera moves ('overlays' frames). It
@@ -44,7 +45,7 @@ interface OpenEntry {
 
 const MIN_WIDTH_PX = 120
 const MIN_HEIGHT_PX = 24
-/** A new note's size until it is written; an edited note's comes from its request. */
+/** A new note's font size; an edited note's comes from its request. */
 const DEFAULT_NOTE_FONT_SIZE_PX = 16
 
 export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHost {
@@ -68,20 +69,16 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
 
     const textarea = document.createElement('textarea')
     const entry: OpenEntry = { request, submit, onCancel, textarea }
-    textarea.dataset.canvasTextEntry = request.mode
+    textarea.dataset.canvasTextEntry = ''
+    textarea.dataset.preserveOverlays = 'true'
     textarea.setAttribute('aria-label', options.translate('canvas.tools.text'))
     textarea.value = request.initialText
-    if (request.mode === 'edit') {
-      textarea.dataset.annotationInlineEditor = 'true'
-      textarea.dataset.preserveOverlays = 'true'
-    } else {
-      textarea.placeholder = options.translate(request.placeholderKey)
-    }
+    textarea.placeholder = options.translate(request.placeholderKey)
     styleEntry(entry)
     place(entry, options.frames.viewFrame.peek())
     active = entry
     options.container.appendChild(textarea)
-    if (request.mode === 'edit') autosize(entry)
+    autosize(entry)
 
     textarea.addEventListener('input', () => autosize(entry))
     textarea.addEventListener('blur', () => {
@@ -110,7 +107,7 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
     requestAnimationFrame(() => {
       if (active !== entry) return
       textarea.focus()
-      if (request.mode === 'edit') textarea.select()
+      textarea.select()
     })
   }
 
@@ -146,16 +143,14 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
   }
 }
 
-/** The same note's editor: today's start() of the annotation already being edited. */
+/** The same note's entry: today's start() of the annotation already being edited. */
 function sameEntry(open: TextEntryRequest, next: TextEntryRequest): boolean {
-  return open.mode === 'edit'
-    && next.mode === 'edit'
-    && open.anchor.x === next.anchor.x
+  return open.anchor.x === next.anchor.x
     && open.anchor.y === next.anchor.y
     && open.initialText === next.initialText
 }
 
-/** Styles both entries: a new note's ('create') and a note edited in place ('edit'), which takes the note's font size. */
+/** At the note's font size and line height, as the note is drawn. */
 function styleEntry({ request, textarea }: OpenEntry): void {
   Object.assign(textarea.style, {
     position: 'absolute',
@@ -169,8 +164,8 @@ function styleEntry({ request, textarea }: OpenEntry): void {
     resize: 'none',
     overflow: 'hidden',
     fontFamily: CANVAS_CHROME_FONT_FAMILY,
-    fontSize: request.mode === 'edit' ? `${noteFontSize(request)}px` : 'var(--text-base)',
-    lineHeight: request.mode === 'edit' ? '1.25' : '1.4',
+    fontSize: `${noteFontSize(request)}px`,
+    lineHeight: '1.25',
     color: 'var(--color-text)',
     zIndex: '3',
     whiteSpace: 'pre',
@@ -178,18 +173,10 @@ function styleEntry({ request, textarea }: OpenEntry): void {
   })
 }
 
-/** At the anchor projected through the frame; an edited note keeps its text's frame and turns with the note. */
+/** At the anchor projected through the frame, in the note's text frame, turned with the note. */
 function place({ request, textarea }: OpenEntry, frame: ViewFrame): void {
   const origin = frame.view.worldToScreen(request.anchor)
   const rotationDeg = request.rotationDeg - frame.view.camera.bearingDeg
-  if (request.mode === 'create') {
-    Object.assign(textarea.style, {
-      left: `${origin.x}px`,
-      top: `${origin.y}px`,
-      transform: rotationDeg === 0 ? '' : `rotate(${rotationDeg}deg)`,
-    })
-    return
-  }
   const text = annotationScreenFrameAt(
     { text: request.initialText, fontSize: noteFontSize(request), rotationDeg },
     origin,
@@ -203,12 +190,10 @@ function place({ request, textarea }: OpenEntry, frame: ViewFrame): void {
   })
 }
 
-/** Today's growth: the new note's field follows its content, the editor never shrinks below one line. */
-function autosize({ request, textarea }: OpenEntry): void {
+/** The field follows its content and never shrinks below one line. */
+function autosize({ textarea }: OpenEntry): void {
   textarea.style.height = 'auto'
-  textarea.style.height = request.mode === 'edit'
-    ? `${Math.max(textarea.scrollHeight, MIN_HEIGHT_PX)}px`
-    : `${textarea.scrollHeight}px`
+  textarea.style.height = `${Math.max(textarea.scrollHeight, MIN_HEIGHT_PX)}px`
 }
 
 function noteFontSize(request: TextEntryRequest): number {

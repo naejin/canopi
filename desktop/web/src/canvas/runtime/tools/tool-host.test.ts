@@ -506,7 +506,7 @@ describe('ToolHost', () => {
         gesture: (g) => {
           if (g.kind === 'tap') {
             text.ctx().effects.requestTextEntry(
-              { anchor: g.point.snapped, rotationDeg: 0, initialText: 'Compost', placeholderKey: 'canvas.note', mode: 'create' },
+              { anchor: g.point.snapped, rotationDeg: 0, initialText: 'Compost', placeholderKey: 'canvas.note' },
               (value) => {
                 submitted.push(value)
                 return 'close'
@@ -534,7 +534,7 @@ describe('ToolHost', () => {
         command: (c) => {
           if (c.kind !== 'edit-text') return 'pass'
           select.ctx().effects.requestTextEntry(
-            { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Old', placeholderKey: 'canvas.note', mode: 'edit' },
+            { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Old', placeholderKey: 'canvas.note' },
             (text) => {
               submitted.push(text)
               return busy ? 'keep' : 'close'
@@ -575,12 +575,12 @@ describe('ToolHost', () => {
       expect(h.chrome.textEntry).toBeNull()
     })
 
-    it('openTextEntryMode answers the mode of the entry a tool opened, and null once it closes', () => {
+    it('textEntryOpen answers whether the entry a tool opened is open', () => {
       const text: StubTool = stubTool('text', {
         gesture: (g) => {
           if (g.kind === 'tap') {
             text.ctx().effects.requestTextEntry(
-              { anchor: g.point.snapped, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note', mode: 'create' },
+              { anchor: g.point.snapped, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note' },
               () => 'close',
             )
           }
@@ -590,11 +590,11 @@ describe('ToolHost', () => {
       useStubTools(text)
       const h = harness({ tool: 'text' })
 
-      expect(h.host.openTextEntryMode()).toBeNull()
+      expect(h.host.textEntryOpen()).toBe(false)
       h.click({ x: 10, y: 10 })
-      expect(h.host.openTextEntryMode()).toBe('create')
+      expect(h.host.textEntryOpen()).toBe(true)
       h.enterText()
-      expect(h.host.openTextEntryMode()).toBeNull()
+      expect(h.host.textEntryOpen()).toBe(false)
     })
 
     it('the host reads the text entry\'s state live', () => {
@@ -604,7 +604,7 @@ describe('ToolHost', () => {
         gesture: (g) => {
           if (g.kind === 'tap') {
             text.ctx().effects.requestTextEntry(
-              { anchor: g.point.snapped, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note', mode: 'create' },
+              { anchor: g.point.snapped, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note' },
               () => 'close',
             )
           }
@@ -648,7 +648,7 @@ describe('ToolHost', () => {
         gesture: (g) => {
           if (g.kind === 'press') {
             text.ctx().effects.requestTextEntry(
-              { anchor: g.point.world, rotationDeg: 0, initialText: 'Compost', placeholderKey: 'canvas.note', mode: 'create' },
+              { anchor: g.point.world, rotationDeg: 0, initialText: 'Compost', placeholderKey: 'canvas.note' },
               () => 'close',
             )
           }
@@ -659,7 +659,7 @@ describe('ToolHost', () => {
         command: (c) => {
           if (c.kind !== 'edit-text') return 'pass'
           select.ctx().effects.requestTextEntry(
-            { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Old', placeholderKey: 'canvas.note', mode: 'edit' },
+            { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Old', placeholderKey: 'canvas.note' },
             () => 'close',
           )
           return 'handled'
@@ -686,55 +686,37 @@ describe('ToolHost', () => {
       // Select's in-place editor commits on the press too, and the press goes on to Select, as today.
       h.arm('select')
       h.host.command({ kind: 'edit-text' })
-      expect(h.chrome.textEntry?.request.mode).toBe('edit')
+      expect(h.chrome.textEntry).not.toBeNull()
       h.click({ x: 200, y: 200 })
       expect(h.chrome.textEntry).toBeNull()
       expect(select.count('press')).toBe(1)
     })
 
-    it('a new note\'s entry, whichever tool opened it, keeps its committing press from the tool and survives overview; an in-place editor does neither', () => {
-      /** A stand-in whose edit-text command opens an entry of `mode`, so the mode and the tool that opened it disagree. */
-      function opener(id: 'select' | 'text', mode: 'create' | 'edit'): StubTool {
-        const tool: StubTool = stubTool(id, {
-          command: (c) => {
-            if (c.kind !== 'edit-text') return 'pass'
-            tool.ctx().effects.requestTextEntry(
-              { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Compost', placeholderKey: 'canvas.note', mode },
-              () => 'close',
+    it('entering overview submits an open entry and closes it, even when its commit is refused', () => {
+      const submitted: string[] = []
+      const text: StubTool = stubTool('text', {
+        gesture: (g) => {
+          if (g.kind === 'tap') {
+            text.ctx().effects.requestTextEntry(
+              { anchor: g.point.world, rotationDeg: 0, initialText: 'Compost', placeholderKey: 'canvas.note' },
+              (value) => {
+                submitted.push(value)
+                return 'keep'
+              },
             )
-            return 'handled'
-          },
-        })
-        return tool
-      }
-      const select = opener('select', 'create')
-      const text = opener('text', 'edit')
-      useStubTools(select, text)
-      const h = harness()
+          }
+          return 'pass'
+        },
+      })
+      useStubTools(text)
+      const h = harness({ tool: 'text' })
 
-      // The press that commits a new note's entry reaches no tool (today's Text field took it), even under Select;
-      h.host.command({ kind: 'edit-text' })
-      h.click({ x: 300, y: 250 })
-      expect(h.chrome.textEntry).toBeNull()
-      expect(select.count('press')).toBe(0)
-      // and entering overview keeps a new note's entry.
-      h.host.command({ kind: 'edit-text' })
+      h.click({ x: 40, y: 40 })
       h.view.setViewport(OVERVIEW)
       h.advance(0)
-      expect(h.chrome.textEntry?.request.mode).toBe('create')
-      h.view.setViewport({ x: 0, y: 0, scale: 1 })
-      h.advance(0)
-
-      // An in-place editor's committing press goes on to the tool, even under Text, and overview closes the editor.
-      h.arm('text')
-      h.host.command({ kind: 'edit-text' })
-      h.click({ x: 300, y: 250 })
+      expect(submitted).toEqual(['Compost'])
       expect(h.chrome.textEntry).toBeNull()
-      expect(text.count('press')).toBe(1)
-      h.host.command({ kind: 'edit-text' })
-      h.view.setViewport(OVERVIEW)
-      h.advance(0)
-      expect(h.chrome.textEntry).toBeNull()
+      expect(h.host.textEntryOpen()).toBe(false)
     })
 
     it('the text entry\'s own Esc reaches the tool through onCancel, and what the tool publishes follows at once', () => {
@@ -744,7 +726,7 @@ describe('ToolHost', () => {
           if (g.kind !== 'press') return 'pass'
           const effects = text.ctx().effects
           effects.requestTextEntry(
-            { anchor: g.point.world, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note', mode: 'create' },
+            { anchor: g.point.world, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note' },
             () => 'close',
             () => {
               cancels.push(h.record.guidance.length)
@@ -1172,7 +1154,7 @@ describe('ToolHost', () => {
         command: (c) => {
           if (c.kind !== 'edit-text') return 'pass'
           select.ctx().effects.requestTextEntry(
-            { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Old', placeholderKey: 'canvas.note', mode: 'edit' },
+            { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Old', placeholderKey: 'canvas.note' },
             (text) => {
               submitted.push(text)
               return text.length > 0 ? 'close' : 'keep'
@@ -1472,7 +1454,7 @@ describe('ToolHost', () => {
         gesture: (g) => {
           if (g.kind === 'press') {
             text.ctx().effects.requestTextEntry(
-              { anchor: g.point.world, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note', mode: 'create' },
+              { anchor: g.point.world, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note' },
               () => 'close',
             )
           }
@@ -1658,7 +1640,7 @@ describe('ToolHost', () => {
         gesture: (g) => {
           if (g.kind === 'press') {
             instances[n]!.ctx().effects.requestTextEntry(
-              { anchor: g.point.world, rotationDeg: 0, initialText: '', placeholderKey: 'note', mode: 'create' },
+              { anchor: g.point.world, rotationDeg: 0, initialText: '', placeholderKey: 'note' },
               () => 'close',
             )
             throw new Error('press failed')
