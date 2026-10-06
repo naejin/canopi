@@ -2,7 +2,7 @@ import { batch, computed, signal, type ReadonlySignal } from '@preact/signals'
 import type { GeoPosition } from '../../session-plane'
 
 import type { CanopiFile } from '../../../types/design'
-import { throwCanvasRuntimeCleanupErrors } from '../cleanup'
+import { collectCanvasRuntimeErrors, throwCanvasRuntimeCleanupErrors } from '../cleanup'
 import {
   CanvasAuthorityBusyError,
   CanvasDocumentReplacementNotAdmittedError,
@@ -438,7 +438,7 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       errors.push(error)
     }
     const selection = step.patch!.selection
-    errors.push(...runEach([
+    errors.push(...collectCanvasRuntimeErrors([
       ...selection ? [() => this._setSelection(selection)] : [],
       this._syncCanvasSignalsFromScene,
       this._incrementSceneRevision,
@@ -478,19 +478,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       // The signal value still advanced, so a later read sees the settled state.
     }
   }
-}
-
-/** Runs each step once, in order, and returns what they threw. */
-function runEach(steps: readonly (() => void)[]): unknown[] {
-  const errors: unknown[] = []
-  for (const step of steps) {
-    try {
-      step()
-    } catch (error) {
-      errors.push(error)
-    }
-  }
-  return errors
 }
 
 interface SceneHydrationSettlementOptions {
@@ -648,7 +635,7 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
 
   private _publish(invalidate: SceneEditInvalidationKind, errors: unknown[]): boolean {
     this._committedChanged = true
-    errors.push(...runEach([
+    errors.push(...collectCanvasRuntimeErrors([
       this._options.syncCanvasSignalsFromScene,
       this._options.incrementSceneRevision,
       () => this._options.invalidate(invalidate),
@@ -661,7 +648,7 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
 
   /** Puts the Scene back as it was before the edit, releases it, and rethrows `errors` with any of its own. */
   private _undo(errors: unknown[]): void {
-    errors.push(...runEach([
+    errors.push(...collectCanvasRuntimeErrors([
       () => this._options.restore(this._before),
       this._options.syncCanvasSignalsFromScene,
     ]))
