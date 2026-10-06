@@ -813,7 +813,6 @@ export interface ToolHost {
   hasLiveGesture(): boolean
   activeToolHasTransient(): boolean
   activeToolIsSelect(): boolean
-  escapeHint(): 'drop-transient' | 'leave-tool' | 'clear-selection' | null
   /**
    * Arrow nudge, the one owner of the series: with a selection, the Select tool and site mode, turns the screen direction
    * into a world delta along screenAxesInWorld() (0.1 m, or 1 m when large), calls deps.nudge.nudgeSelected and (re)starts
@@ -1124,8 +1123,6 @@ export interface CanvasTool {
   hasTransient(): boolean
   /** True while the menu's "Finish shape" applies (Polygon: at least 3 corners); the entry sends `confirm`. */
   canFinish?(): boolean
-  /** Esc hint for the tool card, read by describeEscape. */
-  escapeHint(): 'drop-transient' | 'leave-tool' | 'clear-selection' | null
   cancelTransient(reason: 'escape' | 'tool-change' | 'document-replaced' | 'navigate' | 'overview'): void   // 'overview': the map entered overview; drop what today's overview reset dropped (a stamp keeps its pick and hides only its ghost)
   /** Transient history (polygon corners), read by ToolHost.transientHistory; the tool acts on the undo-transient and redo-transient commands. */
   canUndoTransient?(): boolean
@@ -1212,7 +1209,7 @@ The `ToolHost` (`tools/tool-host.ts`, interface in `interaction-ports.ts`) is th
 - **Releases** (`released()`): the host hears a tool press's own release; for the rest the session calls `released()` after routing (the end of a pointer pan, an up with no press of the map's). It commits the series, clears the drop preview and passive hover, runs `cancelTransient('navigate')` and resets the cursor. A press of the tool's still live is left to its own release. `released()` does not run for: another pointer's still-live press, an up in overview (the recogniser swallows it), and an up over the note editor or a handle. The keyboard port's Space hold also reads `textEntryOpen()`: while an entry is open, Space arms no pan.
 - **Menus**: with the text entry open the map takes focus first; hit, retarget the selection through `deps.setSelection`, open through `ToolHostDeps.menu` (the only opener); `turnViewToEdge` on a zone-edge hit from phase 1 (§4.16, no edge highlight); `finishShape` first while the active tool's `canFinish?()` is true (a polygon draft of 3+ corners) from phase 2: it runs `command({ kind: 'confirm' })`, travelling through the controller's `openAtPointer` like `turnViewToEdge`.
 - **Transient history** (`transientHistory`, revision bumps after every tool call and after a deferred `onCommitted`, read by Edit › Undo through the runtime's own `transientHistory`). Tool calls run untracked and the bump itself reads nothing (`x.value = x.peek() + 1`), because the runtime refreshes the session from inside its effects, which must neither depend on what a tool reads nor loop on the bump.
-- **Esc queries** (`hasLiveGesture`, `activeToolHasTransient`, `activeToolIsSelect`, `escapeHint`); modifier resolution (§2.3).
+- **Esc queries** (`hasLiveGesture`, `activeToolHasTransient`, `activeToolIsSelect`); modifier resolution (§2.3).
 
 Every tool, drop and piece of chrome runs on the host and `chrome/*.ts`; tools decide what a navigation keeps by `cancelTransient`'s reason.
 
@@ -1279,8 +1276,6 @@ export type CanvasEscapeLayer = 'gesture' | 'nudge-series' | 'tool-transient' | 
 export interface CanvasKeyboardPort {
   escapeLayers(): readonly CanvasEscapeLayer[]            // live canvas layers now
   escape(layer: CanvasEscapeLayer): void
-  /** What the next Esc will do, for the tool-card hint (same source as behaviour). */
-  describeEscape(): CanvasEscapeLayer | null
   /** False when nothing consumed it. As today: confirm, remove-last, rotate-held, edit-text and context-menu return false in overview
    *  (today's overview branch, keyboard-port.ts:278-286); edit-text only under Select; the other kinds are unchanged. No keyboard-menu echo is recorded
    *  (phase 2, P2: a native contextmenu never opens the canvas menu). */
@@ -1426,7 +1421,6 @@ export function pushKeyScope(scope: { readonly id: 'stories-undo-toast'; handle(
 
 // app/keyboard/escape-chain.ts
 export interface EscapeLayer {
-  readonly id: string
   readonly priority: number          // higher runs first
   isActive(): boolean
   /** The Esc being dispatched; false when it consumed nothing and the next active layer runs. */
@@ -1436,8 +1430,6 @@ export interface EscapeKey { readonly event: KeyboardEventLike }   // the router
 export function registerEscapeLayer(layer: EscapeLayer): () => void
 /** The router's Esc step: active layers by priority until one consumes the key (§3.7); the canvas port registers its layers. */
 export function runEscape(key: EscapeKey): boolean
-/** The layer the next Esc would run; the tool card renders its hint from this. */
-export function describeEscape(): EscapeLayer | null
 
 // app/keyboard/arming.ts  (the one way app code arms a canvas tool; P9)
 export function armCanvasTool(
@@ -1856,7 +1848,7 @@ The priority table is built in F, the popover layers in the same window as the c
 | Any tool, rotate drag live | restores the camera | next layer | — |
 | Any tool, pan live (from 2, spec) | ends the pan where it is; the tool stays armed | next layer | — |
 
-`describeEscape()` names the layer the next Esc runs; no F row wires the tool card's "Esc …" line to it (the card keeps its own hint). Phase 0 keeps today's order for Plant a row (INV-KEY-09): its Esc runs before the live-gesture layer, so it drops the source even mid-drag, and with no source it requests Select itself. From F the gesture layer (70) runs above the transient (60), so an Esc mid-drag cancels only the drag (plan §8).
+Nothing reports which layer the next Esc runs: the tool card keeps its own "Esc …" hint (phase 2, p1-20). Phase 0 keeps today's order for Plant a row (INV-KEY-09): its Esc runs before the live-gesture layer, so it drops the source even mid-drag, and with no source it requests Select itself. From F the gesture layer (70) runs above the transient (60), so an Esc mid-drag cancels only the drag (plan §8).
 
 ### 3.8 Exceptions
 

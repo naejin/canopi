@@ -17,7 +17,7 @@ Tools implemented a wide `SceneToolAdapter`: raw pointer events, DOM predicates,
 - **The ToolHost also** classifies handle presses, runs interceptors (unsettled-scene quarantine, text-entry commit, inspection probe, overview rule), re-emits the last drag or hover on every camera frame so a draft's fixed corner stays on the ground and its free corner under the cursor, and holds re-origin while a press, a tool transient or the text entry is open, so no tool re-projects anything; re-origin then runs on the last frame, and a plane change hides ghosts (amended 2026-10-06, P8).
 - **Screen-relative behaviour lives in the host:** arrows become world vectors along the screen axes; the host is the only opener of the canvas menu: it retargets the selection and offers "Turn view to this edge" and "Finish shape"; modifiers are resolved from the event's own flags, with no platform dependency (additive Shift, Ctrl or Cmd; subtractive Alt; constrain Shift; Plant a row's no-snap Ctrl or Cmd; ADR 0017).
 - **The Pan tool** keeps an id and a module for cursor and guidance only; its drags become `pan` in the recogniser and never reach it.
-- **Esc queries** (`hasTransient`, `escapeHint`, `cancelTransient`) feed the keyboard owner's Esc chain; a tool's Esc only drops its transient.
+- **Esc queries** (`hasTransient`, `cancelTransient`) feed the keyboard owner's Esc chain; a tool's Esc only drops its transient.
 - **One fault rule** (amended 2026-10-06, P18): at the outermost tool call, once, a call that throws aborts the host's open edits, ends the live press, arms a fresh instance of the current tool (Select if activation threw) and rethrows; a failure during the re-arm is not handled again. No tool keeps a commit-fault branch.
 
 ## Options considered
