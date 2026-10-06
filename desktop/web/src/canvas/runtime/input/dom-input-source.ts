@@ -5,7 +5,8 @@
 // blur, the window pointer listeners while it owns a pointer and the copied GeoLibre selection-drag guard on the host
 // (keys are the key router's, app/keyboard). A press it delivers on the map owns that pointer until its release, its
 // cancel or a window blur: only then does it listen on window, and only to that pointer, so presses, moves and releases
-// that start elsewhere in the app reach the page untouched. It turns each event into host-relative, classified fields
+// that start elsewhere in the app reach the page untouched. While attached, the host takes `touch-action: none` and no
+// WebKit callout, so a finger is the canvas's (A13). It turns each event into host-relative, classified fields
 // for `normalise`, hands the raw input to the sink, and applies the effects the sink sends back to the event being
 // handled: prevent-default, stop-propagation, pointer capture, the drop effect. The native contextmenu reaches no sink:
 // the listener only prevents it where a canvas press made it, or over the map (spec §2.2 "Native menu", U34), and the
@@ -54,6 +55,8 @@ const NATIVE_MENU_TRAIL_MS = 500
 const BUTTON_SECONDARY = 2
 /** Its PointerEvent.buttons bit. */
 const BUTTONS_SECONDARY_BIT = 2
+/** WebKit's long-press callout (the link and image sheet); not in CSSStyleDeclaration's typed properties. */
+const TOUCH_CALLOUT = '-webkit-touch-callout'
 
 type HostRect = Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>
 
@@ -101,6 +104,9 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   const sessionRects = new Map<number, HostRect>()
   let sink: ((input: RawInput) => void) | null = null
   let tickTimer: number | null = null
+  /** The `t` of the last input delivered (an event's timeStamp, a tick's deadline): a deadline is scheduled from it, so the
+   *  timer needs no clock on the events' base (A1; a browser's timeStamp is not Date.now()). */
+  let lastT: number | null = null
   /** Pointers pressed on the map, until their release or cancel: the window listeners follow only these. */
   const owned = new Set<number>()
   /** The owned pointers whose press was a canvas press (not the note editor's, a field's or a menu's): their native menus
@@ -146,6 +152,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
    */
   function deliver(event: Event, rect: HostRect | null, input: RawInput | null, onError: 'quarantine' | 'rethrow' = 'rethrow'): void {
     if (!input || !sink) return
+    lastT = input.t
     handling.push({ event, rect })
     try {
       sink(input)
@@ -321,6 +328,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
       if (sink) throw new Error('The DOM input source is already attached')
       sink = nextSink
       const previousTouchAction = host.style.touchAction
+      const previousCallout = host.style.getPropertyValue(TOUCH_CALLOUT)
       const removals: Array<() => void> = []
       const listen = (
         target: EventTarget,
@@ -344,7 +352,9 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
           ...[...captured].map((pointerId) => () => release(pointerId)),
           ...pending,
           () => {
-            if (host.style.touchAction !== previousTouchAction) host.style.touchAction = previousTouchAction
+            host.style.touchAction = previousTouchAction
+            if (previousCallout) host.style.setProperty(TOUCH_CALLOUT, previousCallout)
+            else host.style.removeProperty(TOUCH_CALLOUT)
           },
         ], 'DOM input source listener removal failed')
       }
@@ -365,7 +375,10 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
         }
         // A map drag never selects or drags page text; the note editor and the map's fields keep their own.
         removals.push(installSelectionDragGuard(host, (target) => keepsTextSelection(target, host)))
-        if (deps.bindings().touch.hostTouchActionNone) host.style.touchAction = 'none'
+        // A finger on the map is the canvas's: the browser neither scrolls, zooms nor pulls the page, and shows no callout
+        // (A13). The note editor turns its callout back on (text-entry-host.ts); touch-action is not inherited.
+        host.style.touchAction = 'none'
+        host.style.setProperty(TOUCH_CALLOUT, 'none')
         listenOnWindow = () => {
           const windowRemovals: Array<() => void> = []
           const listenWindow = (type: string, listener: EventListener): void => {
@@ -430,9 +443,11 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
           case 'set-timer':
             clearTickTimer()
             if (effect.atMs !== undefined) {
-              tickTimer = deps.timers.set(effect.atMs, () => {
+              const atMs = effect.atMs
+              tickTimer = deps.timers.set(Math.max(0, atMs - (lastT ?? atMs)), () => {
                 tickTimer = null
-                sink?.({ kind: 'tick', t: deps.clock() })
+                lastT = atMs
+                sink?.({ kind: 'tick', t: atMs })
               })
             }
             break

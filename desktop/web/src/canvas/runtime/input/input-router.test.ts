@@ -53,7 +53,7 @@ describe('createInputRouter', () => {
     expect(navigation.panByPx.mock.calls).toEqual([[{ x: 5, y: -3 }]])
     expect(navigation.zoomAroundPx).toHaveBeenCalledWith({ x: 10, y: 20 }, 1.2)
     expect(navigation.beginRotation).toHaveBeenCalledWith({ x: 10, y: 20 })
-    expect(rotation.update).toHaveBeenCalledWith(12, { step: true })
+    expect(rotation.update).toHaveBeenCalledWith(12, { step: true, anchorPx: { x: 10, y: 20 } })
     expect(rotation.end).toHaveBeenCalledTimes(1)
   })
 

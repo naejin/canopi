@@ -7,6 +7,8 @@ const MAC_FIREFOX = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14.5; rv:131.0) Geck
 const LINUX_WEBKITGTK = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko)'
 const LINUX_CHROME = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 const IPAD_CHROME = 'Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/131.0 Mobile/15E148 Safari/604.1'
+/** iPadOS Safari asks for desktop sites by default: its agent reads as a Mac's. */
+const IPAD_SAFARI_DESKTOP = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15'
 const ANDROID_CHROME = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36'
 
 describe('detectPlatform', () => {
@@ -20,10 +22,15 @@ describe('detectPlatform', () => {
     ['Chrome on Android', ANDROID_CHROME, 'Linux armv8l', { os: 'android' }],
     ['an unknown agent', 'Unknown/1.0', '', { os: 'other' }],
   ])('reads %s from its user agent', (_name, userAgent, platform, expected) => {
-    expect(detectPlatform({ userAgent, platform }, {})).toEqual({ ...expected, gestureEvents: false })
+    expect(detectPlatform({ userAgent, platform, maxTouchPoints: 0 }, {})).toEqual({ ...expected, gestureEvents: false })
+  })
+
+  it('an iPad desktop user agent with 5 touch points is ios; a Mac with 0 is mac (A8)', () => {
+    expect(detectPlatform({ userAgent: IPAD_SAFARI_DESKTOP, platform: 'MacIntel', maxTouchPoints: 5 }, {}).os).toBe('ios')
+    expect(detectPlatform({ userAgent: IPAD_SAFARI_DESKTOP, platform: 'MacIntel', maxTouchPoints: 0 }, {}).os).toBe('mac')
   })
 
   it('reports WebKit gesture events when GestureEvent exists', () => {
-    expect(detectPlatform({ userAgent: MAC_WKWEBVIEW, platform: 'MacIntel' }, { GestureEvent: class {} }).gestureEvents).toBe(true)
+    expect(detectPlatform({ userAgent: MAC_WKWEBVIEW, platform: 'MacIntel', maxTouchPoints: 0 }, { GestureEvent: class {} }).gestureEvents).toBe(true)
   })
 })

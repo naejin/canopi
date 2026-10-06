@@ -118,6 +118,14 @@ describe('Compass', () => {
     expect(compass().querySelector('[data-needle]')?.getAttribute('transform')).toBe('rotate(-30 10 10)')
   })
 
+  it('takes the zoom group\'s button class, which no caller may leave out (p1-24)', () => {
+    mount(0)
+    expect(compass().classList.contains('button')).toBe(true)
+    // @ts-expect-error className is required: a compass without it would miss the group's button size.
+    const withoutClass: Parameters<typeof Compass>[0] = { command: workspaceCanvasCommandProjection.value.viewActions[0]! }
+    expect(withoutClass.className).toBeUndefined()
+  })
+
   it('reads the bearing in whole degrees, and a turn within half a degree of north to its tenth', () => {
     mount(0)
     act(() => { view.navigation.showCamera({ ...view.view().camera, bearingDeg: 37.5 }) })

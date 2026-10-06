@@ -98,6 +98,25 @@ describe('the handle layer', () => {
     expect(rotate.querySelector('svg')).not.toBeNull()
   })
 
+  it('a touch-sized rotate handle keeps its 28 px button, centred in a transparent 44 px box (Q4)', () => {
+    mount().setHandles([{ ...ROTATE, hitRadiusPx: 22, readout: '+15°' }], id('rotate'))
+
+    const rotate = handle('rotate')!
+    expect(rotate.style.width).toBe('44px')
+    expect(rotate.style.height).toBe('44px')
+    expect(rotate.style.background).toBe('transparent')
+    // The same centre: 28 px above (205, 107).
+    expectScreenPx(rotate.style.left, 183)
+    expectScreenPx(rotate.style.top, 57)
+    const button = rotate.firstElementChild as HTMLElement
+    expect(button.style.width).toBe('28px')
+    expect(button.style.height).toBe('28px')
+    expect(button.style.background).toBe('var(--color-primary)')
+    expect(button.querySelector('svg')).not.toBeNull()
+    // The readout hangs under the button, not under the box.
+    expect(button.querySelector('[data-canvas-handle-readout]')?.textContent).toBe('+15°')
+  })
+
   it('keeps the rotate handle inside the visible map area, as today', () => {
     mount({ top: 40, right: 0, bottom: 0, left: 60 }).setHandles([{ ...ROTATE, anchor: { x: 0, y: 0 } }], null)
 

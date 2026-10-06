@@ -6,14 +6,14 @@ import {
 } from '../../../__tests__/support/canvas-interaction-events'
 import { writePlantStampDragData } from '../../plant-stamp-source'
 import type { DomInputSourceDeps } from '../interaction-ports'
-import { CURRENT_BINDINGS, type Bindings } from './bindings'
 import { createDomInputSource, outcomeEffects } from './dom-input-source'
+import type { Gesture } from './gestures'
 import type { RawInput, RecogniserConfig } from './raw-input'
 import { initialRecogniserState, recognise } from './recognise'
 import { DEFAULT_THRESHOLDS } from './thresholds'
 
 const PLATFORM = { os: 'linux', gestureEvents: false } as const
-const RECOGNISER_CONFIG: RecogniserConfig = { platform: PLATFORM, bindings: CURRENT_BINDINGS, thresholds: DEFAULT_THRESHOLDS }
+const RECOGNISER_CONFIG: RecogniserConfig = { platform: PLATFORM, thresholds: DEFAULT_THRESHOLDS }
 
 let host: HTMLDivElement
 let events: SceneInteractionEventHarness
@@ -37,8 +37,6 @@ function deps(overrides: Partial<DomInputSourceDeps> = {}): DomInputSourceDeps {
   return {
     host,
     platform: PLATFORM,
-    bindings: () => CURRENT_BINDINGS,
-    clock: () => 1000,
     timers: { set: vi.fn(() => 1), clear: vi.fn() },
     ...overrides,
   }
@@ -776,20 +774,22 @@ describe('createDomInputSource', () => {
     expect(received.map((input) => input.kind)).toEqual(['down', 'down'])
   })
 
-  it('delivers a tick when a timer effect fires', () => {
+  it('schedules a deadline from the last input\'s time and delivers its tick at the deadline (A1: base-free)', () => {
     let fire: (() => void) | null = null
-    const timers = { set: vi.fn((_at: number, callback: () => void) => { fire = callback; return 7 }), clear: vi.fn() }
+    const timers = { set: vi.fn((_delayMs: number, callback: () => void) => { fire = callback; return 7 }), clear: vi.fn() }
     const source = createDomInputSource(deps({ timers }))
-    const dispose = attachRecording(source)
+    // Event times on a base far from Date.now(), as a browser's performance-based timeStamp is.
+    const dispose = attachRecording(source, (input) => {
+      if (input.kind === 'down') source.apply([{ kind: 'set-timer', atMs: input.t + 400 }, { kind: 'set-timer', atMs: input.t + 500 }])
+    })
 
-    source.apply([{ kind: 'set-timer', atMs: 1500 }])
-    source.apply([{ kind: 'set-timer', atMs: 1600 }])
+    events.pointerDown({ x: 10, y: 10 }, { pointerType: 'touch', timeStamp: 1234 })
     expect(timers.clear).toHaveBeenCalledWith(7)
+    expect(timers.set).toHaveBeenLastCalledWith(500, expect.any(Function))
     fire!()
     source.apply([{ kind: 'clear-timer' }])
 
-    expect(received).toEqual([{ kind: 'tick', t: 1000 }])
-    expect(timers.set).toHaveBeenLastCalledWith(1600, expect.any(Function))
+    expect(received.map((input) => input.kind === 'tick' ? input : input.kind)).toEqual(['down', { kind: 'tick', t: 1734 }])
     dispose()
   })
 
@@ -886,27 +886,118 @@ describe('createDomInputSource', () => {
     dispose()
   })
 
-  it('host CSS is unchanged while touch gestures are off', () => {
+  it('the map host has touch-action none and no callout while attached (A13)', () => {
     const before = host.getAttribute('style')
+    const setProperty = vi.spyOn(host.style, 'setProperty')
+    const removeProperty = vi.spyOn(host.style, 'removeProperty')
     const source = createDomInputSource(deps())
     const dispose = attachRecording(source, (input) => {
       if (input.kind === 'down') source.apply([{ kind: 'prevent-default' }, { kind: 'capture', pointerId: input.id }])
       if (input.kind === 'up') source.apply([{ kind: 'release-capture', pointerId: input.id }])
     })
+    // The browser neither scrolls, zooms nor pulls the page under a finger on the map, and shows no callout there (WebKit).
+    expect(host.style.touchAction).toBe('none')
+    expect(setProperty).toHaveBeenCalledWith('-webkit-touch-callout', 'none')
+    const attached = host.getAttribute('style')
     events.pointerDown({ x: 10, y: 10 })
     events.pointerMove({ x: 20, y: 10 }, { buttons: 1 })
     events.pointerUp({ x: 20, y: 10 })
     events.wheel({ x: 20, y: 10 }, { deltaY: 5 })
-    expect(host.getAttribute('style')).toBe(before)
+    expect(host.getAttribute('style')).toBe(attached)
     dispose()
     expect(host.getAttribute('style')).toBe(before)
+    expect(removeProperty).toHaveBeenCalledWith('-webkit-touch-callout')
+    setProperty.mockRestore()
+    removeProperty.mockRestore()
+  })
 
-    // A binding with touch gestures takes the host's touch-action for the time it is attached.
-    const touch: Bindings = { ...CURRENT_BINDINGS, touch: { gestures: true, longPressMenu: true, hostTouchActionNone: true } }
-    const detach = createDomInputSource(deps({ bindings: () => touch })).attach(() => {})
-    expect(host.style.touchAction).toBe('none')
-    detach()
-    expect(host.getAttribute('style')).toBe(before)
+  describe('touch (spec §2.2 "Touch" and "Long press")', () => {
+    /** Event times on a base far from Date.now(), as a browser's performance-based timeStamp is (A1). */
+    const BASE = 5_000_000
+
+    function touch(type: 'pointerdown' | 'pointerup', target: EventTarget, timeStamp: number): PointerEvent {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: 60, clientY: 70, button: 0, buttons: type === 'pointerdown' ? 1 : 0 })
+      Object.defineProperties(event, { pointerId: { value: 1 }, pointerType: { value: 'touch' }, timeStamp: { value: timeStamp } })
+      target.dispatchEvent(event)
+      return event as PointerEvent
+    }
+
+    /** The real recogniser behind the source, with real timers (faked by vitest). */
+    function attachRecogniser(): { readonly gestures: Gesture[]; readonly dispose: () => void } {
+      const gestures: Gesture[] = []
+      let state = initialRecogniserState()
+      const source = createDomInputSource(deps({
+        timers: { set: (delayMs, callback) => window.setTimeout(callback, delayMs), clear: (id) => window.clearTimeout(id) },
+      }))
+      const dispose = attachRecording(source, (input) => {
+        const result = recognise(state, input, RECOGNISER_CONFIG)
+        state = result.state
+        gestures.push(...result.gestures)
+        source.apply(result.effects)
+      })
+      return { gestures, dispose }
+    }
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('a 100 ms touch tap opens no menu; a 600 ms hold opens one, and its lift reaches nothing else (A1, A4)', () => {
+      vi.useFakeTimers()
+      const { gestures, dispose } = attachRecogniser()
+      const lifts: Event[] = []
+      const onLift = (event: Event): void => {
+        lifts.push(event)
+      }
+      document.addEventListener('pointerup', onLift)
+
+      touch('pointerdown', host, BASE)
+      vi.advanceTimersByTime(100)
+      touch('pointerup', host, BASE + 100)
+      vi.advanceTimersByTime(600)
+      expect(gestures.map((gesture) => gesture.kind)).toEqual(['press', 'tap'])
+      expect(lifts).toHaveLength(1)
+
+      touch('pointerdown', host, BASE + 1000)
+      vi.advanceTimersByTime(499)
+      expect(gestures.map((gesture) => gesture.kind)).toEqual(['press', 'tap'])
+      vi.advanceTimersByTime(1)
+      expect(gestures.at(-1)).toEqual({ kind: 'menu-request', at: { x: 50, y: 50 }, source: 'long-press' })
+      vi.advanceTimersByTime(100)
+      // The lift emits nothing and never reaches the page, so the open menu's outside-press close cannot hear it.
+      const lift = touch('pointerup', host, BASE + 1600)
+      expect(gestures).toHaveLength(3)
+      expect(lift.defaultPrevented).toBe(true)
+      expect(lifts).toHaveLength(1)
+
+      document.removeEventListener('pointerup', onLift)
+      dispose()
+    })
+
+    it('a long press in the note editor opens no canvas menu', () => {
+      vi.useFakeTimers()
+      const editor = document.createElement('textarea')
+      editor.setAttribute('data-canvas-text-entry', 'create')
+      host.append(editor)
+      const { gestures, dispose } = attachRecogniser()
+
+      touch('pointerdown', editor, BASE)
+      vi.advanceTimersByTime(600)
+      touch('pointerup', editor, BASE + 600)
+
+      expect(gestures).toEqual([])
+      dispose()
+    })
+
+    it('a touch press\'s contextmenu is prevented', () => {
+      const { dispose } = attachRecogniser()
+      touch('pointerdown', host, BASE)
+      // Android sends its own contextmenu during a held press, wherever the finger is.
+      const menu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: 60, clientY: 70 })
+      document.documentElement.dispatchEvent(menu)
+      expect(menu.defaultPrevented).toBe(true)
+      dispose()
+    })
   })
 
   it('rejects a second attach while attached', () => {

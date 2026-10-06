@@ -1,18 +1,17 @@
 // canvas/runtime/input/__fixtures__/sequences.ts
 //
 // Owns the synthetic event sequences of spec §5: each is named by its id and title and runs through `normalise` and
-// `recognise` with an injected platform, clock (each step's timeStamp) and bindings constant. A sequence holds DOM-shaped
+// `recognise` with an injected platform, clock (each step's timeStamp) and thresholds. A sequence holds DOM-shaped
 // literals (`DomEventLike`, with host-relative points and classified targets, as the DOM source hands them over) and the
 // raw inputs that come from elsewhere (key state from the keyboard, escape from the Esc chain, the session's configure
 // and reject). A spec sequence's native contextmenu never reaches the recogniser (the source's one listener prevents it,
 // spec §2.2 "Native menu"), so the fixtures leave it out and dom-input-source.test.ts holds its orderings (A1, A3, A8,
-// A11, A15, B7, C1–C5, D1). The expectations live in recognise.test.ts, under CURRENT_BINDINGS.
+// A11, A15, B7, C1–C5, D1). The expectations live in recognise.test.ts.
 
 import type { CanvasDropPayload, ToolHandleId, ToolId } from '../../interaction-types'
 import type { Gesture } from '../gestures'
-import type { Bindings } from '../bindings'
 import { normalise, type DomEventLike } from '../normalise'
-import type { InputPlatform } from '../platform'
+import { detectPlatform, type InputPlatform } from '../platform'
 import type { AdapterEffect, RawInput, RecogniserState, TargetClass } from '../raw-input'
 import { initialRecogniserState, recognise } from '../recognise'
 import { DEFAULT_THRESHOLDS, type Thresholds } from '../thresholds'
@@ -201,6 +200,16 @@ export const blur = (options: { readonly t?: number } = {}): FixtureStep => ({ t
 export const reject = (id = 1): FixtureStep => ({ raw: { kind: 'reject', id } })
 export const configure = (context: Required<SequenceContext>): FixtureStep => ({ raw: { kind: 'configure', context } })
 
+/** Two fingers 100 px apart about (200, 150), turned clockwise on screen by `deg`: their downs at 0°, their moves after. */
+export function twist(deg: number): FixtureStep[] {
+  const rad = (deg * Math.PI) / 180
+  const dx = 50 * Math.cos(rad)
+  const dy = 50 * Math.sin(rad)
+  const at = (sign: 1 | -1, id: number) => [200 + sign * dx, 150 + sign * dy, { pointer: 'touch', id, buttons: 1 }] as const
+  if (deg === 0) return [down(...at(1, 1)), down(...at(-1, 2))]
+  return [move(...at(1, 1)), move(...at(-1, 2))]
+}
+
 /** A straight run of moves from one point to another, `count` samples after the start. */
 export function moves(from: readonly [number, number], to: readonly [number, number], count: number, options: PointerOptions = {}): FixtureStep[] {
   const steps: FixtureStep[] = []
@@ -233,8 +242,8 @@ export interface SequenceRun {
 }
 
 /** Runs a sequence through normalise and recognise, configuring its context first. Each step without a `t` is 16 ms on. */
-export function runSequence(sequence: Sequence, bindings: Bindings, thresholds: Thresholds = DEFAULT_THRESHOLDS): SequenceRun {
-  const config = { platform: sequence.platform, bindings, thresholds }
+export function runSequence(sequence: Sequence, thresholds: Thresholds = DEFAULT_THRESHOLDS): SequenceRun {
+  const config = { platform: sequence.platform, thresholds }
   let state = recognise(initialRecogniserState(), {
     kind: 'configure',
     t: 0,
@@ -269,7 +278,7 @@ export function runSequence(sequence: Sequence, bindings: Bindings, thresholds: 
 
 const SPECIES_PAYLOAD: CanvasDropPayload = Object.freeze({ kind: 'species', species: null })
 
-/** Every sequence of spec §5 that exists under CURRENT_BINDINGS, keyed by its id. */
+/** Every sequence of spec §5, keyed by its id. */
 export const SEQUENCES = {
   // 5.1 Secondary button
   A1: seq('A1 Windows right-click', WINDOWS, [
@@ -430,7 +439,8 @@ export const SEQUENCES = {
   // 5.5 Touch and trackpad gestures
   E1: seq('E1 One-finger tap', ANDROID, [
     down(100, 100, { pointer: 'touch' }),
-    up(100, 100, { pointer: 'touch' }),
+    move(104, 103, { pointer: 'touch', buttons: 1 }),
+    up(105, 104, { pointer: 'touch' }),
   ]),
   E2: seq('E2 One-finger drag', ANDROID, [
     down(100, 100, { pointer: 'touch' }),
@@ -461,21 +471,44 @@ export const SEQUENCES = {
     up(210, 100, { pointer: 'touch', id: 2 }),
     up(140, 100, { pointer: 'touch', id: 1 }),
   ]),
-  E6: seq('E6 Long press on Android', ANDROID, [
+  E7: seq('E7 Long press', IOS, [
     down(100, 100, { pointer: 'touch', t: 0 }),
-    { t: 600, raw: { kind: 'tick' } },
-    up(100, 100, { pointer: 'touch', t: 700 }),
-  ]),
-  E7: seq('E7 Long press on iOS', IOS, [
-    down(100, 100, { pointer: 'touch', t: 0 }),
-    { t: 600, raw: { kind: 'tick' } },
-    up(100, 100, { pointer: 'touch', t: 650 }),
+    move(104, 102, { pointer: 'touch', buttons: 1, t: 200 }),
+    { t: 500, raw: { kind: 'tick' } },
+    move(140, 100, { pointer: 'touch', buttons: 1, t: 550 }),
+    down(200, 100, { pointer: 'touch', id: 2, t: 560 }),
+    up(200, 100, { pointer: 'touch', id: 2, t: 600 }),
+    up(140, 100, { pointer: 'touch', t: 650 }),
   ]),
   E8: seq('E8 Long press with movement', ANDROID, [
     down(100, 100, { pointer: 'touch', t: 0 }),
     move(115, 100, { pointer: 'touch', buttons: 1, t: 200 }),
-    { t: 600, raw: { kind: 'tick' } },
+    { t: 500, raw: { kind: 'tick' } },
     up(115, 100, { pointer: 'touch', t: 700 }),
+  ]),
+  E15_PINCH: seq('E15 Touch in overview: a pinch', ANDROID, [
+    down(100, 100, { pointer: 'touch', id: 1 }),
+    down(200, 100, { pointer: 'touch', id: 2 }),
+    move(80, 100, { pointer: 'touch', id: 1, buttons: 1 }),
+    move(220, 100, { pointer: 'touch', id: 2, buttons: 1 }),
+    up(220, 100, { pointer: 'touch', id: 2 }),
+    up(80, 100, { pointer: 'touch', id: 1 }),
+  ], { mode: 'overview' }),
+  E16_THIRD_FINGER: seq('E16 A third finger', ANDROID, [
+    down(100, 100, { pointer: 'touch', id: 1 }),
+    down(200, 100, { pointer: 'touch', id: 2 }),
+    down(150, 200, { pointer: 'touch', id: 3 }),
+    move(160, 200, { pointer: 'touch', id: 3, buttons: 1 }),
+    move(110, 100, { pointer: 'touch', id: 1, buttons: 1 }),
+    up(160, 200, { pointer: 'touch', id: 3 }),
+    up(110, 100, { pointer: 'touch', id: 1 }),
+    up(200, 100, { pointer: 'touch', id: 2 }),
+  ]),
+  E16_BLUR: seq('E16 A pinch-twist of 40°, then blur', ANDROID, [
+    ...twist(0),
+    ...twist(20),
+    ...twist(40),
+    blur(),
   ]),
   E9: seq('E9 Trackpad pinch with rotation drift', MAC_GESTURES, [
     gesture('start', 0),
@@ -490,15 +523,6 @@ export const SEQUENCES = {
     gesture('change', 20),
     gesture('end', 20),
   ]),
-  E11: seq('E11 Touch behaves like today', ANDROID, [
-    down(100, 100, { pointer: 'touch', id: 1 }),
-    move(120, 100, { pointer: 'touch', id: 1, buttons: 1 }),
-    down(200, 200, { pointer: 'touch', id: 2 }),
-    move(210, 200, { pointer: 'touch', id: 2, buttons: 1 }),
-    move(140, 100, { pointer: 'touch', id: 1, buttons: 1 }),
-    up(210, 200, { pointer: 'touch', id: 2 }),
-    up(140, 100, { pointer: 'touch', id: 1 }),
-  ]),
   E12: seq('E12 iOS gesture events alongside pointers', IOS, [
     down(100, 100, { pointer: 'touch', id: 1 }),
     down(200, 100, { pointer: 'touch', id: 2 }),
@@ -507,6 +531,22 @@ export const SEQUENCES = {
     move(110, 100, { pointer: 'touch', id: 1, buttons: 1 }),
     move(230, 100, { pointer: 'touch', id: 2, buttons: 1 }),
     gesture('end', 10),
+    up(230, 100, { pointer: 'touch', id: 2 }),
+    up(110, 100, { pointer: 'touch', id: 1 }),
+  ]),
+  // iPadOS Safari's desktop agent reads as a Mac's; with its touch points it is iOS (A8), so its pointers stay the one source.
+  E12_IPAD: seq('E12 iPadOS gesture events alongside pointers', detectPlatform({
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15',
+    platform: 'MacIntel',
+    maxTouchPoints: 5,
+  }, { GestureEvent: class {} }), [
+    down(100, 100, { pointer: 'touch', id: 1 }),
+    down(200, 100, { pointer: 'touch', id: 2 }),
+    gesture('start', 0),
+    gesture('change', 20),
+    move(110, 100, { pointer: 'touch', id: 1, buttons: 1 }),
+    move(230, 100, { pointer: 'touch', id: 2, buttons: 1 }),
+    gesture('end', 20),
     up(230, 100, { pointer: 'touch', id: 2 }),
     up(110, 100, { pointer: 'touch', id: 1 }),
   ]),
@@ -522,11 +562,30 @@ export const SEQUENCES = {
     move(90, 100, { pointer: 'touch', id: 1, buttons: 1 }),
     move(220, 100, { pointer: 'touch', id: 2, buttons: 1 }),
   ], { tool: 'polygon' }),
-  E14: seq('E14 Press-acting tools under a long press', ANDROID, [
+  E14_PLANT_STAMP: seq('E14 Press-acting tools under a long press (Plant stamp)', ANDROID, [
     down(100, 100, { pointer: 'touch', t: 0 }),
-    { t: 600, raw: { kind: 'tick' } },
+    { t: 500, raw: { kind: 'tick' } },
     up(100, 100, { pointer: 'touch', t: 650 }),
   ], { tool: 'plant-stamp' }),
+  E14_POLYGON: seq('E14 Press-acting tools under a long press (Polygon)', ANDROID, [
+    down(100, 100, { pointer: 'touch', t: 0 }),
+    { t: 500, raw: { kind: 'tick' } },
+    up(100, 100, { pointer: 'touch', t: 650 }),
+  ], { tool: 'polygon' }),
+  E15_OVERVIEW: seq('E15 Touch in overview: hold, then drag 120 px', ANDROID, [
+    down(100, 100, { pointer: 'touch', t: 0 }),
+    { t: 500, raw: { kind: 'tick' } },
+    up(100, 100, { pointer: 'touch', t: 600 }),
+    down(100, 100, { pointer: 'touch', t: 1000 }),
+    move(160, 100, { pointer: 'touch', buttons: 1, t: 1020 }),
+    move(220, 100, { pointer: 'touch', buttons: 1, t: 1040 }),
+    up(220, 100, { pointer: 'touch', t: 1060 }),
+  ], { mode: 'overview' }),
+  E15_PAN_TOOL: seq('E15 Touch with the Pan tool: hold', ANDROID, [
+    down(100, 100, { pointer: 'touch', t: 0 }),
+    { t: 500, raw: { kind: 'tick' } },
+    up(100, 100, { pointer: 'touch', t: 600 }),
+  ], { tool: 'hand' }),
 
   // 5.6 Wheel and trackpad
   F1: seq('F1 Windows wheel notch, Mouse', WINDOWS, [wheel(120, 80, { dy: 100 })]),

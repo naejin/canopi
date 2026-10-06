@@ -1,11 +1,11 @@
 // canvas/runtime/input/recognise.ts  (the recogniser: its two state types and its two functions)
 //
 // Owns gesture recognition: a pure reducer from one RawInput to gestures and the effects the DOM source applies to the
-// event it is handling. No clock, timer or DOM: time is `RawInput.t`, the platform and bindings come in the config.
+// event it is handling. No clock, timer or DOM: time is `RawInput.t`, the platform and thresholds come in the config.
 // PointerSession and TouchPair are type exports imported only inside input/; RecogniserState is opaque to callers.
 // raw-input.ts and recognise.ts import each other's types with `import type` only (no runtime cycle).
 //
-// It implements the input of CURRENT_BINDINGS (spec §2.2 and §5): one pointer session at a time;
+// It implements spec §2.2 and §5 (fixtures in __fixtures__/sequences.ts): one pointer session at a time;
 // a secondary press (the right button, a Mac Control-click, a pen's barrel) pending until it passes 3 px: a still release
 // opens the menu at the release point (none in overview), a drag pans, and with Shift at the press it turns the view,
 // stepped while mod is held; no native contextmenu reaches it (the DOM source's listener prevents them); a middle drag, a
@@ -15,7 +15,14 @@
 // held, with the wheel ignored while a pointer rotate lives;
 // a button-less move over owned chrome, the text entry or a handle ends the hover; wheels, over the map or a handle, zoom
 // or pan by the pointing-device setting; a WebKit trackpad twist rotating past 10° as a session of its own; no touch gestures or pen
-// barrel. Touch gestures and the long press arrive in phase 3.
+// barrel. A touch press is held (spec §2.2 "Touch", A2): the host hears nothing until the finger passes 8 px (its press at
+// the down point, then the drag) or lifts (its press and tap at the down point), so a pinch never reaches a tool; a
+// second finger before the slop ends the held press silently, and one after the drag started cancels it ('multitouch');
+// the fingers left resume nothing until every one is up. Two fingers pan by their centroid, zoom about it past 0.1 zoom
+// level and turn about it past 25 px of arc (MapLibre's two-finger rules), and a pair ends in place, whatever ends it
+// (A5, A6, A12, A14). A held press still for 500 ms opens the menu (the 'tick' of the
+// deadline the source schedules) and goes spent: its lift emits nothing and stops propagation, so the open menu never
+// hears it (A4).
 
 import type { CancelReason, Modifiers, PointerKind } from '../interaction-types'
 import { ROTATE_DEG_PER_PX } from '../view/navigation-policy'
@@ -30,8 +37,10 @@ export interface PointerSession {
   readonly role: ButtonRole
   /** 'pending' is a primary press within slop; 'secondary' a secondary press within 3 px (a menu on release, a pan past
    *  it); 'primary' a primary drag past slop; 'pan' a navigation pan; 'rotate' a rotate, which turns the view only once
-   *  `slopPassed` (until then it is pending and silent, and a secondary one still opens the menu on release). */
-  readonly mode: 'pending' | 'secondary' | 'primary' | 'pan' | 'rotate'
+   *  `slopPassed` (until then it is pending and silent, and a secondary one still opens the menu on release); 'held' a
+   *  touch press within its slop, which the host has not heard; 'pair' one of two fingers navigating (the pair's state is
+   *  `RecogniserState.touchPair`); 'spent' a finger that does nothing more until it lifts. */
+  readonly mode: 'pending' | 'secondary' | 'primary' | 'pan' | 'rotate' | 'held' | 'pair' | 'spent'
   readonly start: ScreenPoint
   readonly last: ScreenPoint
   readonly slopPassed: boolean
@@ -47,17 +56,28 @@ export interface PointerSession {
   /** The PointerEvent.buttons bit of the button the press holds: the primary one for a consumed Mac Control press. A
    *  navigation or still secondary session whose move lacks it lost its release (spec §2.2 "Drag end"). */
   readonly buttonBit: number
+  /** A held touch press's press, sent when it resolves (past its slop or at its lift); null when the host hears none (an
+   *  overview or Space pan). */
+  readonly heldPress: { readonly target: PressTarget; readonly mods: Modifiers } | null
 }
 
+/** Two fingers navigating, per MapLibre's two-finger handlers (two_fingers_touch.ts): each move pans by the centroid's
+ *  movement, zooms about the centroid once the distance has changed 0.1 zoom level from the start, and turns about it once
+ *  the vector has turned 25 px of arc over the smallest diameter seen, each counted from the last move once active. */
 export interface TouchPair {
   readonly ids: readonly [number, number]
-  readonly startCentroid: ScreenPoint
+  readonly points: readonly [ScreenPoint, ScreenPoint]
   readonly startDistancePx: number
-  readonly startAngleDeg: number
-  readonly twistDeg: number
+  readonly startVector: ScreenPoint
+  readonly minDiameterPx: number
+  readonly zooming: boolean
+  /** The turn since it started (rotate's totalDeltaDeg), or null before the twist passes its threshold. */
+  readonly twistDeg: number | null
 }
 
 const ZERO: ScreenPoint = Object.freeze({ x: 0, y: 0 })
+/** A finger's own modes: no button bit ends them early (a touch lift always comes). */
+const TOUCH_MODES: ReadonlySet<PointerSession['mode']> = new Set(['held', 'pair', 'spent'])
 /** Wheel zoom: today's exp(clamp(−dy × 0.002, ±1)) per event. */
 const WHEEL_ZOOM_PER_PX = 0.002
 /** A secondary press, and a pointer rotate, start past this travel from the press (MapLibre's clickTolerance); a tool's
@@ -118,10 +138,9 @@ export function recognise(
     case 'focus-out':
       // The session ends the nudge series (ToolHost.endNudgeSeries); no pointer state changes.
       break
-    case 'tick':
-      // The one deadline (the long press) is phase 3's; it stays null until then.
-      break
+    case 'tick': tick(step, input.t); break
   }
+  settleDeadline(step)
   return { state: step.state, gestures: step.gestures, effects: step.effects }
 }
 
@@ -132,10 +151,14 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
   if (input.target.kind === 'owned-text' || input.target.kind === 'owned-chrome' || input.target.kind === 'foreign') return
 
   const live = step.state.sessions.get(input.id)
-  // One pointer session at a time: a second pointer (a second touch) is ignored for the rest of the session.
-  if (step.state.sessions.size > 0 && !live) return
   // A down for a live pointer id: its up was lost. End that session first.
   if (live) endSession(step, live, 'pointercancel')
+  if (input.pointer === 'touch' && input.role === 'primary' && step.state.sessions.size > 0) {
+    otherFinger(step, input)
+    return
+  }
+  // One pointer session at a time: a second pointer is ignored for the rest of the session.
+  if (step.state.sessions.size > 0) return
 
   const clickCount = clickCountOf(step, input, config)
   const { context, held } = step.state
@@ -148,6 +171,7 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
     slopPassed: false,
     clickCount,
     buttonBit: input.ctrlConsumed ? BUTTON_BITS.primary : BUTTON_BITS[input.role],
+    heldPress: null,
   } as const
 
   const pressTarget: PressTarget = input.target.kind === 'handle' ? { kind: 'handle', id: input.target.id } : { kind: 'surface' }
@@ -191,6 +215,24 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
 
   // A primary or middle press is always default-prevented (no text selection, autoscroll or Linux paste) and captured.
   step.effects.push({ kind: 'prevent-default' }, { kind: 'capture', pointerId: input.id })
+  if (input.pointer === 'touch' && input.role === 'primary') {
+    // The finger's press waits for its slop or its lift (A2); a pan of its own starts only past the slop.
+    putSession(step, {
+      ...base,
+      mode: 'held',
+      captured: true,
+      navigation,
+      pressed: false,
+      heldPress: pressed ? { target: pressTarget, mods: input.mods } : null,
+    })
+    // A press the host would hear opens the menu if it stays still (none in overview or with Space).
+    if (pressed) {
+      const longPressAt = input.t + config.thresholds.longPressMs
+      step.state = { ...step.state, deadlines: { longPressAt } }
+      step.effects.push({ kind: 'set-timer', atMs: longPressAt })
+    }
+    return
+  }
   putSession(step, {
     ...base,
     mode: navigation ? 'pan' : 'pending',
@@ -213,8 +255,14 @@ function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void 
   // A navigation or still secondary session whose move lacks its button lost its release (MapLibre's isValidMoveEvent):
   // it ends as a release would, then the host hears the press end. A primary session waits for the next down instead,
   // so a Mac Control-drag is never cut short (spec §2.2 "Drag end").
-  if (session.mode !== 'pending' && session.mode !== 'primary' && (input.buttonMask & session.buttonBit) === 0) {
+  if (session.mode !== 'pending' && session.mode !== 'primary' && !TOUCH_MODES.has(session.mode)
+    && (input.buttonMask & session.buttonBit) === 0) {
     endWithLostRelease(step, session)
+    return
+  }
+  if (session.mode === 'spent') return
+  if (session.mode === 'pair') {
+    pairMove(step, session.pointerId, input.at, config)
     return
   }
   // Any other button added or dropped mid-session changes nothing (the session keeps its mode until its up).
@@ -231,6 +279,25 @@ function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void 
       { kind: 'pan', phase: 'start', deltaPx: ZERO, source: 'secondary-drag', at: session.start },
       { kind: 'pan', phase: 'move', deltaPx: { x: input.at.x - session.start.x, y: input.at.y - session.start.y }, source: 'secondary-drag', at: input.at },
     )
+    return
+  }
+  if (session.mode === 'held') {
+    // Silent within its slop, but tracked: a second finger seeds the pair from where this one is.
+    if (!slopPassed) {
+      putSession(step, { ...session, last: input.at })
+      return
+    }
+    if (session.navigation) {
+      // Overview, the Pan tool or Space: the pan starts at the press, and its first move carries the whole travel so far.
+      putSession(step, { ...session, mode: 'pan', last: input.at, slopPassed: true, heldPress: null })
+      step.gestures.push(
+        { kind: 'pan', phase: 'start', deltaPx: ZERO, source: session.navigation, at: session.start },
+        { kind: 'pan', phase: 'move', deltaPx: { x: input.at.x - session.start.x, y: input.at.y - session.start.y }, source: session.navigation, at: input.at },
+      )
+      return
+    }
+    putSession(step, { ...session, mode: 'primary', last: input.at, slopPassed: true, pressed: true, heldPress: null })
+    step.gestures.push(heldPressOf(session), { kind: 'drag-start', id: session.pointerId, at: input.at, mods: input.mods })
     return
   }
   if (session.mode === 'pan') {
@@ -256,7 +323,24 @@ function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void 
 function up(step: Step, input: RawOf<'up'>, config: RecogniserConfig): void {
   const session = step.state.sessions.get(input.id)
   if (!session) return
+  if (session.mode === 'pair') {
+    // One finger lifts: the pair ends in place, and the other finger resumes nothing.
+    endPair(step, session.pointerId, null)
+    return
+  }
   dropSession(step, session)
+  if (session.mode === 'spent') {
+    // The lift after a long press (or of a finger left from a pair) reaches nothing: the menu it opened stays open.
+    step.effects.push({ kind: 'prevent-default' }, { kind: 'stop-propagation' })
+    return
+  }
+  if (session.mode === 'held') {
+    // A lift within the slop: the press and its tap, both at the down point (A2), unless the host hears none.
+    if (session.heldPress) {
+      step.gestures.push(heldPressOf(session), { kind: 'tap', id: session.pointerId, at: session.start, pointer: session.pointer, mods: input.mods, clickCount: session.clickCount })
+    }
+    return
+  }
   if (session.role === 'secondary' && !session.slopPassed) {
     // A still secondary click: the menu at the release point (convention), Shift or not; overview has none.
     if (step.state.context.mode !== 'overview') step.gestures.push({ kind: 'menu-request', at: input.at, source: 'mouse' })
@@ -291,7 +375,9 @@ function cancel(step: Step, input: RawOf<'cancel'>): void {
   if (input.reason === 'lost-capture') {
     // Only a capture the session holds can be lost; the browser already released it.
     if (!session.captured) return
-    endSession(step, { ...session, captured: false }, 'lost-capture')
+    const lost = { ...session, captured: false }
+    putSession(step, lost)
+    endSession(step, lost, 'lost-capture')
   } else {
     endSession(step, session, input.reason)
   }
@@ -310,14 +396,16 @@ function reject(step: Step, id: number): void {
  * The session sends one configure per setTool call, per overview change and per pointing-device change. Each ends the
  * live sessions ('tool-change') except one that, for the same tool, only leaves overview or only changes the pointing
  * device: today's setTool cancels the live gesture whatever the tool, so re-arming the armed tool is a fence too, and
- * entering overview cancels it and releases Space.
+ * entering overview cancels it and releases Space. A touch pair is the exception: its own zoom publishes the overview
+ * frame mid-pinch, so entering overview leaves a pinch going (the pair is the only live session then).
  */
 function configure(step: Step, context: RawOf<'configure'>['context']): void {
   const previous = step.state.context
   const enteringOverview = context.mode === 'overview' && previous.mode !== 'overview'
   const leavingOverview = context.mode !== 'overview' && previous.mode === 'overview'
   const deviceChanged = context.pointingDevice !== previous.pointingDevice
-  const settingOnly = context.tool === previous.tool && !enteringOverview && (leavingOverview || deviceChanged)
+  const settingOnly = context.tool === previous.tool
+    && (enteringOverview ? step.state.touchPair !== null : leavingOverview || deviceChanged)
   if (!settingOnly) endLiveSessions(step, 'tool-change')
   if (enteringOverview) releaseSpace(step)
   step.state = {
@@ -374,7 +462,7 @@ function withoutNegativeZero(point: ScreenPoint): ScreenPoint {
 }
 
 function passesSlop(session: PointerSession, at: ScreenPoint, config: RecogniserConfig): boolean {
-  const slop = config.bindings.dragSlopPx[session.pointer]
+  const slop = config.thresholds.dragSlopPx[session.pointer]
   const distance = Math.hypot(at.x - session.start.x, at.y - session.start.y)
   return distance >= slop && distance > 0
 }
@@ -394,10 +482,167 @@ function clickCountOf(step: Step, input: RawOf<'down'>, config: RecogniserConfig
   const follows = previous !== null
     && previous.pointer === input.pointer
     && input.t - previous.t <= config.thresholds.multiClickMs
-    && Math.hypot(input.at.x - previous.at.x, input.at.y - previous.at.y) <= config.thresholds.multiClickSlopPx
+    && Math.hypot(input.at.x - previous.at.x, input.at.y - previous.at.y) <= config.thresholds.multiClickSlopPx[input.pointer]
   const count = Math.max(input.detail, follows ? previous.count + 1 : 1)
   step.state = { ...step.state, lastPrimaryPress: { t: input.t, at: input.at, pointer: input.pointer, count } }
   return count
+}
+
+/**
+ * A touch down while another pointer is live (spec §2.2 "Touch"): a second finger on a held press ends it silently, the
+ * host having heard nothing; on a finger past its slop it cancels the drag or pan ('multitouch'). Either way the pair
+ * starts. A third finger, a finger beside a spent one (a long press) or beside a mouse or pen session is ignored.
+ */
+function otherFinger(step: Step, input: RawOf<'down'>): void {
+  const others = [...step.state.sessions.values()]
+  const first = others[0]!
+  if (others.length > 1 || first.pointer !== 'touch' || first.mode === 'spent') return
+  if (first.mode !== 'held') endGestures(step, first, 'multitouch')
+  const points: [ScreenPoint, ScreenPoint] = [first.last, input.at]
+  const vector = minus(points[0], points[1])
+  putSession(step, { ...first, mode: 'pair', heldPress: null, navigation: 'touch-two-finger' })
+  // A tap after the pair is a first click.
+  step.state = {
+    ...step.state,
+    lastPrimaryPress: null,
+    touchPair: {
+      ids: [first.pointerId, input.id],
+      points,
+      startDistancePx: Math.hypot(vector.x, vector.y),
+      startVector: vector,
+      minDiameterPx: Math.hypot(vector.x, vector.y),
+      zooming: false,
+      twistDeg: null,
+    },
+  }
+  step.effects.push({ kind: 'prevent-default' }, { kind: 'capture', pointerId: input.id })
+  putSession(step, {
+    pointerId: input.id,
+    pointer: input.pointer,
+    role: input.role,
+    mode: 'pair',
+    start: input.at,
+    last: input.at,
+    slopPassed: false,
+    captured: true,
+    navigation: 'touch-two-finger',
+    pressed: false,
+    clickCount: 0,
+    buttonBit: BUTTON_BITS.primary,
+    heldPress: null,
+  })
+  // Pair pans carry no point: a touch never moves the resting hover (A14).
+  step.gestures.push({ kind: 'pan', phase: 'start', deltaPx: ZERO, source: 'touch-two-finger' })
+}
+
+/**
+ * One finger of the pair moved: pan by the centroid's movement, zoom about the new centroid, then turn about it (MapLibre's
+ * pinchAround order, A5). The zoom starts once the distance is 0.1 zoom level from its start, and the twist once the
+ * vector has turned `twistStartArcPx` of arc over the smallest diameter seen; each then counts from the last move, so
+ * the view never jumps by the threshold (MapLibre 6.10.0 two_fingers_touch.ts `_move` and `_isBelowThreshold`,
+ * BSD-3-Clause, Copyright (c) 2023 MapLibre contributors; A12).
+ */
+function pairMove(step: Step, id: number, at: ScreenPoint, config: RecogniserConfig): void {
+  const pair = step.state.touchPair
+  if (!pair) return
+  const index = pair.ids[0] === id ? 0 : 1
+  const last = pair.points
+  const points: [ScreenPoint, ScreenPoint] = index === 0 ? [at, last[1]] : [last[0], at]
+  const centroid = midpoint(points[0], points[1])
+  const lastCentroid = midpoint(last[0], last[1])
+  const deltaPx = withoutNegativeZero(minus(centroid, lastCentroid))
+  if (deltaPx.x !== 0 || deltaPx.y !== 0) step.gestures.push({ kind: 'pan', phase: 'move', deltaPx, source: 'touch-two-finger' })
+
+  const vector = minus(points[0], points[1])
+  const lastVector = minus(last[0], last[1])
+  const distance = Math.hypot(vector.x, vector.y)
+  const lastDistance = Math.hypot(lastVector.x, lastVector.y)
+  let { zooming, twistDeg, minDiameterPx } = pair
+  if (distance > 0 && lastDistance > 0 && pair.startDistancePx > 0) {
+    zooming = zooming || Math.abs(Math.log2(distance / pair.startDistancePx)) >= config.thresholds.pinchZoomStartLevels
+    if (zooming && distance !== lastDistance) {
+      step.gestures.push({ kind: 'zoom', anchorPx: centroid, factor: distance / lastDistance, source: 'touch-two-finger' })
+    }
+  }
+  if (twistDeg === null) {
+    minDiameterPx = Math.min(minDiameterPx, distance)
+    const thresholdDeg = (config.thresholds.twistStartArcPx / (Math.PI * minDiameterPx)) * 360
+    if (!(Math.abs(angleBetweenDeg(vector, pair.startVector)) < thresholdDeg)) {
+      twistDeg = 0
+      step.gestures.push({ kind: 'rotate', phase: 'start', anchorPx: centroid, totalDeltaDeg: 0, step: false, source: 'touch-two-finger' })
+    }
+  }
+  if (twistDeg !== null) {
+    // The ground follows the fingers: a clockwise twist on screen lowers the bearing (MapLibre's bearingDelta).
+    twistDeg += angleBetweenDeg(vector, lastVector)
+    step.gestures.push({ kind: 'rotate', phase: 'move', anchorPx: centroid, totalDeltaDeg: twistDeg, step: false, source: 'touch-two-finger' })
+  }
+  step.state = { ...step.state, touchPair: { ...pair, points, zooming, twistDeg, minDiameterPx } }
+  const session = step.state.sessions.get(id)
+  if (session) putSession(step, { ...session, last: at })
+}
+
+/**
+ * The pair ends in place, whatever ends it (A6): the pan ends and a live turn ends with its north snap, never restoring
+ * the camera; a fence (`reason`) also sends the host its cancel. `liftedId` is the finger that lifted or was taken: the
+ * other one goes spent; with none, both fingers end.
+ */
+function endPair(step: Step, liftedId: number | null, reason: CancelReason | null): void {
+  const pair = step.state.touchPair
+  if (!pair) return
+  const centroid = midpoint(pair.points[0], pair.points[1])
+  step.state = { ...step.state, touchPair: null }
+  for (const id of pair.ids) {
+    const session = step.state.sessions.get(id)
+    if (!session) continue
+    if (liftedId === null || id === liftedId) dropSession(step, session)
+    else putSession(step, { ...session, mode: 'spent', navigation: null })
+  }
+  step.gestures.push({ kind: 'pan', phase: 'end', deltaPx: ZERO, source: 'touch-two-finger' })
+  if (pair.twistDeg !== null) {
+    step.gestures.push({ kind: 'rotate', phase: 'end', anchorPx: centroid, totalDeltaDeg: pair.twistDeg, step: false, source: 'touch-two-finger' })
+  }
+  if (reason) step.gestures.push({ kind: 'cancel', reason })
+}
+
+function minus(a: ScreenPoint, b: ScreenPoint): ScreenPoint {
+  return { x: a.x - b.x, y: a.y - b.y }
+}
+
+function midpoint(a: ScreenPoint, b: ScreenPoint): ScreenPoint {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+}
+
+/** MapLibre's getBearingDelta: Point#angleWith(b), in degrees. */
+function angleBetweenDeg(a: ScreenPoint, b: ScreenPoint): number {
+  return (Math.atan2(a.x * b.y - a.y * b.x, a.x * b.x + a.y * b.y) * 180) / Math.PI
+}
+
+/** The long press: a held press still at its deadline opens the menu at its down point, and goes spent (A4). */
+function tick(step: Step, t: number): void {
+  const { longPressAt } = step.state.deadlines
+  if (longPressAt === null || t < longPressAt) return
+  step.state = { ...step.state, deadlines: { longPressAt: null } }
+  const held = [...step.state.sessions.values()].find((session) => session.mode === 'held' && session.heldPress !== null)
+  if (!held) return
+  putSession(step, { ...held, mode: 'spent', heldPress: null })
+  step.gestures.push({ kind: 'menu-request', at: held.start, source: 'long-press' })
+}
+
+/** The long-press deadline lives only while a held press waits for it: anything that resolves or ends it clears it. */
+function settleDeadline(step: Step): void {
+  if (step.state.deadlines.longPressAt === null) return
+  for (const session of step.state.sessions.values()) {
+    if (session.mode === 'held' && session.heldPress !== null) return
+  }
+  step.state = { ...step.state, deadlines: { longPressAt: null } }
+  step.effects.push({ kind: 'clear-timer' })
+}
+
+/** A held touch press as the host hears it once it resolves: at the down point, with the down's modifiers and target. */
+function heldPressOf(session: PointerSession): Gesture {
+  const held = session.heldPress!
+  return { kind: 'press', id: session.pointerId, at: session.start, pointer: session.pointer, mods: held.mods, clickCount: session.clickCount, target: held.target }
 }
 
 function pressOf(input: RawOf<'down'>, target: PressTarget, clickCount: number): Gesture {
@@ -441,6 +686,7 @@ function platformGesture(step: Step, input: RawOf<'platform-gesture'>, config: R
       pressed: false,
       clickCount: 0,
       buttonBit: 0,
+      heldPress: null,
     })
     step.state = { ...step.state, trackpadTwistDeg: 0 }
     return
@@ -522,9 +768,18 @@ function tapOf(session: PointerSession, input: RawOf<'up'>): Gesture {
   }
 }
 
-/** Ends a session without completing it: a pan ends where it is, then the host hears the cancel. */
+/** Ends a session without completing it: a pan ends where it is, then the host hears the cancel. A held touch press or a
+ *  spent finger ends silently: the host heard no press of it. A pair ends in place (A6). */
 function endSession(step: Step, session: PointerSession, reason: CancelReason): void {
+  if (session.mode === 'pair') {
+    endPair(step, session.pointerId, reason)
+    return
+  }
   dropSession(step, session)
+  if (session.mode !== 'held' && session.mode !== 'spent') endGestures(step, session, reason)
+}
+
+function endGestures(step: Step, session: PointerSession, reason: CancelReason): void {
   if (session.mode === 'pan' && session.navigation) step.gestures.push(panEndOf(session))
   // The router restores the camera the rotate started from; the input router does not cancel it on a plain cancel.
   if (session.mode === 'rotate' && session.slopPassed) step.gestures.push(rotateOf(session, 'cancel', session.last, false))
@@ -542,6 +797,7 @@ function endWithLostRelease(step: Step, session: PointerSession): void {
 }
 
 function endLiveSessions(step: Step, reason: CancelReason): void {
+  endPair(step, null, reason)
   for (const session of [...step.state.sessions.values()]) endSession(step, session, reason)
 }
 

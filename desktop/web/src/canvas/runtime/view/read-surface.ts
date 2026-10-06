@@ -16,9 +16,11 @@ export interface RotationSession {
   /**
    * totalDeltaDeg: rotation since begin. With step, the published bearing is
    * roundToStep(start + totalDeltaDeg, 15): absolute multiples of 15°, not start + 15k.
+   * anchorPx: the turn's pivot from now on, when it moves with the gesture (a two-finger twist turns about its moving
+   * centroid, A5); the begin pivot otherwise.
    */
-  update(totalDeltaDeg: number, options: { readonly step: boolean }): void
-  /** snapBearing: within 7° of north jumps to 0 about the session pivot (U34); else keeps. */
+  update(totalDeltaDeg: number, options: { readonly step: boolean; readonly anchorPx?: ScreenPoint }): void
+  /** snapBearing: within 7° of north jumps to 0 about the session's last pivot (U34); else keeps. */
   end(): void
   /** Restores the full starting ViewCamera with animation 'none' (Esc during a rotate). */
   cancel(): void

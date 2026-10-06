@@ -2,7 +2,6 @@
 
 import type { CanvasDropPayload, Modifiers, PointerKind, ToolHandleId, ToolId } from '../interaction-types'
 import type { ScreenPoint } from '../view/types'
-import type { Bindings } from './bindings'
 import type { InputPlatform } from './platform'
 import type { PointerSession, TouchPair } from './recognise'
 import type { Thresholds } from './thresholds'
@@ -38,7 +37,6 @@ export type RawInput =
 
 export interface RecogniserConfig {
   readonly platform: InputPlatform
-  readonly bindings: Bindings
   readonly thresholds: Thresholds
 }
 
@@ -53,8 +51,8 @@ export interface AdapterEffect {
 }
 /** Opaque to callers; the recogniser owns its shape. Plain data (structured-clone safe), so the property test can snapshot it. */
 export interface RecogniserState {
-  readonly sessions: ReadonlyMap<number, PointerSession>        // by pointerId: pointer kind, role, mode ('pending' | 'secondary' | 'primary' | 'pan' | 'rotate'), start, last point, slop passed, capture held
-  readonly touchPair: TouchPair | null                          // two touch ids, their start centroid, distance and angle, twist arc accumulated
+  readonly sessions: ReadonlyMap<number, PointerSession>        // by pointerId: pointer kind, role, mode ('pending' | 'secondary' | 'primary' | 'pan' | 'rotate', and a finger's 'held' | 'pair' | 'spent'), start, last point, slop passed, capture held
+  readonly touchPair: TouchPair | null                          // two touch ids, their last points, the smallest diameter seen, whether the zoom and the twist are active (A12)
   readonly held: { readonly space: boolean }                    // the only gesture-state record of a held key (ADR 0017)
   readonly trackpadTwistDeg: number                             // WebKit gesture rotation accumulated before the 10° threshold
   readonly deadlines: { readonly longPressAt: number | null }

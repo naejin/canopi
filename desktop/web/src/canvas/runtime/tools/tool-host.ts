@@ -73,10 +73,11 @@ const REFUSED_DRAGOVER: GestureOutcome = Object.freeze({ quarantine: true, dropE
 const DROP_CUE_PX = 12
 const NO_HANDLES: readonly ToolHandle[] = Object.freeze([])
 const NO_SNAP: SnapSettings = Object.freeze({ grid: false })
-/** How near a zone's edge a pointer menu offers "Turn view to this edge" (spec §4.16). The keyboard menu has no point;
- *  phase 3 adds the long press's 22 px. */
+/** How near a zone's edge a pointer menu offers "Turn view to this edge" (spec §4.16): a mouse 8 px, a long press 22 px
+ *  (half a 44 px finger target, ADR 0010). The keyboard menu has no point. */
 const MENU_EDGE_TOLERANCE_PX: Partial<Record<MenuSource, number>> = Object.freeze({
   mouse: 8,
+  'long-press': 22,
 })
 /** Arrow-key nudge steps, in session-plane metres. */
 const NUDGE_STEP_M = 0.1
@@ -821,12 +822,13 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     return release(tool, () => {
       live = null
       try {
-        const point = pointAt(g.at, g.mods, g.pointer, gesture.handle)
         if (gesture.kind === 'handle') {
+          // A handle tap ends where it was pressed (A9): the jitter within the slop moves, turns or reshapes nothing.
           callTool(() => tool.gesture({
-            kind: 'handle-drag', phase: 'end', handle: gesture.handle!, point, start: gesture.start,
+            kind: 'handle-drag', phase: 'end', handle: gesture.handle!, point: gesture.start, start: gesture.start,
           }))
         } else {
+          const point = pointAt(g.at, g.mods, g.pointer)
           callTool(() => tool.gesture({ kind: 'tap', point, hit: hitAt(point.world), clickCount: g.clickCount }))
         }
       } finally {

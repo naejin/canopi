@@ -2,7 +2,8 @@
 //
 // Owns the note's text entry (ToolHostDeps.chrome.requestTextEntry, spec §1.4): one textarea over the map, which the host
 // opens for a tool and whose state it reads live (isOpen). One entry for a new note and a note edited in place: drawn at
-// the note's font size and line height where the note will draw, sized by autosize, its text all selected. Enter and a
+// the note's font size and line height where the note will draw, sized by autosize, its text all selected, focused on
+// the next frame, or at once when a finger opened it (A15). Enter and a
 // blur hand the text to the tool's submit, which closes the entry or keeps the same field open while its commit is
 // refused; an entry whose blur commit was refused no longer holds focus, so the press or menu that would have blurred it
 // submits it instead (submitUnfocused). Esc is the
@@ -21,11 +22,14 @@ export interface TextEntryHostOptions {
   readonly frames: ViewFrameSource
   readonly translate: (key: string) => string
   readonly focus: Pick<CanvasFocusPort, 'focusMap'>
+  /** Whether the input being handled is a finger's: its entry takes focus at once, inside the tap's user activation, or
+   *  iOS shows no keyboard (A15). */
+  readonly openedByTouch?: () => boolean
 }
 
 export interface TextEntryHost {
   /** Opens an entry; an open one is submitted first and stays open when its commit is refused. The same note asked again
-   *  keeps its field (today's start of an editor already open). onCancel runs after the entry's own Esc closed it. */
+   *  keeps its field, focused and all selected. onCancel runs after the entry's own Esc closed it. */
   open(request: TextEntryRequest, submit: (text: string) => 'close' | 'keep', onCancel?: () => void): void
   /** Discards the open entry without submitting it (no onCancel: the caller closed it). */
   close(): void
@@ -105,11 +109,14 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
         if (active === entry) submitActive()
       }
     })
-    requestAnimationFrame(() => {
+    const takeFocus = (): void => {
       if (active !== entry) return
       textarea.focus()
       textarea.select()
-    })
+    }
+    // A mouse or pen press opens the entry inside its pointerdown, whose own focus handling runs after: the next frame.
+    if (options.openedByTouch?.()) takeFocus()
+    else requestAnimationFrame(takeFocus)
   }
 
   function submitActive(): void {
@@ -152,7 +159,7 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
   }
 }
 
-/** The same note's entry: today's start() of the annotation already being edited. */
+/** The same note asked again (a second double-click on the note being edited): same anchor, same starting text. */
 function sameEntry(open: TextEntryRequest, next: TextEntryRequest): boolean {
   return open.anchor.x === next.anchor.x
     && open.anchor.y === next.anchor.y
@@ -180,6 +187,8 @@ function styleEntry({ request, textarea }: OpenEntry): void {
     whiteSpace: 'pre',
     transformOrigin: 'top left',
   })
+  // The map host turns WebKit's callout off; a long press in the note still selects its text (A13).
+  textarea.style.setProperty('-webkit-touch-callout', 'default')
 }
 
 /** At the anchor projected through the frame, turned with the note; autosize gives its size. */

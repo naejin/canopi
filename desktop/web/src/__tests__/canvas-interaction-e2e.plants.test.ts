@@ -1351,4 +1351,21 @@ describe('SceneInteractionSession', () => {
       session.dispose()
     })
   })
+
+  it('a finger on Plant a row that jitters 5 px and lifts adds no row (A9)', () => {
+    plantSpacingIntervalM.value = 2
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('source', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('plant-spacing')
+    const finger = { pointerType: 'touch', pointerId: 7, isPrimary: true }
+
+    events.pointerDown({ x: 20, y: 30 }, { ...finger, button: 0, buttons: 1 })
+    events.pointerMove({ x: 25, y: 30 }, { ...finger, button: -1, buttons: 1 })
+    events.pointerUp({ x: 25, y: 30 }, { ...finger, button: 0, buttons: 0 })
+
+    expect(store.persisted.plants.map((plant) => plant.id)).toEqual(['source'])
+    session.dispose()
+  })
 })

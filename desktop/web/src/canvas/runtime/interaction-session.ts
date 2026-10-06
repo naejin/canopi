@@ -31,7 +31,6 @@ import { createHandleLayer, type HandleLayer } from './chrome/handle-layer'
 import { createHoverTooltip, type HoverTooltipController } from './chrome/hover-tooltip'
 import { createTextEntryHost, type TextEntryHost } from './chrome/text-entry-host'
 import { runCanvasRuntimeCleanups, throwCanvasRuntimeCleanupErrors } from './cleanup'
-import { CURRENT_BINDINGS } from './input/bindings'
 import { createDomInputSource, outcomeEffects } from './input/dom-input-source'
 import type { Gesture } from './input/gestures'
 import { createInputRouter } from './input/input-router'
@@ -211,17 +210,22 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _storyPresented = false
   /** Routing a move made with a button held: its hover reaches the host and the tool, not the lens (today's). */
   private _buttonHeld = false
+  /** Routing a finger's input: a text entry it opens takes focus at once (A15). */
+  private _fingerInput = false
   /** Inside refreshMeasurements' ToolHost.sceneChanged(): the runtime is already redrawing. */
   private _refreshing = false
   /** The pointer of the press being routed whose capture waits for the host's admission (ToolHostDeps.capturePress). */
   private _pressCapture: number | null = null
+  /** The pointer of a press being routed on its own release (a touch tap, held until the lift, A3): its session has
+   *  ended, and the press still runs. */
+  private _pressAtRelease: number | null = null
   /** The map's focus again on the frame after a drop, once the browser's drag end has run (today's). */
   private _dropFocusFrame: number | null = null
   private _disposed = false
 
   constructor(private readonly _deps: SceneInteractionSessionDeps) {
     const platform = _deps.platform ?? detectPlatform(navigator, window as unknown as { readonly GestureEvent?: unknown })
-    this._config = { platform, bindings: CURRENT_BINDINGS, thresholds: DEFAULT_THRESHOLDS }
+    this._config = { platform, thresholds: DEFAULT_THRESHOLDS }
     this._pointingDevice = this._readPointingDevice()
     const navigation = _deps.viewNavigation
     this._frames = _deps.frames
@@ -261,6 +265,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         frames: this._frames,
         translate: _deps.translate,
         focus,
+        openedByTouch: () => this._fingerInput,
       }), (entry) => entry.dispose())
       this._tooltip = own(createHoverTooltip(container), (tooltip) => tooltip.dispose())
       const scene = createToolScene({
@@ -358,9 +363,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       this._source = createDomInputSource({
         host: container,
         platform,
-        bindings: () => CURRENT_BINDINGS,
-        clock,
-        timers,
+        timers: {
+          set: (delayMs, callback) => window.setTimeout(callback, delayMs),
+          clear: (id) => window.clearTimeout(id),
+        },
       })
       this._stopWatchingSources = own(this._watchToolSources(), (stop) => stop())
       this._storyObserver = own(this._observeStoryPresentation(), (observer) => observer?.disconnect())
@@ -495,10 +501,12 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (this._disposed) return
     // Every bit the pointer reports, a pen's eraser that no press takes included, as today's lens read it.
     this._buttonHeld = input.kind === 'move' && input.buttonMask !== 0
+    this._fingerInput = (input.kind === 'down' || input.kind === 'move' || input.kind === 'up') && input.pointer === 'touch'
     try {
       this._dispatch(input)
     } finally {
       this._buttonHeld = false
+      this._fingerInput = false
     }
   }
 
@@ -544,10 +552,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     // A press the host hears takes its capture once admitted, before the tool (ToolHostDeps.capturePress), as today's
     // order; a pan's press, which the host never hears, takes it with the rest. The effects before the held capture (the
     // release of the same pointer's session whose up was lost) apply first, so they cannot undo the new press's capture.
-    const pressed = input.kind === 'down'
-      && result.gestures.some((gesture) => gesture.kind === 'press' && gesture.id === input.id)
-      ? input.id
-      : null
+    const press = result.gestures.find((gesture) => gesture.kind === 'press')
+    const pressed = input.kind === 'down' && press?.kind === 'press' && press.id === input.id ? input.id : null
     const heldAt = pressed === null
       ? -1
       : result.effects.findIndex((effect) => effect.kind === 'capture' && effect.pointerId === pressed)
@@ -556,6 +562,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (heldCapture) this._source.apply(result.effects.slice(0, heldAt))
     let outcome: GestureOutcome = {}
     this._pressCapture = heldCapture ? pressed : null
+    this._pressAtRelease = input.kind === 'up' && press?.kind === 'press' ? press.id : null
     try {
       for (const gesture of result.gestures) {
         this._followNavigation(gesture)
@@ -563,10 +570,12 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       }
     } finally {
       this._pressCapture = null
+      this._pressAtRelease = null
     }
     this._source.apply(outcomeEffects(wheel ? [] : effects, outcome))
-    if (outcome.rejectSession && input.kind === 'down') {
-      const rejected = recognise(this._recogniser, { kind: 'reject', t: input.t, id: input.id }, this._config)
+    // A refused press ends its session, whichever input resolved it (a held touch press resolves on a move or an up).
+    if (outcome.rejectSession && press?.kind === 'press') {
+      const rejected = recognise(this._recogniser, { kind: 'reject', t: input.t, id: press.id }, this._config)
       this._recogniser = rejected.state
       this._source.apply(rejected.effects)
     }
@@ -734,7 +743,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       this._pressCapture = null
       this._source.apply([{ kind: 'capture', pointerId }])
     }
-    return this._recogniser.sessions.has(pointerId)
+    return this._recogniser.sessions.has(pointerId) || this._pressAtRelease === pointerId
   }
 
   // ── Keys, the navigation cursor and camera moves ───────────────────────────────────────────────────────────────

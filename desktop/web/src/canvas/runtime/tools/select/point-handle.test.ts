@@ -93,18 +93,6 @@ describe.each(cases)('$label point handle drags', ({ handle, start, create, sele
     expect(draggedPoint(h)).toEqual(start)
   })
 
-  it('a drag within 2 px of the press changes nothing and records no history', () => {
-    const h = harness()
-
-    pressHandle(h)
-    h.move({ x: start.x + 1, y: start.y })
-    h.release({ x: start.x + 1, y: start.y })
-
-    expect(draggedPoint(h)).toEqual(start)
-    expect(h.history.canUndo.value).toBe(false)
-    expect(h.host.hasLiveGesture()).toBe(false)
-  })
-
   it('the release point is applied and commits one changed edit', () => {
     const h = harness()
 
@@ -262,6 +250,41 @@ describe('polygon corners (spec §3.2, U33: every corner route)', () => {
 
     h.view.setViewport({ x: 0, y: 0, scale: 0.5 })
     expect(dots()).toEqual([])
+  })
+
+  it('after a finger\'s tap the handles are 44 px targets and dots need 132 px; a mouse hover makes them 20 px again (Q1, Q2)', () => {
+    // At scale 1 the square's edges are 100 px: dots for a mouse (52 px), none for a finger (2 × 44 + 44 px of outline).
+    const h = polygonHarness()
+    const radii = (glyph: string) => h.chrome.handles.filter((entry) => entry.glyph === glyph).map((entry) => entry.hitRadiusPx)
+    expect(radii('vertex')).toEqual([10, 10, 10, 10])
+    expect(radii('midpoint')).toEqual([8, 8, 8, 8])
+    expect(radii('rotate')).toEqual([14])
+
+    h.click({ x: 150, y: 150 }, { pointer: 'touch' })
+    expect(h.store.session.selectedTargets).toEqual([POLY])
+    expect(radii('vertex')).toEqual([22, 22, 22, 22])
+    expect(radii('midpoint')).toEqual([])
+    expect(radii('rotate')).toEqual([22])
+
+    // At scale 2 the edges are 200 px: each shows its 44 px dot.
+    h.view.setViewport({ x: 0, y: 0, scale: 2 })
+    expect(radii('midpoint')).toEqual([22, 22, 22, 22])
+
+    h.hover({ x: 20, y: 20 })
+    expect(radii('vertex')).toEqual([10, 10, 10, 10])
+    expect(radii('midpoint')).toEqual([8, 8, 8, 8])
+    expect(radii('rotate')).toEqual([14])
+  })
+
+  it('a finger that presses a guide\'s end gets 44 px end targets (Q1)', () => {
+    const h = createToolHarness({ scene: { measurementGuides: [measurementGuide('guide-1', { x: 10, y: 10 }, { x: 160, y: 10 })] } })
+    harnesses.push(h)
+    h.select({ kind: 'measurement-guide', id: 'guide-1' })
+    const ends = () => h.chrome.handles.filter((entry) => entry.id.startsWith('guide-end:')).map((entry) => entry.hitRadiusPx)
+    expect(ends()).toEqual([10, 10])
+
+    h.click({ x: 10, y: 10 }, { pointer: 'touch', target: { kind: 'handle', id: 'guide-end:guide-1:a' as ToolHandleId } })
+    expect(ends()).toEqual([22, 22])
   })
 
   it('double-click an edge midpoint adds a corner', () => {

@@ -2,7 +2,7 @@
 //
 // Owns the Polygon tool. Each press adds a corner at the snapped point (with Shift the new edge turns to a 45° step from
 // the last corner through the host's constraint, its length then snapped, spec §2.3); a press within 8 px of the
-// first corner closes a shape of 3 or more, tested on ToolPoint.free, as do the second press of a double-click, Enter and
+// first corner (a finger's within 22 px, Q5) closes a shape of 3 or more, tested on ToolPoint.free, as do the second press of a double-click, Enter and
 // the canvas menu's "Finish shape" (canFinish), in one Scene Edit that selects the new zone. Hovers, and the drag after a press, move the rubber band and add nothing. The
 // first corner clears the selection without an undo step. Backspace and Edit › Undo take the last corner back onto a redo
 // stack (transient history, no Scene Edit); Esc drops the draft and its redo; an interruption ('navigate') keeps them while
@@ -11,6 +11,7 @@
 // The draft is a fill-only polygon of the corners, the rubber band, a disc per corner and the edge and area chips
 // (tools/measure-labels.ts), whose edge chips re-cull on every camera frame.
 
+import type { PointerKind } from '../interaction-types'
 import type { WorldPoint } from '../view/types'
 import { createPolygonalZoneDraftMeasurements } from '../zone-measurements'
 import type { DraftShape, DraftStroke } from './draft'
@@ -19,8 +20,8 @@ import type { CanvasTool, ToolCommand, ToolContext, ToolGesture, ToolPoint, Tool
 import { appendPolygonZoneToDraft } from './tool-actions'
 import { DRAFT_STROKE, ZONE_DRAFT_FILL } from './zone-drag'
 
-/** A press this close to the first corner, on screen, closes the shape. */
-const CLOSE_DISTANCE_PX = 8
+/** A press this close to the first corner, on screen, closes the shape: a finger's within half ADR 0010's 44 px target. */
+const CLOSE_DISTANCE_PX: Readonly<Record<PointerKind, number>> = Object.freeze({ mouse: 8, pen: 8, touch: 22 })
 /** A press on the last corner moves the rubber band only. */
 const SAME_CORNER_M = 0.0001
 /** The corners' fill carries no stroke: the rubber band draws the edges. */
@@ -66,7 +67,7 @@ export function createPolygonTool(): CanvasTool {
     }
     // A press on the first corner, or the second press of a double-click, finishes a shape of 3 or more; the second press
     // of a double-click whose first finished the shape starts nothing.
-    if (closesAt(point.free) || (clickCount >= 2 && corners.length >= 3)) {
+    if (closesAt(point) || (clickCount >= 2 && corners.length >= 3)) {
       finish()
       return
     }
@@ -85,9 +86,9 @@ export function createPolygonTool(): CanvasTool {
     redraw()
   }
 
-  function closesAt(point: WorldPoint): boolean {
+  function closesAt(point: ToolPoint): boolean {
     if (corners.length < 3) return false
-    return context().view.screenDistance(corners[0]!, point) <= CLOSE_DISTANCE_PX
+    return context().view.screenDistance(corners[0]!, point.free) <= CLOSE_DISTANCE_PX[point.pointer]
   }
 
   /** One Scene Edit adds the zone and selects it; the draft goes once it commits. Fewer than 3 corners wait. */

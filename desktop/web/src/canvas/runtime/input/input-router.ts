@@ -34,7 +34,8 @@ export function createInputRouter(deps: InputRouterDeps): InputRouter {
             return NOTHING
           }
           if (g.phase === 'move') {
-            rotation?.update(g.totalDeltaDeg, { step: g.step })
+            // The turn goes about the gesture's anchor as it is now: a two-finger twist's moving centroid (A5).
+            rotation?.update(g.totalDeltaDeg, { step: g.step, anchorPx: g.anchorPx })
             return NOTHING
           }
           if (g.phase === 'end') rotation?.end()

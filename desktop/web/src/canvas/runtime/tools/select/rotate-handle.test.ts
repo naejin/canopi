@@ -56,6 +56,25 @@ describe('Select rotation handle', () => {
     })
   })
 
+  it('while the selected polygon shows its midpoint dots, the handle rises clear of a dotted edge\'s chip (canopi-f47t.29)', () => {
+    // The top edge's midpoint is under the handle, and its dot puts the edge's chip beside it, outside the top edge (U38):
+    // 6 px out, up to about 22 px tall. The handle's 28 px button and its 3 px ring sit above that.
+    const triangle = [{ x: 100, y: 100 }, { x: 300, y: 100 }, { x: 150, y: 250 }]
+    const h = harness({ scene: { zones: [rectZone('poly', triangle, { zoneType: 'polygon' })] } })
+    h.select({ kind: 'zone', id: 'poly' })
+    const handle = () => h.chrome.handles.find((entry) => entry.id === ROTATE_HANDLE_ID)!
+    const chips = () => (h.renderer.lastDraft()?.shapes ?? []).flatMap((shape) =>
+      shape.kind === 'label' && shape.tone === 'measure-quiet' ? [shape] : [])
+
+    expect(chips()[0]).toMatchObject({ anchor: { x: 200, y: 100 }, beside: { normalPx: { x: 0, y: -1 }, gapPx: 6 } })
+    expect(handle()).toMatchObject({ anchor: { x: 200, y: 100 }, offsetPx: { x: 0, y: -48 } })
+
+    // At a fifth of the scale the edges are under 52 px: no dots, every chip on its edge, and the handle back at 28 px.
+    h.view.setViewport({ x: 0, y: 0, scale: 0.2 })
+    expect(h.chrome.handles.some((entry) => entry.glyph === 'midpoint')).toBe(false)
+    expect(handle().offsetPx).toEqual({ x: 0, y: -28 })
+  })
+
   it('the handle sits 28 px above the projected hull', () => {
     vi.useFakeTimers()
     const h = harness({

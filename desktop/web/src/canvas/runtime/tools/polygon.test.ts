@@ -208,6 +208,22 @@ describe('Polygon tool', () => {
     expect(h.renderer.lastDraft()?.shapes.some((shape) => shape.kind === 'circle-px')).toBeFalsy()
   })
 
+  it('a finger\'s tap within 22 px of the first corner closes the shape; a mouse there adds a corner (Q5)', () => {
+    const h = harness()
+    h.click({ x: 100, y: 100 })
+    h.click({ x: 200, y: 100 })
+    h.click({ x: 200, y: 200 })
+
+    h.click({ x: 118, y: 100 })
+    expect(h.store.persisted.zones).toEqual([])
+    expect(cornerMarkers(h)).toHaveLength(4)
+
+    h.click({ x: 112, y: 112 }, { pointer: 'touch' })
+    expect(h.store.persisted.zones.map((zone) => zone.points)).toEqual([
+      [{ x: 100, y: 100 }, { x: 200, y: 100 }, { x: 200, y: 200 }, { x: 118, y: 100 }],
+    ])
+  })
+
   it('a Shift corner keeps the new edge on 45° from the last corner', () => {
     const h = harness()
 

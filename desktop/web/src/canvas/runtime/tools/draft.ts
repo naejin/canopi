@@ -28,8 +28,8 @@ export interface DraftPresentation { readonly shapes: readonly DraftShape[] }
 export interface ToolHandle {
   readonly id: ToolHandleId              // unique across objects: 'rotate', 'vertex:<zone id>:<index>', 'rect-corner:<id>:ne', 'guide-end:<id>:a', 'edge-mid:<zone id>:<edge index>'
   readonly anchor: WorldPoint
-  readonly offsetPx?: ScreenPoint        // rotate handle: 42 px above the selection's projected hull
-  readonly hitRadiusPx: number           // 10 today; 22 on touch (44 px target, ADR 0010)
+  readonly offsetPx?: ScreenPoint        // rotate handle: centred 28 px above the selection's projected hull, 48 px while dots show
+  readonly hitRadiusPx: number           // a point 10, a midpoint dot 8, the rotate handle 14; 22 after a touch (44 px, ADR 0010; select/handle-size.ts)
   readonly glyph: 'vertex' | 'corner' | 'rotate' | 'midpoint'
   readonly label: string                 // aria-label, translated through ctx.translate (i18n-completeness scans for literals)
   readonly readout?: string              // live chip beside the handle (the rotate handle's '+15°'); the host marks the dragged handle active

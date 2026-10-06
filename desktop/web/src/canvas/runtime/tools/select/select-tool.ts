@@ -4,17 +4,19 @@
 // press selects at once (click.ts) and goes on as a band from empty ground (band.ts), a move-drag of the selection
 // (move-drag.ts) or nothing more; a double-click opens a note for editing in the host's text entry (note-edit.ts), as do
 // Enter and F2 on one selected note ('edit-text'). Its handles are the rotation handle (rotate-handle.ts), the selected
-// zone's reshape points (reshape.ts) and the selected guide's ends (guide-ends.ts); the host shows them while Select is
+// zone's reshape points (reshape.ts) and the selected guide's ends (guide-ends.ts), sized for the pointer kind that last
+// pressed or hovered (handle-size.ts: 44 px targets after a touch, Q1); the host shows them while Select is
 // armed, the text entry is closed and no Scene Edit is open. Hovers pass, so the host's passive hover runs, and the tool
 // card's gesture flag stays off.
 
-import type { ToolHandleId } from '../../interaction-types'
+import type { PointerKind, ToolHandleId } from '../../interaction-types'
 import type { SceneMeasurementGuideEntity, SceneZoneEntity } from '../../scene/types'
 import type { ToolHandle } from '../draft'
 import type { CanvasTool, HitTarget, ToolContext, ToolGesture, ToolPoint, ToolReply, ToolView } from '../tool'
 import { bandDraft, bandSelection, type Band } from './band'
 import { clickSelection, pressSelection, type SelectPress } from './click'
 import { draggableGuide, guideEndHandles, guideEnds, guideEndSubject, guideLengthShapes, type GuideEnd } from './guide-ends'
+import { handleSizeFor } from './handle-size'
 import { abortMoveDrag, beginMoveDrag, commitMoveDrag, hasMoved, moveSelection, type MoveDrag } from './move-drag'
 import { noteExists, openNoteEntry, selectedEditableNoteId } from './note-edit'
 import { beginPointHandleDrag, type PointHandleDrag } from './point-handle'
@@ -66,6 +68,9 @@ export function createSelectTool(): CanvasTool {
   /** The scale the handles were placed at (screen px per world metre): the midpoint dots' room and the hull of screen-sized
    *  plants and notes depend on it. */
   let handlesPixelsPerMetre = 0
+  /** The pointer kind that last pressed or hovered, which sizes the handles (Q1), and the one they were sized for. */
+  let pointer: PointerKind = 'mouse'
+  let handlesPointer: PointerKind = 'mouse'
   let reshapePoints = new Map<ToolHandleId, ZoneControlPoint>()
   let edgeMidpoints = new Map<ToolHandleId, ZoneEdgeMidpoint>()
   let guideEndPoints = new Map<ToolHandleId, GuideEnd>()
@@ -86,37 +91,45 @@ export function createSelectTool(): CanvasTool {
     const handles: ToolHandle[] = []
     // A point handle's drag hides the rotation handle from its press to its release.
     const pointDrag = gesture?.kind === 'reshape' || gesture?.kind === 'guide-end'
-    const rotate = pointDrag ? null : rotateHandle(c.scene, selection, c.view, c.translate, rotationDeltaDeg)
-    handlesBearingDeg = c.view.bearingDeg
-    handlesPixelsPerMetre = pixelsPerMetre(c.view)
-    if (rotate) handles.push(rotate)
+    const size = handleSizeFor(pointer)
     const zone = reshapableZone(scene, selection)
     const points = zone ? zoneControlPoints(zone) : []
+    const midpoints = zone ? zoneEdgeMidpoints(zone, c.view, size) : []
+    // The rotation handle rises over the chips that the dots put beside their edges.
+    const rotate = pointDrag
+      ? null
+      : rotateHandle(c.scene, selection, c.view, c.translate, rotationDeltaDeg, size, midpoints.length > 0)
+    handlesBearingDeg = c.view.bearingDeg
+    handlesPixelsPerMetre = pixelsPerMetre(c.view)
+    handlesPointer = pointer
+    if (rotate) handles.push(rotate)
     reshapePoints = new Map(points.map((entry) => [entry.id, entry]))
-    handles.push(...zoneControlPointHandles(points, c.translate))
-    const midpoints = zone ? zoneEdgeMidpoints(zone, c.view) : []
+    handles.push(...zoneControlPointHandles(points, size, c.translate))
     edgeMidpoints = new Map(midpoints.map((entry) => [entry.id, entry]))
-    handles.push(...zoneEdgeMidpointHandles(midpoints, c.translate))
+    handles.push(...zoneEdgeMidpointHandles(midpoints, size, c.translate))
     const guide = draggableGuide(scene, selection)
     const ends = guide ? guideEnds(guide) : []
     guideEndPoints = new Map(ends.map((entry) => [entry.id, entry]))
-    handles.push(...guideEndHandles(ends, c.translate))
+    handles.push(...guideEndHandles(ends, size, c.translate))
     if (selectedCorner && !reshapePoints.has(selectedCorner)) selectedCorner = null
     c.effects.setHandles(handles, selectedCorner)
   }
 
-  /** A camera frame that turned or zoomed the view redraws the handles (U40); a pan leaves them as they are. The host
-   *  re-emits a hover or a live drag on each camera frame, so both follow it. */
+  /** A camera frame that turned or zoomed the view redraws the handles (U40), as does a hover by another pointer kind (Q1);
+   *  a pan leaves them as they are. The host re-emits a hover or a live drag on each camera frame, so both follow it. */
   function followView(): void {
     if (!context) return
     const { view } = context
-    // A pan changes neither, so it recomputes nothing.
-    if (view.bearingDeg === handlesBearingDeg && pixelsPerMetre(view) === handlesPixelsPerMetre) return
+    // A pan changes none of them, so it recomputes nothing.
+    if (view.bearingDeg === handlesBearingDeg && pixelsPerMetre(view) === handlesPixelsPerMetre && pointer === handlesPointer) {
+      return
+    }
     refreshHandles()
   }
 
   function press(point: ToolPoint, hit: HitTarget | null, clickCount: number): void {
     const c = ctx()
+    pointer = point.pointer
     selectedCorner = null
     if (clickCount >= 2 && addCornerOnEdge(point)) {
       gesture = { kind: 'done' }
@@ -125,12 +138,10 @@ export function createSelectTool(): CanvasTool {
     }
     const result = pressSelection(c, point, hit, clickCount)
     switch (result.kind) {
-      case 'band': {
-        const band: Band = { start: point.world, additive: result.additive }
-        gesture = { kind: 'band', band, press: result }
-        c.effects.setDraft(bandDraft(c.view, band, point.world))
+      case 'band':
+        // The band draws from its drag: a tap (a finger's held press resolves at its lift) draws none.
+        gesture = { kind: 'band', band: { start: point.world, additive: result.additive }, press: result }
         break
-      }
       case 'move':
         gesture = {
           kind: 'move',
@@ -178,9 +189,8 @@ export function createSelectTool(): CanvasTool {
     if (!current) return
     try {
       if (current.kind === 'band') {
-        const selection = dragged ? bandSelection(c, current.band, point.world) : null
-        if (selection) c.effects.setSelection(selection)
-        // A band shorter than its threshold is a click (band.ts); only a fill press's click selects.
+        if (dragged) c.effects.setSelection(bandSelection(c, current.band, point.world))
+        // Only a fill press's click selects.
         else clickSelection(c, current.press)
       } else if (current.kind === 'move') {
         // The release reads the last move: the pointer's travel since then moves nothing.
@@ -201,6 +211,7 @@ export function createSelectTool(): CanvasTool {
   function handleDrag(g: Extract<ToolGesture, { kind: 'handle-drag' }>): void {
     const c = ctx()
     if (g.phase === 'start') {
+      pointer = g.point.pointer
       startHandleDrag(g)
       refreshHandles()
       return
@@ -261,13 +272,13 @@ export function createSelectTool(): CanvasTool {
     const reshapePoint = reshapePoints.get(handle)
     const zone = reshapePoint ? reshapableZone(scene, selection) : null
     if (reshapePoint && zone?.id === reshapePoint.zoneId) {
-      gesture = { kind: 'reshape', drag: beginPointHandleDrag(c, zoneReshapeSubject(zone, reshapePoint), start) }
+      gesture = { kind: 'reshape', drag: beginPointHandleDrag(c, zoneReshapeSubject(zone, reshapePoint)) }
       return
     }
     const end = guideEndPoints.get(handle)
     const guide = end ? draggableGuide(scene, selection) : null
     if (end && guide?.id === end.guideId) {
-      gesture = { kind: 'guide-end', drag: beginPointHandleDrag(c, guideEndSubject(guide, end), start) }
+      gesture = { kind: 'guide-end', drag: beginPointHandleDrag(c, guideEndSubject(guide, end)) }
     }
   }
 
@@ -346,6 +357,7 @@ export function createSelectTool(): CanvasTool {
           break
         case 'hover':
           // The host re-emits the resting pointer on a camera frame instead of calling viewChanged.
+          pointer = g.point.pointer
           followView()
           break
         default:

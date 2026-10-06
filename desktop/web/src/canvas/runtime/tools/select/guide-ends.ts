@@ -14,6 +14,7 @@ import type { WorldPoint } from '../../view/types'
 import type { DraftShape, ToolHandle } from '../draft'
 import { measureLabelShapes } from '../measure-labels'
 import type { ToolContext } from '../tool'
+import type { HandleSize } from './handle-size'
 import type { PointHandleSubject } from './point-handle'
 
 /** One end handle: which end of which guide it moves ('a' the start, 'b' the end). */
@@ -25,8 +26,6 @@ export interface GuideEnd {
 }
 
 const MIN_MEASUREMENT_GUIDE_LENGTH_M = 0.5
-/** A 20 px target. */
-const POINT_HIT_RADIUS_PX = 10
 
 /** The one selected guide the end handles belong to: a single editable guide, nothing locked or blocked. */
 export function draggableGuide(
@@ -44,11 +43,11 @@ export function guideEnds(guide: SceneMeasurementGuideEntity): GuideEnd[] {
   ]
 }
 
-export function guideEndHandles(ends: readonly GuideEnd[], translate: ToolContext['translate']): ToolHandle[] {
+export function guideEndHandles(ends: readonly GuideEnd[], size: HandleSize, translate: ToolContext['translate']): ToolHandle[] {
   return ends.map((end) => ({
     id: end.id,
     anchor: end.world,
-    hitRadiusPx: POINT_HIT_RADIUS_PX,
+    hitRadiusPx: size.pointRadiusPx,
     glyph: 'vertex',
     label: translate('canvas.guideEnd.label', { index: end.index + 1 }),
   }))

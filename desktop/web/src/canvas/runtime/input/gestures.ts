@@ -27,8 +27,9 @@ export type Gesture =
   | { kind: 'drag-end'; id: number; at: ScreenPoint; mods: Modifiers }
   | { kind: 'drop'; phase: 'over' | 'leave' | 'drop'; at: ScreenPoint; payload: CanvasDropPayload }
   // navigation: never reaches tools
-  /** deltaPx is content movement (the ground follows the pointer). at: the pointer's screen point for a pointer source (every
-   *  source but 'wheel'), which the router hands to ToolHost.notePointer; absent for a wheel pan. */
+  /** deltaPx is content movement (the ground follows the pointer). at: the pointer's screen point for a one-pointer source,
+   *  which the router hands to ToolHost.notePointer; absent for a wheel pan and a two-finger pan, which move no resting
+   *  hover (A14). */
   | { kind: 'pan'; phase: 'start' | 'move' | 'end'; deltaPx: ScreenPoint; source: NavigationSource; at?: ScreenPoint }
   | { kind: 'zoom'; anchorPx: ScreenPoint; factor: number; source: NavigationSource }
   | { kind: 'rotate'; phase: 'start' | 'move' | 'end' | 'cancel'; anchorPx: ScreenPoint; totalDeltaDeg: number; step: boolean; source: NavigationSource }
