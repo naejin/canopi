@@ -561,6 +561,15 @@ describe('recognise: 5.6 wheel and trackpad', () => {
     expect(result.effects).toEqual([])
   })
 
+  it('F15b Wheel over a handle (U38): prevented, and zooms or pans as over the map, on every handle kind', () => {
+    const mouse = run(SEQUENCES.F15B_MOUSE)
+    expect(mouse.gestures).toEqual(Array(4).fill(run(SEQUENCES.F1).gestures[0]))
+    expect(mouse.effects).toEqual(Array(4).fill({ kind: 'prevent-default' }))
+    const trackpad = run(SEQUENCES.F15B_TRACKPAD)
+    expect(trackpad.gestures).toEqual(Array(4).fill(run(SEQUENCES.F2).gestures[0]))
+    expect(trackpad.effects).toEqual(Array(4).fill({ kind: 'prevent-default' }))
+  })
+
   it('F16 Page mode: a page of dy is the host height and a page of dx the host width', () => {
     expect(pansOf(run(SEQUENCES.F16).gestures).map((pan) => pan.deltaPx)).toEqual([{ x: 0, y: -300 }, { x: -100, y: 0 }])
   })

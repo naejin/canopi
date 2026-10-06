@@ -2506,6 +2506,38 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('a wheel over a corner, a midpoint dot or the rotate handle zooms the map about the pointer, as over the map (U38)', () => {
+    const square = [{ x: 20, y: 20 }, { x: 120, y: 20 }, { x: 120, y: 120 }, { x: 20, y: 120 }]
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone', locked: false, id: 'polygon-1', name: 'polygon-1', zoneType: 'polygon', rotationDeg: 0,
+        points: square, fillColor: null, notes: null,
+      }]
+    })
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('select')
+    events.pointerDown({ x: 70, y: 20 }, { button: 0 })
+    events.pointerUp({ x: 70, y: 20 }, { button: 0 })
+    const scene = structuredClone(store.persisted)
+
+    let scale = testView.viewport().scale
+    for (const id of ['vertex:polygon-1:0', 'edge-mid:polygon-1:0', 'rotate']) {
+      const handle = container.querySelector<HTMLElement>(`[data-canvas-handle="${id}"]`)
+      expect(handle, id).not.toBeNull()
+      const pointer = { x: 70, y: 40 }
+      const anchor = testView.view().screenToWorld(pointer)
+      const wheel = new WheelEvent('wheel', { bubbles: true, cancelable: true, clientX: pointer.x, clientY: pointer.y, deltaY: -120 })
+      handle!.dispatchEvent(wheel)
+
+      expect(wheel.defaultPrevented, id).toBe(true)
+      expect(testView.viewport().scale, id).toBeCloseTo(scale * Math.exp(0.24), 6)
+      expectPointCloseTo(testView.view().screenToWorld(pointer), anchor)
+      scale = testView.viewport().scale
+    }
+    expect(store.persisted).toEqual(scene)
+    session.dispose()
+  })
+
   it('adds a polygon corner from a double-clicked midpoint dot and deletes the last pressed corner, keeping 3', () => {
     const square = [{ x: 20, y: 20 }, { x: 120, y: 20 }, { x: 120, y: 120 }, { x: 20, y: 120 }]
     store.updatePersisted((draft) => {

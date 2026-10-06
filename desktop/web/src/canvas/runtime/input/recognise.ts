@@ -13,8 +13,8 @@
 // carrying the pointer's point and a Pan-tool press ending with cancel('navigate') after its drag; a Shift+middle drag
 // rotating about its press once it passes 3 px (silent before, so a still click turns nothing), stepped while mod is
 // held, with the wheel ignored while a pointer rotate lives;
-// a button-less move over owned chrome, the text entry or a handle ends the hover; wheels zoom or pan by the
-// pointing-device setting; a WebKit trackpad twist rotating past 10° as a session of its own; no touch gestures or pen
+// a button-less move over owned chrome, the text entry or a handle ends the hover; wheels, over the map or a handle, zoom
+// or pan by the pointing-device setting; a WebKit trackpad twist rotating past 10° as a session of its own; no touch gestures or pen
 // barrel. Touch gestures and the long press arrive in phase 3.
 
 import type { CancelReason, Modifiers, PointerKind } from '../interaction-types'
@@ -328,8 +328,9 @@ function configure(step: Step, context: RawOf<'configure'>['context']): void {
 }
 
 function wheel(step: Step, input: RawOf<'wheel'>): void {
-  // The note editor, handles and the canvas's own chrome keep their wheels (not prevented).
-  if (input.target.kind !== 'surface') return
+  // The note editor and the canvas's own chrome keep their wheels (not prevented); no handle uses the wheel, so a wheel over
+  // one is a map wheel (U38, fixture F15b).
+  if (input.target.kind !== 'surface' && input.target.kind !== 'handle') return
   step.effects.push({ kind: 'prevent-default' })
   // A pointer rotate owns the camera from its press, so Esc restores exactly the camera it pressed on (fixture F18).
   if (pointerRotateLive(step.state)) return

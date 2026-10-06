@@ -30,6 +30,13 @@ export const OWNED_TEXT: TargetClass = Object.freeze({ kind: 'owned-text' })
 export const OWNED_CHROME: TargetClass = Object.freeze({ kind: 'owned-chrome' })
 export const FOREIGN: TargetClass = Object.freeze({ kind: 'foreign' })
 export const ROTATE_HANDLE: TargetClass = Object.freeze({ kind: 'handle', id: 'rotate' as ToolHandleId })
+/** One of each canvas handle kind: a polygon corner, its midpoint dot, the rotate handle and a measurement guide's end. */
+export const HANDLES: readonly TargetClass[] = Object.freeze([
+  Object.freeze({ kind: 'handle', id: 'vertex:zone-1:0' as ToolHandleId }),
+  Object.freeze({ kind: 'handle', id: 'edge-mid:zone-1:0' as ToolHandleId }),
+  ROTATE_HANDLE,
+  Object.freeze({ kind: 'handle', id: 'guide-end:guide-1:a' as ToolHandleId }),
+]) as readonly TargetClass[]
 
 export const HOST = Object.freeze({ width: 400, height: 300 })
 
@@ -558,6 +565,9 @@ export const SEQUENCES = {
     up(120, 80, { t: 400 }),
   ]),
   F15: seq('F15 Wheel over owned text', WINDOWS, [wheel(120, 80, { dy: 100, target: OWNED_TEXT })]),
+  F15B_MOUSE: seq('F15b Wheel over a handle, Mouse', WINDOWS, HANDLES.map((target) => wheel(120, 80, { dy: 100, target }))),
+  F15B_TRACKPAD: seq('F15b Wheel over a handle, Trackpad', WINDOWS, HANDLES.map((target) => wheel(120, 80, { dy: 100, target })),
+    { pointingDevice: 'trackpad' }),
   F16: seq('F16 Page mode', WINDOWS, [
     wheel(120, 80, { dy: 1, mode: 2 }),
     wheel(120, 80, { dx: 0.25, mode: 2 }),
