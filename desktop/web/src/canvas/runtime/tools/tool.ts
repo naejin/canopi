@@ -169,7 +169,6 @@ export interface ToolEffects {
   setDraft(draft: DraftPresentation | null): void           // world-space; drawn by the renderer
   setHandles(handles: readonly ToolHandle[]): void          // DOM handle layer; hit by the source
   setGuidance(guidance: Partial<CanvasToolGuidance> | null): void
-  setCursor(cursor: 'default' | 'crosshair' | 'copy' | 'move' | 'not-allowed' | 'rotate' | 'grab' | 'grabbing'): void
   requestTool(id: ToolId): void
   /** Opens the host's text entry; submit runs on Enter and on blur and keeps the field open on 'keep' (a refused commit);
    *  onCancel runs when the entry closes without a submit (its own Esc), so the tool can follow the cancel. */

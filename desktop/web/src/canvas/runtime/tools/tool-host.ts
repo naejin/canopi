@@ -169,7 +169,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let toolDraft: DraftPresentation | null = null
   let toolHandles: readonly ToolHandle[] = NO_HANDLES
   let toolGuidance: Parameters<ToolEffects['setGuidance']>[0] = null
-  let toolCursor: string | null = null
   let live: LiveGesture | null = null
   let lastHover: StillPointer | null = null
   /** Under Text, the raw press found the note's entry open: its focus move committed the note, and the press places
@@ -321,11 +320,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         if (!owns()) return
         toolGuidance = guidance
         if (callDepth === 0) publishGuidance()
-      },
-      setCursor(cursor) {
-        if (!owns()) return
-        toolCursor = cursor
-        deps.chrome.setCursor(cursor)
       },
       requestTool(id) {
         if (owns()) requestTool(id)
@@ -542,7 +536,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   function resetCursor(): void {
-    deps.chrome.setCursor(toolCursor ?? cursorForTool(currentId))
+    deps.chrome.setCursor(cursorForTool(currentId))
   }
 
   // ── Passive hover and the pointer's world point ─────────────────────────────────────────────────────────────────
@@ -1119,7 +1113,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     toolDraft = null
     toolHandles = NO_HANDLES
     toolGuidance = null
-    toolCursor = null
     publishedGuidance = null
     const tool = TOOL_REGISTRY[id]()
     activeTool = tool
@@ -1362,10 +1355,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
 // ── Pure helpers ───────────────────────────────────────────────────────────────────────────────────────────────────
 
-/**
- * Today's cursors per tool (today's (a4c86d39) pointer-utils.ts cursorForTool); a tool may set its own through
- * ToolEffects.setCursor.
- */
+/** The cursor of each tool (as before v2, at a4c86d39, pointer-utils.ts cursorForTool); no tool sets its own. */
 function cursorForTool(tool: ToolId): string {
   switch (tool) {
     case 'hand': return 'grab'

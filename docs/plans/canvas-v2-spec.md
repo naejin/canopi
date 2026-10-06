@@ -1069,7 +1069,6 @@ export interface ToolEffects {
   setSelectionPreview(preview: SelectionPreview | null): void   // phase R (move-drags), with its first caller
   setHandles(handles: readonly ToolHandle[]): void          // DOM handle layer; hit by the source
   setGuidance(guidance: Partial<CanvasToolGuidance> | null): void
-  setCursor(cursor: 'default' | 'crosshair' | 'copy' | 'move' | 'not-allowed' | 'rotate' | 'grab' | 'grabbing'): void
   requestTool(id: ToolId): void
   /** Opens the host's text entry; submit runs on Enter and on blur and keeps the field open on 'keep' (a refused commit). */
   requestTextEntry(request: TextEntryRequest, submit: (text: string) => 'close' | 'keep', onCancel?: () => void): void  // onCancel: closed by its own Esc
@@ -1186,7 +1185,7 @@ export interface ToolHandle {
 
 An `ellipse` takes `fill?` because today's ellipse zone draft is filled with the zone fill.
 
-Tools never see screen coordinates in gestures; `ScreenPoint` appears only in `offsetPx`/`radiusPx` presentation fields. A tool that needs today's clamp to the visible map (Plant a row) sets `clampsToView`, and the host clamps the screen point before conversion, constraint and snapping. `ToolContext` has no navigation handle. The Pan tool's drags never reach it (the recogniser turns them into `pan`); its press ends with a `tap` or, after a drag, with `cancel('navigate')` (§2.2); its module sets the `grab` cursor and guidance only.
+Tools never see screen coordinates in gestures; `ScreenPoint` appears only in `offsetPx`/`radiusPx` presentation fields. A tool that needs today's clamp to the visible map (Plant a row) sets `clampsToView`, and the host clamps the screen point before conversion, constraint and snapping. `ToolContext` has no navigation handle. The Pan tool's drags never reach it (the recogniser turns them into `pan`); its press ends with a `tap` or, after a drag, with `cancel('navigate')` (§2.2); its module sets guidance only; the `grab` cursor comes from the host's cursor per tool (`cursorForTool`), which no tool overrides.
 
 The `ToolHost` (`tools/tool-host.ts`, interface in `interaction-ports.ts`) is the only code that builds `ToolGesture`s. Its duties, in order:
 
