@@ -14,7 +14,7 @@ import { InspectionLens } from './InspectionLens'
 import { PlantAppearancePopovers } from './PlantAppearancePopovers'
 import { PlantLabelsChip } from './PlantLabelsChip'
 import { SelectionChip } from './SelectionChip'
-import { FoundSiteChip, SiteOnboarding } from './SiteOnboarding'
+import { SiteOnboarding } from './SiteOnboarding'
 import { SpeciesFocusChip } from './SpeciesFocusChip'
 import chipStyles from './SpeciesFocusChip.module.css'
 import { ToolCard, type StampChooserProps } from './ToolCard'
@@ -58,11 +58,10 @@ function CanvasChromeContent({ projection, canvasRef, stampChooser, children }: 
       <ZoomControls viewActions={projection.viewActions} />
       <InspectionLens canvasRef={canvasRef} />
       {children}
-      <TopChipSlot locating={locating} />
       {!locating && <SelectionChip />}
       {!locating && <CanvasOverview />}
       <DisplayLegend />
-      <SiteOnboarding />
+      <SiteOnboarding><TopChipSlot locating={locating} /></SiteOnboarding>
       <CanvasContextMenu />
       <PlantAppearancePopovers canvasRef={canvasRef} />
     </>
@@ -70,9 +69,9 @@ function CanvasChromeContent({ projection, canvasRef, stampChooser, children }: 
 }
 
 /**
- * The one top-centre chip slot (canopi-23p2): the overview notice, the found-place chip, the highlight chip and the
- * labels chip stack in it as flow children instead of covering each other, and it registers as chrome over the map's
- * top edge, so fitting and framing keep below it.
+ * The one top-centre chip slot (canopi-23p2): the overview notice, the highlight chip and the labels chip stack in it as
+ * flow children instead of covering each other, and it registers as chrome over the map's top edge, so fitting and
+ * framing keep below it. SiteOnboarding places it: in the Start card's row while that card shows.
  */
 function TopChipSlot({ locating }: { readonly locating: boolean }) {
   const slot = useRef<HTMLDivElement>(null)
@@ -80,7 +79,6 @@ function TopChipSlot({ locating }: { readonly locating: boolean }) {
   return (
     <div ref={slot} className={chipStyles.topSlot} data-top-chip-slot>
       {!locating && <OverviewNotice />}
-      <FoundSiteChip />
       <SpeciesFocusChip />
       {!locating && <PlantLabelsChip />}
     </div>

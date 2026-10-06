@@ -1,6 +1,6 @@
 // canopi-23p2: the top-centre chips share one slot, which registers with the visible-map-area seam, so they stack
-// instead of covering each other. Their rects are checked in Playwright (design-reveal.spec.ts, map-container.spec.ts);
-// jsdom has no layout, so this checks the structure.
+// instead of covering each other. jsdom has no layout, so this checks the structure: no browser spec reads the slot's
+// rects yet.
 import { render } from 'preact'
 import { createRef } from 'preact'
 import { act } from 'preact/test-utils'
@@ -50,21 +50,32 @@ describe('the top-centre chip slot', () => {
     document.body.innerHTML = ''
   })
 
-  it('the overview notice and the found-site chip render in one top-centre slot', async () => {
-    onboarding.cardOpen.value = true
+  async function renderChrome(): Promise<void> {
     const canvasRef = createRef<HTMLDivElement>()
     await act(async () => {
       render(<div ref={canvasRef}><CanvasChrome projection={workspaceCanvasCommandProjection.value} canvasRef={canvasRef} /></div>, container)
     })
+  }
+
+  it('the overview notice renders in the top-centre slot, and the overview pin stays where the Design is', async () => {
+    await renderChrome()
 
     const slot = container.querySelector<HTMLElement>('[data-top-chip-slot]')!
-    expect(slot).not.toBeNull()
     expect(slot.querySelector('[data-overview-notice]')?.parentElement).toBe(slot)
-    expect(slot.querySelector('[data-found-site]')?.parentElement).toBe(slot)
-    // The Start card keeps its own place beside the tool rail; only its found-place chip moved into the slot.
-    expect(container.querySelector('[data-start-design]')!.closest('[data-top-chip-slot]')).toBeNull()
-    // The overview pin is not a chip: it stays where the Design is.
     expect(container.querySelector('[data-overview-pin]')?.closest('[data-top-chip-slot]') ?? null).toBeNull()
+  })
+
+  it('while the Start card shows, the slot follows the card and its found-place chip in their row', async () => {
+    // A fixed-width offset beside the card would leave the slot off a narrow map; in the row it wraps below the card.
+    onboarding.cardOpen.value = true
+    await renderChrome()
+
+    const row = container.querySelector<HTMLElement>('[data-start-row]')!
+    const slot = container.querySelector<HTMLElement>('[data-top-chip-slot]')!
+    expect([...row.children].map((child) => child.hasAttribute('data-start-design') ? 'card'
+      : child.hasAttribute('data-found-site') ? 'found' : child === slot ? 'slot' : 'other')).toEqual(['card', 'found', 'slot'])
+    expect(slot.querySelector('[data-overview-notice]')?.parentElement).toBe(slot)
+    expect(container.querySelectorAll('[data-top-chip-slot]')).toHaveLength(1)
   })
 
   it('registers the slot as chrome over the top edge of the map', async () => {
@@ -78,10 +89,7 @@ describe('the top-centre chip slot', () => {
     })
     const release = registerMapArea(area)
     try {
-      const canvasRef = createRef<HTMLDivElement>()
-      await act(async () => {
-        render(<div ref={canvasRef}><CanvasChrome projection={workspaceCanvasCommandProjection.value} canvasRef={canvasRef} /></div>, container)
-      })
+      await renderChrome()
       expect(visibleMapFrame.value.top).toBe(164)
     } finally {
       release()

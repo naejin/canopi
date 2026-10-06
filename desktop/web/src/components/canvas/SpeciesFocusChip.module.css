@@ -1,7 +1,7 @@
 /* The one top-centre chip slot (CanvasChrome): the overview notice, the found-place chip, the highlight chip and the
    labels chip stack in it instead of covering each other. Top centre of the visible map, between the tool rail and the
    panel rail or open dock (`--map-inset-*`, published by app/shell/visible-map-area.ts, where the slot registers as top
-   chrome), and right of the tool card or the Start card. Its chips wrap when that area is narrow. */
+   chrome), and right of the tool card. Its chips wrap when that area is narrow. */
 .topSlot {
   position: absolute;
   z-index: 35;
@@ -23,9 +23,12 @@
   pointer-events: auto;
 }
 
-/* Right of the Start card (330 px in the tool card slot) while it shows. */
-*:has(> [data-start-row]) > .topSlot {
-  left: max(calc(var(--map-inset-left, 0px) + var(--space-4)), calc(var(--canvas-tool-card-left) + 330px + var(--space-3)));
+/* While the Start card shows, the slot is a flex item of its row (SiteOnboarding): centred in the room right of the card,
+   or on a line of its own below it when the map is too narrow for both. */
+[data-start-row] > .topSlot {
+  position: static;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* Status chip for highlighted plants, and the labels chip. */

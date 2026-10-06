@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact'
 import { useEffect, useId, useRef } from 'preact/hooks'
 import { placeSearch } from '../../app/geocoding/place-search-session'
 import { PLACE_SEARCH_ZOOM } from '../../app/geocoding/place-search-ui'
@@ -30,15 +31,18 @@ function answerSiteLocate(placeLabel: string | null): void {
 }
 
 /**
- * New-Design guidance over the map: where the site is, then how to start. The found-place chip that goes with the
- * Start card is a top chip (FoundSiteChip, in CanvasChrome's top-centre slot).
+ * New-Design guidance over the map: where the site is, then how to start. The Start card shows in the tool card slot
+ * with the place found; the top chips (`children`, CanvasChrome's top-centre slot) follow them in their row while it
+ * shows, beside the card or wrapped below it on a narrow map, instead of covering it.
  */
-export function SiteOnboarding() {
-  if (siteLocateOpen.value) return <SiteLocateDialog />
-  if (!startDesignCardOpen.value) return null
+export function SiteOnboarding({ children }: { readonly children?: ComponentChildren }) {
+  if (siteLocateOpen.value) return <><SiteLocateDialog />{children}</>
+  if (!startDesignCardOpen.value) return <>{children}</>
   return (
     <div className={styles.startRow} data-start-row>
       <StartDesignCard />
+      <FoundSiteChip />
+      {children}
     </div>
   )
 }
@@ -131,9 +135,7 @@ function StartDesignCard() {
   )
 }
 
-/** While the Start card shows: the place "Where is your site?" found, or that none was searched, with Search again. */
-export function FoundSiteChip() {
-  if (siteLocateOpen.value || !startDesignCardOpen.value) return null
+function FoundSiteChip() {
   const label = foundSiteLabel.value
   return (
     <div className={styles.foundChip} role="status" data-found-site>
