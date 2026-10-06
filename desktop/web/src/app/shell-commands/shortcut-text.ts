@@ -6,7 +6,6 @@
  * platform once, at the point where it detects it (setShortcutPlatform).
  */
 
-import { signal } from '@preact/signals'
 import { modKeyIsCmd, type InputPlatform } from '../../canvas/runtime/input/platform'
 
 interface ParsedShortcut {
@@ -26,13 +25,8 @@ const KEY_NAME_KEYS: Readonly<Record<string, string>> = {
   Escape: 'shortcutKeys.escape',
 }
 
-const ENGLISH_KEY_NAMES: Readonly<Record<string, string>> = {
-  Ctrl: 'Ctrl',
-  Cmd: 'Cmd',
-  Shift: 'Shift',
-  Alt: 'Alt',
-  Delete: 'Del',
-  Escape: 'Esc',
+/** Keys shown as a glyph in every language. */
+const KEY_GLYPHS: Readonly<Record<string, string>> = {
   Plus: '+',
   Minus: '\u2212',
   ArrowLeft: '\u2190',
@@ -46,23 +40,23 @@ const ARIA_KEYS: Readonly<Record<string, string>> = {
   Minus: '-',
 }
 
-/** Whether the mod key is Cmd (macOS, and iPadOS keyboards, as the key router's chord rule reads them). A signal, so
- *  menus and tooltips computed from it follow a late call. */
-const modIsCmd = signal(false)
+/** Whether the mod key is Cmd (macOS, and iPadOS keyboards, as the key router's chord rule reads them). Both editions
+ *  set it before the first render (main.tsx through platform/desktop.ts; main.web.tsx through installWebKeyRouter). */
+let modIsCmd = false
 
 /** The platform whose mod key the labels name; Ctrl until an edition calls it. */
 export function setShortcutPlatform(platform: Pick<InputPlatform, 'os'>): void {
-  modIsCmd.value = modKeyIsCmd(platform)
+  modIsCmd = modKeyIsCmd(platform)
 }
 
-/** The mod key's name: Cmd on macOS, else Ctrl, in the interface language with a translator. It fills `{{mod}}`. */
-export function modKeyName(translate?: (key: string) => string): string {
-  return keyName(modIsCmd.value ? 'Cmd' : 'Ctrl', translate)
+/** The mod key's name in the interface language: Cmd on macOS, else Ctrl. It fills `{{mod}}`. */
+export function modKeyName(translate: (key: string) => string): string {
+  return keyName(modIsCmd ? 'Cmd' : 'Ctrl', translate)
 }
 
-function keyName(key: string, translate?: (key: string) => string): string {
+function keyName(key: string, translate: (key: string) => string): string {
   const translationKey = KEY_NAME_KEYS[key]
-  return translate && translationKey ? translate(translationKey) : ENGLISH_KEY_NAMES[key] ?? key
+  return translationKey ? translate(translationKey) : KEY_GLYPHS[key] ?? key
 }
 
 function parseShortcut(shortcut: string): ParsedShortcut {
@@ -78,10 +72,10 @@ function parseShortcut(shortcut: string): ParsedShortcut {
 
 /**
  * `Ctrl+Shift+Z` → `Ctrl Shift Z`, as menus and tooltips show it, or `Cmd Shift Z`
- * on macOS. With a translator, key names follow the interface language
- * (`Ctrl Maj Z`). Arrow keys read as glyphs (`Shift+ArrowLeft` → `Shift ←`).
+ * on macOS. Key names follow the interface language (`Ctrl Maj Z`); arrow keys
+ * read as glyphs (`Shift+ArrowLeft` → `Shift ←`).
  */
-export function formatShortcut(shortcut: string, translate?: (key: string) => string): string {
+export function formatShortcut(shortcut: string, translate: (key: string) => string): string {
   const parsed = parseShortcut(shortcut)
   const name = (key: string) => keyName(key, translate)
   return [

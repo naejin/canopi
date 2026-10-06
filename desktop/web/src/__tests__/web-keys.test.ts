@@ -6,6 +6,7 @@ import { placeSearchFocusRequest } from '../app/geocoding/place-search-ui'
 import { keyboardShortcutsDialogOpen } from '../app/shell/dialogs'
 import { activePanel, sidePanel } from '../app/shell/state'
 import { singleKeyShortcuts } from '../app/settings/state'
+import { t } from '../i18n'
 import {
   createBrowserShellCatalog,
   installWebKeyRouter,
@@ -58,10 +59,10 @@ describe('Web keys', () => {
 
   it('labels the mod key for the platform it routes keys on: Cmd on a Mac, Ctrl elsewhere', () => {
     installWebKeys([], 'mac')
-    expect(formatShortcut('Ctrl+Shift+Z')).toBe('Cmd Shift Z')
+    expect(formatShortcut('Ctrl+Shift+Z', t)).toBe('Cmd Shift Z')
 
     installWebKeys([], 'linux')
-    expect(formatShortcut('Ctrl+Shift+Z')).toBe('Ctrl Shift Z')
+    expect(formatShortcut('Ctrl+Shift+Z', t)).toBe('Ctrl Shift Z')
   })
 
   it('ignores a key an earlier listener already consumed', () => {

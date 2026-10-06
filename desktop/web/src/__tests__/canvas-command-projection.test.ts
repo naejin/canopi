@@ -5,6 +5,7 @@ import {
   type CanvasCommandProjectionState,
 } from '../app/canvas-commands'
 import { ariaKeyShortcuts, formatShortcut } from '../app/shell-commands/shortcut-text'
+import { t } from '../i18n'
 
 /** Every tool, in rail order. */
 const projectedCanvasTools = (projection: CanvasCommandProjection) =>
@@ -55,8 +56,8 @@ describe('Canvas Command Projection', () => {
   })
 
   it('shows shortcuts with spaces and localized key names, and exposes both modifiers to assistive tech', () => {
-    expect(formatShortcut('Ctrl+Shift+Z')).toBe('Ctrl Shift Z')
-    expect(formatShortcut('Ctrl+Plus')).toBe('Ctrl +')
+    expect(formatShortcut('Ctrl+Shift+Z', t)).toBe('Ctrl Shift Z')
+    expect(formatShortcut('Ctrl+Plus', t)).toBe('Ctrl +')
     expect(formatShortcut('Ctrl+Shift+A', (k) => ({ 'shortcutKeys.ctrl': 'Ctrl', 'shortcutKeys.shift': 'Maj' })[k] ?? k)).toBe('Ctrl Maj A')
     expect(ariaKeyShortcuts('Ctrl+Shift+Z')).toBe('Control+Shift+Z Meta+Shift+Z')
     expect(ariaKeyShortcuts('Ctrl+Plus')).toBe('Control+= Meta+=')
