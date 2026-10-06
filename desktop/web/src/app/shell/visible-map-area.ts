@@ -86,8 +86,8 @@ export function measureVisibleMapFrame(map: DOMRect, occluders: Iterable<MapOccl
  * Pure: the free width of the bottom band, between the bottom chrome on the
  * left (the view chip) and on the right (the zoom group), where the map
  * credits sit. Chrome standing wholly above the band takes none of its room:
- * a dock wider than 60 % of the map (the expanded calendar, the narrow
- * edition's bottom sheet) reads as bottom chrome but stops above the band.
+ * the narrow edition's bottom sheet covers the bottom edge but stops above
+ * the band.
  * The whole map width when no bottom chrome is registered.
  */
 export function measureBottomBandRoom(map: DOMRect, occluders: Iterable<MapOccluderBox>): number {

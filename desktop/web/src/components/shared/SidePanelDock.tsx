@@ -1,12 +1,13 @@
 import type { ComponentChildren } from 'preact'
 import { useFocusRegion } from './useFocusRegion'
-import { useRef } from 'preact/hooks'
+import { useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { sidePanelWidth } from '../../app/shell/state'
 import { commitSidePanelWidth } from '../../app/shell/controller'
 import { DOCK_KEY_REGION } from '../../app/keyboard/target-class'
 import { t } from '../../i18n'
 import { usePointerResize } from './usePointerResize'
 import { useMapOccluder } from './useMapChrome'
+import type { MapOccluderSide } from '../../app/shell/visible-map-area'
 import styles from './SidePanelDock.module.css'
 
 const MIN_SIDEBAR_WIDTH = 320
@@ -15,6 +16,8 @@ const DEFAULT_WIDE_SIDEBAR_WIDTH = 440
 const MAX_SIDEBAR_RATIO = 0.9
 const MAX_EXPANDED_SIDEBAR_WIDTH = 800
 const KEYBOARD_RESIZE_STEP = 20
+/** SidePanelDock.module.css's bottom-sheet query: below it a responsive edition's dock is a sheet at the bottom. */
+const BOTTOM_SHEET_QUERY = '(max-width: 760px)'
 
 interface SidebarResizeSession {
   readonly panel: HTMLDivElement
@@ -42,7 +45,7 @@ export function SidePanelDock({
   readonly onManualResize?: () => void
 }) {
   const panelRef = useRef<HTMLDivElement>(null)
-  useMapOccluder(panelRef)
+  useMapOccluder(panelRef, useDockSide(responsive))
   useFocusRegion(panelRef, 'dock')
   const width = sidePanelWidth.value
   const baseWidth = width === null ? `${wide ? DEFAULT_WIDE_SIDEBAR_WIDTH : DEFAULT_SIDEBAR_WIDTH}px` : `${width}px`
@@ -62,6 +65,27 @@ export function SidePanelDock({
       <div className={styles.panel}>{children}</div>
     </div>
   )
+}
+
+/**
+ * The map edge the dock covers: the right, beside the panel rail, however wide
+ * it grows (the expanded calendar is wider than the inferred-band share); the
+ * bottom while a responsive edition shows it as the bottom sheet.
+ */
+function useDockSide(responsive: boolean): MapOccluderSide {
+  const [sheet, setSheet] = useState(() => bottomSheetQuery(responsive)?.matches ?? false)
+  useLayoutEffect(() => {
+    const query = bottomSheetQuery(responsive)
+    const update = () => setSheet(query?.matches ?? false)
+    update()
+    query?.addEventListener('change', update)
+    return () => query?.removeEventListener('change', update)
+  }, [responsive])
+  return sheet ? 'bottom' : 'right'
+}
+
+function bottomSheetQuery(responsive: boolean): MediaQueryList | null {
+  return responsive && typeof window.matchMedia === 'function' ? window.matchMedia(BOTTOM_SHEET_QUERY) : null
 }
 
 function SidePanelResizeHandle({

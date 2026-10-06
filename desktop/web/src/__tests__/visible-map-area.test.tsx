@@ -1,3 +1,4 @@
+import { render } from 'preact'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   mapAttributionFolded,
@@ -15,6 +16,7 @@ import {
   visibleMapFrame,
 } from '../app/shell/visible-map-area'
 import { setCurrentCanvasSession } from '../canvas/session'
+import { SidePanelDock } from '../components/shared/SidePanelDock'
 import { framingRect } from '../canvas/runtime/view/fit'
 import type { ScenePersistedState } from '../canvas/runtime/scene'
 import { plantFinderMapMatches, zoomToPlantFinderMatches } from '../app/plant-finder/map-matches'
@@ -90,6 +92,41 @@ describe('visible map area', () => {
     expect(measureVisibleMapFrame(rect(WINDOW), [{ rect: sheet }])).toMatchObject({ right: 0, bottom: 420 })
   })
 
+  it('counts the dock on the right edge however wide it is, and the narrow edition\'s bottom sheet on the bottom', () => {
+    // The expanded calendar on a 1280 px window: 800 px wide, over 60 % of the map, beside the panel rail.
+    const expandedCalendar: Box = { left: 404, top: 72, width: 800, height: 664 }
+    const narrowWindow: Box = { left: 0, top: 0, width: 720, height: 800 }
+    const sheet: Box = { left: 12, top: 320, width: 696, height: 416 }
+    let narrow = false
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.hasAttribute('data-dock-width')) return rect(narrow ? sheet : expandedCalendar)
+      return rect(boxes.get(this) ?? { left: 0, top: 0, width: 0, height: 0 })
+    })
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: narrow && query === '(max-width: 760px)', addEventListener: () => {}, removeEventListener: () => {},
+    }))
+    const area = element(WINDOW)
+    const releaseArea = registerMapArea(area)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    try {
+      render(<SidePanelDock responsive expanded><p /></SidePanelDock>, container)
+      expect(visibleMapFrame.value).toMatchObject({ right: 1280 - 404, bottom: 0 })
+      expect(area.style.getPropertyValue('--map-inset-bottom')).toBe('0px')
+
+      render(null, container)
+      narrow = true
+      boxes.set(area, narrowWindow)
+      render(<SidePanelDock responsive><p /></SidePanelDock>, container)
+      expect(visibleMapFrame.value).toMatchObject({ right: 0, bottom: 800 - 320 })
+    } finally {
+      render(null, container)
+      container.remove()
+      releaseArea()
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('publishes the frame as CSS insets on the map area and hands it to the camera', async () => {
     const surfaces = createTestCanvasRuntimeSurfaces()
     const setFramingInsets = vi.spyOn(surfaces.commands.viewport, 'setFramingInsets')
@@ -160,13 +197,12 @@ describe('visible map area', () => {
       { rect: rect(ZOOM_GROUP), side: 'bottom' },
     ])).toBe(608)
     expect(measureBottomBandRoom(rect(WINDOW), [])).toBe(1280)
-    // The expanded calendar dock (800 px, over 60 % of the map) reads as bottom chrome, but it stops above the band and
-    // takes none of its room.
-    expect(measureBottomBandRoom(rect(WINDOW), [
+    // The narrow edition's bottom sheet covers the bottom edge, but it stops above the band and takes none of its room.
+    expect(measureBottomBandRoom(rect(narrow), [
       { rect: rect(viewChip), side: 'bottom' },
-      { rect: rect({ left: 404, top: 72, width: 800, height: 664 }) },
-      { rect: rect(ZOOM_GROUP), side: 'bottom' },
-    ])).toBe(608)
+      { rect: rect({ left: 12, top: 320, width: 696, height: 416 }), side: 'bottom' },
+      { rect: rect(narrowZoom), side: 'bottom' },
+    ])).toBe(48)
 
     const area = element(narrow)
     const releaseArea = registerMapArea(area)
