@@ -430,7 +430,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const shiftConstrains = currentId === 'polygon' || currentId === 'plant-spacing' || handleDrag
     return {
       additive: mods.shift || mods.ctrl || mods.meta,
-      subtractive: false,
+      subtractive: mods.alt,
       constrain: mods.shift && shiftConstrains,
       noSnap: mods.shift && currentId === 'plant-spacing',
     }

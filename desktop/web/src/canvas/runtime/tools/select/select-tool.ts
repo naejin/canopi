@@ -13,7 +13,7 @@ import type { SceneMeasurementGuideEntity, SceneZoneEntity } from '../../scene/t
 import type { ToolHandle } from '../draft'
 import type { CanvasTool, HitTarget, ToolContext, ToolGesture, ToolPoint, ToolReply } from '../tool'
 import { bandDraft, bandSelection, type Band } from './band'
-import { pressSelection, type ClickCandidate } from './click'
+import { clickSelection, pressSelection, type ClickCandidate, type SelectPress } from './click'
 import { draggableGuide, guideEndHandles, guideEnds, guideEndSubject, guideLengthShapes, type GuideEnd } from './guide-ends'
 import { abortMoveDrag, beginMoveDrag, commitMoveDrag, hasMoved, moveSelection, type MoveDrag } from './move-drag'
 import { noteExists, openNoteEntry, selectedEditableNoteId } from './note-edit'
@@ -32,8 +32,8 @@ import {
 
 /** What the press started, from the press to its release or cancel. */
 type SelectGesture =
-  | { readonly kind: 'band'; readonly band: Band }
-  | { readonly kind: 'move'; readonly drag: MoveDrag; readonly click: Omit<ClickCandidate, 'atMs'> }
+  | { readonly kind: 'band'; readonly band: Band; readonly press: SelectPress }
+  | { readonly kind: 'move'; readonly drag: MoveDrag; readonly click: Omit<ClickCandidate, 'atMs'>; readonly press: SelectPress }
   | { readonly kind: 'rotate'; readonly drag: RotationDrag }
   | { readonly kind: 'reshape'; readonly drag: PointHandleDrag<SceneZoneEntity> }
   | { readonly kind: 'guide-end'; readonly drag: PointHandleDrag<SceneMeasurementGuideEntity> }
@@ -91,7 +91,7 @@ export function createSelectTool(): CanvasTool {
     switch (result.kind) {
       case 'band': {
         const band: Band = { start: point.world, additive: result.additive }
-        gesture = { kind: 'band', band }
+        gesture = { kind: 'band', band, press: result }
         c.effects.setDraft(bandDraft(c.view, band, point.world))
         break
       }
@@ -100,6 +100,7 @@ export function createSelectTool(): CanvasTool {
           kind: 'move',
           drag: beginMoveDrag(c, c.scene.persisted, result.target, point),
           click: { target: result.target, world: point.world },
+          press: result,
         }
         break
       case 'edit-note':
@@ -135,12 +136,14 @@ export function createSelectTool(): CanvasTool {
       if (current.kind === 'band') {
         const selection = dragged ? bandSelection(c, current.band, point.world) : null
         if (selection) c.effects.setSelection(selection)
+        else if (!dragged) clickSelection(c, current.press)
       } else if (current.kind === 'move') {
         // The release reads the last move: the pointer's travel since then moves nothing.
         if (hasMoved(current.drag)) {
           commitMoveDrag(current.drag)
         } else {
           abortMoveDrag(current.drag)
+          clickSelection(c, current.press)
           clickCandidate = { ...current.click, atMs: c.now() }
         }
       }

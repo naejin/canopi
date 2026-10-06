@@ -2934,14 +2934,15 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('selects Zones by boundary proximity while interior clicks pass through', () => {
+  it('selects a Zone by its outline or a click in its fill, and a drag in its fill bands without moving it', () => {
+    const corners = [
+      { x: 10, y: 10 },
+      { x: 110, y: 10 },
+      { x: 110, y: 90 },
+      { x: 10, y: 90 },
+    ]
     store.updatePersisted((draft) => {
-      draft.zones = [makeRectZone('zone-1', [
-        { x: 10, y: 10 },
-        { x: 110, y: 10 },
-        { x: 110, y: 90 },
-        { x: 10, y: 90 },
-      ])]
+      draft.zones = [makeRectZone('zone-1', corners)]
     })
     const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
@@ -2949,13 +2950,21 @@ describe('SceneInteractionSession', () => {
 
     events.pointerDown({ x: 60, y: 50 }, { button: 0 })
     events.pointerUp({ x: 60, y: 50 }, { button: 0 })
+    expect(currentCanvasSelection.value).toEqual(new Set(['zone-1']))
 
+    events.pointerDown({ x: 200, y: 200 }, { button: 0 })
+    events.pointerUp({ x: 200, y: 200 }, { button: 0 })
     expect(currentCanvasSelection.value).toEqual(new Set())
-    expect(deps.setSelection).not.toHaveBeenCalledWith([zoneTarget('zone-1')])
 
     events.pointerDown({ x: 10, y: 50 }, { button: 0 })
     events.pointerUp({ x: 10, y: 50 }, { button: 0 })
+    expect(currentCanvasSelection.value).toEqual(new Set(['zone-1']))
 
+    // A drag from inside the selected zone's fill bands: the press clears, the band selects what it touches.
+    events.pointerDown({ x: 40, y: 40 }, { button: 0 })
+    events.pointerMove({ x: 70, y: 70 }, { buttons: 1 })
+    events.pointerUp({ x: 70, y: 70 }, { button: 0 })
+    expect(store.persisted.zones[0]!.points).toEqual(corners)
     expect(currentCanvasSelection.value).toEqual(new Set(['zone-1']))
     session.dispose()
   })

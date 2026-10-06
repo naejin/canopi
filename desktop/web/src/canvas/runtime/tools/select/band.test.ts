@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   createToolHarness,
   plantEntity,
+  rectZone,
   type ToolHarness,
   type ToolHarnessOptions,
 } from '../../../../__tests__/support/tool-harness'
@@ -107,5 +108,23 @@ describe('Select band', () => {
     expect(h.store.session.selectedTargets).toEqual([])
     expect(h.renderer.lastDraft()).toBeNull()
     busy.abort()
+  })
+
+  it("a drag in a zone's fill draws a band", () => {
+    const bed = rectZone('bed', [{ x: 10, y: 10 }, { x: 200, y: 10 }, { x: 200, y: 200 }, { x: 10, y: 200 }])
+    const h = harness({ scene: { ...orchard(), zones: [bed] } })
+    h.select(plant('c'))
+
+    // The press in the fill clears the selection unless additive, and the drag bands; the zone never moves.
+    h.press({ x: 30, y: 30 })
+    expect(h.store.session.selectedTargets).toEqual([])
+    h.move({ x: 60, y: 60 })
+    expect(h.renderer.lastDraft()?.shapes[0]).toMatchObject({ kind: 'quad' })
+    h.move({ x: 100, y: 100 })
+    h.release()
+
+    expect(h.store.persisted.zones[0]!.points).toEqual(bed.points)
+    expect(h.store.session.selectedTargets).toEqual([plant('a'), plant('b'), { kind: 'zone', id: 'bed' }])
+    expect(h.history.canUndo.value).toBe(false)
   })
 })
