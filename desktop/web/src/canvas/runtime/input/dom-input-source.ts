@@ -52,8 +52,17 @@ const NO_RECT = Object.freeze({ left: 0, top: 0, width: 0, height: 0 })
 const NATIVE_MENU_TRAIL_MS = 500
 /** PointerEvent.button for the right button and a pen's barrel. */
 const BUTTON_SECONDARY = 2
+/** Its PointerEvent.buttons bit. */
+const BUTTONS_SECONDARY_BIT = 2
 
 type HostRect = Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>
+
+/** A canvas press the source owns: whether it normalised as secondary, and whether a move over the canvas has since
+ *  reported the right or barrel button held (a real chord, U37). */
+interface CanvasPress {
+  readonly secondary: boolean
+  chorded: boolean
+}
 
 interface HandledEvent {
   readonly event: Event
@@ -94,10 +103,10 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   let tickTimer: number | null = null
   /** Pointers pressed on the map, until their release or cancel: the window listeners follow only these. */
   const owned = new Set<number>()
-  /** The owned pointers whose press was a canvas press (not the note editor's, a field's or a menu's), each with whether
-   *  it normalised as secondary: their native menus are prevented anywhere until NATIVE_MENU_TRAIL_MS after a secondary
-   *  release (a secondary press's, or one that reports the right or barrel button, U36). */
-  const canvasPresses = new Map<number, boolean>()
+  /** The owned pointers whose press was a canvas press (not the note editor's, a field's or a menu's): their native menus
+   *  are prevented anywhere until NATIVE_MENU_TRAIL_MS after a secondary release (a secondary press's, or one that reports
+   *  the right or barrel button after a real chord, U36, U37). */
+  const canvasPresses = new Map<number, CanvasPress>()
   /** When the last canvas secondary press was released (its event's timeStamp). */
   let secondaryReleasedAt: number | null = null
   /** Installs the window pointer listeners (set while attached); returns their removal. */
@@ -117,8 +126,9 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
       canvasPresses.clear()
     } else {
       owned.delete(pointerId)
-      const secondaryPress = canvasPresses.get(pointerId)
-      if (release && secondaryPress !== undefined && (secondaryPress || release.button === BUTTON_SECONDARY)) {
+      const press = canvasPresses.get(pointerId)
+      // A right release that ends a stale primary press, its button never seen over the canvas, starts none (U37).
+      if (release && press && (press.secondary || (press.chorded && release.button === BUTTON_SECONDARY))) {
         secondaryReleasedAt = release.timeStamp
       }
       canvasPresses.delete(pointerId)
@@ -160,7 +170,9 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     const input = pointerInput(event, 'pointerdown', rect)
     // Owned first: a sink that fails on the press may still have opened its session, whose release must reach it.
     own(event.pointerId)
-    if (isCanvasPressTarget(event.target, host)) canvasPresses.set(event.pointerId, input?.kind === 'down' && input.role === 'secondary')
+    if (isCanvasPressTarget(event.target, host)) {
+      canvasPresses.set(event.pointerId, { secondary: input?.kind === 'down' && input.role === 'secondary', chorded: false })
+    }
     deliver(event, rect, input, 'quarantine')
   }
   /** A move of a pointer the source does not own, over the map: a hover (an owned pointer's moves come from window). */
@@ -171,6 +183,8 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   }
   const onPointerMove = (event: PointerEvent): void => {
     if (!owned.has(event.pointerId)) return
+    const press = canvasPresses.get(event.pointerId)
+    if (press && (event.buttons & BUTTONS_SECONDARY_BIT) !== 0 && isCanvasPressTarget(event.target, host)) press.chorded = true
     const rect = sessionRect(event.pointerId)
     deliver(event, rect, pointerInput(event, 'pointermove', rect))
   }

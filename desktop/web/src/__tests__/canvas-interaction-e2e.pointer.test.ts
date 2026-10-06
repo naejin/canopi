@@ -375,6 +375,44 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('a right release starts the trail only after a real chord over the canvas; one ending a stale left press starts none (U37)', () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1000)
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    const panel = document.createElement('div')
+    document.body.append(panel)
+    const trailingMenu = (at: number) => {
+      now.mockReturnValue(at)
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+      document.documentElement.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+
+    // A real chord: a left press on the map, the right button added over it (buttons 3), the left released first and the
+    // right last, whose pointerup reports button 2 (U36).
+    events.pointerDown({ x: 100, y: 100 }, { button: 0, buttons: 1 })
+    now.mockReturnValue(1050)
+    events.pointerMove({ x: 100, y: 100 }, { button: 2, buttons: 3 })
+    now.mockReturnValue(1100)
+    events.pointerMove({ x: 100, y: 100 }, { button: 0, buttons: 2 })
+    now.mockReturnValue(1150)
+    events.pointerUp({ x: 100, y: 100 }, { button: 2, buttons: 0 })
+    expect(trailingMenu(1200)).toBe(true)
+    expect(trailingMenu(1650)).toBe(false)
+
+    // A stale left press (its up lost off the window), then a right click on a panel: the right release ends the stale
+    // press, but its session never saw the right button over the canvas, so the panel's own menu opens.
+    now.mockReturnValue(3000)
+    events.pointerDown({ x: 100, y: 100 }, { button: 0, buttons: 1 })
+    now.mockReturnValue(3050)
+    events.pointerMove({ x: 100, y: 100 }, { button: 2, buttons: 2, target: panel })
+    now.mockReturnValue(3100)
+    events.pointerUp({ x: 100, y: 100 }, { button: 2, buttons: 0, target: panel })
+    expect(trailingMenu(3150)).toBe(false)
+    panel.remove()
+    now.mockRestore()
+    session.dispose()
+  })
+
   it('G7: in overview a left drag pans whatever the armed tool, selects nothing and draws nothing (U36)', () => {
     store.updatePersisted((draft) => {
       draft.zones = [makeRectZone('bed', [{ x: 100, y: 100 }, { x: 500, y: 500 }])]

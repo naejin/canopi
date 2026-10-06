@@ -425,7 +425,7 @@ describe('createDomInputSource', () => {
       return event
     }
 
-    function pointer(type: 'pointerdown' | 'pointerup', target: EventTarget, timeStamp: number, init: MouseEventInit = {}): void {
+    function pointer(type: 'pointerdown' | 'pointermove' | 'pointerup', target: EventTarget, timeStamp: number, init: MouseEventInit = {}): void {
       const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: 30, clientY: 40, ...init })
       Object.defineProperties(event, {
         pointerId: { value: 1 }, pointerType: { value: 'mouse' }, timeStamp: { value: timeStamp },
@@ -499,8 +499,10 @@ describe('createDomInputSource', () => {
 
     it('a canvas pointer whose release reports the right or pen-barrel button starts the trail too (a chorded right button released last, U36)', () => {
       const dispose = attachRecording(createDomInputSource(deps()))
-      // A left press on the map, the right button chorded and released last: the pointerup reports button 2.
+      // A left press on the map, the right button chorded over it (buttons 3) and released last: the pointerup reports
+      // button 2. Without the chord over the canvas a button-2 release starts none (U37, canvas-interaction-e2e.pointer).
       pointer('pointerdown', host, 100, { button: 0, buttons: 1 })
+      pointer('pointermove', host, 150, { button: 2, buttons: 3 })
       pointer('pointerup', document.body, 200, { button: 2 })
       expect(contextMenu(document.documentElement, 260).defaultPrevented).toBe(true)
       expect(contextMenu(document.body, 699).defaultPrevented).toBe(true)
