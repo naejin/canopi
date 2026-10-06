@@ -44,8 +44,6 @@ import {
 
 /** A double-click this close to the selected polygon's edge adds a corner there: the outline's own hit tolerance. */
 const EDGE_DOUBLE_CLICK_PX = 6
-/** A corner released within this many pixels of its press was pressed without moving (the point drag's threshold). */
-const STILL_CORNER_PX = 2
 
 /** What the press started, from the press to its release or cancel. */
 type SelectGesture =
@@ -229,10 +227,9 @@ export function createSelectTool(): CanvasTool {
     try {
       if (current.kind === 'rotate') finishRotation(current.drag, g.point)
       else if (current.kind === 'reshape' || current.kind === 'guide-end') current.drag.finish(g.point)
-      // A polygon corner released where it was pressed becomes the selected corner.
-      const still = c.view.screenDistance(g.start.world, g.point.world) <= STILL_CORNER_PX
-      const corner = current.kind === 'reshape' ? reshapePoints.get(g.handle) : undefined
-      selectedCorner = still && corner && isPolygonCorner(corner) ? g.handle : null
+      // A polygon corner pressed and released without moving becomes the selected corner (U40).
+      const corner = current.kind === 'reshape' && !current.drag.moved ? reshapePoints.get(g.handle) : undefined
+      selectedCorner = corner && isPolygonCorner(corner) ? g.handle : null
     } finally {
       gesture = null
       rotationDeltaDeg = null

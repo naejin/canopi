@@ -344,4 +344,19 @@ describe('polygon corners (spec §3.2, U33: every corner route)', () => {
     expect(corners(h)).toEqual([SQUARE[0], SQUARE[2], SQUARE[3]])
     expect(h.store.persisted.zones).toHaveLength(1)
   })
+
+  it('a corner dragged out and back to its press is not selected; only a still press selects it (U40)', () => {
+    const h = polygonHarness()
+    const at = h.chrome.handles.find((entry) => entry.id === vertex(1))!.anchor
+
+    h.press(at, { target: { kind: 'handle', id: vertex(1) } })
+    h.move({ x: at.x + 30, y: at.y })
+    h.move(at)
+    h.release(at)
+
+    expect(corners(h)).toEqual(SQUARE)
+    expect(h.chrome.activeHandle).toBeNull()
+    expect(h.host.command({ kind: 'delete-handle' })).toBe('pass')
+    expect(corners(h)).toEqual(SQUARE)
+  })
 })
