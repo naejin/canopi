@@ -192,14 +192,24 @@ function place({ request, textarea }: OpenEntry, frame: ViewFrame): void {
   })
 }
 
-/** The field follows its content: as wide as the browser measures its text, borders included (the field is border-box),
- *  so the text's start stays in view, never below 120 px; as tall as its lines, never below one. */
+/** The field follows its content: as wide as the browser measures its text, or its placeholder while empty, borders
+ *  included (the field is border-box), so the text's start and the whole placeholder stay in view in every locale, never
+ *  below 120 px; as tall as its lines, never below one. */
 function autosize({ textarea }: OpenEntry): void {
   textarea.style.width = `${MIN_WIDTH_PX}px`
   const borders = textarea.offsetWidth - textarea.clientWidth
-  textarea.style.width = `${Math.max(textarea.scrollWidth + borders, MIN_WIDTH_PX)}px`
+  textarea.style.width = `${Math.max(contentWidth(textarea) + borders, MIN_WIDTH_PX)}px`
   textarea.style.height = 'auto'
   textarea.style.height = `${Math.max(textarea.scrollHeight, MIN_HEIGHT_PX)}px`
+}
+
+/** The scroll width of the text, or of the placeholder held as the text for the measure while the field is empty. */
+function contentWidth(textarea: HTMLTextAreaElement): number {
+  if (textarea.value !== '' || textarea.placeholder === '') return textarea.scrollWidth
+  textarea.value = textarea.placeholder
+  const width = textarea.scrollWidth
+  textarea.value = ''
+  return width
 }
 
 function noteFontSize(request: TextEntryRequest): number {
