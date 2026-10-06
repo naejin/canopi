@@ -5,13 +5,14 @@
 // and guide snapping, and runs the interceptors (admission, handles, the inspection probe) before the tool; every raw
 // press first commits the nudge series and, as today's pointerdown, closes the menu and moves focus to the map. A drag
 // starts at the press's world point, and every camera frame re-emits the live drag or the resting pointer, which a
-// pointer pan moves (plan §1, exception 1). It holds re-origin while a press, a tool transient or the text entry is open,
-// and a plane change with no pointer resting on the map hides the tool's draft until the next hover, so no tool
-// re-projects a world point it keeps (spec §4.19). The text entry's state is the chrome's, read live. It owns the passive
-// hover, the selection decorations, the arrow-nudge series, transient history and the Esc queries, and merges the
-// tool's draft with its decorations and the drop preview for the renderer. One drop route serves every tool (spec §1.4
-// "Drops"): a species drop places a plant with Place plants' placement, a saved stamp with the saved stamp's, then arms
-// Select. Tools are plain objects listed in tools/registry.ts, which lists every tool id.
+// pointer pan moves (plan §1, exception 1). It holds re-origin while a press, a tool transient or the text entry is
+// open, and a plane change with no pointer resting on the map hides the tool's draft until the next hover, so no tool
+// re-projects a world point it keeps (spec §4.19). In overview a primary press reaches no tool: the host's overview
+// selector (select/overview.ts) selects zones and notes by click and band. The text entry's state is the chrome's, read
+// live. It owns the passive hover, the selection decorations, the arrow-nudge series, transient history and the Esc
+// queries, and merges the tool's draft with its decorations and the drop preview for the renderer. One drop route
+// serves every tool (spec §1.4 "Drops"): a species drop places a plant with Place plants' placement, a saved stamp with
+// the saved stamp's, then arms Select. Tools are plain objects listed in tools/registry.ts, which lists every tool id.
 // The module re-exports createToolScene and builds the context-menu port, so interaction-session.ts imports nothing else
 // from tools/ (P5b).
 
@@ -41,6 +42,7 @@ import { placePlantFromSpecies } from './plant-stamp'
 import { TOOL_REGISTRY } from './registry'
 import { placeSavedObjectStamp, savedObjectStampGhostShapes } from './saved-object-stamp'
 import { bandDraft } from './select/band'
+import { createOverviewSelector } from './select/overview'
 import { selectionScreenHull } from './select/selection-hull'
 import { snapWorldPoint, type SnapSettings } from './snapping'
 import type {
@@ -92,7 +94,8 @@ const ZONE_DRAFT_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>(['line', 'rectangl
 /** A press the host routed, from press to release or cancel (today's _pointerGesture). */
 interface LiveGesture {
   readonly id: number
-  readonly kind: 'tool' | 'handle'
+  /** 'overview': a press in overview, which the host's overview selector owns whatever tool is armed (spec §3.2). */
+  readonly kind: 'tool' | 'handle' | 'overview'
   readonly pointer: PointerKind
   /** The press as a world point, converted once at the press, so the drag start stays on the ground (plan §1, exception 1). */
   start: ToolPoint
@@ -185,6 +188,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let draftHidden = false
   /** What a drop would place, while a panel drag is over the map: a species' band cue or a saved stamp's ghosts. */
   let dropPreview: readonly DraftShape[] | null = null
+  /** The overview selector's band. */
+  let overviewDraft: DraftPresentation | null = null
   let nudging = false
   let nudgeTimer: number | null = null
   let callDepth = 0
@@ -205,6 +210,23 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function frame(): ViewFrame {
     return deps.frames.viewFrame.peek()
   }
+
+  const overviewSelector = createOverviewSelector({
+    scene: deps.scene,
+    get view() {
+      return view
+    },
+    effects: {
+      setSelection(targets) {
+        deps.setSelection(targets)
+        notifySceneChanged()
+      },
+      setDraft(draft) {
+        overviewDraft = draft
+        changed()
+      },
+    },
+  })
 
   const view: ToolView = {
     /** In [0, 360) by the ViewCamera contract, so a tool can store it as a rotation (a note, a saved stamp's pick). */
@@ -476,7 +498,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   /** The tool's draft, the drop preview and the host's decorations, merged for the renderer. */
   function publishDraft(): void {
-    const shownToolDraft = draftHidden ? null : toolDraft
+    // In overview the tool's draft is dropped and the overview selector's band takes its place.
+    const shownToolDraft = overviewDraft ?? (draftHidden ? null : toolDraft)
     const decorations = decorationShapes()
     const key = decorations.length > 0 ? JSON.stringify(decorations) : ''
     if (shownToolDraft === publishedToolDraft && dropPreview === publishedDropPreview && key === publishedDecorations) return
@@ -649,8 +672,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (live) cancelLive('pointercancel')
     // The pointer is pressed now: a frame re-emits its drag, not the hover before it.
     lastHover = null
-    // Under LEGACY an overview press pans in the recogniser and never reaches the host; nothing here samples or edits.
-    if (frame().mode === 'overview') return NOTHING
+    if (frame().mode === 'overview') return overviewPress(g)
     let claimed = false
     const admitted = deps.admission.runWhenSettled(() => {
       claimed = pressWhenSettled(g, commitsNote)
@@ -686,6 +708,37 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     callTool(() => tool.gesture({ kind: 'press', point, hit, clickCount: g.clickCount }))
     clearPassiveHoverForEdit()
     return false
+  }
+
+  /** An overview press selects through the overview selector, inside the scene's admission; no tool hears it, nothing
+   *  samples it and handles do not show (spec §3.2). */
+  function overviewPress(g: Extract<Gesture, { kind: 'press' }>): GestureOutcome {
+    const admitted = deps.admission.runWhenSettled(() => {
+      if (!deps.capturePress(g.id)) return true
+      const point = pointAt(g.at, g.mods, g.pointer)
+      const hit = deps.scene.hitAt(point.world, { overview: true })
+      live = liveGesture(g, 'overview', point, hit)
+      overviewSelector.press(point, hit)
+      return true
+    }, false)
+    return admitted ? NOTHING : REFUSED_PRESS
+  }
+
+  /** The overview press's drag or release; a release runs when the scene is settled, as Select's band does. */
+  function overviewDrag(g: Extract<Gesture, { kind: 'drag-start' | 'drag-move' | 'drag-end' | 'tap' }>, gesture: LiveGesture): GestureOutcome {
+    const point = pointAt(g.at, g.mods, gesture.pointer)
+    if (g.kind === 'drag-start' || g.kind === 'drag-move') {
+      overviewSelector.drag(point)
+      return NOTHING
+    }
+    live = null
+    const admitted = deps.admission.runWhenSettled(() => {
+      overviewSelector.release(point, g.kind === 'drag-end')
+      return true
+    }, false)
+    if (!admitted) overviewSelector.cancel()
+    endLive()
+    return admitted ? NOTHING : QUARANTINE
   }
 
   /** A press that opened a Scene Edit (a move or a handle drag) clears the passive hover, as today's drag presentation did. */
@@ -728,6 +781,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     gesture.dragging = true
     gesture.lastScreen = g.at
     gesture.lastMods = g.mods
+    if (gesture.kind === 'overview') return overviewDrag(g, gesture)
     const tool = activeTool
     if (g.kind !== 'drag-end') {
       deliverDrag(tool, gesture, g.kind)
@@ -792,6 +846,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       return NOTHING
     }
     if (gesture.id !== g.id) return NOTHING
+    if (gesture.kind === 'overview') return overviewDrag(g, gesture)
     const tool = activeTool
     return release(tool, () => {
       live = null
@@ -948,6 +1003,10 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const gesture = live
     if (!gesture) return
     live = null
+    if (gesture.kind === 'overview') {
+      overviewSelector.cancel()
+      return
+    }
     const tool = activeTool
     callTool(() => tool.gesture({ kind: 'cancel', reason }))
   }
@@ -1039,6 +1098,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (next.mode !== mode) {
       mode = next.mode
       if (mode === 'overview') enterOverview()
+      // Leaving overview mid-press drops the overview selector's band; the release selects nothing.
+      else if (live?.kind === 'overview') cancelLive('tool-change')
     }
     refreshAtPointer(activeTool)
     flush()

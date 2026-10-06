@@ -433,7 +433,7 @@ describe('ToolHost', () => {
       expect(polygon.count('press')).toBe(0)
       expect(h.host.hasLiveGesture()).toBe(false)
 
-      // Overview: the press pans in the recogniser; the host neither samples nor edits.
+      // Overview: the press selects through the host's overview selector; nothing samples it and no tool hears it.
       const overview = harness({ tool: 'polygon', viewport: OVERVIEW, inspect })
       inspect.mockClear()
       overview.press({ x: 120, y: 80 })
