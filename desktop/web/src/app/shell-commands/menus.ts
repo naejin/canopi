@@ -72,8 +72,8 @@ export interface WorkspaceMenuInput<Id extends ShellCommandId> {
   readonly savedViews?: readonly MenuAction[]
   /** View › Labels ▸: None, Codes, Names; the canvas `cycle-labels` command gives its key. */
   readonly plantLabels?: readonly MenuAction[]
-  /** Extra File entries placed right after a shell command (Open recent after Open Design…). */
-  readonly fileInsertions?: readonly { readonly after: Id; readonly entry: MenuEntry }[]
+  /** File › Open recent ▸ (Desktop), placed right after Open (`file.open`). */
+  readonly openRecent?: MenuEntry
 }
 
 const SEPARATOR: MenuSeparator = { type: 'separator' }
@@ -99,7 +99,7 @@ export function composeWorkspaceMenus<Id extends ShellCommandId>({
   translate,
   savedViews = [],
   plantLabels = [],
-  fileInsertions = [],
+  openRecent,
 }: WorkspaceMenuInput<Id>): MenuDefinition[] {
   const shellMenu = (id: 'file' | 'edit' | 'view' | 'help') => shell.menus.find((menu) => menu.id === id)
   // Both editions' catalogues fill File, View and Help, and View's three sections.
@@ -120,12 +120,9 @@ export function composeWorkspaceMenus<Id extends ShellCommandId>({
     id: 'file',
     label: fileMenu.label,
     items: joinSections(fileMenu.sections.map((section) =>
-      shellSectionEntries(section, translate).flatMap((entry) => {
-        const insertions = entry.type === 'action'
-          ? fileInsertions.filter((insertion) => insertion.after === entry.id).map((insertion) => insertion.entry)
-          : []
-        return [entry, ...insertions]
-      }),
+      shellSectionEntries(section, translate).flatMap((entry) =>
+        openRecent && entry.type === 'action' && entry.id === 'file.open' ? [entry, openRecent] : [entry],
+      ),
     )),
   })
 

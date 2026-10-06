@@ -137,7 +137,7 @@ export const appCommandGraphChromeProjection = computed<AppCommandGraphChromePro
       translate: t,
       savedViews: savedViewMenuActions(),
       plantLabels: plantLabelMenuActions(),
-      fileInsertions: [{ after: 'file.open', entry: openRecent }],
+      openRecent,
     }),
     paletteCommands,
   }
