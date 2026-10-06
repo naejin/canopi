@@ -241,7 +241,7 @@ export function createSelectTool(): CanvasTool {
     }
   }
 
-  function startHandleDrag(g: Extract<ToolGesture, { kind: 'handle-drag' }>): void {
+  function startHandleDrag(g: Extract<ToolGesture, { kind: 'handle-drag'; phase: 'start' }>): void {
     const { handle, start } = g
     const c = ctx()
     const scene = c.scene.persisted

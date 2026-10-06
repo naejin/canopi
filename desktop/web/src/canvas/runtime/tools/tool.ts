@@ -112,8 +112,9 @@ export type ToolGesture =
   | { readonly kind: 'press'; readonly point: ToolPoint; readonly hit: HitTarget | null; readonly clickCount: number }
   | { readonly kind: 'tap'; readonly point: ToolPoint; readonly hit: HitTarget | null; readonly clickCount: number }
   | { readonly kind: 'drag-start' | 'drag-move' | 'drag-end'; readonly point: ToolPoint; readonly start: ToolPoint; readonly startHit: HitTarget | null }
-  /** clickCount: the press's (a double-click on a polygon's edge midpoint adds a corner), carried by every phase. */
-  | { readonly kind: 'handle-drag'; readonly phase: 'start' | 'move' | 'end'; readonly handle: ToolHandleId; readonly point: ToolPoint; readonly start: ToolPoint; readonly clickCount: number }
+  /** clickCount: the press's (a double-click on a polygon's edge midpoint adds a corner), carried by the start only. */
+  | { readonly kind: 'handle-drag'; readonly phase: 'start'; readonly handle: ToolHandleId; readonly point: ToolPoint; readonly start: ToolPoint; readonly clickCount: number }
+  | { readonly kind: 'handle-drag'; readonly phase: 'move' | 'end'; readonly handle: ToolHandleId; readonly point: ToolPoint; readonly start: ToolPoint }
   | { readonly kind: 'cancel'; readonly reason: CancelReason }
 // Drops are not tool gestures: the host's shared drop handler serves every tool (§1.4).
 
