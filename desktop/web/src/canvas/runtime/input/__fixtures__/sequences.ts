@@ -200,6 +200,16 @@ export const blur = (options: { readonly t?: number } = {}): FixtureStep => ({ t
 export const reject = (id = 1): FixtureStep => ({ raw: { kind: 'reject', id } })
 export const configure = (context: Required<SequenceContext>): FixtureStep => ({ raw: { kind: 'configure', context } })
 
+/** Two fingers 100 px apart about (200, 150), turned clockwise on screen by `deg`: their downs at 0°, their moves after. */
+export function twist(deg: number): FixtureStep[] {
+  const rad = (deg * Math.PI) / 180
+  const dx = 50 * Math.cos(rad)
+  const dy = 50 * Math.sin(rad)
+  const at = (sign: 1 | -1, id: number) => [200 + sign * dx, 150 + sign * dy, { pointer: 'touch', id, buttons: 1 }] as const
+  if (deg === 0) return [down(...at(1, 1)), down(...at(-1, 2))]
+  return [move(...at(1, 1)), move(...at(-1, 2))]
+}
+
 /** A straight run of moves from one point to another, `count` samples after the start. */
 export function moves(from: readonly [number, number], to: readonly [number, number], count: number, options: PointerOptions = {}): FixtureStep[] {
   const steps: FixtureStep[] = []
@@ -475,6 +485,30 @@ export const SEQUENCES = {
     move(115, 100, { pointer: 'touch', buttons: 1, t: 200 }),
     { t: 500, raw: { kind: 'tick' } },
     up(115, 100, { pointer: 'touch', t: 700 }),
+  ]),
+  E15_PINCH: seq('E15 Touch in overview: a pinch', ANDROID, [
+    down(100, 100, { pointer: 'touch', id: 1 }),
+    down(200, 100, { pointer: 'touch', id: 2 }),
+    move(80, 100, { pointer: 'touch', id: 1, buttons: 1 }),
+    move(220, 100, { pointer: 'touch', id: 2, buttons: 1 }),
+    up(220, 100, { pointer: 'touch', id: 2 }),
+    up(80, 100, { pointer: 'touch', id: 1 }),
+  ], { mode: 'overview' }),
+  E16_THIRD_FINGER: seq('E16 A third finger', ANDROID, [
+    down(100, 100, { pointer: 'touch', id: 1 }),
+    down(200, 100, { pointer: 'touch', id: 2 }),
+    down(150, 200, { pointer: 'touch', id: 3 }),
+    move(160, 200, { pointer: 'touch', id: 3, buttons: 1 }),
+    move(110, 100, { pointer: 'touch', id: 1, buttons: 1 }),
+    up(160, 200, { pointer: 'touch', id: 3 }),
+    up(110, 100, { pointer: 'touch', id: 1 }),
+    up(200, 100, { pointer: 'touch', id: 2 }),
+  ]),
+  E16_BLUR: seq('E16 A pinch-twist of 40°, then blur', ANDROID, [
+    ...twist(0),
+    ...twist(20),
+    ...twist(40),
+    blur(),
   ]),
   E9: seq('E9 Trackpad pinch with rotation drift', MAC_GESTURES, [
     gesture('start', 0),

@@ -86,6 +86,9 @@ function endsNaturally(input: RawInput): boolean {
 
 /** A touch finger that does nothing more until it lifts: its gestures, if it had any, have ended. */
 const spent = (session: PointerSession | undefined): boolean => session?.mode === 'spent'
+/** A session that is not one of its own: a spent finger, or a pair's second finger (the pair is its first finger's). */
+const husk = (session: PointerSession | undefined, state: RecogniserState): boolean =>
+  spent(session) || (session?.mode === 'pair' && state.touchPair?.ids[1] === session.pointerId)
 
 /**
  * Replays random interleavings and checks each step against the sessions before and after it. A session starts with a
@@ -121,9 +124,13 @@ function checkSessionLifecycle(seed: number): void {
     // A down on a live pointer id, or a gesture start with a twist live, ends that session and may start the next.
     const restarts = (id: number) => (input.kind === 'down' && input.id === id)
       || (input.kind === 'platform-gesture' && input.phase === 'start' && id === TRACKPAD_TWIST_ID)
+    // A finger that starts the pair (held, dragging or panning) ends its own session; the pair is a new one.
+    const joinsPair = (id: number) => after.get(id)?.mode === 'pair' && before.get(id)?.mode !== 'pair'
     for (const [id, session] of before) {
-      if (spent(session)) continue
-      if (!after.has(id) || (restarts(id) && after.get(id) !== session) || spent(after.get(id))) endedSessions.push(session)
+      if (husk(session, snapshot)) continue
+      if (!after.has(id) || (restarts(id) && after.get(id) !== session) || husk(after.get(id), state) || joinsPair(id)) {
+        endedSessions.push(session)
+      }
     }
     const gestures = result.gestures
     const editingEnds = gestures.filter((gesture) => TERMINAL_EDITING.has(gesture.kind)).length
@@ -141,6 +148,14 @@ function checkSessionLifecycle(seed: number): void {
         .toEqual({ editingEnds: 0, panEnds: 0, rotateEndsNow: 0 })
     } else if (input.kind === 'reject') {
       expect(gestures, `${at(index)}: a reject emits nothing`).toEqual([])
+    } else if (endedSession.mode === 'pair') {
+      // A pair ends in place: its pan ends, a live twist ends (never cancels), and a fence sends the host a cancel (A6).
+      expect({ editingEnds, panEnds, rotateEndsNow }, `${at(index)}: a pair ends once`).toEqual({
+        editingEnds: input.kind === 'up' ? 0 : 1,
+        panEnds: 1,
+        rotateEndsNow: snapshot.touchPair?.twistDeg !== null ? 1 : 0,
+      })
+      expect(rotates(gestures, ['cancel']), `${at(index)}: a pair's turn never cancels`).toBe(0)
     } else if (endedSession.mode === 'held') {
       // The host heard nothing of a held press: it ends silently, unless its lift sends the press and its tap.
       expect({ editingEnds, panEnds, rotateEndsNow }, `${at(index)}: a held touch press ends once`)
@@ -172,8 +187,8 @@ function checkSessionLifecycle(seed: number): void {
     } else {
       expect({ editingEnds, panEnds, rotateEndsNow }, at(index)).toEqual({ editingEnds: 1, panEnds: 0, rotateEndsNow: 0 })
     }
-    const startedNow = [...after.keys()].filter((id) => !spent(after.get(id))
-      && (!before.has(id) || (restarts(id) && after.get(id) !== before.get(id))))
+    const startedNow = [...after.keys()].filter((id) => !husk(after.get(id), state)
+      && (!before.has(id) || (restarts(id) && after.get(id) !== before.get(id)) || joinsPair(id)))
     const pending = (id: number) => ['rotate', 'secondary', 'held'].includes(after.get(id)!.mode)
     const silentStart = startedNow.length > 0 && startedNow.every(pending)
     // A still secondary press becomes a pan once it passes its slop, and a held touch press a drag or a pan: its press or
@@ -193,7 +208,9 @@ function checkSessionLifecycle(seed: number): void {
 
     const lives = [...after.values()]
     const live = lives.find((session) => !spent(session))
-    const passedSlopNow = live?.mode === 'rotate' && live.slopPassed && !(before.get(live.pointerId)?.slopPassed ?? false)
+    const twistsNow = state.touchPair !== null && state.touchPair.twistDeg !== null
+      && snapshot.touchPair !== null && snapshot.touchPair.twistDeg === null
+    const passedSlopNow = (live?.mode === 'rotate' && live.slopPassed && !(before.get(live.pointerId)?.slopPassed ?? false)) || twistsNow
     expect(rotateStartsNow, `${at(index)}: a rotate starts when its session passes its slop`).toBe(passedSlopNow ? 1 : 0)
     rotateStarts += rotateStartsNow
     rotateEnds += rotateEndsNow
@@ -202,9 +219,10 @@ function checkSessionLifecycle(seed: number): void {
         expect(after.get(gesture.id)?.mode, `${at(index)}: ${gesture.kind} outside a primary drag`).toBe('primary')
       }
       if (gesture.kind === 'pan' && gesture.phase === 'move' && gesture.source !== 'wheel') {
-        expect(live?.mode, `${at(index)}: a pan move outside a pan`).toBe('pan')
+        expect(live?.mode, `${at(index)}: a pan move outside a pan`).toBe(gesture.source === 'touch-two-finger' ? 'pair' : 'pan')
       }
-      if (gesture.kind === 'rotate' && gesture.phase === 'move' && !(live?.mode === 'rotate' && live.slopPassed)) {
+      const pairTwists = state.touchPair !== null && state.touchPair.twistDeg !== null
+      if (gesture.kind === 'rotate' && gesture.phase === 'move' && !(live?.mode === 'rotate' && live.slopPassed) && !pairTwists) {
         expect.fail(`${at(index)}: a rotate move outside a live rotate`)
       }
       if (gesture.kind === 'zoom' && live?.mode === 'rotate' && live.navigation !== 'trackpad-twist') {

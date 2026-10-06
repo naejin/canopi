@@ -52,7 +52,7 @@ export interface AdapterEffect {
 /** Opaque to callers; the recogniser owns its shape. Plain data (structured-clone safe), so the property test can snapshot it. */
 export interface RecogniserState {
   readonly sessions: ReadonlyMap<number, PointerSession>        // by pointerId: pointer kind, role, mode ('pending' | 'secondary' | 'primary' | 'pan' | 'rotate'), start, last point, slop passed, capture held
-  readonly touchPair: TouchPair | null                          // two touch ids, their start centroid, distance and angle, twist arc accumulated
+  readonly touchPair: TouchPair | null                          // two touch ids, their last points, the smallest diameter seen, whether the zoom and the twist are active (A12)
   readonly held: { readonly space: boolean }                    // the only gesture-state record of a held key (ADR 0017)
   readonly trackpadTwistDeg: number                             // WebKit gesture rotation accumulated before the 10° threshold
   readonly deadlines: { readonly longPressAt: number | null }

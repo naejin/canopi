@@ -109,10 +109,13 @@ describe('SceneInteractionSession: touch', () => {
     choosePlant()
     const session = createTestSession(createInteractionDeps(container, store, testView))
     session.setTool('plant-stamp')
+    const scale = testView.view().pixelsPerMetre
 
     pinch({ x: 100, y: 100 }, { x: 200, y: 100 })
 
     expect(store.persisted.plants).toHaveLength(0)
+    // The fingers spread from 100 px to 160 px apart: the view zooms in by their ratio.
+    expect(testView.view().pixelsPerMetre / scale).toBeCloseTo(1.6, 6)
     session.dispose()
   })
 

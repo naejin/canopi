@@ -12,7 +12,8 @@ export interface Thresholds {
   readonly longPressMs: number               // 500
   readonly multiClickMs: number              // 500: a primary press this soon after the last one counts as its next click
   readonly multiClickSlopPx: number          // 6: and this close to it
-  readonly twistStartArcPx: number           // 25: touch twist
+  readonly twistStartArcPx: number           // 25 px of arc over the smallest finger diameter seen (MapLibre's ROTATION_THRESHOLD)
+  readonly pinchZoomStartLevels: number      // 0.1: a touch pinch zooms only past this zoom-level change (MapLibre's defaultZoomThreshold)
   readonly trackpadTwistStartDeg: number     // 10: WebKit gesture rotation before any rotate is emitted
 }
 
@@ -22,5 +23,6 @@ export const DEFAULT_THRESHOLDS: Thresholds = Object.freeze({
   multiClickMs: 500,
   multiClickSlopPx: 6,
   twistStartArcPx: 25,
+  pinchZoomStartLevels: 0.1,
   trackpadTwistStartDeg: 10,
 })

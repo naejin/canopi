@@ -23,6 +23,7 @@ import {
   reject,
   runSequence,
   seq,
+  twist,
   up,
   wheel,
   type Sequence,
@@ -355,20 +356,96 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
     expect(early.state.sessions.size).toBe(0)
   })
 
-  it('E4 Two fingers: a second finger before the slop sends the host nothing; the fingers resume nothing', () => {
+  it('E4 Two fingers: nothing for the first; the pair pans by its centroid and zooms about it, carrying no point; the finger left resumes nothing', () => {
     const result = run(SEQUENCES.E4)
     expect(result.gestures.filter((gesture) => !NAVIGATION.has(gesture.kind))).toEqual([])
     // The second finger is captured too, and both lifts end their sessions.
     expect(result.steps[1]!.effects).toEqual([{ kind: 'prevent-default' }, { kind: 'capture', pointerId: 2 }, { kind: 'clear-timer' }])
+    expect(result.steps.map((step) => kinds(step.gestures))).toEqual([
+      [], ['pan:start'], ['pan:move', 'zoom'], ['pan:move', 'zoom'], ['pan:move', 'zoom'], ['pan:move', 'zoom'], ['pan:end'], [],
+    ])
+    const pans = pansOf(result.gestures)
+    expect(pans.every((pan) => pan.source === 'touch-two-finger' && pan.at === undefined)).toBe(true)
+    // The centroid went from (150, 100) to (180, 120); the fingers from 100 px apart to 120.
+    expect(pans.reduce((sum, pan) => ({ x: sum.x + pan.deltaPx.x, y: sum.y + pan.deltaPx.y }), { x: 0, y: 0 })).toEqual({ x: 30, y: 20 })
+    const zooms = zoomsOf(result.gestures)
+    expect(zooms.reduce((product, zoom) => product * zoom.factor, 1)).toBeCloseTo(1.2, 9)
+    expect(zooms.at(-1)!.anchorPx).toEqual({ x: 180, y: 120 })
+    expect(result.gestures.some((gesture) => gesture.kind === 'rotate')).toBe(false)
+    expect(result.state.sessions.size).toBe(0)
+    expect(result.state.touchPair).toBeNull()
+  })
+
+  it('a pinch zooms only past 0.1 zoom level (MapLibre), then from the last distance: a two-finger pan with ±5 % spread keeps the scale', () => {
+    // The fingers move in turn, 96 to 105 px apart.
+    const steady = run(seq('two-finger pan', ANDROID, [
+      down(100, 100, { pointer: 'touch', id: 1 }),
+      down(200, 100, { pointer: 'touch', id: 2 }),
+      move(104, 100, { pointer: 'touch', id: 1, buttons: 1 }),
+      move(209, 100, { pointer: 'touch', id: 2, buttons: 1 }),
+      move(113, 100, { pointer: 'touch', id: 1, buttons: 1 }),
+      move(217, 100, { pointer: 'touch', id: 2, buttons: 1 }),
+    ]))
+    expect(zoomsOf(steady.gestures)).toEqual([])
+    expect(pansOf(steady.gestures).reduce((sum, pan) => sum + pan.deltaPx.x, 0)).toBe(15)
+    const pinched = run(seq('pinch', ANDROID, [
+      down(100, 100, { pointer: 'touch', id: 1 }),
+      down(200, 100, { pointer: 'touch', id: 2 }),
+      move(95, 100, { pointer: 'touch', id: 1, buttons: 1 }),
+      move(212, 100, { pointer: 'touch', id: 2, buttons: 1 }),
+    ]))
+    // 105 px is under the threshold; 117 px passes it (log2 1.17 > 0.1), and the zoom counts from 105.
+    expect(zoomsOf(pinched.gestures)).toEqual([{ kind: 'zoom', anchorPx: { x: 153.5, y: 100 }, factor: 117 / 105, source: 'touch-two-finger' }])
+  })
+
+  it('a twist with 15 px of arc turns nothing; past 25 px it turns about the centroid from the vector at the crossing, clockwise lowering the bearing', () => {
+    // 15 px of arc on a 100 px finger circle is 17.2°; 25 px is 28.6°.
+    const slight = run(seq('slight twist', ANDROID, [...twist(0), ...twist(17)]))
+    expect(slight.gestures.some((gesture) => gesture.kind === 'rotate')).toBe(false)
+    const turned = run(seq('twist', ANDROID, [...twist(0), ...twist(17), ...twist(40), up(0, 0, { pointer: 'touch', id: 2 })]))
+    const rotates = turned.gestures.flatMap((gesture) => gesture.kind === 'rotate' ? [gesture] : [])
+    expect(rotates.map((rotate) => rotate.phase)).toEqual(['start', 'move', 'end'])
+    expect(rotates.every((rotate) => rotate.source === 'touch-two-finger' && !rotate.step)).toBe(true)
+    // The turn counts from the vector before the crossing move (the first finger at 40°, the second still at 17°), the
+    // map following the fingers.
+    const rad = Math.PI / 180
+    const before = Math.atan2(50 * Math.sin(40 * rad) + 50 * Math.sin(17 * rad), 50 * Math.cos(40 * rad) + 50 * Math.cos(17 * rad)) / rad
+    expect(rotates.at(-1)!.totalDeltaDeg).toBeCloseTo(-(40 - before), 9)
+    expect(rotates.at(-1)!.anchorPx).toEqual({ x: 200, y: 150 })
+  })
+
+  it('E16 a third finger is ignored; lifting back to one finger resumes nothing', () => {
+    const result = run(SEQUENCES.E16_THIRD_FINGER)
+    expect(result.steps.map((step) => kinds(step.gestures))).toEqual([
+      [], ['pan:start'], [], [], ['pan:move', 'zoom'], [], ['pan:end'], [],
+    ])
+    expect(result.steps[2]!.effects).toEqual([])
     expect(result.state.sessions.size).toBe(0)
   })
 
-  it('E5 Second finger after a drag started: the drag is cancelled (multitouch), and nothing resumes', () => {
+  it('E16 blur during a pinch-twist ends the pair in place: the turn ends, never cancels (A6)', () => {
+    const result = run(SEQUENCES.E16_BLUR)
+    expect(kinds(result.steps.at(-1)!.gestures)).toEqual(['pan:end', 'rotate:end', 'cancel'])
+    expect(result.gestures.some((gesture) => gesture.kind === 'rotate' && gesture.phase === 'cancel')).toBe(false)
+    expect(result.state.sessions.size).toBe(0)
+    expect(result.state.touchPair).toBeNull()
+  })
+
+  it.each([
+    ['Esc', escape()],
+    ['a tool change', configure({ tool: 'polygon', mode: 'site', pointingDevice: 'mouse' })],
+    ['the browser taking a finger', pointerCancel({ pointer: 'touch', id: 2 })],
+  ] as const)('%s during a pinch-twist ends the pair in place', (_fence, fence) => {
+    const result = run(seq('fenced pair', ANDROID, [...twist(0), ...twist(40), fence]))
+    expect(kinds(result.steps.at(-1)!.gestures)).toEqual(['pan:end', 'rotate:end', 'cancel'])
+  })
+
+  it('E5 Second finger after a drag started: the drag is cancelled (multitouch), the pair starts, and nothing resumes', () => {
     const result = run(SEQUENCES.E5)
     expect(result.steps.map((step) => kinds(step.gestures))).toEqual([
-      [], ['press', 'drag-start'], ['drag-move'], ['drag-move'], ['cancel'], [], [], [], [],
+      [], ['press', 'drag-start'], ['drag-move'], ['drag-move'], ['cancel', 'pan:start'], ['pan:move', 'zoom'], ['pan:move', 'zoom'], ['pan:end'], [],
     ])
-    expect(result.gestures.at(-1)).toEqual({ kind: 'cancel', reason: 'multitouch' })
+    expect(result.gestures[4]).toEqual({ kind: 'cancel', reason: 'multitouch' })
     expect(result.state.sessions.size).toBe(0)
   })
 
@@ -488,15 +565,17 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
     const result = run(SEQUENCES.E12)
     expect(result.gestures.filter((gesture) => !NAVIGATION.has(gesture.kind))).toEqual([])
     expect(result.gestures.some((gesture) => gesture.kind === 'rotate' && gesture.source === 'trackpad-twist')).toBe(false)
+    expect(zoomsOf(result.gestures).map((zoom) => zoom.source)).toEqual(['touch-two-finger', 'touch-two-finger'])
     for (const index of [2, 3, 6]) expect(result.steps[index]!.effects).toEqual([{ kind: 'prevent-default' }])
   })
 
   it.each([
     ['Plant stamp', SEQUENCES.E13_PLANT_STAMP],
     ['Polygon', SEQUENCES.E13_POLYGON],
-  ])('E13 Press-acting tools under a pinch (%s): no press reaches the host', (_tool, sequence) => {
+  ])('E13 Press-acting tools under a pinch (%s): no press reaches the host; pan and zoom only', (_tool, sequence) => {
     const result = run(sequence)
     expect(result.gestures.filter((gesture) => !NAVIGATION.has(gesture.kind))).toEqual([])
+    expect(kinds(result.gestures)).toEqual(['pan:start', 'pan:move', 'zoom', 'pan:move', 'zoom'])
   })
 
   it.each([
@@ -512,6 +591,21 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
     expect(result.steps[0]!.effects).toEqual([{ kind: 'prevent-default' }, { kind: 'capture', pointerId: 1 }])
     expect(result.steps.map((step) => kinds(step.gestures))).toEqual([[], [], [], [], ['pan:start', 'pan:move'], ['pan:move'], ['pan:end']])
     expect(pansOf(result.gestures).reduce((sum, pan) => sum + pan.deltaPx.x, 0)).toBe(120)
+  })
+
+  it('E15 Touch in overview: a pinch zooms', () => {
+    const result = run(SEQUENCES.E15_PINCH)
+    expect(zoomsOf(result.gestures).reduce((product, zoom) => product * zoom.factor, 1)).toBeCloseTo(1.4, 9)
+  })
+
+  it('E5 the pair starts after the cancelled drag', () => {
+    const result = run(seq('drag then pinch', ANDROID, [
+      down(100, 100, { pointer: 'touch', id: 1 }),
+      move(130, 100, { pointer: 'touch', id: 1, buttons: 1 }),
+      down(200, 100, { pointer: 'touch', id: 2 }),
+      move(250, 100, { pointer: 'touch', id: 2, buttons: 1 }),
+    ]))
+    expect(result.steps.map((step) => kinds(step.gestures))).toEqual([[], ['press', 'drag-start'], ['cancel', 'pan:start'], ['pan:move', 'zoom']])
   })
 
   it('E15 Touch with the Pan tool: a hold opens the menu', () => {
