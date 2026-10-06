@@ -70,6 +70,8 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
     const textarea = document.createElement('textarea')
     const entry: OpenEntry = { request, submit, onCancel, textarea }
     textarea.dataset.canvasTextEntry = ''
+    // One row, not the default two: an empty or one-line note's field is one line tall.
+    textarea.rows = 1
     textarea.dataset.preserveOverlays = 'true'
     textarea.setAttribute('aria-label', options.translate('canvas.tools.text'))
     textarea.value = request.initialText
@@ -194,13 +196,14 @@ function place({ request, textarea }: OpenEntry, frame: ViewFrame): void {
 
 /** The field follows its content: as wide as the browser measures its text, or its placeholder while empty, borders
  *  included (the field is border-box), so the text's start and the whole placeholder stay in view in every locale, never
- *  below 120 px; as tall as its lines, never below one. */
+ *  below 120 px; as tall as its lines with its borders, one row while empty or on one line. */
 function autosize({ textarea }: OpenEntry): void {
   textarea.style.width = `${MIN_WIDTH_PX}px`
-  const borders = textarea.offsetWidth - textarea.clientWidth
-  textarea.style.width = `${Math.max(contentWidth(textarea) + borders, MIN_WIDTH_PX)}px`
+  const sideBorders = textarea.offsetWidth - textarea.clientWidth
+  textarea.style.width = `${Math.max(contentWidth(textarea) + sideBorders, MIN_WIDTH_PX)}px`
   textarea.style.height = 'auto'
-  textarea.style.height = `${Math.max(textarea.scrollHeight, MIN_HEIGHT_PX)}px`
+  const topAndBottomBorders = textarea.offsetHeight - textarea.clientHeight
+  textarea.style.height = `${Math.max(textarea.scrollHeight + topAndBottomBorders, MIN_HEIGHT_PX)}px`
 }
 
 /** The scroll width of the text, or of the placeholder held as the text for the measure while the field is empty. */

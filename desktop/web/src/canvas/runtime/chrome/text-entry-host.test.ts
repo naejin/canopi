@@ -111,6 +111,29 @@ describe('the text-entry host', () => {
     expect(textarea.style.width).toBe('120px')
   })
 
+  it('an empty or one-line note field is one line tall', () => {
+    const entries = mount()
+    entries.open(NEW_NOTE, () => 'close')
+    const textarea = entry()!
+    // The browser's measure at 16 px and 1.25 em: an auto-height field holds at least its rows, each a 20 px line, with
+    // 4 px of padding; 1 px borders sit outside the content box (the field is border-box).
+    const lines = () => Math.max(textarea.rows, textarea.value.split('\n').length)
+    Object.defineProperty(textarea, 'scrollHeight', { get: () => lines() * 20 + 4 })
+    Object.defineProperty(textarea, 'offsetHeight', { get: () => parseFloat(textarea.style.height) || lines() * 20 + 6 })
+    Object.defineProperty(textarea, 'clientHeight', { get: () => textarea.offsetHeight - 2 })
+
+    textarea.dispatchEvent(new Event('input'))
+    expect(textarea.style.height).toBe(`${20 + 4 + 2}px`)
+
+    textarea.value = 'Bed'
+    textarea.dispatchEvent(new Event('input'))
+    expect(textarea.style.height).toBe(`${20 + 4 + 2}px`)
+
+    textarea.value = 'Pond edge\nwet'
+    textarea.dispatchEvent(new Event('input'))
+    expect(textarea.style.height).toBe(`${2 * 20 + 4 + 2}px`)
+  })
+
   it('a long placeholder widens the empty field, measured as its text would be, never narrower than 120 px', () => {
     const entries = mount()
     entries.open(NEW_NOTE, () => 'close')
