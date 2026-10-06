@@ -12,7 +12,6 @@ import type { KeyboardEventLike } from './key-chord'
 import type { FocusClass } from './target-class'
 
 interface EscapeLayer {
-  readonly id: string
   readonly priority: number          // higher runs first
   isActive(): boolean
   /** The Esc being dispatched; false when it consumed nothing and the next active layer runs. */
@@ -66,11 +65,6 @@ export function runEscape(key: EscapeKey): boolean {
   return false
 }
 
-/** The layer the next Esc from the map would run. */
-export function describeEscape(): EscapeLayer | null {
-  return activeLayers()[0] ?? null
-}
-
 const CANVAS_LAYERS: readonly CanvasEscapeLayer[] = ['gesture', 'nudge-series', 'tool-transient', 'tool', 'selection']
 
 /**
@@ -82,7 +76,6 @@ const CANVAS_LAYERS: readonly CanvasEscapeLayer[] = ['gesture', 'nudge-series', 
  */
 export function registerCanvasEscapeLayers(canvas: () => CanvasKeyboardPort | null): () => void {
   const disposers = CANVAS_LAYERS.map((id) => registerEscapeLayer({
-    id: `canvas.${id}`,
     priority: ESCAPE_PRIORITY[id],
     isActive: () => canvas()?.escapeLayers().includes(id) ?? false,
     escape(key) {

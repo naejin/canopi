@@ -1295,7 +1295,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     hasLiveGesture: () => live !== null,
     activeToolHasTransient: () => activeTool.hasTransient(),
     activeToolIsSelect: () => currentId === 'select',
-    escapeHint: () => activeTool.escapeHint(),
     nudge,
     hasNudgeSeries: () => nudging,
     endNudgeSeries(commit: boolean): void {

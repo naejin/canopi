@@ -91,7 +91,6 @@ export function createTextNoteTool(): CanvasTool {
     },
     command: () => 'pass',
     hasTransient: () => false,
-    escapeHint: () => 'leave-tool',
     cancelTransient() {
       // Today's Text field outlived every cancellation; the host closes it itself on a tool change or replacement.
     },

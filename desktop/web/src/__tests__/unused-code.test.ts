@@ -64,10 +64,7 @@ const OPTIONS: UnusedCodeOptions = {
  * Entries the check reports that stay on purpose. Each reason names the bead id
  * (`canopi-…`) or the plan section (`canvas-v2-plan.md section N`) that needs it.
  */
-const KEPT: Readonly<Record<string, string>> = {
-  'src/app/keyboard/escape-chain.ts#describeEscape':
-    'canopi-f47t.6 (phase F): the Esc chain\'s hint seam (canvas-v2-spec.md §1.6, §3.7); no F row wires the tool card to it, and escape-chain.test.ts holds it to the next Esc',
-}
+const KEPT: Readonly<Record<string, string>> = {}
 const KEPT_REASON = /\bcanopi-[a-z0-9]+(?:\.\d+)*\b|\bcanvas-v2-plan\.md section \d+(?:\.\d+)*/
 
 

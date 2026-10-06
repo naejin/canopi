@@ -389,7 +389,6 @@ export function createPlantRowTool(): CanvasTool {
     sceneChanged: publish,
     viewChanged: publish,
     hasTransient: () => source !== null,
-    escapeHint: () => source ? 'drop-transient' : 'leave-tool',
     cancelTransient(reason) {
       if (reason !== 'escape' || !source) return
       clear()

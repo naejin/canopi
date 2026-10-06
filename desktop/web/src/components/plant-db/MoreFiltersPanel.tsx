@@ -27,7 +27,6 @@ export function MoreFiltersPanel({ open, onClose }: Props) {
   useEffect(() => {
     if (!open) return
     return registerEscapeLayer({
-      id: 'more-filters',
       priority: ESCAPE_PRIORITY.popover,
       isActive: () => true,
       escape: () => {

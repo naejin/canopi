@@ -237,7 +237,6 @@ export function createObjectStampTool(): CanvasTool {
       if (objectStampSource) publishGuidance()
     },
     hasTransient: () => false,
-    escapeHint: () => 'leave-tool',
     cancelTransient() {
       // The pick and its angle outlive every cancellation, as today; each hides the ghost until the next hover, as today's
       // cancellation and overview reset hid the preview element.

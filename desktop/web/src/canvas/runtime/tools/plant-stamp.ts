@@ -157,7 +157,6 @@ export function createPlantStampTool(): CanvasTool {
     viewChanged: showPreview,
     // A waiting point is the tool's transient: Esc drops it first, and it holds re-origin (spec §4.19), so it keeps its plane.
     hasTransient: () => pendingWorld !== null,
-    escapeHint: () => pendingWorld ? 'drop-transient' : 'leave-tool',
     cancelTransient(reason) {
       // Only an overview entry hides the preview, as today's overview reset did. A pan, a blur and a re-arm of Place plants
       // keep it under the pointer; a real tool change and a document replacement deactivate.

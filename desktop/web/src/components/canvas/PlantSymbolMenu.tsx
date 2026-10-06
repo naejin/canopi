@@ -83,7 +83,6 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
   useEffect(() => {
     if (!shown) return
     return registerEscapeLayer({
-      id: 'plant-symbol-menu',
       priority: ESCAPE_PRIORITY.popover,
       isActive: () => true,
       escape: () => {

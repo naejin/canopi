@@ -332,8 +332,6 @@ export interface CanvasKeyboardPort {
   escapeLayers(): readonly CanvasEscapeLayer[]            // live canvas layers now, by Esc priority (spec §3.7)
   /** Runs a live layer; app/keyboard/escape-chain.ts decides which, from the focus. */
   escape(layer: CanvasEscapeLayer): void
-  /** What the next Esc will do, for the tool-card hint (same source as behaviour). */
-  describeEscape(): CanvasEscapeLayer | null
   /** False when nothing consumed it. confirm, remove-last, rotate-held, edit-text and context-menu return false in overview;
    *  edit-text only under Select, and confirm under Select edits the one selected note (Enter). context-menu stamps the
    *  keyboard-menu echo with the time keyState recorded for a Menu key or Shift+F10, only when that was the last keydown. */

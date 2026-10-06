@@ -162,7 +162,6 @@ export function createSavedObjectStampTool(): CanvasTool {
       return 'pass'
     },
     hasTransient: () => false,
-    escapeHint: () => 'leave-tool',
     cancelTransient() {
       // The stamp and its angle outlive every cancellation, as today; each hides the ghost until the next hover, as today's
       // cancellation and overview reset hid the preview element.

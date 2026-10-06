@@ -196,7 +196,6 @@ export interface ToolHost {
   hasLiveGesture(): boolean
   activeToolHasTransient(): boolean
   activeToolIsSelect(): boolean
-  escapeHint(): 'drop-transient' | 'leave-tool' | 'clear-selection' | null
   /**
    * Arrow nudge, the one owner of the series: with a selection, the Select tool and site mode, turns the screen direction
    * into a world delta along screenAxesInWorld() (0.1 m, or 1 m when large), calls deps.nudge.nudgeSelected and (re)starts

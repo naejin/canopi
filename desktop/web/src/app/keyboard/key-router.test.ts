@@ -17,7 +17,6 @@ function fakePort(host: HTMLElement) {
     command: vi.fn((c: CanvasKeyCommand) => state.command(c)),
     escapeLayers: vi.fn(() => state.layers),
     escape: vi.fn((_layer: CanvasEscapeLayer) => {}),
-    describeEscape: () => state.layers[0] ?? null,
   } satisfies CanvasKeyboardPort
   return { port, state }
 }

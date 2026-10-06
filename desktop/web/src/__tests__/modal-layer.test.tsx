@@ -204,8 +204,8 @@ describe('Modal layer', () => {
     await act(async () => { render(<><Workspace /><CommandPalette /></>, container) })
     const popover = vi.fn(() => true)
     const inspection = vi.fn(() => true)
-    const releasePopover = registerEscapeLayer({ id: 'test-popover', priority: ESCAPE_PRIORITY.popover, isActive: () => true, escape: popover })
-    const releaseInspection = registerEscapeLayer({ id: 'test-inspection', priority: ESCAPE_PRIORITY.inspection, isActive: () => true, escape: inspection })
+    const releasePopover = registerEscapeLayer({ priority: ESCAPE_PRIORITY.popover, isActive: () => true, escape: popover })
+    const releaseInspection = registerEscapeLayer({ priority: ESCAPE_PRIORITY.inspection, isActive: () => true, escape: inspection })
     try {
       await act(async () => { commandPaletteOpen.value = true })
       const input = container.querySelector<HTMLInputElement>('[role="combobox"]')!

@@ -145,9 +145,6 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionC
           return
       }
     },
-    describeEscape() {
-      return escapeLayers()[0] ?? null
-    },
     command(c: CanvasKeyCommand): boolean {
       const overview = session.overview()
       switch (c.kind) {
@@ -226,7 +223,6 @@ export function createForwardingCanvasKeyboardPort(
     },
     escapeLayers: () => current()?.escapeLayers() ?? [],
     escape: (layer) => current()?.escape(layer),
-    describeEscape: () => current()?.describeEscape() ?? null,
     command: (c) => current()?.command(c) ?? false,
     keyState: (state) => current()?.keyState(state) ?? 'pass',
   }

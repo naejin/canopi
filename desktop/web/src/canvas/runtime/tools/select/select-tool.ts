@@ -289,7 +289,6 @@ export function createSelectTool(): CanvasTool {
       refreshHandles()
     },
     hasTransient: () => false,
-    escapeHint: () => (context && context.scene.selection().length > 0 ? 'clear-selection' : null),
     cancelTransient() {
       cancelGesture()
     },

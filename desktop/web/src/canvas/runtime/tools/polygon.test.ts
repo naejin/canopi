@@ -246,11 +246,9 @@ describe('Polygon tool', () => {
 
     h.click({ x: 10, y: 10 })
     h.click({ x: 60, y: 10 })
-    expect(h.host.escapeHint()).toBe('drop-transient')
     expect(h.host.command({ kind: 'escape' })).toBe('handled')
     expect(h.renderer.lastDraft()).toBeNull()
     expect(h.host.activeToolHasTransient()).toBe(false)
-    expect(h.host.escapeHint()).toBe('leave-tool')
 
     // Only a redo left: Esc still drops it first, as today.
     h.click({ x: 10, y: 10 })
@@ -314,7 +312,6 @@ describe('Polygon tool', () => {
     h.blur()
     expect(h.host.transientHistory.canRedo()).toBe(false)
     expect(h.host.activeToolHasTransient()).toBe(false)
-    expect(h.host.escapeHint()).toBe('leave-tool')
   })
 
   it('a closed Zones layer drops the draft and commits nothing', () => {

@@ -214,7 +214,6 @@ describe('createCanvasKeyboardPort', () => {
     f.transient = true
 
     expect(f.port.escapeLayers()).toEqual(['gesture', 'nudge-series', 'tool-transient', 'tool', 'selection'])
-    expect(f.port.describeEscape()).toBe('gesture')
     f.port.escape('gesture')
     expect(f.session.escapeGesture).toHaveBeenCalledTimes(1)
     f.port.escape('nudge-series')
@@ -226,11 +225,9 @@ describe('createCanvasKeyboardPort', () => {
     f.live = false
     f.transient = false
     expect(f.port.escapeLayers()).toEqual(['selection'])
-    expect(f.port.describeEscape()).toBe('selection')
     f.port.escape('selection')
     expect(f.session.clearSelection).toHaveBeenCalledTimes(1)
     expect(f.port.escapeLayers()).toEqual([])
-    expect(f.port.describeEscape()).toBeNull()
   })
 
   it('the tool\'s own Esc is a layer only while it holds a draft or a source; any other tool leaves for Select', () => {
@@ -246,13 +243,13 @@ describe('createCanvasKeyboardPort', () => {
     f.transient = true
     f.live = true
 
-    expect(f.port.describeEscape()).toBe('gesture')
+    expect(f.port.escapeLayers()[0]).toBe('gesture')
     f.port.escape('gesture')
     expect(f.session.escapeGesture).toHaveBeenCalledTimes(1)
     expect(f.toolHost.command).not.toHaveBeenCalled()
     // The next Esc drops the source.
     f.live = false
-    expect(f.port.describeEscape()).toBe('tool-transient')
+    expect(f.port.escapeLayers()[0]).toBe('tool-transient')
     f.port.escape('tool-transient')
     expect(f.toolHost.command).toHaveBeenCalledExactlyOnceWith({ kind: 'escape' })
   })
@@ -291,7 +288,6 @@ describe('createCanvasKeyboardPort', () => {
     f.session.overview = vi.fn(() => true)
     // Nothing to cancel: no canvas layer, so the Esc falls through to the raster inspection's.
     expect(f.port.escapeLayers()).toEqual([])
-    expect(f.port.describeEscape()).toBeNull()
     f.nudging = true
     expect(f.port.escapeLayers()).toEqual(['gesture'])
     f.nudging = false
@@ -394,7 +390,6 @@ describe('createForwardingCanvasKeyboardPort', () => {
     expect(port.command({ kind: 'confirm' })).toBe(false)
     expect(port.escapeLayers()).toEqual([])
     port.escape('tool')
-    expect(port.describeEscape()).toBeNull()
     expect(keyState(port as Fixture['port'], { key: ' ', code: 'Space' })).toBe('pass')
 
     const f = fixture({ tool: 'polygon', reply: () => 'handled' })

@@ -101,6 +101,5 @@ describe('Pan tool', () => {
     expect(h.store.session.selectedTargets).toEqual([])
     expect(h.renderer.lastDraft()).toBeNull()
     expect(h.host.activeToolHasTransient()).toBe(false)
-    expect(h.host.escapeHint()).toBe('leave-tool')
   })
 })

@@ -266,7 +266,6 @@ export function stubTool(id: ToolId, behaviour: StubToolBehaviour = {}): StubToo
       viewChanged?.()
     },
     hasTransient: rest.hasTransient ?? (() => false),
-    escapeHint: rest.escapeHint ?? (() => null),
     cancelTransient(reason) {
       calls.push(`cancelTransient:${reason}`)
       cancelTransient?.(reason)

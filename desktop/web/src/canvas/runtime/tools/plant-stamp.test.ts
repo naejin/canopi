@@ -123,12 +123,10 @@ describe('Place plants tool', () => {
   it('the waiting point is a transient: it holds re-origin, and the first Esc drops it', () => {
     const h = stampHarness(null)
     expect(h.host.activeToolHasTransient()).toBe(false)
-    expect(h.host.escapeHint()).toBe('leave-tool')
 
     h.host.command({ kind: 'place-at', world: { x: 30, y: 20 } })
     expect(h.host.activeToolHasTransient()).toBe(true)
     expect(h.host.holdsReorigin()).toBe(true)
-    expect(h.host.escapeHint()).toBe('drop-transient')
 
     // The keyboard port's tool-transient layer sends the tool's Esc; the tool layer's Esc then leaves (spec §3.7).
     expect(h.host.command({ kind: 'escape' })).toBe('handled')

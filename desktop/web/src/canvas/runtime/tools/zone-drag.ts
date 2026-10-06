@@ -254,7 +254,6 @@ export function createDragShapeTool(spec: DragShapeSpec): CanvasTool {
     },
     // Esc during the drag is the live gesture's layer (the host's), then the tool's.
     hasTransient: () => false,
-    escapeHint: () => 'leave-tool',
     cancelTransient() {
       cancelDrag()
     },

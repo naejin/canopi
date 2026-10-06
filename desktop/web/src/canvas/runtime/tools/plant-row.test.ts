@@ -130,14 +130,12 @@ describe('Plant a row tool', () => {
     const { h } = rowHarness()
     h.click({ x: 20, y: 30 })
     expect(row(h).phase).toBe('row')
-    expect(h.host.escapeHint()).toBe('drop-transient')
     expect(h.host.activeToolHasTransient()).toBe(true)
 
     expect(h.host.command({ kind: 'escape' })).toBe('handled')
     expect(row(h).phase).toBe('pick')
     expect(h.renderer.lastDraft()).toBeNull()
     expect(h.host.activeTool.peek()).toBe('plant-spacing')
-    expect(h.host.escapeHint()).toBe('leave-tool')
 
     // Today's order: the source goes first even while a drag from it is live.
     h.press({ x: 20, y: 30 })

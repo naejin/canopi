@@ -332,7 +332,6 @@ describe('object stamp tool', () => {
 
     h.click({ x: 40, y: 40 })
     expect(h.host.activeToolHasTransient()).toBe(false)
-    expect(h.host.escapeHint()).toBe('leave-tool')
     expect(h.host.command({ kind: 'escape' })).toBe('handled')
 
     expect(h.host.activeTool.value).toBe('select')

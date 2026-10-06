@@ -192,7 +192,6 @@ export function createPolygonTool(): CanvasTool {
       if (corners.length > 0) redraw()
     },
     hasTransient,
-    escapeHint: () => hasTransient() ? 'drop-transient' : 'leave-tool',
     cancelTransient(reason) {
       // An interruption keeps the draft only while it has corners (today's hasPolygonDraft): a redo-only history goes.
       if (reason === 'navigate' && corners.length > 0) return

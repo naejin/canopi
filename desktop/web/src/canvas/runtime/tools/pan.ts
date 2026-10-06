@@ -15,7 +15,6 @@ export function createPanTool(): CanvasTool {
     gesture: () => 'pass',
     command: () => 'pass',
     hasTransient: () => false,
-    escapeHint: () => 'leave-tool',
     cancelTransient() {},
     deactivate() {},
   }

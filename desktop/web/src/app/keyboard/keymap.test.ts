@@ -232,7 +232,7 @@ describe('keymap', () => {
       target: window,
       keymap: CANVAS_KEYMAP_ROWS,
       commands: { run: vi.fn(() => true) },
-      canvas: () => ({ host, keyState: () => 'pass', command, escapeLayers: () => [], escape: () => {}, describeEscape: () => null }),
+      canvas: () => ({ host, keyState: () => 'pass', command, escapeLayers: () => [], escape: () => {} }),
       singleKeys: signal(true),
       focus: { cycleRegion: () => false },
       isModalOpen: () => false,

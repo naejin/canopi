@@ -92,7 +92,6 @@ export function Compass({ command, className }: {
     const centre = { x: box.left + box.width / 2, y: box.top + box.height / 2 }
     const start = { x: event.clientX, y: event.clientY }
     const disposeEscape = registerEscapeLayer({
-      id: 'compass.drag',
       priority: ESCAPE_PRIORITY.gesture,
       isActive: () => isLive(press.current),
       escape: ({ focus }) => {

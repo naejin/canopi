@@ -224,8 +224,6 @@ export interface CanvasTool {
   /** True while the tool holds something Esc should drop first (draft, pick, row source, Place plants' waiting point). It also
    *  holds re-origin (§4.19). */
   hasTransient(): boolean
-  /** Esc hint for the tool card, read by describeEscape. */
-  escapeHint(): 'drop-transient' | 'leave-tool' | 'clear-selection' | null
   cancelTransient(reason: 'escape' | 'tool-change' | 'document-replaced' | 'navigate' | 'overview'): void   // 'overview': the map entered overview; drop what today's overview reset dropped (a stamp keeps its pick and hides only its ghost)
   /** Transient history (polygon corners), read by ToolHost.transientHistory; the tool acts on the undo-transient and redo-transient commands. */
   canUndoTransient?(): boolean
