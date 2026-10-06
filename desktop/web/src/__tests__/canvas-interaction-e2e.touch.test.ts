@@ -19,6 +19,7 @@ import {
   createInteractionDeps,
   installSceneInteractionFixture,
   makePlant,
+  makeRectZone,
   plantTarget,
 } from './support/canvas-interaction-setup'
 import './support/camera-tolerance'
@@ -250,6 +251,22 @@ describe('SceneInteractionSession: touch', () => {
     expect(box('[data-canvas-handle^="vertex:"]')).toEqual(['20px×20px', '20px×20px', '20px×20px', '20px×20px'])
     expect(box('[data-canvas-handle^="edge-mid:"]')).toEqual(['16px×16px', '16px×16px', '16px×16px', '16px×16px'])
     expect(rotate.style.width).toBe('28px')
+    session.dispose()
+  })
+
+  it('a long press 15 px from a rectangle\'s edge offers Turn view to this edge (A11)', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [{ x: 40, y: 60 }, { x: 240, y: 60 }, { x: 240, y: 160 }, { x: 40, y: 160 }])]
+    })
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('select')
+
+    touchDown({ x: 140, y: 45 })
+    vi.advanceTimersByTime(600)
+    touchUp({ x: 140, y: 45 })
+
+    expect(contextMenuHost.current?.turnViewToEdge).toBeTypeOf('function')
     session.dispose()
   })
 })
