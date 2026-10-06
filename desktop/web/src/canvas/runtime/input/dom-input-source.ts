@@ -29,7 +29,7 @@ import { DEFAULT_THRESHOLDS } from './thresholds'
 
 /** The note editor: D1's text-entry host, and today's inline annotation editor until it moves there. */
 const TEXT_ENTRY_SELECTOR = '[data-canvas-text-entry], [data-annotation-inline-editor]'
-/** The canvas's own controls and fields inside the map: the inspection lens's skip set, the chrome and the Unlock affordance. */
+/** The canvas's own controls and fields inside the map: the inspection lens's skip set and the chrome. */
 const OWNED_CHROME_SELECTOR = [
   '[data-canvas-chrome]',
   'button',
@@ -45,9 +45,6 @@ const MAP_CONTROL_SELECTOR = '.maplibregl-ctrl'
 const SURFACE: TargetClass = Object.freeze({ kind: 'surface' })
 const OWNED_TEXT: TargetClass = Object.freeze({ kind: 'owned-text' })
 const OWNED_CHROME: TargetClass = Object.freeze({ kind: 'owned-chrome' })
-/** The Unlock affordance: owned chrome that keeps the hover in every phase (spec §2.2 "Hover"); a press there keeps focus. */
-const UNLOCK_AFFORDANCE: TargetClass = Object.freeze({ kind: 'owned-chrome', lockedAffordance: true })
-const UNLOCK_AFFORDANCE_SELECTOR = '[data-locked-object-affordance]'
 const FOREIGN: TargetClass = Object.freeze({ kind: 'foreign' })
 const NO_RECT = Object.freeze({ left: 0, top: 0, width: 0, height: 0 })
 
@@ -522,7 +519,6 @@ function classifyTarget(target: EventTarget | null, host: HTMLElement, mapContro
   if (closestInside(element, TEXT_ENTRY_SELECTOR, host)) return OWNED_TEXT
   const handle = handleIdOf(element, host)
   if (handle) return { kind: 'handle', id: handle }
-  if (closestInside(element, UNLOCK_AFFORDANCE_SELECTOR, host)) return UNLOCK_AFFORDANCE
   if (closestInside(element, OWNED_CHROME_SELECTOR, host)) return OWNED_CHROME
   if (mapControls === 'chrome' && closestInside(element, MAP_CONTROL_SELECTOR, host)) return OWNED_CHROME
   return SURFACE

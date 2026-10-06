@@ -277,7 +277,6 @@ describe('createDomInputSource', () => {
     const rotation = child('<div data-canvas-handle="rotate"><span data-canvas-handle-readout="true">+15°</span></div>')
     const controlPoint = child('<button data-canvas-handle="rect-corner:zone-1:ne"></button>')
     const editor = child('<textarea data-annotation-inline-editor="true" data-preserve-overlays="true"></textarea>')
-    const unlock = child('<div data-locked-object-affordance="true"><span>Locked</span><button>Unlock</button></div>')
     const chrome = child('<div data-canvas-chrome><span>©</span></div>')
     const surface = child('<canvas></canvas>')
     const outside = document.createElement('div')
@@ -289,8 +288,6 @@ describe('createDomInputSource', () => {
       rotation.firstElementChild!,
       controlPoint,
       editor,
-      unlock.firstElementChild!,
-      unlock.lastElementChild!,
       chrome.firstElementChild!,
       surface,
       host,
@@ -303,24 +300,22 @@ describe('createDomInputSource', () => {
       { kind: 'handle', id: 'rotate' },
       { kind: 'handle', id: 'rect-corner:zone-1:ne' },
       { kind: 'owned-text' },
-      { kind: 'owned-chrome', lockedAffordance: true },
-      { kind: 'owned-chrome', lockedAffordance: true },
       { kind: 'owned-chrome' },
       { kind: 'surface' },
       { kind: 'surface' },
     ])
 
-    // An up carries its target too: the session keeps today's release cleanup off the note editor, a handle and the
-    // Unlock affordance by it, and a release outside the map is foreign.
+    // An up carries its target too: the session keeps today's release cleanup off the note editor and a handle by it, and
+    // a release outside the map is foreign.
     received.length = 0
-    for (const target of [editor, plainHandle, unlock.lastElementChild!, surface, outside]) {
+    for (const target of [editor, plainHandle, chrome.firstElementChild!, surface, outside]) {
       events.pointerDown({ x: 5, y: 5 })
       events.pointerUp({ x: 5, y: 5 }, { target })
     }
     expect(received.flatMap((input) => input.kind === 'up' ? [input.target] : [])).toEqual([
       { kind: 'owned-text' },
       { kind: 'handle', id: 'vertex:zone-1:2' },
-      { kind: 'owned-chrome', lockedAffordance: true },
+      { kind: 'owned-chrome' },
       { kind: 'surface' },
       { kind: 'foreign' },
     ])

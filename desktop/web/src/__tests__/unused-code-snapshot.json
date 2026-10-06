@@ -111,7 +111,6 @@
     "src/canvas/runtime/annotation-layout.ts#AnnotationScreenFrame",
     "src/canvas/runtime/annotation-layout.ts#AnnotationWorldBounds",
     "src/canvas/runtime/chrome/handle-layer.ts#HandleLayerOptions",
-    "src/canvas/runtime/chrome/locked-affordance.ts#LockedAffordanceOptions",
     "src/canvas/runtime/chrome/text-entry-host.ts#TextEntryHostOptions",
     "src/canvas/runtime/input/bindings.ts#PanContext",
     "src/canvas/runtime/inspection-lens-drawing.ts#InspectionLensDrawOptions",

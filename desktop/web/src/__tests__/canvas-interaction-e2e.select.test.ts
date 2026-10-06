@@ -52,7 +52,6 @@ import {
   zoneControlPointCenter,
   measurementGuideControlPoint,
   measurementGuideControlPointCenter,
-  lockedAffordance,
   draftLabelTexts,
   draftShapes,
   selectionBoundsCenter,
@@ -90,12 +89,6 @@ describe('SceneInteractionSession', () => {
         { x: 100, y: 100 },
         { x: 160, y: 150 },
       ])]
-      draft.plants = [makePlant(
-        'locked-plant',
-        'Malus domestica',
-        { x: 20, y: 30 },
-        { locked: true },
-      )]
     })
     const deps = createInteractionDeps(container, store, testView, {
       translate,
@@ -105,26 +98,19 @@ describe('SceneInteractionSession', () => {
     session.setTool('select')
     deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
-    events.pointerMove({ x: 20, y: 30 })
 
     const rotateButton = rotationHandle(container)!
-    const affordance = lockedAffordance(container)!
-    const unlock = affordance.querySelector<HTMLButtonElement>('[data-locked-object-unlock]')!
-    unlock.focus()
+    rotateButton.focus()
 
     expect(rotateButton.getAttribute('aria-label')).toBe('en:canvas.rotationHandle.label')
-    expect(unlock.getAttribute('aria-label')).toBe('en:canvas.lockedObject.unlock')
 
     language = 'fr'
     session.refreshTranslations()
 
     expect(rotationHandle(container)).toBe(rotateButton)
-    expect(lockedAffordance(container)).toBe(affordance)
     expect(rotateButton.style.display).toBe('inline-flex')
-    expect(affordance.style.display).toBe('inline-flex')
-    expect(document.activeElement).toBe(unlock)
+    expect(document.activeElement).toBe(rotateButton)
     expect(rotateButton.getAttribute('aria-label')).toBe('fr:canvas.rotationHandle.label')
-    expect(unlock.getAttribute('aria-label')).toBe('fr:canvas.lockedObject.unlock')
   })
 
   it('names zone control points and guide ends through translate, and relabels them on a locale switch', () => {
@@ -731,12 +717,12 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('keeps active drag and rotation gestures moving through runtime overlay propagation guards', () => {
+  it('keeps active drag and rotation gestures moving over the canvas\'s own chrome', () => {
     store.updatePersisted((draft) => {
       draft.plants = [
         makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }),
-        // Directly locked: hovering it brings the session's Unlock affordance, which stops the moves made on it, onto the map.
-        makePlant('locked-plant', 'Malus domestica', { x: 300, y: 250 }, { locked: true }),
+        // Hovering it brings the plant tooltip, the session's own chrome, onto the map.
+        makePlant('plant-2', 'Malus domestica', { x: 300, y: 250 }),
       ]
       draft.zones = [makeRectZone('zone-1', [
         { x: 80, y: 80 },
@@ -757,7 +743,7 @@ describe('SceneInteractionSession', () => {
 
     deps.setSelection([plantTarget('plant-1')])
     session.refreshMeasurements()
-    const overlay = lockedAffordance(container)!
+    const overlay = plantHoverTooltip(container)
 
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     const overlayMove = events.pointerMove(
@@ -773,31 +759,31 @@ describe('SceneInteractionSession', () => {
     deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
     const handle = rotationHandle(container)!
-    const affordanceElement = lockedAffordance(container)!
+    const chromeElement = plantHoverTooltip(container)
     const pivot = selectionBoundsCenter(getDesignObjectSelectionFromStore(store, testView))
     const start = rotationHandleCenter(container)
     const end = quarterTurnClockwise(pivot, start)
 
     events.pointerDown(start, { button: 0, target: handle })
-    const affordanceMove = events.pointerMove(
+    const chromeMove = events.pointerMove(
       end,
-      { button: 0, target: affordanceElement },
+      { button: 0, target: chromeElement },
     )
-    expect(affordanceMove.target).toBe(affordanceElement)
+    expect(chromeMove.target).toBe(chromeElement)
 
     expect(store.persisted.zones[0]?.rotationDeg).toBeCloseTo(90)
 
-    events.pointerUp(end, { button: 0, target: affordanceElement })
+    events.pointerUp(end, { button: 0, target: chromeElement })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-rotate')
     session.dispose()
   })
 
-  it('ends middle-button panning when pointer continuation targets a runtime overlay', () => {
+  it('ends middle-button panning when pointer continuation targets the canvas\'s own chrome', () => {
     store.updatePersisted((draft) => {
       draft.plants = [
         makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }),
-        // Directly locked: hovering it brings the session's Unlock affordance onto the map.
-        makePlant('locked-plant', 'Malus domestica', { x: 300, y: 250 }, { locked: true }),
+        // Hovering it brings the plant tooltip, the session's own chrome, onto the map.
+        makePlant('plant-2', 'Malus domestica', { x: 300, y: 250 }),
       ]
     })
     const deps = createInteractionDeps(container, store, testView, {
@@ -809,8 +795,7 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 360, y: 280 })
     deps.setSelection([plantTarget('plant-1')])
     session.refreshMeasurements()
-    const overlay = lockedAffordance(container)!
-    expect(overlay).not.toBeNull()
+    const overlay = plantHoverTooltip(container)
 
     events.pointerDown({ x: 200, y: 150 }, { pointerId: 41, button: 1 })
     events.pointerMove(
@@ -1326,81 +1311,24 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('shows a direct unlock affordance when hovering a locked Design Object', () => {
+  it('hovering a directly locked object shows the locked hover stroke and no chip', () => {
     store.updatePersisted((draft) => {
-      draft.plants = [{
-        kind: 'plant',
-        id: 'locked-plant',
-        locked: true,
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        canopySpreadM: 2,
-        position: { x: 20, y: 30 },
-        rotationDeg: null,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
+      draft.plants = [makePlant('locked-plant', 'Malus domestica', { x: 20, y: 30 }, { locked: true })]
     })
-    const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
+    const hovered: unknown[] = []
+    const deps = createInteractionDeps(container, store, testView, {
+      setHoveredTarget: (target) => hovered.push(target),
+    })
     const session = createTestSession(deps)
     session.setTool('select')
 
     events.pointerMove({ x: 20, y: 30 })
 
-    const affordance = lockedAffordance(container)
-    expect(affordance).not.toBeNull()
-    expect(affordance?.dataset.lockedObjectId).toBe('locked-plant')
-    const unlock = affordance?.querySelector<HTMLButtonElement>('[data-locked-object-unlock]')!
-    expect(unlock.getAttribute('aria-label')).toContain('Unlock')
-    expect(selectedObjectIds.value).toEqual(new Set())
-
-    events.pointerDown({ x: 35, y: 45 }, { target: unlock })
-    events.pointerUp({ x: 35, y: 45 }, { target: unlock })
-
-    expect(affordance?.style.display).toBe('inline-flex')
-    expect(affordance?.dataset.lockedObjectId).toBe('locked-plant')
-
-    unlock.click()
-
-    expect(store.persisted.plants[0]?.locked).toBe(false)
-    expect(onSceneEditCommit).toHaveBeenCalledWith('unlock-design-object')
-    expect(selectedObjectIds.value).toEqual(new Set())
-    session.dispose()
-  })
-
-  it('does not show direct unlock affordances for Design Objects blocked by locked Layers', () => {
-    store.updatePersisted((draft) => {
-      draft.layers = draft.layers.map((layer) => (
-        layer.name === 'plants' ? { ...layer, locked: true } : layer
-      ))
-      draft.plants = [{
-        kind: 'plant',
-        id: 'locked-layer-plant',
-        locked: true,
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        canopySpreadM: 2,
-        position: { x: 20, y: 30 },
-        rotationDeg: null,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
-    })
-    const deps = createInteractionDeps(container, store, testView)
-    const session = createTestSession(deps)
-    session.setTool('select')
-
-    events.pointerMove({ x: 20, y: 30 })
-
-    // The host's Unlock affordance joins the map at its first show: here it never shows.
-    const affordance = lockedAffordance(container)
-    expect(affordance?.style.display ?? 'none').toBe('none')
-    expect(affordance?.dataset.lockedObjectId).toBeUndefined()
+    // The renderer draws a hovered, directly locked object with the locked-object stroke (scene-runtime/presentation.ts).
+    expect(hovered.at(-1)).toEqual(plantTarget('locked-plant'))
+    const buttons = [...container.querySelectorAll('button')]
+    expect(buttons.filter((button) => /unlock/i.test(button.getAttribute('aria-label') ?? button.textContent ?? '')))
+      .toEqual([])
     expect(selectedObjectIds.value).toEqual(new Set())
     session.dispose()
   })

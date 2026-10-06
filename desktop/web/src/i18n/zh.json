@@ -157,10 +157,6 @@
       "commitLimitWarning": "增大间距或缩短线段",
       "dragAlong": "沿着这一行拖动"
     },
-    "lockedObject": {
-      "locked": "已锁定",
-      "unlock": "解锁"
-    },
     "contextMenu": {
       "ariaLabel": "画布编辑命令",
       "showName": "显示名称",

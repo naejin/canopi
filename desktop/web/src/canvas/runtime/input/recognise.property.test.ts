@@ -30,7 +30,6 @@ const TARGETS: readonly TargetClass[] = [
   { kind: 'surface' },
   { kind: 'handle', id: 'rotate' as ToolHandleId },
   { kind: 'owned-chrome' },
-  { kind: 'owned-chrome', lockedAffordance: true },
   { kind: 'owned-text' },
   { kind: 'foreign' },
 ]

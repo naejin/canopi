@@ -157,10 +157,6 @@
       "commitLimitWarning": "Vergroot het interval of verkort de lijn",
       "dragAlong": "sleep langs de rij"
     },
-    "lockedObject": {
-      "locked": "Vergrendeld",
-      "unlock": "Ontgrendelen"
-    },
     "contextMenu": {
       "ariaLabel": "Canvasbewerkingsopdrachten",
       "showName": "Naam tonen",

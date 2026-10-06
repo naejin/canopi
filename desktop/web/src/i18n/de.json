@@ -157,10 +157,6 @@
       "commitLimitWarning": "Intervall erhöhen oder Linie verkürzen",
       "dragAlong": "ziehen Sie entlang der Reihe"
     },
-    "lockedObject": {
-      "locked": "Gesperrt",
-      "unlock": "Entsperren"
-    },
     "contextMenu": {
       "ariaLabel": "Bearbeitungsbefehle der Zeichenfläche",
       "showName": "Namen anzeigen",

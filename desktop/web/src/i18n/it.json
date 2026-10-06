@@ -157,10 +157,6 @@
       "commitLimitWarning": "Aumenta l’intervallo o accorcia la linea",
       "dragAlong": "trascina lungo la fila"
     },
-    "lockedObject": {
-      "locked": "Bloccato",
-      "unlock": "Sblocca"
-    },
     "contextMenu": {
       "ariaLabel": "Comandi di modifica della tela",
       "showName": "Mostra nome",

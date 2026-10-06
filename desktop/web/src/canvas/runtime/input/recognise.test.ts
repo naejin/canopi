@@ -9,7 +9,6 @@ import {
   ROTATE_HANDLE,
   SEQUENCES,
   SURFACE,
-  UNLOCK_AFFORDANCE,
   WINDOWS,
   blur,
   configure,
@@ -665,19 +664,17 @@ describe('recognise: sessions', () => {
     expect(result.gestures.map((gesture) => gesture.kind === 'hover' ? gesture.target : null)).toEqual([SURFACE, FOREIGN])
   })
 
-  it('a move over owned chrome ends the hover, with the Unlock affordance keeping it', () => {
-    // Owned chrome (a map button, the attribution), the text entry and a handle end the hover and its tooltip (U6); the
-    // Unlock affordance emits nothing, so the hover it belongs to stays until it is clicked.
+  it('owned chrome always ends the hover', () => {
+    // Owned chrome (a map button, the attribution), the text entry and a handle end the hover and its tooltip (U6).
     const result = run(seq('owned targets', WINDOWS, [
       move(50, 60),
       move(52, 60, { target: OWNED_CHROME }),
       move(54, 60, { target: OWNED_TEXT }),
       move(56, 60, { target: ROTATE_HANDLE }),
-      move(57, 60, { target: UNLOCK_AFFORDANCE }),
       move(58, 60, { target: FOREIGN }),
     ]))
     expect(result.steps.map((step) => kinds(step.gestures))).toEqual([
-      ['hover'], ['hover-end'], ['hover-end'], ['hover-end'], [], ['hover'],
+      ['hover'], ['hover-end'], ['hover-end'], ['hover-end'], ['hover'],
     ])
   })
 

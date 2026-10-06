@@ -54,7 +54,7 @@ function focusTarget(region: HTMLElement): HTMLElement | null {
 function enter(region: FocusRegion): boolean {
   const element = regions.get(region)
   if (!element || !showing(element)) return false
-  // The map is entered at its host, never a control inside it (the Unlock affordance), so the canvas keys reach it.
+  // The map is entered at its host, never a control inside it (a handle), so the canvas keys reach it.
   const target = region === 'map' ? element : focusTarget(element)
   if (!target) return false
   target.focus({ preventScroll: true })

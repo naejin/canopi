@@ -157,10 +157,6 @@
       "commitLimitWarning": "간격을 늘리거나 선을 줄이세요",
       "dragAlong": "줄을 따라 드래그"
     },
-    "lockedObject": {
-      "locked": "잠김",
-      "unlock": "잠금 해제"
-    },
     "contextMenu": {
       "ariaLabel": "캔버스 편집 명령",
       "showName": "이름 표시",

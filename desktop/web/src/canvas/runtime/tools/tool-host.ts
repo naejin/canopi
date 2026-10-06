@@ -512,19 +512,12 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function clearPassiveHover(): void {
     deps.hover(null)
     deps.chrome.setTooltip(null)
-    deps.chrome.setLockedAffordance(null)
   }
 
-  /** Today's _updateHover: the restyle, the plant tooltip and the Unlock affordance for a directly locked object. */
+  /** Today's _updateHover: the restyle (a directly locked object shows the locked hover stroke) and the plant tooltip. */
   function passiveHover(world: WorldPoint, at: ScreenPoint): void {
     const visible = objectTarget(deps.scene.hitAt(world, { includeLocked: true }))
-    const scene = deps.scene.persisted
     deps.hover(visible)
-    deps.chrome.setLockedAffordance(
-      visible && !isTargetLayerLocked(scene, visible) && isDirectSceneDesignObjectLocked(scene, visible)
-        ? { target: visible, at }
-        : null,
-    )
     deps.chrome.setTooltip(visible?.kind === 'plant' ? { target: visible, at } : null)
   }
 
@@ -578,10 +571,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   /**
    * Every raw pointerdown on the map host, reported by the session before it routes the press (today's _onPointerDown):
-   * any button commits the nudge series. An admitted primary or middle press outside the text entry and the Unlock
-   * affordance, with no live press from another pointer, also closes the menu and moves focus
-   * to the map, so an open text entry commits before the press reaches the tool (focusMap); a click inside the entry keeps
-   * it open. A primary press that so commits a new note's entry ('create') places nothing: no tool hears it, as today's Text
+   * any button commits the nudge series. An admitted primary or middle press outside the text entry, with no live press
+   * from another pointer, also closes the menu and moves focus to the map, so an open text entry commits before the press
+   * reaches the tool (focusMap); a click inside the entry keeps it open. A primary press that so commits a new note's entry ('create') places nothing: no tool hears it, as today's Text
    * field took that click (spec §3.2); an in-place editor's ('edit') press goes on, as today's. A press on the live press's
    * own pointer (its up was lost) counts, as today's. The host knows only its own live press: a pan
    * lives in the recogniser, which ignores a second pointer anyway.
@@ -592,7 +584,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     endNudgeSeries(true)
     if (!activeTool || button === 'secondary') return
     if (live && live.id !== pointerId) return
-    if (target.kind === 'owned-text' || (target.kind === 'owned-chrome' && target.lockedAffordance)) return
+    if (target.kind === 'owned-text') return
     // Runs only while the Scene is settled; a refused raw press does nothing, and the press that follows asks again.
     deps.admission.runWhenSettled(() => {
       deps.menu.close()

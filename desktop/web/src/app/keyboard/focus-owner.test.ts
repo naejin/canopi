@@ -145,17 +145,17 @@ describe('F6 regions through the focus owner', () => {
   })
 
   it('F6 to the map focuses the host', () => {
-    // The Unlock affordance beside a locked object lives inside the map host; F6 never lands on it.
-    map.innerHTML = '<div data-canvas-chrome="locked-affordance"><button type="button">Unlock</button></div>'
-    const unlock = map.querySelector('button')!
-    unlock.focus()
+    // A handle beside the selection lives inside the map host; F6 never lands on it.
+    map.innerHTML = '<div data-canvas-handle-layer="true"><button type="button" data-canvas-handle="rotate">Rotate</button></div>'
+    const handle = map.querySelector('button')!
+    handle.focus()
     press()
     expect(document.activeElement).toBe(dock.querySelector('button'))
     press(true)
     expect(document.activeElement).toBe(map)
 
     // From outside the map too.
-    unlock.focus()
+    handle.focus()
     menu.focus()
     press()
     press()

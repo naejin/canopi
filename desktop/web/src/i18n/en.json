@@ -157,10 +157,6 @@
       "commitLimitWarning": "Increase interval or shorten the line",
       "dragAlong": "drag along the row"
     },
-    "lockedObject": {
-      "locked": "Locked",
-      "unlock": "Unlock"
-    },
     "contextMenu": {
       "ariaLabel": "Canvas edit commands",
       "showName": "Show name",

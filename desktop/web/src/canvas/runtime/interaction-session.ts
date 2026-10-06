@@ -6,7 +6,7 @@
 // its own 'tools' frame listener, which a throwing host listener cannot skip, nor it the host's (frame-source.ts): entering or
 // leaving overview reconfigures the recogniser, and entering it releases Space and closes the menu. refreshMeasurements reaches
 // ToolHost.sceneChanged(). It builds the host's chrome (chrome/: the handle layer,
-// the text entry, the plant tooltip and the Unlock affordance, whose Unlock it runs), bridges the plant and saved-stamp
+// the text entry and the plant tooltip), bridges the plant and saved-stamp
 // read models to the armed tool, reads the snapping settings per point, calls ToolHost.rawPress for every raw press on
 // the map host, ToolHost.released() after a release that ended no press of the tool's and ToolHost.interrupted() after a
 // window blur, follows a placed drop (the saved stamp's drag source, the map's focus on the next frame), owns the
@@ -30,7 +30,6 @@ import type {
 } from './app-adapter'
 import { createHandleLayer, type HandleLayer } from './chrome/handle-layer'
 import { createHoverTooltip, type HoverTooltipController } from './chrome/hover-tooltip'
-import { createLockedAffordance, type LockedAffordanceController } from './chrome/locked-affordance'
 import { createTextEntryHost, type TextEntryHost } from './chrome/text-entry-host'
 import { runCanvasRuntimeCleanups, throwCanvasRuntimeCleanupErrors } from './cleanup'
 import { CURRENT_BINDINGS } from './input/bindings'
@@ -53,7 +52,6 @@ import type {
   CanvasSceneEditCommandSurface,
 } from './runtime'
 import { isSceneLayerEditable, type SceneDesignObjectSelection, type SceneDesignObjectTarget, type ScenePoint, type SceneStateReader } from './scene'
-import { setSceneDesignObjectLocks } from './scene/locks'
 import type { SceneCommandAdmission, SceneEditCoordinator, SettledSceneReader } from './scene-runtime/transactions'
 import type { SpeciesCacheEntry } from './species-cache'
 import { createContextMenuPort, createToolHost, createToolScene } from './tools/tool-host'
@@ -192,7 +190,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private readonly _handleLayer: HandleLayer
   private readonly _textEntry: TextEntryHost
   private readonly _tooltip: HoverTooltipController
-  private readonly _lockedAffordance: LockedAffordanceController
   private readonly _toolHost: ToolHost
   private readonly _menu: ReturnType<typeof createContextMenuPort>
   private readonly _port: ReturnType<typeof createCanvasKeyboardPort>
@@ -267,11 +264,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         focus,
       }), (entry) => entry.dispose())
       this._tooltip = own(createHoverTooltip(container), (tooltip) => tooltip.dispose())
-      this._lockedAffordance = own(createLockedAffordance({
-        container,
-        translate: _deps.translate,
-        onUnlock: (target) => this._unlock(target),
-      }), (affordance) => affordance.dispose())
       const scene = createToolScene({
         store: liveStoreReader(_deps),
         selection: _deps.getSelection,
@@ -319,7 +311,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
           submitUnfocusedTextEntry: () => this._textEntry.submitUnfocused(),
           isTextEntryOpen: () => this._textEntry.isOpen(),
           setTooltip: (tooltip) => this._showTooltip(tooltip),
-          setLockedAffordance: (affordance) => this._showLockedAffordance(affordance),
         },
         menu: this._menu,
         focus,
@@ -449,7 +440,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   refreshTranslations(): void {
     if (this._disposed) return
     this._hostKeys.refreshTranslations()
-    this._lockedAffordance.refreshTranslations()
     this._toolHost.refreshTranslations()
   }
 
@@ -497,7 +487,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     attempt(() => clearToolSource(tool))
     attempt(() => this._cancelDropFocus())
     attempt(() => this._toolHost.dispose())
-    attempt(() => this._lockedAffordance.dispose())
     attempt(() => this._tooltip.dispose())
     attempt(() => this._textEntry.dispose())
     attempt(() => this._handleLayer.dispose())
@@ -593,8 +582,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
    * Whether this input ended no press of the tool's, so today's window pointerup (or a pan's pointercancel or lost
    * capture) would have run the cancellation (ToolHost.released): the up, cancel or Esc that ends a pointer pan or turn,
    * or an up with no press of the map's at all. Today's exceptions hold for the latter: nothing while another pointer's press is
-   * live, in overview (the recogniser swallows the up), or over the note editor, a handle or the Unlock affordance. The
-   * host handles the tap or drag-end of a press the tool never heard itself.
+   * live, in overview (the recogniser swallows the up), or over the note editor or a handle. The host handles the tap or drag-end of a press the tool never heard itself.
    */
   private _releasesOutsideTool(input: RawInput, gestures: readonly Gesture[]): boolean {
     if (gestures.some(endsPointerNavigation)) return input.kind === 'up' || (input.kind === 'cancel' && input.id !== 'all')
@@ -830,21 +818,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._tooltip.show(tooltip.at.x, tooltip.at.y, commonName, plant.canonicalName)
   }
 
-  private _showLockedAffordance(affordance: PassiveHoverAt | null): void {
-    if (!affordance) {
-      this._lockedAffordance.hide()
-      return
-    }
-    this._lockedAffordance.show({ target: affordance.target, screenX: affordance.at.x, screenY: affordance.at.y })
-  }
-
-  /** The Unlock affordance's button: today's unlock edit, after which the affordance goes. */
-  private _unlock(target: SceneDesignObjectTarget): void {
-    this._deps.sceneEdits.run('unlock-design-object', (tx) => {
-      tx.mutate((draft) => setSceneDesignObjectLocks(draft, [target], false))
-    }, { onCommitted: () => this._lockedAffordance.hide() })
-  }
-
   /**
    * Today's CSS hid the DOM previews, the rotation handle and the control points while a story is presented
    * (html[data-story-presenting]); the draft and the handles follow it.
@@ -1005,9 +978,8 @@ function endsPointerNavigation(gesture: Gesture): boolean {
   return false
 }
 
-/** The note editor, a handle or the Unlock affordance: today's owned overlays, over which a release ran no cleanup. */
+/** The note editor or a handle: today's owned overlays, over which a release ran no cleanup. */
 function isOwnedOverlay(target: TargetClass): boolean {
-  if (target.kind === 'owned-chrome') return target.lockedAffordance === true
   return target.kind === 'owned-text' || target.kind === 'handle'
 }
 

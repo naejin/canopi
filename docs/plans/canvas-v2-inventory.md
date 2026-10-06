@@ -177,4 +177,4 @@ Rows phases 0, F and 1 cleared are deleted (full text at the commits above). Two
 | ID | Fate |
 |---|---|
 | INV-LSN-13 | the rotation handle's `click` stop and `keydown` swallow moved to `chrome/handle-layer.ts:8` as is; handling only its own keys is a later behaviour change, not scheduled |
-| INV-KEY-18 | element keydown on runtime-owned controls and fields stays the P8 allowlist: `chrome/handle-layer.ts`, `chrome/text-entry-host.ts`, `chrome/locked-affordance.ts` |
+| INV-KEY-18 | element keydown on runtime-owned controls and fields stays the P8 allowlist: `chrome/handle-layer.ts`, `chrome/text-entry-host.ts` |

@@ -352,7 +352,6 @@ export interface ToolHarnessChrome {
   readonly activeHandle: ToolHandleId | null
   readonly cursor: string
   readonly tooltip: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null
-  readonly lockedAffordance: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null
   /** The open text entry, which ToolHostDeps.chrome.isTextEntryOpen reports; it commits on the map's focus (its blur) while it
    *  holds focus, and on submitUnfocusedTextEntry once it has lost it. */
   readonly textEntry: ToolHarnessTextEntry | null
@@ -470,7 +469,6 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
     activeHandle: null as ToolHandleId | null,
     cursor: 'default',
     tooltip: null as ToolHarnessChrome['tooltip'],
-    lockedAffordance: null as ToolHarnessChrome['lockedAffordance'],
     textEntry: null as ToolHarnessTextEntry | null,
   }
   let menuOpen = false
@@ -516,9 +514,6 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       isTextEntryOpen: () => chrome.textEntry !== null,
       setTooltip(tooltip) {
         chrome.tooltip = tooltip
-      },
-      setLockedAffordance(affordance) {
-        chrome.lockedAffordance = affordance
       },
     },
     menu: {

@@ -113,8 +113,6 @@ export interface ToolHostDeps {
      *  entry's own element handler. */
     isTextEntryOpen(): boolean
     setTooltip(t: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null): void   // chrome/hover-tooltip.ts
-    /** chrome/locked-affordance.ts; its factory takes onUnlock, wired by interaction-session.ts. */
-    setLockedAffordance(a: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null): void
   }
   readonly menu: ContextMenuPort                                // opened only by the host (menuAt)
   readonly focus: CanvasFocusPort                               // ToolEffects.requestFocus
@@ -130,7 +128,7 @@ export interface ToolHostDeps {
   /** Today's deps.nudge (the runtime's scene-edit commands); the host owns the series (nudge below). */
   readonly nudge: Pick<CanvasSceneEditCommandSurface, 'nudgeSelected' | 'endNudge'>
   readonly timers: { set(atMs: number, cb: () => void): number; clear(id: number): void; readonly clock: () => number }
-  /** Hover restyle and the locked-object affordance: today's deps.setHoveredTarget. */
+  /** Hover restyle (a directly locked object shows the locked hover stroke): today's deps.setHoveredTarget. */
   readonly hover: (target: SceneDesignObjectTarget | null) => void
   /** The raster inspection probe (CanvasRuntimeAppAdapter.tryInspectAt, passed by scene-runtime.ts); true claims the press. */
   readonly inspect?: (world: WorldPoint) => boolean
@@ -179,8 +177,8 @@ export interface ToolHost {
   /**
    * Presses the host never sees as gestures: the session calls it for every raw pointerdown on the map host before routing it
    * (from the source's raw input, not a gesture; the down's role, 'auxiliary' as 'middle'). Commits the nudge series for any
-   * button. For an admitted primary or middle press outside the text entry ('owned-text') and the Unlock affordance, with no
-   * live press from another pointer id, it also closes the canvas menu and focuses the map (so an open text
+   * button. For an admitted primary or middle press outside the text entry ('owned-text'), with no live press from
+   * another pointer id, it also closes the canvas menu and focuses the map (so an open text
    * entry commits on its blur): today's _onPointerDown conditions.
    */
   rawPress(button: 'primary' | 'secondary' | 'middle', target: TargetClass, pointerId?: number): void
@@ -215,8 +213,8 @@ export interface ToolHost {
    * A pointer release that ended no press of the tool's, which the session reports after routing it: the end or cancel
    * (pointercancel, lost capture, Esc) of a pointer pan (middle, Space, overview or the Pan tool's), or an up with no
    * press of the map's (a right-click release, a release off the map, after a press the scene or the probe refused); not
-   * one while another pointer's press is live, in overview, or over the note editor, a handle or the Unlock affordance
-   * (today's _onPointerUp exceptions). The host's own tap and drag-end of a press the tool never heard do the same. Today's window pointerup ran _cancelTransientInteraction for each: the series commits, the drop preview
+   * one while another pointer's press is live, in overview, or over the note editor or a handle (today's _onPointerUp
+   * exceptions). The host's own tap and drag-end of a press the tool never heard do the same. Today's window pointerup ran _cancelTransientInteraction for each: the series commits, the drop preview
    * and the passive hover clear, the active tool's cancelTransient('navigate') runs (a tool that keeps its draft through a
    * pan keeps it here too) and the cursor returns to the tool's. A press of the tool's still live is left to its own
    * release.
@@ -224,8 +222,8 @@ export interface ToolHost {
   released(): void
   /**
    * Today's _cancelInterruptedInteraction, which the session calls on window blur after feeding the recogniser (which releases
-   * Space and ends the live sessions): commits the nudge series, clears the passive hover, the tooltip and the locked
-   * affordance, calls the active tool's cancelTransient('navigate') (a tool that keeps its draft through a pan keeps it
+   * Space and ends the live sessions): commits the nudge series, clears the passive hover and the tooltip, calls the active
+   * tool's cancelTransient('navigate') (a tool that keeps its draft through a pan keeps it
    * here too) and resets the cursor to the tool's. A failure aborts whatever Scene Edit was still open.
    */
   interrupted(): void
@@ -237,14 +235,11 @@ export interface ToolHost {
   }
   prepareForDocumentReplacement(): void                         // deactivate('document-replaced') and drop live sessions
   refreshTranslations(): void                                   // re-publishes guidance and handle labels
-  /** Every hover whose target is the map (`surface`), before the overview and hover-suppression filters; null on hover-end
-   *  (the pointer left the map; from phase 2 also a move over owned chrome, the text entry or a handle, never the Unlock
-   *  affordance). A hover over owned chrome or anything off the map publishes nothing, and a move over the text
-   *  entry, a handle or the Unlock affordance emits no gesture before phase 2, so the lens keeps its point there, as today's
-   *  lens skips buttons, inputs, textareas, contenteditable and [data-preserve-overlays] (spec §1.4 "Hover", §2.2 "Hover").
-   *  A hover made with a button held is published too: the interaction session's subscribePointerWorld drops it (its raw
-   *  buttonMask, as today's lens skipped a move with any button held). For the inspection lens, the status line and, later, hover
-   *  readouts over analysis results: the screen point lets a readout query the map there without projecting (R1, P2). */
+  /** Every hover whose target is the map (`surface`), before the overview and hover-suppression filters; null on hover-end:
+   *  the pointer left the map, or moved over owned chrome, the text entry or a handle (U6), so the lens drops its point
+   *  there. A hover off the map publishes nothing (spec §1.4 "Hover", §2.2 "Hover"). A hover made with a button held is
+   *  published too: the interaction session's subscribePointerWorld drops it (its raw buttonMask, as today's lens skipped a
+   *  move with any button held). For the inspection lens, the status line and, later, hover readouts over analysis results: the screen point lets a readout query the map there without projecting (R1, P2). */
   subscribePointerWorld(listener: (point: PointerWorld | null) => void): () => void
   dispose(): void
 }

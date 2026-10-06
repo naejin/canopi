@@ -13,10 +13,8 @@ export type ButtonRole = 'primary' | 'secondary' | 'auxiliary'
 export type TargetClass =
   | { readonly kind: 'surface' }                                   // host or [data-canvas-surface]
   | { readonly kind: 'handle'; readonly id: ToolHandleId }         // [data-canvas-handle] in the handle layer
-  | { readonly kind: 'owned-chrome'; readonly lockedAffordance?: true }   // the session chrome ([data-canvas-chrome]), MapLibre's attribution (.maplibregl-ctrl, presses and hovers only: a wheel there is surface); any other button, input, select,
-                                                                   // [contenteditable] or [data-preserve-overlays] in the host (the inspection lens's skip set);
-                                                                   // lockedAffordance: the Unlock affordance ([data-locked-object-affordance], classified in
-                                                                   // dom-input-source.ts), which keeps the hover in every phase (§2.2)
+  | { readonly kind: 'owned-chrome' }                              // the session chrome ([data-canvas-chrome]), MapLibre's attribution (.maplibregl-ctrl, presses and hovers only: a wheel there is surface); any other button, input, select,
+                                                                   // [contenteditable] or [data-preserve-overlays] in the host (the inspection lens's skip set)
   | { readonly kind: 'owned-text' }                                // the text-entry host
   | { readonly kind: 'foreign' }
 

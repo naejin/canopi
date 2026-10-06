@@ -54,6 +54,7 @@ import {
 } from '../../app/panel-targets/state'
 import { createAppCanvasRuntimeAppAdapter } from '../../app/canvas-runtime/app-adapter'
 import { canvasContextMenuRequest } from '../../app/canvas-context-menu/state'
+import { buildCanvasContextMenuEntries, type CanvasContextMenuCommand } from '../../app/canvas-context-menu/entries'
 import { createDesktopCanvasRuntimeAppAdapter } from '../../app/canvas-runtime/desktop-adapter'
 import { createAppSceneRuntimePanelTargetAdapter } from '../../app/canvas-runtime/panel-target-adapter'
 import { locale, plantSpacingIntervalM } from '../../app/settings/state'
@@ -1069,6 +1070,41 @@ describe('scene canvas runtime', () => {
 
     expect(container.querySelector('textarea')).toBeNull()
     expect(runtime.querySurface.getSceneSnapshot().annotations[0]?.text).toBe('New document')
+    events.dispose()
+    runtime.destroy()
+  })
+
+  it('Unlock in the canvas menu unlocks a directly locked object', async () => {
+    const runtime = stubbedRuntime({
+      appAdapter: createAppCanvasRuntimeAppAdapter({ presentationData: {} }),
+    })
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const events = createSceneInteractionEventHarness(container)
+    const file = fileWithOnlyPlants('plant-1')
+    runtime.documentSurface.loadDocument({ ...file, plants: file.plants.map((plant) => ({ ...plant, locked: true })) })
+    setInteractionViewport(runtime)
+    const point = events.clientPoint({ x: 10, y: 10 })
+    container.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: point.x,
+      clientY: point.y,
+    }))
+    const request = canvasContextMenuRequest.value!
+    const unlock = buildCanvasContextMenuEntries(request, {
+      translate: (key) => key,
+      openPlantAppearance: () => {},
+      summary: null,
+      openSpeciesDetail: () => {},
+      addToCalendar: () => {},
+      setUnitCost: () => {},
+    }).find((entry): entry is CanvasContextMenuCommand => 'run' in entry && entry.id === 'unlock')!
+
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.locked).toBe(true)
+    expect(unlock.disabled).toBe(false)
+    unlock.run()
+
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.locked).toBe(false)
     events.dispose()
     runtime.destroy()
   })

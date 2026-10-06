@@ -62,7 +62,7 @@ export type HitTarget =
   | { readonly kind: 'zone-edge'; readonly zoneId: string; readonly edgeIndex: number; readonly distancePx: number }
   | { readonly kind: 'guide'; readonly guideId: string }
 /** No filter is today's hitTestTopLevel exactly: interactive layers, a group as the top-level target, guides, the revealed
- *  (selected or hovered) note, and object-locked objects, which the caller rejects itself (Select shows Unlock). */
+ *  (selected or hovered) note, and object-locked objects, which the caller rejects itself. */
 export interface HitFilter {
   readonly kinds?: readonly SceneDesignObjectTarget['kind'][]
   /** hitAt: also locked layers that are visible (today's hitTestVisibleTopLevel, the host's hover). hitInQuad: a phase-1
@@ -130,7 +130,7 @@ export type ToolCommand =
   | { readonly kind: 'spacing-cancel' }                                       // Esc in the field: drops the source, focus to the map
 
 /**
- * A 'handled' hover clears and skips the host's passive hover (restyle, tooltip, Unlock affordance); 'pass' lets it run.
+ * A 'handled' hover clears and skips the host's passive hover (restyle, tooltip); 'pass' lets it run.
  * A drag-start or drag-move is a hover with the button down unless the tool answers 'handled': a tool that keeps its press
  * to the release answers 'handled' (Select, Text, Place plants), one whose press let go of it answers 'pass'.
  */

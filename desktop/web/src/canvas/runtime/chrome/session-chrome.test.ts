@@ -180,40 +180,26 @@ describe('the session\'s chrome', () => {
     expect(cancelled).toHaveBeenCalledTimes(1)
   })
 
-  it('a registered tool\'s passive hover shows the plant tooltip and the Unlock affordance, whose Unlock unlocks', () => {
+  it('a registered tool\'s passive hover shows the plant tooltip', () => {
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('locked-plant', 'Malus domestica', { x: 20, y: 30 }, { locked: true, commonName: 'Apple' })]
     })
     useStubTools(stubTool('rectangle'))
-    let language = 'en'
-    const { session } = createSession({ translate: (key) => `${language}:${key}` })
+    const { session } = createSession()
     session.setTool('rectangle')
 
     events.pointerMove({ x: 20, y: 30 })
 
-    // The host's are the chrome's, and the map carries one of each.
+    // The host's is the chrome's, and the map carries one.
     expect(container.querySelectorAll('[data-hover-tooltip]')).toHaveLength(1)
-    expect(container.querySelectorAll('[data-locked-object-affordance]')).toHaveLength(1)
     const tooltip = container.querySelector<HTMLElement>('[data-canvas-chrome="hover-tooltip"][data-hover-tooltip]')!
     expect(tooltip.style.display).toBe('block')
     expect(tooltip.textContent).toBe('AppleMalus domestica')
-    const affordance = container.querySelector<HTMLElement>('[data-canvas-chrome="locked-affordance"][data-locked-object-affordance]')!
-    expect(affordance.dataset.lockedObjectId).toBe('locked-plant')
-    const unlock = affordance.querySelector<HTMLButtonElement>('[data-locked-object-unlock]')!
-    expect(unlock.getAttribute('aria-label')).toBe('en:canvas.lockedObject.unlock')
-
-    language = 'fr'
-    session.refreshTranslations()
-    expect(unlock.getAttribute('aria-label')).toBe('fr:canvas.lockedObject.unlock')
-
-    unlock.click()
-    expect(store.persisted.plants[0]?.locked).toBe(false)
-    expect(affordance.style.display).toBe('none')
   })
 
   it('the chrome goes with the session', async () => {
     store.updatePersisted((draft) => {
-      draft.plants = [makePlant('locked-plant', 'Malus domestica', { x: 20, y: 30 }, { locked: true })]
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
     const rectangle = stubTool('rectangle', {
       activate: (ctx) => ctx.effects.setHandles([CORNER]),
@@ -237,7 +223,7 @@ describe('the session\'s chrome', () => {
     session.dispose()
     sessions.length = 0
 
-    for (const selector of ['[data-canvas-handle-layer]', 'textarea', '[data-hover-tooltip]', '[data-locked-object-affordance]']) {
+    for (const selector of ['[data-canvas-handle-layer]', 'textarea', '[data-hover-tooltip]']) {
       expect(container.querySelector(selector), selector).toBeNull()
     }
   })

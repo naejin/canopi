@@ -458,11 +458,6 @@ export function plantHoverTooltip(container: HTMLElement): HTMLElement {
   return tooltip
 }
 
-/** The Unlock affordance the ToolHost's passive hover shows (chrome/locked-affordance.ts), once it has been shown. */
-export function lockedAffordance(container: HTMLElement): HTMLElement | null {
-  return container.querySelector<HTMLElement>('[data-canvas-chrome="locked-affordance"]')
-}
-
 export function nextAnimationFrame(): Promise<void> {
   return new Promise((resolve) => {
     requestAnimationFrame(() => resolve())

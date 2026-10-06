@@ -26,8 +26,6 @@ export const ANDROID: InputPlatform = Object.freeze({ os: 'android', gestureEven
 export const SURFACE: TargetClass = Object.freeze({ kind: 'surface' })
 export const OWNED_TEXT: TargetClass = Object.freeze({ kind: 'owned-text' })
 export const OWNED_CHROME: TargetClass = Object.freeze({ kind: 'owned-chrome' })
-/** The Unlock affordance: owned chrome that keeps the hover in every phase (spec §2.2 "Hover"). */
-export const UNLOCK_AFFORDANCE: TargetClass = Object.freeze({ kind: 'owned-chrome', lockedAffordance: true })
 export const FOREIGN: TargetClass = Object.freeze({ kind: 'foreign' })
 export const ROTATE_HANDLE: TargetClass = Object.freeze({ kind: 'handle', id: 'rotate' as ToolHandleId })
 

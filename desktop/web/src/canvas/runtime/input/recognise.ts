@@ -334,12 +334,10 @@ function wheel(step: Step, input: RawOf<'wheel'>): void {
  * A move with no live session (buttons or not) is a hover wherever the source heard it: over the map, off it at the point a
  * hover left it (carried by the leave), or off it while the source still follows a pressed pointer whose session ended
  * (an Esc mid-press); off the map the host clears its own hover and the tool's still runs. Over the canvas's own things (owned chrome such as the attribution, the text entry,
- * a handle) it ends the hover and its tooltip (spec §2.2 "Hover", U6); the Unlock affordance emits nothing, so the hover
- * it belongs to stays until it is clicked.
+ * a handle) it ends the hover and its tooltip (spec §2.2 "Hover", U6).
  */
 function hover(step: Step, input: RawOf<'move'>): void {
   const { target } = input
-  if (target.kind === 'owned-chrome' && target.lockedAffordance) return
   if (target.kind === 'owned-text' || target.kind === 'handle' || target.kind === 'owned-chrome') {
     step.gestures.push({ kind: 'hover-end' })
     return

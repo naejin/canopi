@@ -2000,7 +2000,6 @@ const CANVAS_V2_POLICIES = [
       'src/canvas/runtime/input/selection-drag-guard.ts',
       'src/canvas/runtime/chrome/text-entry-host.ts',
       'src/canvas/runtime/chrome/handle-layer.ts',
-      'src/canvas/runtime/chrome/locked-affordance.ts',
       'src/canvas/runtime/inspection-lens.ts',
       ...TEST_SOURCE_PATTERNS,
     ],
@@ -3056,7 +3055,6 @@ describe('canvas v2 policies, end of 0B', () => {
       ]),
       plantedSource('src/canvas/runtime/chrome/handle-layer.ts', ["element.addEventListener('pointerenter', () => {})"]),
       plantedSource('src/canvas/runtime/chrome/text-entry-host.ts', ["textarea.addEventListener('blur', () => {})"]),
-      plantedSource('src/canvas/runtime/chrome/locked-affordance.ts', ["button.addEventListener('click', () => {})"]),
       plantedSource('src/canvas/runtime/inspection-lens.ts', ["document.fonts?.addEventListener('loadingdone', () => {})"]),
       plantedSource('src/maplibre/workspace-map.ts', ["container.addEventListener('pointerdown', () => {})"]),
       plantedSource('src/maplibre/view-snapshot-map.ts', ["signal.addEventListener('abort', () => {})"]),
@@ -3067,7 +3065,6 @@ describe('canvas v2 policies, end of 0B', () => {
       'src/canvas/runtime/input/selection-drag-guard.ts',
       'src/canvas/runtime/chrome/text-entry-host.ts',
       'src/canvas/runtime/chrome/handle-layer.ts',
-      'src/canvas/runtime/chrome/locked-affordance.ts',
       'src/canvas/runtime/inspection-lens.ts',
       ...TEST_SOURCE_PATTERNS,
     ].join(', ')

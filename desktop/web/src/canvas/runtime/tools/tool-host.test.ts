@@ -759,13 +759,11 @@ describe('ToolHost', () => {
       expect(h.menuOpen).toBe(true)
       expect(h.record.focus).toEqual([])
 
-      // A press inside the text entry or on the Unlock affordance commits the series and keeps the entry open.
+      // A press inside the text entry commits the series and keeps the entry open.
       h.openTextEntry()
       h.arrow('ArrowRight')
       h.host.rawPress('primary', { kind: 'owned-text' })
-      h.arrow('ArrowRight')
-      h.host.rawPress('middle', { kind: 'owned-chrome', lockedAffordance: true })
-      expect(h.record.nudges).toEqual(['nudge:0.1,0', 'end', 'nudge:0.1,0', 'end', 'nudge:0.1,0', 'end'])
+      expect(h.record.nudges).toEqual(['nudge:0.1,0', 'end', 'nudge:0.1,0', 'end'])
       expect(h.menuOpen).toBe(true)
       expect(h.record.focus).toEqual([])
       expect(h.chrome.textEntry).not.toBeNull()
@@ -903,17 +901,16 @@ describe('ToolHost', () => {
       h.hover({ x: 50, y: 50 })
       expect(h.record.hovers.at(-1)).toBeNull()
       expect(h.chrome.tooltip).toBeNull()
-      expect(h.chrome.lockedAffordance).toBeNull()
     })
 
-    it('a directly locked object under a passing hover shows the Unlock affordance', () => {
+    it('a passing hover restyles a directly locked object, which draws the locked hover stroke', () => {
       useStubTools(stubTool('select'))
       const h = harness({ scene: { plants: [appleAt({ x: 50, y: 50 }, { locked: true })] } })
 
       h.hover({ x: 50, y: 50 })
-      expect(h.chrome.lockedAffordance).toEqual({ target: P1, at: { x: 50, y: 50 } })
+      expect(h.record.hovers.at(-1)).toEqual(P1)
       h.hover({ x: 300, y: 250 })
-      expect(h.chrome.lockedAffordance).toBeNull()
+      expect(h.record.hovers.at(-1)).toBeNull()
     })
 
     it('hover-end clears the passive hover and leaves the preview to the tool', () => {

@@ -1093,12 +1093,12 @@ describe('releases the tool did not hear (today\'s pointerup cleanup)', () => {
     }
   })
 
-  it('a release over the note editor, a handle or the Unlock affordance, of another pointer, in overview or off the map runs nothing', () => {
+  it('a release over the note editor or a handle, of another pointer, in overview or off the map runs nothing', () => {
     const rectangle = stubTool('rectangle')
     useStubTools(rectangle)
     const { session } = createSession()
     session.setTool('rectangle')
-    const owned = ['data-canvas-text-entry', 'data-canvas-handle', 'data-locked-object-affordance'].map((attribute) => {
+    const owned = ['data-canvas-text-entry', 'data-canvas-handle'].map((attribute) => {
       const element = document.createElement('div')
       element.setAttribute(attribute, 'create')
       container.appendChild(element)

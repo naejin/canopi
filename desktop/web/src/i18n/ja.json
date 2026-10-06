@@ -157,10 +157,6 @@
       "commitLimitWarning": "間隔を広げるか線を短くしてください",
       "dragAlong": "列に沿ってドラッグ"
     },
-    "lockedObject": {
-      "locked": "ロック中",
-      "unlock": "ロック解除"
-    },
     "contextMenu": {
       "ariaLabel": "キャンバス編集コマンド",
       "showName": "名前を表示",

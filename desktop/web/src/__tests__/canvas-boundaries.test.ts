@@ -31,11 +31,10 @@ interface Source {
 const SRC = new URL('../', import.meta.url)
 const TEST_SOURCE = /(^src\/__tests__\/|\.test\.tsx?$)/
 
-/** The three chrome files that listen on their own elements (plan §5 P6). */
+/** The two chrome files that listen on their own elements (plan §5 P6). */
 const CHROME_ELEMENT_LISTENERS = [
   'src/canvas/runtime/chrome/text-entry-host.ts',
   'src/canvas/runtime/chrome/handle-layer.ts',
-  'src/canvas/runtime/chrome/locked-affordance.ts',
 ] as const
 
 /** The one owner of window key listeners (spec §1.6): its capture and bubble keydown and capture keyup; it also holds
@@ -234,7 +233,6 @@ describe('canvas v2 regex policies', () => {
     expect(regexHits(policy, [
       { path: 'src/canvas/runtime/chrome/handle-layer.ts', text: "host.addEventListener('pointerdown', press)" },
       { path: 'src/canvas/runtime/chrome/text-entry-host.ts', text: "this.container.addEventListener('keydown', keys)" },
-      { path: 'src/canvas/runtime/chrome/locked-affordance.ts', text: "button.addEventListener('click', unlock)\n// host.addEventListener('x', y)" },
     ])).toEqual({
       'src/canvas/runtime/chrome/handle-layer.ts': 1,
       'src/canvas/runtime/chrome/text-entry-host.ts': 1,

@@ -157,10 +157,6 @@
       "commitLimitWarning": "Augmentez l’intervalle ou raccourcissez la ligne",
       "dragAlong": "faites glisser le long de la rangée"
     },
-    "lockedObject": {
-      "locked": "Verrouillé",
-      "unlock": "Déverrouiller"
-    },
     "contextMenu": {
       "ariaLabel": "Commandes d’édition du canevas",
       "showName": "Afficher le nom",
