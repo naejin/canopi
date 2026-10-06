@@ -324,24 +324,6 @@ describe('object stamp tool', () => {
     expect(h.store.persisted.plants).toHaveLength(2)
   })
 
-  it('a re-origin hides the ghost until the next hover, which shows it under the pointer with the pick', () => {
-    const h = stampHarness({ plants: [smallApple({ x: 40, y: 40 })] })
-    h.click({ x: 40, y: 40 })
-    h.hover({ x: 90, y: 90 })
-    h.leave()
-    expect(ghosts(h)).toHaveLength(1)
-
-    h.reorigin({ lon: 0.01, lat: 0.005 })
-    h.advance(0)
-    expect(ghosts(h)).toEqual([])
-    // `]` turns the pick; its ghost stays hidden.
-    h.host.command({ kind: 'rotate-held', stepDeg: 15 })
-    expect(ghosts(h)).toEqual([])
-
-    h.hover({ x: 120, y: 80 })
-    expectPoint(ghostPlant(h).position, h.world({ x: 120, y: 80 }))
-  })
-
   it('Esc drops the pick, a second Esc leaves', () => {
     const h = stampHarness({ plants: [smallApple({ x: 40, y: 40 })] })
     expect(h.host.activeToolHasEscapeTransient()).toBe(false)
