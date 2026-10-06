@@ -158,7 +158,6 @@
     "src/canvas/runtime/view/types.ts#PlanarProjection",
     "src/canvas/runtime/zone-geometry.ts#ZoneMeasure",
     "src/canvas/runtime/zone-geometry.ts#ZoneWorldBounds",
-    "src/canvas/scale-bar.ts#ScaleBarDisplay",
     "src/commands/graph/catalog.ts#AppCommandState",
     "src/commands/graph/projections.ts#AppCommandGraphChromeProjection",
     "src/commands/graph/projections.ts#AppCommandGraphPanelProjection",
