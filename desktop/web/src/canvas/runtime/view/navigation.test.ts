@@ -634,6 +634,43 @@ describe('view navigation', () => {
     view.dispose()
   })
 
+  it('a rotation session turns about its moving anchor: the world point under the centroid stays within 2 px through a pan plus a twist (A5)', () => {
+    const view = createTestView({ screen: { width: 1000, height: 800 } })
+    let centroid = { x: 400, y: 300 }
+    const world = view.view().screenToWorld(centroid)
+    const session = view.navigation.beginRotation(centroid)
+
+    // Two fingers drift 100 px right while they twist 40°, panning then turning on each move as the recogniser sends it.
+    for (let move = 1; move <= 10; move += 1) {
+      const next = { x: 400 + 10 * move, y: 300 }
+      view.navigation.panByPx({ x: next.x - centroid.x, y: next.y - centroid.y })
+      centroid = next
+      session.update(-4 * move, { step: false, anchorPx: centroid })
+    }
+
+    const under = view.view().worldToScreen(world)
+    expect(Math.hypot(under.x - centroid.x, under.y - centroid.y)).toBeLessThan(2)
+    expect(view.view().camera.bearingDeg).toBeCloseTo(320, 6)
+    session.end()
+    view.dispose()
+  })
+
+  it('a rotation session released within 7° of north snaps about its last anchor', () => {
+    const view = createTestView({ screen: { width: 1000, height: 800 } })
+    const session = view.navigation.beginRotation({ x: 400, y: 300 })
+    view.navigation.panByPx({ x: 100, y: 0 })
+    session.update(-5, { step: false, anchorPx: { x: 500, y: 300 } })
+    const world = view.view().screenToWorld({ x: 500, y: 300 })
+
+    session.end()
+
+    expect(view.view().camera.bearingDeg).toBe(0)
+    const under = view.view().worldToScreen(world)
+    expect(under.x).toBeCloseTo(500, 6)
+    expect(under.y).toBeCloseTo(300, 6)
+    view.dispose()
+  })
+
   it('opens a Design fitted at the given bearing', () => {
     const scene = createScene()
     const view = sceneView(1000, 800, scene, { x: 100, y: 0, scale: 8 })

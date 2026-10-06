@@ -233,13 +233,16 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
       const session = {}
       rotation = session
       const live = () => rotation === session
+      // A twist's pivot moves with its centroid (A5): each turn, and the release's snap, go about the latest one.
+      let anchor = pivot
       return {
-        update(totalDeltaDeg, { step }) {
+        update(totalDeltaDeg, { step, anchorPx }) {
           if (!live() || !Number.isFinite(totalDeltaDeg)) return
+          if (anchorPx && Number.isFinite(anchorPx.x) && Number.isFinite(anchorPx.y)) anchor = anchorPx
           const raw = start.bearingDeg + totalDeltaDeg
           apply({
             kind: 'rotate-around',
-            anchorPx: pivot,
+            anchorPx: anchor,
             bearingDeg: step ? roundToStep(raw, ROTATION_STEP_DEG) : normaliseBearing(raw),
           })
         },
@@ -248,7 +251,7 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
           rotation = null
           const bearing = frame().view.camera.bearingDeg
           if (bearing !== 0 && snapBearing(bearing) === 0) {
-            apply({ kind: 'rotate-around', anchorPx: pivot, bearingDeg: 0 })
+            apply({ kind: 'rotate-around', anchorPx: anchor, bearingDeg: 0 })
           }
         },
         cancel() {
