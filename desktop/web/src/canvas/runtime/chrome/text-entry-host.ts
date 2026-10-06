@@ -29,7 +29,7 @@ export interface TextEntryHostOptions {
 
 export interface TextEntryHost {
   /** Opens an entry; an open one is submitted first and stays open when its commit is refused. The same note asked again
-   *  keeps its field (today's start of an editor already open). onCancel runs after the entry's own Esc closed it. */
+   *  keeps its field, focused and all selected. onCancel runs after the entry's own Esc closed it. */
   open(request: TextEntryRequest, submit: (text: string) => 'close' | 'keep', onCancel?: () => void): void
   /** Discards the open entry without submitting it (no onCancel: the caller closed it). */
   close(): void
@@ -159,7 +159,7 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
   }
 }
 
-/** The same note's entry: today's start() of the annotation already being edited. */
+/** The same note asked again (a second double-click on the note being edited): same anchor, same starting text. */
 function sameEntry(open: TextEntryRequest, next: TextEntryRequest): boolean {
   return open.anchor.x === next.anchor.x
     && open.anchor.y === next.anchor.y
