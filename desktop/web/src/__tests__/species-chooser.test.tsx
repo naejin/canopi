@@ -336,14 +336,19 @@ describe('Place plants species chooser', () => {
     expect(document.activeElement).toBe(map)
   })
 
-  it('returns focus to the map on Esc when no species is chosen, leaving the tool armed', async () => {
+  it('with no species chosen, Esc in the chooser leaves Place plants', async () => {
+    // The chooser is the tool's only state while no species is chosen, so one Esc arms Select (U35).
     const input = container.querySelector<HTMLInputElement>('input[type="search"]')!
     input.focus()
 
-    await act(() => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })) })
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    await act(() => { input.dispatchEvent(escape) })
 
+    expect(escape.defaultPrevented).toBe(true)
+    expect(currentCanvasTool.value).toBe('select')
+    expect(container.querySelector('input[type="search"]')).toBeNull()
+    expect(readPlantStampSource()).toBeNull()
     expect(document.activeElement).toBe(map)
-    expect(options().length).toBeGreaterThan(0)
   })
 
   it('leaves an Esc that is part of an IME composition to the IME', async () => {

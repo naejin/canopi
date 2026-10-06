@@ -1,5 +1,6 @@
 import type { FunctionComponent } from 'preact'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { armCanvasTool } from '../../app/keyboard/arming'
 import { focusOwner } from '../../app/keyboard/focus-owner'
 import { useEnglishFallbackNames } from '../../app/plant-finder/catalog-names'
 import { toolCardContent, type SavedStampSummary } from '../../app/tool-card/content'
@@ -87,6 +88,13 @@ export function ToolCard({ stampChooser: StampChooser }: {
     focusOwner.focusMap()
   }
 
+  /** Esc in the species chooser: with no species chosen the chooser is all Place plants holds, so Esc leaves the tool;
+   *  after Change species it only closes the chooser. */
+  function escapeSpeciesChooser(): void {
+    if (!source) armCanvasTool('select', { from: 'card' })
+    closeChooser()
+  }
+
   return (
     <section
       className={content ? styles.card : styles.idle}
@@ -140,7 +148,7 @@ export function ToolCard({ stampChooser: StampChooser }: {
           autoFocus={changingSpecies}
           focusRequest={prompts.current}
           onChosen={closeChooser}
-          onEscape={closeChooser}
+          onEscape={escapeSpeciesChooser}
         />
       )}
       {StampChooser && stampChooser && choosingStamp && <StampChooser onChosen={closeChooser} onEscape={closeChooser} />}
