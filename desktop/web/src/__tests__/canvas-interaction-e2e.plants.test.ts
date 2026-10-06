@@ -2,6 +2,7 @@
 // tests that arm Plant stamp or Plant a row, and the three Place plants describes.
 // Shared fakes, helpers and fixture: support/canvas-interaction-setup.ts.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { gridInterval } from '../canvas/grid'
 import {
   readPlantStampSource,
   selectPlantStampSource,
@@ -753,7 +754,7 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('gives Shift direction constraint priority over Plant Spacing snapping', () => {
+  it('keeps a Shift row on its 45 degree step, its length then snapped along it', () => {
     plantSpacingIntervalM.value = 1
     snapToGridEnabled.value = true
     testView.setViewport({ x: 0, y: 0, scale: 10 })
@@ -779,11 +780,15 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 40, y: 40 }, { button: 0 })
     events.pointerMove({ x: 71, y: 52 }, { button: 0, shiftKey: true })
 
-    expect(draftShapes('ghost')).toHaveLength(3)
+    // Constrain first, then the length: level with the source, a whole number of grid intervals long.
+    const interval = gridInterval(10).interval
+    const end = 4 + Math.round(Math.hypot(3.1, 1.2) / interval) * interval
+    const xs = Array.from({ length: Math.round(end - 4) }, (_, index) => 5 + index)
+    expect(draftShapes('ghost')).toHaveLength(xs.length)
 
     events.pointerDown({ x: 71, y: 52 }, { button: 0, shiftKey: true })
-    expect(store.persisted.plants.slice(1).map((plant) => plant.position.y)).toEqual([4, 4, 4])
-    expect(store.persisted.plants.slice(1).map((plant) => plant.position.x)).toEqual([5, 6, 7])
+    expect(store.persisted.plants.slice(1).map((plant) => plant.position.y)).toEqual(xs.map(() => 4))
+    expect(store.persisted.plants.slice(1).map((plant) => plant.position.x)).toEqual(xs)
     session.dispose()
   })
 

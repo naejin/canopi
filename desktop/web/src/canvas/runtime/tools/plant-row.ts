@@ -5,8 +5,9 @@
 // Scene Edit that selects the source and the new plants. A held press is a drag past the recogniser's slop (spec §1.4); a
 // release inside it is a click.
 // The row's plants repeat the source at the spacing interval of the tool card's field (the spacing commands; Settings keeps
-// the interval). Shift turns the row to 45° steps from the source and turns snapping off (the host's constraint and
-// noSnap), and the host clamps the pointer to the view (clampsToView). A pan, a blur and a tool re-arm keep the source; Esc
+// the interval). Shift turns the row to 45° steps against the screen from the source, its length then snapped along it
+// (the host's constraint), Ctrl or Cmd turns snapping off (noSnap), and the host clamps the pointer to the view
+// (clampsToView). A pan, a blur and a tool re-arm keep the source; Esc
 // drops it first, then leaves the tool (today's order, even mid-drag). The draft is the source ring at the plant's
 // presented radius, the dashed row guide, a disc for each plant the row would add (at most 250) and the guide's length.
 

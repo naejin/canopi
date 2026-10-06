@@ -32,23 +32,26 @@ import type { SavedObjectStampPayload } from '../../saved-object-stamp-payload'
 
 /** Modifiers by meaning, resolved per platform and per phase by the ToolHost. */
 export interface ToolModifiers {
-  /** Toggle into the selection: Shift, or mod (Cmd on Mac, Ctrl elsewhere). */
+  /** Toggle into the selection: Shift, Ctrl or Cmd (a Mac Ctrl press is a right-click and never reaches a tool). */
   readonly additive: boolean
   /** Remove from the selection: Alt. */
   readonly subtractive: boolean
-  /** Shift. Every phase: Polygon and Plant a row 45° steps; the rotate handle's 15° steps from the press angle. Phase 2 adds square/circle for Rectangle and Ellipse and 45° screen steps for Line and Measure. */
+  /** Shift: 45° screen steps for Polygon, Plant a row, Line and Measure; a square or a circle for Rectangle and Ellipse;
+   *  the rotate handle's 15° steps from the press angle, and every handle drag. */
   readonly constrain: boolean
-  /** Plant a row only. LEGACY/ROTATION: Shift. Phase 2: mod held during the drag. */
+  /** Plant a row only: Ctrl or Cmd held (on every OS). */
   readonly noSnap: boolean
 }
 
 export interface ToolPoint {
   readonly world: WorldPoint       // raw plane metres (for a tool with clampsToView, from the screen point clamped to the view)
-  /** world snapped to grid and guides without the constraint: Polygon's close test under LEGACY (today snap(raw)). Equals world when snap is off. */
+  /** world snapped to the grid without the constraint: Polygon's close test. Equals world when snap is off. */
   readonly free: WorldPoint
   /** world after the tool's constraint (CanvasTool.constraint, Shift): 'direction' turns origin → point to the step and keeps the length; 'rotation-delta' turns the point about the pivot so the angle since the press is a step multiple. Equals world when none applies. */
   readonly constrained: WorldPoint
-  /** Grid and guides on world axes (user). Order per §2.3: LEGACY and ROTATION keep today's (Polygon snaps, then constrains; a Plant a row Shift is also no-snap); V2 constrains, then snaps the length along the ray. Equals constrained when snap is off, noSnap is held or the constraint is 'rotation-delta'. */
+  /** The grid on world axes (user); under a 'direction' constraint the constraint wins and the length along its ray is
+   *  rounded to the grid interval (spec §2.3, one order for every tool). Equals constrained when snap is off, noSnap is
+   *  held or the constraint is 'rotation-delta'. */
   readonly snapped: WorldPoint
   readonly modifiers: ToolModifiers
   readonly pointer: PointerKind

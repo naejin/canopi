@@ -308,4 +308,51 @@ describe('Zone drag tools', () => {
     const outline = getEllipticalZonePolygon(zone, 4) ?? []
     expectScreen(h, outline, [{ x: 220, y: 140 }, { x: 160, y: 180 }, { x: 100, y: 140 }, { x: 160, y: 100 }])
   })
+
+  it('Shift draws a square', () => {
+    const h = harness({ tool: 'rectangle', camera: { bearingDeg: 30 } })
+
+    h.press({ x: 100, y: 100 })
+    h.move({ x: 220, y: 160 }, { shift: true })
+    const draft = shapes(h)[0]
+    // The longer side wins, level on screen: 120 px by 120 px from the press.
+    expectScreen(h, draft?.kind === 'polygon' ? draft.points : [], [
+      { x: 100, y: 100 }, { x: 220, y: 100 }, { x: 220, y: 220 }, { x: 100, y: 220 },
+    ])
+    h.release({ x: 220, y: 160 }, { shift: true })
+
+    const zone = h.store.persisted.zones[0]!
+    expect(zone).toMatchObject({ zoneType: 'rect', rotationDeg: 30 })
+    expectScreen(h, getRectangularZoneCorners(zone) ?? [], [
+      { x: 100, y: 100 }, { x: 220, y: 100 }, { x: 220, y: 220 }, { x: 100, y: 220 },
+    ])
+  })
+
+  it('Shift draws a circle', () => {
+    const h = harness({ tool: 'ellipse' })
+
+    h.press({ x: 100, y: 100 })
+    h.move({ x: 140, y: 190 }, { shift: true })
+    expect(shapes(h)[0]).toMatchObject({ kind: 'ellipse', radiusX: 45, radiusY: 45 })
+    h.release({ x: 140, y: 190 }, { shift: true })
+
+    const zone = h.store.persisted.zones[0]!
+    expect(zone.points[1]).toEqual({ x: 45, y: 45 })
+  })
+
+  it('Shift keeps a line and a measure on 45° steps against the screen at 30', () => {
+    for (const tool of ['line', 'measurement-guide'] as const) {
+      const h = harness({ tool, camera: { bearingDeg: 30 } })
+
+      h.press({ x: 100, y: 100 })
+      // 80 px right and 6 px down on screen: Shift levels it on screen, its length kept.
+      h.move({ x: 180, y: 106 }, { shift: true })
+      h.release({ x: 180, y: 106 }, { shift: true })
+
+      const ends = tool === 'line'
+        ? h.store.persisted.zones[0]!.points
+        : [h.store.persisted.measurementGuides[0]!.start, h.store.persisted.measurementGuides[0]!.end]
+      expectScreen(h, ends, [{ x: 100, y: 100 }, { x: 100 + Math.hypot(80, 6), y: 100 }])
+    }
+  })
 })

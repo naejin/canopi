@@ -145,54 +145,48 @@ describe('ToolHost', () => {
       expect(h.renderer.lastDraft()?.shapes).toEqual([{ kind: 'polyline', points: [at, at], style: { token: 'draft', widthPx: 1 } }])
     })
 
-    it('under LEGACY a Polygon Shift point snaps, then constrains', () => {
+    it('constraint wins, then length snaps along the ray', () => {
       const origin = { x: 0, y: 0 }
-      const polygon = stubTool('polygon', { constraint: () => ({ kind: 'direction', origin, stepDeg: 45 }) })
-      useStubTools(polygon)
-      const h = harness({
-        tool: 'polygon',
-        viewport: { x: 0, y: 0, scale: 10 },
-        snapping: { grid: true },
-      })
-      const interval = gridInterval(10).interval
-      const at = { x: 473, y: 191 }
-      const raw = h.world(at)
-      const free = snapToGrid(raw.x, raw.y, interval)
+      for (const id of ['polygon', 'plant-spacing', 'line', 'measurement-guide'] as const) {
+        const tool = stubTool(id, { constraint: () => ({ kind: 'direction', origin, stepDeg: 45 }) })
+        useStubTools(tool)
+        const h = harness({ tool: id, viewport: { x: 0, y: 0, scale: 10 }, snapping: { grid: true } })
+        const interval = gridInterval(10).interval
+        const at = { x: 473, y: 191 }
+        const raw = h.world(at)
+        const constrained = constrainPointTo45Degrees(origin, raw)
+        const length = Math.hypot(constrained.x, constrained.y)
+        const stepped = Math.round(length / interval) * interval
 
-      h.hover(at, { shift: true })
-      const point = polygon.last('hover')!.point
-      expect(point.world).toEqual(raw)
-      expect(point.free).toEqual(free)
-      expect(point.constrained).toEqual(constrainPointTo45Degrees(origin, raw))
-      expect(point.snapped).toEqual(constrainPointTo45Degrees(origin, free))
-      expect(point.modifiers).toMatchObject({ constrain: true, noSnap: false, additive: true })
-      // The Shift corner is off the grid: today's order snaps first.
-      expect(snapToGrid(point.snapped.x, point.snapped.y, interval)).not.toEqual(point.snapped)
+        h.hover(at, { shift: true })
+        const point = tool.last('hover')!.point
+        expect(point.world).toEqual(raw)
+        expect(point.free).toEqual(snapToGrid(raw.x, raw.y, interval))
+        expect(point.constrained).toEqual(constrained)
+        // The Shift point stays on its 45° ray, its length a whole number of grid steps.
+        expect(Math.atan2(point.snapped.y, point.snapped.x)).toBeCloseTo(Math.atan2(constrained.y, constrained.x), 9)
+        expect(Math.hypot(point.snapped.x, point.snapped.y)).toBeCloseTo(stepped, 9)
+        expect(point.modifiers).toMatchObject({ constrain: true, noSnap: false, additive: true })
 
-      h.hover(at)
-      expect(polygon.last('hover')!.point).toMatchObject({ free, constrained: raw, snapped: free })
+        h.hover(at)
+        expect(tool.last('hover')!.point).toMatchObject({ constrained: raw, snapped: snapToGrid(raw.x, raw.y, interval) })
+      }
     })
 
-    it('under LEGACY a Plant a row Shift constrains the raw point and does not snap', () => {
-      const origin = { x: 0, y: 0 }
-      const row = stubTool('plant-spacing', { constraint: () => ({ kind: 'direction', origin, stepDeg: 45 }) })
-      useStubTools(row)
+    it('Ctrl or Cmd is Plant a row\'s no-snap, and Shift constrains only the drawing tools and handle drags', () => {
+      const row = stubTool('plant-spacing')
+      const select = stubTool('select')
+      useStubTools(row, select)
       const h = harness({ tool: 'plant-spacing', viewport: { x: 0, y: 0, scale: 10 }, snapping: { grid: true } })
       const at = { x: 473, y: 191 }
-      const raw = h.world(at)
 
-      h.hover(at, { shift: true })
-      expect(row.last('hover')!.point).toMatchObject({
-        world: raw,
-        free: raw,
-        constrained: constrainPointTo45Degrees(origin, raw),
-        snapped: constrainPointTo45Degrees(origin, raw),
-        modifiers: { constrain: true, noSnap: true },
-      })
-
-      h.hover(at)
-      const interval = gridInterval(10).interval
-      expect(row.last('hover')!.point).toMatchObject({ constrained: raw, snapped: snapToGrid(raw.x, raw.y, interval) })
+      for (const mods of [{ ctrl: true }, { meta: true }]) {
+        h.hover(at, mods)
+        expect(row.last('hover')!.point).toMatchObject({ snapped: h.world(at), modifiers: { noSnap: true, constrain: false } })
+      }
+      h.arm('select')
+      h.hover(at, { shift: true, ctrl: true, alt: true })
+      expect(select.last('hover')!.point.modifiers).toEqual({ additive: true, subtractive: true, constrain: false, noSnap: false })
     })
 
     it('snapping follows the settings at each point', () => {

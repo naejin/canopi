@@ -44,7 +44,7 @@ import { placeSavedObjectStamp, savedObjectStampGhostShapes } from './saved-obje
 import { bandDraft } from './select/band'
 import { createOverviewSelector } from './select/overview'
 import { selectionScreenHull } from './select/selection-hull'
-import { snapWorldPoint, type SnapSettings } from './snapping'
+import { snapAlongRay, snapWorldPoint, type SnapSettings } from './snapping'
 import type {
   CanvasTool,
   HitTarget,
@@ -88,6 +88,10 @@ const NUDGE_STEP_M = 0.1
 const NUDGE_LARGE_STEP_M = 1
 /** A pause this long ends a nudge series, so its edit commits. */
 const NUDGE_SERIES_IDLE_MS = 800
+/** The tools whose points Shift constrains (spec §2.3); handle drags too. */
+const SHIFT_CONSTRAINS: ReadonlySet<ToolId> = new Set<ToolId>([
+  'polygon', 'plant-spacing', 'line', 'measurement-guide', 'rectangle', 'ellipse',
+])
 /** The drawing tools whose draft chips replace the selected zone's (today both shared one overlay). */
 const ZONE_DRAFT_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>(['line', 'rectangle', 'ellipse', 'polygon'])
 
@@ -453,14 +457,13 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     return snapWorldPoint(point, noSnap ? NO_SNAP : deps.snapping(), frame().view.pixelsPerMetre)
   }
 
-  /** Modifiers by meaning (spec §2.3, the LEGACY and ROTATION column; phase 2 adds the V2 column). */
+  /** Modifiers by meaning (spec §2.3), read from the event that carries them, with no platform dependency. */
   function resolveModifiers(mods: Modifiers, handleDrag: boolean): ToolModifiers {
-    const shiftConstrains = currentId === 'polygon' || currentId === 'plant-spacing' || handleDrag
     return {
       additive: mods.shift || mods.ctrl || mods.meta,
       subtractive: mods.alt,
-      constrain: mods.shift && shiftConstrains,
-      noSnap: mods.shift && currentId === 'plant-spacing',
+      constrain: mods.shift && (handleDrag || SHIFT_CONSTRAINS.has(currentId)),
+      noSnap: (mods.ctrl || mods.meta) && currentId === 'plant-spacing',
     }
   }
 
@@ -482,11 +485,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (constraint.kind === 'rotation-delta') {
       return { world, free, constrained, snapped: constrained, modifiers, pointer }
     }
-    // Today's order, keyed by tool id: Polygon snaps, then constrains, so a Shift corner may be off the grid
-    // (today's (a4c86d39) zone-drawing-tool.ts:226); Plant a row constrains the raw point, and its Shift is also no-snap.
-    const snapped = currentId === 'polygon'
-      ? applyToolConstraint(constraint, free, axes)
-      : snap(constrained, modifiers.noSnap)
+    // One order for every tool: the constraint, then the length along its ray rounded to the grid's interval.
+    const snapped = snapAlongRay(constraint.origin, constrained, modifiers.noSnap ? NO_SNAP : deps.snapping(), frame().view.pixelsPerMetre)
     return { world, free, constrained, snapped, modifiers, pointer }
   }
 

@@ -6,8 +6,9 @@
 // snapped pointer, with its measure chips (tools/measure-labels.ts); the release adds the object and selects it in that
 // edit, and a cancel, a tool change or a closed layer aborts it. Rectangles and ellipses are level with the screen
 // (ToolView.screenAlignedRect, INV-TOOL-03): the zone stores the unturned box about its centre and the bearing as its
-// rotationDeg, so at bearing 0 they are today's world boxes. Shift does nothing here until phase 2. A release that adds
-// nothing aborts its edit, as today's cancellation after every pointerup did; a release that throws is the host's fault
+// rotationDeg, so at bearing 0 they are today's world boxes. Shift draws a square or a circle (screenAlignedRect's
+// `square`), and turns a line or a measure to 45° steps against the screen from its start (the host's 'direction'
+// constraint, then the length along it snaps). A release that adds nothing aborts its edit, as today's cancellation after every pointerup did; a release that throws is the host's fault
 // rule's (spec §1.4 "Faults").
 
 import type { ToolId } from '../interaction-types'
@@ -23,7 +24,7 @@ import {
 } from '../zone-measurements'
 import type { DraftFill, DraftShape, DraftStroke } from './draft'
 import { measureLabelShapes } from './measure-labels'
-import type { CanvasTool, SceneLayerKind, ToolContext, ToolGesture, ToolReply, ToolView } from './tool'
+import type { CanvasTool, SceneLayerKind, ToolContext, ToolGesture, ToolPoint, ToolReply, ToolView } from './tool'
 import { appendEllipseZoneToDraft, appendLineZoneToDraft, appendRectangleZoneToDraft } from './tool-actions'
 
 /** Today's draft line: 2 px in the guide-line colour, on the overlay casing. */
@@ -38,23 +39,29 @@ export interface DragShapeSpec {
   readonly id: ToolId
   /** The layer the object lands on: a press on a closed layer draws nothing, and a release there adds nothing. */
   readonly layer: SceneLayerKind
+  /** What Shift does: 45° steps from the start ('direction'), or a square or a circle ('square'). */
+  readonly shift: 'direction' | 'square'
   /** The Scene Edit of one drag. */
   readonly editType: string
-  /** The shape between the snapped start and end; `view` is the current frame's (screen-aligned boxes read it). */
-  shape(start: WorldPoint, end: WorldPoint, view: ToolView): DraftShape
+  /** The shape between the snapped start and end; `view` is the current frame's (screen-aligned boxes read it), and
+   *  `square` is Shift on a 'square' tool. */
+  shape(start: WorldPoint, end: WorldPoint, view: ToolView, square: boolean): DraftShape
   /** Its measurements; none for a shape too small to measure (the press's zero-size shape). */
-  measure(start: WorldPoint, end: WorldPoint, view: ToolView): readonly ZoneMeasurementLabel[]
+  measure(start: WorldPoint, end: WorldPoint, view: ToolView, square: boolean): readonly ZoneMeasurementLabel[]
   /** The edit a release at `end` makes, returning the object to select; null when the shape is too small to keep. */
   place(
     start: WorldPoint,
     end: WorldPoint,
     view: ToolView,
+    square: boolean,
   ): ((draft: ScenePersistedState) => SceneDesignObjectTarget | null) | null
 }
 
 interface ActiveDrag {
   start: WorldPoint
   end: WorldPoint
+  /** Shift on a 'square' tool, at the last point. */
+  square: boolean
   readonly edit: SceneEditTransaction
 }
 
@@ -66,6 +73,7 @@ const ZONE_DRAGS: Readonly<Record<ZoneDragKind, DragShapeSpec>> = {
   line: {
     id: 'line',
     layer: 'zones',
+    shift: 'direction',
     editType: 'interaction-line',
     shape: (start, end) => ({ kind: 'polyline', points: [start, end], style: DRAFT_STROKE }),
     measure: createLinearZoneMeasurements,
@@ -74,19 +82,20 @@ const ZONE_DRAGS: Readonly<Record<ZoneDragKind, DragShapeSpec>> = {
   rectangle: {
     id: 'rectangle',
     layer: 'zones',
+    shift: 'square',
     editType: 'interaction-rectangle',
-    shape: (start, end, view) => ({
+    shape: (start, end, view, square) => ({
       kind: 'polygon',
-      points: boxCorners(view.screenAlignedRect(start, end)),
+      points: boxCorners(view.screenAlignedRect(start, end, { square })),
       style: DRAFT_STROKE,
       fill: ZONE_DRAFT_FILL,
     }),
-    measure(start, end, view) {
-      const box = view.screenAlignedRect(start, end)
+    measure(start, end, view, square) {
+      const box = view.screenAlignedRect(start, end, { square })
       return isTooSmall(box) ? [] : createRectangularZoneMeasurements(boxCorners(box))
     },
-    place(start, end, view) {
-      const box = view.screenAlignedRect(start, end)
+    place(start, end, view, square) {
+      const box = view.screenAlignedRect(start, end, { square })
       if (isTooSmall(box)) return null
       return (draft) => zoneTarget(appendRectangleZoneToDraft(draft, unturnedRect(box), box.rotationDeg))
     },
@@ -94,9 +103,10 @@ const ZONE_DRAGS: Readonly<Record<ZoneDragKind, DragShapeSpec>> = {
   ellipse: {
     id: 'ellipse',
     layer: 'zones',
+    shift: 'square',
     editType: 'interaction-ellipse',
-    shape(start, end, view) {
-      const box = view.screenAlignedRect(start, end)
+    shape(start, end, view, square) {
+      const box = view.screenAlignedRect(start, end, { square })
       return {
         kind: 'ellipse',
         center: box.center,
@@ -107,12 +117,12 @@ const ZONE_DRAGS: Readonly<Record<ZoneDragKind, DragShapeSpec>> = {
         fill: ZONE_DRAFT_FILL,
       }
     },
-    measure(start, end, view) {
-      const box = view.screenAlignedRect(start, end)
+    measure(start, end, view, square) {
+      const box = view.screenAlignedRect(start, end, { square })
       return createEllipticalZoneMeasurements(box.center, { x: box.width / 2, y: box.height / 2 }, box.rotationDeg)
     },
-    place(start, end, view) {
-      const box = view.screenAlignedRect(start, end)
+    place(start, end, view, square) {
+      const box = view.screenAlignedRect(start, end, { square })
       if (isTooSmall(box)) return null
       return (draft) => zoneTarget(appendEllipseZoneToDraft(draft, unturnedRect(box), box.rotationDeg))
     },
@@ -153,8 +163,9 @@ export function createDragShapeTool(spec: DragShapeSpec): CanvasTool {
 
   function draw(current: ActiveDrag): void {
     const { view, effects } = context()
-    const chips = measureLabelShapes(spec.measure(current.start, current.end, view), (a, b) => view.screenDistance(a, b))
-    effects.setDraft({ shapes: [spec.shape(current.start, current.end, view), ...chips] })
+    const measured = spec.measure(current.start, current.end, view, current.square)
+    const chips = measureLabelShapes(measured, (a, b) => view.screenDistance(a, b))
+    effects.setDraft({ shapes: [spec.shape(current.start, current.end, view, current.square), ...chips] })
     drawn = true
   }
 
@@ -174,22 +185,28 @@ export function createDragShapeTool(spec: DragShapeSpec): CanvasTool {
         if (drag === next) clearDraft()
       },
     })
-    next = { start: at, end: at, edit }
+    next = { start: at, end: at, square: false, edit }
     drag = next
     draw(next)
   }
 
-  function update(start: WorldPoint, end: WorldPoint): void {
+  function update(start: WorldPoint, point: ToolPoint): void {
     if (!drag) return
     drag.start = start
-    drag.end = end
+    drag.end = point.snapped
+    drag.square = squareAt(point)
     draw(drag)
   }
 
-  function release(end: WorldPoint): void {
+  function squareAt(point: ToolPoint): boolean {
+    return spec.shift === 'square' && point.modifiers.constrain
+  }
+
+  function release(point: ToolPoint): void {
     const current = drag
     if (!current) return
-    commit(current, end)
+    current.square = squareAt(point)
+    commit(current, point.snapped)
     if (drag === current) cancelDrag()
     else clearDraft()
   }
@@ -198,7 +215,7 @@ export function createDragShapeTool(spec: DragShapeSpec): CanvasTool {
   function commit(current: ActiveDrag, end: WorldPoint): void {
     const { scene, view } = context()
     if (!scene.isLayerOpenForCreation(spec.layer)) return
-    const place = spec.place(current.start, end, view)
+    const place = spec.place(current.start, end, view, current.square)
     if (!place) return
     let target = null as SceneDesignObjectTarget | null
     current.edit.mutate((draft) => {
@@ -220,6 +237,8 @@ export function createDragShapeTool(spec: DragShapeSpec): CanvasTool {
 
   return {
     id: spec.id,
+    // A line or a measure turns to 45° steps from its start while Shift is held.
+    constraint: () => (spec.shift === 'direction' && drag ? { kind: 'direction', origin: drag.start, stepDeg: 45 } : null),
     activate(next) {
       ctx = next
       drag = null
@@ -232,14 +251,14 @@ export function createDragShapeTool(spec: DragShapeSpec): CanvasTool {
           return 'handled'
         case 'drag-start':
         case 'drag-move':
-          update(g.start.snapped, g.point.snapped)
+          update(g.start.snapped, g.point)
           return 'handled'
         case 'drag-end':
           if (drag) drag.start = g.start.snapped
-          release(g.point.snapped)
+          release(g.point)
           return 'handled'
         case 'tap':
-          release(g.point.snapped)
+          release(g.point)
           return 'handled'
         case 'cancel':
           cancelDrag()
