@@ -40,8 +40,12 @@ describe('ZoomControls', () => {
     phoneLayout.value = null
   })
 
-  it('stands as a column of zoom in, zoom out, the ratio and the compass on a phone, covering no edge of the map', async () => {
-    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: { ...createTestCanvasQuerySurface(), view: view() } }))
+  it('stands as a column of zoom in, zoom out, Fit and the compass on a phone, with no ratio, covering no edge of the map', async () => {
+    const zoomToFit = vi.fn()
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: { ...createTestCanvasQuerySurface(), view: view() },
+      commands: createTestCanvasCommandSurface({ viewport: { zoomToFit } }),
+    }))
     const area = document.createElement('div')
     document.body.appendChild(area)
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
@@ -54,9 +58,12 @@ describe('ZoomControls', () => {
     const group = container.querySelector<HTMLElement>('[data-zoom-group]')!
     expect(group.dataset.zoomGroup).toBe('phone')
     expect([...group.querySelectorAll('button')].map((element) => element.getAttribute('aria-label'))).toEqual([
-      'Zoom in', 'Zoom out', 'Map scale 1:190. Choose a scale', 'Reset north',
+      'Zoom in', 'Zoom out', 'Fit to Design', 'Reset north',
     ])
     expect(container.querySelector('[role="img"]')).toBeNull()
+    // Fit is the desktop group's Fit to Design (and Home): the same command.
+    button('Fit to Design').click()
+    expect(zoomToFit).toHaveBeenCalledOnce()
     expect(visibleMapFrame.value).toMatchObject({ right: 0, bottom: 0 })
 
     await act(async () => { phoneLayout.value = null })

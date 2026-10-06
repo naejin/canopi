@@ -29,9 +29,10 @@ const VIEW_ACTION_ICONS: Readonly<Record<string, ControlIconName>> = {
  * a ratio (a menu of common scales), zoom in, Fit to Design and, after a
  * divider, the compass (always shown). The map attribution pill sits just
  * left of it. On a phone it is a column on the right above the panel sheet:
- * zoom in, zoom out, the ratio and the compass, with 44 px targets; it is
- * placed from the visible map frame, so it covers no edge. The compass is a
- * button of the group: the group's layer and map registration cover it.
+ * zoom in, zoom out, Fit to Design and the compass, with 44 px targets and no
+ * ratio (phones have no scale readout); it is placed from the visible map
+ * frame, so it covers no edge. The compass is a button of the group: the
+ * group's layer and map registration cover it.
  */
 export function ZoomControls({ viewActions }: { readonly viewActions: readonly CanvasToolbarActionCommand[] }) {
   const zoomIn = viewCommand(viewActions, 'zoom-in')
@@ -58,7 +59,7 @@ export function ZoomControls({ viewActions }: { readonly viewActions: readonly C
       <div ref={group} className={`${styles.group} ${styles.phone}`} role="group" aria-label={t('canvas.grid.zoom')} data-zoom-group="phone">
         <ZoomButton command={zoomIn} disabled={zoomIn.disabled || atMaximum} />
         <ZoomButton command={zoomOut} disabled={zoomOut.disabled || atMinimum} />
-        {denominator !== null && <ScaleMenu denominator={denominator} />}
+        <ZoomButton command={fit} disabled={fit.disabled} />
         <Compass command={resetNorth} className={styles.button} />
       </div>
     )

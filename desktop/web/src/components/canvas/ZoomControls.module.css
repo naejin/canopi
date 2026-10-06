@@ -175,10 +175,3 @@
   width: var(--control-size-touch);
   height: var(--control-size-touch);
 }
-
-.phone .ratio {
-  min-width: var(--control-size-touch);
-  height: var(--control-size-touch);
-  padding: 0 var(--space-1);
-  font-size: var(--text-xs);
-}
