@@ -119,6 +119,8 @@ export function createSelectTool(): CanvasTool {
     const dots = handlesZone ? zoneEdgeMidpoints(handlesZone, view) : []
     const dotsChanged = dots.length !== edgeMidpoints.size || dots.some((dot) => !edgeMidpoints.has(dot.id))
     if (view.bearingDeg !== handlesBearingDeg || dotsChanged) refreshHandles()
+    // A zoom that kept the same dots still records its scale, so the pans after it return early.
+    else handlesPixelsPerMetre = pixelsPerMetre(view)
   }
 
   function press(point: ToolPoint, hit: HitTarget | null, clickCount: number): void {

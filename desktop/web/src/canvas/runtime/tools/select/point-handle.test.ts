@@ -257,6 +257,20 @@ describe('polygon corners (spec §3.2, U33: every corner route)', () => {
     expect(midpointQueries.count).toBeGreaterThan(0)
   })
 
+  it('a pan after a zoom that kept the same dots recomputes no midpoint dots', () => {
+    const h = polygonHarness()
+    h.hover({ x: 300, y: 250 })
+    const dots = () => h.chrome.handles.filter((entry) => entry.glyph === 'midpoint').map((entry) => entry.id)
+    const dotsBefore = dots()
+    expect(dotsBefore).toHaveLength(4)
+    h.wheelZoom({ x: 300, y: 250 }, 1.1)
+    expect(dots()).toEqual(dotsBefore)
+    midpointQueries.count = 0
+    h.pan({ x: 300, y: 250 }, { x: 320, y: 260 })
+    h.pan({ x: 320, y: 260 }, { x: 340, y: 270 })
+    expect(midpointQueries.count).toBe(0)
+  })
+
   it('an edge shows its dot only with room for it and free outline beside it (52 px on screen); a zoom redraws the dots', () => {
     // At scale 1 the 40 m edges are 40 px: the corners' 10 px and the dot's 16 px would cover the outline that moves the zone.
     const h = polygonHarness([{ x: 100, y: 100 }, { x: 140, y: 100 }, { x: 140, y: 160 }, { x: 100, y: 160 }])
