@@ -640,9 +640,11 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   /**
    * Every raw pointerdown on the map host, reported by the session before it routes the press (today's _onPointerDown):
-   * any button commits the nudge series. An admitted primary or middle press outside the text entry, with no live press
-   * from another pointer, also closes the menu and moves focus to the map, so an open text entry commits before the press
-   * reaches the tool (focusMap); a click inside the entry keeps it open. While Text is armed a primary press that so commits
+   * any button commits the nudge series. An admitted press of any button outside the text entry, with no live press from
+   * another pointer, also closes the menu and moves focus to the map, so an open text entry commits before the press
+   * reaches the tool (focusMap) and a right-drag pan or a still right-click closes it; a click inside the entry keeps it
+   * open. A right press closes an open menu, and its still release opens the next one, so a double right-click replaces
+   * the menu (spec §3.1). While Text is armed a primary press that so commits
    * the entry places nothing: no tool hears it, as today's Text field took that click (spec §3.2); under another tool the
    * press goes on. A press on the live press's own pointer (its up was lost) counts, as today's. The host knows only its own
    * live press: a pan lives in the recogniser, which ignores a second pointer anyway.
@@ -651,7 +653,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (disposed) return
     pressCommitsNote = false
     endNudgeSeries(true)
-    if (button === 'secondary') return
     if (live && live.id !== pointerId) return
     if (target.kind === 'owned-text') return
     // Runs only while the Scene is settled; a refused raw press does nothing, and the press that follows asks again.

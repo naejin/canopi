@@ -150,6 +150,41 @@ describe('the session\'s chrome', () => {
     expect(text.count('press')).toBe(1)
   })
 
+  it('a right or middle press on the map commits a registered tool\'s open text entry, as a left press does', () => {
+    for (const button of [2, 1]) {
+      const submitted: string[] = []
+      const text = stubTool('text', {
+        gesture: (gesture) => {
+          if (gesture.kind === 'press') {
+            text.ctx().effects.requestTextEntry(
+              { anchor: { x: 30, y: 40 }, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.textNote.placeholder' },
+              (value) => {
+                submitted.push(value)
+                return 'close'
+              },
+            )
+          }
+          return 'pass'
+        },
+      })
+      useStubTools(text)
+      const focus: CanvasFocusPort = { focusMap: vi.fn(() => container.focus()) }
+      const { session } = createSession({ focus })
+      container.tabIndex = 0
+      session.setTool('text')
+      events.pointerDown({ x: 30, y: 40 })
+      events.pointerUp({ x: 30, y: 40 })
+      const entry = container.querySelector<HTMLTextAreaElement>('textarea[data-canvas-text-entry]')!
+      entry.value = 'Gate'
+
+      events.pointerDown({ x: 200, y: 200 }, { button })
+      expect(submitted).toEqual(['Gate'])
+      expect(container.querySelector('textarea')).toBeNull()
+      events.pointerUp({ x: 200, y: 200 }, { button })
+      session.dispose()
+    }
+  })
+
   it('Esc in a registered tool\'s text entry closes it and tells the tool through onCancel', () => {
     const cancelled = vi.fn()
     const text = stubTool('text', {

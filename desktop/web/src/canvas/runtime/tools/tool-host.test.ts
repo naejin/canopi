@@ -780,19 +780,24 @@ describe('ToolHost', () => {
   describe('raw presses', () => {
     const SURFACE = { kind: 'surface' } as const
 
-    it('every raw press commits the nudge series; primary and middle close the menu and focus the map', () => {
+    it('every raw press commits the nudge series and, on any button, closes the menu and focuses the map', () => {
       useStubTools(stubTool('select'))
       const h = harness({ scene: { plants: [appleAt({ x: 10, y: 10 })] } })
       h.select(P1)
       h.menu({ x: 300, y: 250 })
+      h.record.focus.length = 0
 
-      // A right press commits the series and leaves the menu and the focus alone.
+      // A right press commits the series, closes the menu (its release opens the next one) and commits an open entry.
+      h.openTextEntry()
       h.arrow('ArrowRight')
       h.host.rawPress('secondary', SURFACE)
       expect(h.host.hasNudgeSeries()).toBe(false)
       expect(h.record.nudges).toEqual(['nudge:0.1,0', 'end'])
-      expect(h.menuOpen).toBe(true)
-      expect(h.record.focus).toEqual([])
+      expect(h.menuOpen).toBe(false)
+      expect(h.record.focus).toEqual(['map'])
+      expect(h.chrome.textEntry).toBeNull()
+      h.menu({ x: 300, y: 250 })
+      h.record.focus.length = 0
 
       // A press inside the text entry commits the series and keeps the entry open.
       h.openTextEntry()
@@ -813,11 +818,12 @@ describe('ToolHost', () => {
 
       // A primary press: the same, once; the press it becomes moves focus no further.
       h.menu({ x: 300, y: 250 })
+      h.record.focus.length = 0
       h.arrow('ArrowRight')
       h.click({ x: 200, y: 150 })
       expect(h.host.hasNudgeSeries()).toBe(false)
       expect(h.menuOpen).toBe(false)
-      expect(h.record.focus).toEqual(['map', 'map'])
+      expect(h.record.focus).toEqual(['map'])
       expect(h.history.canUndo.value).toBe(true)
     })
 
