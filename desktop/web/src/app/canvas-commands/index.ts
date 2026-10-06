@@ -123,7 +123,7 @@ export interface CanvasCommandProjectionState {
 export type CanvasCommandFrom = 'rail' | 'menu' | 'palette' | 'shortcut'
 
 /** Runs one intent; `from` reaches arming for a tool and is unused by the rest. */
-export type CanvasIntentRunner = (intent: CanvasCommandIntent, from: CanvasCommandFrom) => void
+type CanvasIntentRunner = (intent: CanvasCommandIntent, from: CanvasCommandFrom) => void
 
 /** A command as chrome shows it: menus, the tool rail, the view chip, the palette. */
 export interface CanvasProjectedCommand {
