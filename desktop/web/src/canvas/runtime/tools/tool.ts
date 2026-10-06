@@ -37,7 +37,8 @@ export interface ToolModifiers {
   /** Remove from the selection: Alt. */
   readonly subtractive: boolean
   /** Shift: 45° screen steps for Polygon, Plant a row, Line and Measure; a square or a circle for Rectangle and Ellipse;
-   *  the rotate handle's 15° steps from the press angle, and every handle drag. */
+   *  the rotate handle's 15° steps from the press angle. Point handles (corners, vertices, guide ends) ignore Shift and snap
+   *  as usual (U36). */
   readonly constrain: boolean
   /** Plant a row only: Ctrl or Cmd held (on every OS). */
   readonly noSnap: boolean

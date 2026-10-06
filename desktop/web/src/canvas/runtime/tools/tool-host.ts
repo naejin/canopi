@@ -40,6 +40,7 @@ import { placePlantFromSpecies } from './plant-stamp'
 import { TOOL_REGISTRY } from './registry'
 import { placeSavedObjectStamp, savedObjectStampGhostShapes } from './saved-object-stamp'
 import { bandDraft } from './select/band'
+import { ROTATE_HANDLE_ID } from './select/rotate-handle'
 import { selectionScreenHull } from './select/selection-hull'
 import { snapAlongRay, snapWorldPoint, type SnapSettings } from './snapping'
 import type {
@@ -82,7 +83,7 @@ const NUDGE_STEP_M = 0.1
 const NUDGE_LARGE_STEP_M = 1
 /** A pause this long ends a nudge series, so its edit commits. */
 const NUDGE_SERIES_IDLE_MS = 800
-/** The tools whose points Shift constrains (spec §2.3); handle drags too. */
+/** The tools whose points Shift constrains (spec §2.3); of the handles, only the rotate handle (U36). */
 const SHIFT_CONSTRAINS: ReadonlySet<ToolId> = new Set<ToolId>([
   'polygon', 'plant-spacing', 'line', 'measurement-guide', 'rectangle', 'ellipse',
 ])
@@ -435,24 +436,24 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   /** Modifiers by meaning (spec §2.3), read from the event that carries them, with no platform dependency. */
-  function resolveModifiers(mods: Modifiers, handleDrag: boolean): ToolModifiers {
+  function resolveModifiers(mods: Modifiers, handle: ToolHandleId | null): ToolModifiers {
     return {
       additive: mods.shift || mods.ctrl || mods.meta,
       subtractive: mods.alt,
-      constrain: mods.shift && (handleDrag || SHIFT_CONSTRAINS.has(currentId)),
+      constrain: mods.shift && (handle === ROTATE_HANDLE_ID || SHIFT_CONSTRAINS.has(currentId)),
       noSnap: (mods.ctrl || mods.meta) && currentId === 'plant-spacing',
     }
   }
 
   /** The tool's point at a screen point of the current frame. */
-  function pointAt(screen: ScreenPoint, mods: Modifiers, pointer: PointerKind, handleDrag = false): ToolPoint {
+  function pointAt(screen: ScreenPoint, mods: Modifiers, pointer: PointerKind, handle: ToolHandleId | null = null): ToolPoint {
     const view = frame().view
     const at = activeTool.clampsToView ? clampToScreen(screen, view.screen) : screen
-    return resolvePoint(view.screenToWorld(at), mods, pointer, handleDrag)
+    return resolvePoint(view.screenToWorld(at), mods, pointer, handle)
   }
 
-  function resolvePoint(world: WorldPoint, mods: Modifiers, pointer: PointerKind, handleDrag: boolean): ToolPoint {
-    const modifiers = resolveModifiers(mods, handleDrag)
+  function resolvePoint(world: WorldPoint, mods: Modifiers, pointer: PointerKind, handle: ToolHandleId | null): ToolPoint {
+    const modifiers = resolveModifiers(mods, handle)
     const free = snap(world, modifiers.noSnap)
     const constraint = modifiers.constrain ? activeTool.constraint?.() ?? null : null
     if (!constraint) return { world, free, constrained: world, snapped: free, modifiers, pointer }
@@ -667,10 +668,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function pressWhenSettled(g: Extract<Gesture, { kind: 'press' }>, commitsNote: boolean): boolean {
     const tool = activeTool
     if (!deps.capturePress(g.id)) return true
-    const handleDrag = g.target.kind === 'handle'
-    const point = pointAt(g.at, g.mods, g.pointer, handleDrag)
-    if (g.target.kind === 'handle') {
-      const handle = g.target.id
+    const handle = g.target.kind === 'handle' ? g.target.id : null
+    const point = pointAt(g.at, g.mods, g.pointer, handle)
+    if (handle) {
       live = liveGesture(g, 'handle', point, null)
       publishHandles()
       callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'start', handle, point, start: point, clickCount: g.clickCount }))
@@ -763,7 +763,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   /** The drag at its last screen point, converted through the current frame; its start is the press's world point. */
   function deliverDrag(tool: CanvasTool, gesture: LiveGesture, kind: 'drag-start' | 'drag-move' | 'drag-end'): void {
-    const point = pointAt(gesture.lastScreen, gesture.lastMods, gesture.pointer, gesture.kind === 'handle')
+    const point = pointAt(gesture.lastScreen, gesture.lastMods, gesture.pointer, gesture.handle)
     if (kind === 'drag-end') live = null
     const start = gesture.start
     if (gesture.kind === 'handle') {
@@ -796,7 +796,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     return release(tool, () => {
       live = null
       try {
-        const point = pointAt(g.at, g.mods, g.pointer, gesture.kind === 'handle')
+        const point = pointAt(g.at, g.mods, g.pointer, gesture.handle)
         if (gesture.kind === 'handle') {
           callTool(() => tool.gesture({
             kind: 'handle-drag', phase: 'end', handle: gesture.handle!, point, start: gesture.start, clickCount: gesture.clickCount,
