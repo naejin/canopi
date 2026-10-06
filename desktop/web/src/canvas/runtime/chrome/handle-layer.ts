@@ -2,11 +2,13 @@
 //
 // Owns the DOM handles the ToolHost publishes (ToolHostDeps.chrome.setHandles, spec §1.4): each ToolHandle is drawn at its
 // anchor projected through the view frame plus its screen offset, and moves with every camera frame ('overlays'). The
-// points (zone corners and vertices, guide ends) are a 20 px hit box around an 8 px mark that grows under the pointer,
+// points (zone corners and vertices, guide ends) are a hit box sized by Select (20 px, 44 px after a touch) around an 8 px
+// mark that grows under the pointer,
 // in the tab order, so Delete can reach a focused corner (focusedHandle), and focus on a handle that goes passes to the
 // active one (U37); a polygon edge's midpoint dot is fainter
 // (opacity 0.5, a 1 px ring: GeoLibre's edge marker), drawn under the corners and left out of the tab order. The rotate handle is a 28 px button
-// kept inside the visible map area, with its key swallow and click stop (INV-LSN-13). A handle's readout shows as a chip
+// in a hit box of its own size or larger (44 px after a touch, Q4), kept inside the visible map area, with its key swallow
+// and click stop (INV-LSN-13). A handle's readout shows as a chip
 // under it, and the active handle (the one dragged, or Select's selected corner) is marked and its mark drawn hollow. Presses on a handle are
 // the DOM input source's, which reads data-canvas-handle (input/dom-input-source.ts); the layer listens only on
 // its own elements (P6).
@@ -186,7 +188,8 @@ function drawPoint(handle: ToolHandle): DrawnHandle {
   return { handle, element, readout, mark }
 }
 
-/** Today's rotation handle: a round button that swallows keys and clicks, so neither reaches the map. */
+/** The rotation handle: a 28 px round button centred in its transparent hit box (44 px after a touch, Q4), the box
+ *  swallowing keys and clicks, so neither reaches the map; its readout hangs under the button. */
 function drawRotate(handle: ToolHandle): DrawnHandle {
   const element = document.createElement('div')
   element.setAttribute('role', 'button')
@@ -194,6 +197,22 @@ function drawRotate(handle: ToolHandle): DrawnHandle {
   Object.assign(element.style, {
     position: 'absolute',
     zIndex: String(ROTATE_Z_INDEX),
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'transparent',
+    borderRadius: 'var(--radius-full)',
+    cursor: 'grab',
+    pointerEvents: 'auto',
+    touchAction: 'none',
+    userSelect: 'none',
+  })
+  const button = document.createElement('span')
+  Object.assign(button.style, {
+    position: 'relative',
+    width: `${ROTATE_SIZE_PX}px`,
+    height: `${ROTATE_SIZE_PX}px`,
+    flex: 'none',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -206,18 +225,15 @@ function drawRotate(handle: ToolHandle): DrawnHandle {
     boxShadow: 'var(--shadow-md)',
     boxSizing: 'border-box',
     color: 'var(--color-primary-contrast)',
-    cursor: 'grab',
     outlineWidth: '2px',
     outlineStyle: 'solid',
     outlineColor: 'var(--color-surface)',
     outlineOffset: '1px',
-    pointerEvents: 'auto',
-    touchAction: 'none',
-    userSelect: 'none',
   })
-  element.appendChild(createRotateIcon())
+  button.appendChild(createRotateIcon())
   const readout = createReadout()
-  element.appendChild(readout)
+  button.appendChild(readout)
+  element.appendChild(button)
   element.addEventListener('click', (event) => event.stopPropagation())
   element.addEventListener('keydown', (event) => {
     event.preventDefault()
