@@ -5,7 +5,9 @@
 // and guide snapping, and runs the interceptors (admission, handles, the inspection probe) before the tool; every raw
 // press first commits the nudge series and, as today's pointerdown, closes the menu and moves focus to the map. A drag
 // starts at the press's world point, and every camera frame re-emits the live drag or the resting pointer, which a
-// pointer pan moves (plan §1, exception 1). The text entry's state is the chrome's, read live. It owns the passive
+// pointer pan moves (plan §1, exception 1). It holds re-origin while a press, a tool transient or the text entry is open,
+// and a plane change hides the tool's draft until the next hover, so no tool re-projects a world point it keeps (spec
+// §4.19). The text entry's state is the chrome's, read live. It owns the passive
 // hover, the selection decorations, the arrow-nudge series, transient history and the Esc queries, and merges the
 // tool's draft with its decorations and the drop preview for the renderer. One drop route serves every tool (spec §1.4
 // "Drops"): a species drop places a plant with Place plants' placement, a saved stamp with the saved stamp's, then arms
@@ -176,16 +178,17 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let textEntryMode: TextEntryRequest['mode'] | null = null
   /** The raw press found a new note's entry open: its focus move committed the note, and the press places nothing. */
   let pressCommitsNote = false
-  /** A panel drag passed over the map: its drop preview replaces the tool's draft until the pointer next hovers or presses
-   *  over the map (today's one preview element, which a dragover took over and a pointermove gave back). */
-  let draftHiddenForDrop = false
+  /** The tool's draft is hidden until the pointer next hovers or presses over the map: a panel drag passed over the map, whose
+   *  drop preview replaces it (today's one preview element, which a dragover took over and a pointermove gave back), or a
+   *  re-origin moved the plane under the world points it was drawn at (spec §4.19). */
+  let draftHidden = false
   /** What a drop would place, while a panel drag is over the map: a species' band cue or a saved stamp's ghosts. */
   let dropPreview: readonly DraftShape[] | null = null
   let nudging = false
   let nudgeTimer: number | null = null
   let callDepth = 0
   let invalidateNeeded = false
-  let plane = deps.plane()
+  let planeRevision = frame().view.planeRevision
   let mode = frame().mode
   let publishedToolDraft: DraftPresentation | null = null
   let publishedDropPreview: readonly DraftShape[] | null = null
@@ -292,16 +295,17 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         textEntryMode = request.mode
         deps.chrome.requestTextEntry(request, (text) => {
           const reply = callTool(() => submit(text))
-          // A closed entry shows Select's handles again at once (today's editor refreshed them after its commit).
+          // A closed entry shows Select's handles again at once (today's editor refreshed them after its commit), and ends
+          // its re-origin hold as a tool call does.
           if (reply === 'close' && deps.chrome.isTextEntryOpen()) {
             deps.chrome.closeTextEntry()
-            flush()
+            afterToolCall()
           }
           return reply
-        }, onCancel && (() => {
-          // The entry's own Esc closed it: the tool follows, as a tool call.
-          if (owns()) callTool(onCancel)
-        }))
+        }, () => {
+          // The entry's own Esc closed it: the tool follows, as a tool call, which also ends the entry's re-origin hold.
+          if (owns()) callTool(() => onCancel?.())
+        })
       },
       closeTextEntry() {
         if (owns()) closeTextEntry()
@@ -433,7 +437,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   /** The tool's draft, the drop preview and the host's decorations, merged for the renderer. */
   function publishDraft(): void {
-    const shownToolDraft = activeTool && !draftHiddenForDrop ? toolDraft : null
+    const shownToolDraft = activeTool && !draftHidden ? toolDraft : null
     const decorations = decorationShapes()
     const key = decorations.length > 0 ? JSON.stringify(decorations) : ''
     if (shownToolDraft === publishedToolDraft && dropPreview === publishedDropPreview && key === publishedDecorations) return
@@ -552,10 +556,16 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     return NOTHING
   }
 
-  /** The tool's draft, hidden since a panel drag passed over the map, shows again. */
+  /** The tool's draft, hidden since a panel drag passed over the map or a re-origin, shows again. */
   function showDraftAfterDrop(): void {
-    if (!draftHiddenForDrop) return
-    draftHiddenForDrop = false
+    if (!draftHidden) return
+    draftHidden = false
+    changed()
+  }
+
+  function hideDraftUntilHover(): void {
+    if (draftHidden) return
+    draftHidden = true
     changed()
   }
 
@@ -821,10 +831,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
    * 'none' clears the preview.
    */
   function dragOver(at: ScreenPoint, payload: CanvasDropPayload): GestureOutcome {
-    if (!draftHiddenForDrop) {
-      draftHiddenForDrop = true
-      changed()
-    }
+    hideDraftUntilHover()
     if (frame().mode === 'overview') return refuseDragOver()
     let preview: readonly DraftShape[] | null | undefined
     try {
@@ -1046,33 +1053,14 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   // ── Frames and planes ────────────────────────────────────────────────────────────────────────────────────────────
 
-  /** A re-origin (the plane's identity changed): retained world points move through lon/lat. */
-  function syncPlane(): void {
-    const next = deps.plane()
-    if (next === plane) return
-    const previous = plane
-    plane = next
-    const reproject = (point: WorldPoint): WorldPoint => {
-      const moved = next.toPlane(previous.toGeo(point))
-      return { x: moved.x, y: moved.y }
-    }
-    const start = live?.start
-    if (live && start) {
-      live.start = {
-        ...start,
-        world: reproject(start.world),
-        free: reproject(start.free),
-        constrained: reproject(start.constrained),
-        snapped: reproject(start.snapped),
-      }
-    }
-    const tool = activeTool
-    if (tool?.planeChanged) callTool(() => tool.planeChanged!(reproject))
-  }
-
   function onFrame(next: ViewFrame): void {
     if (disposed) return
-    syncPlane()
+    // A plane change (a re-origin, which waits while a press, a transient or the text entry holds it) leaves a ghost's
+    // world point in the old plane: no tool re-projects it, so the ghost hides until the next hover.
+    if (next.view.planeRevision !== planeRevision) {
+      planeRevision = next.view.planeRevision
+      hideDraftUntilHover()
+    }
     if (next.mode !== mode) {
       mode = next.mode
       if (mode === 'overview') enterOverview()
@@ -1163,7 +1151,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function activate(id: ToolId, source: ToolSource | null): void {
     currentId = id
     activeSource = source
-    draftHiddenForDrop = false
+    draftHidden = false
     toolDraft = null
     toolHandles = NO_HANDLES
     toolGuidance = null
@@ -1278,7 +1266,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   return {
     gesture(g: Gesture): GestureOutcome {
       if (disposed) return NOTHING
-      syncPlane()
       switch (g.kind) {
         case 'hover': return hover(g)
         case 'hover-end': return hoverEnd()
@@ -1344,6 +1331,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       if (!disposed) notifySceneChanged()
     },
     openTextEntryMode: () => (disposed ? null : openTextEntryMode()),
+    holdsReorigin: () => !disposed
+      && (live !== null || (activeTool?.hasTransient() ?? false) || deps.chrome.isTextEntryOpen()),
     hasLiveGesture: () => live !== null,
     activeToolHasTransient: () => activeTool?.hasTransient() ?? false,
     activeToolIsSelect: () => currentId === 'select',

@@ -254,12 +254,6 @@ export function createDragShapeTool(spec: DragShapeSpec): CanvasTool {
       }
     },
     command: () => 'pass',
-    planeChanged(reproject) {
-      if (!drag) return
-      drag.start = reproject(drag.start)
-      drag.end = reproject(drag.end)
-      draw(drag)
-    },
     viewChanged() {
       if (drag && drawn) draw(drag)
     },

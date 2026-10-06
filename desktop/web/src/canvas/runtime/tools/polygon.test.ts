@@ -332,22 +332,17 @@ describe('Polygon tool', () => {
     expect(h.store.persisted.zones).toEqual([])
   })
 
-  it('a re-origin keeps the corners at their lon/lat', () => {
+  it('a draft holds re-origin until it ends', () => {
     const h = harness()
+    expect(h.host.holdsReorigin()).toBe(false)
 
     h.click({ x: 10, y: 10 })
+    expect(h.host.holdsReorigin()).toBe(true)
     h.click({ x: 60, y: 10 })
-    const before = h.plane
-    const geo = [before.toGeo({ x: 10, y: 10 }), before.toGeo({ x: 60, y: 10 })]
-    h.reorigin({ lon: 0.01, lat: 0.005 })
     h.click({ x: 60, y: 50 })
     expect(h.host.command({ kind: 'confirm' })).toBe('handled')
 
-    const points = h.store.persisted.zones[0]!.points
-    for (const [index, expected] of geo.entries()) {
-      const actual = h.plane.toGeo(points[index]!)
-      expect(actual.lon).toBeCloseTo(expected.lon, 8)
-      expect(actual.lat).toBeCloseTo(expected.lat, 8)
-    }
+    expect(h.store.persisted.zones).toHaveLength(1)
+    expect(h.host.holdsReorigin()).toBe(false)
   })
 })

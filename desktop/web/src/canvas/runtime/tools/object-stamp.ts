@@ -8,7 +8,7 @@
 // names the pick. A pick starts at 0, so copies keep their source's orientation like Paste and Duplicate (spec §4.7); `[`
 // and `]` turn it (rotate-held commands), and the tool card shows that turn; Esc leaves for Select at once under LEGACY
 // (spec §3.7). A release and every cancellation (a blur, K again, overview) hide the ghost until the next hover and keep
-// the pick, as today's pointerup and cancellation hid the preview; a re-origin keeps a shown ghost on its ground.
+// the pick, as today's pointerup and cancellation hid the preview; a re-origin hides it until the next hover (the host).
 
 import type { CanvasStampGuidance } from '../../session-state'
 import type { SceneDesignObjectTarget } from '../scene/design-object-targets'
@@ -235,13 +235,6 @@ export function createObjectStampTool(): CanvasTool {
     sceneChanged() {
       // The tool card names the pick in the scene's current language.
       if (objectStampSource) publishGuidance()
-    },
-    planeChanged(reproject) {
-      // A re-origin moves the ground under the last anchor: the ghost stays where it stood, also with the pointer off the
-      // map, where the host re-emits nothing. The pick's objects are placed by their offsets from its anchor.
-      if (!lastAnchor) return
-      lastAnchor = reproject(lastAnchor)
-      if (ghostShown) showGhostAt(lastAnchor)
     },
     hasTransient: () => false,
     escapeHint: () => 'leave-tool',

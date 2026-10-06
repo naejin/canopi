@@ -7,6 +7,8 @@ interface SceneRuntimeReoriginOptions {
   readonly sceneState: Pick<SceneStateReader, 'sessionPlane'>
   readonly authority: Pick<SceneRuntimeEditCoordinator, 'reoriginSessionPlane'>
   readonly commandAdmission: SceneCommandAdmission
+  /** The tool host's hold (ToolHost.holdsReorigin): a live press, a tool transient or an open text entry. */
+  readonly held: () => boolean
 }
 
 /** Placements this close are the same: a micropixel, and a billionth of the scale. */
@@ -29,13 +31,18 @@ interface ObservedFrame {
  * centre is more than 10 km from the plane origin. The Settled Scene Authority
  * performs the plane change; while it does, `reoriginating` is true, so the
  * runtime's plane effect moves the camera into the new plane with its ground
- * kept. The clipboard remaps itself on paste.
+ * kept. The clipboard remaps itself on paste. Re-origin waits while the tool
+ * host holds it (spec §4.19), so no tool re-projects a world point it keeps;
+ * resume() observes the last frame once the hold clears.
  */
 export class SceneRuntimeReoriginController {
   private scheduled = false
   private disposed = false
   private _reoriginating = false
   private last: ObservedFrame | null = null
+  /** The last frame observed, and whether a hold turned it away. */
+  private latest: ViewFrame | null = null
+  private waiting = false
 
   constructor(private readonly options: SceneRuntimeReoriginOptions) {}
 
@@ -45,7 +52,13 @@ export class SceneRuntimeReoriginController {
   }
 
   observe(frame: ViewFrame): void {
-    if (this.disposed || this.unchanged(frame) || this.scheduled || frame.mode !== 'site') return
+    if (this.disposed) return
+    this.latest = frame
+    if (this.options.held()) {
+      this.waiting = true
+      return
+    }
+    if (this.unchanged(frame) || this.scheduled || frame.mode !== 'site') return
     const { screen } = frame.view
     // The ground under the screen centre, whatever the bearing.
     const centre = frame.view.screenToWorld({ x: screen.width / 2, y: screen.height / 2 })
@@ -57,6 +70,14 @@ export class SceneRuntimeReoriginController {
       if (this.disposed) return
       this.options.commandAdmission.runWhenSettled(() => this.reoriginAt(centre), undefined)
     })
+  }
+
+  /** The hold may have cleared: a frame it turned away is observed now, so a long pan during a draft re-origins at once. */
+  resume(): void {
+    if (this.disposed || !this.waiting || this.options.held()) return
+    this.waiting = false
+    this.last = null
+    if (this.latest) this.observe(this.latest)
   }
 
   dispose(): void {
@@ -86,6 +107,10 @@ export class SceneRuntimeReoriginController {
   private reoriginAt(centre: { readonly x: number; readonly y: number }): void {
     const plane = this.options.sceneState.sessionPlane
     if (!plane.needsReorigin(centre)) return
+    if (this.options.held()) {
+      this.waiting = true
+      return
+    }
     this._reoriginating = true
     try {
       this.options.authority.reoriginSessionPlane(plane.toGeo(centre))

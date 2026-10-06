@@ -7,7 +7,7 @@
 // first corner clears the selection without an undo step. Backspace and Edit › Undo take the last corner back onto a redo
 // stack (transient history, no Scene Edit); Esc drops the draft and its redo; an interruption ('navigate') keeps them while
 // the draft has corners and drops a redo-only history, as today; overview, a tool change or a document replacement drops
-// them, and a re-origin moves them through lon/lat.
+// them. The draft holds re-origin (hasTransient), so its corners stay in one plane.
 // The draft is a fill-only polygon of the corners, the rubber band, a disc per corner and the edge and area chips
 // (tools/measure-labels.ts), whose edge chips re-cull on every camera frame.
 
@@ -187,12 +187,6 @@ export function createPolygonTool(): CanvasTool {
         default:
           return 'pass'
       }
-    },
-    planeChanged(reproject) {
-      corners = corners.map(reproject)
-      redo = redo.map(reproject)
-      if (active) active = reproject(active)
-      if (corners.length > 0) redraw()
     },
     viewChanged() {
       if (corners.length > 0) redraw()

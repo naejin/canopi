@@ -19,7 +19,6 @@ import {
   clearSavedObjectStampSource,
   readSavedObjectStampSource,
 } from '../saved-object-stamp-source'
-import type { SessionPlane } from '../session-plane'
 import { getCanvasTool, IDLE_CANVAS_TOOL_GUIDANCE, type CanvasToolGuidance } from '../session-state'
 import type {
   CanvasContextMenuCommands,
@@ -153,6 +152,8 @@ export interface SceneInteractionSession {
   /** ToolHost.subscribePointerWorld: the pointer's world and screen points over the map, null when it leaves (the inspection
    *  lens). The session drops the point of a move made with any button held (its raw buttonMask), as today's lens skipped it. */
   subscribePointerWorld(listener: (point: PointerWorld | null) => void): () => void
+  /** ToolHost.holdsReorigin: re-origin waits while a press, a tool transient or the text entry is open (spec §4.19). */
+  holdsReorigin(): boolean
   dispose(): void
 }
 
@@ -291,7 +292,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         admission: _deps.commandAdmission,
         settled: _deps.settledReader,
         setSelection: (targets) => _deps.setSelection(targets),
-        plane: (): SessionPlane => _deps.getSceneStore().sessionPlane,
         renderer: {
           setDraft: (draft) => this._setDraft(draft),
         },
@@ -457,6 +457,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   redoTransientHistory(): boolean {
     return !this._disposed && this._toolHost.transientHistory.redo()
+  }
+
+  holdsReorigin(): boolean {
+    return !this._disposed && this._toolHost.holdsReorigin()
   }
 
   subscribePointerWorld(listener: (point: PointerWorld | null) => void): () => void {

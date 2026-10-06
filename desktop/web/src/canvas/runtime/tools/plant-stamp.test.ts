@@ -120,6 +120,27 @@ describe('Place plants tool', () => {
     expect(h.store.persisted.plants).toHaveLength(1)
   })
 
+  it('the waiting point is a transient: it holds re-origin, and the first Esc drops it', () => {
+    const h = stampHarness(null)
+    expect(h.host.activeToolHasTransient()).toBe(false)
+    expect(h.host.escapeHint()).toBe('leave-tool')
+
+    h.host.command({ kind: 'place-at', world: { x: 30, y: 20 } })
+    expect(h.host.activeToolHasTransient()).toBe(true)
+    expect(h.host.holdsReorigin()).toBe(true)
+    expect(h.host.escapeHint()).toBe('drop-transient')
+
+    // The keyboard port's tool-transient layer sends the tool's Esc; the tool layer's Esc then leaves (spec §3.7).
+    expect(h.host.command({ kind: 'escape' })).toBe('handled')
+    expect(h.host.activeToolHasTransient()).toBe(false)
+    expect(h.host.holdsReorigin()).toBe(false)
+    expect(h.host.command({ kind: 'escape' })).toBe('pass')
+
+    // The dropped point no longer waits for the pick.
+    h.host.sourceChanged({ kind: 'species', species: APPLE })
+    expect(h.store.persisted.plants).toHaveLength(0)
+  })
+
   it('place-at with a species chosen places at once', () => {
     const h = stampHarness(APPLE)
 

@@ -1,7 +1,6 @@
 // canvas/runtime/interaction-ports.ts  (types; implementations in input/ and tools/)
 
 import type { ReadonlySignal } from '@preact/signals'
-import type { SessionPlane } from '../session-plane'
 import type { CanvasToolGuidance } from '../session-state'
 import type { CanvasFocusPort } from './app-adapter'
 import type { Bindings } from './input/bindings'
@@ -98,7 +97,6 @@ export interface ToolHostDeps {
   readonly settled: SettledSceneReader                          // dragover reads
   /** History-free, dirty-free selection (today's deps.setSelection/clearSelection); backs ToolEffects.setSelection and the menu retarget. */
   readonly setSelection: (targets: readonly SceneDesignObjectTarget[]) => void
-  readonly plane: () => SessionPlane                            // CanvasTool.planeChanged when its identity changes
   readonly renderer: Pick<SceneRenderer, 'setDraft'>
   /** Redraw request after a tool call that mutated an open transaction or changed its draft or handles. */
   readonly invalidate: () => void
@@ -194,6 +192,8 @@ export interface ToolHost {
    *  editor), or null with none open. The keyboard port's Space reads it: a new note's field, focused or not, arms no pan,
    *  as today's Text adapter kept its shared keys while the field was open. */
   openTextEntryMode(): 'create' | 'edit' | null
+  /** The re-origin hold (§4.19): a live press, the active tool's transient or an open text entry. */
+  holdsReorigin(): boolean
   // Esc chain queries (CanvasKeyboardPort reads these)
   hasLiveGesture(): boolean
   activeToolHasTransient(): boolean

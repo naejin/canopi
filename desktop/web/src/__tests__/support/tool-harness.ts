@@ -7,7 +7,7 @@
 
 import { signal } from '@preact/signals'
 import type { CanvasToolGuidance } from '../../canvas/session-state'
-import { createSessionPlane, type GeoPosition, type SessionPlane } from '../../canvas/session-plane'
+import { createSessionPlane, type GeoPosition } from '../../canvas/session-plane'
 import type { Gesture, MenuSource, PressTarget } from '../../canvas/runtime/input/gestures'
 import { createInputRouter } from '../../canvas/runtime/input/input-router'
 import type { TargetClass } from '../../canvas/runtime/input/raw-input'
@@ -199,7 +199,7 @@ export function createToolSceneSource(store: SceneStore, options: ToolSceneSourc
 export interface StubToolRecord {
   readonly gestures: ToolGesture[]
   readonly commands: ToolCommand[]
-  /** 'activate', 'deactivate:<reason>', 'cancelTransient:<reason>', 'viewChanged', 'planeChanged', 'sceneChanged', 'sourceChanged'. */
+  /** 'activate', 'deactivate:<reason>', 'cancelTransient:<reason>', 'viewChanged', 'sceneChanged', 'sourceChanged'. */
   readonly calls: string[]
 }
 
@@ -221,7 +221,7 @@ export function stubTool(id: ToolId, behaviour: StubToolBehaviour = {}): StubToo
   const commands: ToolCommand[] = []
   const calls: string[] = []
   let context: ToolContext | null = null
-  const { activate, gesture, command, cancelTransient, deactivate, sceneChanged, planeChanged, viewChanged, sourceChanged, ...rest } = behaviour
+  const { activate, gesture, command, cancelTransient, deactivate, sceneChanged, viewChanged, sourceChanged, ...rest } = behaviour
   return {
     ...rest,
     id,
@@ -260,10 +260,6 @@ export function stubTool(id: ToolId, behaviour: StubToolBehaviour = {}): StubToo
     sceneChanged() {
       calls.push('sceneChanged')
       sceneChanged?.()
-    },
-    planeChanged(reproject) {
-      calls.push('planeChanged')
-      planeChanged?.(reproject)
     },
     viewChanged() {
       calls.push('viewChanged')
@@ -379,8 +375,6 @@ export interface ToolHarness {
   readonly menuOpen: boolean
   /** Settings › Canvas snapping, read by the host at each point. */
   snapping: SnapSettings
-  /** The session's plane (ToolHostDeps.plane). */
-  readonly plane: SessionPlane
   /** The world point under a screen point of the current frame. */
   world(at: ScreenPoint): WorldPoint
   /** Arms a tool as the session does: its tool signal, then ToolHost.setTool. */
@@ -406,7 +400,7 @@ export interface ToolHarness {
   focusOut(): void
   /** A window blur: the recogniser ends the live session, then the session calls interrupted. */
   blur(): void
-  /** A re-origin: the session's plane moves to `origin` and the camera follows it. */
+  /** A re-origin: the camera moves into the plane at `origin`, keeping its ground (the host sees the plane change). */
   reorigin(origin: GeoPosition): void
   /** Runs the host's manual clock: its due timers (double-click windows, the nudge series). */
   advance(ms: number): void
@@ -433,9 +427,8 @@ const ARROW_DIRECTIONS = {
 } as const
 
 export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness {
-  let plane = createSessionPlane({ lon: 0, lat: 0 })
   const view = createTestView({
-    plane,
+    plane: createSessionPlane({ lon: 0, lat: 0 }),
     ...(options.viewport ? { viewport: options.viewport } : {}),
     ...(options.camera ? { camera: options.camera } : {}),
   })
@@ -488,7 +481,6 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       store.setSelection(targets)
       record.selections.push([...targets])
     },
-    plane: () => plane,
     renderer,
     invalidate: () => {
       record.invalidations += 1
@@ -621,9 +613,6 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
     set snapping(next) {
       snapping = next
     },
-    get plane() {
-      return plane
-    },
     world(at) {
       return view.view().screenToWorld(at)
     },
@@ -699,9 +688,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       host.interrupted()
     },
     reorigin(origin) {
-      const next = createSessionPlane(origin)
-      plane = next
-      view.host.current().planeChanged(next)
+      view.host.current().planeChanged(createSessionPlane(origin))
     },
     advance(ms) {
       now += ms

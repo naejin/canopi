@@ -8,8 +8,8 @@
 // bearing when it is chosen, spec §4.7) and keeps that ground angle when the view turns, as an Object stamp pick does; `[`
 // and `]` turn it from there (rotate-held commands), and the tool card shows that turn; Esc leaves for Select at once under
 // LEGACY (spec §3.7). A release, another stamp and every cancellation (a blur, the tool armed again, overview) hide the
-// ghost until the next hover and keep the stamp, as today's pointerup and cancellation hid the preview; a re-origin keeps a
-// shown ghost on its ground. The ghosts come from tools/stamp-rotation.ts.
+// ghost until the next hover and keep the stamp, as today's pointerup and cancellation hid the preview, and the host hides it
+// on a re-origin until the next hover. The ghosts come from tools/stamp-rotation.ts.
 
 import type { SavedObjectStampPayload } from '../../saved-object-stamp-payload'
 import type { SceneAnnotationEntity, ScenePlantEntity, SceneZoneEntity } from '../scene/types'
@@ -160,13 +160,6 @@ export function createSavedObjectStampTool(): CanvasTool {
         return 'handled'
       }
       return 'pass'
-    },
-    planeChanged(reproject) {
-      // A re-origin moves the ground under the last anchor: the ghost stays where it stood, also with the pointer off the
-      // map, where the host re-emits nothing. The stamp's objects are placed by their offsets from its anchor.
-      if (!lastAnchor) return
-      lastAnchor = reproject(lastAnchor)
-      if (ghostShown) showGhostAt(lastAnchor)
     },
     hasTransient: () => false,
     escapeHint: () => 'leave-tool',

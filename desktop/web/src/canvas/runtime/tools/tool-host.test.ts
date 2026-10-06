@@ -74,24 +74,50 @@ function selectedZoneChips(h: ToolHarness): DraftShape[] {
 
 describe('ToolHost', () => {
   describe('points', () => {
-    it('re-projects the start on a plane change and calls planeChanged', () => {
-      let reproject: ((point: WorldPoint) => WorldPoint) | null = null
-      const rectangle = stubTool('rectangle', { planeChanged: (next) => { reproject = next } })
+    it('holds re-origin while a press is live, the tool has a transient or the text entry is open', () => {
+      let transient = false
+      const rectangle = stubTool('rectangle', { hasTransient: () => transient })
       useStubTools(rectangle)
       const h = harness({ tool: 'rectangle' })
+      expect(h.host.holdsReorigin()).toBe(false)
 
       h.press({ x: 100, y: 100 })
+      expect(h.host.holdsReorigin()).toBe(true)
       h.move({ x: 150, y: 120 })
-      const before = rectangle.last('drag-start')!.start.world
-      h.reorigin({ lon: 0.01, lat: 0.005 })
-      h.move({ x: 160, y: 130 })
+      h.release()
+      expect(h.host.holdsReorigin()).toBe(false)
 
-      expect(rectangle.calls).toContain('planeChanged')
-      const expected = reproject!(before)
-      expect(Math.hypot(expected.x - before.x, expected.y - before.y)).toBeGreaterThan(100)
-      const after = rectangle.last('drag-move')!.start.world
-      expect(after.x).toBeCloseTo(expected.x, 3)
-      expect(after.y).toBeCloseTo(expected.y, 3)
+      transient = true
+      expect(h.host.holdsReorigin()).toBe(true)
+      transient = false
+
+      h.openTextEntry()
+      expect(h.host.holdsReorigin()).toBe(true)
+      h.enterText()
+      expect(h.host.holdsReorigin()).toBe(false)
+    })
+
+    it('a plane change hides the tool\'s ghost until the next hover', () => {
+      const ghost: DraftShape = { kind: 'polyline', points: [{ x: 0, y: 0 }, { x: 1, y: 1 }], style: { token: 'draft', widthPx: 1 } }
+      // A ghost that stays when the pointer leaves the map, as the stamps' do.
+      const stamp: StubTool = stubTool('object-stamp', {
+        gesture: (g) => {
+          if (g.kind === 'hover') stamp.ctx().effects.setDraft({ shapes: [ghost] })
+          return 'pass'
+        },
+      })
+      useStubTools(stamp)
+      const h = harness({ tool: 'object-stamp' })
+
+      h.hover({ x: 100, y: 100 })
+      h.leave()
+      expect(h.renderer.lastDraft()?.shapes).toEqual([ghost])
+
+      h.reorigin({ lon: 0.01, lat: 0.005 })
+      expect(h.renderer.lastDraft()).toBeNull()
+
+      h.hover({ x: 120, y: 100 })
+      expect(h.renderer.lastDraft()?.shapes).toEqual([ghost])
     })
 
     it('under LEGACY a Polygon Shift point snaps, then constrains', () => {

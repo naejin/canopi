@@ -87,6 +87,8 @@ export interface SceneRuntimeConstructionCallbacks {
   readonly readInteractionTool: () => string | null
   readonly plantRowSpacing: CanvasPlantRowSpacingField
   readonly disposeInteraction: () => void
+  /** The interaction session's re-origin hold (ToolHost.holdsReorigin); false with no session mounted. */
+  readonly holdsReorigin: () => boolean
 }
 
 export interface SceneRuntimeConstruction {
@@ -293,11 +295,18 @@ export function createSceneRuntimeConstruction(
     sceneState: sceneStore,
     authority: sceneEdits,
     commandAdmission: sceneEdits,
+    held: callbacks.holdsReorigin,
   })
   // Each frame that moved the placement, screen or mode re-reads the live frame's centre (the controller filters the rest).
   disposeEffects.push(effect(() => {
     const frame = cameraHost.frames.viewFrame.value
     untracked(() => reorigin.observe(frame))
+  }))
+  // A hold ends in a tool call (a release, a dropped transient) or with the text entry's close, and each bumps the transient
+  // history revision: a frame the hold turned away is observed then.
+  disposeEffects.push(effect(() => {
+    void transientHistoryRevision.value
+    untracked(() => reorigin.resume())
   }))
   disposeEffects.push(() => reorigin.dispose())
   const focusSpecies = (canonicalName: string | null) => {

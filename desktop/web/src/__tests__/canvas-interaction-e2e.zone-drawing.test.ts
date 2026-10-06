@@ -12,6 +12,7 @@ import type {
   SceneInteractionSessionDeps,
 } from '../canvas/runtime/interaction-session'
 import { SceneHistory } from '../canvas/runtime/scene-history'
+import { SceneRuntimeReoriginController } from '../canvas/runtime/scene-runtime/reorigin'
 import {
   SceneRuntimeEditCoordinator,
   type SceneEditCoordinator,
@@ -846,32 +847,51 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('keeps a polygon draft at its lon/lat when the session plane re-origins mid-draw', () => {
+  it('a live polygon draft holds re-origin, which runs after the draft ends and the camera moves', async () => {
     const view = createTestView({ screen: { width: 400, height: 300 }, viewport: { x: 0, y: 0, scale: 1 }, plane: store.sessionPlane })
     const deps = createInteractionDeps(container, store, view)
     const session = createTestSession(deps)
+    const edits = deps.sceneEdits as SceneRuntimeEditCoordinator
+    const reorigin = new SceneRuntimeReoriginController({
+      sceneState: store,
+      authority: edits,
+      commandAdmission: edits,
+      held: () => session.holdsReorigin(),
+    })
+    const settle = async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    }
     session.setTool('polygon')
-    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
-    events.pointerDown({ x: 60, y: 10 }, { button: 0 })
+    for (const corner of [{ x: 10, y: 10 }, { x: 60, y: 10 }]) {
+      events.pointerDown(corner, { button: 0 })
+      events.pointerUp(corner, { button: 0 })
+    }
     const previous = store.sessionPlane
     // The viewport is 1 px per metre at the origin, so screen (10, 10) is plane (10, 10).
-    const firstVertexGeo = previous.toGeo({ x: 10, y: 10 })
-    const secondVertexGeo = previous.toGeo({ x: 60, y: 10 })
+    const corners = [previous.toGeo({ x: 10, y: 10 }), previous.toGeo({ x: 60, y: 10 }), previous.toGeo({ x: 60, y: 50 })]
 
-    // Panning 20 km east re-origins the plane; the camera follows it.
-    ;(deps.sceneEdits as SceneRuntimeEditCoordinator).reoriginSessionPlane(previous.toGeo({ x: 20_000, y: 0 }))
-    expect(store.sessionPlane).not.toBe(previous)
-    view.setPlane(store.sessionPlane)
+    // The view's centre is 20 km east: the draft holds the plane.
+    view.navigation.panByPx({ x: -20_000, y: 0 })
+    reorigin.observe(view.frames.viewFrame.peek())
+    await settle()
+    expect(store.sessionPlane).toBe(previous)
 
+    view.navigation.panByPx({ x: 20_000, y: 0 })
     events.pointerDown({ x: 60, y: 50 }, { button: 0 })
+    events.pointerUp({ x: 60, y: 50 }, { button: 0 })
     events.keyDown({ key: 'Enter' })
-
-    const zone = store.persisted.zones[0]!
-    const plane = store.sessionPlane
     const near = (geo: { lon: number; lat: number }) => ({ lon: expect.closeTo(geo.lon, 8), lat: expect.closeTo(geo.lat, 8) })
-    expect(plane.toGeo(zone.points[0]!)).toEqual(near(firstVertexGeo))
-    expect(plane.toGeo(zone.points[1]!)).toEqual(near(secondVertexGeo))
-    expect(plane.toGeo(zone.points[2]!)).toEqual(near(previous.toGeo({ x: 60, y: 50 })))
+    expect(store.persisted.zones[0]!.points.map((point) => previous.toGeo(point))).toEqual(corners.map(near))
+
+    // The draft has ended: the next far frame re-origins, and the zone keeps its lon/lat.
+    view.navigation.panByPx({ x: -20_000, y: 0 })
+    reorigin.observe(view.frames.viewFrame.peek())
+    await settle()
+    const plane = store.sessionPlane
+    expect(plane).not.toBe(previous)
+    expect(store.persisted.zones[0]!.points.map((point) => plane.toGeo(point))).toEqual(corners.map(near))
+    reorigin.dispose()
     session.dispose()
     view.dispose()
   })

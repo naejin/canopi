@@ -8,7 +8,7 @@ import {
 } from '../../../__tests__/support/tool-harness'
 import type { CanvasPlantRowGuidance } from '../../session-state'
 import type { ScenePlantEntity } from '../scene/types'
-import type { ScreenPoint, WorldPoint } from '../view/types'
+import type { WorldPoint } from '../view/types'
 import type { DraftShape } from './draft'
 import { createPlantRowTool } from './plant-row'
 import type { ToolSettingsPort } from './tool'
@@ -506,30 +506,15 @@ describe('Plant a row tool', () => {
     expect(added(h)).toEqual([{ x: 120, y: 30 }, { x: 220, y: 30 }, { x: 320, y: 30 }])
   })
 
-  it('a picked source follows a re-origin', () => {
+  it('a picked source holds re-origin until Esc drops it', () => {
     const { h } = rowHarness({ intervalM: 1 })
+    expect(h.host.holdsReorigin()).toBe(false)
+
     h.click({ x: 20, y: 30 })
     expect(row(h).phase).toBe('row')
+    expect(h.host.holdsReorigin()).toBe(true)
 
-    // The session re-origins: the scene's metres and the host's plane move together, through lon/lat.
-    const previous = h.plane
-    h.reorigin(previous.toGeo({ x: 12_000, y: 3_000 }))
-    const next = h.plane
-    h.store.updatePersisted((draft) => {
-      draft.plants = draft.plants.map((plant) => ({ ...plant, position: next.toPlane(previous.toGeo(plant.position)) }))
-    })
-    const source = h.store.persisted.plants[0]!.position
-    expect(source.x).not.toBeCloseTo(20, 3)
-
-    // An endpoint five metres east of the picked plant, in the new plane.
-    const end: ScreenPoint = h.view.view().worldToScreen({ x: source.x + 5, y: source.y })
-    h.click(end)
-
-    expect(added(h).length).toBeGreaterThan(0)
-    for (const position of added(h)) {
-      expect(position.y).toBeCloseTo(source.y, 3)
-      expect(position.x).toBeGreaterThan(source.x)
-      expect(position.x).toBeLessThanOrEqual(source.x + 5 + 1e-3)
-    }
+    h.host.command({ kind: 'escape' })
+    expect(h.host.holdsReorigin()).toBe(false)
   })
 })

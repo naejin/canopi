@@ -83,6 +83,7 @@ export class SceneCanvasRuntime {
         this._interaction?.setTool(name)
       },
       readInteractionTool: () => this._interaction?.tool ?? null,
+      holdsReorigin: () => this._interaction?.holdsReorigin() ?? false,
       plantRowSpacing: {
         input: (text) => this._interaction?.plantRowSpacing.input(text),
         commit: (text) => this._interaction?.plantRowSpacing.commit(text),

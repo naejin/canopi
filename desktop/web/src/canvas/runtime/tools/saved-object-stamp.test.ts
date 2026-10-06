@@ -465,35 +465,6 @@ describe('saved object stamp tool', () => {
     expect(h.store.persisted.plants).toHaveLength(1)
   })
 
-  it('keeps the ghost on its ground through a re-origin with the pointer off the map', () => {
-    const h = harness()
-    holding(h, mulchStamp())
-    h.hover({ x: 100, y: 100 })
-    h.leave()
-    const before = h.plane
-    const anchor = { x: 100, y: 100 }
-
-    h.reorigin({ lon: 0.01, lat: 0.005 })
-    h.advance(0)
-
-    const moved = h.plane.toPlane(before.toGeo(anchor))
-    expect(Math.hypot(moved.x - anchor.x, moved.y - anchor.y)).toBeGreaterThan(100)
-    const ghost = ghosts(h)[0]!.entity as { readonly anchor: { x: number; y: number } }
-    expect(ghost.anchor.x).toBeCloseTo(moved.x, 6)
-    expect(ghost.anchor.y).toBeCloseTo(moved.y, 6)
-    // The plant 10 m east of the anchor still shows 10 m east of it.
-    const ghostPlant = templateOf(ghosts(h)[0]).plants[0]!.entity
-    expect(ghostPlant.position.x).toBeCloseTo(moved.x + 10, 6)
-    expect(ghostPlant.position.y).toBeCloseTo(moved.y, 6)
-
-    // In overview the ghost stays hidden through a re-origin.
-    h.view.setViewport({ x: 200, y: 150, scale: 0.05 })
-    h.advance(0)
-    h.reorigin({ lon: 0.02, lat: 0.01 })
-    h.advance(0)
-    expect(ghosts(h)).toEqual([])
-  })
-
   it('Esc returns to Select at once under LEGACY', () => {
     const h = harness()
     holding(h, GUILD)

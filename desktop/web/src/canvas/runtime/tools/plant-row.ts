@@ -403,14 +403,6 @@ export function createPlantRowTool(): CanvasTool {
     },
     sceneChanged: publish,
     viewChanged: publish,
-    planeChanged(reproject) {
-      // A picked source outlives a re-origin (the tool holds no Scene Edit until it commits): its metres follow the plane.
-      if (source) source.plant = { ...source.plant, position: reproject(source.plant.position) }
-      if (endpoint) endpoint = reproject(endpoint)
-      if (previewPointer) previewPointer.world = reproject(previewPointer.world)
-      if (endpoint) updatePreview(endpoint)
-      publish()
-    },
     hasTransient: () => source !== null,
     escapeHint: () => source ? 'drop-transient' : 'leave-tool',
     cancelTransient(reason) {

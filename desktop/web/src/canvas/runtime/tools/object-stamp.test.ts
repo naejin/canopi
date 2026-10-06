@@ -306,37 +306,25 @@ describe('object stamp tool', () => {
     expect(h.store.persisted.plants).toHaveLength(2)
   })
 
-  it('keeps the ghost on its ground through a re-origin with the pointer off the map', () => {
+  it('a re-origin hides the ghost until the next hover, which shows it under the pointer with the pick', () => {
     const h = stampHarness({ plants: [smallApple({ x: 40, y: 40 })] })
     h.click({ x: 40, y: 40 })
     h.hover({ x: 90, y: 90 })
     h.leave()
-    const before = h.plane
-    const anchor = objectsGhost(ghosts(h)[0]).anchor
-    const plant = objectsGhost(ghosts(h)[0]).template.plants[0]!.entity.position
+    expect(ghosts(h)).toHaveLength(1)
 
     h.reorigin({ lon: 0.01, lat: 0.005 })
     h.advance(0)
-
-    const moved = h.plane.toPlane(before.toGeo(anchor))
-    expect(Math.hypot(moved.x - anchor.x, moved.y - anchor.y)).toBeGreaterThan(100)
-    const ghost = objectsGhost(ghosts(h)[0])
-    expect(ghost.anchor.x).toBeCloseTo(moved.x, 6)
-    expect(ghost.anchor.y).toBeCloseTo(moved.y, 6)
-    // The pick keeps its offset from the anchor.
-    expect(ghost.template.plants[0]!.entity.position.x - ghost.anchor.x).toBeCloseTo(plant.x - anchor.x, 6)
-    expect(ghost.template.plants[0]!.entity.position.y - ghost.anchor.y).toBeCloseTo(plant.y - anchor.y, 6)
-    // `]` turns it where it now stands.
-    h.host.command({ kind: 'rotate-held', stepDeg: 15 })
-    expect(objectsGhost(ghosts(h)[0]).anchor.x).toBeCloseTo(moved.x, 6)
-    expect(objectsGhost(ghosts(h)[0]).anchor.y).toBeCloseTo(moved.y, 6)
-
-    // In overview the ghost stays hidden through a re-origin.
-    h.view.setViewport({ x: 200, y: 150, scale: 0.05 })
-    h.advance(0)
-    h.reorigin({ lon: 0.02, lat: 0.01 })
-    h.advance(0)
     expect(ghosts(h)).toEqual([])
+    // `]` turns the pick; its ghost stays hidden.
+    h.host.command({ kind: 'rotate-held', stepDeg: 15 })
+    expect(ghosts(h)).toEqual([])
+
+    h.hover({ x: 120, y: 80 })
+    const ghost = objectsGhost(ghosts(h)[0])
+    const under = h.world({ x: 120, y: 80 })
+    expect(ghost.anchor.x).toBeCloseTo(under.x, 6)
+    expect(ghost.anchor.y).toBeCloseTo(under.y, 6)
   })
 
   it('Esc returns to Select at once under LEGACY, pick and all', () => {

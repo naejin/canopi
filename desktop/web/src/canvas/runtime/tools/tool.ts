@@ -219,12 +219,11 @@ export interface CanvasTool {
   command(c: ToolCommand): ToolReply
   /** Scene or selection changed outside the tool (undo, remote edit). */
   sceneChanged?(): void
-  /** The session plane changed (re-origin): re-project retained world points (corners, redo stack, row source) with reproject. */
-  planeChanged?(reproject: (p: WorldPoint) => WorldPoint): void
   /** A camera frame on which the host re-emitted nothing (the pointer off the map): rebuild a draft whose look depends on the
    *  scale, such as the polygon's edge chips hidden below 36 px (today's refreshViewportDependent). */
   viewChanged?(): void
-  /** True while the tool holds something Esc should drop first (draft, pick, row source). */
+  /** True while the tool holds something Esc should drop first (draft, pick, row source, Place plants' waiting point). It also
+   *  holds re-origin (§4.19). */
   hasTransient(): boolean
   /** Esc hint for the tool card, read by describeEscape. */
   escapeHint(): 'drop-transient' | 'leave-tool' | 'clear-selection' | null
