@@ -143,9 +143,13 @@ export function createContextMenuPort(options: ContextMenuPortOptions): ContextM
   return {
     open(request) {
       const held = request.holdsSelectionDeletes ? { holdsSelectionDeletes: true as const } : {}
+      const finish = request.finishShape ? { finishShape: request.finishShape } : {}
       if (request.at === 'selection') {
         const selection = selectionModel()
-        controller.openFromKeyboard(selection, selectionScreenHull(scene, selection, controllerOptions.view()), held)
+        controller.openFromKeyboard(selection, selectionScreenHull(scene, selection, controllerOptions.view()), {
+          ...finish,
+          ...held,
+        })
         return
       }
       const screen = request.screen ?? controllerOptions.view().worldToScreen(request.at)
@@ -157,7 +161,7 @@ export function createContextMenuPort(options: ContextMenuPortOptions): ContextM
         screen,
         kept ?? (visible && !target ? EMPTY_SELECTION_MODEL : null),
         {
-          ...(request.finishShape ? { finishShape: request.finishShape } : {}),
+          ...finish,
           ...(request.turnViewToEdge ? { turnViewToEdge: request.turnViewToEdge } : {}),
           ...held,
         },
@@ -1120,14 +1124,21 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       notifySceneChanged()
     }
     const turnViewToEdge = edgeTurnAt(world, source)
-    const finishShape = activeTool.canFinish?.() ? finishShapeOf(activeTool) : null
     deps.menu.open({
       at: world,
       screen: at,
-      ...(finishShape ? { finishShape } : {}),
+      ...toolMenuEntries(held),
       ...(turnViewToEdge ? { turnViewToEdge } : {}),
-      ...(held ? { holdsSelectionDeletes: true as const } : {}),
     })
+  }
+
+  /** The entries every menu, pointer or keyboard, takes from the armed tool and the hold: "Finish shape" while the tool
+   *  can finish its draft, and holdsSelectionDeletes during the re-origin hold (U39). */
+  function toolMenuEntries(held: boolean): { readonly finishShape?: () => void; readonly holdsSelectionDeletes?: true } {
+    return {
+      ...(activeTool.canFinish?.() ? { finishShape: finishShapeOf(activeTool) } : {}),
+      ...(held ? { holdsSelectionDeletes: true as const } : {}),
+    }
   }
 
   /** "Finish shape" (spec §3.2): the draft's Enter, while the tool that offered it is still armed. */
@@ -1311,7 +1322,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         if (deps.chrome.isTextEntryOpen()) focusMap()
         // A press, a tool transient or an entry its commit left open keeps the selection and its deletes (U39).
         const held = holdsReorigin()
-        if (at === 'selection') deps.menu.open({ at, screen: null, ...(held ? { holdsSelectionDeletes: true as const } : {}) })
+        if (at === 'selection') deps.menu.open({ at, screen: null, ...toolMenuEntries(held) })
         else openMenuAt(at, source, held)
         return true
       }, false)

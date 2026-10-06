@@ -835,6 +835,7 @@ describe('SceneInteractionSession', () => {
 
     openContextMenuFromKeyboard()
     expect(contextMenuHost.current?.selection?.editableTargets).toEqual([plantTarget('plant-1')])
+    expect(contextMenuItemIds()[0]).toBe('finish-shape')
     expect(contextMenuCommand('cut').disabled).toBe(true)
     expect(contextMenuCommand('delete').disabled).toBe(true)
     expect(store.persisted.plants).toHaveLength(2)

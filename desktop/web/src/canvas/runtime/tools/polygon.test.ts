@@ -143,6 +143,18 @@ describe('Polygon tool', () => {
     expect(cornerMarkers(h)).toEqual([])
   })
 
+  it('the keyboard menu also leads with Finish shape', () => {
+    const h = harness()
+    h.click({ x: 10, y: 10 })
+    h.click({ x: 60, y: 10 })
+    h.click({ x: 60, y: 50 })
+    h.menu('selection', 'keyboard')
+    const finishShape = h.record.menus.at(-1)?.finishShape
+    expect(finishShape).toBeTypeOf('function')
+    finishShape!()
+    expect(h.store.persisted.zones[0]!.points).toEqual([{ x: 10, y: 10 }, { x: 60, y: 10 }, { x: 60, y: 50 }])
+  })
+
   it('Backspace removes the last corner', () => {
     const h = harness()
 
