@@ -151,6 +151,13 @@ describe('ZoomControls', () => {
     expect(document.activeElement).toBe(ratio())
   })
 
+  it('refuses to render without one of its view commands, naming it', async () => {
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: { ...createTestCanvasQuerySurface(), view: view() } }))
+    const viewActions = workspaceCanvasCommandProjection.value.viewActions.filter((action) => action.id !== 'fit-to-design')
+    // A detached root: a render that throws leaves its root unusable.
+    expect(() => render(<ZoomControls viewActions={viewActions} />, document.createElement('div'))).toThrow('fit-to-design')
+  })
+
   it('keeps zoom writes on the focused command surface', async () => {
     const zoomIn = vi.fn()
     const zoomOut = vi.fn()
