@@ -9,6 +9,7 @@ import { detectPlatform, modKeyIsCmd } from '../../canvas/runtime/input/platform
 import type { CanvasDocumentSurface, CanvasQuerySurface } from '../../canvas/runtime/runtime'
 import { currentCanvasDocumentSurface, currentCanvasQuerySurface } from '../../canvas/session'
 import { modKeyName } from '../../app/shell-commands/shortcut-text'
+import { phoneLayout } from '../../app/shell/phone-layout'
 import { t } from '../../i18n'
 import { ControlIcon } from '../shared/ControlIcon'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
@@ -61,8 +62,9 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
   const panel = useRef<HTMLElement>(null)
   const handle = useSignal<CanvasInspectionHandle | null>(null)
   const failed = useSignal(false)
-  // The open panel covers the map's left edge: Home, Fit and framing land right of it (canopi-f47t.28).
-  useMapOccluder(panel, 'left')
+  // The open panel covers the map's left edge: Home, Fit and framing land right of it (canopi-f47t.28). Not on a phone,
+  // where it spans nearly the whole width and would push the chips and credits off screen.
+  useMapOccluder(panel, 'left', phoneLayout.value === null)
   useLayoutEffect(() => {
     if (!preview.current) return
     let view: CanvasInspectionHandle

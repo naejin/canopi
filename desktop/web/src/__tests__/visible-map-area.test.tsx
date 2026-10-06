@@ -22,6 +22,7 @@ import { SidePanelDock } from '../components/shared/SidePanelDock'
 import { InspectionLens } from '../components/canvas/InspectionLens'
 import type { CanvasInspectionHandle } from '../canvas/inspection'
 import { framingRect } from '../canvas/runtime/view/fit'
+import { phoneLayout } from '../app/shell/phone-layout'
 import type { ScenePersistedState } from '../canvas/runtime/scene'
 import { plantFinderMapMatches, zoomToPlantFinderMatches } from '../app/plant-finder/map-matches'
 import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
@@ -193,6 +194,39 @@ describe('visible map area', () => {
       await act(async () => render(null, container))
       expect(visibleMapFrame.value.left).toBe(0)
     } finally {
+      render(null, container)
+      container.remove()
+      releaseArea()
+    }
+  })
+
+  it('on a phone the open inspection lens leaves the map area whole, so the selection chip and credits stay on screen', async () => {
+    const view: CanvasInspectionHandle = {
+      state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true, frame: { width: 284, height: 284 }, plants: [] }),
+      sourceQuad: signal(null),
+      inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panByScreen: vi.fn(), zoomBy: vi.fn(),
+      highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
+    }
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ attachInspectionTo: () => view }) }))
+    // A 360 px phone held upright: the panel runs from 68 px to 352 px, nearly the map's whole width.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.tagName === 'SECTION' && this.hasAttribute('data-expanded')) return rect({ left: 68, top: 60, width: 284, height: 420 })
+      return rect(boxes.get(this) ?? { left: 0, top: 0, width: 0, height: 0 })
+    })
+    const area = element({ left: 0, top: 0, width: 360, height: 740 })
+    const releaseArea = registerMapArea(area)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    phoneLayout.value = 'portrait'
+    try {
+      await act(async () => render(<InspectionLens canvasRef={{ current: element(WINDOW) }} />, container))
+      await act(async () => container.querySelector<HTMLButtonElement>('[data-inspection-launcher]')!.click())
+      expect(container.querySelector('section[data-expanded]')).not.toBeNull()
+      refreshVisibleMapArea()
+      expect(visibleMapFrame.value.left).toBe(0)
+      expect(area.style.getPropertyValue('--map-inset-left')).toBe('0px')
+    } finally {
+      phoneLayout.value = null
       render(null, container)
       container.remove()
       releaseArea()
