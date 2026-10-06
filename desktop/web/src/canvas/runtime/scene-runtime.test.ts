@@ -7,7 +7,7 @@ import { SceneRendererMountCancelledError } from './scene-runtime/render-schedul
 import { effect } from '@preact/signals'
 import { stageScaleToMapZoom } from '../projection'
 import { DEFAULT_NEW_DESIGN_VIEW } from '../session-plane'
-import { getMapBackdropInk } from './scene-visuals'
+import { getMapBackdropInk, type CanvasMapBackdrop } from './scene-visuals'
 import type { SceneRuntimePresentationController } from './scene-runtime/presentation'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import '../../__tests__/support/camera-tolerance'
@@ -1352,6 +1352,39 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.hideCanvasChrome()
     expect(aids()).toBeUndefined()
     runtime.destroy()
+  })
+
+  it('the grid\'s ink follows a basemap backdrop change', () => {
+    let onMapBackdrop: (backdrop: CanvasMapBackdrop) => void = () => {}
+    const runtime = new SceneCanvasRuntime({
+      appAdapter: {
+        ...createCleanStateAdapterProbe().adapter,
+        settings: createTestSettingsAdapter({
+          readChromeOverlay: () => ({ gridVisible: true }),
+          subscribeMapBackdrop: (onChange) => {
+            onMapBackdrop = onChange
+            onChange('basemap')
+            return () => {}
+          },
+        }),
+      },
+    })
+    try {
+      runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+      runtime.documentSurface.showCanvasChrome()
+      const presentation = (runtime as unknown as { _presentation: SceneRuntimePresentationController })._presentation
+      const gridInk = () => presentation.buildRendererSnapshot().editingAids?.grid.ink
+      const light = getMapBackdropInk().grid
+      expect(gridInk()).toBe(light)
+
+      onMapBackdrop('dark-basemap')
+
+      expect(getMapBackdropInk().grid).not.toBe(light)
+      expect(gridInk()).toBe(getMapBackdropInk().grid)
+    } finally {
+      onMapBackdrop('basemap')
+      runtime.destroy()
+    }
   })
 
   it('shows a searched place by moving only the view', () => {
