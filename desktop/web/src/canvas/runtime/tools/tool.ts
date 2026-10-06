@@ -200,7 +200,6 @@ export interface ToolContext {
 
 export interface CanvasTool {
   readonly id: ToolId
-  readonly dragSlopPx?: number                    // per-tool threshold, sent through `configure` on every tool change (Plant a row: 0; it measures today's 4 px itself)
   /** True while the tool's next release must be admitted by the scene (Select's band: today's requiresSettledPointerUp). */
   settledRelease?(): boolean
   readonly clampsToView?: boolean                 // the host clamps the screen point to the view before converting (Plant a row)

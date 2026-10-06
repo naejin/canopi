@@ -1773,7 +1773,6 @@ describe('ToolHost', () => {
       expect(rectangle.calls).toEqual(['activate', 'cancelTransient:tool-change', 'deactivate:switch'])
       expect(ellipse.calls).toEqual(['activate'])
       expect(h.host.hasLiveGesture()).toBe(false)
-      expect(h.host.activeToolDragSlopPx()).toBeNull()
     })
 
     it('entering overview cancels the tool\'s transient with the overview reason', () => {

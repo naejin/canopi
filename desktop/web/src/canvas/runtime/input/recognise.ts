@@ -69,7 +69,7 @@ export function initialRecogniserState(): RecogniserState {
     held: { space: false },
     trackpadTwistDeg: 0,
     deadlines: { longPressAt: null, menuEchoUntil: null, windowsTrailUntil: null, lastSecondaryEndAt: null },
-    context: { tool: 'select', mode: 'site', pointingDevice: 'mouse', dragSlopPx: null },
+    context: { tool: 'select', mode: 'site', pointingDevice: 'mouse' },
   }
 }
 
@@ -204,7 +204,7 @@ function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void 
     rotateMove(step, session, input, config.platform)
     return
   }
-  const slopPassed = session.slopPassed || passesSlop(session, input.at, step.state, config)
+  const slopPassed = session.slopPassed || passesSlop(session, input.at, config)
   if (session.mode === 'pan') {
     const deltaPx = { x: input.at.x - session.last.x, y: input.at.y - session.last.y }
     putSession(step, { ...session, last: input.at, slopPassed })
@@ -301,7 +301,6 @@ function configure(step: Step, context: RawOf<'configure'>['context']): void {
       tool: context.tool,
       mode: context.mode,
       pointingDevice: context.pointingDevice,
-      dragSlopPx: context.dragSlopPx ?? null,
     },
   }
 }
@@ -359,8 +358,8 @@ function withoutNegativeZero(point: ScreenPoint): ScreenPoint {
   return { x: point.x === 0 ? 0 : point.x, y: point.y === 0 ? 0 : point.y }
 }
 
-function passesSlop(session: PointerSession, at: ScreenPoint, state: RecogniserState, config: RecogniserConfig): boolean {
-  const slop = state.context.dragSlopPx ?? config.bindings.dragSlopPx[session.pointer]
+function passesSlop(session: PointerSession, at: ScreenPoint, config: RecogniserConfig): boolean {
+  const slop = config.bindings.dragSlopPx[session.pointer]
   const distance = Math.hypot(at.x - session.start.x, at.y - session.start.y)
   return distance >= slop && distance > 0
 }

@@ -712,16 +712,6 @@ describe('recognise: sessions', () => {
     }
   })
 
-  it('Plant a row keeps slop 0 through configure', () => {
-    const result = run(seq('plant a row', WINDOWS, [
-      { raw: { kind: 'configure', context: { tool: 'plant-spacing', mode: 'site', pointingDevice: 'mouse', dragSlopPx: 0 } } },
-      down(100, 100),
-      move(101, 100, { buttons: 1 }),
-      up(101, 100),
-    ]))
-    expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-end'])
-  })
-
   it('a pointer-source pan carries the pointer\'s point and a wheel pan does not', () => {
     const space = run(SEQUENCES.G3)
     const points = pansOf(space.gestures).map((pan) => pan.at)

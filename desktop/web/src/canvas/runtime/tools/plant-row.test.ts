@@ -392,32 +392,6 @@ describe('Plant a row tool', () => {
     expect(row(h).phase).toBe('pick')
   })
 
-  it('moves within 4 px of the press preview the row, and a release there is a click', () => {
-    const { h } = rowHarness({ intervalM: 0.5 })
-
-    // The press picks the source and its field asks for focus, which a jitter leaves there.
-    h.press({ x: 20, y: 30 })
-    const focus = h.record.focus.length
-    h.move({ x: 22, y: 30 })
-    expect(shapesOf(h, 'polyline')[0]!.points).toEqual([{ x: 20, y: 30 }, { x: 22, y: 30 }])
-    expect(row(h).count).toBe(4)
-    h.release({ x: 23, y: 30 })
-
-    expect(added(h)).toEqual([])
-    expect(row(h).phase).toBe('row')
-    expect(h.record.focus.slice(focus)).toEqual([])
-
-    // A move 4 px out makes the press a drag, even when it comes back before the release (today's).
-    h.press({ x: 20, y: 30 })
-    const pressFocus = h.record.focus.length
-    h.move({ x: 24, y: 30 })
-    expect(h.record.focus.slice(pressFocus)).toEqual(['map:tool-requested'])
-    h.move({ x: 22, y: 30 })
-    h.release({ x: 22, y: 30 })
-
-    expect(added(h)).toEqual([{ x: 20.5, y: 30 }, { x: 21, y: 30 }, { x: 21.5, y: 30 }, { x: 22, y: 30 }])
-  })
-
   it('the spacing field asks for focus on the release of the press that picked the source, never during its drag', () => {
     const { h } = rowHarness({ intervalM: 2 })
 
@@ -436,13 +410,6 @@ describe('Plant a row tool', () => {
     expect(row(h).focusRequest).toBe(0)
     h.release({ x: 20, y: 30 })
     expect(row(h)).toMatchObject({ phase: 'row', focusRequest: 1 })
-    // So does a press that jitters inside 4 px.
-    h.host.command({ kind: 'spacing-cancel' })
-    h.press({ x: 20, y: 30 })
-    h.move({ x: 22, y: 30 })
-    expect(row(h).focusRequest).toBe(1)
-    h.release({ x: 22, y: 30 })
-    expect(row(h).focusRequest).toBe(2)
   })
 
   it('a drag from the source takes the map\'s focus', () => {

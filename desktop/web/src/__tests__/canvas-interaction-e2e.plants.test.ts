@@ -470,6 +470,27 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('Plant a row\'s preview stays put for the first 3 px, then follows the drag', () => {
+    plantSpacingIntervalM.value = 2
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('source', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('plant-spacing')
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    expect(rowSource('source')).toBe(true)
+
+    events.pointerMove({ x: 22, y: 30 }, { button: 0 })
+    expect(draftShapes('polyline')).toEqual([])
+
+    events.pointerMove({ x: 60, y: 30 }, { button: 0 })
+    const guideEnd = draftShapes('polyline')[0]?.points.at(-1)
+    expect(guideEnd?.x).toBeCloseTo(60, 6)
+    expect(guideEnd?.y).toBeCloseTo(30, 6)
+    events.pointerUp({ x: 60, y: 30 }, { button: 0 })
+    session.dispose()
+  })
+
   it('handles Escape from the focused Plant Spacing interval input', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
@@ -937,7 +958,7 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('previews Plant Spacing from moves inside its 4 px drag slop', () => {
+  it('a Plant a row press that jitters inside the drag slop is a click: no row, and the field takes focus on its release', () => {
     plantSpacingIntervalM.value = 0.5
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('source', 'Malus domestica', { x: 20, y: 30 })]
@@ -951,8 +972,7 @@ describe('SceneInteractionSession', () => {
     const input = spacingInput()!
     events.pointerMove({ x: 22, y: 30 }, { button: 0 })
 
-    expect(draftShapes('polyline')[0]?.points).toEqual([{ x: 20, y: 30 }, { x: 22, y: 30 }])
-    expect(rowLength()).toBe('2 m')
+    expect(draftShapes('polyline')).toEqual([])
     // The field takes focus on the release of the press that picked the source, which a jitter leaves a click.
     expect(document.activeElement).not.toBe(input)
     events.pointerUp({ x: 22, y: 30 }, { button: 0 })

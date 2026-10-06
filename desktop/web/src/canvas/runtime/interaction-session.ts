@@ -682,7 +682,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         tool: this._tool.peek(),
         mode: this._mode,
         pointingDevice: this._pointingDevice,
-        dragSlopPx: this._toolHost.activeToolDragSlopPx() ?? undefined,
       },
     }
   }

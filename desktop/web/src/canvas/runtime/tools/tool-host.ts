@@ -1314,7 +1314,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       if (tool?.sourceChanged) callTool(() => tool.sourceChanged!(source))
     },
     activeTool: deps.toolState.active,
-    activeToolDragSlopPx: () => activeTool?.dragSlopPx ?? null,
     rawPress,
     notePointer(screen: ScreenPoint | null): void {
       if (disposed) return

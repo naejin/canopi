@@ -220,19 +220,6 @@ describe('the interaction session', () => {
     expect(testView.viewport()).not.toEqual(before)
   })
 
-  it('the active tool\'s slop reaches configure', () => {
-    const row = stubTool('plant-spacing', { dragSlopPx: 4 })
-    useStubTools(row)
-    const { session } = createSession()
-    session.setTool('plant-spacing')
-
-    events.pointerDown({ x: 100, y: 100 })
-    events.pointerMove({ x: 103, y: 100 })
-    expect(row.count('drag-start')).toBe(0)
-    events.pointerMove({ x: 104, y: 100 })
-    expect(row.count('drag-start')).toBe(1)
-  })
-
   it('a plant source chosen while armed reaches sourceChanged', async () => {
     const sources: (ToolSource | null)[] = []
     const stamp = stubTool('plant-stamp', {

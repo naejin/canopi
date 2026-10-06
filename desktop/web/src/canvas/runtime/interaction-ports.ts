@@ -170,8 +170,6 @@ export interface ToolHost {
   /** A new source for the armed tool (the session's read-model bridge): forwards to CanvasTool.sourceChanged. */
   sourceChanged(source: ToolSource | null): void
   readonly activeTool: ReadonlySignal<ToolId>
-  /** The active tool's dragSlopPx, sent in the recogniser's configure on every tool change. */
-  activeToolDragSlopPx(): number | null
   /**
    * Presses the host never sees as gestures: the session calls it for every raw pointerdown on the map host before routing it
    * (from the source's raw input, not a gesture; the down's role, 'auxiliary' as 'middle'). Commits the nudge series for any
