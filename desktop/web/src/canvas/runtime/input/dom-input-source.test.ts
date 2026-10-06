@@ -497,6 +497,16 @@ describe('createDomInputSource', () => {
       menu.remove()
       dispose()
     })
+
+    it('B7: a Mac Control press on the map is secondary: its menu at the press is prevented, and its trail after the release', () => {
+      const dispose = attachRecording(createDomInputSource(deps({ platform: { os: 'mac', gestureEvents: true } })))
+      pointer('pointerdown', host, 100, { button: 0, buttons: 1, ctrlKey: true })
+      expect(contextMenu(host, 101).defaultPrevented).toBe(true)
+      pointer('pointerup', document.body, 300, { button: 0, ctrlKey: true })
+      expect(contextMenu(document.body, 320).defaultPrevented).toBe(true)
+      expect(received[0]).toMatchObject({ kind: 'down', role: 'secondary', ctrlConsumed: true })
+      dispose()
+    })
   })
 
   it('a quarantine outcome prevents and stops the event', () => {

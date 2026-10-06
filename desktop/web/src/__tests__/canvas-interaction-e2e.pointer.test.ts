@@ -18,6 +18,9 @@ import {
   enterOverview,
 } from './support/canvas-interaction-setup'
 import type { TestView } from './support/test-view'
+import type { InputPlatform } from '../canvas/runtime/input/platform'
+
+const MAC: InputPlatform = { os: 'mac', gestureEvents: true }
 import './support/camera-tolerance'
 
 describe('SceneInteractionSession', () => {
@@ -194,6 +197,35 @@ describe('SceneInteractionSession', () => {
     const points = store.persisted.zones[0]!.points
     expect(points.map((point) => [point.x, point.y])).toEqual([[20, 20], [80, 20], [80, 80]])
     expect(contextMenuHost.opened).toHaveLength(0)
+    session.dispose()
+  })
+
+  it('B1, B2: on a Mac a Control-click on a plant opens its menu with no toggle, and a Control-drag pans', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [
+        makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }),
+        makePlant('plant-2', 'Pyrus communis', { x: 120, y: 30 }),
+      ]
+    })
+    const deps = { ...createInteractionDeps(container, store, testView), platform: MAC }
+    const session = createTestSession(deps)
+    session.setTool('select')
+    deps.setSelection([plantTarget('plant-2')])
+
+    events.pointerDown({ x: 20, y: 30 }, { ctrlKey: true })
+    events.pointerUp({ x: 20, y: 30 }, { ctrlKey: true })
+    expect(contextMenuHost.opened).toHaveLength(1)
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
+
+    contextMenuHost.reset()
+    const before = testView.viewport()
+    events.pointerDown({ x: 200, y: 200 }, { ctrlKey: true })
+    events.pointerMove({ x: 260, y: 220 }, { buttons: 1, ctrlKey: true })
+    events.pointerUp({ x: 260, y: 220 }, { ctrlKey: true })
+    expect(testView.viewport().x).toBeCloseTo(before.x + 60, 6)
+    expect(testView.viewport().y).toBeCloseTo(before.y + 20, 6)
+    expect(contextMenuHost.opened).toHaveLength(0)
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
     session.dispose()
   })
 

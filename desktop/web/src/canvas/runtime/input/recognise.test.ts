@@ -196,18 +196,16 @@ describe('recognise: 5.1 secondary button', () => {
 })
 
 describe('recognise: 5.2 macOS Ctrl+click', () => {
-  it('B1 macOS Ctrl+click: an additive tap', () => {
+  it('B1 macOS Ctrl+click: the menu at the release point, no press and no selection toggle', () => {
     const result = run(SEQUENCES.B1)
-    expect(kinds(result.gestures)).toEqual(['press', 'tap'])
-    expect(result.gestures[0]).toMatchObject({ kind: 'press', mods: { ctrl: true, meta: false }, target: { kind: 'surface' } })
-    expect(result.gestures[1]).toMatchObject({ kind: 'tap', mods: { ctrl: true } })
+    expect(result.steps[0]!.input).toMatchObject({ kind: 'down', role: 'secondary', ctrlConsumed: true })
+    expect(result.gestures).toEqual([{ kind: 'menu-request', at: { x: 100, y: 100 }, source: 'mouse' }])
   })
 
-  it('B2 macOS Ctrl+drag: an additive band', () => {
+  it('B2 macOS Ctrl+drag: a pan, no band and no menu', () => {
     const result = run(SEQUENCES.B2)
-    expectNoNavigation(result.gestures)
-    expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-move', 'drag-move', 'drag-end'])
-    expect(result.gestures[1]).toMatchObject({ kind: 'drag-start', mods: { ctrl: true } })
+    expect(kinds(result.gestures)).toEqual(['pan:start', 'pan:move', 'pan:move', 'pan:move', 'pan:end'])
+    expect(pansOf(result.gestures)[0]!.source).toBe('secondary-drag')
   })
 
   it.each([
@@ -223,9 +221,18 @@ describe('recognise: 5.2 macOS Ctrl+click', () => {
     expect(run(SEQUENCES.B4).gestures).toEqual(run(SEQUENCES.A3).gestures)
   })
 
-  it('B6 Mac Ctrl+Shift+click drag: a band, never a rotate', () => {
+  it('B6 Mac Ctrl+Shift+click drag: a rotate, unstepped, stepped once Cmd is held; Ctrl never steps', () => {
     const result = run(SEQUENCES.B6)
-    expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-move', 'drag-move', 'drag-move'])
+    expect(result.gestures.map((gesture) => gesture.kind === 'rotate' && [gesture.phase, gesture.step])).toEqual([
+      ['start', false], ['move', false], ['move', false],
+      ['move', true], ['move', true], ['move', true],
+    ])
+  })
+
+  it('B7 Mac Ctrl+drag never opens the menu: a pan, and its release requests none', () => {
+    const result = run(SEQUENCES.B7)
+    expect(kinds(result.gestures)).toEqual(['pan:start', 'pan:move', 'pan:move', 'pan:move', 'pan:end'])
+    expect(result.gestures.some((gesture) => gesture.kind === 'menu-request')).toBe(false)
   })
 })
 

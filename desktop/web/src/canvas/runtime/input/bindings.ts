@@ -12,7 +12,6 @@ export interface Bindings {
   readonly auxiliaryShiftDrag: 'pan' | 'rotate'
   /** Contexts in which a primary drag pans. */
   readonly primaryDragPansIn: readonly PanContext[]
-  readonly macCtrlClick: 'primary' | 'secondary'
   readonly touch: { readonly gestures: boolean; readonly longPressMenu: boolean; readonly hostTouchActionNone: boolean }
   readonly penBarrel: 'ignore' | 'secondary'
   readonly trackpadGestures: boolean                       // WebKit gesture* rotation (the scale is ignored: the pinch arrives as Ctrl+wheel)
@@ -28,7 +27,6 @@ export interface Bindings {
 export const CURRENT_BINDINGS: Bindings = Object.freeze({
   auxiliaryShiftDrag: 'rotate',
   primaryDragPansIn: Object.freeze(['hand-tool', 'overview'] as const),
-  macCtrlClick: 'primary',
   touch: Object.freeze({ gestures: false, longPressMenu: false, hostTouchActionNone: false }),
   penBarrel: 'ignore',
   trackpadGestures: true,

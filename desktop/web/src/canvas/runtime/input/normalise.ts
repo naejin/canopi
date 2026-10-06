@@ -162,9 +162,8 @@ function pressRole(
     return null   // barrel under 'ignore', eraser (5) and any other pen button
   }
   if (button === BUTTON_PRIMARY) {
-    if (platform.os === 'mac' && bindings.macCtrlClick === 'secondary' && e.ctrlKey && !e.metaKey) {
-      return { role: 'secondary', ctrlConsumed: true }
-    }
+    // A Mac Control-click is a right-click: the session's Ctrl is consumed, never a modifier (spec §1.2).
+    if (platform.os === 'mac' && e.ctrlKey && !e.metaKey) return { role: 'secondary', ctrlConsumed: true }
     return { role: 'primary', ctrlConsumed: false }
   }
   if (button === BUTTON_AUXILIARY) return { role: 'auxiliary', ctrlConsumed: false }

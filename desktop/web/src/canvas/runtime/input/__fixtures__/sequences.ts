@@ -376,6 +376,11 @@ export const SEQUENCES = {
     keyState(false, { ctrl: true, shift: true, meta: true }),
     ...moves([120, 100], [140, 100], 2, { buttons: 1, ctrl: true, shift: true, meta: true }),
   ]),
+  B7: seq('B7 Mac Ctrl+drag never opens the menu', MAC_GESTURES, [
+    down(100, 100, { ctrl: true }),
+    ...moves([100, 100], [150, 140], 3, { buttons: 1, ctrl: true }),
+    up(150, 140, { ctrl: true }),
+  ]),
 
   // 5.4 Pen
   D1: seq('D1 Pen barrel tap', WINDOWS, [

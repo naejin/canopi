@@ -38,26 +38,15 @@ describe('normalise', () => {
     expect(pages).toMatchObject({ dxPx: 100, dyPx: 0 })
   })
 
-  it('a Mac physical Ctrl is ctrl, never mod', () => {
-    const press = normalise(event({ type: 'pointerdown', button: 0, ctrlKey: true, pointerId: 3 }), MAC, CURRENT_BINDINGS, HOST)
-    expect(press).toMatchObject({
-      kind: 'down',
-      role: 'primary',
-      ctrlConsumed: false,
-      mods: { shift: false, ctrl: true, alt: false, meta: false },
-    })
-    const command = normalise(event({ type: 'pointerdown', button: 0, metaKey: true }), MAC, CURRENT_BINDINGS, HOST)
-    expect(command).toMatchObject({ mods: { ctrl: false, meta: true } })
-  })
-
-  it('a Mac Ctrl+click becomes a consumed secondary press only when the bindings say so', () => {
-    const secondaryCtrl: Bindings = { ...CURRENT_BINDINGS, macCtrlClick: 'secondary' }
-    const press = normalise(event({ type: 'pointerdown', button: 0, ctrlKey: true }), MAC, secondaryCtrl, HOST)
+  it('a Mac Ctrl+click becomes a consumed secondary press; Cmd is meta, and Ctrl+Cmd or Ctrl elsewhere stays primary', () => {
+    const press = normalise(event({ type: 'pointerdown', button: 0, ctrlKey: true }), MAC, CURRENT_BINDINGS, HOST)
     expect(press).toMatchObject({ kind: 'down', role: 'secondary', ctrlConsumed: true, mods: { ctrl: true } })
-    const withCommand = normalise(event({ type: 'pointerdown', button: 0, ctrlKey: true, metaKey: true }), MAC, secondaryCtrl, HOST)
-    expect(withCommand).toMatchObject({ role: 'primary', ctrlConsumed: false })
-    const elsewhere = normalise(event({ type: 'pointerdown', button: 0, ctrlKey: true }), WINDOWS, secondaryCtrl, HOST)
-    expect(elsewhere).toMatchObject({ role: 'primary' })
+    const withCommand = normalise(event({ type: 'pointerdown', button: 0, ctrlKey: true, metaKey: true }), MAC, CURRENT_BINDINGS, HOST)
+    expect(withCommand).toMatchObject({ role: 'primary', ctrlConsumed: false, mods: { ctrl: true, meta: true } })
+    const elsewhere = normalise(event({ type: 'pointerdown', button: 0, ctrlKey: true }), WINDOWS, CURRENT_BINDINGS, HOST)
+    expect(elsewhere).toMatchObject({ role: 'primary', ctrlConsumed: false })
+    const command = normalise(event({ type: 'pointerdown', button: 0, metaKey: true }), MAC, CURRENT_BINDINGS, HOST)
+    expect(command).toMatchObject({ role: 'primary', mods: { ctrl: false, meta: true } })
   })
 
   it('maps mouse buttons to roles and drops back and forward', () => {
