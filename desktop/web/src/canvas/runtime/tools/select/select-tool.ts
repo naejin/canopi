@@ -63,10 +63,9 @@ export function createSelectTool(): CanvasTool {
   let rotationDeltaDeg: number | null = null
   /** The bearing the handles were placed at: the rotation handle sits above the projected hull, so a turn moves it. */
   let handlesBearingDeg = 0
-  /** The scale the handles were placed at (screen px per world metre): which edges have room for a dot depends on it alone. */
+  /** The scale the handles were placed at (screen px per world metre): the midpoint dots' room and the hull of screen-sized
+   *  plants and notes depend on it. */
   let handlesPixelsPerMetre = 0
-  /** The reshaped zone the handles were drawn for: a zoom changes which of its edges have room for a midpoint dot. */
-  let handlesZone: SceneZoneEntity | null = null
   let reshapePoints = new Map<ToolHandleId, ZoneControlPoint>()
   let edgeMidpoints = new Map<ToolHandleId, ZoneEdgeMidpoint>()
   let guideEndPoints = new Map<ToolHandleId, GuideEnd>()
@@ -92,7 +91,6 @@ export function createSelectTool(): CanvasTool {
     handlesPixelsPerMetre = pixelsPerMetre(c.view)
     if (rotate) handles.push(rotate)
     const zone = reshapableZone(scene, selection)
-    handlesZone = zone
     const points = zone ? zoneControlPoints(zone) : []
     reshapePoints = new Map(points.map((entry) => [entry.id, entry]))
     handles.push(...zoneControlPointHandles(points, c.translate))
@@ -107,18 +105,14 @@ export function createSelectTool(): CanvasTool {
     c.effects.setHandles(handles, selectedCorner)
   }
 
-  /** A camera frame that turned the view, or zoomed it so another set of edges has room for a dot, redraws the handles;
-   *  a pan leaves them as they are. The host re-emits a hover or a live drag on each camera frame, so both follow it. */
+  /** A camera frame that turned or zoomed the view redraws the handles (U40); a pan leaves them as they are. The host
+   *  re-emits a hover or a live drag on each camera frame, so both follow it. */
   function followView(): void {
     if (!context) return
     const { view } = context
     // A pan changes neither, so it recomputes nothing.
     if (view.bearingDeg === handlesBearingDeg && pixelsPerMetre(view) === handlesPixelsPerMetre) return
-    const dots = handlesZone ? zoneEdgeMidpoints(handlesZone, view) : []
-    const dotsChanged = dots.length !== edgeMidpoints.size || dots.some((dot) => !edgeMidpoints.has(dot.id))
-    if (view.bearingDeg !== handlesBearingDeg || dotsChanged) refreshHandles()
-    // A zoom that kept the same dots still records its scale, so the pans after it return early.
-    else handlesPixelsPerMetre = pixelsPerMetre(view)
+    refreshHandles()
   }
 
   function press(point: ToolPoint, hit: HitTarget | null, clickCount: number): void {
