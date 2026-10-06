@@ -1,8 +1,7 @@
 // canvas/runtime/keyboard-port.ts
 //
 // Owns the canvas's key handling behind CanvasKeyboardPort (spec §1.2a, §1.6, ADR 0020): the key router hands it every
-// key first (keyState: the nudge commit, the physical Ctrl, the Menu key's time, the Space hold, the modifiers a live rotate
-// steps by), runs its key commands (the arrow nudge and pan, mod for the large step; Shift+←/→ turning the view and
+// key first (keyState: the nudge commit, the Menu key's time, the Space hold, the modifiers a live rotate steps by), runs its key commands (the arrow nudge and pan, mod for the large step; Shift+←/→ turning the view and
 // Shift+↑ or Shift+N resetting north; Enter, Backspace, F2, `[` `]`, the Menu key) and lists and runs its Esc layers, which
 // app/keyboard/escape-chain.ts places in the Esc chain. The arrow nudge series is the ToolHost's; the port only reads its
 // outcome. It never touches a DOM event: the router acts on its answers.
@@ -55,19 +54,14 @@ interface CanvasKeySession {
   clearSelection(): void
 }
 
-/** The session's port: the router's CanvasKeyboardPort, plus the physical keys the DOM input source reads. */
+/** The session's port: the router's CanvasKeyboardPort, plus the Menu key's time the DOM input source reads. */
 interface SessionCanvasKeyboardPort extends CanvasKeyboardPort {
-  /** Whether Control is physically down (a Ctrl wheel without it is a trackpad pinch). */
-  physicalCtrl(): boolean
   /** When the keyboard last opened the canvas menu (event time), for the contextmenu echo; null before. */
   lastKeyboardMenuAt(): number | null
-  /** A window blur: every key is up. */
-  releaseKeys(): void
 }
 
 export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionCanvasKeyboardPort {
   const { host, toolHost, session } = deps
-  let physicalCtrl = false
   let lastMenuAt: number | null = null
   /** The last keydown keyState saw: a Menu key or Shift+F10 stamps the keyboard menu's time. */
   let lastKeyDown: CanvasKeyState | null = null
@@ -199,13 +193,11 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionC
     },
     keyState(k) {
       if (k.type === 'keyup') {
-        if (k.key === 'Control') physicalCtrl = false
         if (k.code === 'Space') session.keyState({ space: false, mods: k.mods })
         else if (MODIFIER_KEYS.has(k.key)) session.keyState({ space: session.spaceHeld(), mods: k.mods })
         return verdict()
       }
       lastKeyDown = k
-      if (k.key === 'Control') physicalCtrl = true
       // Any other key ends a nudge series (one undo step); Esc aborts it through its layer.
       if (toolHost.hasNudgeSeries() && !ARROW_KEYS.has(k.key) && !MODIFIER_KEYS.has(k.key) && k.key !== 'Escape') {
         toolHost.endNudgeSeries(true)
@@ -215,11 +207,7 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionC
       if (MODIFIER_KEYS.has(k.key)) session.keyState({ space: session.spaceHeld(), mods: k.mods })
       return verdict()
     },
-    physicalCtrl: () => physicalCtrl,
     lastKeyboardMenuAt: () => lastMenuAt,
-    releaseKeys() {
-      physicalCtrl = false
-    },
   }
 }
 

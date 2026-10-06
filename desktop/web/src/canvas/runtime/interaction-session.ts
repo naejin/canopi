@@ -358,10 +358,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         host: container,
         platform,
         bindings: () => CURRENT_BINDINGS,
-        keys: {
-          physicalCtrl: () => this._port.physicalCtrl(),
-          lastKeyboardMenuAt: () => this._port.lastKeyboardMenuAt(),
-        },
+        keys: { lastKeyboardMenuAt: () => this._port.lastKeyboardMenuAt() },
         clock,
         timers,
       })
@@ -649,7 +646,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
    *  when that path failed. */
   private _interrupted(): void {
     this._spaceHeld = false
-    this._port.releaseKeys()
     this._cancelDropFocus()
     this._setNavigationCursor(null)
     this._toolHost.interrupted()

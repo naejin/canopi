@@ -6,7 +6,7 @@ import type { TargetClass } from './raw-input'
 
 export type NavigationSource =
   | 'secondary-drag' | 'auxiliary-drag' | 'space-drag' | 'primary-drag'   // primary-drag: the Pan tool (and legacy overview)
-  | 'wheel' | 'trackpad-pinch' | 'trackpad-twist' | 'touch-two-finger'
+  | 'wheel' | 'trackpad-twist' | 'touch-two-finger'                         // a pinch is a 'wheel' (P14)
 
 export type MenuSource = 'mouse' | 'ctrl-click' | 'pen-barrel' | 'long-press' | 'keyboard' | 'native'
 // CancelReason, PointerKind, Modifiers, ToolHandleId, CanvasDropPayload: from ../interaction-types.ts (§1.2a); TargetClass: from ./raw-input.ts (§1.2)

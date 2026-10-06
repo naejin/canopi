@@ -28,7 +28,7 @@ function deps(): DomInputSourceDeps {
     host,
     platform: { os: 'linux', gestureEvents: false },
     bindings: () => CURRENT_BINDINGS,
-    keys: { physicalCtrl: () => false, lastKeyboardMenuAt: () => null },
+    keys: { lastKeyboardMenuAt: () => null },
     clock: () => 0,
     timers: { set: vi.fn(() => 1), clear: vi.fn() },
   }

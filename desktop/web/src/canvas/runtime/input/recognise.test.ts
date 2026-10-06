@@ -3,6 +3,7 @@ import { CURRENT_BINDINGS } from './bindings'
 import type { Gesture } from './gestures'
 import {
   FOREIGN,
+  MAC,
   MAC_GESTURES,
   OWNED_CHROME,
   OWNED_TEXT,
@@ -295,10 +296,10 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
 
   it('a twist the other way subtracts the threshold the other way', () => {
     const result = run(seq('anticlockwise twist', MAC_GESTURES, [
-      gesture('start', 1, 0),
-      gesture('change', 1, -15),
-      gesture('change', 1, -4),
-      gesture('end', 1, -4),
+      gesture('start', 0),
+      gesture('change', -15),
+      gesture('change', -4),
+      gesture('end', -4),
     ]))
     expect(result.gestures.map((gesture) => gesture.kind === 'rotate' && [gesture.phase, gesture.totalDeltaDeg])).toEqual([
       ['start', 0], ['move', 5], ['move', -6], ['end', -6],
@@ -311,11 +312,11 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
     ['configure', configure({ tool: 'polygon', mode: 'site', pointingDevice: 'trackpad' }), 'tool-change'],
   ] as const)('%s cancels a live twist, and the rest of the twist turns nothing', (_fence, fence, reason) => {
     const result = run(seq('fenced twist', MAC_GESTURES, [
-      gesture('start', 1, 0),
-      gesture('change', 1, 20),
+      gesture('start', 0),
+      gesture('change', 20),
       fence,
-      gesture('change', 1, 30),
-      gesture('end', 1, 30),
+      gesture('change', 30),
+      gesture('end', 30),
     ]))
     expect(kinds(result.gestures)).toEqual(['rotate:start', 'rotate:move', 'rotate:cancel', 'cancel'])
     expect(result.gestures.at(-1)).toEqual({ kind: 'cancel', reason })
@@ -326,30 +327,30 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
   it('a twist is ignored during a pointer pan or rotate, and a press during a twist is ignored', () => {
     const duringPan = run(seq('twist during a pan', MAC_GESTURES, [
       down(100, 100, { button: 1 }),
-      gesture('start', 1, 0),
-      gesture('change', 1, 20),
+      gesture('start', 0),
+      gesture('change', 20),
       move(120, 100, { buttons: 4 }),
-      gesture('end', 1, 20),
+      gesture('end', 20),
       up(120, 100, { button: 1 }),
     ]))
     expect(kinds(duringPan.gestures)).toEqual(['pan:start', 'pan:move', 'pan:end'])
     const duringRotate = run(seq('twist during a rotate', MAC_GESTURES, [
       down(100, 100, { button: 1, shift: true }),
       move(120, 100, { buttons: 4, shift: true }),
-      gesture('start', 1, 0),
-      gesture('change', 1, 20),
-      gesture('end', 1, 20),
+      gesture('start', 0),
+      gesture('change', 20),
+      gesture('end', 20),
       up(120, 100, { button: 1, shift: true }),
     ]))
     expect(duringRotate.gestures.every((gesture) => gesture.kind === 'rotate' && gesture.source === 'auxiliary-drag')).toBe(true)
     expect(kinds(duringRotate.gestures)).toEqual(['rotate:start', 'rotate:move', 'rotate:end'])
     const pressDuringTwist = run(seq('press during a twist', MAC_GESTURES, [
-      gesture('start', 1, 0),
-      gesture('change', 1, 20),
+      gesture('start', 0),
+      gesture('change', 20),
       down(100, 100),
       move(140, 100, { buttons: 1 }),
       up(140, 100),
-      gesture('end', 1, 20),
+      gesture('end', 20),
     ]))
     expect(kinds(pressDuringTwist.gestures)).toEqual(['rotate:start', 'rotate:move', 'rotate:end'])
     expect(pressDuringTwist.steps[2]!.effects).toEqual([])
@@ -404,7 +405,7 @@ describe('recognise: 5.6 wheel and trackpad', () => {
     const zooms = zoomsOf(result.gestures)
     expect(zooms).toHaveLength(1)
     expect(zooms[0]!.factor).toBeGreaterThan(1)
-    expect(zooms[0]!.source).toBe('trackpad-pinch')
+    expect(zooms[0]!.source).toBe('wheel')
     expect(result.effects).toEqual([{ kind: 'prevent-default' }])
   })
 
@@ -444,7 +445,19 @@ describe('recognise: 5.6 wheel and trackpad', () => {
   it('F12 WKWebView pinch with Ctrl wheels: the gesture\'s scale is ignored and each Ctrl wheel zooms', () => {
     const zooms = zoomsOf(run(SEQUENCES.F12).gestures)
     expect(zooms).toHaveLength(2)
-    expect(zooms.every((zoom) => zoom.factor > 1 && zoom.source === 'trackpad-pinch')).toBe(true)
+    expect(zooms.every((zoom) => zoom.factor > 1 && zoom.source === 'wheel')).toBe(true)
+  })
+
+  it('a Ctrl+wheel zooms continuously by its delta, a pinch\'s synthetic Ctrl and a held Control alike', () => {
+    const pinch = zoomsOf(run(SEQUENCES.F4_MOUSE).gestures)
+    const held = zoomsOf(run(seq('Ctrl+wheel with Control held', MAC, [
+      keyState(false, { ctrl: true }),
+      wheel(120, 80, { dy: -2.3, ctrl: true }),
+      keyState(false),
+    ])).gestures)
+    const zoom = { kind: 'zoom', anchorPx: { x: 120, y: 80 }, factor: Math.exp(2.3 * 0.002), source: 'wheel' }
+    expect(pinch).toEqual([zoom])
+    expect(held).toEqual([zoom])
   })
 
   it('F14 Momentum tail: wheels stay standalone and the press starts a fresh session', () => {

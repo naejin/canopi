@@ -18,7 +18,7 @@ export interface DomEventLike {
   readonly pointerId?: number; readonly pointerType?: string; readonly button?: number; readonly buttons?: number; readonly detail?: number
   readonly shiftKey: boolean; readonly ctrlKey: boolean; readonly altKey: boolean; readonly metaKey: boolean
   readonly deltaX?: number; readonly deltaY?: number; readonly deltaMode?: number
-  readonly scale?: number; readonly rotation?: number           // WebKit GestureEvent
+  readonly rotation?: number                                    // WebKit GestureEvent (its scale is never read: the pinch arrives as Ctrl+wheel)
   readonly target: TargetClass                                  // classified by the source from data attributes
   readonly fromKeyboard?: boolean                               // contextmenu: set by the source from the KeyRouter's echo record
   readonly dropPayload?: CanvasDropPayload                      // drag events: read by the source from dataTransfer
@@ -41,7 +41,6 @@ export function normalise(
   e: DomEventLike,
   platform: InputPlatform,
   bindings: Bindings,
-  keys: { readonly physicalCtrl: boolean },
   host: { readonly width: number; readonly height: number },
 ): RawInput | null {
   const t = e.timeStamp
@@ -113,8 +112,6 @@ export function normalise(
         dxPx: (e.deltaX ?? 0) * xUnit,
         dyPx: (e.deltaY ?? 0) * yUnit,
         mods: modifiersOf(e),
-        // A trackpad pinch arrives as a Ctrl wheel with no Ctrl key down.
-        pinch: e.ctrlKey && !keys.physicalCtrl,
         target: e.target,
       }
     }
@@ -130,7 +127,6 @@ export function normalise(
         t,
         phase: e.type === 'gesturestart' ? 'start' : e.type === 'gesturechange' ? 'change' : 'end',
         at,
-        scale: e.scale ?? 1,
         rotationDeg: e.rotation ?? 0,
       }
     case 'dragover':

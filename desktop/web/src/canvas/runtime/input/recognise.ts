@@ -316,12 +316,11 @@ function wheel(step: Step, input: RawOf<'wheel'>): void {
   const { dxPx, dyPx, mods } = input
   if (!Number.isFinite(dxPx) || !Number.isFinite(dyPx)) return
   const scrollPans = step.state.context.pointingDevice === 'trackpad'
-  // A pinch arrives as a Ctrl wheel and zooms whatever the setting says; so do Ctrl and Cmd wheels.
-  if (input.pinch || mods.ctrl || mods.meta || (!scrollPans && !mods.shift)) {
+  // A pinch arrives as a Ctrl wheel: it, Ctrl and Cmd wheels zoom whatever the setting says, continuously by their delta (one
+  // path, no notch detection: a 100 px notch is ×1.22).
+  if (mods.ctrl || mods.meta || (!scrollPans && !mods.shift)) {
     const factor = Math.exp(Math.max(-1, Math.min(1, -dyPx * WHEEL_ZOOM_PER_PX)))
-    if (factor !== 1) {
-      step.gestures.push({ kind: 'zoom', anchorPx: input.at, factor, source: input.pinch ? 'trackpad-pinch' : 'wheel' })
-    }
+    if (factor !== 1) step.gestures.push({ kind: 'zoom', anchorPx: input.at, factor, source: 'wheel' })
     return
   }
   // A mouse wheel has one axis: under the Trackpad setting Shift turns its scroll sideways.

@@ -39,7 +39,7 @@ export interface SequenceContext {
 
 /** One step: a DOM event, or a raw input that does not come from one. `t` is the step's clock (ms). */
 export type FixtureStep =
-  | { readonly t?: number; readonly dom: Omit<DomEventLike, 'timeStamp'>; readonly physicalCtrl?: boolean }
+  | { readonly t?: number; readonly dom: Omit<DomEventLike, 'timeStamp'> }
   | { readonly t?: number; readonly raw: DistributiveOmit<RawInput, 't'> }
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
@@ -130,7 +130,6 @@ interface WheelOptions {
   readonly ctrl?: boolean
   readonly alt?: boolean
   readonly meta?: boolean
-  readonly physicalCtrl?: boolean
   readonly target?: TargetClass
   readonly t?: number
 }
@@ -138,7 +137,6 @@ interface WheelOptions {
 export function wheel(x: number, y: number, options: WheelOptions = {}): FixtureStep {
   return {
     t: options.t,
-    physicalCtrl: options.physicalCtrl,
     dom: {
       type: 'wheel',
       clientX: x,
@@ -157,7 +155,6 @@ export function wheel(x: number, y: number, options: WheelOptions = {}): Fixture
 
 export function gesture(
   phase: 'start' | 'change' | 'end',
-  scale: number,
   rotation: number,
   options: { readonly t?: number } = {},
 ): FixtureStep {
@@ -167,7 +164,6 @@ export function gesture(
       type: phase === 'start' ? 'gesturestart' : phase === 'change' ? 'gesturechange' : 'gestureend',
       clientX: 200,
       clientY: 150,
-      scale,
       rotation,
       shiftKey: false,
       ctrlKey: false,
@@ -266,7 +262,7 @@ export function runSequence(sequence: Sequence, bindings: Bindings, thresholds: 
   for (const step of sequence.steps) {
     clock = step.t ?? clock + 16
     const input = 'dom' in step
-      ? normalise({ ...step.dom, timeStamp: clock }, sequence.platform, bindings, { physicalCtrl: step.physicalCtrl ?? false }, HOST)
+      ? normalise({ ...step.dom, timeStamp: clock }, sequence.platform, bindings, HOST)
       : { ...step.raw, t: clock } as RawInput
     if (!input) {
       steps.push({ input: null, gestures: [], effects: [] })
@@ -485,17 +481,17 @@ export const SEQUENCES = {
     up(115, 100, { pointer: 'touch', t: 700 }),
   ]),
   E9: seq('E9 Trackpad pinch with rotation drift', MAC_GESTURES, [
-    gesture('start', 1, 0),
-    gesture('change', 1.2, 4),
-    gesture('change', 1.5, -4),
-    gesture('end', 1.5, -4),
+    gesture('start', 0),
+    gesture('change', 4),
+    gesture('change', -4),
+    gesture('end', -4),
   ]),
   E10: seq('E10 Deliberate trackpad twist', MAC_GESTURES, [
-    gesture('start', 1, 0),
-    gesture('change', 1, 5),
-    gesture('change', 1, 12),
-    gesture('change', 1, 20),
-    gesture('end', 1, 20),
+    gesture('start', 0),
+    gesture('change', 5),
+    gesture('change', 12),
+    gesture('change', 20),
+    gesture('end', 20),
   ]),
   E11: seq('E11 Touch behaves like today', ANDROID, [
     down(100, 100, { pointer: 'touch', id: 1 }),
@@ -509,11 +505,11 @@ export const SEQUENCES = {
   E12: seq('E12 iOS gesture events alongside pointers', IOS, [
     down(100, 100, { pointer: 'touch', id: 1 }),
     down(200, 100, { pointer: 'touch', id: 2 }),
-    gesture('start', 1, 0),
-    gesture('change', 1.5, 10),
+    gesture('start', 0),
+    gesture('change', 10),
     move(110, 100, { pointer: 'touch', id: 1, buttons: 1 }),
     move(230, 100, { pointer: 'touch', id: 2, buttons: 1 }),
-    gesture('end', 1.5, 10),
+    gesture('end', 10),
     up(230, 100, { pointer: 'touch', id: 2 }),
     up(110, 100, { pointer: 'touch', id: 1 }),
   ]),
@@ -543,7 +539,7 @@ export const SEQUENCES = {
   F4_TRACKPAD: seq('F4 Chromium pinch (synthetic Ctrl), Trackpad', MAC, [wheel(120, 80, { dy: -2.3, ctrl: true })], { pointingDevice: 'trackpad' }),
   F5: seq('F5 Real Ctrl + wheel', WINDOWS, [
     keyState(false, { ctrl: true }),
-    wheel(120, 80, { dy: 100, ctrl: true, physicalCtrl: true }),
+    wheel(120, 80, { dy: 100, ctrl: true }),
     keyState(false),
   ], { pointingDevice: 'trackpad' }),
   F6: seq('F6 Trackpad scroll, Trackpad', MAC_GESTURES, [wheel(120, 80, { dx: 3.5, dy: -7.25 })], { pointingDevice: 'trackpad' }),
@@ -553,17 +549,17 @@ export const SEQUENCES = {
   F10: seq('F10 Shift + wheel, Mouse', WINDOWS, [wheel(120, 80, { dy: 100, shift: true })]),
   F10B: seq('F10b Shift + wheel delivered as dx', WINDOWS, [wheel(120, 80, { dx: 100, shift: true })]),
   F11: seq('F11 WKWebView pinch and rotate', MAC_GESTURES, [
-    gesture('start', 1, 0),
-    gesture('change', 1.2, 5),
-    gesture('change', 1.5, 12),
-    gesture('end', 1.5, 12),
+    gesture('start', 0),
+    gesture('change', 5),
+    gesture('change', 12),
+    gesture('end', 12),
   ]),
   F12: seq('F12 WKWebView pinch with Ctrl wheels', MAC_GESTURES, [
-    gesture('start', 1, 0),
+    gesture('start', 0),
     wheel(200, 150, { dy: -3, ctrl: true }),
-    gesture('change', 1.1, 0),
+    gesture('change', 0),
     wheel(200, 150, { dy: -3, ctrl: true }),
-    gesture('end', 1.1, 0),
+    gesture('end', 0),
   ]),
   F14: seq('F14 Momentum tail', MAC_GESTURES, [
     ...Array.from({ length: 10 }, (_, index) => wheel(120, 80, { dy: 4 - index * 0.3, t: 16 * (index + 1) })),

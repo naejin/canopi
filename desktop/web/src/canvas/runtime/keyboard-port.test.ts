@@ -383,17 +383,6 @@ describe('createCanvasKeyboardPort', () => {
     expect(f.port.command({ kind: 'arrow', dir: 'left', large: false })).toBe(true)
     expect(f.navigation.panByPx).toHaveBeenCalledWith({ x: 64, y: 0 })
   })
-
-  it('tracks the physical Control key for pinch detection', () => {
-    const f = fixture()
-    keyState(f.port, { key: 'Control', mods: { ctrl: true } })
-    expect(f.port.physicalCtrl()).toBe(true)
-    keyState(f.port, { type: 'keyup', key: 'Control' })
-    expect(f.port.physicalCtrl()).toBe(false)
-    keyState(f.port, { key: 'Control', mods: { ctrl: true } })
-    f.port.releaseKeys()
-    expect(f.port.physicalCtrl()).toBe(false)
-  })
 })
 
 describe('createForwardingCanvasKeyboardPort', () => {

@@ -129,9 +129,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   }
 
   function pointerInput(event: PointerEvent, type: DomEventLike['type'], rect: HostRect): RawInput | null {
-    return normalise(domEventLike(event, type, rect, classifyTarget(event.target, host)), deps.platform, deps.bindings(), {
-      physicalCtrl: deps.keys.physicalCtrl(),
-    }, rect)
+    return normalise(domEventLike(event, type, rect, classifyTarget(event.target, host)), deps.platform, deps.bindings(), rect)
   }
 
   function sessionRect(pointerId: number): HostRect {
@@ -191,9 +189,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     try {
       if (!owned.has(event.pointerId) && event.pointerType !== 'touch') {
         const rect = host.getBoundingClientRect()
-        deliver(event, rect, normalise(domEventLike(event, 'pointermove', rect, classifyTarget(event.relatedTarget, host)), deps.platform, deps.bindings(), {
-          physicalCtrl: deps.keys.physicalCtrl(),
-        }, rect))
+        deliver(event, rect, normalise(domEventLike(event, 'pointermove', rect, classifyTarget(event.relatedTarget, host)), deps.platform, deps.bindings(), rect))
       }
     } finally {
       deliver(event, null, pointerInput(event, 'pointerleave', NO_RECT))
@@ -216,9 +212,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   const onWheel = (event: WheelEvent): void => {
     if (allowsNativeContextMenuTarget(event.target)) return
     const rect = host.getBoundingClientRect()
-    deliver(event, rect, normalise(domEventLike(event, 'wheel', rect, classifyTarget(event.target, host, 'surface')), deps.platform, deps.bindings(), {
-      physicalCtrl: deps.keys.physicalCtrl(),
-    }, rect))
+    deliver(event, rect, normalise(domEventLike(event, 'wheel', rect, classifyTarget(event.target, host, 'surface')), deps.platform, deps.bindings(), rect))
   }
   const onContextMenu = (event: MouseEvent): void => {
     if (allowsNativeContextMenuTarget(event.target)) return
@@ -229,12 +223,12 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
       // The keyboard menu opened from keydown; its own contextmenu follows within the echo window.
       fromKeyboard: lastKeyboardMenuAt !== null && event.timeStamp - lastKeyboardMenuAt < DEFAULT_THRESHOLDS.menuEchoMs,
     }
-    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), { physicalCtrl: deps.keys.physicalCtrl() }, rect))
+    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), rect))
   }
   const dragHandler = (type: 'dragover' | 'dragleave' | 'drop') => (event: DragEvent): void => {
     const rect = type === 'dragleave' ? NO_RECT : host.getBoundingClientRect()
     const like: DomEventLike = { ...domEventLike(event, type, rect, classifyTarget(event.target, host)), dropPayload: dropPayloadOf(event, type) }
-    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), { physicalCtrl: deps.keys.physicalCtrl() }, rect))
+    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), rect))
   }
   /**
    * True from a gesturestart the canvas does not take to its gestureend. A twist starts only over the map, as a wheel is
@@ -258,7 +252,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
       lastTwist = null
       ignoringTwist = true
       const rect = host.getBoundingClientRect()
-      deliver(event, rect, normalise(end, deps.platform, deps.bindings(), { physicalCtrl: deps.keys.physicalCtrl() }, rect))
+      deliver(event, rect, normalise(end, deps.platform, deps.bindings(), rect))
     }
     if (ignoringTwist) {
       event.preventDefault()
@@ -268,9 +262,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     const rect = host.getBoundingClientRect()
     const like = gestureEventLike(event, type, rect)
     lastTwist = type === 'gestureend' ? null : like
-    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), {
-      physicalCtrl: deps.keys.physicalCtrl(),
-    }, rect))
+    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), rect))
   }
   const onDragOver = dragHandler('dragover')
   const onDragLeave = dragHandler('dragleave')
@@ -459,11 +451,11 @@ function domEventLike(event: MouseEvent, type: DomEventLike['type'], rect: HostR
   }
 }
 
-/** WebKit's GestureEvent: a UIEvent with the pointer's client point, the pinch scale and the rotation in degrees. */
+/** WebKit's GestureEvent: a UIEvent with the pointer's client point and the rotation in degrees (its scale is never read: the
+ *  pinch arrives as Ctrl wheels). */
 interface GestureEventFields {
   readonly clientX: number
   readonly clientY: number
-  readonly scale: number
   readonly rotation: number
   readonly shiftKey: boolean
   readonly ctrlKey: boolean
@@ -482,7 +474,6 @@ function gestureEventLike(event: Event, type: 'gesturestart' | 'gesturechange' |
     ctrlKey: gesture.ctrlKey,
     altKey: gesture.altKey,
     metaKey: gesture.metaKey,
-    scale: gesture.scale,
     rotation: gesture.rotation,
     target: SURFACE,
   }

@@ -339,14 +339,14 @@ export interface CanvasKeyboardPort {
    *  keyboard-menu echo with the time keyState recorded for a Menu key or Shift+F10, only when that was the last keydown. */
   command(c: CanvasKeyCommand): boolean
   /** The key router's first call for every keydown (capture) and keyup: the nudge commit on any key but an arrow, a
-   *  modifier or Esc, the physical Ctrl, the Menu key's time and the Space hold (code Space, not text, and a live pointer
+   *  modifier or Esc, the Menu key's time and the Space hold (code Space, not text, and a live pointer
    *  session or not a control). The verdict tells the router what to do; the port never touches the event. */
   keyState(k: CanvasKeyState): CanvasKeyVerdict
   readonly host: HTMLElement
 }
 export interface CanvasKeyState {
   readonly type: 'keydown' | 'keyup'
-  readonly key: string             // 'Control' sets the physical Ctrl; arrows, modifiers and Escape keep a nudge series
+  readonly key: string             // arrows, modifiers and Escape keep a nudge series
   readonly code: string            // 'Space'
   readonly mods: Modifiers
   readonly timeStamp: number       // KeyboardEvent.timeStamp: the clock of the contextmenu echo

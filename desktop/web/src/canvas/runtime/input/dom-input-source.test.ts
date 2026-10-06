@@ -38,7 +38,7 @@ function deps(overrides: Partial<DomInputSourceDeps> = {}): DomInputSourceDeps {
     host,
     platform: PLATFORM,
     bindings: () => CURRENT_BINDINGS,
-    keys: { physicalCtrl: () => false, lastKeyboardMenuAt: () => null },
+    keys: { lastKeyboardMenuAt: () => null },
     clock: () => 1000,
     timers: { set: vi.fn(() => 1), clear: vi.fn() },
     ...overrides,
@@ -420,7 +420,7 @@ describe('createDomInputSource', () => {
   it('marks a contextmenu inside the keyboard menu\'s echo window as fromKeyboard', () => {
     let lastKeyboardMenuAt: number | null = null
     const dispose = attachRecording(createDomInputSource(deps({
-      keys: { physicalCtrl: () => false, lastKeyboardMenuAt: () => lastKeyboardMenuAt },
+      keys: { lastKeyboardMenuAt: () => lastKeyboardMenuAt },
     })))
     const openMenu = (): void => {
       host.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 30, clientY: 40 }))
@@ -745,10 +745,11 @@ describe('createDomInputSource', () => {
     }
     const events = [dispatch('gesturestart', 0), dispatch('gesturechange', 12.5), dispatch('gestureend', 12.5)]
 
+    // The scale is never read: the pinch zooms through WebKit's Ctrl wheels.
     expect(received).toEqual([
-      expect.objectContaining({ kind: 'platform-gesture', phase: 'start', at: { x: 200, y: 150 }, scale: 1.3, rotationDeg: 0 }),
-      expect.objectContaining({ kind: 'platform-gesture', phase: 'change', at: { x: 200, y: 150 }, scale: 1.3, rotationDeg: 12.5 }),
-      expect.objectContaining({ kind: 'platform-gesture', phase: 'end', rotationDeg: 12.5 }),
+      { kind: 'platform-gesture', t: expect.any(Number), phase: 'start', at: { x: 200, y: 150 }, rotationDeg: 0 },
+      { kind: 'platform-gesture', t: expect.any(Number), phase: 'change', at: { x: 200, y: 150 }, rotationDeg: 12.5 },
+      { kind: 'platform-gesture', t: expect.any(Number), phase: 'end', at: { x: 200, y: 150 }, rotationDeg: 12.5 },
     ])
     expect(events.map((event) => event.defaultPrevented)).toEqual([true, true, true])
     dispose()

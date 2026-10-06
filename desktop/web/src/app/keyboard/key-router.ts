@@ -2,8 +2,8 @@
 //
 // Owns the only window key listeners (spec §1.6, ADR 0020; policy P8): keydown in capture and bubble, keyup in capture.
 // A key that is part of an IME composition runs nothing (WebKit sends the composition's Enter with keyCode 229).
-// Capture hands every other key to the canvas keyboard port first (keyState: the nudge commit, the physical Ctrl, the Menu
-// key's time, the Space hold), cycles the F6 regions and, while a drag or nudge series is live, runs the Esc chain before
+// Capture hands every other key to the canvas keyboard port first (keyState: the nudge commit, the Menu key's time, the
+// Space hold), cycles the F6 regions and, while a drag or nudge series is live, runs the Esc chain before
 // any element handler (app/keyboard/escape-chain.ts). It also keeps the keys held down and lets every one go (a keyup to
 // the port) when Meta comes up, on a window blur and on a visibility change: macOS drops the keyup of any key released
 // while Cmd is down, so Meta's keyup releases every held key. Bubble skips a key an element handler already took, then

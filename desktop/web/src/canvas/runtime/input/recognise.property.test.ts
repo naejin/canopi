@@ -59,9 +59,9 @@ function randomInput(random: () => number, t: number): RawInput {
     return { kind: 'configure', t, context: { tool: pick(TOOLS), mode: random() < 0.25 ? 'overview' : 'site', pointingDevice: pick(['mouse', 'trackpad'] as const) } }
   }
   if (roll < 0.92) return { kind: 'key-state', t, space: random() < 0.4, mods }
-  if (roll < 0.93) return { kind: 'wheel', t, at, dxPx: random() * 20 - 10, dyPx: random() * 200 - 100, mods, pinch: false, target: pick(TARGETS) }
+  if (roll < 0.93) return { kind: 'wheel', t, at, dxPx: random() * 20 - 10, dyPx: random() * 200 - 100, mods, target: pick(TARGETS) }
   if (roll < 0.97) {
-    return { kind: 'platform-gesture', t, phase: pick(['start', 'change', 'change', 'end'] as const), at, scale: 1 + random(), rotationDeg: random() * 60 - 30 }
+    return { kind: 'platform-gesture', t, phase: pick(['start', 'change', 'change', 'end'] as const), at, rotationDeg: random() * 60 - 30 }
   }
   return { kind: 'native-contextmenu', t, at, fromKeyboard: random() < 0.3, target: pick(TARGETS) }
 }
