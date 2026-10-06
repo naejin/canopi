@@ -295,10 +295,10 @@ export function createSceneRuntimeConstruction(
     untracked(() => reorigin.observe(frame))
   }))
   // A hold ends in a tool call (a release, a dropped transient) or with the text entry's close, and each bumps the transient
-  // history revision: a frame the hold turned away is observed then.
+  // history revision: the live frame is observed then if the hold turned one away.
   disposeEffects.push(effect(() => {
     void transientHistoryRevision.value
-    untracked(() => reorigin.resume())
+    untracked(() => reorigin.resume(cameraHost.frames.viewFrame.peek()))
   }))
   disposeEffects.push(() => reorigin.dispose())
   const focusSpecies = (canonicalName: string | null) => {

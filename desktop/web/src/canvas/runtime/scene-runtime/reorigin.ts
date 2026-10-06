@@ -33,15 +33,14 @@ interface ObservedFrame {
  * runtime's plane effect moves the camera into the new plane with its ground
  * kept. The clipboard remaps itself on paste. Re-origin waits while the tool
  * host holds it (spec §4.19), so no tool re-projects a world point it keeps;
- * resume() observes the last frame once the hold clears.
+ * resume() observes the live frame once the hold clears.
  */
 export class SceneRuntimeReoriginController {
   private scheduled = false
   private disposed = false
   private _reoriginating = false
   private last: ObservedFrame | null = null
-  /** The last frame observed, and whether a hold turned it away. */
-  private latest: ViewFrame | null = null
+  /** Whether a hold turned a frame away. */
   private waiting = false
 
   constructor(private readonly options: SceneRuntimeReoriginOptions) {}
@@ -53,7 +52,6 @@ export class SceneRuntimeReoriginController {
 
   observe(frame: ViewFrame): void {
     if (this.disposed) return
-    this.latest = frame
     if (this.options.held()) {
       this.waiting = true
       return
@@ -72,12 +70,13 @@ export class SceneRuntimeReoriginController {
     })
   }
 
-  /** The hold may have cleared: a frame it turned away is observed now, so a long pan during a draft re-origins at once. */
-  resume(): void {
+  /** The hold may have cleared: after a frame it turned away, the live frame (the camera host's) is observed now, so a long
+   *  pan during a draft re-origins at once. */
+  resume(frame: ViewFrame): void {
     if (this.disposed || !this.waiting || this.options.held()) return
     this.waiting = false
     this.last = null
-    if (this.latest) this.observe(this.latest)
+    this.observe(frame)
   }
 
   dispose(): void {
