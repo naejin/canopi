@@ -43,9 +43,10 @@ export interface RecogniserConfig {
 }
 
 /** Applied by the source to the event it is handling. 'stop-propagation' (stopImmediatePropagation) and 'drop-effect' come from
- *  a GestureOutcome (§1.2a): a quarantine is 'prevent-default' plus 'stop-propagation'. */
+ *  a GestureOutcome (§1.2a): a quarantine is 'prevent-default' plus 'stop-propagation'. 'disown': the pointer's session
+ *  ended with its release lost (spec §2.2 "Drag end"), so the source stops following it as a press of the map's. */
 export interface AdapterEffect {
-  readonly kind: 'prevent-default' | 'stop-propagation' | 'capture' | 'release-capture' | 'set-timer' | 'clear-timer' | 'drop-effect'
+  readonly kind: 'prevent-default' | 'stop-propagation' | 'capture' | 'release-capture' | 'disown' | 'set-timer' | 'clear-timer' | 'drop-effect'
   readonly pointerId?: number
   readonly atMs?: number
   readonly dropEffect?: 'copy' | 'move' | 'none'                // 'drop-effect': dataTransfer.dropEffect on dragover and drop

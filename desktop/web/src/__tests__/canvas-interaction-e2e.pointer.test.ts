@@ -320,6 +320,31 @@ describe('SceneInteractionSession', () => {
     expect(downstreamDrop).toHaveBeenCalled()
   })
 
+  it('a right press or middle pan whose release was lost leaves native menus off the map to the page (B4, A35)', () => {
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    const panel = document.createElement('div')
+    document.body.append(panel)
+    const pageMenu = () => {
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+      panel.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+
+    // A still right press, then a move with no button: its up was lost.
+    events.pointerDown({ x: 100, y: 100 }, { button: 2, buttons: 2 })
+    expect(pageMenu()).toBe(true)
+    events.pointerMove({ x: 101, y: 100 }, { buttons: 0 })
+    expect(pageMenu()).toBe(false)
+
+    // A middle pan, then a move with no button.
+    events.pointerDown({ x: 100, y: 100 }, { button: 1, buttons: 4 })
+    events.pointerMove({ x: 140, y: 100 }, { buttons: 4 })
+    events.pointerMove({ x: 150, y: 100 }, { buttons: 0 })
+    expect(pageMenu()).toBe(false)
+    panel.remove()
+    session.dispose()
+  })
+
   it('G7: in overview a left drag pans whatever the armed tool, selects nothing and draws nothing (U36)', () => {
     store.updatePersisted((draft) => {
       draft.zones = [makeRectZone('bed', [{ x: 100, y: 100 }, { x: 500, y: 500 }])]

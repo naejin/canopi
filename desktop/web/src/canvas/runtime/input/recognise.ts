@@ -510,6 +510,7 @@ function endSession(step: Step, session: PointerSession, reason: CancelReason): 
  *  restored; no menu opens; then cancel('pointercancel') ends any press of the host's (the Pan tool's). */
 function endWithLostRelease(step: Step, session: PointerSession): void {
   dropSession(step, session)
+  step.effects.push({ kind: 'disown', pointerId: session.pointerId })
   if (session.mode === 'pan' && session.navigation) step.gestures.push(panEndOf(session))
   if (session.mode === 'rotate' && session.slopPassed) step.gestures.push(rotateOf(session, 'end', session.last, false))
   step.gestures.push({ kind: 'cancel', reason: 'pointercancel' })

@@ -104,7 +104,8 @@ describe('recognise: 5.1 secondary button', () => {
   it('A5 Right press, pointerup lost: the move without its button ends the session, with no pan and no menu; the next press is fresh', () => {
     const result = run(SEQUENCES.A5)
     expect(result.steps[1]!.gestures).toEqual([{ kind: 'cancel', reason: 'pointercancel' }])
-    expect(result.steps[1]!.effects).toEqual([{ kind: 'release-capture', pointerId: 1 }])
+    // The source stops following the pointer, so its native menus are the page's again (B4).
+    expect(result.steps[1]!.effects).toEqual([{ kind: 'release-capture', pointerId: 1 }, { kind: 'disown', pointerId: 1 }])
     expect(kinds(result.steps[2]!.gestures)).toEqual(['press'])
     expect(kinds(result.steps[3]!.gestures)).toEqual(['tap'])
   })

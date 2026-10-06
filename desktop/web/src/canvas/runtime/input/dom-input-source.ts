@@ -401,6 +401,10 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
           case 'release-capture':
             if (effect.pointerId !== undefined) release(effect.pointerId)
             break
+          case 'disown':
+            // Its release was lost: no up will end it, so its native menus are the page's again (B4).
+            if (effect.pointerId !== undefined) disown(effect.pointerId)
+            break
           case 'drop-effect': {
             const transfer = event && 'dataTransfer' in event ? (event as DragEvent).dataTransfer : null
             if (transfer && effect.dropEffect) transfer.dropEffect = effect.dropEffect
