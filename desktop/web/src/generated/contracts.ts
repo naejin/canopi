@@ -904,7 +904,10 @@ export type SavedViewTerrain = {
 	hillshade: boolean,
 };
 
-// What a plain wheel or two-finger scroll does on the map.
+/**
+ *  The pointing device of Settings › Canvas, named by what a plain wheel or
+ *  two-finger scroll does on the map: `Zoom` is Mouse, `Pan` is Trackpad.
+ */
 export type ScrollWheel = "zoom" | "pan";
 
 export type Settings = {
@@ -967,8 +970,9 @@ export type Settings = {
 	 */
 	single_key_shortcuts: boolean,
 	/**
-	 *  Settings › Canvas: what a plain wheel or two-finger scroll does on the
-	 *  map. Pinch and Ctrl wheel always zoom; Shift wheel always pans.
+	 *  Settings › Canvas › Pointing device: `Zoom` is Mouse (a plain wheel
+	 *  zooms), `Pan` is Trackpad (a two-finger scroll pans). Pinch and Ctrl
+	 *  wheel always zoom; Shift wheel always pans.
 	 */
 	scroll_wheel: ScrollWheel,
 	/**

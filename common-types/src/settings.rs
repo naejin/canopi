@@ -76,8 +76,9 @@ pub struct Settings {
     /// plus Shift N, which always resets north, and + and − while the map has
     /// focus.
     pub single_key_shortcuts: bool,
-    /// Settings › Canvas: what a plain wheel or two-finger scroll does on the
-    /// map. Pinch and Ctrl wheel always zoom; Shift wheel always pans.
+    /// Settings › Canvas › Pointing device: `Zoom` is Mouse (a plain wheel
+    /// zooms), `Pan` is Trackpad (a two-finger scroll pans). Pinch and Ctrl
+    /// wheel always zoom; Shift wheel always pans.
     pub scroll_wheel: ScrollWheel,
     /// Settings › New Designs: a new Design turns Satellite on. Off keeps the
     /// background last used. Applied when a Design is created, never after.
@@ -205,7 +206,8 @@ settings_enum! {
 }
 
 settings_enum! {
-    /// What a plain wheel or two-finger scroll does on the map.
+    /// The pointing device of Settings › Canvas, named by what a plain wheel or
+    /// two-finger scroll does on the map: `Zoom` is Mouse, `Pan` is Trackpad.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
     #[serde(rename_all = "lowercase")]
     pub enum ScrollWheel {
