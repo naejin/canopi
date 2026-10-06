@@ -46,7 +46,7 @@ export interface WorldMapLibreOptions {
   readonly center: [number, number]
   readonly zoom: number
   /** The request seam that authenticates official provider tiles. */
-  readonly transformRequest?: (url: string) => { url: string }
+  readonly transformRequest: (url: string) => { url: string }
 }
 
 export function createWorldMapLibreMap(
@@ -65,7 +65,7 @@ export function createWorldMapLibreMap(
     pitchWithRotate: false,
     dragRotate: false,
     touchZoomRotate: false,
-    ...(options.transformRequest ? { transformRequest: options.transformRequest } : {}),
+    transformRequest: options.transformRequest,
   }) as unknown as WorldMapLibreMap
 
   // MapLibre prints an error event nobody listens to on the console, and a
