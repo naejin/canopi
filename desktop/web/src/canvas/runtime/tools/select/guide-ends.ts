@@ -1,9 +1,8 @@
 // canvas/runtime/tools/select/guide-ends.ts
 //
-// Owns the end handles of the one selected measurement guide under Select (the successor of
-// interaction/measurement-guide-control-points.ts): its two ends as ToolHandle data the host shows through the handle
-// layer, the geometry of dragging one (a 0.5 m minimum length) and the length chip the drag shows beside the selected
-// zone's chips, as today (tools/measure-labels.ts, `measure-quiet`). The drag itself is point-handle.ts's, edit type
+// Owns the end handles of the one selected measurement guide under Select: its two ends as ToolHandle data the host shows
+// through the handle layer, the geometry of dragging one (a 0.5 m minimum length) and the length chip the drag shows
+// beside the selected zone's chips (tools/measure-labels.ts, `measure-quiet`). The drag itself is point-handle.ts's, edit type
 // 'interaction-measurement-guide-control-point'. Each handle's label is translated ('canvas.guideEnd.label').
 
 import type { ToolHandleId } from '../../interaction-types'
@@ -26,7 +25,7 @@ export interface GuideEnd {
 }
 
 const MIN_MEASUREMENT_GUIDE_LENGTH_M = 0.5
-/** Today's control points: a 20 px target. */
+/** A 20 px target. */
 const POINT_HIT_RADIUS_PX = 10
 
 /** The one selected guide the end handles belong to: a single editable guide, nothing locked or blocked. */

@@ -1,12 +1,11 @@
 // canvas/runtime/tools/select/click.ts
 //
-// Owns what a Select press does to the selection, at the press as today (today's (a4c86d39) shared-gestures.ts
-// beginSelectionGesture), with the history-free selection effect: a hit on a directly locked object selects it (toggles
-// it when additive) and moves nothing; a double-click on a plant (the platform's click count, as today) selects the
-// plant's species; a double-click on a note (the platform's, or two presses within 500 ms on the host's clock and 6 px
+// Owns what a Select press does to the selection, at the press, with the history-free selection effect: a hit on a
+// directly locked object selects it (toggles it when additive) and moves nothing; a double-click on a plant (the
+// platform's click count) selects the plant's species; a double-click on a note (the platform's, or two presses within 500 ms on the host's clock and 6 px
 // on the same note after a click that did not move) opens the note for editing; an additive press toggles the hit; any
 // other hit is selected unless it already is and starts a move-drag; empty ground (or a hit locked through its group or
-// layer) clears the selection unless additive and starts the band. Additive is Shift, Ctrl or Cmd under LEGACY
+// layer) clears the selection unless additive and starts the band. Additive is Shift, Ctrl or Cmd
 // (ToolModifiers.additive).
 
 import {
@@ -41,7 +40,7 @@ export interface ClickCandidate {
   readonly atMs: number
 }
 
-/** Selects as today's press did and says what follows. `lastClick` is the previous click that did not move. */
+/** Selects for the press and says what follows. `lastClick` is the previous click that did not move. */
 export function pressSelection(
   ctx: ToolContext,
   point: ToolPoint,
@@ -95,7 +94,7 @@ export function pressSelection(
   return { kind: 'move', target: hit }
 }
 
-/** Today's recogniser: the same note, within 500 ms and 6 px of the last click that did not move. */
+/** Select's own double-click on a note: the same note, within 500 ms and 6 px of the last click that did not move. */
 function isNoteDoubleClick(
   ctx: ToolContext,
   previous: ClickCandidate | null,

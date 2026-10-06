@@ -1,6 +1,6 @@
 // canvas/runtime/tools/select/band.ts
 //
-// Owns Select's band (today's (a4c86d39) shared-gestures.ts 'band' mode): a press on empty ground clears the selection unless the
+// Owns Select's band: a press on empty ground clears the selection unless the
 // press is additive, and the drag draws a screen-aligned box from the press to the pointer (the band's `quad` draft:
 // the selection stroke at 2 px over the selection fill). The release selects every object the box touches, tested
 // against its world quad (turned with the view, never widened to its world box; spec §4.9), the locked ones left out,

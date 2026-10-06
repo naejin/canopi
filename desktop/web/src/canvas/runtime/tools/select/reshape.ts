@@ -1,7 +1,6 @@
 // canvas/runtime/tools/select/reshape.ts
 //
-// Owns the reshape handles of the one selected zone under Select (the successor of interaction/zone-control-points.ts):
-// a line's two ends and a polygon's vertices ('vertex'), a rectangle's four corners ('corner') and an ellipse's four
+// Owns the reshape handles of the one selected zone under Select: a line's two ends and a polygon's vertices ('vertex'), a rectangle's four corners ('corner') and an ellipse's four
 // axis ends ('vertex'), as ToolHandle data the host shows through the handle layer, and the geometry of dragging one
 // (a 0.5 m minimum side, a 0.25 m² minimum polygon area). The drag itself is point-handle.ts's, edit type
 // 'interaction-zone-control-point'. Each handle's label is translated ('canvas.zoneControlPoint.label').
@@ -37,7 +36,7 @@ export interface ZoneControlPoint {
 const MIN_ZONE_DIMENSION_M = 0.5
 const MIN_POLYGON_AREA_M2 = 0.25
 const GEOMETRY_EPSILON = 0.000001
-/** Today's control points: a 20 px target. */
+/** A 20 px target. */
 const POINT_HIT_RADIUS_PX = 10
 const RECT_CORNER_NAMES = ['nw', 'ne', 'se', 'sw'] as const
 const ELLIPSE_AXIS_NAMES = { 'ellipse-east': 'east', 'ellipse-west': 'west', 'ellipse-north': 'north', 'ellipse-south': 'south' } as const
@@ -51,7 +50,7 @@ export function reshapableZone(
   return target ? scene.zones.find((zone) => zone.id === target.id) ?? null : null
 }
 
-/** The zone's reshape points, in today's order. */
+/** The zone's reshape points, in the order of their labels' indices. */
 export function zoneControlPoints(zone: SceneZoneEntity): ZoneControlPoint[] {
   if (zone.zoneType === 'line' && zone.points.length >= 2) {
     return zone.points.slice(0, 2).map((world, index) => point(zone, 'line-endpoint', index, world, `vertex:${zone.id}:${index}`))

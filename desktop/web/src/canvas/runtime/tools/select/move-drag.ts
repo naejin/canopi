@@ -1,6 +1,6 @@
 // canvas/runtime/tools/select/move-drag.ts
 //
-// Owns Select's move-drag (today's (a4c86d39) shared-gestures.ts 'dragging' mode): a press on a selectable object opens one
+// Owns Select's move-drag: a press on a selectable object opens one
 // 'interaction-drag' Scene Edit over the selection's editable objects; each move shifts them by the pointer's travel since
 // the press, snapped so that the pressed object (or the first captured one) lands on the grid and guides, not the pointer
 // (ToolContext.snap); the release commits once when anything moved more than a millimetre, one undo step through the

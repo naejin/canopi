@@ -1,14 +1,14 @@
 // canvas/runtime/tools/select/rotate-handle.ts
 //
-// Owns Select's rotation handle (the successor of interaction/selection-rotation-handle.ts): the 'rotate' ToolHandle
-// centred 28 px above the selection's projected hull (today's 28 px button 14 px above it; spec §4.9): the screen box of
+// Owns Select's rotation handle: the 'rotate' ToolHandle, a 28 px button centred 28 px above the selection's projected
+// hull (14 px clear of it; spec §4.9): the screen box of
 // the shapes it draws (select/selection-hull.ts), so on a turned map it sits above what the user sees, centred on it. The
 // handle layer keeps it inside the visible map area. It is shown for a rotatable selection
 // (scene-runtime/selection-rotation.ts), and its drag: one
 // 'interaction-rotate' Scene Edit turning the selection about the centre of its bounds by the signed angle the pointer
 // has turned since the press. With Shift (ToolModifiers.constrain) the angle steps by 15° from the press angle, relative
-// as today; the host turns the point (a 'rotation-delta' constraint) and the drag rounds the angle it reads back. A turn
-// of 0.25° or less changes nothing. The handle's readout is today's '+15°' chip.
+// to it; the host turns the point (a 'rotation-delta' constraint) and the drag rounds the angle it reads back. A turn
+// of 0.25° or less changes nothing. The handle's readout is a '+15°' chip.
 
 import type { ToolHandleId } from '../../interaction-types'
 import type { CanvasDesignObjectSelectionModel } from '../../runtime'
@@ -28,7 +28,7 @@ import { selectionScreenHull } from './selection-hull'
 
 export const ROTATE_HANDLE_ID = 'rotate' as ToolHandleId
 
-/** Today's button: 28 px, 14 px above the selection's top edge. */
+/** A 28 px button, 14 px above the selection's top edge. */
 const HANDLE_RADIUS_PX = 14
 const HANDLE_GAP_PX = 14
 const STEP_DEG = 15
@@ -69,7 +69,7 @@ export function rotateHandle(
   }
 }
 
-/** Today's readout: the whole degrees turned, signed ('+15°', '0°', '-30°'). */
+/** The readout: the whole degrees turned, signed ('+15°', '0°', '-30°'). */
 export function rotationReadout(deltaDeg: number): string {
   const rounded = Math.round(deltaDeg)
   return `${rounded > 0 ? '+' : ''}${rounded}°`

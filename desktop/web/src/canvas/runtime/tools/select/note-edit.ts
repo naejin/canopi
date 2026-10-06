@@ -39,7 +39,7 @@ export function openNoteEntry(ctx: ToolContext, annotationId: string, onClosed: 
   return true
 }
 
-/** True while the scene still holds the note (today's editor closed once its note was gone). */
+/** True while the scene still holds the note: the editor closes once its note is gone. */
 export function noteExists(scene: Readonly<ScenePersistedState>, annotationId: string): boolean {
   return findAnnotation(scene, annotationId) !== null
 }
@@ -70,7 +70,7 @@ function submitNote(ctx: ToolContext, annotationId: string, text: string): 'clos
   }) ? 'close' : 'keep'
 }
 
-/** Today's canEditAnnotation: the note alone would be editable (not grouped, on a visible unlocked layer, not locked). */
+/** The note alone would be editable (not grouped, on a visible unlocked layer, not locked). */
 function isNoteEditable(scene: Readonly<ScenePersistedState>, annotation: SceneAnnotationEntity): boolean {
   const target = { kind: 'annotation', id: annotation.id } as const
   if (getSceneGroupedMemberKeys(scene).has(sceneObjectGroupMemberKey(target))) return false

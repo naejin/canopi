@@ -10,7 +10,7 @@ import type { ScenePersistedState } from '../../scene/types'
 import type { WorldPoint } from '../../view/types'
 import type { ToolContext, ToolPoint } from '../tool'
 
-/** Today's control points apply nothing until the pointer has moved this far from the press. */
+/** A point handle applies nothing until the pointer has moved this far from the press. */
 const DRAG_THRESHOLD_PX = 2
 
 /** What a point handle edits: one object, reshaped from its state at the press. */

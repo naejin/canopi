@@ -1,12 +1,12 @@
 // canvas/runtime/tools/select/select-tool.ts
 //
-// Owns the Select tool (spec §1.4, §3.2): a plain CanvasTool the ToolHost runs, composed of today's Select gestures. A
+// Owns the Select tool (spec §1.4, §3.2): a plain CanvasTool the ToolHost runs, composed of the Select gestures. A
 // press selects at once (click.ts) and goes on as a band from empty ground (band.ts), a move-drag of the selection
 // (move-drag.ts) or nothing more; a double-click opens a note for editing in the host's text entry (note-edit.ts), as do
 // Enter and F2 on one selected note ('edit-text'). Its handles are the rotation handle (rotate-handle.ts), the selected
 // zone's reshape points (reshape.ts) and the selected guide's ends (guide-ends.ts); the host shows them while Select is
 // armed, the text entry is closed and no Scene Edit is open. Hovers pass, so the host's passive hover runs, and the tool
-// card's gesture flag stays off, as today's Select published.
+// card's gesture flag stays off.
 
 import type { ToolHandleId } from '../../interaction-types'
 import type { SceneMeasurementGuideEntity, SceneZoneEntity } from '../../scene/types'
@@ -63,7 +63,7 @@ export function createSelectTool(): CanvasTool {
     const scene = c.scene.persisted
     const selection = c.scene.selectionModel()
     const handles: ToolHandle[] = []
-    // A point handle's drag hides the rotation handle from its press to its release, as today's drag presentation did.
+    // A point handle's drag hides the rotation handle from its press to its release.
     const pointDrag = gesture?.kind === 'reshape' || gesture?.kind === 'guide-end'
     const rotate = pointDrag ? null : rotateHandle(c.scene, selection, c.view, c.translate, rotationDeltaDeg)
     handlesBearingDeg = c.view.bearingDeg
@@ -136,7 +136,7 @@ export function createSelectTool(): CanvasTool {
         const selection = dragged ? bandSelection(c, current.band, point.world) : null
         if (selection) c.effects.setSelection(selection)
       } else if (current.kind === 'move') {
-        // Today's release reads the last move: the pointer's travel since then moves nothing.
+        // The release reads the last move: the pointer's travel since then moves nothing.
         if (hasMoved(current.drag)) {
           commitMoveDrag(current.drag)
         } else {
@@ -234,7 +234,7 @@ export function createSelectTool(): CanvasTool {
     constraint: () => (gesture?.kind === 'rotate' ? rotationConstraint(gesture.drag) : null),
     activate(ctx) {
       context = ctx
-      // Today's Select published no gesture to the tool card, whatever it held.
+      // Select publishes no gesture to the tool card, whatever it holds.
       ctx.effects.setGuidance({ gesture: false })
       refreshHandles()
     },
@@ -248,7 +248,7 @@ export function createSelectTool(): CanvasTool {
           dragTo(g.point)
           // The host re-emits a live drag on a camera frame, not a hover: a key turn mid-band moves the handle too.
           followBearing()
-          // The press stays Select's to its release: no passive hover over its moves, as today.
+          // The press stays Select's to its release: no passive hover over its moves.
           return 'handled'
         case 'drag-end':
           release(g.point, true)
@@ -281,7 +281,7 @@ export function createSelectTool(): CanvasTool {
     },
     sceneChanged() {
       const c = ctx()
-      // Today's note editor closed once its note was gone (a replaced document, an undo).
+      // The note editor closes once its note is gone (a replaced document, an undo).
       if (editingNoteId !== null && !noteExists(c.scene.persisted, editingNoteId)) {
         editingNoteId = null
         c.effects.closeTextEntry()
