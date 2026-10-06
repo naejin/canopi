@@ -3,10 +3,10 @@
 // Owns Place plants ('plant-stamp', key P; spec §1.4, §3.2) and the plant placement the host's species drop calls (0B-4):
 // each press places one plant of the chosen species at the snapped point, selected, as one Scene Edit; with no species the
 // card asks for one, and "Place plants here" waits at its point for the pick (the species arrives through activate and
-// sourceChanged, which the session bridges from the plant read model); the first Esc drops a waiting point. Its hover
-// draws the read-only preview: the plant's symbol where a click would place it, a dashed ring for the species' mature width
-// when the catalog gives one (never invented) and the distance to the nearest plant within 320 px on screen. The preview
-// hides when the pointer leaves the map and when the map enters overview.
+// sourceChanged, which the session bridges from the plant read model); Esc leaves the tool at once, a waiting point with
+// it. Its hover draws the read-only preview: the plant's symbol where a click would place it, a dashed ring for the
+// species' mature width when the catalog gives one (never invented) and the distance to the nearest plant within 320 px
+// on screen. The preview hides when the pointer leaves the map and when the map enters overview.
 
 import type { PlantStampSourceInput } from '../../plant-stamp-source'
 import { speciesPlacementAppearance } from '../species-key'
@@ -137,9 +137,8 @@ export function createPlantStampTool(): CanvasTool {
     },
     command(c) {
       if (c.kind === 'escape') {
-        // The tool-transient layer's Esc drops a waiting point; with none, the tool layer leaves (spec §3.7).
-        if (!pendingWorld) return 'pass'
-        pendingWorld = null
+        // Esc leaves for Select at once, the waiting point with it (U35, as the saved stamp's Esc).
+        context().effects.requestTool('select')
         return 'handled'
       }
       if (c.kind !== 'place-at') return 'pass'
@@ -156,7 +155,8 @@ export function createPlantStampTool(): CanvasTool {
     },
     sceneChanged: showPreview,
     viewChanged: showPreview,
-    // A waiting point is the tool's transient: Esc drops it first, and it holds re-origin (spec §4.19), so it keeps its plane.
+    // A waiting point is the tool's transient: it holds re-origin (spec §4.19), so it keeps its plane, and Delete and Ctrl+X
+    // delete nothing while it waits. Esc does not drop it first: Esc leaves the tool.
     hasTransient: () => pendingWorld !== null,
     cancelTransient(reason) {
       // Only an overview entry hides the preview, as today's overview reset did. A pan, a blur and a re-arm of Place plants

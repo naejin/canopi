@@ -215,8 +215,8 @@ export interface CanvasTool {
   /** A camera frame on which the host re-emitted nothing (the pointer off the map): rebuild a draft whose look depends on the
    *  scale, such as the polygon's edge chips hidden below 36 px (today's refreshViewportDependent). */
   viewChanged?(): void
-  /** True while the tool holds something Esc should drop first (draft, pick, row source, Place plants' waiting point). It also
-   *  holds re-origin (§4.19). */
+  /** True while the tool holds something Esc should drop first (draft, pick, row source) or Place plants' waiting point,
+   *  whose Esc leaves the tool (U35). It also holds re-origin (§4.19). */
   hasTransient(): boolean
   cancelTransient(reason: 'escape' | 'tool-change' | 'document-replaced' | 'navigate' | 'overview'): void   // 'overview': the map entered overview; drop what today's overview reset dropped (a stamp keeps its pick and hides only its ghost)
   /** Transient history (polygon corners), read by ToolHost.transientHistory; the tool acts on the undo-transient and redo-transient commands. */

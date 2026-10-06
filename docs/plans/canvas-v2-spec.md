@@ -1120,8 +1120,8 @@ export interface CanvasTool {
   /** A camera frame on which the host re-emitted nothing (the pointer off the map): rebuild a draft whose look depends on the
    *  scale, such as the polygon's edge chips hidden below 36 px (today's refreshViewportDependent). */
   viewChanged?(): void
-  /** True while the tool holds something Esc should drop first (draft, pick, row source, Place plants' waiting point). It also
-   *  holds re-origin and blocks Delete and Ctrl+X (§4.19, §1.6 "Key admission"). */
+  /** True while the tool holds something Esc should drop first (draft, pick, row source) or Place plants' waiting point,
+   *  whose Esc leaves the tool (U35). It also holds re-origin and blocks Delete and Ctrl+X (§4.19, §1.6 "Key admission"). */
   hasTransient(): boolean
   /** True while the menu's "Finish shape" applies (Polygon: at least 3 corners); the entry sends `confirm`. */
   canFinish?(): boolean
@@ -1814,7 +1814,7 @@ Tool letters and where the tools live:
 
 Chords whose character needs Shift (spec): the router matches `+` by the produced key and ignores Shift for it (US QWERTY sends Shift+= as key `+`, shiftKey true), and matches Shift+2 by `code` `Digit2` with Shift on every layout (US QWERTY produces `@`, AZERTY `2`). Fixtures H20–H22.
 
-Moved keys, in one list: N (cycle labels → reset north); Shift+L (new: cycle labels); Shift+arrows (large nudge and pan → turn view and reset north; Shift+↓ unbound); large step (Shift+arrow → mod+arrow, on the canvas, in the PDF page editor and in the inspection lens); Plant a row no-snap (Shift → mod during the drag); Esc on a held Object stamp pick and on Place plants' waiting point (leave the tool → drop it first; Plant a row already drops its source first today); Pan tool (main rail → View and Tools menus, palette, phone strip). Moved behaviour: Space held at a press on a rotate or vertex handle (the handle drags → the map pans, from 2).
+Moved keys, in one list: N (cycle labels → reset north); Shift+L (new: cycle labels); Shift+arrows (large nudge and pan → turn view and reset north; Shift+↓ unbound); large step (Shift+arrow → mod+arrow, on the canvas, in the PDF page editor and in the inspection lens); Plant a row no-snap (Shift → mod during the drag); Esc on a held Object stamp pick (leave the tool → drop it first; Plant a row already drops its source first today; Place plants' waiting point leaves with the tool, U35); Pan tool (main rail → View and Tools menus, palette, phone strip). Moved behaviour: Space held at a press on a rotate or vertex handle (the handle drags → the map pans, from 2).
 
 ### 3.7 Esc per tool
 
@@ -1826,7 +1826,7 @@ The text entry (note editor, spacing field) is not a layer: its element handler 
 | 80 | canvas context menu | open |
 | 70 | live pointer gesture, including a rotate drag and a compass drag (the compass registers its own layer; both restore the starting camera) and, from 2, a pan (right-, middle- or Space-drag, the Pan tool: the pan ends where it is and the Esc is consumed; spec). | a drag, band, move, handle drag, pan or rotate is live |
 | 65 | nudge series (abort) | arrows moved the selection and the series is not committed |
-| 60 | tool transient | a polygon draft or a Plant a row source (today); from 2 also a held Object stamp pick and Place plants' waiting point. A tool's `escape` only drops its transient and answers `pass` otherwise; the tool layer (50) leaves |
+| 60 | tool transient | a polygon draft or a Plant a row source (today); from 2 also a held Object stamp pick and Place plants' waiting point. A tool's `escape` only drops its transient and answers `pass` otherwise; the tool layer (50) leaves. Place plants' `escape` leaves for Select at once, its waiting point with it (U35) |
 | 50 | non-Select tool → Select | any tool but Select is armed |
 | 30 | selection → clear | something is selected |
 | 25 | raster inspection → end | inspecting |
@@ -1840,7 +1840,7 @@ The priority table is built in F, the popover layers in the same window as the c
 | Select | clears the selection | — | — |
 | Pan | Select | clears the selection | — |
 | Plant stamp | Select ("Esc to stop placing") | clears | — |
-| Plant stamp, waiting placement (from 2) | drops the waiting point | Select | clears |
+| Plant stamp, waiting placement (from 2) | Select at once; the waiting point goes with the tool (U35) | clears | — |
 | Plant a row, source chosen | drops the source (today, `plant-spacing-tool.ts:205-211`) | Select | clears |
 | Plant a row, during a drag (from F) | cancels the drag; the source stays | drops the source | Select |
 | Object stamp, pick held | drops the pick; the card shows `stampPick` (from 2; before: Select at once) | Select | clears |
