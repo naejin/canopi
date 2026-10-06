@@ -400,7 +400,7 @@ describe('Plant a row tool', () => {
     expect(row(h)).toMatchObject({ phase: 'row', focusRequest: 0 })
     const focus = h.record.focus.length
     h.move({ x: 25, y: 30 })
-    expect(h.record.focus.slice(focus)).toEqual(['map:tool-requested'])
+    expect(h.record.focus.slice(focus)).toEqual(['map'])
     h.release({ x: 26, y: 30 })
     expect(added(h)).toEqual([{ x: 22, y: 30 }, { x: 24, y: 30 }, { x: 26, y: 30 }])
     expect(row(h).focusRequest).toBe(0)
@@ -419,7 +419,7 @@ describe('Plant a row tool', () => {
     const focusBeforeDrag = h.record.focus.length
     h.move({ x: 25, y: 30 })
 
-    expect(h.record.focus.slice(focusBeforeDrag)).toEqual(['map:tool-requested'])
+    expect(h.record.focus.slice(focusBeforeDrag)).toEqual(['map'])
   })
 
   it('the spacing field\'s commands reach the row', () => {
@@ -448,14 +448,14 @@ describe('Plant a row tool', () => {
     h.host.command({ kind: 'spacing-commit', via: 'enter' })
     expect(settings.commitPlantSpacingIntervalM).toHaveBeenCalledWith(0.75)
     expect(row(h)).toMatchObject({ phase: 'row', interval: '75 cm', intervalValid: true })
-    expect(h.record.focus.slice(focus)).toEqual(['map:tool-requested'])
+    expect(h.record.focus.slice(focus)).toEqual(['map'])
     expect(h.store.persisted.plants).toHaveLength(1)
 
     // Esc in the field drops the source and gives the map its focus back; the tool stays armed.
     h.host.command({ kind: 'spacing-cancel' })
     expect(row(h).phase).toBe('pick')
     expect(h.renderer.lastDraft()).toBeNull()
-    expect(h.record.focus.at(-1)).toBe('map:tool-requested')
+    expect(h.record.focus.at(-1)).toBe('map')
     expect(h.host.activeTool.peek()).toBe('plant-spacing')
   })
 

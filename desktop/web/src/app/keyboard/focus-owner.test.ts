@@ -215,7 +215,7 @@ describe('focus moves go through the focus owner', () => {
       expect(presentStory('tour', 0)).toBe(true)
       elsewhere.focus()
       leaveStoryPresentation()
-      await vi.waitFor(() => expect(focusMap).toHaveBeenCalledWith('story-exit'))
+      await vi.waitFor(() => expect(focusMap).toHaveBeenCalledWith())
       expect(document.activeElement).toBe(map)
     } finally {
       leaveStoryPresentation()
@@ -252,7 +252,7 @@ describe('focus moves go through the focus owner', () => {
         dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
       })
       expect(plantColorMenuOpen.value).toBe(false)
-      expect(focusMap).toHaveBeenCalledWith('menu-closed')
+      expect(focusMap).toHaveBeenCalledWith()
       expect(document.activeElement).toBe(map)
     } finally {
       plantColorMenuOpen.value = false

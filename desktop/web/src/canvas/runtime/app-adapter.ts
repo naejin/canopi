@@ -198,7 +198,7 @@ export interface CanvasRuntimeAppAdapter {
 
 /** How a tool's focus request (ToolEffects.requestFocus) leaves the runtime. The FocusOwner implements it. */
 export interface CanvasFocusPort {
-  focusMap(reason: 'tool-requested' | 'text-entry-closed'): void
+  focusMap(): void
 }
 
 export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter {

@@ -354,7 +354,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         if (owns()) closeTextEntry()
       },
       requestFocus() {
-        if (owns()) deps.focus.focusMap('tool-requested')
+        if (owns()) deps.focus.focusMap()
       },
     }
     return {
@@ -924,7 +924,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function dropped(kind: 'species' | 'saved-stamp'): void {
     if (disposed) return
     requestTool('select')
-    deps.focus.focusMap('tool-requested')
+    deps.focus.focusMap()
     deps.dropped(kind)
   }
 
@@ -1028,7 +1028,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function focusMap(): void {
     const entryOpen = deps.chrome.isTextEntryOpen()
     if (entryOpen) deps.chrome.submitUnfocusedTextEntry()
-    deps.focus.focusMap(entryOpen ? 'text-entry-closed' : 'tool-requested')
+    deps.focus.focusMap()
     // Select's handles, hidden while the entry was open, follow at once.
     if (entryOpen) flush()
   }

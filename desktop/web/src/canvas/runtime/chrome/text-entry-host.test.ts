@@ -147,7 +147,7 @@ describe('the text-entry host', () => {
     key(textarea, { key: 'Enter' })
     expect(entry()).toBeNull()
     expect(entries.isOpen()).toBe(false)
-    expect(focusMap).toHaveBeenCalledWith('text-entry-closed')
+    expect(focusMap).toHaveBeenCalledWith()
   })
 
   it('a blur submits at once, so a press on the map finds the entry already committed', async () => {
@@ -214,7 +214,7 @@ describe('the text-entry host', () => {
     expect(mapKeys).not.toHaveBeenCalled()
     expect(submit).not.toHaveBeenCalled()
     expect(entries.isOpen()).toBe(false)
-    expect(focusMap).toHaveBeenCalledWith('text-entry-closed')
+    expect(focusMap).toHaveBeenCalledWith()
   })
 
   it('Enter and Esc while composing do nothing', async () => {

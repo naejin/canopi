@@ -519,8 +519,8 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       isOpen: () => menuOpen,
     },
     focus: {
-      focusMap(reason) {
-        record.focus.push(`map:${reason}`)
+      focusMap() {
+        record.focus.push('map')
         // A text entry that holds focus commits on its blur; one that has lost it hears nothing.
         const entry = chrome.textEntry
         if (entry?.focused) blurTextEntry(entry)

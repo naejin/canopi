@@ -11,17 +11,13 @@ import type { CanvasFocusPort } from '../../canvas/runtime/app-adapter'
 import { currentCanvasKeyboardPort } from '../../canvas/session'
 import { modalLayerOpen } from '../shell/modal-layer'
 
-type FocusReason =
-  | 'tool-armed' | 'drop' | 'chooser-closed' | 'text-entry-closed' | 'menu-closed' | 'story-exit' | 'user-opened'
-  | 'tool-requested'
-
 export type FocusRegion = 'title-bar' | 'tool-rail' | 'map' | 'dock'
 
 export interface FocusOwner extends CanvasFocusPort {
   /** The map host itself, never a control inside it. */
-  focusMap(reason: FocusReason): void
+  focusMap(): void
   /** A component opened by a user action focuses its first field through here; content-derived UI cannot. */
-  focusOnOpen(el: HTMLElement, reason: 'user-opened'): void
+  focusOnOpen(el: HTMLElement): void
   /** A mounted region; returns its release. */
   registerRegion(region: FocusRegion, el: HTMLElement): () => void
   /** F6 (1) and Shift+F6 (-1); false while the modal layer is held or no other region shows. */

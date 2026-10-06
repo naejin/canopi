@@ -47,6 +47,6 @@ export function armCanvasTool(
   // Never short-circuited for the tool already armed: arming it again takes the new source (and Copy an object on the
   // map arms Select, then Place a stamp, to drop the stamp it held).
   setCurrentCanvasTool(tool)
-  if (from !== 'shortcut') focusOwner.focusMap('tool-armed')
+  if (from !== 'shortcut') focusOwner.focusMap()
   return true
 }

@@ -279,7 +279,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         commands: _deps.selectionCommands,
         saveSelectionAsObjectStamp: _deps.contextualCommands?.saveSelectionAsObjectStamp,
         placePlantsAt: (world) => { this._toolHost.command({ kind: 'place-at', world }) },
-        returnFocus: () => focus.focusMap('tool-requested'),
+        returnFocus: () => focus.focusMap(),
         scene,
         selectionModel: _deps.getDesignObjectSelection,
       }), (menu) => menu.close())
@@ -625,7 +625,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._cancelDropFocus()
     this._dropFocusFrame = window.requestAnimationFrame(() => {
       this._dropFocusFrame = null
-      this._focus.focusMap('tool-requested')
+      this._focus.focusMap()
     })
   }
 

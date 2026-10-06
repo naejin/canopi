@@ -53,6 +53,6 @@ function mapCornerAnchor(canvasRef: RefObject<HTMLDivElement>): PlantAppearanceA
       }
     },
     // Closing gives focus back to the map, through the focus owner.
-    focus: () => focusOwner.focusMap('menu-closed'),
+    focus: () => focusOwner.focusMap(),
   }
 }

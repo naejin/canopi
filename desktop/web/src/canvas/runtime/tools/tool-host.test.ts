@@ -522,7 +522,7 @@ describe('ToolHost', () => {
       h.click({ x: 40, y: 40 })
       expect(h.chrome.textEntry?.request.initialText).toBe('Compost')
       h.press({ x: 90, y: 90 })
-      expect(h.record.focus.at(-1)).toBe('map:text-entry-closed')
+      expect(h.record.focus.at(-1)).toBe('map')
       expect(submitted).toEqual(['Compost'])
       expect(h.chrome.textEntry).toBeNull()
     })
@@ -621,14 +621,14 @@ describe('ToolHost', () => {
       expect(h.chrome.handles).toEqual([])
       // a menu takes focus first, so the entry commits on its blur and the handles return,
       h.menu({ x: 300, y: 250 })
-      expect(h.record.focus).toEqual(['map:text-entry-closed'])
+      expect(h.record.focus).toEqual(['map'])
       expect(h.chrome.textEntry).toBeNull()
       expect(h.chrome.handles).toEqual([handle])
       // and so does the next press, a middle one too.
       h.openTextEntry()
       h.host.sceneChanged()
       h.host.rawPress('middle', { kind: 'surface' })
-      expect(h.record.focus).toEqual(['map:text-entry-closed', 'map:text-entry-closed'])
+      expect(h.record.focus).toEqual(['map', 'map'])
       expect(h.chrome.textEntry).toBeNull()
       expect(h.chrome.handles).toEqual([handle])
 
@@ -638,7 +638,9 @@ describe('ToolHost', () => {
       expect(h.chrome.textEntry).not.toBeNull()
       h.escapeTextEntry()
       h.click({ x: 90, y: 90 })
-      expect(h.record.focus.at(-1)).toBe('map:tool-requested')
+      // The click reached Text, which opened a new entry there: a press that found an entry open would place nothing.
+      expect(h.record.focus.at(-1)).toBe('map')
+      expect(h.chrome.textEntry?.request.anchor.x).toBeCloseTo(90, 6)
     })
 
     it('under Text, the click whose raw press finds the note entry open commits it and reaches no tool', () => {
@@ -670,7 +672,7 @@ describe('ToolHost', () => {
       const heard = text.gestures.length
       // The press's focus move commits the entry on its blur, and the click places nothing (spec §3.2, as today).
       expect(h.click({ x: 90, y: 90 })).toEqual({})
-      expect(h.record.focus.at(-1)).toBe('map:text-entry-closed')
+      expect(h.record.focus.at(-1)).toBe('map')
       expect(h.chrome.textEntry).toBeNull()
       expect(text.gestures).toHaveLength(heard)
       // The next click is the tool's again, and so is one after a middle press committed the entry.
@@ -802,7 +804,7 @@ describe('ToolHost', () => {
       h.host.rawPress('middle', { kind: 'owned-chrome' })
       expect(h.host.hasNudgeSeries()).toBe(false)
       expect(h.menuOpen).toBe(false)
-      expect(h.record.focus).toEqual(['map:text-entry-closed'])
+      expect(h.record.focus).toEqual(['map'])
       expect(h.chrome.textEntry).toBeNull()
 
       // A primary press: the same, once; the press it becomes moves focus no further.
@@ -811,7 +813,7 @@ describe('ToolHost', () => {
       h.click({ x: 200, y: 150 })
       expect(h.host.hasNudgeSeries()).toBe(false)
       expect(h.menuOpen).toBe(false)
-      expect(h.record.focus).toEqual(['map:text-entry-closed', 'map:tool-requested'])
+      expect(h.record.focus).toEqual(['map', 'map'])
       expect(h.history.canUndo.value).toBe(true)
     })
 
@@ -833,11 +835,11 @@ describe('ToolHost', () => {
       h.menu('selection', 'keyboard')
       h.host.rawPress('primary', SURFACE, 4)
       expect(h.menuOpen).toBe(true)
-      expect(h.record.focus).toEqual(['map:tool-requested'])
+      expect(h.record.focus).toEqual(['map'])
       // The live pointer pressed again, its up lost: today's _onPointerDown skipped only another pointer's press.
       h.host.rawPress('primary', SURFACE, 3)
       expect(h.menuOpen).toBe(false)
-      expect(h.record.focus).toEqual(['map:tool-requested', 'map:tool-requested'])
+      expect(h.record.focus).toEqual(['map', 'map'])
       h.release()
       h.menu('selection', 'keyboard')
 
@@ -845,7 +847,7 @@ describe('ToolHost', () => {
       busy = true
       h.host.rawPress('middle', SURFACE)
       expect(h.menuOpen).toBe(true)
-      expect(h.record.focus).toEqual(['map:tool-requested', 'map:tool-requested'])
+      expect(h.record.focus).toEqual(['map', 'map'])
       busy = false
 
       // A failed cancellation leaves no edit open to wait for: the next raw press moves focus at once.
@@ -2011,7 +2013,7 @@ describe('ToolHost', () => {
         expect(h.store.session.selectedTargets, id).toEqual([{ kind: 'plant', id: plant.id }])
         expect(committed, id).toEqual(['interaction-drop'])
         expect(h.host.activeTool.value, id).toBe('select')
-        expect(h.record.focus, id).toEqual(['map:tool-requested'])
+        expect(h.record.focus, id).toEqual(['map'])
         expect(h.record.drops, id).toEqual(['species'])
         // A drop is no tool gesture.
         expect(armed.gestures, id).toEqual([])
@@ -2032,7 +2034,7 @@ describe('ToolHost', () => {
       expect(h.store.session.selectedTargets).toHaveLength(2)
       expect(committed).toEqual(['interaction-saved-object-stamp'])
       expect(h.host.activeTool.value).toBe('select')
-      expect(h.record.focus).toEqual(['map:tool-requested'])
+      expect(h.record.focus).toEqual(['map'])
       expect(h.record.drops).toEqual(['saved-stamp'])
 
       // A stamp whose layer is locked places nothing and is not reported: the drag source stays with the panel.

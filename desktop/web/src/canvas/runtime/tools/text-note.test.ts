@@ -84,7 +84,7 @@ describe('the Text tool', () => {
     h.typeText('Blurred note')
 
     h.click({ x: 80, y: 90 })
-    expect(h.record.focus.at(-1)).toBe('map:text-entry-closed')
+    expect(h.record.focus.at(-1)).toBe('map')
     expect(h.store.persisted.annotations).toEqual([expect.objectContaining({ position: { x: 24, y: 32 }, text: 'Blurred note' })])
     expect(h.chrome.textEntry).toBeNull()
 

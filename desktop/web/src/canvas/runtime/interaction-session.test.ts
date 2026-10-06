@@ -152,7 +152,7 @@ describe('the interaction session', () => {
     // A middle press pans, and still moves focus to the map.
     events.pointerDown({ x: 10, y: 10 }, { button: 1 })
     events.pointerUp({ x: 10, y: 10 }, { button: 1 })
-    expect(focus.focusMap).toHaveBeenCalledExactlyOnceWith('tool-requested')
+    expect(focus.focusMap).toHaveBeenCalledExactlyOnceWith()
     expect(select.count('press')).toBe(0)
 
     order.length = 0
