@@ -9,8 +9,8 @@ import type { PdfInput, PdfLabels, PdfSetup, PreparedPdf, PdfPlan, PdfLayoutCach
 export interface PdfCapture {
   readonly identity: object
   readonly input: PdfInput
-  /** The view is still turning: its live bearing is not the settled one, so `viewBearingDeg` may be an angle the turn only
-   *  passes through. `isCurrent` turns false once the view settles. */
+  /** The view is still turning: its live bearing is not the settled one, so `viewBearingDeg` may be an angle a flight only
+   *  passes through (a turn jumps, U34, but settles 150 ms later). `isCurrent` turns false once the view settles. */
   readonly turning?: boolean
   isCurrent(): boolean
 }
@@ -48,7 +48,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   let identity: object | null = null
   let capture: PdfCapture | null = null
   // As on screen lays pages out at the bearing the view rests at when the workspace opens, held until it closes:
-  // a turn still easing then is waited for (ADR 0015), and any later turn never moves the pages.
+  // a flight still turning then (a saved view or story step) is waited for, and any later turn never moves the pages.
   let heldBearing: number | null = null
   let controller: AbortController | null = null
   let generation = 0
