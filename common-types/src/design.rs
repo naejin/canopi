@@ -136,7 +136,6 @@ pub const PLANT_SYMBOL_IDS: &[&str] = &[
 pub enum DesignFileFieldOwner {
     Document,
     Scene,
-    Shared,
 }
 
 impl DesignFileFieldOwner {
@@ -144,7 +143,6 @@ impl DesignFileFieldOwner {
         match self {
             Self::Document => "document",
             Self::Scene => "scene",
-            Self::Shared => "shared",
         }
     }
 }
@@ -246,7 +244,7 @@ pub const DESIGN_FILE_FIELDS: &[DesignFileField] = &[
     },
     DesignFileField {
         key: "extra",
-        owner: DesignFileFieldOwner::Shared,
+        owner: DesignFileFieldOwner::Document,
     },
 ];
 
