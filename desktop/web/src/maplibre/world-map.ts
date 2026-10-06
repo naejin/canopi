@@ -75,7 +75,8 @@ export function createWorldMapLibreMap(
   map.on('error', (event) => logMapError('Passive MapLibre World map error:', event))
 
   // The World map stays north-up: its keyboard handler keeps arrow pans and
-  // +/- zoom, but Shift+arrows neither turn nor tilt it (INV-CAM-46).
+  // +/- zoom, but Shift+arrows neither turn nor tilt it (world-map-surface.test.tsx,
+  // "Shift+arrow keys do not turn or tilt the World map").
   map.keyboard.disableRotation()
 
   try {
