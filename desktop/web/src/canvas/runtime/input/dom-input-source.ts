@@ -101,6 +101,9 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   const sessionRects = new Map<number, HostRect>()
   let sink: ((input: RawInput) => void) | null = null
   let tickTimer: number | null = null
+  /** The `t` of the last input delivered (an event's timeStamp, a tick's deadline): a deadline is scheduled from it, so the
+   *  timer needs no clock on the events' base (A1; a browser's timeStamp is not Date.now()). */
+  let lastT: number | null = null
   /** Pointers pressed on the map, until their release or cancel: the window listeners follow only these. */
   const owned = new Set<number>()
   /** The owned pointers whose press was a canvas press (not the note editor's, a field's or a menu's): their native menus
@@ -146,6 +149,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
    */
   function deliver(event: Event, rect: HostRect | null, input: RawInput | null, onError: 'quarantine' | 'rethrow' = 'rethrow'): void {
     if (!input || !sink) return
+    lastT = input.t
     handling.push({ event, rect })
     try {
       sink(input)
@@ -430,9 +434,11 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
           case 'set-timer':
             clearTickTimer()
             if (effect.atMs !== undefined) {
-              tickTimer = deps.timers.set(effect.atMs, () => {
+              const atMs = effect.atMs
+              tickTimer = deps.timers.set(Math.max(0, atMs - (lastT ?? atMs)), () => {
                 tickTimer = null
-                sink?.({ kind: 'tick', t: deps.clock() })
+                lastT = atMs
+                sink?.({ kind: 'tick', t: atMs })
               })
             }
             break

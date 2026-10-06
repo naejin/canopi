@@ -43,8 +43,8 @@ export interface DomInputSourceDeps {
   readonly host: HTMLElement                                    // the map host; listeners attach here and on window (0B: from attach, as today; from F only during an owned session)
   readonly platform: InputPlatform
   readonly bindings: () => Bindings                             // CURRENT_BINDINGS in production
-  readonly clock: () => number
-  readonly timers: { set(atMs: number, cb: () => void): number; clear(id: number): void }
+  /** `set` waits `delayMs`: the source measures a deadline from the last input's time, base-free (A1). */
+  readonly timers: { set(delayMs: number, cb: () => void): number; clear(id: number): void }
 }
 export interface DomInputSource {
   /** Installs the listeners; returns the disposer that removes every listener it added (tested: exactly once each) and

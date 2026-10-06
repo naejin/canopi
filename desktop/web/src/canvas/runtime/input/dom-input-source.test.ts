@@ -38,7 +38,6 @@ function deps(overrides: Partial<DomInputSourceDeps> = {}): DomInputSourceDeps {
     host,
     platform: PLATFORM,
     bindings: () => CURRENT_BINDINGS,
-    clock: () => 1000,
     timers: { set: vi.fn(() => 1), clear: vi.fn() },
     ...overrides,
   }
@@ -776,20 +775,22 @@ describe('createDomInputSource', () => {
     expect(received.map((input) => input.kind)).toEqual(['down', 'down'])
   })
 
-  it('delivers a tick when a timer effect fires', () => {
+  it('schedules a deadline from the last input\'s time and delivers its tick at the deadline (A1: base-free)', () => {
     let fire: (() => void) | null = null
-    const timers = { set: vi.fn((_at: number, callback: () => void) => { fire = callback; return 7 }), clear: vi.fn() }
+    const timers = { set: vi.fn((_delayMs: number, callback: () => void) => { fire = callback; return 7 }), clear: vi.fn() }
     const source = createDomInputSource(deps({ timers }))
-    const dispose = attachRecording(source)
+    // Event times on a base far from Date.now(), as a browser's performance-based timeStamp is.
+    const dispose = attachRecording(source, (input) => {
+      if (input.kind === 'down') source.apply([{ kind: 'set-timer', atMs: input.t + 400 }, { kind: 'set-timer', atMs: input.t + 500 }])
+    })
 
-    source.apply([{ kind: 'set-timer', atMs: 1500 }])
-    source.apply([{ kind: 'set-timer', atMs: 1600 }])
+    events.pointerDown({ x: 10, y: 10 }, { pointerType: 'touch', timeStamp: 1234 })
     expect(timers.clear).toHaveBeenCalledWith(7)
+    expect(timers.set).toHaveBeenLastCalledWith(500, expect.any(Function))
     fire!()
     source.apply([{ kind: 'clear-timer' }])
 
-    expect(received).toEqual([{ kind: 'tick', t: 1000 }])
-    expect(timers.set).toHaveBeenLastCalledWith(1600, expect.any(Function))
+    expect(received.map((input) => input.kind === 'tick' ? input : input.kind)).toEqual(['down', { kind: 'tick', t: 1734 }])
     dispose()
   })
 

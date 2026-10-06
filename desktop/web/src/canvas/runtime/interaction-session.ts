@@ -359,8 +359,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         host: container,
         platform,
         bindings: () => CURRENT_BINDINGS,
-        clock,
-        timers,
+        timers: {
+          set: (delayMs, callback) => window.setTimeout(callback, delayMs),
+          clear: (id) => window.clearTimeout(id),
+        },
       })
       this._stopWatchingSources = own(this._watchToolSources(), (stop) => stop())
       this._storyObserver = own(this._observeStoryPresentation(), (observer) => observer?.disconnect())

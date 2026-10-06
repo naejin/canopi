@@ -28,7 +28,6 @@ function deps(): DomInputSourceDeps {
     host,
     platform: { os: 'linux', gestureEvents: false },
     bindings: () => CURRENT_BINDINGS,
-    clock: () => 0,
     timers: { set: vi.fn(() => 1), clear: vi.fn() },
   }
 }
