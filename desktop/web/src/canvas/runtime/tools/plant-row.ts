@@ -9,10 +9,9 @@
 // (the host's constraint), Ctrl or Cmd turns snapping off (noSnap), and the host clamps the pointer to the view
 // (clampsToView). A pan, a blur and a tool re-arm keep the source; the source is the tool's transient, which Esc drops
 // (the chain's tool-transient layer), and with none the chain's tool layer leaves the tool. The draft is the source ring at the plant's
-// presented radius, the dashed row guide, a disc for each plant the row would add (at most 250) and the guide's length.
+// presented radius, the dashed row guide, a disc for each plant the row would add (at most 250) and the guide's length in the zone chip format.
 
 import {
-  formatPlantSpacingGuideLength,
   formatPlantSpacingIntervalInput,
   parsePlantSpacingIntervalInput,
 } from '../../plant-spacing-interval'
@@ -28,6 +27,7 @@ import { isSceneDesignObjectLocked } from '../scene/locks'
 import { resolvePlantSymbolForPlant } from '../scene/plant-symbols'
 import type { ScenePlantEntity } from '../scene/types'
 import type { WorldPoint } from '../view/types'
+import { formatMetricDistance } from '../zone-measurements'
 import type { DraftShape, DraftStroke } from './draft'
 import type { CanvasTool, ToolCommand, ToolContext, ToolPoint } from './tool'
 
@@ -109,7 +109,7 @@ export function createPlantRowTool(): CanvasTool {
       kind: 'label',
       anchor: { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 },
       offsetPx: { x: 0, y: 0 },
-      text: formatPlantSpacingGuideLength(Math.hypot(end.x - start.x, end.y - start.y)),
+      text: formatMetricDistance(Math.hypot(end.x - start.x, end.y - start.y)),
       tone: 'hint-primary',
     })
     return shapes
