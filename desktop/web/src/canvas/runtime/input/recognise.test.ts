@@ -101,6 +101,45 @@ describe('recognise: 5.1 secondary button', () => {
     expect(result.gestures.some((gesture) => gesture.kind === 'menu-request')).toBe(false)
   })
 
+  it('A5 Right press, pointerup lost: the move without its button ends the session, with no pan and no menu; the next press is fresh', () => {
+    const result = run(SEQUENCES.A5)
+    expect(result.steps[1]!.gestures).toEqual([{ kind: 'cancel', reason: 'pointercancel' }])
+    expect(result.steps[1]!.effects).toEqual([{ kind: 'release-capture', pointerId: 1 }])
+    expect(kinds(result.steps[2]!.gestures)).toEqual(['press'])
+    expect(kinds(result.steps[3]!.gestures)).toEqual(['tap'])
+  })
+
+  it('A35 Drag end: a navigation session ends when its physical button leaves the move, a primary drag does not', () => {
+    const middle = run(seq('middle pan, up lost', WINDOWS, [
+      down(100, 100, { button: 1 }),
+      move(120, 100, { buttons: 4 }),
+      move(130, 100, { buttons: 0 }),
+      move(140, 100, { buttons: 0 }),
+    ]))
+    expect(kinds(middle.gestures)).toEqual(['pan:start', 'pan:move', 'pan:end', 'cancel', 'hover'])
+    const rotate = run(seq('Shift+right turn, up lost', WINDOWS, [
+      down(100, 100, { button: 2, shift: true }),
+      move(120, 100, { buttons: 2, shift: true }),
+      move(130, 100, { buttons: 1, shift: true }),
+    ]))
+    // The lost release ends the turn where it is: the view keeps it.
+    expect(kinds(rotate.gestures)).toEqual(['rotate:start', 'rotate:move', 'rotate:end', 'cancel'])
+    // A Mac Control-drag holds the primary button: its moves keep the pan.
+    const macPan = run(seq('Mac Control-drag', MAC_GESTURES, [
+      down(100, 100, { ctrl: true }),
+      move(120, 100, { buttons: 1, ctrl: true }),
+      move(140, 100, { buttons: 1 }),
+      move(150, 100, { buttons: 2 }),
+    ]))
+    expect(kinds(macPan.gestures)).toEqual(['pan:start', 'pan:move', 'pan:move', 'pan:end', 'cancel'])
+    const band = run(seq('band, up lost', WINDOWS, [
+      down(100, 100),
+      move(120, 100, { buttons: 1 }),
+      move(130, 100, { buttons: 0 }),
+    ]))
+    expect(kinds(band.gestures)).toEqual(['press', 'drag-start', 'drag-move'])
+  })
+
   it('A6 WKWebView capture then nothing: cancel(lost-capture), no menu, nothing stuck', () => {
     const result = run(SEQUENCES.A6)
     expect(result.gestures).toEqual([{ kind: 'cancel', reason: 'lost-capture' }])

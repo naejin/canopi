@@ -42,6 +42,9 @@ export interface PointerSession {
   readonly pressed: boolean
   /** The platform's pointerdown `detail`, as delivered (never counted here under LEGACY). */
   readonly clickCount: number
+  /** The PointerEvent.buttons bit of the button the press holds: the primary one for a consumed Mac Control press. A
+   *  navigation or still secondary session whose move lacks it lost its release (spec §2.2 "Drag end"). */
+  readonly buttonBit: number
 }
 
 export interface TouchPair {
@@ -60,6 +63,8 @@ const WHEEL_ZOOM_PER_PX = 0.002
 const NAVIGATION_SLOP_PX = 3
 /** The session id of a WebKit trackpad twist, which has no pointer: browsers number pointers from 0. */
 const TRACKPAD_TWIST_ID = -1
+/** PointerEvent.buttons bits. */
+const BUTTON_BITS: Readonly<Record<ButtonRole, number>> = Object.freeze({ primary: 1, secondary: 2, auxiliary: 4 })
 
 export function initialRecogniserState(): RecogniserState {
   return {
@@ -139,6 +144,7 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
     last: input.at,
     slopPassed: false,
     clickCount: input.detail,
+    buttonBit: input.ctrlConsumed ? BUTTON_BITS.primary : BUTTON_BITS[input.role],
   } as const
 
   const pressTarget: PressTarget = input.target.kind === 'handle' ? { kind: 'handle', id: input.target.id } : { kind: 'surface' }
@@ -201,7 +207,14 @@ function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void 
     return
   }
 
-  // A button added or dropped mid-session changes nothing (the session keeps its mode until its up).
+  // A navigation or still secondary session whose move lacks its button lost its release (MapLibre's isValidMoveEvent):
+  // it ends as a release would, then the host hears the press end. A primary session waits for the next down instead,
+  // so a Mac Control-drag is never cut short (spec §2.2 "Drag end").
+  if (session.mode !== 'pending' && session.mode !== 'primary' && (input.buttonMask & session.buttonBit) === 0) {
+    endWithLostRelease(step, session)
+    return
+  }
+  // Any other button added or dropped mid-session changes nothing (the session keeps its mode until its up).
   if (session.mode === 'rotate') {
     rotateMove(step, session, input, config.platform)
     return
@@ -402,6 +415,7 @@ function platformGesture(step: Step, input: RawOf<'platform-gesture'>, config: R
       navigation: 'trackpad-twist',
       pressed: false,
       clickCount: 0,
+      buttonBit: 0,
     })
     step.state = { ...step.state, trackpadTwistDeg: 0 }
     return
@@ -490,6 +504,15 @@ function endSession(step: Step, session: PointerSession, reason: CancelReason): 
   // The router restores the camera the rotate started from; the input router does not cancel it on a plain cancel.
   if (session.mode === 'rotate' && session.slopPassed) step.gestures.push(rotateOf(session, 'cancel', session.last, false))
   step.gestures.push({ kind: 'cancel', reason })
+}
+
+/** A navigation or still secondary session whose release was lost: a pan ends where it is and a turn ends kept, never
+ *  restored; no menu opens; then cancel('pointercancel') ends any press of the host's (the Pan tool's). */
+function endWithLostRelease(step: Step, session: PointerSession): void {
+  dropSession(step, session)
+  if (session.mode === 'pan' && session.navigation) step.gestures.push(panEndOf(session))
+  if (session.mode === 'rotate' && session.slopPassed) step.gestures.push(rotateOf(session, 'end', session.last, false))
+  step.gestures.push({ kind: 'cancel', reason: 'pointercancel' })
 }
 
 function endLiveSessions(step: Step, reason: CancelReason): void {

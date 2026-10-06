@@ -288,6 +288,12 @@ export const SEQUENCES = {
     ...moves([100, 100], [160, 100], 3, { buttons: 2 }),
     up(160, 100, { button: 2 }),
   ]),
+  A5: seq('A5 Right press, pointerup lost', LINUX, [
+    down(100, 100, { button: 2 }),
+    move(140, 100, { buttons: 0 }),
+    down(150, 100),
+    up(150, 100),
+  ]),
   A6: seq('A6 WKWebView capture then nothing', MAC_GESTURES, [
     down(100, 100, { button: 2 }),
     lostCapture(),

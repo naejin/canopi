@@ -491,6 +491,19 @@ describe('the interaction session', () => {
     events.pointerUp({ x: 140, y: 100 }, { pointerId: 5, button: 1, buttons: 0 })
   })
 
+  it('a right-drag whose release was lost ends at the move without its button and runs the cleanup its release would (A35)', () => {
+    createSession()
+    const released = vi.spyOn(builtHosts.at(-1)!, 'released')
+    const before = testView.viewport()
+
+    events.pointerDown({ x: 100, y: 100 }, { pointerId: 6, button: 2 })
+    events.pointerMove({ x: 140, y: 100 }, { pointerId: 6, buttons: 2 })
+    events.pointerMove({ x: 160, y: 100 }, { pointerId: 6, buttons: 0 })
+    expect(released).toHaveBeenCalledTimes(1)
+    expect(testView.viewport().x).toBeCloseTo(before.x + 40, 6)
+    expect(container.style.cursor).not.toBe('grabbing')
+  })
+
   it('a WebKit pinch is no live pointer session until its twist passes 10°: Esc and the arrows keep working', () => {
     const { session } = createSession({ platform: { os: 'mac', gestureEvents: true } })
     const gesture = (type: string, rotation: number) => {
