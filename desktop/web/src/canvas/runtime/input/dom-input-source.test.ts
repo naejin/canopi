@@ -38,7 +38,6 @@ function deps(overrides: Partial<DomInputSourceDeps> = {}): DomInputSourceDeps {
     host,
     platform: PLATFORM,
     bindings: () => CURRENT_BINDINGS,
-    keys: { lastKeyboardMenuAt: () => null },
     clock: () => 1000,
     timers: { set: vi.fn(() => 1), clear: vi.fn() },
     ...overrides,

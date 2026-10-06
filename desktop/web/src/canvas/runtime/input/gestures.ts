@@ -8,7 +8,7 @@ export type NavigationSource =
   | 'secondary-drag' | 'auxiliary-drag' | 'space-drag' | 'primary-drag'   // primary-drag: the Pan tool
   | 'wheel' | 'trackpad-twist' | 'touch-two-finger'                         // a pinch is a 'wheel' (P14)
 
-export type MenuSource = 'mouse' | 'ctrl-click' | 'pen-barrel' | 'long-press' | 'keyboard' | 'native'
+export type MenuSource = 'mouse' | 'long-press' | 'keyboard'
 // CancelReason, PointerKind, Modifiers, ToolHandleId, CanvasDropPayload: from ../interaction-types.ts (§1.2a); TargetClass: from ./raw-input.ts (§1.2)
 
 export type PressTarget =

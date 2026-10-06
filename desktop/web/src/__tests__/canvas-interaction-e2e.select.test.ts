@@ -1640,7 +1640,7 @@ describe('SceneInteractionSession', () => {
     expect(request.world.y).toBeCloseTo(125)
 
     // The key's own trailing contextmenu event does not reopen the menu at a pointer.
-    openContextMenu({ x: 0, y: 0 })
+    container.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
     expect(contextMenuHost.opened).toHaveLength(1)
 
     // A control keeps the key; with nothing focused the map takes it after a press on the map (the canvas-focus scope,

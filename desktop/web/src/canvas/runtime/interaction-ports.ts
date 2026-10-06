@@ -43,7 +43,6 @@ export interface DomInputSourceDeps {
   readonly host: HTMLElement                                    // the map host; listeners attach here and on window (0B: from attach, as today; from F only during an owned session)
   readonly platform: InputPlatform
   readonly bindings: () => Bindings                             // CURRENT_BINDINGS in production
-  readonly keys: { readonly lastKeyboardMenuAt: () => number | null }   // the keyboard port's, which the key router feeds
   readonly clock: () => number
   readonly timers: { set(atMs: number, cb: () => void): number; clear(id: number): void }
 }

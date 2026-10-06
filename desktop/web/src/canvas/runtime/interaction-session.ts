@@ -356,7 +356,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         host: container,
         platform,
         bindings: () => CURRENT_BINDINGS,
-        keys: { lastKeyboardMenuAt: () => null },
         clock,
         timers,
       })

@@ -2168,7 +2168,7 @@ describe('ToolHost', () => {
 
         // 7 px off the field's slanted edge, beyond its 6 px hit: the empty map's menu, with the entry.
         const normal = { x: 2 / Math.sqrt(5), y: 1 / Math.sqrt(5) }
-        h.menu({ x: 80 + normal.x * 7, y: 60 + normal.y * 7 }, 'native')
+        h.menu({ x: 80 + normal.x * 7, y: 60 + normal.y * 7 })
         expect(h.record.selections).toEqual([])
         expect(offered()).toBeTypeOf('function')
         offered()!()
@@ -2179,15 +2179,15 @@ describe('ToolHost', () => {
         h.view.navigation.resetNorth()
         vi.advanceTimersByTime(400)
 
-        h.menu({ x: 80 + normal.x * 9, y: 60 + normal.y * 9 }, 'native')
+        h.menu({ x: 80 + normal.x * 9, y: 60 + normal.y * 9 })
         expect(offered()).toBeUndefined()
         // The locked bed: its own menu, with the entry; the view turns, no object moves.
-        h.menu({ x: 200, y: 63 }, 'native')
+        h.menu({ x: 200, y: 63 })
         expect(h.record.selections.at(-1)).toEqual([{ kind: 'zone', id: 'bed' }])
         expect(offered()).toBeTypeOf('function')
-        h.menu({ x: 324, y: 78 }, 'native')
+        h.menu({ x: 324, y: 78 })
         expect(offered()).toBeTypeOf('function')
-        h.menu({ x: 240, y: 200 }, 'native')
+        h.menu({ x: 240, y: 200 })
         expect(offered()).toBeUndefined()
 
         h.select({ kind: 'zone', id: 'field' })

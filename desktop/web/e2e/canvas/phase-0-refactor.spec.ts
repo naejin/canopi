@@ -145,11 +145,15 @@ test('step 3: Space and a 200 px left drag pan the map 200 px; objects stay on t
   expectPx(after.y - before.y, 0, 'a horizontal drag does not move the map vertically')
 })
 
-test('step 4: right-click on a plant opens the canvas menu with today\'s entries; Esc closes it', async ({ page }) => {
+test('step 4: a right-click on a plant opens the canvas menu with today\'s entries on release; Esc closes it', async ({ page }) => {
   await openBaseFixture(page)
-  await page.mouse.click(APPLE.x, APPLE.y, { button: 'right' })
+  await page.mouse.move(APPLE.x, APPLE.y)
+  await page.mouse.down({ button: 'right' })
+  await expectCanvasDrawn(page)
+  await expect(page.getByRole('menu'), 'the right press alone opens no menu (it may still become a pan)').toHaveCount(0)
+  await page.mouse.up({ button: 'right' })
   const menu = page.getByRole('menu', { name: 'Apple' })
-  await expect(menu).toBeVisible()
+  await expect(menu, 'the still right-click opens the menu on release').toBeVisible()
   await expect(menu.getByRole('menuitem')).toHaveText([
     /^Cut/, /^Copy/, /^Paste/, /^Duplicate/,
     /^Select all of this species/, /^Plant color/, /^Plant symbol/, /^Show name/, /^Species details/,

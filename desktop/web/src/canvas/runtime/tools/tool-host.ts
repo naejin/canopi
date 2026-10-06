@@ -78,10 +78,7 @@ const NO_SNAP: SnapSettings = Object.freeze({ grid: false })
 /** How near a zone's edge a pointer menu offers "Turn view to this edge" (spec §4.16). The keyboard menu has no point;
  *  phase 3 adds the long press's 22 px. */
 const MENU_EDGE_TOLERANCE_PX: Partial<Record<MenuSource, number>> = Object.freeze({
-  native: 8,
   mouse: 8,
-  'ctrl-click': 8,
-  'pen-barrel': 8,
 })
 /** Arrow-key nudge steps, in session-plane metres. */
 const NUDGE_STEP_M = 0.1
