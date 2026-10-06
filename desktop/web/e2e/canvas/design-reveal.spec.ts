@@ -174,3 +174,51 @@ test('the title bar shows what the start screen shows until the hidden Design sh
     revealed: { name: true, saveStatus: true, placeField: true, menus: true },
   })
 })
+
+// canopi-23p2: in a New Design's overview the Start card, its found-place chip and the top-centre chip slot share one row
+// (SiteOnboarding), so the overview notice never covers the card, and every chip stays on screen and clear of the panels.
+for (const size of [{ width: 360, height: 740 }, { width: 768, height: 800 }, { width: 1400, height: 900 }]) {
+  test(`a New Design's top chips sit beside the Start card, on screen and clear of the panels, at ${size.width}x${size.height}`, async ({ page }) => {
+    await page.setViewportSize(size)
+    await page.goto('')
+    await page.locator('[data-start-screen]').getByRole('button', { name: 'New Design' }).first().click()
+    await page.locator('[data-site-locate]').getByRole('button', { name: 'Skip, I’ll find it on the map' }).click()
+    await expect(page.locator('[data-start-design]')).toBeVisible()
+    await expect(page.locator('[data-overview-notice]')).toBeVisible()
+
+    const rects = await page.evaluate(() => {
+      const box = (selector: string) => {
+        const element = document.querySelector(selector)
+        if (!element) return null
+        const { left, top, right, bottom } = element.getBoundingClientRect()
+        return { left, top, right, bottom }
+      }
+      const found = document.querySelector('[data-found-site]')
+      const slot = document.querySelector('[data-top-chip-slot]')
+      return {
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        notice: box('[data-overview-notice]'),
+        found: box('[data-found-site]'),
+        card: box('[data-start-design]'),
+        rail: box('nav[aria-label="Web Edition panels"]'),
+        foundInRow: found?.parentElement?.hasAttribute('data-start-row') ?? false,
+        slotInRow: slot?.parentElement?.hasAttribute('data-start-row') ?? false,
+        foundInSlot: slot?.contains(found ?? null) ?? false,
+      }
+    })
+    expect(rects.foundInRow, 'the found-place chip is a child of the Start row').toBe(true)
+    expect(rects.slotInRow, 'the top-centre slot is a child of the Start row').toBe(true)
+    expect(rects.foundInSlot, 'the found-place chip is beside the slot, not in it').toBe(false)
+    const { viewport, notice, found, card, rail } = rects
+    for (const [name, chip] of [['overview notice', notice], ['found-place chip', found]] as const) {
+      expect(chip, name).not.toBeNull()
+      expect(chip!.left, `${name} left edge on screen`).toBeGreaterThanOrEqual(0)
+      expect(chip!.top, `${name} top edge on screen`).toBeGreaterThanOrEqual(0)
+      expect(chip!.right, `${name} right edge on screen`).toBeLessThanOrEqual(viewport.width)
+      expect(chip!.bottom, `${name} bottom edge on screen`).toBeLessThanOrEqual(viewport.height)
+      if (rail && rail.right > rail.left) expect(chip!.right, `${name} left of the panel rail`).toBeLessThanOrEqual(rail.left)
+    }
+    const overlaps = notice!.left < card!.right && card!.left < notice!.right && notice!.top < card!.bottom && card!.top < notice!.bottom
+    expect(overlaps, 'the overview notice does not cover the Start card').toBe(false)
+  })
+}
