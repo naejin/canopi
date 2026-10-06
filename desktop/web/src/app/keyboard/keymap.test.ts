@@ -52,7 +52,7 @@ describe('keymap', () => {
     expect(singleKey(keyLike(']'))).toEqual(['follows-switch'])
     expect(singleKey(keyLike('z', { ctrlKey: true }))).toEqual(['n/a'])
     expect(singleKey(keyLike('0', { ctrlKey: true }))).toEqual(['n/a'])
-    expect(singleKey(keyLike('Delete'))).toEqual(['n/a'])
+    expect(singleKey(keyLike('Delete'))).toEqual(['n/a', 'n/a'])
     expect(singleKey(keyLike('ArrowLeft'))).toEqual(['n/a'])
     expect(singleKey(keyLike('Enter'))).toEqual(['n/a'])
   })
@@ -266,6 +266,42 @@ describe('keymap', () => {
       { kind: 'rotate-view', direction: 1 },
       { kind: 'reset-north' },
     ])
+  })
+
+  it('Delete with no corner selected deletes the selection as before', () => {
+    const run = vi.fn((_command: string) => true)
+    // No zone corner is selected: the map refuses its corner deletion.
+    const command = vi.fn((_c: CanvasKeyCommand) => false)
+    const host = document.createElement('div')
+    host.tabIndex = 0
+    const rail = document.createElement('button')
+    document.body.append(host, rail)
+    router = installKeyRouter({
+      target: window,
+      keymap: CANVAS_KEYMAP_ROWS,
+      commands: { run },
+      canvas: () => ({ host, keyState: () => 'pass', command, escapeLayers: () => [], escape: () => {} }),
+      singleKeys: signal(true),
+      focus: { cycleRegion: () => false },
+      isModalOpen: () => false,
+      platform: TEST_KEY_PLATFORM,
+      document,
+    })
+    const pressDelete = (target: HTMLElement) => {
+      target.focus()
+      const event = new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true })
+      target.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+
+    // On the map the corner is asked first, then the selection goes.
+    expect(pressDelete(host)).toBe(true)
+    expect(command.mock.calls.map(([c]) => c)).toEqual([{ kind: 'delete-handle' }])
+    expect(run.mock.calls.map(([c]) => c)).toEqual(['canvas.deleteSelected'])
+    // Away from the map Delete deletes the selection without asking.
+    expect(pressDelete(rail)).toBe(true)
+    expect(command).toHaveBeenCalledOnce()
+    expect(run.mock.calls.map(([c]) => c)).toEqual(['canvas.deleteSelected', 'canvas.deleteSelected'])
   })
 
   it('composes an edition\'s shell rows from its catalogue, F2 after the map, every row working in text fields', () => {

@@ -249,6 +249,8 @@ describe('key router', () => {
       row.dispatchEvent(new Event('focusin', { bubbles: true }))
       expect(press({ key: 'c', ctrlKey: true }, document.body).defaultPrevented).toBe(false)
       host.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+      // No zone corner is selected, so the map's Delete falls back to deleting the selection.
+      fake.state.command = (c) => c.kind !== 'delete-handle'
       expect(edits(document.body)).toEqual(EDITS.map(() => true))
       expect(run.mock.calls.map(([command]) => command)).toEqual(EDITS)
     })

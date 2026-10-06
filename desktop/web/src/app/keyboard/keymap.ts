@@ -51,13 +51,16 @@ export interface CommandSink {
 }
 
 /**
- * The canvas key commands, ahead of the catalogue rows they share a chord with (Backspace, F2, `[` `]`). The rotation
- * chords live only here, never on a catalogue definition, whose rows are not in the `view-arrows` scope and would turn
- * the map from an arrow-owning widget (spec §3.6): the menus show them through the definitions' display-only keyHints.
+ * The canvas key commands, ahead of the catalogue rows they share a chord with (Backspace, Delete, F2, `[` `]`). The
+ * rotation chords live only here, never on a catalogue definition, whose rows are not in the `view-arrows` scope and
+ * would turn the map from an arrow-owning widget (spec §3.6): the menus show them through the definitions' display-only
+ * keyHints.
  */
 const CANVAS_KEY_ROWS: readonly KeymapRow[] = [
   keyRow({ kind: 'confirm' }, ['Enter']),
   keyRow({ kind: 'remove-last' }, ['Backspace'], { fallback: 'canvas.deleteSelected' }),
+  // A selected zone corner first; with none the selection goes, as from away from the map.
+  keyRow({ kind: 'delete-handle' }, ['Delete'], { fallback: 'canvas.deleteSelected' }),
   keyRow({ kind: 'edit-text' }, ['F2'], { fallback: 'file.rename' }),
   keyRow({ kind: 'context-menu' }, ['ContextMenu', 'Shift+F10']),
   keyRow({ kind: 'rotate-held', stepDeg: -15 }, ['['], { scope: 'command', singleKey: 'follows-switch', fallback: 'canvas.sendToBack' }),
