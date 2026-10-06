@@ -65,8 +65,7 @@ export type HitTarget =
 /** No filter is today's hitTestTopLevel exactly: interactive layers, a group as the top-level target, guides, the revealed
  *  (selected or hovered) note, and object-locked objects, which the caller rejects itself. */
 export interface HitFilter {
-  /** hitAt: also locked layers that are visible (hitTestVisibleTopLevel, the host's hover). hitInQuad throws a clear error
-   *  (the band select skips locked layers). */
+  /** hitAt: also locked layers that are visible (hitTestVisibleTopLevel, the host's hover). */
   readonly includeLocked?: boolean
   /** hitAt: answers only the nearest zone edge within this many CSS px ("Turn view to this edge", spec §4.16), converted at
    *  the frame's pixelsPerMetre. hitAt only: a band has no tolerance. */
@@ -113,8 +112,9 @@ export type ToolGesture =
   | { readonly kind: 'press'; readonly point: ToolPoint; readonly hit: HitTarget | null; readonly clickCount: number }
   | { readonly kind: 'tap'; readonly point: ToolPoint; readonly hit: HitTarget | null; readonly clickCount: number }
   | { readonly kind: 'drag-start' | 'drag-move' | 'drag-end'; readonly point: ToolPoint; readonly start: ToolPoint; readonly startHit: HitTarget | null }
-  /** clickCount: the press's (a double-click on a polygon's edge midpoint adds a corner), carried by every phase. */
-  | { readonly kind: 'handle-drag'; readonly phase: 'start' | 'move' | 'end'; readonly handle: ToolHandleId; readonly point: ToolPoint; readonly start: ToolPoint; readonly clickCount: number }
+  /** clickCount: the press's (a double-click on a polygon's edge midpoint adds a corner), carried by the start only. */
+  | { readonly kind: 'handle-drag'; readonly phase: 'start'; readonly handle: ToolHandleId; readonly point: ToolPoint; readonly start: ToolPoint; readonly clickCount: number }
+  | { readonly kind: 'handle-drag'; readonly phase: 'move' | 'end'; readonly handle: ToolHandleId; readonly point: ToolPoint; readonly start: ToolPoint }
   | { readonly kind: 'cancel'; readonly reason: CancelReason }
 // Drops are not tool gestures: the host's shared drop handler serves every tool (§1.4).
 
@@ -157,7 +157,7 @@ export interface ToolView {
 export interface ToolScene {
   readonly persisted: Readonly<ScenePersistedState>
   hitAt(world: WorldPoint, filter?: HitFilter): HitTarget | null
-  hitInQuad(quad: WorldQuad, filter?: HitFilter): readonly HitTarget[]
+  hitInQuad(quad: WorldQuad): readonly HitTarget[]
   nearestPlant(world: WorldPoint): { readonly plant: ScenePlantEntity; readonly distanceM: number } | null
   /** How the scene presents a plant now: the name in today's order (localised, stored common,
    *  canonical), the display colour and the symbol radius in CSS px. For tool-card names, row glyphs and the source ring. */
@@ -233,7 +233,7 @@ export interface CanvasTool {
   hasTransient(): boolean
   /** Esc leaves the tool even while it holds a transient, which is then no Esc layer (Place plants' waiting point, U35). */
   readonly escapeLeaves?: true
-  cancelTransient(reason: 'escape' | 'tool-change' | 'document-replaced' | 'navigate' | 'overview'): void   // 'overview': the map entered overview; drop what today's overview reset dropped (a stamp keeps its pick and hides only its ghost)
+  cancelTransient(reason: 'tool-change' | 'document-replaced' | 'navigate' | 'overview'): void   // 'overview': the map entered overview; drop what today's overview reset dropped (a stamp keeps its pick and hides only its ghost)
   /** Transient history (polygon corners), read by ToolHost.transientHistory; the tool acts on the undo-transient and redo-transient commands. */
   canUndoTransient?(): boolean
   canRedoTransient?(): boolean

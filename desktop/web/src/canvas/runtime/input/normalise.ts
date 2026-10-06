@@ -27,13 +27,10 @@ const WHEEL_LINE_PX = 16
 const DOM_DELTA_LINE = 1
 const DOM_DELTA_PAGE = 2
 
-/** Pointer button numbers (PointerEvent.button) and bits (PointerEvent.buttons). */
+/** Pointer button numbers (PointerEvent.button). */
 const BUTTON_PRIMARY = 0
 const BUTTON_AUXILIARY = 1
 const BUTTON_SECONDARY = 2
-const BIT_PRIMARY = 1
-const BIT_SECONDARY = 2
-const BIT_AUXILIARY = 4
 
 export function normalise(
   e: DomEventLike,
@@ -69,7 +66,6 @@ export function normalise(
         pointer,
         at,
         mods: modifiersOf(e),
-        buttons: buttonRoles(e.buttons ?? 0, pointer),
         target: e.target,
         buttonMask: e.buttons ?? 0,
       }
@@ -165,13 +161,4 @@ function pressRole(
   if (button === BUTTON_AUXILIARY) return { role: 'auxiliary', ctrlConsumed: false }
   if (button === BUTTON_SECONDARY) return { role: 'secondary', ctrlConsumed: false }
   return null   // back and forward (3, 4)
-}
-
-function buttonRoles(buttons: number, pointer: PointerKind): ReadonlySet<ButtonRole> {
-  const roles = new Set<ButtonRole>()
-  if (buttons & BIT_PRIMARY) roles.add('primary')
-  if (pointer === 'touch') return roles
-  if (buttons & BIT_SECONDARY) roles.add('secondary')
-  if (buttons & BIT_AUXILIARY && pointer === 'mouse') roles.add('auxiliary')
-  return roles
 }

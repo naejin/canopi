@@ -44,8 +44,6 @@ import {
 
 /** A double-click this close to the selected polygon's edge adds a corner there: the outline's own hit tolerance. */
 const EDGE_DOUBLE_CLICK_PX = 6
-/** A corner released within this many pixels of its press was pressed without moving (the point drag's threshold). */
-const STILL_CORNER_PX = 2
 
 /** What the press started, from the press to its release or cancel. */
 type SelectGesture =
@@ -65,10 +63,9 @@ export function createSelectTool(): CanvasTool {
   let rotationDeltaDeg: number | null = null
   /** The bearing the handles were placed at: the rotation handle sits above the projected hull, so a turn moves it. */
   let handlesBearingDeg = 0
-  /** The scale the handles were placed at (screen px per world metre): which edges have room for a dot depends on it alone. */
+  /** The scale the handles were placed at (screen px per world metre): the midpoint dots' room and the hull of screen-sized
+   *  plants and notes depend on it. */
   let handlesPixelsPerMetre = 0
-  /** The reshaped zone the handles were drawn for: a zoom changes which of its edges have room for a midpoint dot. */
-  let handlesZone: SceneZoneEntity | null = null
   let reshapePoints = new Map<ToolHandleId, ZoneControlPoint>()
   let edgeMidpoints = new Map<ToolHandleId, ZoneEdgeMidpoint>()
   let guideEndPoints = new Map<ToolHandleId, GuideEnd>()
@@ -94,7 +91,6 @@ export function createSelectTool(): CanvasTool {
     handlesPixelsPerMetre = pixelsPerMetre(c.view)
     if (rotate) handles.push(rotate)
     const zone = reshapableZone(scene, selection)
-    handlesZone = zone
     const points = zone ? zoneControlPoints(zone) : []
     reshapePoints = new Map(points.map((entry) => [entry.id, entry]))
     handles.push(...zoneControlPointHandles(points, c.translate))
@@ -109,18 +105,14 @@ export function createSelectTool(): CanvasTool {
     c.effects.setHandles(handles, selectedCorner)
   }
 
-  /** A camera frame that turned the view, or zoomed it so another set of edges has room for a dot, redraws the handles;
-   *  a pan leaves them as they are. The host re-emits a hover or a live drag on each camera frame, so both follow it. */
+  /** A camera frame that turned or zoomed the view redraws the handles (U40); a pan leaves them as they are. The host
+   *  re-emits a hover or a live drag on each camera frame, so both follow it. */
   function followView(): void {
     if (!context) return
     const { view } = context
     // A pan changes neither, so it recomputes nothing.
     if (view.bearingDeg === handlesBearingDeg && pixelsPerMetre(view) === handlesPixelsPerMetre) return
-    const dots = handlesZone ? zoneEdgeMidpoints(handlesZone, view) : []
-    const dotsChanged = dots.length !== edgeMidpoints.size || dots.some((dot) => !edgeMidpoints.has(dot.id))
-    if (view.bearingDeg !== handlesBearingDeg || dotsChanged) refreshHandles()
-    // A zoom that kept the same dots still records its scale, so the pans after it return early.
-    else handlesPixelsPerMetre = pixelsPerMetre(view)
+    refreshHandles()
   }
 
   function press(point: ToolPoint, hit: HitTarget | null, clickCount: number): void {
@@ -200,7 +192,7 @@ export function createSelectTool(): CanvasTool {
         }
       }
     } finally {
-      if (!('drag' in current) || !current.drag.open) gesture = null
+      gesture = null
       c.effects.setDraft(null)
       refreshHandles()
     }
@@ -229,19 +221,18 @@ export function createSelectTool(): CanvasTool {
     try {
       if (current.kind === 'rotate') finishRotation(current.drag, g.point)
       else if (current.kind === 'reshape' || current.kind === 'guide-end') current.drag.finish(g.point)
-      // A polygon corner released where it was pressed becomes the selected corner.
-      const still = c.view.screenDistance(g.start.world, g.point.world) <= STILL_CORNER_PX
-      const corner = current.kind === 'reshape' ? reshapePoints.get(g.handle) : undefined
-      selectedCorner = still && corner && isPolygonCorner(corner) ? g.handle : null
+      // A polygon corner pressed and released without moving becomes the selected corner (U40).
+      const corner = current.kind === 'reshape' && !current.drag.moved ? reshapePoints.get(g.handle) : undefined
+      selectedCorner = corner && isPolygonCorner(corner) ? g.handle : null
     } finally {
-      if (!('drag' in current) || !current.drag.open) gesture = null
+      gesture = null
       rotationDeltaDeg = null
       c.effects.setDraft(null)
       refreshHandles()
     }
   }
 
-  function startHandleDrag(g: Extract<ToolGesture, { kind: 'handle-drag' }>): void {
+  function startHandleDrag(g: Extract<ToolGesture, { kind: 'handle-drag'; phase: 'start' }>): void {
     const { handle, start } = g
     const c = ctx()
     const scene = c.scene.persisted

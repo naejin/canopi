@@ -131,8 +131,8 @@ export function getAnnotationWorldBounds(
   return boundsForPoints(getAnnotationWorldCorners(annotation, viewportScale))
 }
 
-/** A note's text frame at an origin already projected (the text-entry host projects through the view frame). */
-export function annotationScreenFrameAt(
+/** A note's text frame at an origin already projected. */
+function annotationScreenFrameAt(
   annotation: Pick<SceneAnnotationEntity, 'text' | 'fontSize' | 'rotationDeg'>,
   origin: ScenePoint,
 ): AnnotationScreenFrame {

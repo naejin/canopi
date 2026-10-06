@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { CanopiFile } from '../../../types/design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
 import { geoAt, storedGeoAt } from '../../../__tests__/support/geo-design'
@@ -6,24 +6,20 @@ import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../../../t
 import { SceneStore } from './store'
 import { createDefaultScenePersistedState, createDefaultSceneSessionState } from './defaults'
 import { serializeScenePersistedState } from './codec'
-import { createSceneGeoFrame } from './geo-frame'
+import { createSessionPlane } from '../../session-plane'
 
 const TEST_FRAME_ORIGIN = { lon: 13, lat: 23 }
 
 describe('scene store', () => {
-  it('reads whether it holds objects without cloning the full scene', () => {
+  it('reads whether it holds objects', () => {
     const store = new SceneStore()
     store.updatePersisted((draft) => {
       draft.annotations.push({ kind: 'annotation', id: 'a', locked: false,
         annotationType: 'text', position: { x: 3, y: 4 }, text: 'Note', fontSize: 12, rotationDeg: 0 })
     })
-    const read = vi.spyOn(store, 'persisted', 'get')
-    try {
-      expect(store.hasObjects).toBe(true)
-      store.updatePersisted((draft) => { draft.annotations = [] })
-      expect(store.hasObjects).toBe(false)
-      expect(read).not.toHaveBeenCalled()
-    } finally { read.mockRestore() }
+    expect(store.hasObjects).toBe(true)
+    store.updatePersisted((draft) => { draft.annotations = [] })
+    expect(store.hasObjects).toBe(false)
   })
 
   it('owns committed persisted drafts after the mutator returns', () => {
@@ -215,11 +211,11 @@ describe('scene store', () => {
     expect(persisted.plants).toHaveLength(0)
     expect(persisted.measurementGuides).toEqual([])
     expect(session.selectedTargets).toEqual([])
-    expect(serializeScenePersistedState(persisted, createSceneGeoFrame(TEST_FRAME_ORIGIN), { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(CURRENT_CANOPI_FILE_VERSION)
+    expect(serializeScenePersistedState(persisted, createSessionPlane(TEST_FRAME_ORIGIN), { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(CURRENT_CANOPI_FILE_VERSION)
   })
 
   it('normalizes and round-trips a Design without Measurement Guides', () => {
-    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSceneGeoFrame(TEST_FRAME_ORIGIN))
+    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSessionPlane(TEST_FRAME_ORIGIN))
     delete file.measurement_guides
 
     const store = new SceneStore().hydrate(file)
@@ -394,7 +390,7 @@ describe('scene store', () => {
   })
 
   it('writes no extra: the scene owns no extra key', () => {
-    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSceneGeoFrame(TEST_FRAME_ORIGIN), {
+    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSessionPlane(TEST_FRAME_ORIGIN), {
       now: new Date('2026-04-02T00:00:00.000Z'),
     })
 

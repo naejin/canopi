@@ -22,7 +22,6 @@ import type {
   CanvasViewportCommandSurface,
 } from './runtime'
 import {
-  createSceneGeoFrame,
   hydrateScenePersistedStateInFrame,
   type SceneLayerEntity,
   type ScenePoint,
@@ -329,7 +328,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
           created_at: '',
           updated_at: '',
         },
-        createSceneGeoFrame(this.options.sceneStore.sessionPlane.origin),
+        this.options.sceneStore.sessionPlane,
       )
       const receipt = createSceneArrangementPlacement({ sceneEdits: this.options.sceneEdits }).place({
         template: {

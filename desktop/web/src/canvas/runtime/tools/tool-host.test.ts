@@ -421,12 +421,6 @@ describe('ToolHost', () => {
       expect(stamp.calls).toEqual(['activate', 'viewChanged'])
       h.host.notePointer({ x: 150, y: 120 })
       expect(stamp.count('hover')).toBe(hovers + 1)
-
-      // null: no pointer rests on the map.
-      h.host.notePointer(null)
-      h.view.navigation.panByPx({ x: 10, y: 0 })
-      expect(stamp.count('hover')).toBe(hovers + 1)
-      expect(stamp.calls.filter((call) => call === 'viewChanged')).toHaveLength(2)
     })
 
     it('a camera frame with the pointer off the map calls viewChanged', () => {
@@ -1276,7 +1270,7 @@ describe('ToolHost', () => {
       stop()
 
       expect(runs).toBe(1)
-      expect(h.host.transientHistory.revision.peek()).toBeGreaterThan(0)
+      expect(h.record.transientHistoryChanges).toBeGreaterThan(0)
     })
   })
 
@@ -1309,14 +1303,12 @@ describe('ToolHost', () => {
       expect(history.canUndo()).toBe(false)
       h.click({ x: 10, y: 10 })
       h.click({ x: 60, y: 10 })
-      const revision = history.revision.peek()
       const changes = h.record.transientHistoryChanges
 
       expect(history.canUndo()).toBe(true)
       expect(history.undo()).toBe(true)
       expect(corners).toEqual([{ x: 10, y: 10 }])
       expect(history.canRedo()).toBe(true)
-      expect(history.revision.peek()).toBeGreaterThan(revision)
       expect(h.record.transientHistoryChanges).toBeGreaterThan(changes)
 
       expect(history.undo()).toBe(true)
@@ -1354,12 +1346,10 @@ describe('ToolHost', () => {
       const h = harness({ tool: 'polygon', edits })
 
       expect(h.host.command({ kind: 'confirm' })).toBe('handled')
-      const revision = h.host.transientHistory.revision.peek()
       const changes = h.record.transientHistoryChanges
       expect(h.host.transientHistory.canUndo()).toBe(true)
 
       deferred!()
-      expect(h.host.transientHistory.revision.peek()).toBe(revision + 1)
       expect(h.record.transientHistoryChanges).toBe(changes + 1)
       expect(h.host.transientHistory.canUndo()).toBe(false)
     })
@@ -1856,7 +1846,7 @@ describe('ToolHost', () => {
       useStubTools(polygon)
       const h = harness({ tool: 'polygon', edits })
       h.click({ x: 10, y: 10 })
-      const revision = h.host.transientHistory.revision.peek()
+      const changes = h.record.transientHistoryChanges
 
       let runs = 0
       const stop = effect(() => {
@@ -1865,7 +1855,7 @@ describe('ToolHost', () => {
       })
       try {
         expect(runs).toBe(1)
-        expect(h.host.transientHistory.revision.peek()).toBe(revision + 1)
+        expect(h.record.transientHistoryChanges).toBe(changes + 1)
       } finally {
         stop()
       }

@@ -2,7 +2,8 @@
 //
 // Owns the canvas's key handling behind CanvasKeyboardPort (spec §1.2a, §1.6, ADR 0020): the key router hands it every
 // key first (keyState: the nudge commit, the Space hold, the modifiers a live rotate steps by), runs its key commands (the arrow nudge and pan, mod for the large step; Shift+←/→ turning the view and
-// Shift+↑ or Shift+N resetting north; Enter, Backspace, F2, `[` `]`, the Menu key) and lists and runs its Esc layers, which
+// Shift+↑ or Shift+N resetting north; plain + and − zooming one step; Enter, Backspace, Delete on a
+// focused or selected corner, F2, `[` `]`, the Menu key) and lists and runs its Esc layers, which
 // app/keyboard/escape-chain.ts places in the Esc chain. The arrow nudge series is the ToolHost's; the port only reads its
 // outcome. It never touches a DOM event: the router acts on its answers.
 
@@ -56,12 +57,7 @@ interface CanvasKeySession {
   clearSelection(): void
 }
 
-/** The session's port: the router's CanvasKeyboardPort, with its deletes hold. */
-interface SessionCanvasKeyboardPort extends CanvasKeyboardPort {
-  holdsSelectionDeletes(): boolean
-}
-
-export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionCanvasKeyboardPort {
+export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): CanvasKeyboardPort {
   const { host, toolHost, session } = deps
 
   /** The arrow's rule after the host's nudge (spec §3.6): a handled or refused nudge takes the key, and on 'pass' the map

@@ -90,9 +90,9 @@ describe('geolocated design codec', () => {
   })
 
   it('centres the session plane on the objects', () => {
-    const { geo, persisted } = hydrateSceneFromDesign(currentDesign())
+    const { plane, persisted } = hydrateSceneFromDesign(currentDesign())
     const xs = persisted.plants.map((p) => p.position.x)
-    expect(Math.abs(geo.plane.origin.lon - 2.29451)).toBeLessThan(0.0001)
+    expect(Math.abs(plane.origin.lon - 2.29451)).toBeLessThan(0.0001)
     expect(Math.min(...xs)).toBeLessThan(0)
     expect(Math.max(...xs)).toBeGreaterThan(0)
   })
@@ -182,9 +182,9 @@ describe('geolocated design codec', () => {
 
   it('stores ellipses as opposite unrotated bounding-box corners', () => {
     const file = currentDesign()
-    const { persisted, geo } = hydrateSceneFromDesign(file)
+    const { persisted, plane } = hydrateSceneFromDesign(file)
     const pond = persisted.zones.find((zone) => zone.id === 'pond')!
-    const [first, second] = file.zones[1]!.points.map((point) => geo.plane.toPlane(point))
+    const [first, second] = file.zones[1]!.points.map((point) => plane.toPlane(point))
     expect(pond.points[0]!.x).toBeCloseTo((first!.x + second!.x) / 2, 9)
     expect(pond.points[1]!.x).toBeCloseTo((second!.x - first!.x) / 2, 9)
     expect(pond.points[1]!.y).toBeCloseTo((second!.y - first!.y) / 2, 9)
@@ -233,8 +233,8 @@ describe('geolocated design codec', () => {
   })
 
   it('serializes with an explicit frame so saved content never depends on hidden state', () => {
-    const { persisted, geo } = hydrateSceneFromDesign(currentDesign())
-    const saved = serializeScenePersistedState(persisted, geo)
+    const { persisted, plane } = hydrateSceneFromDesign(currentDesign())
+    const saved = serializeScenePersistedState(persisted, plane)
     expect(saved.version).toBe(9)
     expect('spatial_frame' in saved).toBe(false)
   })

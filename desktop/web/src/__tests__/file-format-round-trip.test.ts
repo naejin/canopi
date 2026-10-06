@@ -112,7 +112,7 @@ describe('file format round-trip', () => {
   it('canvas codec round-trips scene-owned entity fields and writes no extra', () => {
     const now = new Date('2026-04-09T12:00:00.000Z')
     const hydrated = hydrateSceneFromDesign(FIXTURE)
-    const serialized = serializeScenePersistedState(hydrated.persisted, hydrated.geo, { now })
+    const serialized = serializeScenePersistedState(hydrated.persisted, hydrated.plane, { now })
 
     // updated_at is regenerated from `now`; document-owned metadata is emitted as placeholders.
     // Unedited lon/lat positions on the 1e-9° grid are written back unchanged. `extra` is Design Edit's: the scene writes none, and the
@@ -133,7 +133,7 @@ describe('file format round-trip', () => {
   it('round-trips a serialized current-version Design through JSON and the Design decoder', () => {
     expect(CURRENT_CANOPI_FILE_VERSION).toBe(9)
     const hydrated = hydrateSceneFromDesign(FIXTURE)
-    const serialized = serializeScenePersistedState(hydrated.persisted, hydrated.geo, {
+    const serialized = serializeScenePersistedState(hydrated.persisted, hydrated.plane, {
       now: new Date('2026-04-09T12:00:00.000Z'),
     })
 

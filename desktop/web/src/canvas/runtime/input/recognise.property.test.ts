@@ -46,9 +46,8 @@ function randomInput(random: () => number, t: number): RawInput {
     return { kind: 'down', t, id, pointer: pick(['mouse', 'mouse', 'pen', 'touch'] as const), role: pick(ROLES), at, mods, target: pick(TARGETS), detail: 1, ctrlConsumed: false }
   }
   if (roll < 0.45) {
-    const buttons = new Set<ButtonRole>(ROLES.filter(() => random() < 0.3))
-    const buttonMask = (buttons.has('primary') ? 1 : 0) | (buttons.has('secondary') ? 2 : 0) | (buttons.has('auxiliary') ? 4 : 0)
-    return { kind: 'move', t, id, pointer: 'mouse', at, mods, buttons, target: pick(TARGETS), buttonMask }
+    const buttonMask = ROLES.filter(() => random() < 0.3).reduce((mask, role) => mask | (role === 'primary' ? 1 : role === 'secondary' ? 2 : 4), 0)
+    return { kind: 'move', t, id, pointer: 'mouse', at, mods, target: pick(TARGETS), buttonMask }
   }
   if (roll < 0.58) return { kind: 'up', t, id, pointer: 'mouse', role: pick(ROLES), at, mods, target: pick(TARGETS) }
   if (roll < 0.64) return { kind: 'cancel', t, id, reason: pick(['pointercancel', 'lost-capture'] as const) }

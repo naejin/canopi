@@ -9,8 +9,7 @@
 // and `]` turn it (rotate-held commands), and the tool card shows that turn. The pick is the tool's transient: it holds
 // re-origin, it keeps Delete and Ctrl+X from deleting the selection, and Esc drops it first, the card asking for a pick
 // again; with nothing held Esc leaves through the Esc chain's tool layer (spec §3.7). A release and every other
-// cancellation (a blur, K again, overview) hide the ghost until the next hover and keep the pick; a re-origin hides it
-// until the next hover (the host).
+// cancellation (a blur, K again, overview) hide the ghost until the next hover and keep the pick.
 
 import type { CanvasStampGuidance } from '../../session-state'
 import type { SceneDesignObjectTarget } from '../scene/design-object-targets'

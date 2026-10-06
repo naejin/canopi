@@ -8,6 +8,8 @@ vi.mock('../../../ipc/species', () => ({
 }))
 
 import { createSceneInteractionEventHarness } from '../../../__tests__/support/canvas-interaction-events'
+import { clearSavedObjectStampSource, selectSavedObjectStampSource } from '../../saved-object-stamp-source'
+import type { DraftPresentation, DraftShape } from '../tools/draft'
 import { geoAt } from '../../../__tests__/support/geo-design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
 import type { CanopiFile } from '../../../types/design'
@@ -171,6 +173,7 @@ async function createMountedRuntime() {
     runtime,
     container,
     events,
+    renderer,
     dispose() {
       events.dispose()
       runtime.destroy()
@@ -427,6 +430,49 @@ describe('session plane re-origin', () => {
       const saved = runtime.querySurface.getSceneSnapshot().annotations.find((annotation) => annotation.text === 'Gate')!
       expect(next.toGeo(saved.position)).toEqual(geoNear(noteGeo))
     } finally {
+      mounted.dispose()
+    }
+  })
+
+  it('a re-origin with the pointer off the map hides the held stamp\'s ghost until the next hover, which draws it under the pointer in the new plane', async () => {
+    const mounted = await createMountedRuntime()
+    const { runtime, events, renderer } = mounted
+    /** The held stamp's ghost plant in the draft the renderer last drew, or null. */
+    const ghostPlant = () => {
+      const draft = renderer.setDraft.mock.calls.at(-1)?.[0] as DraftPresentation | null | undefined
+      const ghost = (draft?.shapes ?? []).find((shape): shape is Extract<DraftShape, { kind: 'ghost' }> => shape.kind === 'ghost')
+      return ghost?.entity.kind === 'objects' ? ghost.entity.template.plants[0]!.entity : null
+    }
+    try {
+      selectSavedObjectStampSource({
+        version: 2,
+        anchor: { x: 0, y: 0 },
+        plants: [{
+          id: 'plant-1', canonicalName: 'Malus domestica', commonName: 'Apple', color: null, symbol: null,
+          position: { x: 0, y: 0 }, rotationDeg: null, scale: null,
+        }],
+        zones: [],
+        annotations: [],
+        groups: [],
+      })
+      runtime.commandSurface.tools.setTool('saved-object-stamp')
+      events.pointerMove({ x: 250, y: 150 })
+      events.pointerLeave({ x: 450, y: 150 })
+      expect(ghostPlant()).not.toBeNull()
+      const previous = sessionPlane(runtime)
+
+      // The held stamp is no transient: the controller does not hold, and the plane moves to the view centre.
+      centreViewOn(runtime, { x: FAR_EAST_METERS, y: 0 })
+      await settleReorigin()
+      expect(sessionPlane(runtime)).not.toBe(previous)
+      expect(ghostPlant()).toBeNull()
+
+      events.pointerMove({ x: 120, y: 80 })
+      const under = frameOf(runtime).view.screenToWorld({ x: 120, y: 80 })
+      expect(ghostPlant()!.position.x).toBeCloseTo(under.x, 6)
+      expect(ghostPlant()!.position.y).toBeCloseTo(under.y, 6)
+    } finally {
+      clearSavedObjectStampSource()
       mounted.dispose()
     }
   })

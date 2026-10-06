@@ -121,6 +121,28 @@ describe('Select rotation handle', () => {
     h.release({ x: 360, y: 260 }, { shift: true })
   })
 
+  it('a zoom moves the rotation handle with a screen-sized plant at the top of the hull (U40)', () => {
+    const h = harness({
+      scene: {
+        zones: [rectZone('bed', [{ x: 20, y: 80 }, { x: 120, y: 80 }, { x: 120, y: 140 }, { x: 20, y: 140 }])],
+        plants: [plantEntity('apple', 'Malus domestica', { x: 70, y: 60 })],
+      },
+    })
+    h.select({ kind: 'zone', id: 'bed' }, { kind: 'plant', id: 'apple' })
+    const anchor = () => h.chrome.handles.find((entry) => entry.id === ROTATE_HANDLE_ID)!.anchor
+
+    for (const factor of [0.5, 4]) {
+      const before = anchor()
+      h.wheelZoom({ x: 300, y: 250 }, factor)
+      const zoomed = anchor()
+      // The plant's circle keeps its size on screen, so the top of the hull moves on the ground.
+      expect(Math.abs(zoomed.y - before.y)).toBeGreaterThan(0.1)
+      // Where a redraw from scratch puts it.
+      h.host.sceneChanged()
+      expect(anchor()).toEqual(zoomed)
+    }
+  })
+
   describe('on a turned map it sits 28 px above the drawn shapes, not above their world box', () => {
     /** The handle's centre on screen. */
     function handleCentre(h: ToolHarness): ScreenPoint {

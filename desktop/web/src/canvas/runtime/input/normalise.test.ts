@@ -73,14 +73,9 @@ describe('normalise', () => {
     expect(pen(5)).toBeNull()
   })
 
-  it('makes every touch primary and reads move buttons as roles', () => {
+  it('makes every touch primary', () => {
     expect(normalise(event({ type: 'pointerdown', pointerType: 'touch', button: 0 }), WINDOWS, HOST))
       .toMatchObject({ pointer: 'touch', role: 'primary' })
-    const mouseMove = normalise(event({ type: 'pointermove', buttons: 7 }), WINDOWS, HOST)
-    expect(mouseMove?.kind === 'move' ? [...mouseMove.buttons].sort() : null).toEqual(['auxiliary', 'primary', 'secondary'])
-    // A pen's barrel is a secondary button; its eraser (32) is none.
-    const penMove = normalise(event({ type: 'pointermove', pointerType: 'pen', buttons: 34 }), WINDOWS, HOST)
-    expect(penMove?.kind === 'move' ? [...penMove.buttons] : null).toEqual(['secondary'])
   })
 
   it('keeps the pointer id, detail and host-relative point of a press', () => {

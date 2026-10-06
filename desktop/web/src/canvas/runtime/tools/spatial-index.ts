@@ -46,10 +46,7 @@ export function createToolScene(source: ToolSceneSource): ToolScene {
       const target = hit ?? (filter?.fill ? hitTestZoneFill(persisted(), world) : null)
       return target ? { kind: 'object', target } : null
     },
-    hitInQuad(quad: WorldQuad, filter?: HitFilter): readonly HitTarget[] {
-      if (filter?.includeLocked) {
-        throw new Error('ToolScene.hitInQuad has no includeLocked query: today\'s band select skips locked layers.')
-      }
+    hitInQuad(quad: WorldQuad): readonly HitTarget[] {
       return queryQuadTopLevel(
         persisted(),
         quad,

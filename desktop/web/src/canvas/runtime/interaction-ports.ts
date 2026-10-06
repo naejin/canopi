@@ -183,10 +183,9 @@ export interface ToolHost {
   /**
    * Where the pointer is during a pointer-source pan (the router, from the pan's `at`): updates the host's stored resting
    * pointer and re-emits there at once, as each camera frame does, so a draft or a ghost stays under the pointer whatever
-   * the order of the pan's frame and this call. Wheel and key pans leave the resting pointer where it is. null: no pointer
-   * rests on the map.
+   * the order of the pan's frame and this call. Wheel and key pans leave the resting pointer where it is.
    */
-  notePointer(screen: ScreenPoint | null): void
+  notePointer(screen: ScreenPoint): void
   /** Scene or selection changed outside a tool call (select all, undo, menu commands, nudges): refresh handles and decorations. */
   sceneChanged(): void
   /** True while a note's text entry is open. The keyboard port's Space reads it: an open entry, focused or not, arms no
@@ -228,9 +227,9 @@ export interface ToolHost {
    */
   interrupted(): void
   /** Transient history (today's canUndo/…TransientHistory): sends the active tool the 'undo-transient' and 'redo-transient' commands and
-   *  reads its canUndoTransient?/canRedoTransient?; revision bumps after every call into the tool and after a deferred onCommitted. */
+   *  reads its canUndoTransient?/canRedoTransient?. deps.transientHistoryChanged runs after every call into the tool and after a
+   *  deferred onCommitted. */
   readonly transientHistory: {
-    readonly revision: ReadonlySignal<number>
     canUndo(): boolean; canRedo(): boolean; undo(): boolean; redo(): boolean
   }
   prepareForDocumentReplacement(): void                         // deactivate('document-replaced') and drop live sessions

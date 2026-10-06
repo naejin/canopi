@@ -28,12 +28,14 @@ export interface PointHandleSubject<TEntity> {
 export interface PointHandleDrag<TEntity> {
   /** The object as last applied, or null before the pointer passed the threshold. */
   readonly current: TEntity | null
+  /** True once the pointer passed the threshold, at a move or the release, even if it came back: the press was not still. */
+  readonly moved: boolean
   /** True until the Scene Edit is committed or rolled back. */
   readonly open: boolean
   move(point: ToolPoint): void
   /** Applies the release point, then commits a change or rolls back. */
   finish(point: ToolPoint): void
-  /** Rolls the object back; throws, still open, when the abort fails. */
+  /** Rolls the object back. */
   cancel(): void
 }
 
@@ -69,6 +71,9 @@ export function beginPointHandleDrag<TEntity>(
     get current() {
       return current
     },
+    get moved() {
+      return moved
+    },
     get open() {
       return open
     },
@@ -79,7 +84,8 @@ export function beginPointHandleDrag<TEntity>(
     },
     finish(point) {
       if (!open) return
-      if (moved || pastThreshold(point)) apply(point)
+      moved = moved || pastThreshold(point)
+      if (moved) apply(point)
       if (!changed || !tx.changed) {
         abort()
         return

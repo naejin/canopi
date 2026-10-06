@@ -2,7 +2,7 @@
 //
 // Owns the note's text entry (ToolHostDeps.chrome.requestTextEntry, spec §1.4): one textarea over the map, which the host
 // opens for a tool and whose state it reads live (isOpen). One entry for a new note and a note edited in place: drawn at
-// the note's font size and line height in its text's frame, where the note will draw, its text all selected. Enter and a
+// the note's font size and line height where the note will draw, sized by autosize, its text all selected. Enter and a
 // blur hand the text to the tool's submit, which closes the entry or keeps the same field open while its commit is
 // refused; an entry whose blur commit was refused no longer holds focus, so the press or menu that would have blurred it
 // submits it instead (submitUnfocused). Esc is the
@@ -12,7 +12,6 @@
 // listens only on its own textarea (P6).
 
 import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
-import { annotationScreenFrameAt } from '../annotation-layout'
 import type { CanvasFocusPort } from '../app-adapter'
 import type { TextEntryRequest } from '../tools/tool'
 import type { ViewFrame, ViewFrameSource } from '../view/types'
@@ -84,10 +83,7 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
     options.container.appendChild(textarea)
     autosize(entry)
 
-    textarea.addEventListener('input', () => {
-      place(entry, options.frames.viewFrame.peek())
-      autosize(entry)
-    })
+    textarea.addEventListener('input', () => autosize(entry))
     textarea.addEventListener('blur', () => {
       if (active === entry) submitActive()
     })
@@ -186,19 +182,14 @@ function styleEntry({ request, textarea }: OpenEntry): void {
   })
 }
 
-/** At the anchor projected through the frame, in the frame of the text typed so far, turned with the note. */
+/** At the anchor projected through the frame, turned with the note; autosize gives its size. */
 function place({ request, textarea }: OpenEntry, frame: ViewFrame): void {
   const origin = frame.view.worldToScreen(request.anchor)
   const rotationDeg = request.rotationDeg - frame.view.camera.bearingDeg
-  const text = annotationScreenFrameAt(
-    { text: textarea.value, fontSize: noteFontSize(request), rotationDeg },
-    origin,
-  )
   Object.assign(textarea.style, {
-    left: `${text.origin.x}px`,
-    top: `${text.origin.y}px`,
-    minHeight: `${Math.max(text.heightPx + 4, MIN_HEIGHT_PX)}px`,
-    transform: text.rotationDeg === 0 ? '' : `rotate(${text.rotationDeg}deg)`,
+    left: `${origin.x}px`,
+    top: `${origin.y}px`,
+    transform: rotationDeg === 0 ? '' : `rotate(${rotationDeg}deg)`,
   })
 }
 

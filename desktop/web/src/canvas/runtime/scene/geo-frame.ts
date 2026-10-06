@@ -6,14 +6,6 @@ import {
 } from '../../session-plane'
 import type { ScenePersistedState, ScenePoint, SceneZoneEntity } from './types'
 
-export interface SceneGeoFrame {
-  readonly plane: SessionPlane
-}
-
-export function createSceneGeoFrame(origin: GeoPosition): SceneGeoFrame {
-  return { plane: createSessionPlane(origin) }
-}
-
 // The largest 1e-9 degree grid latitude inside Web Mercator's ±85.0511287798066.
 const GRID_MAX_LATITUDE_DEG = 85.051128779
 
@@ -27,18 +19,18 @@ export function roundGeoPosition(point: GeoPosition): GeoPosition {
 
 // --- hydrate: lon/lat -> plane ------------------------------------------------
 
-export function hydrateGeoPoint(frame: SceneGeoFrame, geo: GeoPosition): ScenePoint {
-  return frame.plane.toPlane(geo)
+export function hydrateGeoPoint(plane: SessionPlane, geo: GeoPosition): ScenePoint {
+  return plane.toPlane(geo)
 }
 
 // Ellipses are stored as opposite corners of their unrotated bounding box and
 // held in the runtime as centre + radii.
 export function hydrateGeoEllipse(
-  frame: SceneGeoFrame,
+  plane: SessionPlane,
   corners: readonly [GeoPosition, GeoPosition],
 ): [ScenePoint, ScenePoint] {
-  const first = frame.plane.toPlane(corners[0])
-  const second = frame.plane.toPlane(corners[1])
+  const first = plane.toPlane(corners[0])
+  const second = plane.toPlane(corners[1])
   const center = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 }
   const radii = { x: (second.x - first.x) / 2, y: (second.y - first.y) / 2 }
   return [center, radii]
@@ -46,18 +38,18 @@ export function hydrateGeoEllipse(
 
 // --- serialize: plane -> rounded lon/lat --------------------------------------
 
-export function serializeGeoPoint(frame: SceneGeoFrame, point: ScenePoint): GeoPosition {
-  return roundGeoPosition(frame.plane.toGeo(point))
+export function serializeGeoPoint(plane: SessionPlane, point: ScenePoint): GeoPosition {
+  return roundGeoPosition(plane.toGeo(point))
 }
 
 export function serializeGeoEllipse(
-  frame: SceneGeoFrame,
+  plane: SessionPlane,
   center: ScenePoint,
   radii: ScenePoint,
 ): [GeoPosition, GeoPosition] {
   return [
-    roundGeoPosition(frame.plane.toGeo({ x: center.x - radii.x, y: center.y - radii.y })),
-    roundGeoPosition(frame.plane.toGeo({ x: center.x + radii.x, y: center.y + radii.y })),
+    roundGeoPosition(plane.toGeo({ x: center.x - radii.x, y: center.y - radii.y })),
+    roundGeoPosition(plane.toGeo({ x: center.x + radii.x, y: center.y + radii.y })),
   ]
 }
 
@@ -68,10 +60,10 @@ export function serializeGeoEllipse(
 // applied to every metre holder (scene, history, clipboard) so they stay
 // consistent.
 export class ScenePlaneReprojector {
-  readonly next: SceneGeoFrame
+  readonly next: SessionPlane
 
-  constructor(private readonly previous: SceneGeoFrame, nextOrigin: GeoPosition) {
-    this.next = createSceneGeoFrame(nextOrigin)
+  constructor(private readonly previous: SessionPlane, nextOrigin: GeoPosition) {
+    this.next = createSessionPlane(nextOrigin)
   }
 
   point(point: ScenePoint): ScenePoint {

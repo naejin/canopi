@@ -14,7 +14,7 @@
 // The module re-exports createToolScene and builds the context-menu port, so interaction-session.ts imports nothing else
 // from tools/ (P5b).
 
-import { signal, untracked } from '@preact/signals'
+import { untracked } from '@preact/signals'
 import { CanvasRuntimeCleanupError, runCanvasRuntimeCleanups } from '../cleanup'
 import type { Gesture, MenuSource, PressTarget } from '../input/gestures'
 import type { TargetClass } from '../input/raw-input'
@@ -99,8 +99,6 @@ interface LiveGesture {
   start: ToolPoint
   readonly startHit: HitTarget | null
   readonly handle: ToolHandleId | null
-  /** The press's click count, carried by a handle drag's every phase. */
-  readonly clickCount: number
   /** Where the pointer last was, re-emitted on a camera frame while the drag is live. */
   lastScreen: ScreenPoint
   lastMods: Modifiers
@@ -173,7 +171,6 @@ export function createContextMenuPort(options: ContextMenuPortOptions): ContextM
 }
 
 export function createToolHost(deps: ToolHostDeps): ToolHost {
-  const transientRevision = signal(0)
   const pointerListeners = new Set<(point: PointerWorld | null) => void>()
   /** Transactions a tool began and has not committed or aborted: its Scene Edit is open. */
   const openEdits = new Set<SceneEditTransaction>()
@@ -302,8 +299,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   function afterToolCall(): void {
-    // A write that reads nothing: a deferred commit may settle inside a caller's effect.
-    transientRevision.value = transientRevision.peek() + 1
     deps.transientHistoryChanged()
     flush()
   }
@@ -737,7 +732,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       start,
       startHit,
       handle: target.kind === 'handle' ? target.id : null,
-      clickCount: g.clickCount,
       lastScreen: g.at,
       lastMods: g.mods,
       dragging: false,
@@ -799,7 +793,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const start = gesture.start
     if (gesture.kind === 'handle') {
       const phase = kind === 'drag-end' ? 'end' : 'move'
-      callTool(() => tool.gesture({ kind: 'handle-drag', phase, handle: gesture.handle!, point, start, clickCount: gesture.clickCount }))
+      callTool(() => tool.gesture({ kind: 'handle-drag', phase, handle: gesture.handle!, point, start }))
     } else {
       const reply = callTool(() => tool.gesture({ kind, point, start, startHit: gesture.startHit }))
       // A move the tool passes is none of its press's (Plant a row's missed press, a stamp with nothing held, a polygon
@@ -830,7 +824,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         const point = pointAt(g.at, g.mods, g.pointer, gesture.handle)
         if (gesture.kind === 'handle') {
           callTool(() => tool.gesture({
-            kind: 'handle-drag', phase: 'end', handle: gesture.handle!, point, start: gesture.start, clickCount: gesture.clickCount,
+            kind: 'handle-drag', phase: 'end', handle: gesture.handle!, point, start: gesture.start,
           }))
         } else {
           callTool(() => tool.gesture({ kind: 'tap', point, hit: hitAt(point.world), clickCount: g.clickCount }))
@@ -1335,13 +1329,12 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       if (tool.sourceChanged) callTool(() => tool.sourceChanged!(source))
     },
     rawPress,
-    notePointer(screen: ScreenPoint | null): void {
+    notePointer(screen: ScreenPoint): void {
       if (disposed) return
       // A pan with nothing resting on the map starts nothing. Otherwise the resting pointer moves and is re-emitted at
       // once, and again on each camera frame: the router pans before it notes the pointer, and the driver publishes the
       // pan's frame synchronously, so a draft or a ghost ends under the pointer whichever comes first.
-      if (!screen) lastHover = null
-      else if (lastHover) {
+      if (lastHover) {
         lastHover = { ...lastHover, screen }
         reemit(activeTool)
         flush()
@@ -1370,7 +1363,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       cancelTransientInteraction('navigate')
     },
     transientHistory: {
-      revision: transientRevision,
       canUndo: () => activeTool.canUndoTransient?.() ?? false,
       canRedo: () => activeTool.canRedoTransient?.() ?? false,
       undo: () => stepTransientHistory('undo-transient'),

@@ -243,31 +243,11 @@ describe('polygon corners (spec §3.2, U33: every corner route)', () => {
     })
   })
 
-  it('a pan under a resting pointer recomputes no midpoint dots; a zoom and a turn do', () => {
+  it('a pan under a resting pointer recomputes no midpoint dots', () => {
     const h = polygonHarness()
     h.hover({ x: 300, y: 250 })
     midpointQueries.count = 0
     h.pan({ x: 300, y: 250 }, { x: 320, y: 260 })
-    expect(midpointQueries.count).toBe(0)
-
-    h.wheelZoom({ x: 300, y: 250 }, 1.5)
-    expect(midpointQueries.count).toBeGreaterThan(0)
-    midpointQueries.count = 0
-    h.view.navigation.rotateBy(1)
-    expect(midpointQueries.count).toBeGreaterThan(0)
-  })
-
-  it('a pan after a zoom that kept the same dots recomputes no midpoint dots', () => {
-    const h = polygonHarness()
-    h.hover({ x: 300, y: 250 })
-    const dots = () => h.chrome.handles.filter((entry) => entry.glyph === 'midpoint').map((entry) => entry.id)
-    const dotsBefore = dots()
-    expect(dotsBefore).toHaveLength(4)
-    h.wheelZoom({ x: 300, y: 250 }, 1.1)
-    expect(dots()).toEqual(dotsBefore)
-    midpointQueries.count = 0
-    h.pan({ x: 300, y: 250 }, { x: 320, y: 260 })
-    h.pan({ x: 320, y: 260 }, { x: 340, y: 270 })
     expect(midpointQueries.count).toBe(0)
   })
 
@@ -343,5 +323,20 @@ describe('polygon corners (spec §3.2, U33: every corner route)', () => {
     expect(h.host.command({ kind: 'delete-handle' })).toBe('handled')
     expect(corners(h)).toEqual([SQUARE[0], SQUARE[2], SQUARE[3]])
     expect(h.store.persisted.zones).toHaveLength(1)
+  })
+
+  it('a corner dragged out and back to its press is not selected; only a still press selects it (U40)', () => {
+    const h = polygonHarness()
+    const at = h.chrome.handles.find((entry) => entry.id === vertex(1))!.anchor
+
+    h.press(at, { target: { kind: 'handle', id: vertex(1) } })
+    h.move({ x: at.x + 30, y: at.y })
+    h.move(at)
+    h.release(at)
+
+    expect(corners(h)).toEqual(SQUARE)
+    expect(h.chrome.activeHandle).toBeNull()
+    expect(h.host.command({ kind: 'delete-handle' })).toBe('pass')
+    expect(corners(h)).toEqual(SQUARE)
   })
 })

@@ -1,4 +1,4 @@
-import { signal, type ReadonlySignal } from '@preact/signals'
+import { signal, type ReadonlySignal, type Signal } from '@preact/signals'
 import type {
   CanopiFile,
 } from '../../../types/design'
@@ -13,8 +13,8 @@ import {
   type SceneSerializeOptions,
   serializeScenePersistedState,
 } from './codec'
-import { createSceneGeoFrame, ScenePlaneReprojector, type SceneGeoFrame } from './geo-frame'
-import { DEFAULT_NEW_DESIGN_VIEW, type GeoPosition, type SessionPlane } from '../../session-plane'
+import { ScenePlaneReprojector } from './geo-frame'
+import { createSessionPlane, DEFAULT_NEW_DESIGN_VIEW, type GeoPosition, type SessionPlane } from '../../session-plane'
 import {
   createDefaultScenePersistedState,
   createDefaultSceneSessionState,
@@ -36,36 +36,29 @@ function sceneHasObjects(scene: ScenePersistedState): boolean {
 export class SceneStore {
   private _persisted: ScenePersistedState
   private _session: SceneSessionState
-  private _geo: SceneGeoFrame
-  private readonly _plane = signal<SessionPlane | null>(null)
+  private readonly _plane: Signal<SessionPlane>
   private readonly _resolveEmptyOrigin: () => GeoPosition
 
   /** `emptyOrigin` places the session plane of a Design without objects; a Design loads through hydrate. */
   constructor(emptyOrigin: () => GeoPosition = () => DEFAULT_NEW_DESIGN_VIEW) {
     this._resolveEmptyOrigin = emptyOrigin
     this._persisted = createDefaultScenePersistedState()
-    this._geo = createSceneGeoFrame(this._resolveEmptyOrigin())
+    this._plane = signal(createSessionPlane(this._resolveEmptyOrigin()))
     this._session = createDefaultSceneSessionState()
-    this._plane.value = this._geo.plane
   }
 
   get persisted(): ScenePersistedState {
     return cloneScenePersistedState(this._persisted)
   }
 
-  // The runtime's metre frame for this Design; replaced on hydrate and re-origin.
+  // The runtime's metre frame for this Design, which serialization and re-origin use; replaced on hydrate and re-origin.
   get sessionPlane(): SessionPlane {
-    return this._geo.plane
+    return this._plane.peek()
   }
 
   // Published on hydrate and re-origin for map and LiDAR consumers.
   get sessionPlaneSignal(): ReadonlySignal<SessionPlane | null> {
     return this._plane
-  }
-
-  // The session plane that serialization and re-origin need.
-  get geoFrame(): SceneGeoFrame {
-    return this._geo
   }
 
   /** sceneHasObjects of the Scene, read without copying it. */
@@ -80,9 +73,8 @@ export class SceneStore {
   hydrate(file: CanopiFile): this {
     const hydrated = hydrateSceneFromDesign(file, this._resolveEmptyOrigin())
     this._persisted = hydrated.persisted
-    this._geo = hydrated.geo
     this._session = createDefaultSceneSessionState()
-    this._plane.value = this._geo.plane
+    this._plane.value = hydrated.plane
     return this
   }
 
@@ -91,13 +83,12 @@ export class SceneStore {
    * reprojector.
    */
   beginReorigin(origin: GeoPosition): ScenePlaneReprojector {
-    return new ScenePlaneReprojector(this._geo, origin)
+    return new ScenePlaneReprojector(this.sessionPlane, origin)
   }
 
   commitReorigin(reprojector: ScenePlaneReprojector): this {
     this._persisted = reprojector.persisted(this._persisted)
-    this._geo = reprojector.next
-    this._plane.value = this._geo.plane
+    this._plane.value = reprojector.next
     return this
   }
 
@@ -132,7 +123,7 @@ export class SceneStore {
   }
 
   toCanopiFile(options: SceneSerializeOptions = {}): CanopiFile {
-    return serializeScenePersistedState(this._persisted, this._geo, options)
+    return serializeScenePersistedState(this._persisted, this.sessionPlane, options)
   }
 }
 

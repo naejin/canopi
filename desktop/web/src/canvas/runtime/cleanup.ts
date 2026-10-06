@@ -2,15 +2,20 @@ export function runCanvasRuntimeCleanups(
   cleanups: readonly (() => void)[],
   message: string,
 ): void {
+  throwCanvasRuntimeCleanupErrors(collectCanvasRuntimeErrors(cleanups), message)
+}
+
+/** Runs each step once, in order, and returns what they threw. */
+export function collectCanvasRuntimeErrors(steps: readonly (() => void)[]): unknown[] {
   const errors: unknown[] = []
-  for (const cleanup of cleanups) {
+  for (const step of steps) {
     try {
-      cleanup()
+      step()
     } catch (error) {
       errors.push(error)
     }
   }
-  throwCanvasRuntimeCleanupErrors(errors, message)
+  return errors
 }
 
 export function throwCanvasRuntimeCleanupErrors(
