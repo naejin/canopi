@@ -1,9 +1,9 @@
 // canvas/runtime/tools/polygon.ts
 //
 // Owns the Polygon tool. Each press adds a corner at the snapped point (with Shift the new edge turns to a 45° step from
-// the last corner through the host's constraint, which under LEGACY snaps first, spec §2.3); a press within 8 px of the
-// first corner closes a shape of 3 or more, tested on ToolPoint.free (today's snap(raw)), and Enter finishes it, in one
-// Scene Edit that selects the new zone. Hovers, and the drag after a press, move the rubber band and add nothing. The
+// the last corner through the host's constraint, its length then snapped, spec §2.3); a press within 8 px of the
+// first corner closes a shape of 3 or more, tested on ToolPoint.free, as do the second press of a double-click, Enter and
+// the canvas menu's "Finish shape" (canFinish), in one Scene Edit that selects the new zone. Hovers, and the drag after a press, move the rubber band and add nothing. The
 // first corner clears the selection without an undo step. Backspace and Edit › Undo take the last corner back onto a redo
 // stack (transient history, no Scene Edit); Esc drops the draft and its redo; an interruption ('navigate') keeps them while
 // the draft has corners and drops a redo-only history, as today; overview, a tool change or a document replacement drops
@@ -58,13 +58,14 @@ export function createPolygonTool(): CanvasTool {
     effects.setDraft({ shapes: draftShapes(corners, active, view) })
   }
 
-  function press(point: ToolPoint): void {
+  function press(point: ToolPoint, clickCount: number): void {
     const { scene, effects } = context()
     if (!scene.isLayerOpenForCreation('zones')) {
       drop()
       return
     }
-    if (closesAt(point.free)) {
+    // A press on the first corner, or the second press of a double-click, finishes a shape of 3 or more.
+    if (closesAt(point.free) || (clickCount >= 2 && corners.length >= 3)) {
       finish()
       return
     }
@@ -158,7 +159,7 @@ export function createPolygonTool(): CanvasTool {
     gesture(g: ToolGesture): ToolReply {
       switch (g.kind) {
         case 'press':
-          press(g.point)
+          press(g.point, g.clickCount)
           return 'handled'
         case 'hover':
         case 'drag-start':
@@ -191,6 +192,7 @@ export function createPolygonTool(): CanvasTool {
     viewChanged() {
       if (corners.length > 0) redraw()
     },
+    canFinish: () => corners.length >= 3,
     hasTransient,
     cancelTransient(reason) {
       // An interruption keeps the draft only while it has corners (today's hasPolygonDraft): a redo-only history goes.

@@ -157,7 +157,10 @@ export function createContextMenuPort(options: ContextMenuPortOptions): ContextM
       controller.openAtPointer(
         screen,
         target ? selectionModel() : visible ? EMPTY_SELECTION_MODEL : null,
-        request.turnViewToEdge,
+        {
+          ...(request.finishShape ? { finishShape: request.finishShape } : {}),
+          ...(request.turnViewToEdge ? { turnViewToEdge: request.turnViewToEdge } : {}),
+        },
       )
     },
     close: () => controller.close(),
@@ -1138,8 +1141,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   // ── Menus ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  /** Hit, retarget the selection to the object under the pointer (history-free), then open the menu, with "Turn view to
-   *  this edge" when the pointer is on a zone's edge. */
+  /** Hit, retarget the selection to the object under the pointer (history-free), then open the menu, with "Finish shape"
+   *  when the armed tool can finish its draft and "Turn view to this edge" when the pointer is on a zone's edge. */
   function openMenuAt(at: ScreenPoint, source: MenuSource): void {
     const world = frame().view.screenToWorld(at)
     const { target } = contextMenuTargetAt(deps.scene, world)
@@ -1148,7 +1151,21 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       notifySceneChanged()
     }
     const turnViewToEdge = edgeTurnAt(world, source)
-    deps.menu.open({ at: world, screen: at, ...(turnViewToEdge ? { turnViewToEdge } : {}) })
+    const finishShape = activeTool.canFinish?.() ? finishShapeOf(activeTool) : null
+    deps.menu.open({
+      at: world,
+      screen: at,
+      ...(finishShape ? { finishShape } : {}),
+      ...(turnViewToEdge ? { turnViewToEdge } : {}),
+    })
+  }
+
+  /** "Finish shape" (spec §3.2): the draft's Enter, while the tool that offered it is still armed. */
+  function finishShapeOf(tool: CanvasTool): () => void {
+    return () => {
+      if (disposed || activeTool !== tool) return
+      deps.admission.runWhenSettled(() => callTool(() => tool.command({ kind: 'confirm' })), 'pass' as ToolReply)
+    }
   }
 
   /**

@@ -166,6 +166,7 @@
       "setUnitCost": "単価を設定…",
       "placePlantsHere": "ここに植物を配置",
       "turnViewToEdge": "この辺に合わせてビューを回転",
+      "finishShape": "図形を完成",
       "renameZone": "ゾーン名を変更…"
     },
     "rotationHandle": {

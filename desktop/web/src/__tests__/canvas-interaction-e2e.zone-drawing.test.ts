@@ -25,6 +25,7 @@ import { createTestView, type TestView } from './support/test-view'
 import {
   storedGeo,
   contextMenuCommand,
+  contextMenuItemIds,
   createInteractionDeps,
   createSelectionCommands,
   plantTarget,
@@ -780,6 +781,29 @@ describe('SceneInteractionSession', () => {
       ],
     })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-polygon')
+    session.dispose()
+  })
+
+  it('finishes a polygonal zone with a double-click or the canvas menu\'s first entry, Finish shape', () => {
+    const deps = createInteractionDeps(container, store, testView)
+    const session = createTestSession(deps)
+    session.setTool('polygon')
+
+    events.pointerDown({ x: 10, y: 10 }, { button: 0, detail: 1 })
+    events.pointerDown({ x: 60, y: 10 }, { button: 0, detail: 1 })
+    events.pointerDown({ x: 60, y: 50 }, { button: 0, detail: 1 })
+    events.pointerDown({ x: 60, y: 50 }, { button: 0, detail: 2 })
+    expect(store.persisted.zones).toHaveLength(1)
+    expect(store.persisted.zones[0]!.points).toEqual([{ x: 10, y: 10 }, { x: 60, y: 10 }, { x: 60, y: 50 }])
+
+    events.pointerDown({ x: 110, y: 10 }, { button: 0, detail: 1 })
+    events.pointerDown({ x: 160, y: 10 }, { button: 0, detail: 1 })
+    events.pointerDown({ x: 160, y: 50 }, { button: 0, detail: 1 })
+    openContextMenu({ x: 200, y: 180 })
+    expect(contextMenuItemIds()[0]).toBe('finish-shape')
+    contextMenuCommand('finish-shape').run()
+    expect(store.persisted.zones).toHaveLength(2)
+    expect(store.persisted.zones[1]!.points).toEqual([{ x: 110, y: 10 }, { x: 160, y: 10 }, { x: 160, y: 50 }])
     session.dispose()
   })
 

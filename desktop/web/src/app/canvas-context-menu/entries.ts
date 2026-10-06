@@ -29,6 +29,7 @@ export type CanvasContextMenuItemId =
   | 'set-unit-cost'
   | 'place-plants-here'
   | 'turn-view-to-edge'
+  | 'finish-shape'
 
 export interface CanvasContextMenuCommand {
   readonly id: CanvasContextMenuItemId
@@ -76,7 +77,8 @@ const SEPARATOR = { separator: true } as const
 /**
  * The right-click menu for a request: the selection's commands in plain words
  * with their menu-bar shortcuts, or Paste and Select all on the empty map.
- * Every command runs on the request's scene-edit surface. On a zone's edge,
+ * Every command runs on the request's scene-edit surface. During a polygon
+ * draft that can finish, Finish shape leads every menu. On a zone's edge,
  * Turn view to this edge leads the empty map's menu and comes before Lock in
  * the selection's.
  */
@@ -99,10 +101,21 @@ export function buildCanvasContextMenuEntries(
         run: () => turnViewToEdge(),
       }, SEPARATOR]
     : []
+  // Finish shape (spec §3.2): a polygon draft that can finish leads every menu with it.
+  const finishShape = request.finishShape
+  const finishEntries: readonly CanvasContextMenuEntry[] = finishShape
+    ? [{
+        id: 'finish-shape',
+        label: options.translate('canvas.contextMenu.finishShape'),
+        disabled: false,
+        run: () => finishShape(),
+      }, SEPARATOR]
+    : []
 
   if (!selection) {
     const placePlantsAt = request.placePlantsAt
     return [
+      ...finishEntries,
       ...edgeEntries,
       ...placePlantsAt
         ? [{
@@ -201,6 +214,7 @@ export function buildCanvasContextMenuEntries(
   ]
 
   return [
+    ...finishEntries,
     edit('cut', !can.copy, () => {
       commands.copy()
       commands.deleteSelected()

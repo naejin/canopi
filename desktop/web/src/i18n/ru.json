@@ -166,6 +166,7 @@
       "setUnitCost": "Задать цену за единицу…",
       "placePlantsHere": "Разместить растения здесь",
       "turnViewToEdge": "Повернуть вид по этому краю",
+      "finishShape": "Завершить фигуру",
       "renameZone": "Переименовать зону…"
     },
     "rotationHandle": {

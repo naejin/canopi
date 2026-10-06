@@ -8,6 +8,9 @@ import type { CanvasDesignObjectSelectionModel } from '../runtime'
 import type { ScenePoint } from '../scene'
 import type { ViewTransform, WorldQuad } from '../view/types'
 
+/** The optional entries a pointer menu carries onto its request. */
+export type PointerMenuEntries = Pick<CanvasContextMenuRequest, 'finishShape' | 'turnViewToEdge'>
+
 interface CanvasContextMenuOptions {
   readonly container: HTMLElement
   /** The live frame's view, read when the menu opens. */
@@ -24,9 +27,10 @@ interface CanvasContextMenuOptions {
  * render. The session owns this controller; the app owns the menu's DOM.
  */
 export interface CanvasContextMenuController {
-  /** `screen` is container-relative; `selection` is null on the empty map. `turnViewToEdge`: the pointer is on a zone's
-   *  edge (the request's entry, spec §4.16). */
-  openAtPointer(screen: ScenePoint, selection: CanvasDesignObjectSelectionModel | null, turnViewToEdge?: () => void): void
+  /** `screen` is container-relative; `selection` is null on the empty map. `entries`: the request's optional entries from
+   *  the host, Finish shape (a polygon draft that can finish) and Turn view to this edge (the pointer on a zone's edge,
+   *  spec §4.16). */
+  openAtPointer(screen: ScenePoint, selection: CanvasDesignObjectSelectionModel | null, entries?: PointerMenuEntries): void
   /** Menu key or Shift F10: beside the selection's projected hull (`hull`, the world quad of the screen box of the shapes it
    *  draws, tools/select/selection-hull.ts; tool-host.test.ts "the keyboard menu opens beside a shape drawn level at 45"),
    *  else mid-map (the empty-map menu without a selection). */
@@ -44,7 +48,7 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
     anchor: CanvasContextMenuAnchor,
     world: ScenePoint,
     selection: CanvasDesignObjectSelectionModel | null,
-    turnViewToEdge?: () => void,
+    entries: PointerMenuEntries = {},
   ): void {
     const adapter = options.adapter
     if (!adapter) return
@@ -57,7 +61,8 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
         ? { saveSelectionAsObjectStamp: options.saveSelectionAsObjectStamp }
         : {}),
       ...(options.placePlantsAt ? { placePlantsAt: options.placePlantsAt } : {}),
-      ...(turnViewToEdge ? { turnViewToEdge } : {}),
+      ...(entries.finishShape ? { finishShape: entries.finishShape } : {}),
+      ...(entries.turnViewToEdge ? { turnViewToEdge: entries.turnViewToEdge } : {}),
       returnFocus: options.returnFocus,
       closed: () => {
         if (openRequest === request) openRequest = null
@@ -73,12 +78,12 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
   }
 
   return {
-    openAtPointer(screen, selection, turnViewToEdge) {
+    openAtPointer(screen, selection, entries) {
       const world = options.view().screenToWorld(screen)
       const origin = containerOrigin()
       const x = origin.left + screen.x
       const y = origin.top + screen.y
-      open({ left: x, top: y, right: x, bottom: y }, world, selection, turnViewToEdge)
+      open({ left: x, top: y, right: x, bottom: y }, world, selection, entries)
     },
     openFromKeyboard(selection, hull) {
       const origin = containerOrigin()

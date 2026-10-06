@@ -85,6 +85,7 @@ function build(
     readonly summary?: MapSelectionSummary | null
     readonly characterKeyShortcuts?: boolean
     readonly turnViewToEdge?: () => void
+    readonly finishShape?: () => void
   } = {},
 ) {
   const commands = options.commands ?? createCommands()
@@ -100,6 +101,7 @@ function build(
     ...(options.saveSelectionAsObjectStamp ? { saveSelectionAsObjectStamp: options.saveSelectionAsObjectStamp } : {}),
     placePlantsAt: vi.fn(),
     ...(options.turnViewToEdge ? { turnViewToEdge: options.turnViewToEdge } : {}),
+    ...(options.finishShape ? { finishShape: options.finishShape } : {}),
     returnFocus: options.returnFocus ?? vi.fn(),
   }
   const entries = buildCanvasContextMenuEntries(request, {
@@ -255,6 +257,19 @@ describe('canvas context menu entries', () => {
     // Without an edge under the pointer, neither menu offers it.
     expect(ids(build(null).entries)).not.toContain('turn-view-to-edge')
     expect(ids(build(ONE_ZONE).entries)).not.toContain('turn-view-to-edge')
+  })
+
+  it('Finish shape is the first entry of a polygon draft\'s menu, on the empty map and over a selection', () => {
+    const finishShape = vi.fn()
+
+    const empty = build(null, { finishShape, turnViewToEdge: vi.fn() }).entries
+    expect(ids(empty).slice(0, 4)).toEqual(['finish-shape', '—', 'turn-view-to-edge', '—'])
+    expect(item(empty, 'finish-shape')).toMatchObject({ label: 'Finish shape', disabled: false })
+    item(empty, 'finish-shape').run()
+    expect(finishShape).toHaveBeenCalledOnce()
+
+    expect(ids(build(ONE_ZONE, { finishShape }).entries).slice(0, 2)).toEqual(['finish-shape', '—'])
+    expect(ids(build(null).entries)).not.toContain('finish-shape')
   })
 
   it('keeps inapplicable commands visible but disabled, and running them does nothing', () => {

@@ -228,6 +228,9 @@ export interface CanvasTool {
   /** A camera frame on which the host re-emitted nothing (the pointer off the map): rebuild a draft whose look depends on the
    *  scale, such as the polygon's edge chips hidden below 36 px (today's refreshViewportDependent). */
   viewChanged?(): void
+  /** True when the draft can finish now (a polygon with 3 or more corners): the canvas menu then leads with "Finish
+   *  shape", which sends the tool 'confirm'. */
+  canFinish?(): boolean
   /** True while the tool holds a draft, pick, row source or Place plants' waiting point: Esc drops it first unless
    *  `escapeLeaves`, and it holds re-origin (§4.19). */
   hasTransient(): boolean
