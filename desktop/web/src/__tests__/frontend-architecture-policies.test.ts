@@ -1352,6 +1352,9 @@ const SOURCE_TOMBSTONE_POLICIES = [
       // P11, phase 1 (spec §1.5): the grid and measurement guides draw in the world layers;
       // the Canvas2D scene chrome is gone.
       'src/canvas/runtime/scene-chrome.ts',
+      // P11, phase 3 (A7): touch behaviour is unconditional and the drag slop
+      // is a threshold; the bindings module is gone.
+      'src/canvas/runtime/input/bindings.ts',
     ],
     symbols: [
       {
@@ -1382,6 +1385,23 @@ const SOURCE_TOMBSTONE_POLICIES = [
         // P11, phase 1: the overlay went with scene-chrome.ts (file above).
         from: ['src/**'],
         names: ['SceneChromeOverlay'],
+      },
+      {
+        // P11, phases 2 and 3 (A7): every input binding has its end value, so
+        // the Bindings type, its constant and phase 2's PanContext are gone.
+        from: ['src/**'],
+        names: ['Bindings', 'CURRENT_BINDINGS', 'PanContext'],
+      },
+      {
+        // P11, phase 3 (A7): DomInputSourceDeps and RecogniserConfig take no
+        // bindings. The name is common elsewhere (DuckDB, the import graph), so
+        // the tombstone covers the input pipeline that held the field.
+        from: [
+          'src/canvas/runtime/input/**',
+          'src/canvas/runtime/interaction-ports.ts',
+          'src/canvas/runtime/interaction-session.ts',
+        ],
+        names: ['bindings'],
       },
     ],
   },
@@ -3232,7 +3252,7 @@ describe('canvas v2 policies, end of 0B', () => {
         "focusRegion('map')",
         'export function focusMapSurface() {}',
       ]),
-      plantedSource('src/canvas/runtime/input/planted.test.ts', ['export const bindings = LEGACY_BINDINGS']),
+      plantedSource('src/canvas/runtime/input/planted.test.ts', ['export const legacy = LEGACY_BINDINGS']),
       // The focus owner's method keeps the name: a declaration, an object method and a call on the owner pass.
       plantedSource('src/app/keyboard/focus-owner.ts', [
         "export interface FocusOwner { focusRegion(region: string, reason: string): void }",
@@ -3249,6 +3269,29 @@ describe('canvas v2 policies, end of 0B', () => {
       `${P11} src/canvas/runtime/input/planted.test.ts contains retired symbol LEGACY_BINDINGS`,
       `${P11_FOCUS_REGION_CALL} src/components/plant-db/planted.ts:2 calls focusRegion`,
       `${P11_FOCUS_REGION_EXPORT} src/components/plant-db/planted.ts exports forbidden symbol focusRegion`,
+    ])
+  })
+
+  it('P11 rejects the retired bindings module, Bindings, CURRENT_BINDINGS, PanContext and the input pipeline\'s bindings field', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/input/bindings.ts', ['export const touch = 1']),
+      plantedSource('src/canvas/runtime/input/planted.test.ts', [
+        'export const config: Bindings = CURRENT_BINDINGS',
+        "export type Pan = PanContext",
+      ]),
+      plantedSource('src/canvas/runtime/interaction-ports.ts', [
+        'export interface DomInputSourceDeps { readonly bindings: () => number }',
+      ]),
+      // The name stays free outside the input pipeline.
+      plantedSource('src/__tests__/planted-duckdb.test.ts', ['export const bindings = 1']),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, SOURCE_TOMBSTONE_POLICIES)).toEqual([
+      `${P11} retired source still exists: src/canvas/runtime/input/bindings.ts`,
+      `${P11} src/canvas/runtime/input/planted.test.ts contains retired symbol Bindings`,
+      `${P11} src/canvas/runtime/input/planted.test.ts contains retired symbol CURRENT_BINDINGS`,
+      `${P11} src/canvas/runtime/input/planted.test.ts contains retired symbol PanContext`,
+      `${P11} src/canvas/runtime/interaction-ports.ts contains retired symbol bindings`,
     ])
   })
 
