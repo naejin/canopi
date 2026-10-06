@@ -46,6 +46,8 @@ import {
 const EDGE_DOUBLE_CLICK_PX = 6
 /** A corner released within this many pixels of its press was pressed without moving (the point drag's threshold). */
 const STILL_CORNER_PX = 2
+/** Where Select reads the view's scale, to tell a zoom from a pan. */
+const PLANE_ORIGIN = { x: 0, y: 0 }
 
 /** What the press started, from the press to its release or cancel. */
 type SelectGesture =
@@ -64,8 +66,10 @@ export function createSelectTool(): CanvasTool {
   let editingNoteId: string | null = null
   /** The turn so far while the rotation handle is dragged: its readout, shown while the host shows the handles. */
   let rotationDeltaDeg: number | null = null
-  /** The bearing the handles were placed at: the rotation handle sits above the projected hull, so a turn moves it. */
+  /** The view the handles were placed for: a turn moves the rotation handle above the projected hull, and a zoom changes
+   *  which polygon edges have room for a midpoint dot. */
   let handlesBearingDeg = 0
+  let handlesMetresPerPixel = 0
   let reshapePoints = new Map<ToolHandleId, ZoneControlPoint>()
   let edgeMidpoints = new Map<ToolHandleId, ZoneEdgeMidpoint>()
   let guideEndPoints = new Map<ToolHandleId, GuideEnd>()
@@ -87,12 +91,13 @@ export function createSelectTool(): CanvasTool {
     const pointDrag = gesture?.kind === 'reshape' || gesture?.kind === 'guide-end'
     const rotate = pointDrag ? null : rotateHandle(c.scene, selection, c.view, c.translate, rotationDeltaDeg)
     handlesBearingDeg = c.view.bearingDeg
+    handlesMetresPerPixel = c.view.metresPerPixelAt(PLANE_ORIGIN)
     if (rotate) handles.push(rotate)
     const zone = reshapableZone(scene, selection)
     const points = zone ? zoneControlPoints(zone) : []
     reshapePoints = new Map(points.map((entry) => [entry.id, entry]))
     handles.push(...zoneControlPointHandles(points, c.translate))
-    const midpoints = zone ? zoneEdgeMidpoints(zone) : []
+    const midpoints = zone ? zoneEdgeMidpoints(zone, c.view) : []
     edgeMidpoints = new Map(midpoints.map((entry) => [entry.id, entry]))
     handles.push(...zoneEdgeMidpointHandles(midpoints, c.translate))
     const guide = draggableGuide(scene, selection)
@@ -103,10 +108,12 @@ export function createSelectTool(): CanvasTool {
     c.effects.setHandles(handles, selectedCorner)
   }
 
-  /** A camera frame that turned the view moves the rotation handle; a pan or a zoom leaves it where it is. The host
-   *  re-emits a hover or a live drag on each camera frame, so both follow it. */
-  function followBearing(): void {
-    if (context && context.view.bearingDeg !== handlesBearingDeg) refreshHandles()
+  /** A camera frame that turned or zoomed the view redraws the handles; a pan leaves them as they are. The host re-emits a
+   *  hover or a live drag on each camera frame, so both follow it. */
+  function followView(): void {
+    if (!context) return
+    const { view } = context
+    if (view.bearingDeg !== handlesBearingDeg || view.metresPerPixelAt(PLANE_ORIGIN) !== handlesMetresPerPixel) refreshHandles()
   }
 
   function press(point: ToolPoint, hit: HitTarget | null, clickCount: number): void {
@@ -323,7 +330,7 @@ export function createSelectTool(): CanvasTool {
         case 'drag-move':
           dragTo(g.point)
           // The host re-emits a live drag on a camera frame, not a hover: a key turn mid-band moves the handle too.
-          followBearing()
+          followView()
           // The press stays Select's to its release: no passive hover over its moves.
           return 'handled'
         case 'drag-end':
@@ -340,7 +347,7 @@ export function createSelectTool(): CanvasTool {
           break
         case 'hover':
           // The host re-emits the resting pointer on a camera frame instead of calling viewChanged.
-          followBearing()
+          followView()
           break
         default:
           break
@@ -348,7 +355,7 @@ export function createSelectTool(): CanvasTool {
       return 'pass'
     },
     viewChanged() {
-      followBearing()
+      followView()
     },
     command(c): ToolReply {
       if (c.kind === 'delete-handle') return deleteCorner()

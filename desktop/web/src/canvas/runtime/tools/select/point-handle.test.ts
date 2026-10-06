@@ -191,6 +191,19 @@ describe('polygon corners (spec §3.2, U33: every corner route)', () => {
     expect(rect.chrome.handles.filter((entry) => entry.glyph === 'midpoint')).toEqual([])
   })
 
+  it('an edge shows its dot only with room for it and free outline beside it (52 px on screen); a zoom redraws the dots', () => {
+    // At scale 1 the 40 m edges are 40 px: the corners' 10 px and the dot's 16 px would cover the outline that moves the zone.
+    const h = polygonHarness([{ x: 100, y: 100 }, { x: 140, y: 100 }, { x: 140, y: 160 }, { x: 100, y: 160 }])
+    const dots = () => h.chrome.handles.filter((entry) => entry.glyph === 'midpoint').map((entry) => entry.id)
+    expect(dots()).toEqual([midpoint(1), midpoint(3)])
+
+    h.view.setViewport({ x: 0, y: 0, scale: 2 })
+    expect(dots()).toEqual([midpoint(0), midpoint(1), midpoint(2), midpoint(3)])
+
+    h.view.setViewport({ x: 0, y: 0, scale: 0.5 })
+    expect(dots()).toEqual([])
+  })
+
   it('double-click an edge midpoint adds a corner', () => {
     const h = polygonHarness()
 
@@ -200,7 +213,9 @@ describe('polygon corners (spec §3.2, U33: every corner route)', () => {
     clickHandle(h, midpoint(0), { clickCount: 2 })
     expect(corners(h)).toEqual([SQUARE[0], { x: 150, y: 100 }, SQUARE[1], SQUARE[2], SQUARE[3]])
     expect(h.store.session.selectedTargets).toEqual([POLY])
-    expect(h.chrome.handles.filter((entry) => entry.glyph === 'midpoint')).toHaveLength(5)
+    // The two 50 px halves of the split edge leave no room for a dot.
+    expect(h.chrome.handles.filter((entry) => entry.glyph === 'midpoint').map((entry) => entry.id))
+      .toEqual([midpoint(2), midpoint(3), midpoint(4)])
 
     h.undo()
     expect(corners(h)).toEqual(SQUARE)

@@ -2537,6 +2537,30 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('leaves the short edges of a selected polygon without midpoint dots until a zoom makes room, and draws dots under the corners', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone', locked: false, id: 'polygon-1', name: 'polygon-1', zoneType: 'polygon', rotationDeg: 0,
+        points: [{ x: 20, y: 20 }, { x: 50, y: 20 }, { x: 50, y: 100 }, { x: 20, y: 100 }], fillColor: null, notes: null,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, testView)
+    const session = createTestSession(deps)
+    session.setTool('select')
+    events.pointerDown({ x: 50, y: 60 }, { button: 0 })
+    events.pointerUp({ x: 50, y: 60 }, { button: 0 })
+    const dots = () => [...container.querySelectorAll<HTMLElement>('[data-canvas-handle-glyph="midpoint"]')]
+      .map((dot) => dot.dataset.canvasHandle).sort()
+    expect(dots()).toEqual(['edge-mid:polygon-1:1', 'edge-mid:polygon-1:3'])
+
+    testView.setViewport({ x: 0, y: 0, scale: 2 })
+    expect(dots()).toEqual(['edge-mid:polygon-1:0', 'edge-mid:polygon-1:1', 'edge-mid:polygon-1:2', 'edge-mid:polygon-1:3'])
+    const corner = container.querySelector<HTMLElement>('[data-canvas-handle="vertex:polygon-1:0"]')!
+    const dot = container.querySelector<HTMLElement>('[data-canvas-handle="edge-mid:polygon-1:0"]')!
+    expect(Number(dot.style.zIndex)).toBeLessThan(Number(corner.style.zIndex))
+    session.dispose()
+  })
+
   it('shows selected polygonal zone edge measurements and area', () => {
     store.updatePersisted((draft) => {
       draft.zones = [{

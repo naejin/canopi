@@ -248,6 +248,11 @@ describe('the handle layer', () => {
     expect(dot.tabIndex).toBe(-1)
   })
 
+  it('draws a midpoint dot under the corners, whatever order the handles come in', () => {
+    mount().setHandles([MIDPOINT, VERTEX], null)
+    expect(Number(handle(MIDPOINT.id)!.style.zIndex)).toBeLessThan(Number(handle(VERTEX.id)!.style.zIndex))
+  })
+
   it('corners are tabbable, report the focused one and draw the active one filled', () => {
     const drawn = mount()
     drawn.setHandles([VERTEX, CORNER, ROTATE], id('vertex:zone-1:2'))

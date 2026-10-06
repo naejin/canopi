@@ -4,7 +4,7 @@
 // anchor projected through the view frame plus its screen offset, and moves with every camera frame ('overlays'). The
 // points (zone corners and vertices, guide ends) are a 20 px hit box around an 8 px mark that grows under the pointer,
 // in the tab order, so Delete can reach a focused corner (focusedHandle); a polygon edge's midpoint dot is fainter
-// (opacity 0.5, a 1 px ring: GeoLibre's edge marker) and left out of the tab order. The rotate handle is a 28 px button
+// (opacity 0.5, a 1 px ring: GeoLibre's edge marker), drawn under the corners and left out of the tab order. The rotate handle is a 28 px button
 // kept inside the visible map area, with its key swallow and click stop (INV-LSN-13). A handle's readout shows as a chip
 // under it, and the active handle (the one dragged, or Select's selected corner) is marked and its mark drawn hollow. Presses on a handle are
 // the DOM input source's, which reads data-canvas-handle (input/dom-input-source.ts); the layer listens only on
@@ -40,6 +40,8 @@ const POINT_RING_PX = 2
 const MIDPOINT_RING_PX = 1
 const MIDPOINT_OPACITY = '0.5'
 const POINT_Z_INDEX = 29
+/** Under the corners, so a corner wins where its target meets a dot's. */
+const MIDPOINT_Z_INDEX = 28
 const ROTATE_SIZE_PX = 28
 const ROTATE_Z_INDEX = 27
 /** The rotate button's distance from the visible map area's edge. */
@@ -139,7 +141,7 @@ function drawPoint(handle: ToolHandle): DrawnHandle {
   element.tabIndex = midpoint ? -1 : 0
   Object.assign(element.style, {
     position: 'absolute',
-    zIndex: String(POINT_Z_INDEX),
+    zIndex: String(midpoint ? MIDPOINT_Z_INDEX : POINT_Z_INDEX),
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',

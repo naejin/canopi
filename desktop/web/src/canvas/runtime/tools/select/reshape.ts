@@ -3,8 +3,8 @@
 // Owns the reshape handles of the one selected zone under Select: a line's two ends and a polygon's vertices ('vertex'), a rectangle's four corners ('corner') and an ellipse's four
 // axis ends ('vertex'), as ToolHandle data the host shows through the handle layer, and the geometry of dragging one
 // (a 0.5 m minimum side, a 0.25 m² minimum polygon area). The drag itself is point-handle.ts's, edit type
-// 'interaction-zone-control-point'. A polygon also shows a fainter midpoint dot on each edge ('edge-mid'), and its
-// corners are added and removed here (edit type 'interaction-zone-corner'), keeping at least 3; rectangles, ellipses
+// 'interaction-zone-control-point'. A polygon also shows a fainter midpoint dot on each edge long enough on screen to
+// keep free outline beside it ('edge-mid'), and its corners are added and removed here (edit type 'interaction-zone-corner'), keeping at least 3; rectangles, ellipses
 // and lines keep their own reshape. Each handle's label is translated ('canvas.zoneControlPoint.label',
 // 'canvas.zoneEdgeMidpoint.label').
 
@@ -15,7 +15,7 @@ import type { ScenePersistedState, SceneZoneEntity } from '../../scene/types'
 import type { WorldPoint } from '../../view/types'
 import { getRectangularZoneCorners, polygonArea } from '../../zone-geometry'
 import type { ToolHandle } from '../draft'
-import type { ToolContext } from '../tool'
+import type { ToolContext, ToolView } from '../tool'
 import type { PointHandleSubject } from './point-handle'
 
 export type ZoneControlPointKind =
@@ -41,8 +41,11 @@ const MIN_POLYGON_AREA_M2 = 0.25
 const GEOMETRY_EPSILON = 0.000001
 /** A 20 px target. */
 const POINT_HIT_RADIUS_PX = 10
-/** A midpoint dot's target: a 16 px box around its fainter mark, so the corners beside it win at small edges. */
+/** A midpoint dot's target: a 16 px box around its fainter mark. */
 const MIDPOINT_HIT_RADIUS_PX = 8
+/** The shortest edge on screen that shows its dot: the two corners' targets, the dot's and as much free outline again, so
+ *  a dot never covers a corner and an edge keeps outline that moves the zone (spec §3.2). */
+const MIN_MIDPOINT_EDGE_PX = 2 * POINT_HIT_RADIUS_PX + 4 * MIDPOINT_HIT_RADIUS_PX
 /** A polygon keeps at least this many corners. */
 const MIN_POLYGON_CORNERS = 3
 const CORNER_EDIT = 'interaction-zone-corner'
@@ -104,15 +107,15 @@ export interface ZoneEdgeMidpoint {
   readonly world: WorldPoint
 }
 
-/** A polygon's edge midpoints, edge i running from corner i to the next; none for other zones. */
-export function zoneEdgeMidpoints(zone: SceneZoneEntity): ZoneEdgeMidpoint[] {
+/** A polygon's edge midpoints in `view`, edge i running from corner i to the next, each on an edge of at least
+ *  MIN_MIDPOINT_EDGE_PX on screen; none for other zones. */
+export function zoneEdgeMidpoints(zone: SceneZoneEntity, view: Pick<ToolView, 'screenDistance'>): ZoneEdgeMidpoint[] {
   if (zone.zoneType !== 'polygon' || zone.points.length < MIN_POLYGON_CORNERS) return []
-  return zone.points.map((start, edgeIndex) => ({
-    id: `edge-mid:${zone.id}:${edgeIndex}` as ToolHandleId,
-    zoneId: zone.id,
-    edgeIndex,
-    world: midpoint(start, zone.points[(edgeIndex + 1) % zone.points.length]!),
-  }))
+  return zone.points.flatMap((start, edgeIndex) => {
+    const end = zone.points[(edgeIndex + 1) % zone.points.length]!
+    if (view.screenDistance(start, end) < MIN_MIDPOINT_EDGE_PX) return []
+    return [{ id: `edge-mid:${zone.id}:${edgeIndex}` as ToolHandleId, zoneId: zone.id, edgeIndex, world: midpoint(start, end) }]
+  })
 }
 
 /** The handles the host draws for `midpoints`. */
