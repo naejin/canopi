@@ -23,7 +23,6 @@ function menus(): MenuDefinition[] {
           disabled: false,
           items: [action('pdf'), action('geojson')],
         },
-        { type: 'label', label: 'More' },
         action('quit', { disabled: true }),
       ],
     },
@@ -100,7 +99,6 @@ describe('MenuBar keyboard and semantics', () => {
     expect(file.querySelector('[data-command-id="new"]')!.textContent).toBe('newCtrl N')
     expect(file.querySelector('[data-command-id="new"]')!.getAttribute('aria-keyshortcuts')).toBe('Control+N Meta+N')
     expect(file.querySelector('[role="separator"]')).not.toBeNull()
-    expect(file.querySelector('[role="presentation"]')?.textContent).toBe('More')
     // No checkable items in File: no check column.
     expect(file.querySelector('[data-command-id="new"] > span')!.className).toContain('itemLabel')
 
@@ -175,7 +173,7 @@ describe('MenuBar keyboard and semantics', () => {
     const quit = openMenu()!.querySelector<HTMLButtonElement>('[data-command-id="quit"]')!
     expect(quit.getAttribute('aria-disabled')).toBe('true')
     await act(async () => { quit.click() })
-    expect((items[0]!.items[4] as MenuAction).action).not.toHaveBeenCalled()
+    expect((items[0]!.items[3] as MenuAction).action).not.toHaveBeenCalled()
     expect(openMenu()).not.toBeNull()
 
     await act(async () => { openMenu()!.querySelector<HTMLButtonElement>('[data-command-id="new"]')!.click() })

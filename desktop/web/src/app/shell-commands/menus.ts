@@ -50,16 +50,11 @@ interface MenuSubmenu {
   readonly items: readonly MenuAction[]
 }
 
-interface MenuLabel {
-  readonly type: 'label'
-  readonly label: string
-}
-
 interface MenuSeparator {
   readonly type: 'separator'
 }
 
-export type MenuEntry = MenuAction | MenuLabel | MenuSeparator | MenuSubmenu
+export type MenuEntry = MenuAction | MenuSeparator | MenuSubmenu
 
 export interface MenuDefinition {
   readonly id: WorkspaceMenuId

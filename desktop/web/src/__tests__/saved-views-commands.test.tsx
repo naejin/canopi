@@ -108,7 +108,7 @@ function savedViewsSubmenu(entries: readonly MenuEntry[]) {
 
 function savedViewSection(entries: readonly MenuEntry[]): string[] {
   const start = entries.findIndex((item) => item.type === 'submenu' && item.id === 'view.savedViews')
-  return entries.slice(start - 1, start + 3).map((item) => item.type === 'separator' ? '—' : item.type === 'label' ? item.label : item.id)
+  return entries.slice(start - 1, start + 3).map((item) => item.type === 'separator' ? '—' : item.id)
 }
 
 function desktopViewMenu(): readonly MenuEntry[] {
