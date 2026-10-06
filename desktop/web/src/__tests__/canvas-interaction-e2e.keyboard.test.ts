@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { t } from '../i18n'
 import { modKeyName } from '../app/shell-commands/shortcut-text'
 import { SceneStore } from '../canvas/runtime/scene'
+import { currentCanvasSelection } from '../canvas/session-state'
 import type {
   SceneInteractionSession,
   SceneInteractionSessionDeps,
@@ -14,6 +15,7 @@ import { createRecordingRenderer } from './support/recording-renderer'
 import type { SceneInteractionEventHarness } from './support/canvas-interaction-events'
 import type { TestView } from './support/test-view'
 import {
+  contextMenuCommand,
   contextMenuHost,
   createInteractionDeps,
   plantTarget,
@@ -35,7 +37,7 @@ describe('SceneInteractionSession', () => {
   let store: SceneStore
   let events: SceneInteractionEventHarness
 
-  const { createTestSession, spacingInput } = installSceneInteractionFixture(
+  const { createTestSession, spacingInput, openContextMenu, keyCommands } = installSceneInteractionFixture(
     (f) => {
       ({ container, testView, store, events } = f)
     },
@@ -353,6 +355,22 @@ describe('SceneInteractionSession', () => {
       session.dispose()
     })
 
+    it('in overview Esc clears the selection and leaves the tool armed (A20)', () => {
+      store.updatePersisted((draft) => {
+        draft.zones = [makeRectZone('zone-1', [{ x: 20, y: 20 }, { x: 80, y: 20 }, { x: 80, y: 60 }, { x: 20, y: 60 }])]
+      })
+      const { session, deps, tools } = sessionWithToolLog()
+      session.setTool('rectangle')
+      enterOverview(testView)
+      deps.setSelection([zoneTarget('zone-1')])
+      container.focus()
+
+      expect(escapeOnMap().defaultPrevented).toBe(true)
+      expect(deps.clearSelection).toHaveBeenCalledOnce()
+      expect(tools).not.toContain('select')
+      session.dispose()
+    })
+
     it('cancels a polygon draft first, then returns to Select', () => {
       const { session, tools } = sessionWithToolLog()
       session.setTool('polygon')
@@ -408,6 +426,64 @@ describe('SceneInteractionSession', () => {
       expect(tools).not.toContain('select')
       escapeOnMap()
       expect(tools.at(-1)).toBe('select')
+      session.dispose()
+    })
+  })
+
+  describe('key admission (canopi-f47t.21)', () => {
+    const DELETES = ['canvas.deleteSelected', 'canvas.cut']
+    const deletesRun = () => keyCommands.mock.calls.map(([command]) => command).filter((command) => DELETES.includes(command))
+    /** Delete and Ctrl+X, and Backspace unless the armed tool takes it (Polygon removes its last corner). */
+    const pressDeletes = (target: HTMLElement, backspace = true) => {
+      events.keyDown({ key: 'Delete', target })
+      if (backspace) events.keyDown({ key: 'Backspace', target })
+      events.keyDown({ key: 'x', code: 'KeyX', ctrlKey: true, target })
+    }
+
+    it('Delete and Ctrl+X delete nothing while a polygon draft has two corners, from the map or a map control', () => {
+      store.updatePersisted((draft) => {
+        draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 200, y: 200 })]
+      })
+      const deps = createInteractionDeps(container, store, testView)
+      const session = createTestSession(deps)
+      session.setTool('polygon')
+      container.focus()
+      events.pointerDown({ x: 20, y: 20 })
+      events.pointerUp({ x: 20, y: 20 })
+      events.pointerDown({ x: 80, y: 20 })
+      events.pointerUp({ x: 80, y: 20 })
+      deps.setSelection([plantTarget('plant-1')])
+
+      pressDeletes(container, false)
+      const control = document.createElement('button')
+      container.appendChild(control)
+      control.focus()
+      pressDeletes(control, false)
+      expect(deletesRun()).toEqual([])
+      expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
+
+      // Esc drops the draft: the selection deletes again.
+      events.keyDown({ key: 'Escape', target: container })
+      events.keyDown({ key: 'Delete', target: container })
+      expect(deletesRun()).toEqual(['canvas.deleteSelected'])
+      control.remove()
+      session.dispose()
+    })
+
+    it('Delete deletes nothing while Place plants\' point waits', () => {
+      store.updatePersisted((draft) => {
+        draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 200, y: 200 })]
+      })
+      const deps = createInteractionDeps(container, store, testView, { setTool: (name: string) => { session.setTool(name as 'plant-stamp') } })
+      const session: SceneInteractionSession = createTestSession(deps)
+      deps.setSelection([plantTarget('plant-1')])
+      openContextMenu({ x: 30, y: 30 })
+      contextMenuCommand('place-plants-here').run()
+      expect(session.tool).toBe('plant-stamp')
+      container.focus()
+
+      pressDeletes(container)
+      expect(deletesRun()).toEqual([])
       session.dispose()
     })
   })

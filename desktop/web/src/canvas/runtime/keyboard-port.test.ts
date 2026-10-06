@@ -41,12 +41,14 @@ interface Fixture {
   live: boolean
   space: boolean
   transient: boolean
+  /** A tool transient that is no Esc layer (Place plants' waiting point): it holds re-origin only. */
+  waiting: boolean
   port: ReturnType<typeof createCanvasKeyboardPort>
 }
 
 function fixture(options: { readonly tool?: ToolId; readonly reply?: (c: ToolCommand) => ToolReply } = {}): Fixture {
   const tool = signal<ToolId>(options.tool ?? 'select')
-  const state = { selected: false, nudging: false, live: false, space: false, transient: false }
+  const state = { selected: false, nudging: false, live: false, space: false, transient: false, waiting: false }
   const toolHost = {
     nudge: vi.fn((): 'handled' | 'refused' | 'pass' => 'pass'),
     command: vi.fn(options.reply ?? ((): ToolReply => 'pass')),
@@ -61,6 +63,7 @@ function fixture(options: { readonly tool?: ToolId; readonly reply?: (c: ToolCom
     hasNudgeSeries: () => state.nudging,
     activeToolIsSelect: () => tool.peek() === 'select',
     activeToolHasEscapeTransient: () => state.transient,
+    holdsReorigin: () => state.transient || state.waiting,
     textEntryOpen: () => false,
   } as unknown as ToolHost
   const session = {
@@ -94,6 +97,8 @@ function fixture(options: { readonly tool?: ToolId; readonly reply?: (c: ToolCom
     set space(value: boolean) { state.space = value },
     get transient() { return state.transient },
     set transient(value: boolean) { state.transient = value },
+    get waiting() { return state.waiting },
+    set waiting(value: boolean) { state.waiting = value },
     port: undefined as unknown as ReturnType<typeof createCanvasKeyboardPort>,
   }
   result.port = createCanvasKeyboardPort({
@@ -117,7 +122,6 @@ function keyState(
     type: 'keydown',
     key: '',
     code: '',
-    timeStamp: 0,
     text: false,
     onCanvas: true,
     ...init,
@@ -280,18 +284,34 @@ describe('createCanvasKeyboardPort', () => {
     expect(keyState(f.port, { type: 'keyup', key: 'a' })).toBe('pass-live')
   })
 
-  it('in overview only a live or interrupted gesture is an Esc layer, and Space still holds', () => {
+  it('holds the selection\'s deletes while a pointer session or a tool transient lives, Place plants\' waiting point included (canopi-f47t.21)', () => {
     const f = fixture({ tool: 'polygon' })
-    f.selected = true
+    expect(f.port.holdsSelectionDeletes()).toBe(false)
+    f.transient = true
+    expect(f.port.holdsSelectionDeletes()).toBe(true)
+    f.transient = false
+    // A waiting point is no Esc layer, and still holds them.
+    f.waiting = true
+    expect(f.port.escapeLayers()).not.toContain('tool-transient')
+    expect(f.port.holdsSelectionDeletes()).toBe(true)
+    f.waiting = false
+    f.live = true
+    expect(f.port.holdsSelectionDeletes()).toBe(true)
+  })
+
+  it('in overview a live or interrupted gesture, then the selection, are the Esc layers, and Space still holds', () => {
+    const f = fixture({ tool: 'polygon' })
     f.transient = true
     f.session.overview = vi.fn(() => true)
     // Nothing to cancel: no canvas layer, so the Esc falls through to the raster inspection's.
     expect(f.port.escapeLayers()).toEqual([])
+    f.selected = true
+    expect(f.port.escapeLayers()).toEqual(['selection'])
     f.nudging = true
-    expect(f.port.escapeLayers()).toEqual(['gesture'])
+    expect(f.port.escapeLayers()).toEqual(['gesture', 'selection'])
     f.nudging = false
     f.live = true
-    expect(f.port.escapeLayers()).toEqual(['gesture'])
+    expect(f.port.escapeLayers()).toEqual(['gesture', 'selection'])
     f.port.escape('gesture')
     expect(f.session.escapeGesture).toHaveBeenCalledTimes(1)
     expect(f.toolHost.interrupted).toHaveBeenCalledTimes(1)
@@ -299,23 +319,13 @@ describe('createCanvasKeyboardPort', () => {
     expect(keyState(f.port, { key: ' ', code: 'Space' })).toBe('held')
   })
 
-  it('the Menu key and Shift F10 open the selection\'s menu through the host and record the echo time', () => {
+  it('the Menu key and Shift F10 open the selection\'s menu through the host, never during a pointer session', () => {
     const f = fixture()
-    keyState(f.port, { key: 'ContextMenu', timeStamp: 120 })
     expect(f.port.command({ kind: 'context-menu' })).toBe(true)
     expect(f.toolHost.menuAt).toHaveBeenCalledExactlyOnceWith('selection', 'keyboard')
-    expect(f.port.lastKeyboardMenuAt()).toBe(120)
-    keyState(f.port, { key: 'F10', mods: { shift: true }, timeStamp: 240 })
-    f.port.command({ kind: 'context-menu' })
-    expect(f.toolHost.menuAt).toHaveBeenCalledTimes(2)
-    expect(f.port.lastKeyboardMenuAt()).toBe(240)
-    // A menu opened after another key records no echo time.
-    keyState(f.port, { key: 'a', timeStamp: 360 })
-    f.port.command({ kind: 'context-menu' })
-    expect(f.port.lastKeyboardMenuAt()).toBe(240)
     f.live = true
     expect(f.port.command({ kind: 'context-menu' })).toBe(false)
-    expect(f.toolHost.menuAt).toHaveBeenCalledTimes(3)
+    expect(f.toolHost.menuAt).toHaveBeenCalledOnce()
   })
 
   it('Enter confirms, then edits the selected note under Select; F2 only edits it', () => {

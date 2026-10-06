@@ -1,5 +1,11 @@
 import { signal, type Signal } from '@preact/signals'
+import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createTestCanvasDocumentSurface, createTestCanvasRuntimeSurfaces } from '../../__tests__/support/canvas-runtime-surfaces'
+import type { CanvasInspectionHandle } from '../../canvas/inspection'
+import { setCurrentCanvasSession } from '../../canvas/session'
+import { InspectionLens } from '../../components/canvas/InspectionLens'
 import type { CanvasEscapeLayer, CanvasKeyboardPort, CanvasKeyCommand, CanvasKeyState, CanvasKeyVerdict } from '../../canvas/runtime/runtime'
 import { installKeyRouter, type KeyRouterDeps, type KeyRouterHandle } from './key-router'
 import { CANVAS_KEYMAP_ROWS, pushKeyScope, type KeymapRow } from './keymap'
@@ -10,6 +16,8 @@ function fakePort(host: HTMLElement) {
     verdict: 'pass' as CanvasKeyVerdict,
     layers: [] as CanvasEscapeLayer[],
     command: (_c: CanvasKeyCommand): boolean => true,
+    /** A pointer session or a tool transient holds the selection's deletes. */
+    holdsDeletes: false,
   }
   const port = {
     host,
@@ -17,6 +25,7 @@ function fakePort(host: HTMLElement) {
     command: vi.fn((c: CanvasKeyCommand) => state.command(c)),
     escapeLayers: vi.fn(() => state.layers),
     escape: vi.fn((_layer: CanvasEscapeLayer) => {}),
+    holdsSelectionDeletes: () => state.holdsDeletes,
   } satisfies CanvasKeyboardPort
   return { port, state }
 }
@@ -609,6 +618,42 @@ describe('key router', () => {
     expect(run).not.toHaveBeenCalled()
   })
 
+  it('opening the lens from a focused launcher hands focus to the map, so ArrowUp nudges and Esc clears (canopi-f47t.24)', async () => {
+    install()
+    const root = document.createElement('div')
+    document.body.append(root)
+    const view = {
+      state: signal(null), sourceQuad: signal(null), inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(),
+      centerOnCanvas: vi.fn(), panByScreen: vi.fn(), zoomBy: vi.fn(), highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
+    } as unknown as CanvasInspectionHandle
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      documents: createTestCanvasDocumentSurface({ attachInspectionTo: () => view }),
+    }))
+    try {
+      await act(async () => render(h(InspectionLens, { canvasRef: { current: host } }), root))
+      // A real press on the launcher (outside the map host) focuses it, as WebView2, WebKitGTK and Tab-then-Enter do;
+      // the launcher hides as the lens opens, so the map host must take focus or the keys reach neither map nor lens.
+      const launcher = root.querySelector<HTMLButtonElement>('button[aria-expanded]')!
+      launcher.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+      launcher.focus()
+      await act(async () => launcher.click())
+      expect(root.querySelector('[data-inspection-frame]')).not.toBeNull()
+      expect(document.activeElement).toBe(host)
+      fake.state.command = (c) => c.kind === 'arrow'
+      fake.state.layers = ['selection']
+
+      press({ key: 'ArrowUp' }, document.activeElement!)
+      expect(fake.port.command).toHaveBeenCalledExactlyOnceWith({ kind: 'arrow', dir: 'up', large: false })
+      expect(view.panByScreen).not.toHaveBeenCalled()
+      press({ key: 'Escape' }, document.activeElement!)
+      expect(fake.port.escape).toHaveBeenCalledExactlyOnceWith('selection')
+      expect(root.querySelector('[data-inspection-frame]')).not.toBeNull()
+    } finally {
+      await act(async () => render(null, root))
+      setCurrentCanvasSession(null)
+    }
+  })
+
   it('F2 falls through to the shell when the map has no note to edit (H27)', () => {
     install()
     host.focus()
@@ -687,6 +732,7 @@ describe('key router', () => {
     host.focus()
     fake.state.verdict = 'pass-live'
     fake.state.layers = ['gesture', 'selection']
+    fake.state.holdsDeletes = true
     fake.state.command = () => false
     // A still drag or twist is live: the deletion would wait for it to settle and land after the release.
     expect(press({ key: 'Backspace' }, host).defaultPrevented).toBe(true)
@@ -701,10 +747,37 @@ describe('key router', () => {
 
     fake.state.verdict = 'pass'
     fake.state.layers = ['selection']
+    fake.state.holdsDeletes = false
     fake.state.command = () => false
     press({ key: 'Backspace' }, host)
     press({ key: 'Delete' }, host)
     expect(run.mock.calls.map(([command]) => command)).toEqual(['canvas.deleteSelected', 'canvas.deleteSelected'])
+  })
+
+  it('Delete, Backspace\'s fallback and Ctrl+X delete nothing during a polygon draft, from the map or a map control (canopi-f47t.21)', () => {
+    install()
+    const zoomIn = document.createElement('button')
+    document.body.append(zoomIn)
+    host.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    // A Polygon draft with two corners and a selection: no pointer is pressed, the tool holds a transient.
+    fake.state.holdsDeletes = true
+    fake.state.layers = ['tool-transient', 'tool', 'selection']
+    fake.state.command = () => false
+    host.focus()
+    expect(press({ key: 'Delete' }, host).defaultPrevented).toBe(true)
+    expect(press({ key: 'Backspace' }, host).defaultPrevented).toBe(true)
+    expect(press({ key: 'x', code: 'KeyX', ctrlKey: true }, host).defaultPrevented).toBe(true)
+    zoomIn.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    zoomIn.focus()
+    expect(press({ key: 'Delete' }, zoomIn).defaultPrevented).toBe(true)
+    expect(press({ key: 'x', code: 'KeyX', ctrlKey: true }, zoomIn).defaultPrevented).toBe(true)
+    expect(run).not.toHaveBeenCalled()
+
+    // Once the draft ends, the selection deletes again.
+    fake.state.holdsDeletes = false
+    fake.state.layers = ['selection']
+    press({ key: 'Delete' }, zoomIn)
+    expect(run.mock.calls.map(([command]) => command)).toEqual(['canvas.deleteSelected'])
   })
 
   it('Ctrl+X cuts nothing while a pointer session is live, and cuts once it settles', () => {
@@ -712,6 +785,7 @@ describe('key router', () => {
     host.focus()
     fake.state.verdict = 'pass-live'
     fake.state.layers = ['gesture', 'selection']
+    fake.state.holdsDeletes = true
     fake.state.command = () => false
     // Cut deletes the selection too: the deletion would wait for the session to settle and land after the release.
     expect(press({ key: 'x', code: 'KeyX', ctrlKey: true }, host).defaultPrevented).toBe(true)
@@ -719,6 +793,7 @@ describe('key router', () => {
 
     fake.state.verdict = 'pass'
     fake.state.layers = ['selection']
+    fake.state.holdsDeletes = false
     press({ key: 'x', code: 'KeyX', ctrlKey: true }, host)
     expect(run.mock.calls.map(([command]) => command)).toEqual(['canvas.cut'])
   })

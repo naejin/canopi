@@ -333,13 +333,17 @@ export interface CanvasKeyboardPort {
   /** Runs a live layer; app/keyboard/escape-chain.ts decides which, from the focus. */
   escape(layer: CanvasEscapeLayer): void
   /** False when nothing consumed it. confirm, remove-last, rotate-held, edit-text and context-menu return false in overview;
-   *  edit-text only under Select, and confirm under Select edits the one selected note (Enter). context-menu stamps the
-   *  keyboard-menu echo with the time keyState recorded for a Menu key or Shift+F10, only when that was the last keydown. */
+   *  edit-text only under Select, and confirm under Select edits the one selected note (Enter). */
   command(c: CanvasKeyCommand): boolean
   /** The key router's first call for every keydown (capture) and keyup: the nudge commit on any key but an arrow, a
-   *  modifier or Esc, the Menu key's time and the Space hold (code Space, not text, and a live pointer
+   *  modifier or Esc, and the Space hold (code Space, not text, and a live pointer
    *  session or not a control). The verdict tells the router what to do; the port never touches the event. */
   keyState(k: CanvasKeyState): CanvasKeyVerdict
+  /** A key that deletes the selection (Delete, Backspace's fallback, Ctrl+X) runs nothing while this holds (U33,
+   *  canopi-f47t.21): a live pointer session, or a tool transient (a draft, a Plant a row source, Place plants' waiting
+   *  point, a held stamp pick; the re-origin hold's, an open note entry included). Absent: nothing holds them (a port
+   *  before an interaction session exists). */
+  holdsSelectionDeletes?(): boolean
   readonly host: HTMLElement
 }
 export interface CanvasKeyState {
@@ -347,7 +351,6 @@ export interface CanvasKeyState {
   readonly key: string             // arrows, modifiers and Escape keep a nudge series
   readonly code: string            // 'Space'
   readonly mods: Modifiers
-  readonly timeStamp: number       // KeyboardEvent.timeStamp: the clock of the contextmenu echo
   readonly text: boolean           // the target is a text field
   readonly onCanvas: boolean       // focus is the map host (not a control in it) or nothing (app/keyboard/target-class.ts)
 }

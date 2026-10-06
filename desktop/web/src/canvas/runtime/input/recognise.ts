@@ -6,30 +6,31 @@
 // raw-input.ts and recognise.ts import each other's types with `import type` only (no runtime cycle).
 //
 // It implements the input of CURRENT_BINDINGS (spec §2.2 and §5): one pointer session at a time;
-// the right button inert and the native contextmenu opening the menu at once (except in overview and for a keyboard
-// menu's echo); a middle drag, a Space press, overview and the Pan tool pan (a primary press on a handle drags the handle
-// first), a pointer pan carrying the pointer's point and a Pan-tool press ending with cancel('navigate') after its drag;
-// a Shift+middle drag rotating about its press once it passes 3 px (silent before, so a still click turns nothing), stepped
-// while mod is held, with the wheel ignored while it lives; a button-less move over owned chrome, the text entry or a
-// handle ends the hover; wheels zoom or pan by the pointing-device setting; a WebKit trackpad twist rotating past 10° as
-// a session of its own; no touch gestures or pen barrel.
-// The other binding values arrive in later phases: the secondary drag and the menu on release in phase 2, touch gestures
-// and the long press in phase 3.
+// a secondary press (the right button, a Mac Control-click, a pen's barrel) pending until it passes 3 px: a still release
+// opens the menu at the release point (none in overview), a drag pans, and with Shift at the press it turns the view,
+// stepped while mod is held; no native contextmenu reaches it (the DOM source's listener prevents them); a middle drag, a
+// press with Space held (on a handle too) and the Pan tool's primary drag pan, a pointer pan carrying the pointer's point
+// and a Pan-tool press ending with cancel('navigate') after its drag; a primary press in overview reaching the host; a Shift+middle drag rotating about its press once it passes 3 px (silent
+// before, so a still click turns nothing), stepped while mod is held, with the wheel ignored while a pointer rotate lives;
+// a button-less move over owned chrome, the text entry or a handle ends the hover; wheels zoom or pan by the
+// pointing-device setting; a WebKit trackpad twist rotating past 10° as a session of its own; no touch gestures or pen
+// barrel. Touch gestures and the long press arrive in phase 3.
 
 import type { CancelReason, Modifiers, PointerKind } from '../interaction-types'
 import { ROTATE_DEG_PER_PX } from '../view/navigation-policy'
 import type { ScreenPoint } from '../view/types'
 import type { Gesture, NavigationSource, PressTarget } from './gestures'
-import type { InputPlatform } from './platform'
+import { modKeyIsCmd, type InputPlatform } from './platform'
 import type { AdapterEffect, ButtonRole, RawInput, RecogniserConfig, RecogniserState } from './raw-input'
 
 export interface PointerSession {
   readonly pointerId: number
   readonly pointer: PointerKind
   readonly role: ButtonRole
-  /** 'pending' is a primary press within slop; 'primary' a primary drag past it; 'pan' a navigation pan; 'rotate' a
-   *  rotate, which turns the view only once `slopPassed` (until then it is pending and silent). */
-  readonly mode: 'pending' | 'primary' | 'pan' | 'rotate' | 'ignored'
+  /** 'pending' is a primary press within slop; 'secondary' a secondary press within 3 px (a menu on release, a pan past
+   *  it); 'primary' a primary drag past slop; 'pan' a navigation pan; 'rotate' a rotate, which turns the view only once
+   *  `slopPassed` (until then it is pending and silent, and a secondary one still opens the menu on release). */
+  readonly mode: 'pending' | 'secondary' | 'primary' | 'pan' | 'rotate'
   readonly start: ScreenPoint
   readonly last: ScreenPoint
   readonly slopPassed: boolean
@@ -39,8 +40,11 @@ export interface PointerSession {
   /** True when a `press` reached the host, which owes it one end: a `tap` within slop, else `cancel('navigate')` for a pan
    *  (the Pan tool's press). */
   readonly pressed: boolean
-  /** The platform's pointerdown `detail`, as delivered (never counted here under LEGACY). */
+  /** The platform's pointerdown `detail`, as delivered (never counted here). */
   readonly clickCount: number
+  /** The PointerEvent.buttons bit of the button the press holds: the primary one for a consumed Mac Control press. A
+   *  navigation or still secondary session whose move lacks it lost its release (spec §2.2 "Drag end"). */
+  readonly buttonBit: number
 }
 
 export interface TouchPair {
@@ -54,10 +58,13 @@ export interface TouchPair {
 const ZERO: ScreenPoint = Object.freeze({ x: 0, y: 0 })
 /** Wheel zoom: today's exp(clamp(−dy × 0.002, ±1)) per event. */
 const WHEEL_ZOOM_PER_PX = 0.002
-/** A pointer rotate starts past this travel from its press (MapLibre's clickTolerance); a tool's own slop never applies. */
-const ROTATE_SLOP_PX = 3
+/** A secondary press, and a pointer rotate, start past this travel from the press (MapLibre's clickTolerance); a tool's
+ *  own slop never applies. */
+const NAVIGATION_SLOP_PX = 3
 /** The session id of a WebKit trackpad twist, which has no pointer: browsers number pointers from 0. */
 const TRACKPAD_TWIST_ID = -1
+/** PointerEvent.buttons bits. */
+const BUTTON_BITS: Readonly<Record<ButtonRole, number>> = Object.freeze({ primary: 1, secondary: 2, auxiliary: 4 })
 
 export function initialRecogniserState(): RecogniserState {
   return {
@@ -65,7 +72,7 @@ export function initialRecogniserState(): RecogniserState {
     touchPair: null,
     held: { space: false },
     trackpadTwistDeg: 0,
-    deadlines: { longPressAt: null, menuEchoUntil: null, windowsTrailUntil: null, lastSecondaryEndAt: null },
+    deadlines: { longPressAt: null },
     context: { tool: 'select', mode: 'site', pointingDevice: 'mouse' },
   }
 }
@@ -83,7 +90,7 @@ export function recognise(
 ): { readonly state: RecogniserState; readonly gestures: readonly Gesture[]; readonly effects: readonly AdapterEffect[] } {
   const step: Step = { state, gestures: [], effects: [] }
   switch (input.kind) {
-    case 'down': down(step, input, config); break
+    case 'down': down(step, input); break
     case 'move': move(step, input, config); break
     case 'up': up(step, input, config); break
     case 'cancel': cancel(step, input); break
@@ -99,7 +106,6 @@ export function recognise(
       break
     case 'configure': configure(step, input.context); break
     case 'wheel': wheel(step, input); break
-    case 'native-contextmenu': nativeContextMenu(step, input); break
     case 'drop':
       // Dragover and drop are always default-prevented (the drop target); dragleave is only observed.
       if (input.phase !== 'leave') step.effects.push({ kind: 'prevent-default' })
@@ -110,7 +116,7 @@ export function recognise(
       // The session ends the nudge series (ToolHost.endNudgeSeries); no pointer state changes.
       break
     case 'tick':
-      // Deadlines (the long press, phase 3) are all null under LEGACY.
+      // The one deadline (the long press) is phase 3's; it stays null until then.
       break
   }
   return { state: step.state, gestures: step.gestures, effects: step.effects }
@@ -118,9 +124,7 @@ export function recognise(
 
 type RawOf<K extends RawInput['kind']> = Extract<RawInput, { kind: K }>
 
-function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void {
-  // Secondary under 'menu-on-native': the button is inert; the native contextmenu opens the menu (phase 2 adds the drag).
-  if (input.role === 'secondary') return
+function down(step: Step, input: RawOf<'down'>): void {
   // The note editor, the canvas's own buttons and fields, and anything outside the map keep their own presses.
   if (input.target.kind === 'owned-text' || input.target.kind === 'owned-chrome' || input.target.kind === 'foreign') return
 
@@ -130,7 +134,6 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
   // A down for a live pointer id: its up was lost. End that session first.
   if (live) endSession(step, live, 'pointercancel')
 
-  const { bindings } = config
   const { context, held } = step.state
   const base = {
     pointerId: input.id,
@@ -140,12 +143,20 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
     last: input.at,
     slopPassed: false,
     clickCount: input.detail,
+    buttonBit: input.ctrlConsumed ? BUTTON_BITS.primary : BUTTON_BITS[input.role],
   } as const
 
   const pressTarget: PressTarget = input.target.kind === 'handle' ? { kind: 'handle', id: input.target.id } : { kind: 'surface' }
-  const panIn = (panContext: 'hand-tool' | 'overview'): boolean => bindings.primaryDragPansIn.includes(panContext)
 
-  if (input.role === 'auxiliary' && input.mods.shift && bindings.auxiliaryShiftDrag === 'rotate') {
+  if (input.role === 'secondary') {
+    // Pending and silent until it passes 3 px, in every tool and in overview: a still release opens the menu, a drag
+    // pans, or turns the view when Shift was held at the press (only Shift at the press decides; spec §2.2).
+    step.effects.push({ kind: 'prevent-default' }, { kind: 'capture', pointerId: input.id })
+    putSession(step, { ...base, mode: input.mods.shift ? 'rotate' : 'secondary', captured: true, navigation: 'secondary-drag', pressed: false })
+    return
+  }
+
+  if (input.role === 'auxiliary' && input.mods.shift) {
     // Shift+middle (checked before overview, fixture G9c): a pending rotate, silent until it passes its slop, so a still
     // click turns nothing (G9b). Shift at the press decides the mode for the whole session.
     step.effects.push({ kind: 'prevent-default' }, { kind: 'capture', pointerId: input.id })
@@ -153,23 +164,21 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
     return
   }
 
+  // A primary press reaches the host in overview too (its band selects zones and notes, spec §1.4 "Overview").
   let navigation: NavigationSource | null = null
   let pressed = true
-  if (context.mode === 'overview' && (input.role === 'auxiliary' || panIn('overview'))) {
-    // Legacy overview: a left or plain middle press pans the map, whatever is under it; a pan never reaches the host.
-    navigation = input.role === 'auxiliary' ? 'auxiliary-drag' : 'primary-drag'
-    pressed = false
-  } else if (input.role === 'primary' && pressTarget.kind === 'handle') {
-    // Handles first: before Space and the Pan tool (today's order; fixture G3b).
-  } else if (input.role === 'auxiliary') {
+  if (input.role === 'auxiliary') {
     // A plain middle drag pans; a middle tap does nothing.
     navigation = 'auxiliary-drag'
     pressed = false
   } else if (held.space) {
+    // Space at the press pans, a press on a handle included (fixture G3b).
     navigation = 'space-drag'
     pressed = false
-  } else if (context.tool === 'hand' && panIn('hand-tool')) {
-    // The Pan tool: the drag pans, and the press and tap still reach the host.
+  } else if (pressTarget.kind === 'handle') {
+    // A handle drags before the Pan tool pans (today's order).
+  } else if (context.tool === 'hand') {
+    // The Pan tool, in overview too: the drag pans, and the press and tap still reach the host.
     navigation = 'primary-drag'
   }
 
@@ -194,12 +203,29 @@ function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void 
     return
   }
 
-  // A button added or dropped mid-session changes nothing (the session keeps its mode until its up).
+  // A navigation or still secondary session whose move lacks its button lost its release (MapLibre's isValidMoveEvent):
+  // it ends as a release would, then the host hears the press end. A primary session waits for the next down instead,
+  // so a Mac Control-drag is never cut short (spec §2.2 "Drag end").
+  if (session.mode !== 'pending' && session.mode !== 'primary' && (input.buttonMask & session.buttonBit) === 0) {
+    endWithLostRelease(step, session)
+    return
+  }
+  // Any other button added or dropped mid-session changes nothing (the session keeps its mode until its up).
   if (session.mode === 'rotate') {
     rotateMove(step, session, input, config.platform)
     return
   }
   const slopPassed = session.slopPassed || passesSlop(session, input.at, config)
+  if (session.mode === 'secondary') {
+    if (Math.hypot(input.at.x - session.start.x, input.at.y - session.start.y) < NAVIGATION_SLOP_PX) return
+    // Past the slop the pan starts at the press, and its first move carries the whole travel so far.
+    putSession(step, { ...session, mode: 'pan', last: input.at, slopPassed: true })
+    step.gestures.push(
+      { kind: 'pan', phase: 'start', deltaPx: ZERO, source: 'secondary-drag', at: session.start },
+      { kind: 'pan', phase: 'move', deltaPx: { x: input.at.x - session.start.x, y: input.at.y - session.start.y }, source: 'secondary-drag', at: input.at },
+    )
+    return
+  }
   if (session.mode === 'pan') {
     const deltaPx = { x: input.at.x - session.last.x, y: input.at.y - session.last.y }
     putSession(step, { ...session, last: input.at, slopPassed })
@@ -224,6 +250,11 @@ function up(step: Step, input: RawOf<'up'>, config: RecogniserConfig): void {
   const session = step.state.sessions.get(input.id)
   if (!session) return
   dropSession(step, session)
+  if (session.role === 'secondary' && !session.slopPassed) {
+    // A still secondary click: the menu at the release point (convention), Shift or not; overview has none.
+    if (step.state.context.mode !== 'overview') step.gestures.push({ kind: 'menu-request', at: input.at, source: 'mouse' })
+    return
+  }
   if (session.mode === 'rotate') {
     // A rotate that never passed its slop ends as it began: silently.
     if (session.slopPassed) step.gestures.push(rotateOf(session, 'end', session.last, stepsRotate(input.mods, config.platform)))
@@ -329,17 +360,6 @@ function hover(step: Step, input: RawOf<'move'>): void {
   step.gestures.push({ kind: 'hover', at: input.at, pointer: input.pointer, mods: input.mods, target })
 }
 
-function nativeContextMenu(step: Step, input: RawOf<'native-contextmenu'>): void {
-  // The note editor and anything outside the map keep the native menu (copy and paste).
-  if (input.target.kind === 'owned-text' || input.target.kind === 'foreign') return
-  step.effects.push({ kind: 'prevent-default' })
-  if (step.state.context.mode === 'overview') return
-  // The Menu key already opened the menu from keydown; its trailing event is the echo.
-  if (input.fromKeyboard || input.at === null) return
-  // Even during a primary session (today: the menu opens unless a Scene Edit is live, which the host decides).
-  step.gestures.push({ kind: 'menu-request', at: input.at, source: 'native' })
-}
-
 /** −0 (a negated zero delta) reads as 0, so a pan's delta compares equal to the plain vector. */
 function withoutNegativeZero(point: ScreenPoint): ScreenPoint {
   return { x: point.x === 0 ? 0 : point.x, y: point.y === 0 ? 0 : point.y }
@@ -391,6 +411,7 @@ function platformGesture(step: Step, input: RawOf<'platform-gesture'>, config: R
       navigation: 'trackpad-twist',
       pressed: false,
       clickCount: 0,
+      buttonBit: 0,
     })
     step.state = { ...step.state, trackpadTwistDeg: 0 }
     return
@@ -422,7 +443,7 @@ function twistOf(session: PointerSession, phase: 'start' | 'move' | 'end', total
  */
 function rotateMove(step: Step, session: PointerSession, input: RawOf<'move'>, platform: InputPlatform): void {
   const starting = !session.slopPassed
-  if (starting && Math.hypot(input.at.x - session.start.x, input.at.y - session.start.y) < ROTATE_SLOP_PX) return
+  if (starting && Math.hypot(input.at.x - session.start.x, input.at.y - session.start.y) < NAVIGATION_SLOP_PX) return
   const live = { ...session, last: input.at, slopPassed: true }
   putSession(step, live)
   const stepped = stepsRotate(input.mods, platform)
@@ -449,9 +470,9 @@ function rotateOf(session: PointerSession, phase: 'start' | 'move' | 'end' | 'ca
   }
 }
 
-/** mod steps a rotate: Cmd on Apple platforms, where Ctrl never steps; Ctrl elsewhere. */
+/** mod steps a rotate: Cmd where mod is Cmd (Ctrl never steps there), Ctrl elsewhere. */
 function stepsRotate(mods: Modifiers, platform: InputPlatform): boolean {
-  return platform.os === 'mac' || platform.os === 'ios' ? mods.meta : mods.ctrl
+  return modKeyIsCmd(platform) ? mods.meta : mods.ctrl
 }
 
 function pointerRotateLive(state: RecogniserState): boolean {
@@ -479,6 +500,15 @@ function endSession(step: Step, session: PointerSession, reason: CancelReason): 
   // The router restores the camera the rotate started from; the input router does not cancel it on a plain cancel.
   if (session.mode === 'rotate' && session.slopPassed) step.gestures.push(rotateOf(session, 'cancel', session.last, false))
   step.gestures.push({ kind: 'cancel', reason })
+}
+
+/** A navigation or still secondary session whose release was lost: a pan ends where it is and a turn ends kept, never
+ *  restored; no menu opens; then cancel('pointercancel') ends any press of the host's (the Pan tool's). */
+function endWithLostRelease(step: Step, session: PointerSession): void {
+  dropSession(step, session)
+  if (session.mode === 'pan' && session.navigation) step.gestures.push(panEndOf(session))
+  if (session.mode === 'rotate' && session.slopPassed) step.gestures.push(rotateOf(session, 'end', session.last, false))
+  step.gestures.push({ kind: 'cancel', reason: 'pointercancel' })
 }
 
 function endLiveSessions(step: Step, reason: CancelReason): void {

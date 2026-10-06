@@ -2,8 +2,7 @@
 //
 // Owns the only window key listeners (spec §1.6, ADR 0020; policy P8): keydown in capture and bubble, keyup in capture.
 // A key that is part of an IME composition runs nothing (WebKit sends the composition's Enter with keyCode 229).
-// Capture hands every other key to the canvas keyboard port first (keyState: the nudge commit, the Menu key's time, the
-// Space hold), cycles the F6 regions and, while a drag or nudge series is live, runs the Esc chain before
+// Capture hands every other key to the canvas keyboard port first (keyState: the nudge commit, the Space hold), cycles the F6 regions and, while a drag or nudge series is live, runs the Esc chain before
 // any element handler (app/keyboard/escape-chain.ts). It also keeps the keys held down and lets every one go (a keyup to
 // the port) when Meta comes up, on a window blur and on a visibility change: macOS drops the keyup of any key released
 // while Cmd is down, so Meta's keyup releases every held key. Bubble skips a key an element handler already took, then
@@ -56,12 +55,12 @@ export function installKeyRouter(deps: KeyRouterDeps): KeyRouterHandle {
     classifyKeyTarget(event.target, port?.host ?? null, deps.isModalOpen(), last)
   /** The keys down now, by code: what a lost keyup would leave held in the port. */
   const held = new Map<string, string>()
-  const letGo = (timeStamp: number): void => {
+  const letGo = (): void => {
     const keys = [...held]
     held.clear()
     const port = deps.canvas()
     if (!port) return
-    for (const [code, key] of keys) port.keyState(releasedKey(key, code, timeStamp))
+    for (const [code, key] of keys) port.keyState(releasedKey(key, code))
   }
   // The listeners are registered for keydown and keyup only, so a KeyboardEvent here is a KeyboardEventLike.
   const onKeyDownCapture = (event: KeyboardEvent): void => {
@@ -75,9 +74,9 @@ export function installKeyRouter(deps: KeyRouterDeps): KeyRouterHandle {
     held.delete(event.code || event.key)
     const port = deps.canvas()
     if (port) port.keyState(keyState(event as KeyboardEventLike, 'keyup', at(port, event as KeyboardEventLike)))
-    if (event.key === 'Meta') letGo(event.timeStamp)
+    if (event.key === 'Meta') letGo()
   }
-  const onLeave = (event: Event): void => letGo(event.timeStamp)
+  const onLeave = (): void => letGo()
   const onPressOrFocus = (event: Event): void => {
     const host = deps.canvas()?.host
     last = {
@@ -247,11 +246,12 @@ const DELETES_SELECTION: ReadonlySet<ShellCommandId | CanvasCommandId> = new Set
   'canvas.cut',
 ])
 
-/** A sink command from a key. A command that deletes the selection is consumed and runs nothing while a pointer
- *  session is live (a still drag, twist or rotate included): it would wait for the session to settle and land after
- *  the release. */
+/** A sink command from a key. A command that deletes the selection is consumed and runs nothing while the canvas holds
+ *  it (U33, canopi-f47t.21): a live pointer session (a still drag, twist or rotate included), whose deletion would wait
+ *  for it to settle and land after the release, or a tool transient (a draft, a row source, Place plants' waiting point,
+ *  a held stamp pick). From any focus, since a canvas row's fallback passes here too. */
 function runSink(deps: KeyRouterDeps, port: CanvasKeyboardPort | null, command: ShellCommandId | CanvasCommandId): boolean {
-  if (DELETES_SELECTION.has(command) && (port?.escapeLayers().includes('gesture') ?? false)) return true
+  if (DELETES_SELECTION.has(command) && (port?.holdsSelectionDeletes?.() ?? false)) return true
   return deps.commands.run(command)
 }
 
@@ -261,13 +261,12 @@ function consume(event: KeyboardEventLike): void {
 }
 
 /** A keyup the browser never sent, for a key held when Meta came up or the window lost the keys. */
-function releasedKey(key: string, code: string, timeStamp: number): CanvasKeyState {
+function releasedKey(key: string, code: string): CanvasKeyState {
   return {
     type: 'keyup',
     key,
     code,
     mods: { shift: false, ctrl: false, alt: false, meta: false },
-    timeStamp,
     text: false,
     onCanvas: false,
   }
@@ -279,7 +278,6 @@ function keyState(event: KeyboardEventLike, type: CanvasKeyState['type'], at: Ke
     key: event.key,
     code: event.code,
     mods: { shift: event.shiftKey, ctrl: event.ctrlKey, alt: event.altKey, meta: event.metaKey },
-    timeStamp: event.timeStamp,
     text: at.text,
     // Space holds from the map and with nothing focused, wherever the last press landed (spec §1.6, step 3).
     onCanvas: at.focus === 'map' || at.unfocused,

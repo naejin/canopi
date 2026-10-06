@@ -79,7 +79,6 @@ describe('createDomInputSource', () => {
       ['pointermove', false],
       ['pointerleave', false],
       ['lostpointercapture', false],
-      ['contextmenu', false],
       ['wheel', false],
       ['dragover', false],
       ['dragleave', false],
@@ -92,7 +91,8 @@ describe('createDomInputSource', () => {
     ])
     expect(hostAdds.find(([type]) => type === 'wheel')?.[2]).toEqual({ passive: false })
     expect(listenerCalls(spies.windowAdd).map(([type, , options]) => [type, captureFlag(options)])).toEqual([['blur', false]])
-    expect(listenerCalls(spies.documentAdd)).toEqual([])
+    // The one contextmenu listener: at document capture, so a menu retargeted off the map is heard too.
+    expect(listenerCalls(spies.documentAdd).map(([type, , options]) => [type, captureFlag(options)])).toEqual([['contextmenu', true]])
     // A press on the map owns its pointer: the window listeners follow it, and detach removes them with the rest.
     events.pointerDown({ x: 10, y: 10 })
     expect(listenerCalls(spies.windowAdd).map(([type, , options]) => [type, captureFlag(options)])).toEqual([
@@ -119,12 +119,12 @@ describe('createDomInputSource', () => {
     for (const spy of Object.values(spies)) spy.mockRestore()
   })
 
-  it('installs no key listener (the key router owns them) and nothing on the document', () => {
+  it('installs no key listener (the key router owns them), and only the contextmenu listener on the document', () => {
     const windowAdd = vi.spyOn(window, 'addEventListener')
     const documentAdd = vi.spyOn(document, 'addEventListener')
     const dispose = attachRecording(createDomInputSource(deps()))
     expect(listenerCalls(windowAdd).map(([type]) => type)).toEqual(['blur'])
-    expect(listenerCalls(documentAdd)).toEqual([])
+    expect(listenerCalls(documentAdd).map(([type]) => type)).toEqual(['contextmenu'])
     dispose()
     windowAdd.mockRestore()
     documentAdd.mockRestore()
@@ -141,7 +141,7 @@ describe('createDomInputSource', () => {
     const hostRemove = vi.spyOn(host, 'removeEventListener')
 
     expect(() => createDomInputSource(deps()).attach(() => {})).toThrow(failure)
-    expect(listenerCalls(hostRemove).map(([type]) => type)).toEqual(['pointerdown', 'pointermove', 'pointerleave', 'lostpointercapture', 'contextmenu'])
+    expect(listenerCalls(hostRemove).map(([type]) => type)).toEqual(['pointerdown', 'pointermove', 'pointerleave', 'lostpointercapture'])
     expect(listenerCalls(windowRemove).map(([type]) => type)).toEqual(['blur'])
     for (const spy of [hostAdd, windowRemove, hostRemove]) spy.mockRestore()
   })
@@ -417,39 +417,110 @@ describe('createDomInputSource', () => {
     dispose()
   })
 
-  it('marks a contextmenu inside the keyboard menu\'s echo window as fromKeyboard', () => {
-    let lastKeyboardMenuAt: number | null = null
-    const dispose = attachRecording(createDomInputSource(deps({
-      keys: { lastKeyboardMenuAt: () => lastKeyboardMenuAt },
-    })))
-    const openMenu = (): void => {
-      host.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 30, clientY: 40 }))
+  describe('the native contextmenu (spec §2.2 "Native menu"; U34)', () => {
+    /** A contextmenu at an event time, as the browser sends it after a press, a release or a key. */
+    function contextMenu(target: EventTarget, timeStamp: number): MouseEvent {
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: 30, clientY: 40 })
+      Object.defineProperty(event, 'timeStamp', { value: timeStamp })
+      target.dispatchEvent(event)
+      return event
     }
 
-    openMenu()
-    const at = received[0]!.t
-    lastKeyboardMenuAt = at - 100
-    openMenu()
-    lastKeyboardMenuAt = at - 1000
-    openMenu()
+    function pointer(type: 'pointerdown' | 'pointerup', target: EventTarget, timeStamp: number, init: MouseEventInit = {}): void {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: 30, clientY: 40, ...init })
+      Object.defineProperties(event, {
+        pointerId: { value: 1 }, pointerType: { value: 'mouse' }, timeStamp: { value: timeStamp },
+      })
+      target.dispatchEvent(event)
+    }
 
-    expect(received.map((input) => input.kind === 'native-contextmenu' && input.fromKeyboard)).toEqual([false, true, false])
-    expect(received[0]).toMatchObject({ at: { x: 20, y: 20 } })
-    dispose()
+    it('C5, C1: over the map, with no press (a pen press-and-hold, VO+Shift+M, the Menu key\'s own), it is prevented and opens nothing', () => {
+      const handle = document.createElement('div')
+      handle.setAttribute('data-canvas-handle', 'rotate')
+      host.append(handle)
+      const dispose = attachRecording(createDomInputSource(deps()))
+      expect(contextMenu(host, 10).defaultPrevented).toBe(true)
+      expect(contextMenu(handle, 20).defaultPrevented).toBe(true)
+      expect(received).toEqual([])
+      dispose()
+    })
+
+    it('A15, C4: the note editor and the map\'s fields keep their native menu in all three orderings, and outside the map it is the page\'s', () => {
+      const editor = document.createElement('div')
+      editor.setAttribute('data-canvas-text-entry', '')
+      const text = document.createElement('textarea')
+      editor.append(text)
+      const field = document.createElement('input')
+      host.append(editor, field)
+      const panel = document.createElement('div')
+      document.body.append(panel)
+      const linux = attachRecording(createDomInputSource(deps()))
+      for (const target of [text, field]) {
+        // Linux and macOS: the menu at the press.
+        pointer('pointerdown', target, 100, { button: 2, buttons: 2 })
+        expect(contextMenu(target, 101).defaultPrevented).toBe(false)
+        pointer('pointerup', target, 102, { button: 2 })
+        // Windows: the menu after the release.
+        pointer('pointerdown', target, 200, { button: 2, buttons: 2 })
+        pointer('pointerup', target, 201, { button: 2 })
+        expect(contextMenu(target, 260).defaultPrevented).toBe(false)
+      }
+      expect(contextMenu(panel, 300).defaultPrevented).toBe(false)
+      linux()
+      // Mac Control-click: the press is secondary, the menu at the press.
+      const mac = attachRecording(createDomInputSource(deps({ platform: { os: 'mac', gestureEvents: true } })))
+      pointer('pointerdown', text, 400, { button: 0, buttons: 1, ctrlKey: true })
+      expect(contextMenu(text, 401).defaultPrevented).toBe(false)
+      pointer('pointerup', text, 402, { button: 0, ctrlKey: true })
+      mac()
+      panel.remove()
+    })
+
+    it('A8, A11: anywhere while a canvas press is held, and within 500 ms of a secondary release, the menu is prevented', () => {
+      const menu = document.createElement('div')
+      menu.setAttribute('role', 'menu')
+      document.body.append(menu)
+      const dispose = attachRecording(createDomInputSource(deps()))
+      // A11: a right press during a left drag, whose menu (Linux, at the press) lands wherever the pointer is.
+      pointer('pointerdown', host, 100, { button: 0, buttons: 1 })
+      expect(contextMenu(document.documentElement, 150).defaultPrevented).toBe(true)
+      pointer('pointerup', document.body, 200, { button: 0 })
+      // A primary release leaves no trail: the page's own menu opens off the map.
+      expect(contextMenu(menu, 250).defaultPrevented).toBe(false)
+      // A8: the WebView2 trail after a right release, retargeted to <html> or to the menu just opened.
+      pointer('pointerdown', host, 1000, { button: 2, buttons: 2 })
+      pointer('pointerup', document.body, 1100, { button: 2 })
+      expect(contextMenu(document.documentElement, 1166).defaultPrevented).toBe(true)
+      expect(contextMenu(menu, 1599).defaultPrevented).toBe(true)
+      expect(contextMenu(menu, 1600).defaultPrevented).toBe(false)
+      expect(received.map((input) => input.kind)).toEqual(['down', 'up', 'down', 'up'])
+      menu.remove()
+      dispose()
+    })
+
+    it('B7: a Mac Control press on the map is secondary: its menu at the press is prevented, and its trail after the release', () => {
+      const dispose = attachRecording(createDomInputSource(deps({ platform: { os: 'mac', gestureEvents: true } })))
+      pointer('pointerdown', host, 100, { button: 0, buttons: 1, ctrlKey: true })
+      expect(contextMenu(host, 101).defaultPrevented).toBe(true)
+      pointer('pointerup', document.body, 300, { button: 0, ctrlKey: true })
+      expect(contextMenu(document.body, 320).defaultPrevented).toBe(true)
+      expect(received[0]).toMatchObject({ kind: 'down', role: 'secondary', ctrlConsumed: true })
+      dispose()
+    })
   })
 
   it('a quarantine outcome prevents and stops the event', () => {
     const source = createDomInputSource(deps())
     const dispose = attachRecording(source, () => source.apply(outcomeEffects([], { quarantine: true })))
     const downstream = vi.fn()
-    host.addEventListener('contextmenu', downstream)
+    host.addEventListener('drop', downstream)
 
-    const menu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
-    host.dispatchEvent(menu)
+    const drop = new Event('drop', { bubbles: true, cancelable: true })
+    host.dispatchEvent(drop)
 
-    expect(menu.defaultPrevented).toBe(true)
+    expect(drop.defaultPrevented).toBe(true)
     expect(downstream).not.toHaveBeenCalled()
-    host.removeEventListener('contextmenu', downstream)
+    host.removeEventListener('drop', downstream)
     dispose()
   })
 
@@ -579,8 +650,9 @@ describe('createDomInputSource', () => {
       dispose()
     }
 
-    // The one rule: rethrow on every event kind; only a press on the map host (covered above) is quarantined.
-    expect(errors).toEqual(Array(11).fill(failure))
+    // The one rule: rethrow on every event kind; only a press on the map host (covered above) is quarantined. The
+    // contextmenu reaches no sink: the source's own listener prevents it over the map.
+    expect(errors).toEqual(Array(10).fill(failure))
     expect(heard).toEqual([
       'pointermove:false',
       'pointercancel:false',
@@ -588,7 +660,7 @@ describe('createDomInputSource', () => {
       'wheel:false',
       'pointerup:false',
       'blur:false',
-      'contextmenu:false',
+      'contextmenu:true',
       'dragover:false',
       'drop:false',
     ])
@@ -709,18 +781,15 @@ describe('createDomInputSource', () => {
     dispose()
   })
 
-  it('gesture listeners attach only with trackpad gestures on WebKit, copy the rotation, prevent the default and detach', () => {
+  it('gesture listeners attach only on WebKit, copy the rotation, prevent the default and detach', () => {
     const MAC_WEBKIT = { os: 'mac', gestureEvents: true } as const
     const GESTURE_TYPES = ['gesturestart', 'gesturechange', 'gestureend']
     const gestureListeners = (spy: { mock: { calls: unknown[][] } }) =>
       listenerCalls(spy).map(([type]) => type).filter((type) => GESTURE_TYPES.includes(type))
-    const without: Bindings = { ...CURRENT_BINDINGS, trackpadGestures: false }
-    for (const [platform, bindings] of [[PLATFORM, CURRENT_BINDINGS], [MAC_WEBKIT, without]] as const) {
-      const add = vi.spyOn(host, 'addEventListener')
-      createDomInputSource(deps({ platform, bindings: () => bindings })).attach(() => {})()
-      expect(gestureListeners(add)).toEqual([])
-      add.mockRestore()
-    }
+    const elsewhere = vi.spyOn(host, 'addEventListener')
+    createDomInputSource(deps({ platform: PLATFORM })).attach(() => {})()
+    expect(gestureListeners(elsewhere)).toEqual([])
+    elsewhere.mockRestore()
 
     const add = vi.spyOn(host, 'addEventListener')
     const remove = vi.spyOn(host, 'removeEventListener')
@@ -760,7 +829,7 @@ describe('createDomInputSource', () => {
     remove.mockRestore()
   })
 
-  it('a twist that starts over the text entry or owned chrome, or while the text entry is open, is prevented and never delivered', () => {
+  it('a twist that starts over the text entry or owned chrome is prevented and never delivered; over the map it turns the view, the entry open or not (P31)', () => {
     const MAC_WEBKIT = { os: 'mac', gestureEvents: true } as const
     const config: RecogniserConfig = { ...RECOGNISER_CONFIG, platform: MAC_WEBKIT }
     let state = initialRecogniserState()
@@ -790,63 +859,18 @@ describe('createDomInputSource', () => {
     entry.setAttribute('data-canvas-text-entry', 'create')
     host.append(surface, chrome, entry)
 
-    // Over the entry, over owned chrome, and over the map while the entry is open (spec §3.8: no canvas turn is live).
-    const ignored = [...twist(entry), ...twist(chrome), ...twist(surface)]
+    // Over the entry and over owned chrome: the page never zooms or turns, and nothing reaches the recogniser.
+    const ignored = [...twist(entry), ...twist(chrome)]
     expect(received).toEqual([])
     expect(turns).toEqual([])
     expect(ignored.every((event) => event.defaultPrevented)).toBe(true)
 
-    // Once the entry closes, a twist over the map turns the view again.
+    // Over the map the view turns with the entry open (the entry follows its note), and after it closes.
+    twist(surface)
     entry.remove()
     twist(surface)
-    expect(received.map((input) => input.kind)).toEqual(['platform-gesture', 'platform-gesture', 'platform-gesture'])
-    expect(turns).toEqual([0, -20, -20])
-    dispose()
-  })
-
-  it('a live twist ends where it was when the text entry opens, and the rest of it is prevented and never delivered', () => {
-    const MAC_WEBKIT = { os: 'mac', gestureEvents: true } as const
-    const config: RecogniserConfig = { ...RECOGNISER_CONFIG, platform: MAC_WEBKIT }
-    let state = initialRecogniserState()
-    const turns: Array<[string, number]> = []
-    const source = createDomInputSource(deps({ platform: MAC_WEBKIT }))
-    const dispose = attachRecording(source, (input) => {
-      const result = recognise(state, input, config)
-      state = result.state
-      source.apply(result.effects)
-      for (const gesture of result.gestures) if (gesture.kind === 'rotate') turns.push([gesture.phase, gesture.totalDeltaDeg])
-    })
-    const dispatch = (target: Element, type: string, rotation: number): Event => {
-      const event = new Event(type, { bubbles: true, cancelable: true })
-      Object.defineProperties(event, {
-        clientX: { value: 210 }, clientY: { value: 170 }, scale: { value: 1 }, rotation: { value: rotation },
-        shiftKey: { value: false }, ctrlKey: { value: false }, altKey: { value: false }, metaKey: { value: false },
-      })
-      target.dispatchEvent(event)
-      return event
-    }
-    const surface = document.createElement('canvas')
-    host.append(surface)
-    dispatch(surface, 'gesturestart', 0)
-    dispatch(surface, 'gesturechange', 30)
-    expect(turns).toEqual([['start', 0], ['move', -20]])
-
-    // F2 under Select opens the entry mid-twist (spec §3.8: no canvas turn is live while it is open).
-    const entry = document.createElement('textarea')
-    entry.setAttribute('data-canvas-text-entry', 'edit')
-    host.append(entry)
-    const rest = [dispatch(surface, 'gesturechange', 50), dispatch(surface, 'gesturechange', 70), dispatch(surface, 'gestureend', 70)]
-    expect(turns).toEqual([['start', 0], ['move', -20], ['end', -20]])
-    expect(state.sessions.size).toBe(0)
-    expect(received.filter((input) => input.kind === 'platform-gesture').map((input) => input.kind === 'platform-gesture' && input.phase))
-      .toEqual(['start', 'change', 'end'])
-    expect(rest.every((event) => event.defaultPrevented)).toBe(true)
-
-    // The entry closing (its Esc) leaves no twist to resume: the next twist starts fresh.
-    entry.remove()
-    dispatch(surface, 'gesturestart', 0)
-    dispatch(surface, 'gesturechange', 15)
-    expect(turns.at(-1)).toEqual(['move', -5])
+    expect(received.map((input) => input.kind)).toEqual(Array(6).fill('platform-gesture'))
+    expect(turns).toEqual([0, -20, -20, 0, -20, -20])
     dispose()
   })
 

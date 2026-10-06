@@ -491,6 +491,19 @@ describe('the interaction session', () => {
     events.pointerUp({ x: 140, y: 100 }, { pointerId: 5, button: 1, buttons: 0 })
   })
 
+  it('a right-drag whose release was lost ends at the move without its button and runs the cleanup its release would (A35)', () => {
+    createSession()
+    const released = vi.spyOn(builtHosts.at(-1)!, 'released')
+    const before = testView.viewport()
+
+    events.pointerDown({ x: 100, y: 100 }, { pointerId: 6, button: 2 })
+    events.pointerMove({ x: 140, y: 100 }, { pointerId: 6, buttons: 2 })
+    events.pointerMove({ x: 160, y: 100 }, { pointerId: 6, buttons: 0 })
+    expect(released).toHaveBeenCalledTimes(1)
+    expect(testView.viewport().x).toBeCloseTo(before.x + 40, 6)
+    expect(container.style.cursor).not.toBe('grabbing')
+  })
+
   it('a WebKit pinch is no live pointer session until its twist passes 10°: Esc and the arrows keep working', () => {
     const { session } = createSession({ platform: { os: 'mac', gestureEvents: true } })
     const gesture = (type: string, rotation: number) => {
@@ -506,7 +519,7 @@ describe('the interaction session', () => {
     expect(session.keyboard.escapeLayers()).not.toContain('gesture')
     expect(session.keyboard.keyState({
       type: 'keydown', key: 'Shift', code: 'ShiftLeft', mods: { shift: true, ctrl: false, alt: false, meta: false },
-      timeStamp: 0, text: false, onCanvas: true,
+      text: false, onCanvas: true,
     })).toBe('pass')
     // Past 10° the twist turns the view and is live: Esc cancels it first.
     gesture('gesturechange', 14)
@@ -559,8 +572,8 @@ describe('the interaction session', () => {
     const pen = { pointerId: 40, pointerType: 'pen' } as const
 
     events.pointerDown({ x: 20, y: 30 }, { ...pen, button: 0, buttons: 1 })
-    // The barrel goes down mid-drag and the tip lifts first: the pointerup reports the barrel (button 2), which
-    // LEGACY ignores as a press, yet today's pointerup ended the drag whatever its button.
+    // The barrel goes down mid-drag and the tip lifts first: the pointerup reports the barrel (button 2), and an up ends
+    // its pointer's session whatever its button, as today's pointerup ended the drag.
     events.pointerMove({ x: 35, y: 45 }, { ...pen, buttons: 3 })
     events.pointerMove({ x: 35, y: 45 }, { ...pen, buttons: 2 })
     events.pointerUp({ x: 35, y: 45 }, { ...pen, button: 2, buttons: 0 })

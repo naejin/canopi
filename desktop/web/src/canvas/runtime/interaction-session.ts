@@ -356,7 +356,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         host: container,
         platform,
         bindings: () => CURRENT_BINDINGS,
-        keys: { lastKeyboardMenuAt: () => this._port.lastKeyboardMenuAt() },
+        keys: { lastKeyboardMenuAt: () => null },
         clock,
         timers,
       })
@@ -491,7 +491,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   private _receive(input: RawInput): void {
     if (this._disposed) return
-    // Every bit the pointer reports, a pen's barrel or eraser that LEGACY ignores as a press included, as today's lens read it.
+    // Every bit the pointer reports, a pen's eraser that no press takes included, as today's lens read it.
     this._buttonHeld = input.kind === 'move' && input.buttonMask !== 0
     try {
       this._dispatch(input)
@@ -573,13 +573,19 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   /**
    * Whether this input ended no press of the tool's, so today's window pointerup (or a pan's pointercancel or lost
-   * capture) would have run the cancellation (ToolHost.released): the up, cancel or Esc that ends a pointer pan or turn,
-   * or an up with no press of the map's at all. Today's exceptions hold for the latter: nothing while another pointer's press is
-   * live, in overview (the recogniser swallows the up), or over the note editor or a handle. The host handles the tap or drag-end of a press the tool never heard itself.
+   * capture) would have run the cancellation (ToolHost.released): the up, cancel, Esc or lost release that ends a pointer
+   * pan or turn, or an up with no press of the map's at all, a still right-click's that opens the menu included. Today's
+   * exceptions hold for the latter: nothing while another pointer's press is live, in overview (a still right-click there
+   * opens nothing and cleans nothing), or over the note editor or a handle. The host handles the tap or drag-end of a
+   * press the tool never heard itself.
    */
   private _releasesOutsideTool(input: RawInput, gestures: readonly Gesture[]): boolean {
-    if (gestures.some(endsPointerNavigation)) return input.kind === 'up' || (input.kind === 'cancel' && input.id !== 'all')
-    if (input.kind !== 'up' || gestures.length > 0) return false
+    // A move ends a pointer pan or turn whose release was lost (spec §2.2 "Drag end").
+    if (gestures.some(endsPointerNavigation)) {
+      return input.kind === 'up' || input.kind === 'move' || (input.kind === 'cancel' && input.id !== 'all')
+    }
+    // A still right-click's up opens the menu and is still no press of the tool's: a held stamp's ghost hides (A34).
+    if (input.kind !== 'up' || gestures.some((gesture) => gesture.kind !== 'menu-request')) return false
     if (this._recogniser.sessions.size > 0 || this._mode === 'overview') return false
     return !isOwnedOverlay(input.target)
   }
