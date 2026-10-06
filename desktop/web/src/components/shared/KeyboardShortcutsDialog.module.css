@@ -44,6 +44,15 @@
   white-space: nowrap;
 }
 
+/* A gesture row joins a platform's inputs into one box (French on a Mac: about 114 characters), wider than a column:
+   it wraps inside its row instead of running past the section. */
+.wraps {
+  display: inline-block;
+  padding-block: var(--space-0-5);
+  text-align: end;
+  white-space: normal;
+}
+
 .escape {
   margin: 0;
   padding: var(--space-2) var(--space-3);
