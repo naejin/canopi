@@ -6,11 +6,11 @@
 // raw-input.ts and recognise.ts import each other's types with `import type` only (no runtime cycle).
 //
 // It implements the input of CURRENT_BINDINGS (spec §2.2 and §5): one pointer session at a time;
-// a secondary press (the right button) pending until it passes 3 px: a still release opens the menu at the release point
-// (none in overview), a drag pans, and with Shift at the press it turns the view, stepped while mod is held; no native
-// contextmenu reaches it (the DOM source's listener prevents them); a middle drag, a Space press, overview and the Pan tool
-// pan (a primary press on a handle drags the handle first), a pointer pan carrying the pointer's point and a Pan-tool press
-// ending with cancel('navigate') after its drag; a Shift+middle drag rotating about its press once it passes 3 px (silent
+// a secondary press (the right button, a Mac Control-click, a pen's barrel) pending until it passes 3 px: a still release
+// opens the menu at the release point (none in overview), a drag pans, and with Shift at the press it turns the view,
+// stepped while mod is held; no native contextmenu reaches it (the DOM source's listener prevents them); a middle drag, a
+// press with Space held (on a handle too) and the Pan tool's primary drag pan, a pointer pan carrying the pointer's point
+// and a Pan-tool press ending with cancel('navigate') after its drag; a primary press in overview reaching the host; a Shift+middle drag rotating about its press once it passes 3 px (silent
 // before, so a still click turns nothing), stepped while mod is held, with the wheel ignored while a pointer rotate lives;
 // a button-less move over owned chrome, the text entry or a handle ends the hover; wheels zoom or pan by the
 // pointing-device setting; a WebKit trackpad twist rotating past 10° as a session of its own; no touch gestures or pen
@@ -90,7 +90,7 @@ export function recognise(
 ): { readonly state: RecogniserState; readonly gestures: readonly Gesture[]; readonly effects: readonly AdapterEffect[] } {
   const step: Step = { state, gestures: [], effects: [] }
   switch (input.kind) {
-    case 'down': down(step, input, config); break
+    case 'down': down(step, input); break
     case 'move': move(step, input, config); break
     case 'up': up(step, input, config); break
     case 'cancel': cancel(step, input); break
@@ -124,7 +124,7 @@ export function recognise(
 
 type RawOf<K extends RawInput['kind']> = Extract<RawInput, { kind: K }>
 
-function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void {
+function down(step: Step, input: RawOf<'down'>): void {
   // The note editor, the canvas's own buttons and fields, and anything outside the map keep their own presses.
   if (input.target.kind === 'owned-text' || input.target.kind === 'owned-chrome' || input.target.kind === 'foreign') return
 
@@ -134,7 +134,6 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
   // A down for a live pointer id: its up was lost. End that session first.
   if (live) endSession(step, live, 'pointercancel')
 
-  const { bindings } = config
   const { context, held } = step.state
   const base = {
     pointerId: input.id,
@@ -148,7 +147,6 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
   } as const
 
   const pressTarget: PressTarget = input.target.kind === 'handle' ? { kind: 'handle', id: input.target.id } : { kind: 'surface' }
-  const panIn = (panContext: 'hand-tool' | 'overview'): boolean => bindings.primaryDragPansIn.includes(panContext)
 
   if (input.role === 'secondary') {
     // Pending and silent until it passes 3 px, in every tool and in overview: a still release opens the menu, a drag
@@ -158,7 +156,7 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
     return
   }
 
-  if (input.role === 'auxiliary' && input.mods.shift && bindings.auxiliaryShiftDrag === 'rotate') {
+  if (input.role === 'auxiliary' && input.mods.shift) {
     // Shift+middle (checked before overview, fixture G9c): a pending rotate, silent until it passes its slop, so a still
     // click turns nothing (G9b). Shift at the press decides the mode for the whole session.
     step.effects.push({ kind: 'prevent-default' }, { kind: 'capture', pointerId: input.id })
@@ -166,23 +164,21 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
     return
   }
 
+  // A primary press reaches the host in overview too (its band selects zones and notes, spec §1.4 "Overview").
   let navigation: NavigationSource | null = null
   let pressed = true
-  if (context.mode === 'overview' && (input.role === 'auxiliary' || panIn('overview'))) {
-    // Legacy overview: a left or plain middle press pans the map, whatever is under it; a pan never reaches the host.
-    navigation = input.role === 'auxiliary' ? 'auxiliary-drag' : 'primary-drag'
-    pressed = false
-  } else if (input.role === 'primary' && pressTarget.kind === 'handle') {
-    // Handles first: before Space and the Pan tool (today's order; fixture G3b).
-  } else if (input.role === 'auxiliary') {
+  if (input.role === 'auxiliary') {
     // A plain middle drag pans; a middle tap does nothing.
     navigation = 'auxiliary-drag'
     pressed = false
   } else if (held.space) {
+    // Space at the press pans, a press on a handle included (fixture G3b).
     navigation = 'space-drag'
     pressed = false
-  } else if (context.tool === 'hand' && panIn('hand-tool')) {
-    // The Pan tool: the drag pans, and the press and tap still reach the host.
+  } else if (pressTarget.kind === 'handle') {
+    // A handle drags before the Pan tool pans (today's order).
+  } else if (context.tool === 'hand') {
+    // The Pan tool, in overview too: the drag pans, and the press and tap still reach the host.
     navigation = 'primary-drag'
   }
 

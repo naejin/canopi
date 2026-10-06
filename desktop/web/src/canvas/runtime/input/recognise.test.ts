@@ -602,10 +602,10 @@ describe('recognise: 5.7 middle button and Space', () => {
     expect(moved).toEqual({ x: 40, y: -10 })
   })
 
-  it('G3b Space at a press on a handle: the handle drags (today\'s handle-first order)', () => {
+  it('G3b Space at a press on a handle: a space-drag pan; the handle is not dragged', () => {
     const result = run(SEQUENCES.G3B)
-    expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-move', 'drag-move', 'drag-end'])
-    expect(result.gestures[0]).toMatchObject({ kind: 'press', target: { kind: 'handle', id: 'rotate' } })
+    expect(kinds(result.gestures)).toEqual(['pan:start', 'pan:move', 'pan:move', 'pan:move', 'pan:end'])
+    expect(pansOf(result.gestures)[0]!.source).toBe('space-drag')
   })
 
   it('G4 Space then alt-tab: blur releases Space; the later drag is primary', () => {
@@ -618,6 +618,27 @@ describe('recognise: 5.7 middle button and Space', () => {
 
   it('G6 X11 autorepeat pairs: the pan continues', () => {
     expect(kinds(run(SEQUENCES.G6).gestures)).toEqual(['pan:start', 'pan:move', 'pan:move', 'pan:end'])
+  })
+
+  it.each([
+    ['mouse', SEQUENCES.G7],
+    ['touch', SEQUENCES.G7_TOUCH],
+  ])('G7 Overview left drag (%s): a press and a drag reach the host (the band), never a pan', (_pointer, sequence) => {
+    const result = run(sequence)
+    expectNoNavigation(result.gestures)
+    expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-move', 'drag-move', 'drag-end'])
+    const clicked = run(seq('overview click', WINDOWS, [down(100, 100), up(100, 100)], { mode: 'overview' }))
+    expect(kinds(clicked.gestures)).toEqual(['press', 'tap'])
+  })
+
+  it.each([
+    ['pen tip', SEQUENCES.G8_PEN],
+    ['touch', SEQUENCES.G8_TOUCH],
+  ])('G8 Pan tool, %s drag: a primary-drag pan; the press ends with cancel(navigate)', (_pointer, sequence) => {
+    const result = run(sequence)
+    expect(kinds(result.gestures)).toEqual(['press', 'pan:start', 'pan:move', 'pan:move', 'pan:end', 'cancel'])
+    expect(pansOf(result.gestures)[0]!.source).toBe('primary-drag')
+    expect(result.gestures.at(-1)).toEqual({ kind: 'cancel', reason: 'navigate' })
   })
 
   it('G9 Shift+middle-drag rotates: nothing until 3 px, then +16° at 20 px, measured from the press', () => {
@@ -706,30 +727,24 @@ describe('recognise: 5.9 precedence', () => {
     expect(result.gestures[0]).toMatchObject({ kind: 'press', mods: { shift: true } })
   })
 
-  it('J3 Legacy overview: a drag pans; a still right-click opens no menu; a right-drag pans', () => {
-    const dragged = run(SEQUENCES.J3_DRAG)
-    expect(kinds(dragged.gestures)).toEqual(['pan:start', 'pan:move', 'pan:move', 'pan:move', 'pan:end'])
-    expect(pansOf(dragged.gestures)[0]!.source).toBe('primary-drag')
-    const clicked = run(SEQUENCES.J3_RIGHT_CLICK)
-    expect(clicked.gestures).toEqual([])
+  it('J3 Overview right-click: no menu; a right-drag pans', () => {
+    expect(run(SEQUENCES.J3_RIGHT_CLICK).gestures).toEqual([])
     const rightDragged = run(SEQUENCES.J3_RIGHT_DRAG)
     expect(kinds(rightDragged.gestures)).toEqual(['pan:start', 'pan:move', 'pan:move', 'pan:end'])
     expect(pansOf(rightDragged.gestures)[0]!.source).toBe('secondary-drag')
   })
 
-  it('J9 Space with the Pan tool: a space-drag pan', () => {
+  it('J9 Space with the Pan tool: a space-drag pan, the same result; no press reaches the tool', () => {
     const result = run(SEQUENCES.J9)
     expect(kinds(result.gestures)).toEqual(['pan:start', 'pan:move', 'pan:move', 'pan:move', 'pan:end'])
     expect(pansOf(result.gestures)[0]!.source).toBe('space-drag')
   })
 
-  it('J10 Space held and overview presses pan and never reach the probe', () => {
-    for (const sequence of [SEQUENCES.J10_SPACE, SEQUENCES.J10_OVERVIEW]) {
-      const result = run(sequence)
-      expect(result.gestures.some((gesture) => gesture.kind === 'press' || gesture.kind === 'tap')).toBe(false)
-      expect(kinds(result.gestures)[0]).toBe('pan:start')
-      expect(kinds(result.gestures).at(-1)).toBe('pan:end')
-    }
+  it('J10 a press with Space held pans and never reaches the probe', () => {
+    const result = run(SEQUENCES.J10_SPACE)
+    expect(result.gestures.some((gesture) => gesture.kind === 'press' || gesture.kind === 'tap')).toBe(false)
+    expect(kinds(result.gestures)[0]).toBe('pan:start')
+    expect(kinds(result.gestures).at(-1)).toBe('pan:end')
   })
 })
 
@@ -924,8 +939,9 @@ describe('recognise: cancel fences', () => {
     const leaving = run(seq('leave overview', WINDOWS, [
       down(100, 100),
       configure({ tool: 'select', mode: 'site', pointingDevice: 'mouse' }),
+      up(100, 100),
     ], { mode: 'overview' }))
-    expect(kinds(leaving.gestures)).toEqual(['pan:start'])
+    expect(kinds(leaving.gestures)).toEqual(['press', 'tap'])
   })
 
   it('a lost capture ends the session that holds capture', () => {

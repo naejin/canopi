@@ -621,6 +621,26 @@ export const SEQUENCES = {
     up(120, 100),
     keyState(false),
   ]),
+  G7: seq('G7 Overview left drag', WINDOWS, [
+    down(100, 100),
+    ...moves([100, 100], [150, 130], 3, { buttons: 1 }),
+    up(150, 130),
+  ], { mode: 'overview' }),
+  G7_TOUCH: seq('G7 Overview one-finger drag', ANDROID, [
+    down(100, 100, { pointer: 'touch' }),
+    ...moves([100, 100], [150, 130], 3, { pointer: 'touch', buttons: 1 }),
+    up(150, 130, { pointer: 'touch' }),
+  ], { mode: 'overview' }),
+  G8_PEN: seq('G8 Pan tool, pen tip drag', WINDOWS, [
+    down(100, 100, { pointer: 'pen' }),
+    ...moves([100, 100], [140, 120], 2, { pointer: 'pen', buttons: 1 }),
+    up(140, 120, { pointer: 'pen' }),
+  ], { tool: 'hand' }),
+  G8_TOUCH: seq('G8 Pan tool, touch drag', ANDROID, [
+    down(100, 100, { pointer: 'touch' }),
+    ...moves([100, 100], [140, 120], 2, { pointer: 'touch', buttons: 1 }),
+    up(140, 120, { pointer: 'touch' }),
+  ], { tool: 'hand' }),
   G9: seq('G9 Shift+middle-drag rotates', WINDOWS, [
     down(100, 100, { button: 1, shift: true }),
     move(102, 100, { buttons: 4, shift: true }),
@@ -661,11 +681,6 @@ export const SEQUENCES = {
     ...moves([100, 100], [150, 150], 3, { buttons: 1, shift: true }),
     up(150, 150, { shift: true }),
   ]),
-  J3_DRAG: seq('J3 Legacy overview drag', WINDOWS, [
-    down(100, 100),
-    ...moves([100, 100], [150, 130], 3, { buttons: 1 }),
-    up(150, 130),
-  ], { mode: 'overview' }),
   J3_RIGHT_CLICK: seq('J3 Overview right-click', WINDOWS, [
     down(100, 100, { button: 2 }),
     up(100, 100, { button: 2 }),
@@ -688,10 +703,6 @@ export const SEQUENCES = {
     ...moves([100, 100], [130, 100], 3, { buttons: 1 }),
     up(130, 100),
   ]),
-  J10_OVERVIEW: seq('J10 overview, down(0)', WINDOWS, [
-    down(100, 100),
-    up(100, 100),
-  ], { mode: 'overview' }),
 
   // Drops: the drag cue is the host's; the recogniser forwards the phases and prevents dragover and drop.
   DROP: seq('Drop from a panel', WINDOWS, [

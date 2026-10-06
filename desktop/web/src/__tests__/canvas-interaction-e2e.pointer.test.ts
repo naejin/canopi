@@ -29,7 +29,7 @@ describe('SceneInteractionSession', () => {
   let store: SceneStore
   let events: SceneInteractionEventHarness
 
-  const { createTestSession } = installSceneInteractionFixture(
+  const { createTestSession, openContextMenu } = installSceneInteractionFixture(
     (f) => {
       ({ container, testView, store, events } = f)
     },
@@ -320,7 +320,7 @@ describe('SceneInteractionSession', () => {
     expect(downstreamDrop).toHaveBeenCalled()
   })
 
-  it('uses primary drag for navigation in overview regardless of the armed tool', () => {
+  it('G7: in overview a left drag no longer pans; it reaches the host, and a drawing tool draws nothing', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
@@ -330,15 +330,22 @@ describe('SceneInteractionSession', () => {
     const before = testView.viewport()
 
     events.pointerDown({ x: 100, y: 100 }, { button: 0 })
-    events.pointerMove({ x: 140, y: 125 }, { button: 0 })
+    events.pointerMove({ x: 140, y: 125 }, { buttons: 1 })
     events.pointerUp({ x: 140, y: 125 }, { button: 0 })
 
-    const after = testView.viewport()
-    expect(after.x).toBeCloseTo(before.x + 40, 6)
-    expect(after.y).toBeCloseTo(before.y + 25, 6)
-    expect(after.scale).toBeCloseTo(before.scale, 9)
+    expect(testView.viewport()).toEqual(before)
     expect(store.persisted).toEqual(scene)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
+
+    // The middle button and Space still pan there; a still right-click opens no menu.
+    events.pointerDown({ x: 100, y: 100 }, { button: 1 })
+    events.pointerMove({ x: 140, y: 125 }, { button: 1 })
+    events.pointerUp({ x: 140, y: 125 }, { button: 1 })
+    expect(testView.viewport().x).toBeCloseTo(before.x + 40, 6)
+    expect(testView.viewport().y).toBeCloseTo(before.y + 25, 6)
+    const menu = openContextMenu({ x: 100, y: 100 })
+    expect(menu.defaultPrevented).toBe(true)
+    expect(contextMenuHost.opened).toHaveLength(0)
     session.dispose()
   })
 })
