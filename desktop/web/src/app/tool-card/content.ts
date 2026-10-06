@@ -15,8 +15,11 @@ export interface ToolCardInput {
   /** Place plants: the chosen species' shown name, or null while the card offers its chooser. */
   readonly speciesName: string | null
   readonly savedStamp: SavedStampSummary | null
-  /** Settings › Canvas › Scroll wheel: Select's line says whether the wheel or a pinch zooms. */
+  /** Settings › Canvas › Pointing device (stored scroll_wheel: 'zoom' is Mouse, 'pan' is Trackpad): Select's line says
+   *  how this device pans and zooms. */
   readonly scrollWheel: 'zoom' | 'pan'
+  /** The platform's mod key name (Ctrl, or Cmd on a Mac), for Plant a row's no-snap hint. */
+  readonly modKey: string
   readonly translate: Translate
 }
 
@@ -41,11 +44,10 @@ export interface ToolCardContent {
   readonly rowCount: { readonly text: string; readonly density: 'normal' | 'dense' | 'blocked' } | null
 }
 
-/** Tools without a card: Pan needs no guidance. */
-const NO_CARD = new Set(['hand'])
-
 const TITLE_KEYS: Readonly<Record<string, string>> = {
   select: 'canvas.tools.select',
+  // Pan is off the main rail, so its card says what it does.
+  hand: 'canvas.tools.hand',
   'plant-stamp': 'canvas.tools.plantStamp',
   'plant-spacing': 'canvas.tools.plantSpacing',
   'object-stamp': 'canvas.tools.objectStamp',
@@ -64,12 +66,15 @@ const STAMP_TOOLS = new Set(['object-stamp', 'saved-object-stamp'])
 export function toolCardContent(input: ToolCardInput): ToolCardContent | null {
   const { tool, guidance, translate } = input
   const titleKey = TITLE_KEYS[tool]
-  if (NO_CARD.has(tool) || !titleKey) return null
+  if (!titleKey) return null
 
+  // What the next Esc does: drops a held row source or stamp pick first, cancels a draft, then leaves the tool.
   const esc = translate(
-    guidance.gesture ? 'canvas.toolCard.escCancel'
-      : PLACING_TOOLS.has(tool) ? 'canvas.toolCard.escStopPlacing'
-        : 'canvas.toolCard.escSelect',
+    tool === 'plant-spacing' && guidance.plantRow?.phase === 'row' ? 'canvas.toolCard.escClearRow'
+      : tool === 'object-stamp' && guidance.stamp ? 'canvas.toolCard.escClearStamp'
+        : guidance.gesture ? 'canvas.toolCard.escCancel'
+          : PLACING_TOOLS.has(tool) ? 'canvas.toolCard.escStopPlacing'
+            : 'canvas.toolCard.escSelect',
   )
   const hints = (...keys: string[]): string => [...keys.map((key) => translate(key)), esc].join(' · ')
   const card = (subject: string | null, instruction: string, hintText = hints()): ToolCardContent => ({
@@ -89,6 +94,8 @@ export function toolCardContent(input: ToolCardInput): ToolCardContent | null {
     case 'select':
       // No Esc meaning: under Select, Esc only clears the selection.
       return card(null, '', translate(input.scrollWheel === 'pan' ? 'canvas.toolCard.selectHintPan' : 'canvas.toolCard.selectHint'))
+    case 'hand':
+      return card(null, translate('canvas.toolCard.panHint'))
     case 'plant-stamp':
       return input.speciesName
         ? card(input.speciesName, translate('canvas.toolCard.placeOne'))
@@ -110,7 +117,8 @@ export function toolCardContent(input: ToolCardInput): ToolCardContent | null {
       }
       const counted = translate('canvas.plantSpacing.generatedCount', { count: row.count ?? 0 })
       return {
-        ...card(row.plantName, translate('canvas.plantSpacing.dragAlong'), hints('canvas.toolCard.rowKeys')),
+        ...card(row.plantName, translate('canvas.plantSpacing.dragAlong'),
+          [translate('canvas.toolCard.rowKeys', { mod: input.modKey }), esc].join(' · ')),
         rowCount: row.count === null ? null : {
           text: row.density === 'blocked' ? `${counted} · ${translate('canvas.plantSpacing.commitLimitWarning')}` : counted,
           density: row.density,
@@ -120,17 +128,17 @@ export function toolCardContent(input: ToolCardInput): ToolCardContent | null {
     case 'polygon':
       return card(null, translate('canvas.toolCard.polygon'), hints('canvas.toolCard.polygonKeys'))
     case 'rectangle':
-      return card(null, translate('canvas.toolCard.rectangle'))
+      return card(null, translate('canvas.toolCard.rectangle'), hints('canvas.toolCard.rectangleKeys'))
     case 'ellipse':
-      return card(null, translate('canvas.toolCard.ellipse'))
+      return card(null, translate('canvas.toolCard.ellipse'), hints('canvas.toolCard.ellipseKeys'))
     case 'line':
-      return card(null, translate('canvas.toolCard.line'))
+      return card(null, translate('canvas.toolCard.line'), hints('canvas.toolCard.lineKeys'))
     case 'text':
       return guidance.gesture
         ? card(null, translate('canvas.toolCard.textType'), hints('canvas.toolCard.textKeys'))
         : card(null, translate('canvas.toolCard.textPlace'))
     case 'measurement-guide':
-      return card(null, translate('canvas.toolCard.measure'))
+      return card(null, translate('canvas.toolCard.measure'), hints('canvas.toolCard.lineKeys'))
     default:
       return null
   }

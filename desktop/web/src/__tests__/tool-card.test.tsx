@@ -108,24 +108,27 @@ describe('Tool card', () => {
   const live = () => container.querySelector<HTMLElement>('[role="status"]')!
   const lines = () => [...live().children].map((line) => line.textContent)
 
-  it('shows no card for Pan, but keeps its live region mounted', async () => {
+  it('while Pan is armed its card reads Drag to move the map', async () => {
     await choose('hand')
-    expect(card()).toBeNull()
+    expect(card()!.dataset.toolCard).toBe('hand')
+    expect(card()!.getAttribute('aria-label')).toBe('Pan')
+    expect(lines()).toEqual(['Pan', 'Drag to move the map', 'Esc to go back to Select'])
     expect(live().getAttribute('aria-live')).toBe('polite')
-    expect(live().textContent).toBe('')
   })
 
-  it('gives Select one quiet line naming the modifiers, following the scroll wheel setting', async () => {
+  it('the Select card follows the pointing device', async () => {
     expect(card()!.dataset.toolCard).toBe('select')
     expect(card()!.getAttribute('aria-label')).toBe('Select')
-    expect(lines()).toEqual(['Select', 'Drag to select · Shift-click adds · Space + drag or H pans · wheel zooms'])
+    // Mouse (stored scroll_wheel 'zoom').
+    expect(lines()).toEqual(['Select', 'Drag to select · Shift-click adds · Alt-click removes · right-drag pans · wheel zooms'])
     expect(live().querySelector('b')).toBeNull()
 
+    // Trackpad (stored 'pan').
     await act(() => { scrollWheel.value = 'pan' })
-    expect(lines()).toEqual(['Select', 'Drag to select · Shift-click adds · Space + drag or H pans · pinch zooms'])
+    expect(lines()).toEqual(['Select', 'Drag to select · Shift-click adds · Alt-click removes · two fingers pan · pinch zooms'])
 
     await act(() => { locale.value = 'fr' })
-    expect(lines()).toEqual(['Sélection', 'Glisser pour sélectionner · Maj-clic ajoute · Espace + glisser ou H déplace la carte · pincement zoome'])
+    expect(lines()).toEqual(['Sélection', 'Glisser pour sélectionner · Maj-clic ajoute · Alt-clic retire · deux doigts déplacent la carte · pincement zoome'])
   })
 
   it('names the species for Place plants, offers Change species and says Esc stops placing', async () => {
@@ -216,18 +219,14 @@ describe('Tool card', () => {
 
     await choose('measurement-guide')
     expect(live()).toBe(region)
-    expect(lines()).toEqual([
-      'Measure',
-      'Drag from one point to another to measure. The line stays as a guide.',
-      'Esc to go back to Select',
-    ])
+    expect(lines()[0]).toBe('Measure')
   })
 
   it('switches the Esc meaning to cancel while a polygon is being drawn', async () => {
     await choose('polygon')
     expect(lines()).toEqual([
       'Polygon zone',
-      'Click to add corners. Click the first corner or press Enter to finish.',
+      'Click to add corners. Click the first corner, double-click or press Enter to finish.',
       'Backspace removes the last corner · Shift keeps 45° angles · Esc to go back to Select',
     ])
 
@@ -236,12 +235,13 @@ describe('Tool card', () => {
   })
 
   it.each([
-    ['rectangle', 'Rectangle zone', 'Drag across the map to draw the rectangle.'],
-    ['ellipse', 'Ellipse zone', 'Drag across the map to draw the ellipse.'],
-    ['line', 'Line zone', 'Drag along the map to draw the line.'],
-  ] as const)('explains the %s gesture', async (tool, title, instruction) => {
+    ['rectangle', 'Rectangle zone', 'Drag across the map to draw the rectangle.', 'Shift draws a square'],
+    ['ellipse', 'Ellipse zone', 'Drag across the map to draw the ellipse.', 'Shift draws a circle'],
+    ['line', 'Line zone', 'Drag along the map to draw the line.', 'Shift keeps 45° angles'],
+    ['measurement-guide', 'Measure', 'Drag from one point to another to measure. The line stays as a guide.', 'Shift keeps 45° angles'],
+  ] as const)('explains the %s gesture and what Shift does', async (tool, title, instruction, keys) => {
     await choose(tool)
-    expect(lines()).toEqual([title, instruction, 'Esc to go back to Select'])
+    expect(lines()).toEqual([title, instruction, `${keys} · Esc to go back to Select`])
   })
 
   it('tells how to place a text note, then how to finish it', async () => {
@@ -269,11 +269,12 @@ describe('Tool card', () => {
 
   it('tells how to turn a held stamp and shows its angle once turned', async () => {
     const guild = { kind: 'group', name: 'Pear guild', plants: 10, species: 4 } as const
+    // A held pick: the first Esc clears it.
     await choose('object-stamp', { stamp: guild, stampRotationDeg: 0 })
-    expect(lines().slice(1)).toEqual(['Pear guild', '10 plants · 4 species · click to place', '[ and ] rotate by 15° · Esc to stop placing'])
+    expect(lines().slice(1)).toEqual(['Pear guild', '10 plants · 4 species · click to place', '[ and ] rotate by 15° · Esc to clear the stamp'])
 
     await choose('object-stamp', { stamp: guild, stampRotationDeg: 30 })
-    expect(lines().slice(1)).toEqual(['Pear guild', '10 plants · 4 species · turned 30° · click to place', '[ and ] rotate by 15° · Esc to stop placing'])
+    expect(lines().slice(1)).toEqual(['Pear guild', '10 plants · 4 species · turned 30° · click to place', '[ and ] rotate by 15° · Esc to clear the stamp'])
   })
 
   describe('Change stamp', () => {
@@ -431,7 +432,7 @@ describe('Tool card', () => {
       const lead = card()!.querySelector<HTMLElement>('[data-tool-card-lead]')!
       expect(lead.querySelector('svg')?.getAttribute('data-plant-symbol')).toBe('berry')
       expect(lead.style.color).toBe('rgb(171, 82, 104)')
-      expect(live().textContent).toContain('Shift keeps 45° angles · Esc to cancel')
+      expect(live().textContent).toContain('Shift keeps 45° angles · Ctrl turns off snapping · Esc to clear the row')
       const input = field()!
       expect(input.value).toBe('50 cm')
       expect(input.getAttribute('inputmode')).toBe('decimal')
