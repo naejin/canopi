@@ -38,8 +38,6 @@ export interface ToolModifiers {
   readonly subtractive: boolean
   /** Shift. Every phase: Polygon and Plant a row 45° steps; the rotate handle's 15° steps from the press angle. Phase 2 adds square/circle for Rectangle and Ellipse and 45° screen steps for Line and Measure. */
   readonly constrain: boolean
-  /** Alt, reserved (unused). */
-  readonly fromCentre: boolean
   /** Plant a row only. LEGACY/ROTATION: Shift. Phase 2: mod held during the drag. */
   readonly noSnap: boolean
 }
@@ -142,7 +140,7 @@ export interface ToolView {
   screenDistance(a: WorldPoint, b: WorldPoint): number
   screenAxesInWorld(at?: WorldPoint): { readonly right: WorldVector; readonly down: WorldVector }
   /** Screen-aligned rectangle from two world corners: rotationDeg = the bearing (in [0, 360)). Shift's square and circle use `square`. */
-  screenAlignedRect(a: WorldPoint, b: WorldPoint, options?: { readonly square?: boolean; readonly fromCentre?: boolean }):
+  screenAlignedRect(a: WorldPoint, b: WorldPoint, options?: { readonly square?: boolean }):
     { readonly center: WorldPoint; readonly width: number; readonly height: number; readonly rotationDeg: number }
 }
 // Angle constraints are not a ToolView query: the host applies them (CanvasTool.constraint), so ToolPoint.snapped is always right.

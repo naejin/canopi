@@ -431,7 +431,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       additive: mods.shift || mods.ctrl || mods.meta,
       subtractive: false,
       constrain: mods.shift && shiftConstrains,
-      fromCentre: false,
       noSnap: mods.shift && currentId === 'plant-spacing',
     }
   }
@@ -1392,7 +1391,7 @@ function screenAlignedRect(
   view: ViewTransform,
   a: WorldPoint,
   b: WorldPoint,
-  options: { readonly square?: boolean; readonly fromCentre?: boolean } = {},
+  options: { readonly square?: boolean } = {},
 ): { readonly center: WorldPoint; readonly width: number; readonly height: number; readonly rotationDeg: number } {
   const { right, down } = view.screenAxesInWorld()
   let across = (b.x - a.x) * right.x + (b.y - a.y) * right.y
@@ -1403,9 +1402,6 @@ function screenAlignedRect(
     along = (along < 0 ? -1 : 1) * side
   }
   const rotationDeg = view.camera.bearingDeg
-  if (options.fromCentre) {
-    return { center: a, width: Math.abs(across) * 2, height: Math.abs(along) * 2, rotationDeg }
-  }
   return {
     center: {
       x: a.x + (right.x * across + down.x * along) / 2,

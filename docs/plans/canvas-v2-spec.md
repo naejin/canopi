@@ -1041,7 +1041,7 @@ export interface ToolView {
   screenDistance(a: WorldPoint, b: WorldPoint): number
   screenAxesInWorld(at?: WorldPoint): { readonly right: WorldVector; readonly down: WorldVector }
   /** Screen-aligned rectangle from two world corners: rotationDeg = normaliseBearing(bearing). Shift's square and circle use `square`. */
-  screenAlignedRect(a: WorldPoint, b: WorldPoint, options?: { readonly square?: boolean; readonly fromCentre?: boolean }):
+  screenAlignedRect(a: WorldPoint, b: WorldPoint, options?: { readonly square?: boolean }):
     { readonly center: WorldPoint; readonly width: number; readonly height: number; readonly rotationDeg: number }
 }
 // Angle constraints are not a ToolView query: the host applies them (CanvasTool.constraint), so ToolPoint.snapped is always right.
