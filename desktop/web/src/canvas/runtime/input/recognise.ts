@@ -20,7 +20,7 @@ import type { CancelReason, Modifiers, PointerKind } from '../interaction-types'
 import { ROTATE_DEG_PER_PX } from '../view/navigation-policy'
 import type { ScreenPoint } from '../view/types'
 import type { Gesture, NavigationSource, PressTarget } from './gestures'
-import type { InputPlatform } from './platform'
+import { modKeyIsCmd, type InputPlatform } from './platform'
 import type { AdapterEffect, ButtonRole, RawInput, RecogniserConfig, RecogniserState } from './raw-input'
 
 export interface PointerSession {
@@ -449,9 +449,9 @@ function rotateOf(session: PointerSession, phase: 'start' | 'move' | 'end' | 'ca
   }
 }
 
-/** mod steps a rotate: Cmd on Apple platforms, where Ctrl never steps; Ctrl elsewhere. */
+/** mod steps a rotate: Cmd where mod is Cmd (Ctrl never steps there), Ctrl elsewhere. */
 function stepsRotate(mods: Modifiers, platform: InputPlatform): boolean {
-  return platform.os === 'mac' || platform.os === 'ios' ? mods.meta : mods.ctrl
+  return modKeyIsCmd(platform) ? mods.meta : mods.ctrl
 }
 
 function pointerRotateLive(state: RecogniserState): boolean {

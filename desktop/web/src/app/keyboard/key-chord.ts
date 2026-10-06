@@ -6,7 +6,7 @@
 // and brackets fall back to the physical key, a layout's digit row to its digits, and AltGr typing a character or a
 // key of an IME composition names no shortcut.
 
-import type { InputPlatform } from '../../canvas/runtime/input/platform'
+import { modKeyIsCmd, type InputPlatform } from '../../canvas/runtime/input/platform'
 
 /** The KeyboardEvent fields the router reads; tests pass literals. */
 export interface KeyboardEventLike {
@@ -37,7 +37,7 @@ const CODE_KEYS: Readonly<Record<string, string>> = { BracketLeft: '[', BracketR
  */
 export function chordOf(e: KeyboardEventLike, platform: Pick<InputPlatform, 'os'>): KeyChord | null {
   if (e.isComposing || e.keyCode === 229) return null
-  const mac = platform.os === 'mac' || platform.os === 'ios'
+  const mac = modKeyIsCmd(platform)
   if (!mac && e.metaKey) return null
   if (!mac && e.ctrlKey && e.altKey && [...e.key].length === 1 && !/[\p{L}\p{N}]/u.test(e.key)) return null
   return {
