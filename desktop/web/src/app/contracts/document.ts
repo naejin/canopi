@@ -104,15 +104,12 @@ function composeKnownDocumentFields(
 ): CanopiFile {
   const output: Partial<Record<KnownCanopiKey, unknown>> = {}
 
+  // `extra` is all Design Edit's, like every 'document' field: the scene owns no `extra` key (ADR 0011).
   for (const key of DOCUMENT_FILE_KNOWN_KEYS) {
-    if (key === 'extra') continue
     const value = ownedFieldSource(key, document, canvas)[key]
     if (WRITTEN_ONLY_WHEN_PRESENT.has(key) && value == null) continue
     output[key] = value
   }
-
-  // `extra` is all Design Edit's: the scene owns no `extra` key (ADR 0011).
-  output.extra = normalizePersistedExtra(document.extra)
   return output as CanopiFile
 }
 
