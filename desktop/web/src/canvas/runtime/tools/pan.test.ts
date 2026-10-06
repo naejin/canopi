@@ -12,7 +12,7 @@ import {
   type ToolHarness,
 } from '../../../__tests__/support/tool-harness'
 import { setCurrentCanvasSession } from '../../session'
-import { activeTool } from '../../session-state'
+import { currentCanvasTool } from '../../session-state'
 import { CURRENT_BINDINGS } from '../input/bindings'
 import type { Gesture } from '../input/gestures'
 import { createInputRouter } from '../input/input-router'
@@ -43,7 +43,7 @@ function panHarness(): { readonly h: ToolHarness; readonly gestures: ToolGesture
 afterEach(() => {
   for (const h of harnesses.splice(0)) h.dispose()
   setCurrentCanvasSession(null)
-  activeTool.value = 'select'
+  currentCanvasTool.value = 'select'
 })
 
 describe('Pan tool', () => {

@@ -290,8 +290,6 @@
     "src/canvas/runtime/zone-measurements.ts#formatMetricArea",
     "src/canvas/saved-object-stamp-source.ts#readSavedObjectStampDragData",
     "src/canvas/session-plane.ts#SESSION_PLANE_REORIGIN_DISTANCE_METERS",
-    "src/canvas/session-state.ts#activeTool",
-    "src/canvas/session-state.ts#selectedObjectIds",
     "src/canvas/theme-refresh.ts#CANVAS_COLOR_CSS_VARS",
     "src/components/canvas/PlantLabelsChip.tsx#PLANT_LABELS_CHIP_MS",
     "src/components/shared/DesignSketchThumbnail.tsx#plantDotSize",

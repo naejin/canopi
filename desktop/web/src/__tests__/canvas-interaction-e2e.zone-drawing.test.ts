@@ -4,7 +4,7 @@
 // renderer (the draft sink scene-runtime.ts passes); the tools' own behaviour is tested in canvas/runtime/tools/*.test.ts.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { selectPlantStampSource } from '../canvas/plant-stamp-source'
-import { selectedObjectIds } from '../canvas/session-state'
+import { currentCanvasSelection } from '../canvas/session-state'
 import { snapToGridEnabled } from '../app/canvas-settings/signals'
 import { SceneStore, type ScenePoint } from '../canvas/runtime/scene'
 import type {
@@ -756,7 +756,7 @@ describe('SceneInteractionSession', () => {
 
     events.pointerDown({ x: 10, y: 10 }, { button: 0 })
 
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
     // History-free, through the session's selection (ToolEffects.setSelection).
     expect(deps.setSelection).toHaveBeenCalledTimes(2)
     expect(deps.setSelection).toHaveBeenLastCalledWith([])

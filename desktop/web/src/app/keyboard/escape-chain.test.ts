@@ -11,7 +11,7 @@ import { PlantColorMenu } from '../../components/canvas/PlantColorMenu'
 import { InspectionStatus } from '../../components/canvas/InspectionStatus'
 import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
 import { setCurrentCanvasSession } from '../../canvas/session'
-import { selectedObjectIds } from '../../canvas/session-state'
+import { currentCanvasSelection } from '../../canvas/session-state'
 import type { ToolHost } from '../../canvas/runtime/interaction-ports'
 import type { ToolId } from '../../canvas/runtime/interaction-types'
 import { createCanvasKeyboardPort } from '../../canvas/runtime/keyboard-port'
@@ -141,7 +141,7 @@ afterEach(() => {
   router?.dispose()
   for (const root of mounts) act(() => render(null, root))
   plantColorMenuOpen.value = false
-  selectedObjectIds.value = new Set()
+  currentCanvasSelection.value = new Set()
   setCurrentCanvasSession(null)
   document.body.replaceChildren()
 })
@@ -163,7 +163,7 @@ describe('the Esc chain', () => {
         }),
       },
     }))
-    selectedObjectIds.value = new Set(['plant-1'])
+    currentCanvasSelection.value = new Set(['plant-1'])
     plantColorMenuOpen.value = true
     canvas = { tool: 'polygon', transient: true, live: false, selected: true }
     mount(h(PlantColorMenu, { buttonRef: { current: null } }))

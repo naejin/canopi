@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { hoveredPanelTargets, selectedPanelTargets } from '../app/panel-targets/state'
-import { selectedObjectIds } from '../canvas/session-state'
+import { currentCanvasSelection } from '../canvas/session-state'
 import { createPanelTargetMapOverlayContract } from '../maplibre/panel-target-overlays'
 import { targets, speciesTarget } from '../target'
 import { projectTargetResolutionToMapFeatures } from '../target/map-projection'
@@ -30,7 +30,7 @@ function createScene() {
 describe('panel target bridge authority', () => {
   it('keeps resolver and map projection seams pure', () => {
     const selectionBefore = new Set(['canvas-selection'])
-    selectedObjectIds.value = selectionBefore
+    currentCanvasSelection.value = selectionBefore
     hoveredPanelTargets.value = [speciesTarget('Malus domestica')]
     selectedPanelTargets.value = [speciesTarget('Malus domestica')]
 
@@ -44,7 +44,7 @@ describe('panel target bridge authority', () => {
     expect(resolved.plantIds).toEqual(['plant-1'])
     expect(overlay.hasRenderableFeatures).toBe(true)
 
-    expect(selectedObjectIds.value).toEqual(selectionBefore)
+    expect(currentCanvasSelection.value).toEqual(selectionBefore)
     expect(hoveredPanelTargets.value).toEqual([speciesTarget('Malus domestica')])
     expect(selectedPanelTargets.value).toEqual([speciesTarget('Malus domestica')])
   })

@@ -1,37 +1,27 @@
 import { computed, signal } from '@preact/signals'
 import type { PlantSymbolId } from '../generated/known-canopi-keys'
 
-export const activeTool = signal<string>('select')
-export const selectedObjectIds = signal<Set<string>>(new Set())
-
-// UI mirror state only. SceneCanvasRuntime owns authoritative canvas selection.
-export function getCanvasTool(): string {
-  return activeTool.value
-}
+// UI mirror state only, one name per signal (canvas/session.ts re-exports them). SceneCanvasRuntime owns the authoritative
+// canvas selection.
+export const currentCanvasTool = signal<string>('select')
+export const currentCanvasSelection = signal<Set<string>>(new Set())
 
 export function setCanvasTool(name: string): void {
-  activeTool.value = name
+  currentCanvasTool.value = name
 }
-
-// Re-export the signal directly — wrapping in computed() adds an extra reactive
-// node with no behavioral difference since computed(() => signal.value) === signal.
-export { activeTool as canvasToolState }
 
 export function setCanvasSelection(
   ids: Iterable<string>,
   options: { readonly publishIfUnchanged?: boolean } = {},
 ): void {
   const next = new Set(ids)
-  const current = selectedObjectIds.value
+  const current = currentCanvasSelection.value
   const unchanged = next.size === current.size && [...next].every((id) => current.has(id))
   if (unchanged && !options.publishIfUnchanged) return
-  selectedObjectIds.value = next
+  currentCanvasSelection.value = next
 }
 
-export { selectedObjectIds as canvasSelectionState }
-
-// Derived value — genuinely needs computed() since it maps Set → boolean.
-export const canvasHasSelectionState = computed(() => selectedObjectIds.value.size > 0)
+export const currentCanvasHasSelection = computed(() => currentCanvasSelection.value.size > 0)
 
 /** What a stamp pick places: the tool card names it and counts its plants and species. */
 export interface CanvasStampGuidance {
@@ -80,10 +70,11 @@ export interface CanvasToolGuidance {
 
 export const IDLE_CANVAS_TOOL_GUIDANCE: CanvasToolGuidance = Object.freeze({ gesture: false, stamp: null, stampRotationDeg: null, promptSpecies: false, plantRow: null })
 
-const toolGuidance = signal<CanvasToolGuidance>(IDLE_CANVAS_TOOL_GUIDANCE)
+/** The active tool's gesture and stamp state, for the tool card. */
+export const currentCanvasToolGuidance = signal<CanvasToolGuidance>(IDLE_CANVAS_TOOL_GUIDANCE)
 
 export function setCanvasToolGuidance(next: CanvasToolGuidance): void {
-  const current = toolGuidance.peek()
+  const current = currentCanvasToolGuidance.peek()
   if (
     current.gesture === next.gesture
     && current.promptSpecies === next.promptSpecies
@@ -91,7 +82,7 @@ export function setCanvasToolGuidance(next: CanvasToolGuidance): void {
     && stampGuidanceEqual(current.stamp, next.stamp)
     && plantRowGuidanceEqual(current.plantRow, next.plantRow)
   ) return
-  toolGuidance.value = next
+  currentCanvasToolGuidance.value = next
 }
 
 function stampGuidanceEqual(a: CanvasStampGuidance | null, b: CanvasStampGuidance | null): boolean {
@@ -106,5 +97,3 @@ function plantRowGuidanceEqual(a: CanvasPlantRowGuidance | null, b: CanvasPlantR
     && a.intervalValid === b.intervalValid && a.count === b.count && a.density === b.density
     && a.focusRequest === b.focusRequest
 }
-
-export { toolGuidance as canvasToolGuidanceState }

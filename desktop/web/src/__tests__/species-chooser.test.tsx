@@ -16,7 +16,7 @@ import { SceneStore } from '../canvas/runtime/scene/store'
 import { setCurrentCanvasSession } from '../canvas/session'
 import {
   IDLE_CANVAS_TOOL_GUIDANCE,
-  getCanvasTool,
+  currentCanvasTool,
   setCanvasTool,
   setCanvasToolGuidance,
 } from '../canvas/session-state'
@@ -331,7 +331,7 @@ describe('Place plants species chooser', () => {
 
     expect(escape.defaultPrevented).toBe(true)
     expect(options()).toHaveLength(0)
-    expect(getCanvasTool()).toBe('plant-stamp')
+    expect(currentCanvasTool.value).toBe('plant-stamp')
     expect(readPlantStampSource()?.canonical_name).toBe('Ficus carica')
     expect(document.activeElement).toBe(map)
   })

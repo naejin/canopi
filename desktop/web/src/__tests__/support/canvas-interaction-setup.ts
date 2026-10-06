@@ -8,7 +8,7 @@ import { clearPlantStampSource } from '../../canvas/plant-stamp-source'
 import { clearSavedObjectStampSource } from '../../canvas/saved-object-stamp-source'
 import {
   IDLE_CANVAS_TOOL_GUIDANCE,
-  selectedObjectIds,
+  currentCanvasSelection,
   setCanvasTool,
   setCanvasToolGuidance,
 } from '../../canvas/session-state'
@@ -235,12 +235,12 @@ export function createInteractionDeps(
   const setSelection = vi.fn((targets: Iterable<SceneDesignObjectTarget>) => {
     selection = [...targets].map((target) => ({ ...target }))
     store.setSelection(selection)
-    selectedObjectIds.value = new Set(selection.map((target) => target.id))
+    currentCanvasSelection.value = new Set(selection.map((target) => target.id))
   })
   const clearSelection = vi.fn(() => {
     selection = []
     store.setSelection(selection)
-    selectedObjectIds.value = new Set()
+    currentCanvasSelection.value = new Set()
   })
   const render = (overrides.render ?? ((kind: 'scene' | 'viewport') => {
     if (kind === 'scene' || kind === 'viewport') renderedSession?.refreshMeasurements()
@@ -789,7 +789,7 @@ export function installSceneInteractionFixture(
     testView = createTestView({ screen: { width: 400, height: 300 }, viewport: { x: 0, y: 0, scale: 1 } })
     store = new SceneStore()
     sessions = []
-    selectedObjectIds.value = new Set()
+    currentCanvasSelection.value = new Set()
     clearPlantStampSource()
     clearSavedObjectStampSource()
     snapToGridEnabled.value = false
@@ -821,7 +821,7 @@ export function installSceneInteractionFixture(
     setCanvasTool('select')
     setCanvasToolGuidance(IDLE_CANVAS_TOOL_GUIDANCE)
     container.remove()
-    selectedObjectIds.value = new Set()
+    currentCanvasSelection.value = new Set()
     clearPlantStampSource()
     clearSavedObjectStampSource()
     snapToGridEnabled.value = false

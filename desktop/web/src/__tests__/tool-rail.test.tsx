@@ -16,7 +16,7 @@ import { toolRailRoom, visibleMapFrame } from '../app/shell/visible-map-area'
 import { phoneLayout } from '../app/shell/phone-layout'
 import { toolNamesVisible, usedCanvasTools } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { activeTool, selectedObjectIds } from '../canvas/session-state'
+import { currentCanvasTool, currentCanvasSelection } from '../canvas/session-state'
 import { activePanel, sidePanel } from '../app/shell/state'
 import { gridVisible, snapToGridEnabled } from '../app/canvas-settings/signals'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
@@ -51,7 +51,7 @@ describe('ToolRail', () => {
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
-    activeTool.value = 'select'
+    currentCanvasTool.value = 'select'
     canUndo.value = false
     canRedo.value = false
     setTool.mockReset()
@@ -59,7 +59,7 @@ describe('ToolRail', () => {
     redo.mockReset()
     toggleGrid.mockReset()
     toggleSnapToGrid.mockReset()
-    selectedObjectIds.value = new Set()
+    currentCanvasSelection.value = new Set()
     activePanel.value = 'canvas'
     sidePanel.value = null
     gridVisible.value = true
@@ -88,8 +88,8 @@ describe('ToolRail', () => {
     render(null, container)
     container.remove()
     phoneLayout.value = null
-    activeTool.value = 'select'
-    selectedObjectIds.value = new Set()
+    currentCanvasTool.value = 'select'
+    currentCanvasSelection.value = new Set()
     activePanel.value = 'canvas'
     sidePanel.value = null
     gridVisible.value = true
@@ -128,9 +128,9 @@ describe('ToolRail', () => {
     const uninstall = installToolRailLearning()
     try {
       expect(usedCanvasTools.value).toEqual([])
-      await act(async () => { activeTool.value = 'polygon' })
-      await act(async () => { activeTool.value = 'select' })
-      await act(async () => { activeTool.value = 'polygon' })
+      await act(async () => { currentCanvasTool.value = 'polygon' })
+      await act(async () => { currentCanvasTool.value = 'select' })
+      await act(async () => { currentCanvasTool.value = 'polygon' })
       expect(usedCanvasTools.value).toEqual(['polygon', 'select'])
     } finally {
       uninstall()
@@ -190,7 +190,7 @@ describe('ToolRail', () => {
   })
 
   it('presses the active tool and groups tools as the Menus board does', async () => {
-    activeTool.value = 'ellipse'
+    currentCanvasTool.value = 'ellipse'
     await mount()
     const tools = [...container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')]
     expect(tools.map((button) => button.dataset.command)).toEqual([
@@ -209,7 +209,7 @@ describe('ToolRail', () => {
     await mount()
     await act(async () => { railButton('canvas.tool.line').click() })
     expect(setTool).toHaveBeenCalledWith('line')
-    expect(activeTool.value).toBe('line')
+    expect(currentCanvasTool.value).toBe('line')
     expect(sidePanel.value).toBe('plant-db')
     expect(activePanel.value).toBe('canvas')
   })
@@ -253,7 +253,7 @@ describe('ToolRail', () => {
     await mount()
     await act(async () => {
       usedCanvasTools.value = [...RAIL_TOOL_IDS]
-      selectedObjectIds.value = new Set(['plant-1'])
+      currentCanvasSelection.value = new Set(['plant-1'])
     })
 
     const labels = [...container.querySelectorAll('button')].map((button) =>
@@ -268,7 +268,7 @@ describe('ToolRail', () => {
     await mount()
     await act(async () => {
       phoneLayout.value = 'portrait'
-      activeTool.value = 'rectangle'
+      currentCanvasTool.value = 'rectangle'
     })
     const rail = container.querySelector<HTMLElement>('[role="toolbar"]')!
     expect(rail.dataset.toolRail).toBe('phone')
@@ -357,7 +357,7 @@ describe('ToolRail', () => {
       expect(items[2]!.getAttribute('aria-keyshortcuts')).toBe('R')
       await act(async () => { items[2]!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
       expect(setTool).toHaveBeenCalledWith('rectangle')
-      expect(activeTool.value).toBe('rectangle')
+      expect(currentCanvasTool.value).toBe('rectangle')
       // More shows that it holds the active tool.
       expect(container.querySelector('[data-tool-rail-more]')!.hasAttribute('data-holds-active')).toBe(true)
 

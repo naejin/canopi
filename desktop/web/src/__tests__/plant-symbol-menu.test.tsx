@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PlantSymbolMenu } from '../components/canvas/PlantSymbolMenu'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { plantSymbolMenuOpen } from '../canvas/plant-symbol-menu-state'
-import { selectedObjectIds } from '../canvas/session-state'
+import { currentCanvasSelection } from '../canvas/session-state'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import {
   createTestCanvasCommandSurface,
@@ -41,7 +41,7 @@ describe('PlantSymbolMenu', () => {
       },
     }))
     buttonRef.current = document.createElement('button')
-    selectedObjectIds.value = new Set(['plant-1'])
+    currentCanvasSelection.value = new Set(['plant-1'])
     plantSymbolMenuOpen.value = true
   })
 
@@ -49,7 +49,7 @@ describe('PlantSymbolMenu', () => {
     vi.unstubAllGlobals()
     render(null, container)
     container.remove()
-    selectedObjectIds.value = new Set()
+    currentCanvasSelection.value = new Set()
     plantSymbolMenuOpen.value = false
     setCurrentCanvasSession(null)
   })

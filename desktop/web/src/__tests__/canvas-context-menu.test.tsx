@@ -12,7 +12,7 @@ import {
 import { plantColorMenuOpen } from '../canvas/plant-color-menu-state'
 import { plantSymbolMenuOpen } from '../canvas/plant-symbol-menu-state'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { selectedObjectIds } from '../canvas/session-state'
+import { currentCanvasSelection } from '../canvas/session-state'
 import type {
   CanvasContextMenuCommands,
   CanvasContextMenuRequest,
@@ -92,7 +92,7 @@ describe('CanvasContextMenu', () => {
     document.body.append(map, container)
     commands = createCommands()
     returnFocus.mockClear()
-    selectedObjectIds.value = new Set(['plant-1'])
+    currentCanvasSelection.value = new Set(['plant-1'])
     const plantContext = {
       plantIds: ['plant-1'],
       singleSpeciesCanonicalName: 'Malus domestica',
@@ -106,14 +106,14 @@ describe('CanvasContextMenu', () => {
         ...createTestCanvasQuerySurface(),
         getSelectedPlantColorContext: () => ({
           ...plantContext,
-          plantIds: selectedObjectIds.value.size > 0 ? plantContext.plantIds : [],
+          plantIds: currentCanvasSelection.value.size > 0 ? plantContext.plantIds : [],
           sharedCurrentColor: null,
           suggestedColor: null,
           singleSpeciesDefaultColor: null,
         }),
         getSelectedPlantSymbolContext: () => ({
           ...plantContext,
-          plantIds: selectedObjectIds.value.size > 0 ? plantContext.plantIds : [],
+          plantIds: currentCanvasSelection.value.size > 0 ? plantContext.plantIds : [],
           sharedCurrentSymbol: null,
           sharedEffectiveSymbol: 'round',
           inheritedSymbol: null,
@@ -137,7 +137,7 @@ describe('CanvasContextMenu', () => {
       plantAppearanceAnchor.value = null
       render(null, container)
     })
-    selectedObjectIds.value = new Set()
+    currentCanvasSelection.value = new Set()
     setCurrentCanvasSession(null)
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
@@ -394,7 +394,7 @@ describe('CanvasContextMenu', () => {
     await act(async () => menuItem('plant-symbol').click())
     expect(document.querySelector('[role="dialog"][aria-label="Plant symbol"]')).not.toBeNull()
 
-    await act(async () => { selectedObjectIds.value = new Set() })
+    await act(async () => { currentCanvasSelection.value = new Set() })
 
     expect(plantSymbolMenuOpen.value).toBe(false)
     expect(document.querySelector('[role="dialog"]')).toBeNull()

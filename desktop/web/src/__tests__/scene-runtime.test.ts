@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { selectedObjectIds, setCanvasSelection } from '../canvas/session-state'
+import { currentCanvasSelection, setCanvasSelection } from '../canvas/session-state'
 import { createDesktopCanvasRuntimeAppAdapter } from '../app/canvas-runtime/desktop-adapter'
 import type { CanopiFile } from '../types/design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
@@ -346,7 +346,7 @@ describe('Canvas runtime surfaces', () => {
 
       commands.sceneEdits.selectAll()
       commands.sceneEdits.groupSelected()
-      const originalGroupId = [...selectedObjectIds.value][0]!
+      const originalGroupId = [...currentCanvasSelection.value][0]!
 
       commands.sceneEdits.duplicateSelected()
 
@@ -364,7 +364,7 @@ describe('Canvas runtime surfaces', () => {
       expect(clonedMembers).toHaveLength(2)
       expectPointNear(clonedMembers[0], { x: original('plant-1').x + 1, y: original('plant-1').y })
       expectPointNear(clonedMembers[1], { x: original('plant-2').x + 1, y: original('plant-2').y })
-      expect(selectedObjectIds.value).toEqual(new Set([clonedGroup.id]))
+      expect(currentCanvasSelection.value).toEqual(new Set([clonedGroup.id]))
     } finally {
       host.destroy()
     }
@@ -640,18 +640,18 @@ describe('Canvas runtime surfaces', () => {
           createPlant('plant-2', 30, 40),
         ],
       })
-      selectedObjectIds.value = new Set(['mirror-only'])
+      currentCanvasSelection.value = new Set(['mirror-only'])
 
       commands.sceneEdits.selectAll()
       expect(queries.getSelection()).toEqual([
         { kind: 'plant', id: 'plant-1' },
         { kind: 'plant', id: 'plant-2' },
       ])
-      expect(selectedObjectIds.value).toEqual(new Set(['plant-1', 'plant-2']))
+      expect(currentCanvasSelection.value).toEqual(new Set(['plant-1', 'plant-2']))
 
       commands.sceneEdits.deleteSelected()
       expect(queries.getSelection()).toEqual([])
-      expect(selectedObjectIds.value.size).toBe(0)
+      expect(currentCanvasSelection.value.size).toBe(0)
     } finally {
       host.destroy()
     }

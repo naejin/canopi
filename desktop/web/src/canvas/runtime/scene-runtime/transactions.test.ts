@@ -5,7 +5,7 @@ import { designSessionFixture } from '../../../__tests__/support/design-session-
 import type { CanopiFile } from '../../../types/design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
 import { geoAt, hydratedScene } from '../../../__tests__/support/geo-design'
-import { selectedObjectIds } from '../../session-state'
+import { currentCanvasSelection } from '../../session-state'
 import {
   CanvasDocumentReplacementNotAdmittedError,
   createCanvasDocumentReplacementToken,
@@ -90,7 +90,7 @@ function createHarness() {
   const setSelection = (targets: Iterable<SceneDesignObjectTarget>) => {
     const next = [...targets]
     sceneStore.setSelection(next)
-    selectedObjectIds.value = new Set(next.map((target) => target.id))
+    currentCanvasSelection.value = new Set(next.map((target) => target.id))
   }
   const sceneEdits = new SceneRuntimeEditCoordinator({
     sceneStore,
@@ -118,7 +118,7 @@ function createHarness() {
 describe('scene edit transactions', () => {
   beforeEach(() => {
     designSessionFixture.canvasClean = true
-    selectedObjectIds.value = new Set()
+    currentCanvasSelection.value = new Set()
   })
 
   it('commits a command edit as one history entry and one scene revision', () => {
@@ -188,7 +188,7 @@ describe('scene edit transactions', () => {
     expect(sceneStore.persisted.plants[0]?.position).toEqual(plantStart(0))
     expect(sceneStore.persisted.plants[0]?.locked).toBe(true)
     expect(sceneStore.session.selectedTargets).toEqual([{ kind: 'plant', id: 'plant-1' }])
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
     expect(history.canUndo.value).toBe(false)
     expect(readSceneRevision()).toBe(0)
     expect(invalidations).toEqual([])

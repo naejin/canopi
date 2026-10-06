@@ -19,7 +19,7 @@ import {
   clearSavedObjectStampSource,
   readSavedObjectStampSource,
 } from '../saved-object-stamp-source'
-import { getCanvasTool, IDLE_CANVAS_TOOL_GUIDANCE, type CanvasToolGuidance } from '../session-state'
+import { currentCanvasTool, IDLE_CANVAS_TOOL_GUIDANCE, type CanvasToolGuidance } from '../session-state'
 import type {
   CanvasContextMenuCommands,
   CanvasFocusPort,
@@ -180,7 +180,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   private readonly _config: RecogniserConfig
-  private readonly _tool = signal<ToolId>(getCanvasTool() as ToolId)
+  private readonly _tool = signal<ToolId>(currentCanvasTool.peek() as ToolId)
   private readonly _frames: ViewFrameSource
   /** The view's mode as the session last heard it on a 'tools' frame: what the recogniser is configured with. */
   private _mode: ViewFrame['mode']

@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { activeTool } from '../canvas/session-state'
+import { currentCanvasTool } from '../canvas/session-state'
 import { placeSearchFocusRequest } from '../app/geocoding/place-search-ui'
 import { keyboardShortcutsDialogOpen } from '../app/shell/dialogs'
 import { activePanel, sidePanel } from '../app/shell/state'
@@ -40,7 +40,7 @@ function webCatalog(newDesign = vi.fn()): BrowserShellCatalog {
 
 describe('Web keys', () => {
   beforeEach(() => {
-    activeTool.value = 'select'
+    currentCanvasTool.value = 'select'
     setCurrentCanvasSession(null)
   })
 
@@ -50,7 +50,7 @@ describe('Web keys', () => {
     setCurrentCanvasSession(null)
     activePanel.value = 'canvas'
     sidePanel.value = null
-    activeTool.value = 'select'
+    currentCanvasTool.value = 'select'
     document.body.innerHTML = ''
     setShortcutPlatform({ os: 'linux' })
     vi.restoreAllMocks()
@@ -72,7 +72,7 @@ describe('Web keys', () => {
 
     window.dispatchEvent(event)
 
-    expect(activeTool.value).toBe('select')
+    expect(currentCanvasTool.value).toBe('select')
   })
 
   it('focuses the place field on Ctrl+K only while a Design canvas is live', () => {
@@ -94,7 +94,7 @@ describe('Web keys', () => {
     singleKeyShortcuts.value = false
     try {
       expect(dispatchShortcut({ key: 'z' }).defaultPrevented).toBe(false)
-      expect(activeTool.value).toBe('select')
+      expect(currentCanvasTool.value).toBe('select')
       const before = placeSearchFocusRequest.value
       expect(dispatchShortcut({ key: 'k', ctrlKey: true }).defaultPrevented).toBe(true)
       expect(placeSearchFocusRequest.value).toBe(before + 1)
@@ -196,7 +196,7 @@ describe('Web keys', () => {
 
     expect(setTool).toHaveBeenCalledOnce()
     expect(setTool).toHaveBeenCalledWith('ellipse')
-    expect(activeTool.value).toBe('ellipse')
+    expect(currentCanvasTool.value).toBe('ellipse')
     expect(undo).toHaveBeenCalledTimes(2)
     expect(redo).toHaveBeenCalledTimes(2)
   })
@@ -219,7 +219,7 @@ describe('Web keys', () => {
 
     expect(setTool).not.toHaveBeenCalled()
     expect(undo).not.toHaveBeenCalled()
-    expect(activeTool.value).toBe('select')
+    expect(currentCanvasTool.value).toBe('select')
   })
 
   it('re-reads the live Canvas surface across detach and replacement', () => {

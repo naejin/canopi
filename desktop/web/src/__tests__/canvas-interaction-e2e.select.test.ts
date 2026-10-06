@@ -5,7 +5,7 @@ import { signal } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
 import { writePlantStampDragData } from '../canvas/plant-stamp-source'
 import { writeSavedObjectStampDragData } from '../canvas/saved-object-stamp-source'
-import { selectedObjectIds } from '../canvas/session-state'
+import { currentCanvasSelection } from '../canvas/session-state'
 import { snapToGridEnabled } from '../app/canvas-settings/signals'
 import { createMapLibreCameraDriver } from '../maplibre/camera-driver'
 import { createSessionPlane } from '../canvas/session-plane'
@@ -233,7 +233,7 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 35, y: 45 })
     events.pointerUp({ x: 35, y: 45 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
     expect(store.persisted.plants[0]?.position).toEqual({ x: 35, y: 45 })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
     expect(deps.setSelection).toHaveBeenCalledWith([plantTarget('plant-1')])
@@ -844,7 +844,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 20, y: 30 }, { button: 0, detail: 2 })
     events.pointerUp({ x: 20, y: 30 }, { button: 0, detail: 2 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['apple-1', 'apple-2']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['apple-1', 'apple-2']))
     expect(deps.setSelection).toHaveBeenCalledWith([
       plantTarget('apple-1'),
       plantTarget('apple-2'),
@@ -871,12 +871,12 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 20, y: 30 }, { button: 0, detail: 2, shiftKey: true })
     events.pointerUp({ x: 20, y: 30 }, { button: 0, detail: 2, shiftKey: true })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['pear-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['pear-1']))
 
     events.pointerDown({ x: 20, y: 30 }, { button: 0, detail: 2, shiftKey: true })
     events.pointerUp({ x: 20, y: 30 }, { button: 0, detail: 2, shiftKey: true })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['pear-1', 'apple-1', 'apple-2']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['pear-1', 'apple-1', 'apple-2']))
     session.dispose()
   })
 
@@ -1329,7 +1329,7 @@ describe('SceneInteractionSession', () => {
     const buttons = [...container.querySelectorAll('button')]
     expect(buttons.filter((button) => /unlock/i.test(button.getAttribute('aria-label') ?? button.textContent ?? '')))
       .toEqual([])
-    expect(selectedObjectIds.value).toEqual(new Set())
+    expect(currentCanvasSelection.value).toEqual(new Set())
     session.dispose()
   })
 
@@ -1418,7 +1418,7 @@ describe('SceneInteractionSession', () => {
 
     expect(contextMenu.defaultPrevented).toBe(true)
     expect(downstreamContextMenu).not.toHaveBeenCalled()
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
     expect(store.persisted.plants.find((plant) => plant.id === 'plant-1')?.position)
       .toEqual({ x: 40, y: 50 })
     expect(contextMenuHost.opened).toHaveLength(0)
@@ -1472,7 +1472,7 @@ describe('SceneInteractionSession', () => {
     openContextMenu({ x: 300, y: 250 })
 
     expect(contextMenuHost.current?.selection).toBeNull()
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
     expect(deps.setSelection).not.toHaveBeenCalled()
     session.dispose()
   })
@@ -1488,7 +1488,7 @@ describe('SceneInteractionSession', () => {
 
     openContextMenu({ x: 20, y: 30 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
     expect(contextMenuHost.current?.selection?.editableTargets).toEqual([plantTarget('plant-1')])
     expect(contextMenuHost.current?.commands).toBe(commands)
     contextMenuCommand('copy').run()
@@ -1614,7 +1614,7 @@ describe('SceneInteractionSession', () => {
     vi.mocked(deps.setSelection).mockClear()
     openContextMenu({ x: 110, y: 30 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
     expect(deps.setSelection).not.toHaveBeenCalled()
     expect(contextMenuCommand('copy').disabled).toBe(true)
     expect(contextMenuCommand('delete').disabled).toBe(true)
@@ -1651,7 +1651,7 @@ describe('SceneInteractionSession', () => {
 
     openContextMenu({ x: 120, y: 30 })
 
-    expect(selectedObjectIds.value).toEqual(new Set())
+    expect(currentCanvasSelection.value).toEqual(new Set())
     expect(deps.setSelection).not.toHaveBeenCalled()
     expect(contextMenuHost.current?.selection).not.toBeNull()
     expect(contextMenuCommand('copy').disabled).toBe(true)
@@ -1676,7 +1676,7 @@ describe('SceneInteractionSession', () => {
     vi.mocked(deps.setSelection).mockClear()
     openContextMenu({ x: 80, y: 30 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-2']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-2']))
     expect(deps.setSelection).toHaveBeenCalledWith([plantTarget('plant-2')])
     expect(contextMenuHost.current?.selection?.editableTargets).toEqual([plantTarget('plant-2')])
 
@@ -1684,7 +1684,7 @@ describe('SceneInteractionSession', () => {
     vi.mocked(deps.setSelection).mockClear()
     openContextMenu({ x: 80, y: 30 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1', 'plant-2']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1', 'plant-2']))
     expect(deps.setSelection).not.toHaveBeenCalled()
     expect(contextMenuHost.current?.selection?.editableTargets).toHaveLength(2)
     session.dispose()
@@ -1701,7 +1701,7 @@ describe('SceneInteractionSession', () => {
 
     openContextMenu({ x: 20, y: 30 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['locked-plant']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['locked-plant']))
     expect(contextMenuCommand('copy').disabled).toBe(true)
     expect(contextMenuCommand('delete').disabled).toBe(true)
     expect(contextMenuCommand('unlock').disabled).toBe(false)
@@ -1811,7 +1811,7 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 35, y: 45 }, { button: 0 })
     events.pointerUp({ x: 35, y: 45 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['locked-plant']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['locked-plant']))
     expect(store.persisted.plants[0]?.position).toEqual({ x: 20, y: 30 })
 
     openContextMenu({ x: 20, y: 30 })
@@ -1830,7 +1830,7 @@ describe('SceneInteractionSession', () => {
     expect(unlockSelected).toHaveBeenCalledTimes(1)
     expect(onSceneEditCommit).toHaveBeenCalledWith('unlock-selected')
     expect(store.persisted.plants[0]?.locked).toBe(false)
-    expect(selectedObjectIds.value).toEqual(new Set(['locked-plant']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['locked-plant']))
     openContextMenu({ x: 20, y: 30 })
     expect(contextMenuCommand('unlock').disabled).toBe(true)
     expect(contextMenuCommand('lock').disabled).toBe(false)
@@ -1864,7 +1864,7 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 35, y: 45 }, { button: 0 })
     events.pointerUp({ x: 35, y: 45 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['editable-plant', 'locked-plant']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['editable-plant', 'locked-plant']))
     expect(store.persisted.plants.find((plant) => plant.id === 'editable-plant')?.position).toEqual({ x: 35, y: 45 })
     expect(store.persisted.plants.find((plant) => plant.id === 'locked-plant')?.position).toEqual({ x: 60, y: 30 })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
@@ -1904,13 +1904,13 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     events.pointerUp({ x: 20, y: 30 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set())
+    expect(currentCanvasSelection.value).toEqual(new Set())
 
     events.pointerDown({ x: 10, y: 20 }, { button: 0 })
     events.pointerMove({ x: 30, y: 40 }, { button: 0 })
     events.pointerUp({ x: 30, y: 40 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set())
+    expect(currentCanvasSelection.value).toEqual(new Set())
     session.dispose()
   })
 
@@ -2061,7 +2061,7 @@ describe('SceneInteractionSession', () => {
     events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
     events.pointerDown({ x: 27, y: 35 }, { button: 0, detail: 1 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['annotation-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['annotation-1']))
     expect(container.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('Portable note')
     session.dispose()
   })
@@ -2325,7 +2325,7 @@ describe('SceneInteractionSession', () => {
     textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
 
     expect(store.persisted.annotations).toHaveLength(0)
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-annotation-text')
     expect(container.querySelector('textarea')).toBeNull()
     session.dispose()
@@ -2562,7 +2562,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 80, y: 50 }, { button: 0 })
     events.pointerUp({ x: 80, y: 50 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['zone-ellipse']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['zone-ellipse']))
     expect(deps.setSelection).toHaveBeenCalledWith([zoneTarget('zone-ellipse')])
     session.dispose()
   })
@@ -2593,7 +2593,7 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 90, y: 65 }, { button: 0 })
     events.pointerUp({ x: 90, y: 65 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['zone-ellipse']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['zone-ellipse']))
     expect(store.persisted.zones[0]?.points).toEqual([
       { x: 60, y: 65 },
       { x: 30, y: 20 },
@@ -2710,7 +2710,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 15, y: 45 }, { button: 0 })
     events.pointerUp({ x: 15, y: 45 }, { button: 0 })
 
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
     expect(draftLabelTexts(deps)).toEqual([])
     session.dispose()
   })
@@ -2739,7 +2739,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 50, y: 13 }, { button: 0 })
     events.pointerUp({ x: 50, y: 13 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['line-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['line-1']))
     expect(draftLabelTexts(deps)).toEqual(['100 m'])
     session.dispose()
   })
@@ -2768,7 +2768,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 60, y: 60 }, { button: 0 })
     events.pointerUp({ x: 60, y: 60 }, { button: 0 })
 
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
     expect(draftLabelTexts(deps)).toEqual([])
     session.dispose()
   })
@@ -2798,7 +2798,7 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 80, y: 60 }, { button: 0 })
     events.pointerUp({ x: 80, y: 60 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['line-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['line-1']))
     session.dispose()
   })
 
@@ -2865,7 +2865,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 10, y: 20 }, { button: 0 })
     events.pointerUp({ x: 10, y: 20 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['zone-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['zone-1']))
     expect(draftLabelTexts(deps)).toEqual([
       '100 m',
       '80 m',
@@ -2923,7 +2923,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 150, y: 20 }, { button: 0, shiftKey: true })
     events.pointerUp({ x: 150, y: 20 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['zone-1', 'zone-2']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['zone-1', 'zone-2']))
     expect(draftLabelTexts(deps)).toEqual([])
     session.dispose()
   })
@@ -2961,7 +2961,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 10, y: 20 }, { button: 0 })
     events.pointerUp({ x: 10, y: 20 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['group-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['group-1']))
     expect(draftLabelTexts(deps)).toEqual([])
     session.dispose()
   })
@@ -3047,13 +3047,13 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 60, y: 50 }, { button: 0 })
     events.pointerUp({ x: 60, y: 50 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set())
+    expect(currentCanvasSelection.value).toEqual(new Set())
     expect(deps.setSelection).not.toHaveBeenCalledWith([zoneTarget('zone-1')])
 
     events.pointerDown({ x: 10, y: 50 }, { button: 0 })
     events.pointerUp({ x: 10, y: 50 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['zone-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['zone-1']))
     session.dispose()
   })
 
@@ -3074,7 +3074,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 10, y: 50 }, { button: 0 })
     events.pointerUp({ x: 10, y: 50 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
     session.dispose()
   })
 
@@ -3522,7 +3522,7 @@ describe('SceneInteractionSession', () => {
       rotationDeg: 45,
       position: { x: 42, y: 40 },
     })
-    expect(selectedObjectIds.value).toEqual(new Set([
+    expect(currentCanvasSelection.value).toEqual(new Set([
       store.persisted.plants[0]!.id,
       store.persisted.zones[0]!.id,
       store.persisted.annotations[0]!.id,
@@ -3915,13 +3915,13 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 24, y: 24 }, { button: 0 })
     events.pointerUp({ x: 24, y: 24 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['shared']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['shared']))
     expect(deps.setSelection).toHaveBeenCalledWith([annotationTarget('shared')])
     session.dispose()
   })
 
   it('clears selection through the runtime seam when clicking empty canvas', () => {
-    selectedObjectIds.value = new Set(['plant-1'])
+    currentCanvasSelection.value = new Set(['plant-1'])
     const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
@@ -3929,7 +3929,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 380, y: 280 }, { button: 0 })
     events.pointerUp({ x: 380, y: 280 }, { button: 0 })
 
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
     // The ToolHost's history-free selection (ToolHostDeps.setSelection); the runtime's clearSelection is the same write.
     expect(deps.setSelection).toHaveBeenCalledTimes(1)
     expect(deps.setSelection).toHaveBeenCalledWith([])

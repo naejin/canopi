@@ -11,7 +11,7 @@ import { TEST_GEO_ORIGIN } from '../../__tests__/support/geo-design'
 import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
 import { setCurrentCanvasSession } from '../../canvas/session'
 import { createSessionPlane } from '../../canvas/session-plane'
-import { selectedObjectIds } from '../../canvas/session-state'
+import { currentCanvasSelection } from '../../canvas/session-state'
 import { PlantAppearancePopovers } from '../../components/canvas/PlantAppearancePopovers'
 import { useFocusRegion } from '../../components/shared/useFocusRegion'
 import type { CanopiFile } from '../../types/design'
@@ -227,7 +227,7 @@ describe('focus moves go through the focus owner', () => {
     vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
     const container = document.createElement('div')
     document.body.append(container)
-    selectedObjectIds.value = new Set(['plant-1'])
+    currentCanvasSelection.value = new Set(['plant-1'])
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       queries: {
         ...createTestCanvasQuerySurface(),
@@ -256,7 +256,7 @@ describe('focus moves go through the focus owner', () => {
       expect(document.activeElement).toBe(map)
     } finally {
       plantColorMenuOpen.value = false
-      selectedObjectIds.value = new Set()
+      currentCanvasSelection.value = new Set()
       await act(async () => { render(null, container) })
       vi.unstubAllGlobals()
     }

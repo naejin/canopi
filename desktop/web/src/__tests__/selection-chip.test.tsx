@@ -11,7 +11,7 @@ import { SceneStore } from '../canvas/runtime/scene/store'
 import type { SceneDesignObjectSelection } from '../canvas/runtime/scene'
 import type { CanvasCommandSurface } from '../canvas/runtime/runtime'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { selectedObjectIds } from '../canvas/session-state'
+import { currentCanvasSelection } from '../canvas/session-state'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasDocumentSurface,
@@ -102,7 +102,7 @@ describe('Selection chip', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
-    selectedObjectIds.value = new Set()
+    currentCanvasSelection.value = new Set()
     plantFinderMapMatches.value = null
     setCurrentCanvasSession(null)
   })
@@ -110,7 +110,7 @@ describe('Selection chip', () => {
   async function select(targets: SceneDesignObjectSelection): Promise<void> {
     await act(() => {
       queries.setSelection(targets)
-      selectedObjectIds.value = new Set(targets.map((target) => target.id))
+      currentCanvasSelection.value = new Set(targets.map((target) => target.id))
     })
   }
 

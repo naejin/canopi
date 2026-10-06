@@ -45,7 +45,7 @@ import {
   clearSavedObjectStampSource,
   selectSavedObjectStampSource,
 } from '../saved-object-stamp-source'
-import { activeTool, canvasToolGuidanceState as currentCanvasToolGuidance, selectedObjectIds } from '../session-state'
+import { currentCanvasTool, currentCanvasToolGuidance, currentCanvasSelection } from '../session-state'
 import {
   hoveredCanvasTargets,
   hoveredPanelTargets,
@@ -546,9 +546,9 @@ function createPanelTargetAdapterProbe(initialTargets: readonly PanelTarget[] = 
 
 describe('scene canvas runtime', () => {
   beforeEach(() => {
-    activeTool.value = 'select'
+    currentCanvasTool.value = 'select'
     locale.value = 'en'
-    selectedObjectIds.value = new Set()
+    currentCanvasSelection.value = new Set()
     plantColorMenuOpen.value = false
     clearPlantStampSource()
     clearSavedObjectStampSource()
@@ -877,13 +877,13 @@ describe('scene canvas runtime', () => {
 
     expect(() => runtime.commandSurface.tools.setTool('rectangle'))
       .toThrow('drag abort failed')
-    expect(activeTool.value).toBe('select')
+    expect(currentCanvasTool.value).toBe('select')
     expect(container.style.cursor).toBe('default')
 
     runtime.commandSurface.tools.setTool('rectangle')
 
     expect(abortCalls).toBe(2)
-    expect(activeTool.value).toBe('rectangle')
+    expect(currentCanvasTool.value).toBe('rectangle')
     expect(container.style.cursor).toBe('crosshair')
 
     beginSpy.mockRestore()
@@ -899,10 +899,10 @@ describe('scene canvas runtime', () => {
     rectangleActivation.deactivateFails = true
     try {
       runtime.commandSurface.tools.setTool('rectangle')
-      expect(activeTool.value).toBe('rectangle')
+      expect(currentCanvasTool.value).toBe('rectangle')
       // Leaving Rectangle throws before Ellipse is armed: the host arms a fresh Select, and so does the toolbar.
       expect(() => runtime.commandSurface.tools.setTool('ellipse')).toThrow('deactivation failed')
-      expect(activeTool.value).toBe('select')
+      expect(currentCanvasTool.value).toBe('select')
     } finally {
       rectangleActivation.deactivateFails = false
     }
@@ -915,20 +915,20 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
     setInteractionViewport(runtime)
     runtime.commandSurface.tools.setTool('line')
-    expect(activeTool.value).toBe('line')
+    expect(currentCanvasTool.value).toBe('line')
 
     rectangleActivation.fails = true
     try {
       // Rectangle's activation throws: the host falls back to Select, and the app's own tool state (session-state.ts,
-      // read here as `activeTool`) must follow it, not stay on the tool that was armed before the failed attempt.
+      // read here as `currentCanvasTool`) must follow it, not stay on the tool that was armed before the failed attempt.
       expect(() => runtime.commandSurface.tools.setTool('rectangle')).toThrow('activation failed')
-      expect(activeTool.value).toBe('select')
+      expect(currentCanvasTool.value).toBe('select')
     } finally {
       rectangleActivation.fails = false
     }
 
     runtime.commandSurface.tools.setTool('rectangle')
-    expect(activeTool.value).toBe('rectangle')
+    expect(currentCanvasTool.value).toBe('rectangle')
 
     runtime.destroy()
   })
@@ -1593,14 +1593,14 @@ describe('scene canvas runtime', () => {
     const grouped = runtime.querySurface.getSceneSnapshot()
     expect(grouped.groups).toHaveLength(1)
     const groupId = grouped.groups[0]!.id
-    expect(selectedObjectIds.value).toEqual(new Set([groupId]))
+    expect(currentCanvasSelection.value).toEqual(new Set([groupId]))
 
     runtime.commandSurface.sceneEdits.duplicateSelected()
 
     const duplicated = runtime.querySurface.getSceneSnapshot()
     expect(duplicated.groups).toHaveLength(2)
     expect(duplicated.plants).toHaveLength(4)
-    const duplicateGroupId = [...selectedObjectIds.value][0]!
+    const duplicateGroupId = [...currentCanvasSelection.value][0]!
     expect(duplicateGroupId).not.toBe(groupId)
 
     runtime.commandSurface.sceneEdits.deleteSelected()
@@ -1608,7 +1608,7 @@ describe('scene canvas runtime', () => {
     const afterDelete = runtime.querySurface.getSceneSnapshot()
     expect(afterDelete.groups).toHaveLength(1)
     expect(afterDelete.plants).toHaveLength(2)
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
   })
 
   it('selectAll prefers top-level group ids and skips locked items', () => {
@@ -1632,7 +1632,7 @@ describe('scene canvas runtime', () => {
 
     runtime.commandSurface.sceneEdits.selectAll()
 
-    expect(selectedObjectIds.value).toEqual(new Set(['group-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['group-1']))
   })
 
   it('keeps Species focus separate from selection, history and saved content, and resets on replacement', () => {
@@ -1723,7 +1723,7 @@ describe('scene canvas runtime', () => {
 
     clickAt(events, { x: 10, y: 10 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
     expect(runtime.querySurface.getDesignObjectSelection().lockedTargets).toEqual([
       { kind: 'plant', id: 'plant-1' },
     ])
@@ -1749,7 +1749,7 @@ describe('scene canvas runtime', () => {
 
     clickAt(events, { x: 10, y: 10 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
     expect(runtime.querySurface.getSelectedPlantSymbolContext().plantIds).toEqual([])
 
     const changed = runtime.commandSurface.plantPresentation.setSelectedPlantSymbol('conifer')
@@ -1776,7 +1776,7 @@ describe('scene canvas runtime', () => {
     events.pointerDown({ x: 20, y: 20 }, { button: 0, shiftKey: true })
     events.pointerUp({ x: 20, y: 20 }, { button: 0, shiftKey: true })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1', 'plant-2']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1', 'plant-2']))
     expect(runtime.querySurface.getSelectedPlantColorContext().plantIds).toEqual(['plant-1'])
 
     const changed = runtime.commandSurface.plantPresentation.setSelectedPlantColor('#228833')
@@ -1905,7 +1905,7 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
 
     runtime.commandSurface.sceneEdits.selectAll()
-    selectedObjectIds.value = new Set(['plant-2'])
+    currentCanvasSelection.value = new Set(['plant-2'])
 
     expect(runtime.querySurface.getSelectedPlantColorContext().plantIds).toEqual(['plant-1'])
   })
@@ -1915,7 +1915,7 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
 
     runtime.commandSurface.sceneEdits.selectAll()
-    selectedObjectIds.value = new Set(['zone-1'])
+    currentCanvasSelection.value = new Set(['zone-1'])
 
     expect(runtime.querySurface.getSelection()).toEqual([plantTarget('plant-1')])
 
@@ -1926,7 +1926,7 @@ describe('scene canvas runtime', () => {
     )
     runtime.commandSurface.sceneEdits.selectAll()
     expect(runtime.querySurface.getSelection()).toEqual([plantTarget('plant-2')])
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-2']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-2']))
 
     runtime.documentSurface.replaceDocument(
       fileWithOnlyPlants('plant-2'),
@@ -1934,7 +1934,7 @@ describe('scene canvas runtime', () => {
       () => {},
     )
     expect(runtime.querySurface.getSelection()).toEqual([])
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
   })
 
   it('publishes the UI selection mirror when only the selected target kind changes', () => {
@@ -1946,7 +1946,7 @@ describe('scene canvas runtime', () => {
     const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
     const publications: string[][] = []
     const dispose = effect(() => {
-      publications.push([...selectedObjectIds.value])
+      publications.push([...currentCanvasSelection.value])
     })
 
     sceneEdits.run('select-colliding-plant', (tx) => {
@@ -1958,7 +1958,7 @@ describe('scene canvas runtime', () => {
     })
 
     expect(runtime.querySurface.getSelection()).toEqual([zoneTarget('shared-id')])
-    expect(selectedObjectIds.value).toEqual(new Set(['shared-id']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['shared-id']))
     expect(publications).toHaveLength(publicationsAfterPlant + 1)
     dispose()
     runtime.destroy()
@@ -2043,7 +2043,7 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
     runtime.commandSurface.sceneEdits.selectAll()
     expect(runtime.querySurface.getSelection()).toEqual([plantTarget('plant-1')])
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
     failPanelTargetCleanup = true
     const replacementToken = createCanvasDocumentReplacementToken()
 
@@ -2056,7 +2056,7 @@ describe('scene canvas runtime', () => {
     expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.id))
       .toEqual(['plant-1'])
     expect(runtime.querySurface.getSelection()).toEqual([plantTarget('plant-1')])
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
 
     failPanelTargetCleanup = false
     runtime.documentSurface.replaceDocument(
@@ -2067,7 +2067,7 @@ describe('scene canvas runtime', () => {
     expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.id))
       .toEqual(['plant-2'])
     expect(runtime.querySurface.getSelection()).toEqual([])
-    expect(selectedObjectIds.value).toEqual(new Set())
+    expect(currentCanvasSelection.value).toEqual(new Set())
     runtime.destroy()
   })
 
@@ -2455,7 +2455,7 @@ describe('scene canvas runtime', () => {
     expect(snapshot?.highlightedPlantIds).toEqual(new Set(['plant-1', 'plant-2']))
     expect(snapshot?.highlightedZoneIds).toEqual(new Set(['zone-1']))
     expect(runtime.querySurface.getSelection().length).toBe(0)
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
     runtime.destroy()
   })
 
@@ -2480,7 +2480,7 @@ describe('scene canvas runtime', () => {
     expect(snapshot?.highlightedPlantIds).toEqual(new Set(['plant-1', 'plant-2']))
     expect(snapshot?.highlightedZoneIds).toEqual(new Set(['zone-1']))
     expect(runtime.querySurface.getSelection().length).toBe(0)
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
     expect(cleanState.setCanvasClean).not.toHaveBeenCalledWith(false)
     runtime.destroy()
   })
@@ -2535,7 +2535,7 @@ describe('scene canvas runtime', () => {
     })
 
     expect(runtime.querySurface.getSelection().length).toBe(0)
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
     runtime.destroy()
   })
 
@@ -2728,14 +2728,14 @@ describe('scene canvas runtime', () => {
 
     expect(hoveredCanvasTargets.value).toEqual([speciesTarget('Malus domestica')])
     expect(runtime.querySurface.getSelection().length).toBe(0)
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
     expect(cleanState.setCanvasClean).not.toHaveBeenCalledWith(false)
 
     ;(runtime as any)._interaction._deps.setHoveredTarget(null)
 
     expect(hoveredCanvasTargets.value).toEqual([])
     expect(runtime.querySurface.getSelection().length).toBe(0)
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
     expect(cleanState.setCanvasClean).not.toHaveBeenCalledWith(false)
     runtime.destroy()
   })
@@ -2835,7 +2835,7 @@ describe('scene canvas runtime', () => {
 
     runtime.documentSurface.loadDocument(makeFile())
     runtime.commandSurface.tools.setTool('plant-stamp')
-    activeTool.value = 'plant-stamp'
+    currentCanvasTool.value = 'plant-stamp'
     selectPlantStampSource({
       canonical_name: 'Malus domestica',
       common_name: 'Apple',
@@ -2843,7 +2843,7 @@ describe('scene canvas runtime', () => {
       width_max_m: 4,
     })
     plantColorMenuOpen.value = true
-    selectedObjectIds.value = new Set(['plant-1'])
+    currentCanvasSelection.value = new Set(['plant-1'])
     hoveredPanelTargets.value = [speciesTarget('Malus domestica')]
     selectedPanelTargetOrigin.value = 'timeline'
     selectedPanelTargets.value = [{ kind: 'zone', zone_id: 'zone-1' }]
@@ -2858,10 +2858,10 @@ describe('scene canvas runtime', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(activeTool.value).toBe('select')
+    expect(currentCanvasTool.value).toBe('select')
     expect(readPlantStampSource()).toBe(null)
     expect(plantColorMenuOpen.value).toBe(false)
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
     expect(hoveredPanelTargets.value).toEqual([])
     expect(selectedPanelTargets.value).toEqual([])
     expect(selectedPanelTargetOrigin.value).toBeNull()
@@ -2887,7 +2887,7 @@ describe('scene canvas runtime', () => {
     expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(3)
     const stampedId = runtime.querySurface.getSceneSnapshot().plants[2]!.id
     expect(runtime.querySurface.getSceneSnapshot().plants[2]!.pinnedName).toBe(false)
-    expect(selectedObjectIds.value).toEqual(new Set([stampedId]))
+    expect(currentCanvasSelection.value).toEqual(new Set([stampedId]))
 
     runtime.commandSurface.history.undo()
     expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(2)
@@ -2927,7 +2927,7 @@ describe('scene canvas runtime', () => {
     expect(runtime.querySurface.getSceneSnapshot().groups).toHaveLength(2)
     expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(4)
     const stampedGroup = runtime.querySurface.getSceneSnapshot().groups[1]!
-    expect(selectedObjectIds.value).toEqual(new Set([stampedGroup.id]))
+    expect(currentCanvasSelection.value).toEqual(new Set([stampedGroup.id]))
     expect(stampedGroup.members).toHaveLength(2)
     expect(stampedGroup.members.map((member) => member.id)).not.toContain('plant-1')
     expect(stampedGroup.members.map((member) => member.id)).not.toContain('plant-2')
@@ -3289,7 +3289,7 @@ describe('scene canvas runtime', () => {
     runtime.commandSurface.tools.setTool('select')
 
     clickAt(events, { x: 10, y: 10 })
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
 
     runtime.commandSurface.tools.setTool('measurement-guide')
     events.pointerDown({ x: 100, y: 10 })
@@ -3298,7 +3298,7 @@ describe('scene canvas runtime', () => {
 
     const createdGuide = runtime.querySurface.getSceneSnapshot().measurementGuides[0]
     expect(createdGuide).toBeDefined()
-    expect(selectedObjectIds.value).toEqual(new Set([createdGuide!.id]))
+    expect(currentCanvasSelection.value).toEqual(new Set([createdGuide!.id]))
     expect(runtime.querySurface.getDesignObjectSelection().editableTargets).toEqual([
       { kind: 'measurement-guide', id: createdGuide!.id },
     ])
@@ -3326,14 +3326,14 @@ describe('scene canvas runtime', () => {
     runtime.commandSurface.tools.setTool('select')
 
     clickAt(events, { x: 10, y: 10 })
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
 
     runtime.commandSurface.tools.setTool('measurement-guide')
     events.pointerDown({ x: 100, y: 10 })
     events.pointerUp({ x: 100, y: 10 })
 
     expect(runtime.querySurface.getSceneSnapshot().measurementGuides).toHaveLength(0)
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
     expect(runtime.commandSurface.history.canUndo.value).toBe(false)
     events.dispose()
     runtime.destroy()
@@ -3349,7 +3349,7 @@ describe('scene canvas runtime', () => {
 
     clickAt(events, { x: 25, y: 10 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['measurement-guide-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['measurement-guide-1']))
     expect(runtime.querySurface.getDesignObjectSelection().editableTargets).toEqual([
       { kind: 'measurement-guide', id: 'measurement-guide-1' },
     ])
@@ -3394,14 +3394,14 @@ describe('scene canvas runtime', () => {
     const duplicate = guides.find((guide) => guide.id !== 'measurement-guide-1')
     expect(duplicate).toMatchObject({ locked: false })
     expectGuideNear(runtime, duplicate, [11, 10], [41, 10])
-    expect(selectedObjectIds.value).toEqual(new Set([duplicate!.id]))
+    expect(currentCanvasSelection.value).toEqual(new Set([duplicate!.id]))
 
     runtime.commandSurface.sceneEdits.copy()
     runtime.commandSurface.sceneEdits.paste()
 
     guides = runtime.querySurface.getSceneSnapshot().measurementGuides
     expect(guides).toHaveLength(3)
-    const pastedId = [...selectedObjectIds.value][0]!
+    const pastedId = [...currentCanvasSelection.value][0]!
     const pasted = guides.find((guide) => guide.id === pastedId)
     expect(pasted).toMatchObject({ locked: false })
     expectGuideNear(runtime, pasted, [12, 10], [42, 10])
@@ -3411,7 +3411,7 @@ describe('scene canvas runtime', () => {
     guides = runtime.querySurface.getSceneSnapshot().measurementGuides
     expect(guides).toHaveLength(2)
     expect(guides.some((guide) => guide.id === pastedId)).toBe(false)
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
     events.dispose()
     runtime.destroy()
   })
@@ -3426,7 +3426,7 @@ describe('scene canvas runtime', () => {
 
     clickAt(events, { x: 25, y: 10 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['measurement-guide-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['measurement-guide-1']))
     expect(runtime.querySurface.getDesignObjectSelection().editableTargets).toEqual([])
     expect(runtime.querySurface.getDesignObjectSelection().lockedTargets).toEqual([
       { kind: 'measurement-guide', id: 'measurement-guide-1' },
@@ -3444,7 +3444,7 @@ describe('scene canvas runtime', () => {
     expect(runtime.querySurface.getSceneSnapshot().measurementGuides).toHaveLength(2)
     events.dispose()
     runtime.destroy()
-    selectedObjectIds.value = new Set()
+    currentCanvasSelection.value = new Set()
 
     const lockedLayerRuntime = stubbedRuntime()
     const { container: lockedLayerContainer } = await initRuntimeWithStubbedRenderer(lockedLayerRuntime)
@@ -3460,11 +3460,11 @@ describe('scene canvas runtime', () => {
     clickAt(lockedLayerEvents, { x: 25, y: 10 })
     lockedLayerRuntime.commandSurface.sceneEdits.selectAll()
 
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
     expect(lockedLayerRuntime.querySurface.getDesignObjectSelection().editableTargets).toEqual([])
     lockedLayerEvents.dispose()
     lockedLayerRuntime.destroy()
-    selectedObjectIds.value = new Set()
+    currentCanvasSelection.value = new Set()
 
     const hiddenLayerRuntime = stubbedRuntime()
     const { container: hiddenLayerContainer } = await initRuntimeWithStubbedRenderer(hiddenLayerRuntime)
@@ -3480,7 +3480,7 @@ describe('scene canvas runtime', () => {
     clickAt(hiddenLayerEvents, { x: 25, y: 10 })
     hiddenLayerRuntime.commandSurface.sceneEdits.selectAll()
 
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
     expect(hiddenLayerRuntime.querySurface.getDesignObjectSelection().editableTargets).toEqual([])
     hiddenLayerEvents.dispose()
     hiddenLayerRuntime.destroy()
@@ -3494,7 +3494,7 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(file)
 
     runtime.commandSurface.sceneEdits.selectAll()
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1', 'zone-1', 'measurement-guide-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1', 'zone-1', 'measurement-guide-1']))
 
     runtime.commandSurface.sceneEdits.groupSelected()
 
@@ -3523,7 +3523,7 @@ describe('scene canvas runtime', () => {
     lockedRuntime.commandSurface.tools.setTool('select')
 
     clickAt(lockedEvents, { x: 10, y: 10 })
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
 
     lockedRuntime.commandSurface.tools.setTool('measurement-guide')
 
@@ -3533,7 +3533,7 @@ describe('scene canvas runtime', () => {
 
     expect(draftLabelTexts(lockedRenderer)).toEqual([])
     expect(lockedRuntime.querySurface.getSceneSnapshot().measurementGuides).toHaveLength(0)
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
     expect(lockedRuntime.commandSurface.history.canUndo.value).toBe(false)
     lockedEvents.dispose()
     lockedRuntime.destroy()
@@ -3552,7 +3552,7 @@ describe('scene canvas runtime', () => {
     hiddenRuntime.commandSurface.tools.setTool('select')
 
     clickAt(hiddenEvents, { x: 10, y: 10 })
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
 
     hiddenRuntime.commandSurface.tools.setTool('measurement-guide')
 
@@ -3562,7 +3562,7 @@ describe('scene canvas runtime', () => {
 
     expect(draftLabelTexts(hiddenRenderer)).toEqual([])
     expect(hiddenRuntime.querySurface.getSceneSnapshot().measurementGuides).toHaveLength(0)
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
     expect(hiddenRuntime.commandSurface.history.canUndo.value).toBe(false)
     hiddenEvents.dispose()
     hiddenRuntime.destroy()

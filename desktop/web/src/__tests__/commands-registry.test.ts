@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { signal } from '@preact/signals'
-import { activeTool } from '../canvas/session-state'
+import { currentCanvasTool } from '../canvas/session-state'
 import { activePanel, sidePanel } from '../app/shell/state'
 import {
   gridVisible,
@@ -75,7 +75,7 @@ describe('command registry canvas tool switching', () => {
 
   beforeEach(() => {
     keys = installDesktopKeys()
-    activeTool.value = 'select'
+    currentCanvasTool.value = 'select'
     activePanel.value = 'canvas'
     sidePanel.value = null
     setCurrentCanvasSession(null)
@@ -93,7 +93,7 @@ describe('command registry canvas tool switching', () => {
     keys.dispose()
     vi.restoreAllMocks()
     setCurrentCanvasSession(null)
-    activeTool.value = 'select'
+    currentCanvasTool.value = 'select'
     designSessionFixture.file = null
     theme.value = 'light'
     gridVisible.value = true
@@ -111,7 +111,7 @@ describe('command registry canvas tool switching', () => {
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe(null)
     expect(setTool).toHaveBeenCalledWith('hand')
-    expect(activeTool.value).toBe('hand')
+    expect(currentCanvasTool.value).toBe('hand')
   })
 
   it('preserves side panels only when tool commands already start from the canvas', () => {
@@ -124,7 +124,7 @@ describe('command registry canvas tool switching', () => {
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe('plant-db')
     expect(setTool).toHaveBeenCalledWith('ellipse')
-    expect(activeTool.value).toBe('ellipse')
+    expect(currentCanvasTool.value).toBe('ellipse')
 
     activePanel.value = 'templates'
     sidePanel.value = null
@@ -133,7 +133,7 @@ describe('command registry canvas tool switching', () => {
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe(null)
     expect(setTool).toHaveBeenCalledWith('hand')
-    expect(activeTool.value).toBe('hand')
+    expect(currentCanvasTool.value).toBe('hand')
   })
 
   it('exposes the ellipse tool through the shared command graph', () => {
@@ -145,7 +145,7 @@ describe('command registry canvas tool switching', () => {
     expect(getCommand('canvas.tool.ellipse').shortcut).toBe('E')
     expect(activePanel.value).toBe('canvas')
     expect(setTool).toHaveBeenCalledWith('ellipse')
-    expect(activeTool.value).toBe('ellipse')
+    expect(currentCanvasTool.value).toBe('ellipse')
   })
 
   it('exposes the polygon tool through the shared command graph', () => {
@@ -157,7 +157,7 @@ describe('command registry canvas tool switching', () => {
     expect(getCommand('canvas.tool.polygon').shortcut).toBe('Z')
     expect(activePanel.value).toBe('canvas')
     expect(setTool).toHaveBeenCalledWith('polygon')
-    expect(activeTool.value).toBe('polygon')
+    expect(currentCanvasTool.value).toBe('polygon')
   })
 
   it('exposes the Line tool through the shared command graph', () => {
@@ -169,7 +169,7 @@ describe('command registry canvas tool switching', () => {
     expect(getCommand('canvas.tool.line').shortcut).toBe('L')
     expect(activePanel.value).toBe('canvas')
     expect(setTool).toHaveBeenCalledWith('line')
-    expect(activeTool.value).toBe('line')
+    expect(currentCanvasTool.value).toBe('line')
   })
 
   it('exposes the Measurement Guide tool through the shared command graph', () => {
@@ -180,7 +180,7 @@ describe('command registry canvas tool switching', () => {
 
     expect(activePanel.value).toBe('canvas')
     expect(setTool).toHaveBeenCalledWith('measurement-guide')
-    expect(activeTool.value).toBe('measurement-guide')
+    expect(currentCanvasTool.value).toBe('measurement-guide')
     expect(appCommandGraphToolbarProjection.value.toolGroups.flatMap((group) => group.tools).some((tool) =>
       tool.tool === 'measurement-guide'
       && tool.commandId === 'canvas.tool.measurementGuide',
@@ -195,7 +195,7 @@ describe('command registry canvas tool switching', () => {
 
     expect(activePanel.value).toBe('canvas')
     expect(setTool).toHaveBeenCalledWith('object-stamp')
-    expect(activeTool.value).toBe('object-stamp')
+    expect(currentCanvasTool.value).toBe('object-stamp')
   })
 
   it('exposes Plant Spacing through the shared command graph', () => {
@@ -207,14 +207,14 @@ describe('command registry canvas tool switching', () => {
     expect(getCommand('canvas.tool.plantSpacing').shortcut).toBe('W')
     expect(activePanel.value).toBe('canvas')
     expect(setTool).toHaveBeenCalledWith('plant-spacing')
-    expect(activeTool.value).toBe('plant-spacing')
+    expect(currentCanvasTool.value).toBe('plant-spacing')
   })
 
   it('falls back to priming the mirror tool state when no session is mounted', () => {
     getCommand('canvas.tool.text').action()
 
     expect(activePanel.value).toBe('canvas')
-    expect(activeTool.value).toBe('text')
+    expect(currentCanvasTool.value).toBe('text')
   })
 
   it('uses the shared shortcut definitions for panel navigation and tools', () => {
@@ -515,7 +515,7 @@ describe('command registry canvas tool switching', () => {
 
     expect(activePanel.value).toBe('canvas')
     expect(setTool).toHaveBeenCalledWith('ellipse')
-    expect(activeTool.value).toBe('ellipse')
+    expect(currentCanvasTool.value).toBe('ellipse')
     expect(undo).toHaveBeenCalledTimes(1)
     expect(toggleGrid).toHaveBeenCalledTimes(1)
     expect(toggleSnapToGrid).toHaveBeenCalledTimes(1)
@@ -609,7 +609,7 @@ describe('command registry canvas tool switching', () => {
       singleKeyShortcuts.value = false
 
       expect(keyDown({ key: 'z' })).toBe(false)
-      expect(activeTool.value).toBe('select')
+      expect(currentCanvasTool.value).toBe('select')
       expect(keyDown({ key: 'L', shiftKey: true })).toBe(false)
       expect(labels()).toBe('names')
       expect(keyDown({ key: 'F', shiftKey: true })).toBe(false)

@@ -6,7 +6,7 @@ import { signal } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
 import { writePlantStampDragData } from '../canvas/plant-stamp-source'
 import { writeSavedObjectStampDragData } from '../canvas/saved-object-stamp-source'
-import { selectedObjectIds, type CanvasToolGuidance } from '../canvas/session-state'
+import { currentCanvasSelection, type CanvasToolGuidance } from '../canvas/session-state'
 import { SceneStore } from '../canvas/runtime/scene'
 import {
   createSceneInteractionSession,
@@ -53,7 +53,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 20, y: 30 }, { button: 0, detail: 2 })
     events.pointerUp({ x: 20, y: 30 }, { button: 0, detail: 2 })
 
-    expect(selectedObjectIds.value).toEqual(new Set())
+    expect(currentCanvasSelection.value).toEqual(new Set())
     expect(deps.setSelection).not.toHaveBeenCalled()
     session.dispose()
   })

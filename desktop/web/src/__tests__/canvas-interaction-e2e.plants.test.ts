@@ -8,7 +8,7 @@ import {
   writePlantStampDragData,
 } from '../canvas/plant-stamp-source'
 import {
-  selectedObjectIds,
+  currentCanvasSelection,
   setCanvasToolGuidance,
   type CanvasToolGuidance,
 } from '../canvas/session-state'
@@ -192,7 +192,7 @@ describe('SceneInteractionSession', () => {
     expect(hud?.textContent).not.toContain('Plant Spacing')
     expect(hud?.querySelector('button')).toBeNull()
     expect(deps.setSelection).not.toHaveBeenCalled()
-    expect(selectedObjectIds.value).toEqual(new Set(['already-selected']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['already-selected']))
     session.dispose()
   })
 
@@ -1156,7 +1156,7 @@ describe('SceneInteractionSession', () => {
       const droppedPlant = store.persisted.plants.find((plant) => plant.id !== 'plant-1')
 
       expect(droppedPlant).toBeDefined()
-      expect(selectedObjectIds.value).toEqual(new Set([droppedPlant!.id]))
+      expect(currentCanvasSelection.value).toEqual(new Set([droppedPlant!.id]))
       expect(setTool).toHaveBeenCalledWith('select')
       expect(document.activeElement).toBe(sourceControl)
       await nextAnimationFrame()

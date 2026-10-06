@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PlantColorMenu } from '../components/canvas/PlantColorMenu'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { plantColorMenuOpen } from '../canvas/plant-color-menu-state'
-import { selectedObjectIds } from '../canvas/session-state'
+import { currentCanvasSelection } from '../canvas/session-state'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { createLiveTestCanvasRuntimeHost } from './support/live-canvas-runtime'
 import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
@@ -47,7 +47,7 @@ describe('PlantColorMenu', () => {
       },
     }))
     buttonRef.current = document.createElement('button')
-    selectedObjectIds.value = new Set(['plant-1'])
+    currentCanvasSelection.value = new Set(['plant-1'])
     plantColorMenuOpen.value = true
   })
 
@@ -56,7 +56,7 @@ describe('PlantColorMenu', () => {
     vi.unstubAllGlobals()
     render(null, container)
     container.remove()
-    selectedObjectIds.value = new Set()
+    currentCanvasSelection.value = new Set()
     plantColorMenuOpen.value = false
     setCurrentCanvasSession(null)
   })
