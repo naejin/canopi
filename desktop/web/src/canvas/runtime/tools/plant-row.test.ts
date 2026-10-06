@@ -360,6 +360,19 @@ describe('Plant a row tool', () => {
     }
   })
 
+  it('a Ctrl or Cmd change at the release applies at the next move, so the row commits as its last preview drew it (B3, A17)', () => {
+    const { h } = rowHarness({ intervalM: 2, snapping: { grid: true } })
+    // Scale 1: the grid is 20 m, so a snapped end would sit at (80, 40); the preview, with Ctrl held, ended at the pointer.
+    h.press({ x: 20, y: 30 })
+    h.move({ x: 73, y: 37 }, { ctrl: true })
+    expect(shapesOf(h, 'polyline')[0]!.points[1]).toEqual({ x: 73, y: 37 })
+    h.release({ x: 73, y: 37 })
+
+    expect(added(h).at(-1)).not.toEqual({ x: 80, y: 40 })
+    const last = added(h).at(-1)!
+    expect(Math.hypot(last.x - 20, last.y - 30)).toBeLessThanOrEqual(Math.hypot(53, 7))
+  })
+
   it('a row of 100 plants commits without confirmation', () => {
     const { h } = rowHarness({ intervalM: 1, plants: [sourcePlant({ x: 10, y: 10 })] })
     h.click({ x: 10, y: 10 })

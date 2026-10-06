@@ -727,7 +727,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (gesture.id !== g.id) return NOTHING
     gesture.dragging = true
     gesture.lastScreen = g.at
-    gesture.lastMods = g.mods
+    // A modifier change applies at the next move (A17): the release commits with the modifiers its last preview drew.
+    if (g.kind !== 'drag-end') gesture.lastMods = g.mods
     const tool = activeTool
     if (g.kind !== 'drag-end') {
       deliverDrag(tool, gesture, g.kind)
