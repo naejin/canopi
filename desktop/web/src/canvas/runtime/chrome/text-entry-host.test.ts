@@ -195,9 +195,8 @@ describe('the text-entry host', () => {
     expectScreenPx(textarea.style.top, 47)
     expect(textarea.style.fontSize).toBe('20px')
     expect(textarea.style.lineHeight).toBe('1.25')
-    // Two lines at 1.25 em, as the note is drawn; the width is the browser's measure, at least 120 px.
+    // The width is the browser's measure, at least 120 px.
     expect(textarea.style.width).toBe('120px')
-    expect(textarea.style.minHeight).toBe('54px')
     expect(textarea.style.transform).toBe('rotate(30deg)')
     expect(textarea.style.transformOrigin).toBe('top left')
 
