@@ -461,20 +461,19 @@ export const SEQUENCES = {
     up(210, 100, { pointer: 'touch', id: 2 }),
     up(140, 100, { pointer: 'touch', id: 1 }),
   ]),
-  E6: seq('E6 Long press on Android', ANDROID, [
+  E7: seq('E7 Long press', IOS, [
     down(100, 100, { pointer: 'touch', t: 0 }),
-    { t: 600, raw: { kind: 'tick' } },
-    up(100, 100, { pointer: 'touch', t: 700 }),
-  ]),
-  E7: seq('E7 Long press on iOS', IOS, [
-    down(100, 100, { pointer: 'touch', t: 0 }),
-    { t: 600, raw: { kind: 'tick' } },
-    up(100, 100, { pointer: 'touch', t: 650 }),
+    move(104, 102, { pointer: 'touch', buttons: 1, t: 200 }),
+    { t: 500, raw: { kind: 'tick' } },
+    move(140, 100, { pointer: 'touch', buttons: 1, t: 550 }),
+    down(200, 100, { pointer: 'touch', id: 2, t: 560 }),
+    up(200, 100, { pointer: 'touch', id: 2, t: 600 }),
+    up(140, 100, { pointer: 'touch', t: 650 }),
   ]),
   E8: seq('E8 Long press with movement', ANDROID, [
     down(100, 100, { pointer: 'touch', t: 0 }),
     move(115, 100, { pointer: 'touch', buttons: 1, t: 200 }),
-    { t: 600, raw: { kind: 'tick' } },
+    { t: 500, raw: { kind: 'tick' } },
     up(115, 100, { pointer: 'touch', t: 700 }),
   ]),
   E9: seq('E9 Trackpad pinch with rotation drift', MAC_GESTURES, [
@@ -513,11 +512,30 @@ export const SEQUENCES = {
     move(90, 100, { pointer: 'touch', id: 1, buttons: 1 }),
     move(220, 100, { pointer: 'touch', id: 2, buttons: 1 }),
   ], { tool: 'polygon' }),
-  E14: seq('E14 Press-acting tools under a long press', ANDROID, [
+  E14_PLANT_STAMP: seq('E14 Press-acting tools under a long press (Plant stamp)', ANDROID, [
     down(100, 100, { pointer: 'touch', t: 0 }),
-    { t: 600, raw: { kind: 'tick' } },
+    { t: 500, raw: { kind: 'tick' } },
     up(100, 100, { pointer: 'touch', t: 650 }),
   ], { tool: 'plant-stamp' }),
+  E14_POLYGON: seq('E14 Press-acting tools under a long press (Polygon)', ANDROID, [
+    down(100, 100, { pointer: 'touch', t: 0 }),
+    { t: 500, raw: { kind: 'tick' } },
+    up(100, 100, { pointer: 'touch', t: 650 }),
+  ], { tool: 'polygon' }),
+  E15_OVERVIEW: seq('E15 Touch in overview: hold, then drag 120 px', ANDROID, [
+    down(100, 100, { pointer: 'touch', t: 0 }),
+    { t: 500, raw: { kind: 'tick' } },
+    up(100, 100, { pointer: 'touch', t: 600 }),
+    down(100, 100, { pointer: 'touch', t: 1000 }),
+    move(160, 100, { pointer: 'touch', buttons: 1, t: 1020 }),
+    move(220, 100, { pointer: 'touch', buttons: 1, t: 1040 }),
+    up(220, 100, { pointer: 'touch', t: 1060 }),
+  ], { mode: 'overview' }),
+  E15_PAN_TOOL: seq('E15 Touch with the Pan tool: hold', ANDROID, [
+    down(100, 100, { pointer: 'touch', t: 0 }),
+    { t: 500, raw: { kind: 'tick' } },
+    up(100, 100, { pointer: 'touch', t: 600 }),
+  ], { tool: 'hand' }),
 
   // 5.6 Wheel and trackpad
   F1: seq('F1 Windows wheel notch, Mouse', WINDOWS, [wheel(120, 80, { dy: 100 })]),

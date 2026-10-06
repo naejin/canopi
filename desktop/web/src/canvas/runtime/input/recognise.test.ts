@@ -328,8 +328,8 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
       { kind: 'press', id: 1, at: { x: 100, y: 100 }, pointer: 'touch', mods: NO_MODS, clickCount: 1, target: { kind: 'surface' } },
       { kind: 'tap', id: 1, at: { x: 100, y: 100 }, pointer: 'touch', mods: NO_MODS, clickCount: 1 },
     ])
-    // The finger is held and captured from the down, so its moves reach the map.
-    expect(result.steps[0]!.effects).toEqual([{ kind: 'prevent-default' }, { kind: 'capture', pointerId: 1 }])
+    // The finger is held and captured from the down, so its moves reach the map, and its long press is timed.
+    expect(result.steps[0]!.effects).toEqual([{ kind: 'prevent-default' }, { kind: 'capture', pointerId: 1 }, { kind: 'set-timer', atMs: 516 }])
   })
 
   it('E2 One-finger drag: nothing until 8 px, then the press at the down point and the drag, never a pan', () => {
@@ -359,7 +359,7 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
     const result = run(SEQUENCES.E4)
     expect(result.gestures.filter((gesture) => !NAVIGATION.has(gesture.kind))).toEqual([])
     // The second finger is captured too, and both lifts end their sessions.
-    expect(result.steps[1]!.effects).toEqual([{ kind: 'prevent-default' }, { kind: 'capture', pointerId: 2 }])
+    expect(result.steps[1]!.effects).toEqual([{ kind: 'prevent-default' }, { kind: 'capture', pointerId: 2 }, { kind: 'clear-timer' }])
     expect(result.state.sessions.size).toBe(0)
   })
 
@@ -372,16 +372,31 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
     expect(result.state.sessions.size).toBe(0)
   })
 
-  it('E6 Long press on Android: no menu before phase 3 (the native contextmenu opens nothing), a tap', () => {
-    expect(kinds(run(SEQUENCES.E6).gestures)).toEqual(['press', 'tap'])
+  it('E7 Long press: the menu at the down point from the timer, no press; the spent finger ignores moves, a second finger and its lift', () => {
+    const result = run(SEQUENCES.E7)
+    expect(result.steps[0]!.effects).toEqual([{ kind: 'prevent-default' }, { kind: 'capture', pointerId: 1 }, { kind: 'set-timer', atMs: 500 }])
+    expect(result.steps.map((step) => step.gestures)).toEqual([
+      [], [], [{ kind: 'menu-request', at: { x: 100, y: 100 }, source: 'long-press' }], [], [], [], [],
+    ])
+    // The lift after a long press emits nothing and stops propagation, so the open menu never hears it (A4).
+    expect(result.steps.at(-1)!.effects).toEqual([
+      { kind: 'release-capture', pointerId: 1 }, { kind: 'prevent-default' }, { kind: 'stop-propagation' },
+    ])
+    expect(result.state.sessions.size).toBe(0)
   })
 
-  it('E7 Long press on iOS: no timer, a tap', () => {
-    expect(kinds(run(SEQUENCES.E7).gestures)).toEqual(['press', 'tap'])
+  it('E8 Long press with movement: a drag, no menu; the slop clears the timer', () => {
+    const result = run(SEQUENCES.E8)
+    expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-end'])
+    expect(result.steps[1]!.effects).toEqual([{ kind: 'clear-timer' }])
   })
 
-  it('E8 Long press with movement: a drag, no menu', () => {
-    expect(kinds(run(SEQUENCES.E8).gestures)).toEqual(['press', 'drag-start', 'drag-end'])
+  it('a tap clears the long-press timer, and a cancel ends a held press with it', () => {
+    const tapped = run(seq('touch tap', ANDROID, [down(100, 100, { pointer: 'touch' }), up(100, 100, { pointer: 'touch' })]))
+    expect(tapped.steps[1]!.effects).toEqual([{ kind: 'release-capture', pointerId: 1 }, { kind: 'clear-timer' }])
+    const stolen = run(seq('stolen', ANDROID, [down(100, 100, { pointer: 'touch' }), pointerCancel({ pointer: 'touch' })]))
+    expect(stolen.steps[1]!.effects).toEqual([{ kind: 'release-capture', pointerId: 1 }, { kind: 'clear-timer' }])
+    expect(stolen.state.deadlines.longPressAt).toBeNull()
   })
 
   it('E9 a pinch with 4 degrees of drift never rotates', () => {
@@ -484,8 +499,23 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
     expect(result.gestures.filter((gesture) => !NAVIGATION.has(gesture.kind))).toEqual([])
   })
 
-  it('E14 Press-acting tools under a long press: no menu, a press and a tap', () => {
-    expect(kinds(run(SEQUENCES.E14).gestures)).toEqual(['press', 'tap'])
+  it.each([
+    ['Plant stamp', SEQUENCES.E14_PLANT_STAMP],
+    ['Polygon', SEQUENCES.E14_POLYGON],
+  ])('E14 Press-acting tools under a long press (%s): the menu opens; no press', (_tool, sequence) => {
+    expect(kinds(run(sequence).gestures)).toEqual(['menu-request'])
+  })
+
+  it('E15 Touch in overview: a hold or a tap does nothing; a drag pans past 8 px with the whole travel', () => {
+    const result = run(SEQUENCES.E15_OVERVIEW)
+    // No timer in overview: it has no menu.
+    expect(result.steps[0]!.effects).toEqual([{ kind: 'prevent-default' }, { kind: 'capture', pointerId: 1 }])
+    expect(result.steps.map((step) => kinds(step.gestures))).toEqual([[], [], [], [], ['pan:start', 'pan:move'], ['pan:move'], ['pan:end']])
+    expect(pansOf(result.gestures).reduce((sum, pan) => sum + pan.deltaPx.x, 0)).toBe(120)
+  })
+
+  it('E15 Touch with the Pan tool: a hold opens the menu', () => {
+    expect(kinds(run(SEQUENCES.E15_PAN_TOOL).gestures)).toEqual(['menu-request'])
   })
 })
 

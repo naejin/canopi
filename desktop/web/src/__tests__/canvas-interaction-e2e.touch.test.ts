@@ -2,7 +2,7 @@
 // §3.4): the recogniser holds every touch press until 8 px, the lift or 500 ms, so a tap acts at the lift at the down
 // point and a pinch never reaches a tool. Real tools, the real recogniser and the real DOM source, in jsdom.
 // Shared fakes, helpers and fixture: support/canvas-interaction-setup.ts.
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { selectPlantStampSource } from '../canvas/plant-stamp-source'
 import { currentCanvasSelection } from '../canvas/session-state'
 import type { SceneStore } from '../canvas/runtime/scene'
@@ -15,6 +15,7 @@ import { createRecordingRenderer, type RecordingRenderer } from './support/recor
 import type { SceneInteractionEventHarness } from './support/canvas-interaction-events'
 import type { TestView } from './support/test-view'
 import {
+  contextMenuHost,
   createInteractionDeps,
   installSceneInteractionFixture,
   makePlant,
@@ -38,6 +39,10 @@ describe('SceneInteractionSession: touch', () => {
 
   beforeEach(() => {
     renderer = createRecordingRenderer()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   function createTestSession(deps: SceneInteractionSessionDeps): SceneInteractionSession {
@@ -139,6 +144,43 @@ describe('SceneInteractionSession: touch', () => {
     pinch({ x: 200, y: 200 }, { x: 300, y: 200 })
 
     expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
+    session.dispose()
+  })
+
+  it('E14 a long press with Plant stamp opens the menu at the finger and places nothing, the lift included', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    choosePlant()
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('plant-stamp')
+
+    touchDown({ x: 100, y: 100 })
+    vi.advanceTimersByTime(499)
+    expect(contextMenuHost.current).toBeNull()
+    vi.advanceTimersByTime(101)
+    expect(contextMenuHost.current?.world).toEqual({ x: 100, y: 100 })
+    touchMove({ x: 104, y: 100 })
+    touchUp({ x: 104, y: 100 })
+
+    expect(store.persisted.plants).toHaveLength(0)
+    expect(contextMenuHost.opened).toHaveLength(1)
+    session.dispose()
+  })
+
+  it('E14 a long press during a Polygon draft opens the menu and adds no corner', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('polygon')
+    events.pointerDown({ x: 20, y: 20 }, { timeStamp: 0 })
+    events.pointerUp({ x: 20, y: 20 }, { timeStamp: 10 })
+    events.pointerDown({ x: 80, y: 20 }, { timeStamp: 1000 })
+    events.pointerUp({ x: 80, y: 20 }, { timeStamp: 1010 })
+
+    touchDown({ x: 150, y: 150 })
+    vi.advanceTimersByTime(600)
+    touchUp({ x: 150, y: 150 })
+
+    expect(contextMenuHost.current).not.toBeNull()
+    expect(draftCorners()).toBe(2)
     session.dispose()
   })
 })

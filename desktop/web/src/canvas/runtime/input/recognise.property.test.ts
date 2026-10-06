@@ -62,7 +62,8 @@ function randomInput(random: () => number, t: number): RawInput {
   if (roll < 0.96) {
     return { kind: 'platform-gesture', t, phase: pick(['start', 'change', 'change', 'end'] as const), at, rotationDeg: random() * 60 - 30 }
   }
-  if (roll < 0.98) return { kind: 'tick', t }
+  // The source's tick comes at the deadline it scheduled: a held press's long press is due 500 ms after its down.
+  if (roll < 0.98) return { kind: 'tick', t: t + 600 }
   return { kind: 'leave', t }
 }
 
@@ -184,7 +185,9 @@ function checkSessionLifecycle(seed: number): void {
     else expect(starts, `${at(index)}: a start gesture without a new session`).toBe(resolvedNow + (heldTap ? 1 : 0))
     const menus = gestures.filter((gesture) => gesture.kind === 'menu-request').length
     const stillSecondaryUp = input.kind === 'up' && endedSession?.role === 'secondary' && !endedSession.slopPassed
-    expect(menus, `${at(index)}: a menu only from a still secondary release`).toBeLessThanOrEqual(stillSecondaryUp ? 1 : 0)
+    const longPress = input.kind === 'tick' && endedSession?.mode === 'held'
+    expect(menus, `${at(index)}: a menu only from a still secondary release or a long press`)
+      .toBeLessThanOrEqual(stillSecondaryUp || longPress ? 1 : 0)
     started += startedNow.length
     ended += endedSessions.length
 

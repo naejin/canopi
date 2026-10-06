@@ -18,7 +18,9 @@
 // barrel. A touch press is held (spec §2.2 "Touch", A2): the host hears nothing until the finger passes 8 px (its press at
 // the down point, then the drag) or lifts (its press and tap at the down point), so a pinch never reaches a tool; a
 // second finger before the slop ends the held press silently, and one after the drag started cancels it ('multitouch');
-// the fingers left resume nothing until every one is up.
+// the fingers left resume nothing until every one is up. A held press still for 500 ms opens the menu (the 'tick' of the
+// deadline the source schedules) and goes spent: its lift emits nothing and stops propagation, so the open menu never
+// hears it (A4).
 
 import type { CancelReason, Modifiers, PointerKind } from '../interaction-types'
 import { ROTATE_DEG_PER_PX } from '../view/navigation-policy'
@@ -125,10 +127,9 @@ export function recognise(
     case 'focus-out':
       // The session ends the nudge series (ToolHost.endNudgeSeries); no pointer state changes.
       break
-    case 'tick':
-      // The one deadline (the long press) is phase 3's; it stays null until then.
-      break
+    case 'tick': tick(step, input.t); break
   }
+  settleDeadline(step)
   return { state: step.state, gestures: step.gestures, effects: step.effects }
 }
 
@@ -213,6 +214,12 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
       pressed: false,
       heldPress: pressed ? { target: pressTarget, mods: input.mods } : null,
     })
+    // A press the host would hear opens the menu if it stays still (none in overview or with Space).
+    if (pressed) {
+      const longPressAt = input.t + config.thresholds.longPressMs
+      step.state = { ...step.state, deadlines: { longPressAt } }
+      step.effects.push({ kind: 'set-timer', atMs: longPressAt })
+    }
     return
   }
   putSession(step, {
@@ -298,7 +305,11 @@ function up(step: Step, input: RawOf<'up'>, config: RecogniserConfig): void {
   const session = step.state.sessions.get(input.id)
   if (!session) return
   dropSession(step, session)
-  if (session.mode === 'spent') return
+  if (session.mode === 'spent') {
+    // The lift after a long press (or of a finger left from a pair) reaches nothing: the menu it opened stays open.
+    step.effects.push({ kind: 'prevent-default' }, { kind: 'stop-propagation' })
+    return
+  }
   if (session.mode === 'held') {
     // A lift within the slop: the press and its tap, both at the down point (A2), unless the host hears none.
     if (session.heldPress) {
@@ -478,6 +489,27 @@ function otherFinger(step: Step, input: RawOf<'down'>): void {
     buttonBit: BUTTON_BITS.primary,
     heldPress: null,
   })
+}
+
+/** The long press: a held press still at its deadline opens the menu at its down point, and goes spent (A4). */
+function tick(step: Step, t: number): void {
+  const { longPressAt } = step.state.deadlines
+  if (longPressAt === null || t < longPressAt) return
+  step.state = { ...step.state, deadlines: { longPressAt: null } }
+  const held = [...step.state.sessions.values()].find((session) => session.mode === 'held' && session.heldPress !== null)
+  if (!held) return
+  putSession(step, { ...held, mode: 'spent', heldPress: null })
+  step.gestures.push({ kind: 'menu-request', at: held.start, source: 'long-press' })
+}
+
+/** The long-press deadline lives only while a held press waits for it: anything that resolves or ends it clears it. */
+function settleDeadline(step: Step): void {
+  if (step.state.deadlines.longPressAt === null) return
+  for (const session of step.state.sessions.values()) {
+    if (session.mode === 'held' && session.heldPress !== null) return
+  }
+  step.state = { ...step.state, deadlines: { longPressAt: null } }
+  step.effects.push({ kind: 'clear-timer' })
 }
 
 /** A held touch press as the host hears it once it resolves: at the down point, with the down's modifiers and target. */
