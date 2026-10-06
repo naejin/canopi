@@ -43,6 +43,7 @@ export type CanvasViewAction =
   | 'zoom-in'
   | 'zoom-out'
   | 'fit-to-design'
+  | 'zoom-to-selection'
   | 'reset-north'
   | 'turn-view-left'
   | 'turn-view-right'
@@ -85,6 +86,7 @@ export type CanvasCommandId =
   | 'view.zoomIn'
   | 'view.zoomOut'
   | 'view.fitToDesign'
+  | 'view.zoomToSelection'
   | 'view.resetNorth'
   | 'view.turnViewLeft'
   | 'view.turnViewRight'
@@ -344,7 +346,9 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
   edit('save-as-stamp', 'canvas.saveSelectionAsStamp', 'menu.edit.saveAsStamp'),
   view('zoom-in', 'view.zoomIn', 'menu.view.zoomIn', { shortcuts: ['Ctrl+Plus'] }),
   view('zoom-out', 'view.zoomOut', 'menu.view.zoomOut', { shortcuts: ['Ctrl+Minus'] }),
-  view('fit-to-design', 'view.fitToDesign', 'menu.view.fitToDesign', { shortcuts: ['Shift+F', 'Ctrl+0'] }),
+  // Home fits too, with the map focused: a canvas key row (app/keyboard/keymap.ts), shown here only.
+  view('fit-to-design', 'view.fitToDesign', 'menu.view.fitToDesign', { shortcuts: ['Shift+F', 'Ctrl+0'], keyHints: ['Home'] }),
+  view('zoom-to-selection', 'view.zoomToSelection', 'menu.view.zoomToSelection', { shortcuts: ['Shift+2'] }),
   // The rotation rows sit after Fit to Design, in the View menu's first section. Their routed chords (Shift+N, Shift+←,
   // Shift+→, Shift+↑) are canvas key rows, shown here only (spec §3.6).
   // N follows the single-key switch; Shift+N always resets (with the switch off menus show it).
@@ -421,8 +425,9 @@ export function isCanvasCommandDisabled(
       return !state.canRedo
     case 'toggle-grid':
     case 'toggle-snap-to-grid':
-    case 'view':
       return !state.canvasAvailable
+    case 'view':
+      return !state.canvasAvailable || (intent.action === 'zoom-to-selection' && !state.hasSelection)
     case 'edit': {
       if (!state.canvasAvailable) return true
       if (MUTATING_EDITS.has(intent.action) && !state.spatialEditingAvailable) return true

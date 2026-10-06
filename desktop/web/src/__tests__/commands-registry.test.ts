@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { signal } from '@preact/signals'
-import { currentCanvasTool } from '../canvas/session-state'
+import { currentCanvasSelection, currentCanvasTool } from '../canvas/session-state'
 import { activePanel, sidePanel } from '../app/shell/state'
 import {
   gridVisible,
@@ -218,6 +218,22 @@ describe('command registry canvas tool switching', () => {
 
     expect(setTool).toHaveBeenCalledWith('hand')
     expect(currentCanvasTool.value).toBe('hand')
+  })
+
+  it('Shift+2 zooms to the selection on the Desktop keymap, and does nothing without one', () => {
+    const zoomToSelection = vi.fn()
+    mountCanvasCommandSurface({ viewport: { zoomToSelection } })
+    const press = () => pressKey({ key: '@', code: 'Digit2', shiftKey: true }, document.body).defaultPrevented
+
+    expect(press()).toBe(false)
+    expect(zoomToSelection).not.toHaveBeenCalled()
+    currentCanvasSelection.value = new Set(['plant-1'])
+    try {
+      expect(press()).toBe(true)
+      expect(zoomToSelection).toHaveBeenCalledOnce()
+    } finally {
+      currentCanvasSelection.value = new Set()
+    }
   })
 
   it('falls back to priming the mirror tool state when no session is mounted', () => {
@@ -716,7 +732,7 @@ describe('command registry canvas tool switching', () => {
       'canvas.lockSelected', 'canvas.unlockSelected', 'canvas.unlockAll', 'canvas.saveSelectionAsStamp',
     ])
     expect(byMenu.view).toEqual([
-      'view.zoomIn', 'view.zoomOut', 'view.fitToDesign',
+      'view.zoomIn', 'view.zoomOut', 'view.fitToDesign', 'view.zoomToSelection',
       'view.resetNorth', 'view.turnViewLeft', 'view.turnViewRight', 'canvas.tool.hand', 'view.searchPlace',
       'view.saveCurrentView', 'view.manageViews',
       'canvas.toggleGrid', 'canvas.toggleSnapToGrid',
@@ -747,6 +763,7 @@ describe('command registry canvas tool switching', () => {
     expect(menuShortcut.get('file.rename')).toBe('F2')
     expect(menuShortcut.get('app.settings')).toBe('Ctrl ,')
     expect(menuShortcut.get('view.fitToDesign')).toBe('Shift F')
+    expect(menuShortcut.get('view.zoomToSelection')).toBe('Shift 2')
     expect(menuShortcut.get('view.searchPlace')).toBe('Ctrl K')
     expect(menuShortcut.get('help.shortcuts')).toBe('F1')
     // The palette is a Help command like F1, so its key is discoverable there and in the F1 list.
@@ -763,7 +780,7 @@ describe('command registry canvas tool switching', () => {
     expect(menuShortcut.get('canvas.clearSelection')).toBe('Esc')
   })
 
-  it('lists Reset north, Turn view left 15° and Turn view right 15° in the View menu and the palette, after Fit to Design', () => {
+  it('lists Reset north, Turn view left 15° and Turn view right 15° in the View menu and the palette, after Fit to Design and Zoom to selection', () => {
     const resetNorth = vi.fn()
     const rotateBy = vi.fn()
     mountCanvasCommandSurface({ viewport: { resetNorth, rotateBy } })
@@ -776,7 +793,8 @@ describe('command registry canvas tool switching', () => {
       ['Turn view right 15°', 'Shift →', 'Shift+ArrowRight', false],
     ])
     const ids = flattenMenuActions([view]).map((item) => item.id)
-    expect(ids.indexOf('view.resetNorth')).toBe(ids.indexOf('view.fitToDesign') + 1)
+    expect(ids.indexOf('view.zoomToSelection')).toBe(ids.indexOf('view.fitToDesign') + 1)
+    expect(ids.indexOf('view.resetNorth')).toBe(ids.indexOf('view.zoomToSelection') + 1)
     for (const id of ['view.resetNorth', 'view.turnViewLeft', 'view.turnViewRight']) {
       expect(getCommand(id).shortcut, id).toBe(rows.find((item) => item.id === id)!.shortcut)
     }

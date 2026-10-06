@@ -1077,6 +1077,7 @@
     "view.darkTheme": "어두운 테마",
     "edit.saveAsStamp": "스탬프로 저장",
     "view.fitToDesign": "디자인에 맞추기",
+    "view.zoomToSelection": "선택 영역으로 확대/축소",
     "view.resetNorth": "북쪽을 위로",
     "view.turnViewLeft": "보기를 왼쪽으로 15° 회전",
     "view.turnViewRight": "보기를 오른쪽으로 15° 회전",
@@ -1734,6 +1735,7 @@
     "alt": "Alt",
     "delete": "Del",
     "escape": "Esc",
+    "home": "Home",
     "enter": "Enter"
   },
   "siteOnboarding": {

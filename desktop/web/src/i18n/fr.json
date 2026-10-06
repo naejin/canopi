@@ -1077,6 +1077,7 @@
     "view.darkTheme": "Thème sombre",
     "edit.saveAsStamp": "Enregistrer comme tampon",
     "view.fitToDesign": "Ajuster au Design",
+    "view.zoomToSelection": "Zoomer sur la sélection",
     "view.resetNorth": "Rétablir le nord",
     "view.turnViewLeft": "Tourner la vue de 15° à gauche",
     "view.turnViewRight": "Tourner la vue de 15° à droite",
@@ -1734,6 +1735,7 @@
     "alt": "Alt",
     "delete": "Suppr",
     "escape": "Échap",
+    "home": "Début",
     "enter": "Entrée"
   },
   "siteOnboarding": {

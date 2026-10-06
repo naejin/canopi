@@ -1077,6 +1077,7 @@
     "view.darkTheme": "Dunkles Farbschema",
     "edit.saveAsStamp": "Als Stempel speichern",
     "view.fitToDesign": "Auf Design einpassen",
+    "view.zoomToSelection": "Auf Auswahl zoomen",
     "view.resetNorth": "Nach Norden ausrichten",
     "view.turnViewLeft": "Ansicht um 15° nach links drehen",
     "view.turnViewRight": "Ansicht um 15° nach rechts drehen",
@@ -1734,6 +1735,7 @@
     "alt": "Alt",
     "delete": "Entf",
     "escape": "Esc",
+    "home": "Pos1",
     "enter": "Eingabe"
   },
   "siteOnboarding": {

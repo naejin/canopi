@@ -172,6 +172,7 @@ describe('Canvas Command Projection', () => {
       ['zoom-in', 'Ctrl +'],
       ['zoom-out', 'Ctrl −'],
       ['fit-to-design', 'Shift F'],
+      ['zoom-to-selection', 'Shift 2'],
       ['reset-north', 'N'],
       ['turn-view-left', 'Shift ←'],
       ['turn-view-right', 'Shift →'],
@@ -179,9 +180,18 @@ describe('Canvas Command Projection', () => {
       ['search-place', 'Ctrl K'],
       ['cycle-labels', 'Shift L'],
     ])
-    projection.viewActions[2]!.action()
+    const view = (id: string) => projection.viewActions.find((command) => command.id === id)!
+    view('fit-to-design').action()
     expect(run).toHaveBeenCalledWith({ type: 'view', action: 'fit-to-design' }, 'menu')
     run.mockClear()
+    // Home fits with the map focused: shown beside Fit to Design for assistive tech, routed by its key row.
+    expect(view('fit-to-design').ariaShortcut).toBe('Shift+F Control+0 Meta+0 Home')
+    // Zoom to selection needs a selection.
+    expect(view('zoom-to-selection').disabled).toBe(true)
+    expect(createCanvasCommandProjection({ state: state({ hasSelection: true }), run, translate: tagged, characterKeys: true })
+      .viewActions.find((command) => command.id === 'zoom-to-selection')!.disabled).toBe(false)
+    view('zoom-to-selection').action()
+    expect(run).not.toHaveBeenCalled()
 
     expect(projection.settingsToggles.map((toggle) => [toggle.id, toggle.shortcut, toggle.pressed])).toEqual([
       ['grid', 'Shift G', true],

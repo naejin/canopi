@@ -23,6 +23,7 @@ const KEY_NAME_KEYS: Readonly<Record<string, string>> = {
   Alt: 'shortcutKeys.alt',
   Delete: 'shortcutKeys.delete',
   Escape: 'shortcutKeys.escape',
+  Home: 'shortcutKeys.home',
 }
 
 /** Keys shown as a glyph in every language. */

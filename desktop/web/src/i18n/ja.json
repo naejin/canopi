@@ -1077,6 +1077,7 @@
     "view.darkTheme": "ダークテーマ",
     "edit.saveAsStamp": "スタンプとして保存",
     "view.fitToDesign": "デザインに合わせる",
+    "view.zoomToSelection": "選択範囲にズーム",
     "view.resetNorth": "北を上にする",
     "view.turnViewLeft": "ビューを左に 15° 回転",
     "view.turnViewRight": "ビューを右に 15° 回転",
@@ -1734,6 +1735,7 @@
     "alt": "Alt",
     "delete": "Del",
     "escape": "Esc",
+    "home": "Home",
     "enter": "Enter"
   },
   "siteOnboarding": {

@@ -1198,6 +1198,7 @@
     "view.darkTheme": "Dark theme",
     "edit.saveAsStamp": "Save as stamp",
     "view.fitToDesign": "Fit to Design",
+    "view.zoomToSelection": "Zoom to selection",
     "view.resetNorth": "Reset north",
     "view.turnViewLeft": "Turn view left 15°",
     "view.turnViewRight": "Turn view right 15°",
@@ -1734,6 +1735,7 @@
     "alt": "Alt",
     "delete": "Del",
     "escape": "Esc",
+    "home": "Home",
     "enter": "Enter"
   },
   "siteOnboarding": {

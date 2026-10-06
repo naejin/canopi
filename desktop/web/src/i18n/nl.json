@@ -1077,6 +1077,7 @@
     "view.darkTheme": "Donker thema",
     "edit.saveAsStamp": "Opslaan als stempel",
     "view.fitToDesign": "Passend op ontwerp",
+    "view.zoomToSelection": "Zoomen naar selectie",
     "view.resetNorth": "Noorden herstellen",
     "view.turnViewLeft": "Weergave 15° naar links draaien",
     "view.turnViewRight": "Weergave 15° naar rechts draaien",
@@ -1734,6 +1735,7 @@
     "alt": "Alt",
     "delete": "Del",
     "escape": "Esc",
+    "home": "Home",
     "enter": "Enter"
   },
   "siteOnboarding": {
