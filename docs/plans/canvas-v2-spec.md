@@ -102,8 +102,8 @@ export interface ViewTransform {
   /** Local ground resolution at a world point (view centre if omitted). Replaces `1 / viewport.scale` and the scale-bar value. */
   metresPerPixelAt(p?: WorldPoint): number
   screenDistance(a: WorldPoint, b: WorldPoint): number
-  /** Unit world vectors of screen-right and screen-down at a point (view centre if omitted). */
-  screenAxesInWorld(at?: WorldPoint): { readonly right: WorldVector; readonly down: WorldVector }
+  /** Unit world vectors of screen-right and screen-down: one pair for the whole plane (the camera has no pitch). */
+  screenAxesInWorld(): { readonly right: WorldVector; readonly down: WorldVector }
 
   visibleWorldQuad(insets?: ScreenInsets): WorldQuad
   /** Four projected corners, never two (rotation-handle anchor, menu anchor). */
@@ -574,7 +574,7 @@ export interface AdapterEffect {
 }
 /** Opaque to callers; the recogniser owns its shape. Plain data (structured-clone safe), so the property test can snapshot it. */
 export interface RecogniserState {
-  readonly sessions: ReadonlyMap<number, PointerSession>        // by pointerId: pointer kind, role, mode ('pending' | 'primary' | 'pan' | 'rotate'), start, last point, press target, slop passed, capture held
+  readonly sessions: ReadonlyMap<number, PointerSession>        // by pointerId: pointer kind, role, mode ('pending' | 'primary' | 'pan' | 'rotate'), start, last point, slop passed, capture held
   readonly touchPair: TouchPair | null                          // two touch ids, their start centroid, distance and angle, twist arc accumulated
   readonly held: { readonly space: boolean }                    // the only gesture-state record of a held key (ADR 0017)
   readonly trackpadTwistDeg: number                             // WebKit gesture rotation accumulated before the 10° threshold
@@ -892,8 +892,9 @@ export type Gesture =
   | { kind: 'hover'; at: ScreenPoint; pointer: PointerKind; mods: Modifiers; target: TargetClass }
   | { kind: 'hover-end' }
   | { kind: 'press'; id: number; at: ScreenPoint; pointer: PointerKind; mods: Modifiers; clickCount: number; target: PressTarget }
-  | { kind: 'tap'; id: number; at: ScreenPoint; pointer: PointerKind; mods: Modifiers; clickCount: number; target: PressTarget }
-  | { kind: 'drag-start'; id: number; from: ScreenPoint; at: ScreenPoint; pointer: PointerKind; mods: Modifiers; target: PressTarget }
+  /** The host takes a tap's and a drag's start point, pointer kind and handle from its own live press (the `press` carries the target). */
+  | { kind: 'tap'; id: number; at: ScreenPoint; pointer: PointerKind; mods: Modifiers; clickCount: number }
+  | { kind: 'drag-start'; id: number; at: ScreenPoint; mods: Modifiers }
   | { kind: 'drag-move'; id: number; at: ScreenPoint; mods: Modifiers }
   | { kind: 'drag-end'; id: number; at: ScreenPoint; mods: Modifiers }
   | { kind: 'drop'; phase: 'over' | 'leave' | 'drop'; at: ScreenPoint; payload: CanvasDropPayload }
@@ -967,23 +968,25 @@ export interface HitFilter {
   /** Select and the overview selector only (phase 2, canopi-f47t.2): when nothing else hits, the topmost zone whose fill
    *  contains the point (pointInPolygon; rectangle and ellipse polygons). Plain hitAt callers are unchanged. */
   readonly fill?: true
-  /** hitAt: also locked layers that are visible (today's hitTestVisibleTopLevel, the host's hover). hitInQuad: a phase-1
-   *  feature; until then the façade throws a clear error (the band select skips locked layers). */
+  /** hitAt: also locked layers that are visible (hitTestVisibleTopLevel, the host's hover). hitInQuad throws a clear error
+   *  (the band select skips locked layers). */
   readonly includeLocked?: boolean
-  /** A phase-1 feature (the zone-edge hits of "Turn view to this edge", spec §4.16), converted at the frame's pixelsPerMetre;
-   *  until then the façade throws a clear error (the hit tests carry their own tolerances). */
+  /** hitAt only: answers only the nearest zone edge within this many CSS px ("Turn view to this edge", §4.16), converted at the
+   *  frame's pixelsPerMetre. A band has no tolerance (the object hit tests carry their own). */
   readonly toleranceScreenPx?: number
 }
-/** The selection read model: today's CanvasDesignObjectSelectionModel (canvas/runtime/runtime.ts:48), unchanged. */
+/** The selection read model: CanvasDesignObjectSelectionModel (canvas/runtime/runtime.ts), with `plantNamePinning` required; an empty
+ *  selection reads the one frozen EMPTY_SELECTION_MODEL (scene-runtime/selection.ts), as does the host's disabled menu. */
 export type SelectionReadModel = CanvasDesignObjectSelectionModel
 /** Layer names as stored (SceneLayerEntity.name): 'plants', 'zones', 'annotations', 'measurements', … A `string`; narrowing it
  *  to the known names is a later, optional change. */
 export type SceneLayerKind = SceneLayerEntity['name']
 /**
  * A preview of what a placement would create, drawn with the draft by the scene's own drawing code (plan §4, "Conventions still in force").
- * The entities are already where a click would put them: the tool builds the plant as a click would (today plantEntityFromStampSource)
- * and applies the stamp's offset and held rotation to the template (today objectStampEntities and rotateStampEntities).
- * `anchor` and `rotationDeg` describe the pick for tests and guidance; the renderer never re-applies them.
+ * The entities are already where a click would put them: the tool builds the plant as a click would (plantEntityFromStampSource),
+ * and a stamp tool draws the template a press would add: `stampTemplateAt(template, anchor, at, degrees)` (tools/stamp-rotation.ts)
+ * turns it about the stamp's anchor, then moves it by at − anchor; the placement adds that same template. The tool card reads the
+ * held turn from guidance (`stampRotationDeg`), never from the ghost.
  * A plant ghost is the plant's mark only: the Place plants mature-width ring, its label and the nearest-plant guide are ellipse, label and polyline shapes.
  * mark 'symbol' (default) draws the plant's symbol; 'dot' draws Plant a row's look: a filled disc in the plant's display colour with a 2 px
  * border of the same colour, radius half the plant's world AABB (today plant-spacing-overlay.ts:158-181; Plant a row emits its row ghosts
@@ -995,7 +998,7 @@ export type SceneLayerKind = SceneLayerEntity['name']
  */
 export type GhostEntity =
   | { readonly kind: 'plant'; readonly plant: ScenePlantEntity; readonly mark?: 'symbol' | 'dot'; readonly sizeFrom?: WorldPoint }
-  | { readonly kind: 'objects'; readonly anchor: WorldPoint; readonly rotationDeg: number; readonly template: SceneArrangementTemplate }  // stamp pick, saved stamp
+  | { readonly kind: 'objects'; readonly template: SceneArrangementTemplate }  // stamp pick, saved stamp
 /** A note's text entry; the host owns the textarea. The tool card's spacing field is not one (it sends spacing commands). */
 export interface TextEntryRequest {
   readonly anchor: WorldPoint
@@ -1035,12 +1038,12 @@ export type ToolReply = 'handled' | 'pass'
 
 /** Read-only view queries: everything a tool may know about the camera. */
 export interface ToolView {
-  readonly bearingDeg: number
+  readonly bearingDeg: number                  // ViewCamera.bearingDeg as the drivers keep it, in [0, 360); not normalised again
   readonly mode: 'site' | 'overview'
   metresPerPixelAt(p: WorldPoint): number
   screenDistance(a: WorldPoint, b: WorldPoint): number
-  screenAxesInWorld(at?: WorldPoint): { readonly right: WorldVector; readonly down: WorldVector }
-  /** Screen-aligned rectangle from two world corners: rotationDeg = normaliseBearing(bearing). Shift's square and circle use `square`. */
+  screenAxesInWorld(): { readonly right: WorldVector; readonly down: WorldVector }
+  /** Screen-aligned rectangle from two world corners: rotationDeg = the bearing, already in [0, 360) (T2). Shift's square and circle use `square`. */
   screenAlignedRect(a: WorldPoint, b: WorldPoint, options?: { readonly square?: boolean }):
     { readonly center: WorldPoint; readonly width: number; readonly height: number; readonly rotationDeg: number }
 }
@@ -1051,10 +1054,11 @@ export interface ToolScene {
   readonly persisted: Readonly<ScenePersistedState>
   hitAt(world: WorldPoint, filter?: HitFilter): HitTarget | null
   hitInQuad(quad: WorldQuad, filter?: HitFilter): readonly HitTarget[]
-  nearestPlant(world: WorldPoint, excluding?: ReadonlySet<string>): { readonly plant: ScenePlantEntity; readonly distanceM: number } | null
-  /** How the scene presents a plant (or a species by canonical name) now: the name in today's order (localised, stored common,
-   *  canonical), the display colour and the symbol radius in CSS px. For tool-card names, row glyphs and the source ring. */
-  plantPresentation(plant: ScenePlantEntity | string): { readonly commonName: string; readonly color: string; readonly radiusPx: number } | null
+  nearestPlant(world: WorldPoint): { readonly plant: ScenePlantEntity; readonly distanceM: number } | null
+  /** How the scene presents a plant now, among the scene's plants (for its crowding): the name in today's order (localised,
+   *  stored common, canonical), the display colour and the symbol radius in CSS px. For tool-card names, row glyphs and the
+   *  source ring; a preview passes the plant a click would place (plantEntityFromStampSource). */
+  plantPresentation(plant: ScenePlantEntity): { readonly commonName: string; readonly color: string; readonly radiusPx: number }
   isLayerOpenForCreation(layer: SceneLayerKind): boolean
   selection(): SceneDesignObjectSelection
   selectionModel(): SelectionReadModel         // read per call, not cached (as today)
@@ -1414,8 +1418,9 @@ export interface CommandSink {
 /** Pushed scopes: non-modal surfaces that own keys while open (step 7). Modal surfaces push none: the story presenter's and the PDF
  *  page editor's own element onKeyDown run before the router, under the modal step (step 5), so the presenter hears only keys inside
  *  its root (fixture I12b). */
-export interface KeyScopeHandle { dispose(): void }
-export function pushKeyScope(scope: { readonly id: 'stories-undo-toast'; handle(e: KeyboardEventLike, chord: KeyChord): boolean }): KeyScopeHandle
+/** Pushes a scope that takes a chord by answering true (the Stories Undo toast's Ctrl Z); returns the function that removes it. The
+ *  router tries the pushed scopes latest first. */
+export function pushKeyScope(handle: (chord: KeyChord) => boolean): () => void
 
 // app/keyboard/escape-chain.ts
 export interface EscapeLayer {
