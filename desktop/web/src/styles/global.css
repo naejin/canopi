@@ -275,6 +275,12 @@ html, body, #app {
   overflow: hidden;
 }
 
+/* A drag on the Web top bar or strip never pulls to refresh or bounces the page
+   (phase 3, A13). It also turns off the desktop browsers' two-finger history swipe. */
+html {
+  overscroll-behavior: none;
+}
+
 body {
   font-family: var(--font-sans);
   font-size: var(--text-base);
