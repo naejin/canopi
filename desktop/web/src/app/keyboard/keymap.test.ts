@@ -232,7 +232,9 @@ describe('keymap', () => {
       target: window,
       keymap: CANVAS_KEYMAP_ROWS,
       commands: { run: vi.fn(() => true) },
-      canvas: () => ({ host, keyState: () => 'pass', command, escapeLayers: () => [], escape: () => {} }),
+      canvas: () => ({
+        host, keyState: () => 'pass', command, escapeLayers: () => [], escape: () => {}, holdsSelectionDeletes: () => false,
+      }),
       singleKeys: signal(true),
       focus: { cycleRegion: () => false },
       isModalOpen: () => false,
@@ -280,7 +282,9 @@ describe('keymap', () => {
       target: window,
       keymap: CANVAS_KEYMAP_ROWS,
       commands: { run },
-      canvas: () => ({ host, keyState: () => 'pass', command, escapeLayers: () => [], escape: () => {} }),
+      canvas: () => ({
+        host, keyState: () => 'pass', command, escapeLayers: () => [], escape: () => {}, holdsSelectionDeletes: () => false,
+      }),
       singleKeys: signal(true),
       focus: { cycleRegion: () => false },
       isModalOpen: () => false,
@@ -316,7 +320,9 @@ describe('keymap', () => {
       target: window,
       keymap: CANVAS_KEYMAP_ROWS,
       commands: { run },
-      canvas: () => ({ host, keyState: () => 'pass', command, escapeLayers: () => [], escape: () => {} }),
+      canvas: () => ({
+        host, keyState: () => 'pass', command, escapeLayers: () => [], escape: () => {}, holdsSelectionDeletes: () => false,
+      }),
       singleKeys: signal(singleKeys),
       focus: { cycleRegion: () => false },
       isModalOpen: () => false,
