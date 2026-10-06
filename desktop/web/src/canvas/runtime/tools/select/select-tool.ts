@@ -11,7 +11,7 @@
 import type { ToolHandleId } from '../../interaction-types'
 import type { SceneMeasurementGuideEntity, SceneZoneEntity } from '../../scene/types'
 import type { ToolHandle } from '../draft'
-import type { CanvasTool, HitTarget, ToolContext, ToolGesture, ToolPoint, ToolReply } from '../tool'
+import type { CanvasTool, HitTarget, ToolContext, ToolGesture, ToolPoint, ToolReply, ToolView } from '../tool'
 import { bandDraft, bandSelection, type Band } from './band'
 import { clickSelection, pressSelection, type SelectPress } from './click'
 import { draggableGuide, guideEndHandles, guideEnds, guideEndSubject, guideLengthShapes, type GuideEnd } from './guide-ends'
@@ -65,6 +65,8 @@ export function createSelectTool(): CanvasTool {
   let rotationDeltaDeg: number | null = null
   /** The bearing the handles were placed at: the rotation handle sits above the projected hull, so a turn moves it. */
   let handlesBearingDeg = 0
+  /** The scale the handles were placed at (screen px per world metre): which edges have room for a dot depends on it alone. */
+  let handlesPixelsPerMetre = 0
   /** The reshaped zone the handles were drawn for: a zoom changes which of its edges have room for a midpoint dot. */
   let handlesZone: SceneZoneEntity | null = null
   let reshapePoints = new Map<ToolHandleId, ZoneControlPoint>()
@@ -89,6 +91,7 @@ export function createSelectTool(): CanvasTool {
     const pointDrag = gesture?.kind === 'reshape' || gesture?.kind === 'guide-end'
     const rotate = pointDrag ? null : rotateHandle(c.scene, selection, c.view, c.translate, rotationDeltaDeg)
     handlesBearingDeg = c.view.bearingDeg
+    handlesPixelsPerMetre = pixelsPerMetre(c.view)
     if (rotate) handles.push(rotate)
     const zone = reshapableZone(scene, selection)
     handlesZone = zone
@@ -111,6 +114,8 @@ export function createSelectTool(): CanvasTool {
   function followView(): void {
     if (!context) return
     const { view } = context
+    // A pan changes neither, so it recomputes nothing.
+    if (view.bearingDeg === handlesBearingDeg && pixelsPerMetre(view) === handlesPixelsPerMetre) return
     const dots = handlesZone ? zoneEdgeMidpoints(handlesZone, view) : []
     const dotsChanged = dots.length !== edgeMidpoints.size || dots.some((dot) => !edgeMidpoints.has(dot.id))
     if (view.bearingDeg !== handlesBearingDeg || dotsChanged) refreshHandles()
@@ -389,3 +394,11 @@ export function createSelectTool(): CanvasTool {
     },
   }
 }
+
+/** Screen px per world metre on the session plane, where screen distance depends on the scale alone. */
+function pixelsPerMetre(view: Pick<ToolView, 'screenDistance'>): number {
+  return view.screenDistance(ORIGIN, UNIT_X)
+}
+
+const ORIGIN = Object.freeze({ x: 0, y: 0 })
+const UNIT_X = Object.freeze({ x: 1, y: 0 })

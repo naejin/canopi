@@ -9,6 +9,19 @@ import type { ToolHandleId } from '../../interaction-types'
 import type { ScreenPoint, WorldPoint } from '../../view/types'
 import '../../../../__tests__/support/camera-tolerance'
 
+/** Calls of Select's midpoint-dot query (reshape.ts zoneEdgeMidpoints), counted through the real function. */
+const midpointQueries = vi.hoisted(() => ({ count: 0 }))
+vi.mock('./reshape', async (importOriginal) => {
+  const actual = await importOriginal<{ readonly zoneEdgeMidpoints: (...args: never[]) => unknown }>()
+  return {
+    ...actual,
+    zoneEdgeMidpoints: (...args: never[]) => {
+      midpointQueries.count += 1
+      return actual.zoneEdgeMidpoints(...args)
+    },
+  }
+})
+
 const harnesses: ToolHarness[] = []
 
 afterEach(() => {
@@ -228,6 +241,20 @@ describe('polygon corners (spec §3.2, U33: every corner route)', () => {
       expect(placements[index]!.normalPx.x).toBeCloseTo((middle.x - centre.x) / length, 9)
       expect(placements[index]!.normalPx.y).toBeCloseTo((middle.y - centre.y) / length, 9)
     })
+  })
+
+  it('a pan under a resting pointer recomputes no midpoint dots; a zoom and a turn do', () => {
+    const h = polygonHarness()
+    h.hover({ x: 300, y: 250 })
+    midpointQueries.count = 0
+    h.pan({ x: 300, y: 250 }, { x: 320, y: 260 })
+    expect(midpointQueries.count).toBe(0)
+
+    h.wheelZoom({ x: 300, y: 250 }, 1.5)
+    expect(midpointQueries.count).toBeGreaterThan(0)
+    midpointQueries.count = 0
+    h.view.navigation.rotateBy(1)
+    expect(midpointQueries.count).toBeGreaterThan(0)
   })
 
   it('an edge shows its dot only with room for it and free outline beside it (52 px on screen); a zoom redraws the dots', () => {
