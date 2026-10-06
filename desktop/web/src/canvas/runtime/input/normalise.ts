@@ -1,11 +1,10 @@
 // canvas/runtime/input/normalise.ts
 //
 // Owns the translation of one DOM event (as the fields it reads, `DomEventLike`) into one `RawInput`: button roles per
-// pointer kind and binding, physical modifiers, wheel units, drop payloads. No state and no browser: the DOM source
+// pointer kind and platform, physical modifiers, wheel units, drop payloads. No state and no browser: the DOM source
 // converts client points to host-relative CSS px and classifies the target before calling it, and fixtures pass literals.
 
 import type { CanvasDropPayload, Modifiers, PointerKind } from '../interaction-types'
-import type { Bindings } from './bindings'
 import type { InputPlatform } from './platform'
 import type { ButtonRole, RawInput, TargetClass } from './raw-input'
 
@@ -39,7 +38,6 @@ const BIT_AUXILIARY = 4
 export function normalise(
   e: DomEventLike,
   platform: InputPlatform,
-  bindings: Bindings,
   host: { readonly width: number; readonly height: number },
 ): RawInput | null {
   const t = e.timeStamp
@@ -47,7 +45,7 @@ export function normalise(
   switch (e.type) {
     case 'pointerdown': {
       const pointer = pointerKindOf(e.pointerType)
-      const press = pressRole(e, pointer, platform, bindings)
+      const press = pressRole(e, pointer, platform)
       if (!press) return null
       return {
         kind: 'down',
@@ -71,17 +69,16 @@ export function normalise(
         pointer,
         at,
         mods: modifiersOf(e),
-        buttons: buttonRoles(e.buttons ?? 0, pointer, bindings),
+        buttons: buttonRoles(e.buttons ?? 0, pointer),
         target: e.target,
         buttonMask: e.buttons ?? 0,
       }
     }
     case 'pointerup': {
       const pointer = pointerKindOf(e.pointerType)
-      const release = pressRole(e, pointer, platform, bindings)
+      const release = pressRole(e, pointer, platform)
       // An up is never dropped: it ends its pointer's session whatever the button, as today's pointerup did. A button no
-      // press takes reads as primary: a mouse's back and forward, and a pen's eraser or its barrel under 'ignore' (a drag
-      // whose tip lifted before the barrel).
+      // press takes reads as primary: a mouse's back and forward, and a pen's eraser.
       return {
         kind: 'up',
         t,
@@ -152,14 +149,13 @@ function pressRole(
   e: DomEventLike,
   pointer: PointerKind,
   platform: InputPlatform,
-  bindings: Bindings,
 ): { readonly role: ButtonRole; readonly ctrlConsumed: boolean } | null {
   const button = e.button ?? BUTTON_PRIMARY
   if (pointer === 'touch') return { role: 'primary', ctrlConsumed: false }
   if (pointer === 'pen') {
     if (button === BUTTON_PRIMARY) return { role: 'primary', ctrlConsumed: false }
-    if (button === BUTTON_SECONDARY && bindings.penBarrel === 'secondary') return { role: 'secondary', ctrlConsumed: false }
-    return null   // barrel under 'ignore', eraser (5) and any other pen button
+    if (button === BUTTON_SECONDARY) return { role: 'secondary', ctrlConsumed: false }   // the barrel
+    return null   // the eraser (5) and any other pen button
   }
   if (button === BUTTON_PRIMARY) {
     // A Mac Control-click is a right-click: the session's Ctrl is consumed, never a modifier (spec §1.2).
@@ -171,11 +167,11 @@ function pressRole(
   return null   // back and forward (3, 4)
 }
 
-function buttonRoles(buttons: number, pointer: PointerKind, bindings: Bindings): ReadonlySet<ButtonRole> {
+function buttonRoles(buttons: number, pointer: PointerKind): ReadonlySet<ButtonRole> {
   const roles = new Set<ButtonRole>()
   if (buttons & BIT_PRIMARY) roles.add('primary')
   if (pointer === 'touch') return roles
-  if (buttons & BIT_SECONDARY && (pointer === 'mouse' || bindings.penBarrel === 'secondary')) roles.add('secondary')
+  if (buttons & BIT_SECONDARY) roles.add('secondary')
   if (buttons & BIT_AUXILIARY && pointer === 'mouse') roles.add('auxiliary')
   return roles
 }

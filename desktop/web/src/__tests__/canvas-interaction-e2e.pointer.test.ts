@@ -229,6 +229,31 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('D1, D2: a pen barrel tap on a plant opens its menu, and a barrel drag pans', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('polygon')
+    const barrel = { pointerType: 'pen', pointerId: 7, button: 2 } as const
+
+    events.pointerDown({ x: 20, y: 30 }, barrel)
+    events.pointerUp({ x: 20, y: 30 }, barrel)
+    expect(contextMenuHost.opened).toHaveLength(1)
+    expect(contextMenuHost.current?.selection?.editableTargets).toEqual([plantTarget('plant-1')])
+
+    contextMenuHost.reset()
+    const before = testView.viewport()
+    events.pointerDown({ x: 200, y: 200 }, barrel)
+    events.pointerMove({ x: 230, y: 240 }, { pointerType: 'pen', pointerId: 7, buttons: 2 })
+    events.pointerUp({ x: 230, y: 240 }, barrel)
+    expect(testView.viewport().x).toBeCloseTo(before.x + 30, 6)
+    expect(testView.viewport().y).toBeCloseTo(before.y + 40, 6)
+    expect(contextMenuHost.opened).toHaveLength(0)
+    expect(store.persisted.zones).toHaveLength(0)
+    session.dispose()
+  })
+
   it('A13: Shift+right-drag turns the view about the press, in 15° steps while mod is held', () => {
     const session = createTestSession(createInteractionDeps(container, store, testView))
     container.focus()

@@ -242,7 +242,7 @@ export function runSequence(sequence: Sequence, bindings: Bindings, thresholds: 
   for (const step of sequence.steps) {
     clock = step.t ?? clock + 16
     const input = 'dom' in step
-      ? normalise({ ...step.dom, timeStamp: clock }, sequence.platform, bindings, HOST)
+      ? normalise({ ...step.dom, timeStamp: clock }, sequence.platform, HOST)
       : { ...step.raw, t: clock } as RawInput
     if (!input) {
       steps.push({ input: null, gestures: [], effects: [] })

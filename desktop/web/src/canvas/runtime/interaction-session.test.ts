@@ -559,8 +559,8 @@ describe('the interaction session', () => {
     const pen = { pointerId: 40, pointerType: 'pen' } as const
 
     events.pointerDown({ x: 20, y: 30 }, { ...pen, button: 0, buttons: 1 })
-    // The barrel goes down mid-drag and the tip lifts first: the pointerup reports the barrel (button 2), which
-    // LEGACY ignores as a press, yet today's pointerup ended the drag whatever its button.
+    // The barrel goes down mid-drag and the tip lifts first: the pointerup reports the barrel (button 2), and an up ends
+    // its pointer's session whatever its button, as today's pointerup ended the drag.
     events.pointerMove({ x: 35, y: 45 }, { ...pen, buttons: 3 })
     events.pointerMove({ x: 35, y: 45 }, { ...pen, buttons: 2 })
     events.pointerUp({ x: 35, y: 45 }, { ...pen, button: 2, buttons: 0 })

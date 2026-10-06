@@ -142,7 +142,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   }
 
   function pointerInput(event: PointerEvent, type: DomEventLike['type'], rect: HostRect): RawInput | null {
-    return normalise(domEventLike(event, type, rect, classifyTarget(event.target, host)), deps.platform, deps.bindings(), rect)
+    return normalise(domEventLike(event, type, rect, classifyTarget(event.target, host)), deps.platform, rect)
   }
 
   function sessionRect(pointerId: number): HostRect {
@@ -204,7 +204,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     try {
       if (!owned.has(event.pointerId) && event.pointerType !== 'touch') {
         const rect = host.getBoundingClientRect()
-        deliver(event, rect, normalise(domEventLike(event, 'pointermove', rect, classifyTarget(event.relatedTarget, host)), deps.platform, deps.bindings(), rect))
+        deliver(event, rect, normalise(domEventLike(event, 'pointermove', rect, classifyTarget(event.relatedTarget, host)), deps.platform, rect))
       }
     } finally {
       deliver(event, null, pointerInput(event, 'pointerleave', NO_RECT))
@@ -227,7 +227,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   const onWheel = (event: WheelEvent): void => {
     if (allowsNativeContextMenuTarget(event.target)) return
     const rect = host.getBoundingClientRect()
-    deliver(event, rect, normalise(domEventLike(event, 'wheel', rect, classifyTarget(event.target, host, 'surface')), deps.platform, deps.bindings(), rect))
+    deliver(event, rect, normalise(domEventLike(event, 'wheel', rect, classifyTarget(event.target, host, 'surface')), deps.platform, rect))
   }
   /**
    * The one contextmenu listener (document capture): it opens nothing and reaches no sink. It prevents the native menu
@@ -244,7 +244,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   const dragHandler = (type: 'dragover' | 'dragleave' | 'drop') => (event: DragEvent): void => {
     const rect = type === 'dragleave' ? NO_RECT : host.getBoundingClientRect()
     const like: DomEventLike = { ...domEventLike(event, type, rect, classifyTarget(event.target, host)), dropPayload: dropPayloadOf(event, type) }
-    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), rect))
+    deliver(event, rect, normalise(like, deps.platform, rect))
   }
   /**
    * True from a gesturestart the canvas does not take to its gestureend. A twist starts only over the map, as a wheel is
@@ -268,7 +268,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
       lastTwist = null
       ignoringTwist = true
       const rect = host.getBoundingClientRect()
-      deliver(event, rect, normalise(end, deps.platform, deps.bindings(), rect))
+      deliver(event, rect, normalise(end, deps.platform, rect))
     }
     if (ignoringTwist) {
       event.preventDefault()
@@ -278,7 +278,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     const rect = host.getBoundingClientRect()
     const like = gestureEventLike(event, type, rect)
     lastTwist = type === 'gestureend' ? null : like
-    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), rect))
+    deliver(event, rect, normalise(like, deps.platform, rect))
   }
   const onDragOver = dragHandler('dragover')
   const onDragLeave = dragHandler('dragleave')

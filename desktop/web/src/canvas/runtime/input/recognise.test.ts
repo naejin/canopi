@@ -34,10 +34,6 @@ function kinds(gestures: readonly Gesture[]): string[] {
   return gestures.map((gesture) => (gesture.kind === 'pan' || gesture.kind === 'rotate') ? `${gesture.kind}:${gesture.phase}` : gesture.kind)
 }
 
-function withoutHovers(gestures: readonly Gesture[]): readonly Gesture[] {
-  return gestures.filter((gesture) => gesture.kind !== 'hover')
-}
-
 const NAVIGATION = new Set(['pan', 'zoom', 'rotate'])
 
 function expectNoNavigation(gestures: readonly Gesture[]): void {
@@ -237,18 +233,16 @@ describe('recognise: 5.2 macOS Ctrl+click', () => {
 })
 
 describe('recognise: 5.4 pen', () => {
-  it('D1 Pen barrel tap: nothing from the barrel', () => {
+  it('D1 Pen barrel tap: the menu at the release, source mouse', () => {
     const result = run(SEQUENCES.D1)
-    // The barrel's press is dropped; its up is kept (an up is never dropped) and ends no session.
-    expect(result.steps[0]!.input).toBeNull()
-    expect(result.steps[1]!.input).toMatchObject({ kind: 'up', pointer: 'pen', role: 'primary' })
-    expect(result.gestures).toEqual([])
+    expect(result.steps[0]!.input).toMatchObject({ kind: 'down', pointer: 'pen', role: 'secondary' })
+    expect(result.gestures).toEqual([{ kind: 'menu-request', at: { x: 100, y: 100 }, source: 'mouse' }])
   })
 
-  it('D2 Pen barrel drag: nothing but hovers', () => {
+  it('D2 Pen barrel drag: a pan', () => {
     const result = run(SEQUENCES.D2)
-    expect(withoutHovers(result.gestures)).toEqual([])
-    expect(result.effects).toEqual([])
+    expect(kinds(result.gestures)).toEqual(['pan:start', 'pan:move', 'pan:move', 'pan:end'])
+    expect(pansOf(result.gestures)[0]!.source).toBe('secondary-drag')
   })
 
   it('D3 Pen tip draw: a primary drag', () => {
@@ -275,8 +269,12 @@ describe('recognise: 5.4 pen', () => {
     expect(result.gestures[0]).toMatchObject({ kind: 'press', pointer: 'mouse' })
   })
 
-  it('D7 Pen barrel + Shift drag: nothing from the barrel', () => {
-    expect(withoutHovers(run(SEQUENCES.D7).gestures)).toEqual([])
+  it('D7 Pen barrel + Shift drag: a rotate, unstepped, then in 15° steps while mod is held', () => {
+    const result = run(SEQUENCES.D7)
+    expect(result.gestures.map((gesture) => gesture.kind === 'rotate' && [gesture.phase, gesture.step])).toEqual([
+      ['start', false], ['move', false], ['move', false],
+      ['move', true], ['move', true], ['move', true],
+    ])
   })
 })
 

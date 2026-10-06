@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { CURRENT_BINDINGS, type Bindings } from './bindings'
 import { normalise, type DomEventLike } from './normalise'
 import type { InputPlatform } from './platform'
 import type { TargetClass } from './raw-input'
@@ -25,32 +24,32 @@ function event(overrides: Partial<DomEventLike> & Pick<DomEventLike, 'type'>): D
 
 describe('normalise', () => {
   it('wheel deltas in lines and pages become pixels', () => {
-    const pixels = normalise(event({ type: 'wheel', deltaX: 2, deltaY: 3, deltaMode: 0 }), WINDOWS, CURRENT_BINDINGS, HOST)
+    const pixels = normalise(event({ type: 'wheel', deltaX: 2, deltaY: 3, deltaMode: 0 }), WINDOWS, HOST)
     expect(pixels).toMatchObject({ dxPx: 2, dyPx: 3 })
-    const lines = normalise(event({ type: 'wheel', deltaX: 2, deltaY: 3, deltaMode: 1 }), WINDOWS, CURRENT_BINDINGS, HOST)
+    const lines = normalise(event({ type: 'wheel', deltaX: 2, deltaY: 3, deltaMode: 1 }), WINDOWS, HOST)
     expect(lines).toMatchObject({ dxPx: 32, dyPx: 48 })
-    const pages = normalise(event({ type: 'wheel', deltaY: 1, deltaMode: 2 }), WINDOWS, CURRENT_BINDINGS, HOST)
+    const pages = normalise(event({ type: 'wheel', deltaY: 1, deltaMode: 2 }), WINDOWS, HOST)
     expect(pages).toMatchObject({ dxPx: 0, dyPx: 300 })
   })
 
   it('a page of deltaX is the host width', () => {
-    const pages = normalise(event({ type: 'wheel', deltaX: 0.25, deltaMode: 2 }), WINDOWS, CURRENT_BINDINGS, HOST)
+    const pages = normalise(event({ type: 'wheel', deltaX: 0.25, deltaMode: 2 }), WINDOWS, HOST)
     expect(pages).toMatchObject({ dxPx: 100, dyPx: 0 })
   })
 
   it('a Mac Ctrl+click becomes a consumed secondary press; Cmd is meta, and Ctrl+Cmd or Ctrl elsewhere stays primary', () => {
-    const press = normalise(event({ type: 'pointerdown', button: 0, ctrlKey: true }), MAC, CURRENT_BINDINGS, HOST)
+    const press = normalise(event({ type: 'pointerdown', button: 0, ctrlKey: true }), MAC, HOST)
     expect(press).toMatchObject({ kind: 'down', role: 'secondary', ctrlConsumed: true, mods: { ctrl: true } })
-    const withCommand = normalise(event({ type: 'pointerdown', button: 0, ctrlKey: true, metaKey: true }), MAC, CURRENT_BINDINGS, HOST)
+    const withCommand = normalise(event({ type: 'pointerdown', button: 0, ctrlKey: true, metaKey: true }), MAC, HOST)
     expect(withCommand).toMatchObject({ role: 'primary', ctrlConsumed: false, mods: { ctrl: true, meta: true } })
-    const elsewhere = normalise(event({ type: 'pointerdown', button: 0, ctrlKey: true }), WINDOWS, CURRENT_BINDINGS, HOST)
+    const elsewhere = normalise(event({ type: 'pointerdown', button: 0, ctrlKey: true }), WINDOWS, HOST)
     expect(elsewhere).toMatchObject({ role: 'primary', ctrlConsumed: false })
-    const command = normalise(event({ type: 'pointerdown', button: 0, metaKey: true }), MAC, CURRENT_BINDINGS, HOST)
+    const command = normalise(event({ type: 'pointerdown', button: 0, metaKey: true }), MAC, HOST)
     expect(command).toMatchObject({ role: 'primary', mods: { ctrl: false, meta: true } })
   })
 
   it('maps mouse buttons to roles and drops back and forward', () => {
-    const role = (button: number) => normalise(event({ type: 'pointerdown', button }), WINDOWS, CURRENT_BINDINGS, HOST)
+    const role = (button: number) => normalise(event({ type: 'pointerdown', button }), WINDOWS, HOST)
     expect(role(0)).toMatchObject({ role: 'primary' })
     expect(role(1)).toMatchObject({ role: 'auxiliary' })
     expect(role(2)).toMatchObject({ role: 'secondary' })
@@ -60,35 +59,32 @@ describe('normalise', () => {
 
   it('never drops an up: a button it would not press with is a primary release for every pointer kind', () => {
     const up = (pointerType: string, button: number) =>
-      normalise(event({ type: 'pointerup', pointerType, button, pointerId: 4 }), WINDOWS, CURRENT_BINDINGS, HOST)
-    // The pen's barrel under LEGACY (a drag whose tip lifted before the barrel) and its eraser end their session.
-    expect(up('pen', 2)).toMatchObject({ kind: 'up', id: 4, pointer: 'pen', role: 'primary' })
-    expect(up('pen', 5)).toMatchObject({ kind: 'up', pointer: 'pen', role: 'primary' })
+      normalise(event({ type: 'pointerup', pointerType, button, pointerId: 4 }), WINDOWS, HOST)
+    // A pen's eraser and a mouse's back button end their session; a barrel release is secondary.
+    expect(up('pen', 5)).toMatchObject({ kind: 'up', id: 4, pointer: 'pen', role: 'primary' })
     expect(up('mouse', 3)).toMatchObject({ kind: 'up', pointer: 'mouse', role: 'primary' })
-    const barrel = normalise(event({ type: 'pointerup', pointerType: 'pen', button: 2 }), WINDOWS, { ...CURRENT_BINDINGS, penBarrel: 'secondary' }, HOST)
-    expect(barrel).toMatchObject({ kind: 'up', role: 'secondary' })
+    expect(up('pen', 2)).toMatchObject({ kind: 'up', pointer: 'pen', role: 'secondary' })
   })
 
-  it('maps the pen tip to primary and drops the barrel under LEGACY and the eraser always', () => {
-    const pen = (button: number, bindings: Bindings = CURRENT_BINDINGS) =>
-      normalise(event({ type: 'pointerdown', pointerType: 'pen', button }), WINDOWS, bindings, HOST)
+  it('maps the pen tip to primary and the barrel to secondary, and drops the eraser', () => {
+    const pen = (button: number) => normalise(event({ type: 'pointerdown', pointerType: 'pen', button }), WINDOWS, HOST)
     expect(pen(0)).toMatchObject({ pointer: 'pen', role: 'primary' })
-    expect(pen(2)).toBeNull()
+    expect(pen(2)).toMatchObject({ pointer: 'pen', role: 'secondary' })
     expect(pen(5)).toBeNull()
-    expect(pen(2, { ...CURRENT_BINDINGS, penBarrel: 'secondary' })).toMatchObject({ role: 'secondary' })
   })
 
   it('makes every touch primary and reads move buttons as roles', () => {
-    expect(normalise(event({ type: 'pointerdown', pointerType: 'touch', button: 0 }), WINDOWS, CURRENT_BINDINGS, HOST))
+    expect(normalise(event({ type: 'pointerdown', pointerType: 'touch', button: 0 }), WINDOWS, HOST))
       .toMatchObject({ pointer: 'touch', role: 'primary' })
-    const mouseMove = normalise(event({ type: 'pointermove', buttons: 7 }), WINDOWS, CURRENT_BINDINGS, HOST)
+    const mouseMove = normalise(event({ type: 'pointermove', buttons: 7 }), WINDOWS, HOST)
     expect(mouseMove?.kind === 'move' ? [...mouseMove.buttons].sort() : null).toEqual(['auxiliary', 'primary', 'secondary'])
-    const penMove = normalise(event({ type: 'pointermove', pointerType: 'pen', buttons: 34 }), WINDOWS, CURRENT_BINDINGS, HOST)
-    expect(penMove?.kind === 'move' ? [...penMove.buttons] : null).toEqual([])
+    // A pen's barrel is a secondary button; its eraser (32) is none.
+    const penMove = normalise(event({ type: 'pointermove', pointerType: 'pen', buttons: 34 }), WINDOWS, HOST)
+    expect(penMove?.kind === 'move' ? [...penMove.buttons] : null).toEqual(['secondary'])
   })
 
   it('keeps the pointer id, detail and host-relative point of a press', () => {
-    expect(normalise(event({ type: 'pointerdown', pointerId: 9, detail: 2 }), WINDOWS, CURRENT_BINDINGS, HOST)).toEqual({
+    expect(normalise(event({ type: 'pointerdown', pointerId: 9, detail: 2 }), WINDOWS, HOST)).toEqual({
       kind: 'down',
       t: 10,
       id: 9,
@@ -104,7 +100,7 @@ describe('normalise', () => {
 
   it('turns the other event types into their raw inputs', () => {
     const raw = (overrides: Partial<DomEventLike> & Pick<DomEventLike, 'type'>) =>
-      normalise(event(overrides), WINDOWS, CURRENT_BINDINGS, HOST)
+      normalise(event(overrides), WINDOWS, HOST)
     expect(raw({ type: 'pointerup', pointerId: 2, button: 0 })).toMatchObject({ kind: 'up', id: 2, role: 'primary', target: SURFACE })
     expect(raw({ type: 'pointercancel', pointerId: 2 })).toEqual({ kind: 'cancel', t: 10, id: 2, reason: 'pointercancel' })
     expect(raw({ type: 'lostpointercapture', pointerId: 2 })).toEqual({ kind: 'cancel', t: 10, id: 2, reason: 'lost-capture' })
