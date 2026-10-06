@@ -42,6 +42,8 @@ interface CanvasKeySession {
   pointerSessionLive(): boolean
   /** The map is in overview (the session's mode). */
   overview(): boolean
+  /** A canvas handle (a corner, a midpoint dot, a guide end) holds keyboard focus: the arrows do nothing (U36). */
+  handleFocused(): boolean
   /** Space is held for panning: the recogniser's held.space, the one record (ADR 0017). */
   spaceHeld(): boolean
   /** Space and the modifiers as the keys left them: the recogniser's key state and the navigation cursor. */
@@ -140,7 +142,9 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionC
       const overview = session.overview()
       switch (c.kind) {
         case 'arrow':
-          // A live pointer session leaves the arrows still (fixture H25); mod+arrow is consumed even so.
+          // A live pointer session leaves the arrows still (fixture H25); mod+arrow is consumed even so. A focused handle
+          // takes them and moves nothing (U36).
+          if (session.handleFocused()) return true
           if (session.pointerSessionLive()) return c.large
           return arrow(DIRECTIONS[c.dir], c.large)
         case 'rotate-held':

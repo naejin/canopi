@@ -368,6 +368,7 @@ function selectPort(host: HTMLElement, canvas: { selected: boolean, tool: string
     session: {
       pointerSessionLive: () => false,
       overview: () => false,
+      handleFocused: () => false,
       spaceHeld: () => false,
       keyState: () => {},
       escapeGesture: () => {},

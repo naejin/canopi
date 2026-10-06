@@ -72,6 +72,7 @@ function canvasPort(): CanvasKeyboardPort {
     session: {
       pointerSessionLive: () => canvas.live,
       overview: () => canvas.overview ?? false,
+      handleFocused: () => false,
       spaceHeld: () => false,
       keyState: () => {},
       escapeGesture: () => { canvas.live = false },

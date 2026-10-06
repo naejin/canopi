@@ -2610,6 +2610,40 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('arrow keys do nothing while a polygon corner or midpoint dot holds focus (U36)', () => {
+    const square = [{ x: 20, y: 20 }, { x: 120, y: 20 }, { x: 120, y: 120 }, { x: 20, y: 120 }]
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone', locked: false, id: 'polygon-1', name: 'polygon-1', zoneType: 'polygon', rotationDeg: 0,
+        points: square, fillColor: null, notes: null,
+      }]
+    })
+    const nudge = { nudgeSelected: vi.fn(() => true), endNudge: vi.fn() }
+    const deps = createInteractionDeps(container, store, testView, { nudge })
+    const session = createTestSession(deps)
+    session.setTool('select')
+    events.pointerDown({ x: 70, y: 70 }, { button: 0 })
+    events.pointerUp({ x: 70, y: 70 }, { button: 0 })
+    const before = testView.viewport()
+
+    for (const handle of ['vertex:polygon-1:1', 'edge-mid:polygon-1:0']) {
+      const element = container.querySelector<HTMLElement>(`[data-canvas-handle="${handle}"]`)!
+      element.focus()
+      for (const key of ['ArrowRight', 'ArrowDown']) {
+        events.keyDown({ key, code: key, target: element })
+        events.keyDown({ key, code: key, ctrlKey: true, target: element })
+      }
+    }
+
+    expect(nudge.nudgeSelected).not.toHaveBeenCalled()
+    expect(testView.viewport()).toEqual(before)
+    // From the map the arrow nudges as before.
+    container.focus()
+    events.keyDown({ key: 'ArrowRight', code: 'ArrowRight', target: container })
+    expect(nudge.nudgeSelected).toHaveBeenCalledOnce()
+    session.dispose()
+  })
+
   it('leaves the short edges of a selected polygon without midpoint dots until a zoom makes room, and draws dots under the corners', () => {
     store.updatePersisted((draft) => {
       draft.zones = [{

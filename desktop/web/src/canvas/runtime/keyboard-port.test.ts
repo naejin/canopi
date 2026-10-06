@@ -69,6 +69,7 @@ function fixture(options: { readonly tool?: ToolId; readonly reply?: (c: ToolCom
   const session = {
     pointerSessionLive: () => state.live,
     overview: vi.fn(() => false),
+    handleFocused: () => false,
     spaceHeld: () => state.space,
     keyState: vi.fn((next: { readonly space: boolean }) => {
       state.space = next.space

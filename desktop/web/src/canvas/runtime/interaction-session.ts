@@ -341,6 +341,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         session: {
           pointerSessionLive: () => this._pointerSessionLive(),
           overview: () => this._mode === 'overview',
+          handleFocused: () => this._handleLayer.focusedHandle() !== null,
           spaceHeld: () => this._recogniser.held.space,
           keyState: (state) => this._setKeyState(state.space, state.mods),
           escapeGesture: () => this._escapeGesture(),
