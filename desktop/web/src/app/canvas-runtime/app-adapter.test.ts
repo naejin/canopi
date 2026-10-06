@@ -200,13 +200,12 @@ describe('Canvas Runtime app adapter composition', () => {
 
 describe('reduced motion', () => {
   afterEach(() => {
-    vi.useRealTimers()
     vi.unstubAllGlobals()
     vi.resetModules()
   })
 
-  it('under reduced motion a key turn jumps', async () => {
-    // A live prefers-reduced-motion query: on, then turned off while the app runs.
+  it('the reduced-motion preference is live, and a key turn jumps with it on or off', async () => {
+    // A live prefers-reduced-motion query: on, then turned off while the app runs. It reaches the flights only: every turn jumps (U34).
     let onChange: ((event: { readonly matches: boolean }) => void) | null = null
     const query = {
       matches: true,
@@ -217,22 +216,18 @@ describe('reduced motion', () => {
     vi.resetModules()
     const { createAppCanvasRuntimeAppAdapter: createLiveAdapter } = await import('./app-adapter')
     const { createLiveTestCanvasRuntimeHost } = await import('../../__tests__/support/live-canvas-runtime')
-    vi.useFakeTimers()
-    const host = createLiveTestCanvasRuntimeHost({
-      screen: { width: 800, height: 600 },
-      appAdapter: createLiveAdapter({ presentationData: {} }),
-    })
+    const appAdapter = createLiveAdapter({ presentationData: {} })
+    const host = createLiveTestCanvasRuntimeHost({ screen: { width: 800, height: 600 }, appAdapter })
     const bearing = () => host.surfaces.queries.view.captureView().camera.bearingDeg
 
+    expect(appAdapter.reducedMotion?.value).toBe(true)
     host.surfaces.commands.viewport.rotateBy(1)
     expect(bearing()).toBeCloseTo(15, 6)
 
-    // The preference is live: once it is off, the next turn eases over 300 ms.
     query.matches = false
     onChange!({ matches: false })
+    expect(appAdapter.reducedMotion?.value).toBe(false)
     host.surfaces.commands.viewport.rotateBy(1)
-    expect(bearing()).toBeCloseTo(15, 6)
-    vi.advanceTimersByTime(320)
     expect(bearing()).toBeCloseTo(30, 6)
     await host.destroy()
   })

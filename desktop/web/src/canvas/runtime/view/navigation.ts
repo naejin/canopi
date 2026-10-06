@@ -111,7 +111,7 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
   }
 
   function turnTo(bearingDeg: number): void {
-    apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg, animation: 'ease' })
+    apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg })
   }
 
   function zoomAroundPx(anchor: ScreenPoint, factor: number): void {
@@ -241,7 +241,6 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
             kind: 'rotate-around',
             anchorPx: pivot,
             bearingDeg: step ? roundToStep(raw, ROTATION_STEP_DEG) : normaliseBearing(raw),
-            animation: 'none',
           })
         },
         end() {
@@ -249,7 +248,7 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
           rotation = null
           const bearing = frame().view.camera.bearingDeg
           if (bearing !== 0 && snapBearing(bearing) === 0) {
-            apply({ kind: 'rotate-around', anchorPx: pivot, bearingDeg: 0, animation: 'ease' })
+            apply({ kind: 'rotate-around', anchorPx: pivot, bearingDeg: 0 })
           }
         },
         cancel() {

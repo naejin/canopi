@@ -1,14 +1,13 @@
-// canvas/runtime/view/headless-driver.ts  (tweens run on the window's animation frames)
+// canvas/runtime/view/headless-driver.ts
 //
 // Owns the camera while no map is attached (tests, before attach, after a failure): a geographic ViewCamera, moved with the same
 // camera-math and constrainCamera as the MapLibre driver and built with the one buildViewTransform (ADR 0016). Every move publishes
-// one ViewFrame when anything in it changed. A resize keeps the view centre, as MapLibre does; a re-origin keeps the camera's
-// ground and rebuilds the frame in the new plane.
+// one ViewFrame when anything in it changed. Every move jumps: without a map a flight jumps too. A resize keeps the view centre, as
+// MapLibre does; a re-origin keeps the camera's ground and rebuilds the frame in the new plane.
 
 import { signal } from '@preact/signals'
 import { stageScaleToMapZoom } from '../../projection'
 import type { SessionPlane } from '../../session-plane'
-import { startBearingTween, type BearingTween } from './bearing-tween'
 import type { CameraDriver, CameraDriverDeps, CameraDriverFailure, CameraMove } from './camera-driver'
 import { panCamera, rotateCameraAround, zoomCameraAround } from './camera-math'
 import {
@@ -21,7 +20,7 @@ import {
   type DriverFrameState,
 } from './driver-frame'
 import { createDriverFrameSource } from './frame-source'
-import { constrainCamera, normaliseBearing, VIEW_EASE_MS } from './navigation-policy'
+import { constrainCamera, normaliseBearing } from './navigation-policy'
 import type { ScreenInsets, ViewCamera, ViewScreen } from './types'
 
 export interface HeadlessCameraDriverOptions {
@@ -42,8 +41,6 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
   let planeRevision = 0
   let screen = normaliseScreen(options.screen)
   let insets = frozenInsets(options.insets ?? NO_INSETS)
-  let tween: BearingTween | null = null
-  let frameRequest: number | null = null
   let disposed = false
   const queued: Array<() => void> = []
   const failure = signal<CameraDriverFailure | null>(null)
@@ -80,39 +77,10 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
     return true
   }
 
-  function reducedMotion(): boolean {
-    return deps.policy().reducedMotion.peek()
-  }
-
-  function startTween(next: BearingTween): void {
-    stopTween()
-    tween = next
-    frameRequest = requestAnimationFrame(stepTween)
-    commit(camera)
-  }
-
-  function stopTween(): void {
-    if (frameRequest !== null) cancelAnimationFrame(frameRequest)
-    frameRequest = null
-    tween = null
-  }
-
-  function stepTween(nowMs: number): void {
-    frameRequest = null
-    const running = tween
-    if (disposed || !running) return
-    const step = running.step(camera, screen, nowMs)
-    if (step.done) tween = null
-    // Every tween frame goes through constrainCamera at that frame's bearing.
-    commit(step.camera)
-    if (!step.done && tween === running && !disposed) frameRequest = requestAnimationFrame(stepTween)
-  }
-
   function apply(move: CameraMove): void {
     if (disposed || !acceptsMove(move) || queuedWhileDispatching(() => apply(move))) return
     switch (move.kind) {
       case 'pan-by':
-        // A pan during a tween composes with it: the tween's next step starts from the panned camera.
         commit(panCamera(camera, screen, move.deltaPx))
         return
       case 'zoom-around': {
@@ -122,29 +90,13 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
         return
       }
       case 'rotate-around':
-        if (move.animation === 'ease' && !reducedMotion()) {
-          startTween(startBearingTween(camera, {
-            bearingDeg: move.bearingDeg,
-            anchorPx: move.anchorPx,
-            durationMs: VIEW_EASE_MS,
-          }, performance.now()))
-          return
-        }
-        stopTween()
         commit(rotateCameraAround(camera, screen, move.anchorPx, move.bearingDeg))
         return
       case 'set':
         // Without a map there is no flight: 'fly' jumps.
-        stopTween()
         commit(validCamera(move.target))
         return
     }
-  }
-
-  function stopAnimation(): void {
-    if (disposed || queuedWhileDispatching(stopAnimation) || !tween) return
-    stopTween()
-    commit(camera)
   }
 
   function planeChanged(next: SessionPlane): void {
@@ -176,14 +128,14 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
     frames,
     failure,
     apply,
-    bearingTarget: () => (tween ? tween.targetBearingDeg : camera.bearingDeg),
-    stopAnimation,
+    bearingTarget: () => camera.bearingDeg,
+    // Nothing ever animates without a map.
+    stopAnimation: () => {},
     planeChanged,
     setScreen,
     setInsets,
     dispose() {
       disposed = true
-      stopTween()
       queued.length = 0
       frames.dispose()
     },

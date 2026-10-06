@@ -105,7 +105,7 @@ function moveTheView(host: CanvasRuntimeHost): void {
   const camera = host.cameraHost.current()
   camera.apply({ kind: 'pan-by', deltaPx: { x: 140, y: -60 } })
   camera.apply({ kind: 'zoom-around', anchorPx: { x: 300, y: 200 }, factor: 1.6 })
-  camera.apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 35, animation: 'none' })
+  camera.apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 35 })
 }
 
 /** What saving now should write: the live view as stored, with the ground the whole map shows. */

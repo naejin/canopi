@@ -19,14 +19,13 @@ export interface NavigationPolicy {
   readonly minZoom: number                 // 0
   readonly maxZoom: number                 // 27
   /** prefers-reduced-motion: reduce, a live matchMedia signal made in app/canvas-runtime/app-adapter.ts, declared on canvas/runtime/app-adapter.ts and
-   *  passed to createCameraDriverHost; view/ never calls matchMedia (P4). Eases and tweens become 'none' moves while true. */
+   *  passed to createCameraDriverHost; view/ never calls matchMedia (P4). Flights become jumps while true (turns always jump, U34). */
   readonly reducedMotion: ReadonlySignal<boolean>
 }
 
 export const ROTATE_DEG_PER_PX = 0.8                                  // MapLibre's rate
 /** Free gestures and the compass snap to north within this angle on release. */
 const SNAP_TO_NORTH_DEG = 7
-export const VIEW_EASE_MS = 300
 
 /** Bearings this close to a whole multiple of 360 read as north. */
 const FULL_TURN_EPSILON_DEG = 1e-9

@@ -109,7 +109,8 @@ export function createAppCanvasRuntimeAppAdapter(
 let reducedMotion: { readonly source: unknown; readonly preference: ReadonlySignal<boolean> } | null = null
 
 /**
- * The platform's prefers-reduced-motion: reduce, live: the runtime's view jumps instead of easing while it is true (spec §4.3).
+ * The platform's prefers-reduced-motion: reduce, live: the runtime's flights (saved views, stories, places) jump instead of flying
+ * while it is true; turns always jump (U34, spec §4.3).
  * One query listener per matchMedia (the app's lifetime; a test that stubs matchMedia gets its own).
  */
 function reducedMotionPreference(): ReadonlySignal<boolean> {

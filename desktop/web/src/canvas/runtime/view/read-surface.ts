@@ -18,7 +18,7 @@ export interface RotationSession {
    * roundToStep(start + totalDeltaDeg, 15): absolute multiples of 15°, not start + 15k.
    */
   update(totalDeltaDeg: number, options: { readonly step: boolean }): void
-  /** snapBearing: within 7° of north tweens to 0 in 300 ms about the session pivot; else keeps. */
+  /** snapBearing: within 7° of north jumps to 0 about the session pivot (U34); else keeps. */
   end(): void
   /** Restores the full starting ViewCamera with animation 'none' (Esc during a rotate). */
   cancel(): void
@@ -37,7 +37,7 @@ export interface ViewReadSurface {
    *  where nothing else re-renders, and is the named exception to the coarse-signal rule (P10). */
   readonly designPin: ReadonlySignal<ScreenPoint | null>
   /** The camera after 150 ms without change (the settled frame's camera): last view, map contributions, and the PDF's test
-   *  for a turn still easing (its bearing against captureView's). Never what a user-triggered capture records (captureView). */
+   *  for a view still turning (a flight, or a turn not yet settled: its bearing against captureView's). Never what a user-triggered capture records (captureView). */
   readonly settledCamera: ReadonlySignal<ViewCamera>
   /** The settled frame's revision: changes once per settle, whatever settled (camera, screen, insets, re-origin). The labels count. */
   readonly settledRevision: ReadonlySignal<number>

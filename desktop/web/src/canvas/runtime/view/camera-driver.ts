@@ -9,15 +9,11 @@ export type CameraMove =
   /** deltaPx is content movement: the ground under the pointer moves by deltaPx. New centre = unproject(screenCentre − deltaPx). */
   | { readonly kind: 'pan-by'; readonly deltaPx: ScreenPoint }
   | { readonly kind: 'zoom-around'; readonly anchorPx: ScreenPoint; readonly factor: number }
-  /**
-   * Keep the ground under anchorPx fixed while the bearing changes; the centre is an output.
-   * 'ease' runs a driver tween (VIEW_EASE_MS) about the same anchor.
-   */
+  /** Keep the ground under anchorPx fixed while the bearing changes; the centre is an output. Every turn jumps (U34). */
   | {
       readonly kind: 'rotate-around'
       readonly anchorPx: ScreenPoint | 'centre'
       readonly bearingDeg: number
-      readonly animation: 'none' | 'ease'
     }
   /** Go to a full camera. The centre is an input; no anchor. 'fly' is MapLibre flyTo; without a map it jumps. */
   | {
@@ -30,7 +26,7 @@ export interface CameraDriver {
   readonly frames: DriverFrameSource
   /** Synchronous for 'none' moves and the incremental kinds: `frames.viewFrame` is current on return (unless queued). */
   apply(move: CameraMove): void
-  /** The bearing a running tween or flight will end at, else the live bearing. */
+  /** The bearing a running flight will end at, else the live bearing. */
   bearingTarget(): number
   stopAnimation(): void
   /** The runtime's plane effect calls it on a re-origin, and on any plane change while a map is attached: either driver keeps its
@@ -44,7 +40,7 @@ export interface CameraDriver {
   dispose(): void
 }
 
-/** Injected into both drivers; they read the clock and animation frames from the window themselves (tests fake them). */
+/** Injected into both drivers. */
 export interface CameraDriverDeps {
   readonly policy: () => NavigationPolicy
 }

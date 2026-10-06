@@ -50,7 +50,7 @@ describe('createTestView', () => {
     view.dispose()
   })
 
-  it('a turn and the settle run on Vitest fake timers', () => {
+  it('a turn jumps and the settle runs on Vitest fake timers', () => {
     vi.useFakeTimers()
     const view = createTestView()
     const published: ViewFrame[] = []
@@ -58,16 +58,16 @@ describe('createTestView', () => {
     const settled = view.frames.settledViewFrame.peek()
 
     view.navigation.rotateBy(1)
-    expect(published).toHaveLength(0)
-
-    // The tween lands on an animation frame; the settle has not run while it moved.
-    vi.advanceTimersByTime(320)
-    const landed = published.at(-1)!
+    // The turn lands at once (U34); the settle has not run yet.
+    expect(published).toHaveLength(1)
+    const landed = published[0]!
     expect(landed.view.camera.bearingDeg).toBe(15)
     expect(view.frames.settledViewFrame.peek()).toBe(settled)
 
     // 150 ms after the last frame the settle timer publishes it as the settled frame.
-    vi.advanceTimersByTime(150)
+    vi.advanceTimersByTime(149)
+    expect(view.frames.settledViewFrame.peek()).toBe(settled)
+    vi.advanceTimersByTime(1)
     expect(view.frames.settledViewFrame.peek()).toBe(landed)
     view.dispose()
   })
