@@ -92,16 +92,19 @@ export function createSelectTool(): CanvasTool {
     // A point handle's drag hides the rotation handle from its press to its release.
     const pointDrag = gesture?.kind === 'reshape' || gesture?.kind === 'guide-end'
     const size = handleSizeFor(pointer)
-    const rotate = pointDrag ? null : rotateHandle(c.scene, selection, c.view, c.translate, rotationDeltaDeg, size)
+    const zone = reshapableZone(scene, selection)
+    const points = zone ? zoneControlPoints(zone) : []
+    const midpoints = zone ? zoneEdgeMidpoints(zone, c.view, size) : []
+    // The rotation handle rises over the chips that the dots put beside their edges.
+    const rotate = pointDrag
+      ? null
+      : rotateHandle(c.scene, selection, c.view, c.translate, rotationDeltaDeg, size, midpoints.length > 0)
     handlesBearingDeg = c.view.bearingDeg
     handlesPixelsPerMetre = pixelsPerMetre(c.view)
     handlesPointer = pointer
     if (rotate) handles.push(rotate)
-    const zone = reshapableZone(scene, selection)
-    const points = zone ? zoneControlPoints(zone) : []
     reshapePoints = new Map(points.map((entry) => [entry.id, entry]))
     handles.push(...zoneControlPointHandles(points, size, c.translate))
-    const midpoints = zone ? zoneEdgeMidpoints(zone, c.view, size) : []
     edgeMidpoints = new Map(midpoints.map((entry) => [entry.id, entry]))
     handles.push(...zoneEdgeMidpointHandles(midpoints, size, c.translate))
     const guide = draggableGuide(scene, selection)

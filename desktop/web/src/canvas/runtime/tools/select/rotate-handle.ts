@@ -1,7 +1,8 @@
 // canvas/runtime/tools/select/rotate-handle.ts
 //
 // Owns Select's rotation handle: the 'rotate' ToolHandle, a 28 px button centred 28 px above the selection's projected
-// hull (14 px clear of it; spec §4.9), its hit box sized for the last pointer (handle-size.ts): the screen box of
+// hull (14 px clear of it; spec §4.9), or 48 px while the selected polygon shows midpoint dots, so it clears an edge's
+// length chip beside its dot (U38, canopi-f47t.29), its hit box sized for the last pointer (handle-size.ts): the screen box of
 // the shapes it draws (select/selection-hull.ts), so on a turned map it sits above what the user sees, centred on it. The
 // handle layer keeps it inside the visible map area. It is shown for a rotatable selection
 // (scene-runtime/selection-rotation.ts), and its drag: one
@@ -32,6 +33,10 @@ export const ROTATE_HANDLE_ID = 'rotate' as ToolHandleId
 /** The look: a 28 px button, 14 px above the selection's top edge, whatever its hit box. */
 const HANDLE_RADIUS_PX = 14
 const HANDLE_GAP_PX = 14
+/** While midpoint dots show, a top edge's length chip may sit beside its dot, above the edge (U38): 6 px out plus a chip
+ *  of up to 22 px (13 px lettering × 1.2, 2 px padding and a 1 px border each side). The button's 3 px ring then keeps
+ *  some air above that chip. */
+const HANDLE_GAP_ABOVE_DOT_CHIPS_PX = 34
 const STEP_DEG = 15
 /** A turn this small is no turn: the drag commits nothing. */
 const NO_OP_ROTATION_DELTA_DEG = 0.25
@@ -47,7 +52,7 @@ export interface RotationDrag {
   open: boolean
 }
 
-/** The rotation handle for `selection`, or null when it does not rotate. */
+/** The rotation handle for `selection`, or null when it does not rotate; `dotsShown` while midpoint dots show. */
 export function rotateHandle(
   scene: ToolScene,
   selection: CanvasDesignObjectSelectionModel,
@@ -55,6 +60,7 @@ export function rotateHandle(
   translate: ToolContext['translate'],
   deltaDeg: number | null,
   size: HandleSize,
+  dotsShown: boolean,
 ): ToolHandle | null {
   if (!isRotatableSelection(selection)) return null
   const hull = selectionScreenHull(scene, selection, view)
@@ -63,7 +69,7 @@ export function rotateHandle(
   return {
     id: ROTATE_HANDLE_ID,
     anchor: { x: (topLeft.x + topRight.x) / 2, y: (topLeft.y + topRight.y) / 2 },
-    offsetPx: { x: 0, y: -(HANDLE_GAP_PX + HANDLE_RADIUS_PX) },
+    offsetPx: { x: 0, y: -((dotsShown ? HANDLE_GAP_ABOVE_DOT_CHIPS_PX : HANDLE_GAP_PX) + HANDLE_RADIUS_PX) },
     hitRadiusPx: size.rotateRadiusPx,
     glyph: 'rotate',
     label: translate('canvas.rotationHandle.label'),
