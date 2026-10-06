@@ -211,7 +211,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     },
     metresPerPixelAt: (p) => frame().view.metresPerPixelAt(p),
     screenDistance: (a, b) => frame().view.screenDistance(a, b),
-    screenAxesInWorld: (at) => frame().view.screenAxesInWorld(at),
+    screenAxesInWorld: () => frame().view.screenAxesInWorld(),
     screenAlignedRect: (a, b, options) => screenAlignedRect(frame().view, a, b, options),
   }
 

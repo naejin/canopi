@@ -181,7 +181,7 @@ function previewShapes(ctx: ToolContext, species: PlantStampSourceInput, world: 
     const radius = width / 2
     shapes.push({ kind: 'ellipse', center: world, radiusX: radius, radiusY: radius, rotationDeg: 0, style: SPREAD_RING_STROKE })
     // Upright, above the ring's top on screen.
-    const { down } = view.screenAxesInWorld(world)
+    const { down } = view.screenAxesInWorld()
     labels.push({
       kind: 'label',
       anchor: { x: world.x - down.x * radius, y: world.y - down.y * radius },

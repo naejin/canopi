@@ -76,8 +76,8 @@ export interface ViewTransform {
   /** Local ground resolution at a world point (view centre if omitted): the scale bar and ratio read it. */
   metresPerPixelAt(p?: WorldPoint): number
   screenDistance(a: WorldPoint, b: WorldPoint): number
-  /** Unit world vectors of screen-right and screen-down at a point (view centre if omitted). */
-  screenAxesInWorld(at?: WorldPoint): { readonly right: WorldVector; readonly down: WorldVector }
+  /** Unit world vectors of screen-right and screen-down: one pair for the whole plane (the camera has no pitch). */
+  screenAxesInWorld(): { readonly right: WorldVector; readonly down: WorldVector }
 
   /** The ground under the whole screen's corners; framing inside the insets is fit.ts's framingRect. */
   visibleWorldQuad(): WorldQuad

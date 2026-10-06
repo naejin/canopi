@@ -138,7 +138,7 @@ export interface ToolView {
   readonly mode: 'site' | 'overview'
   metresPerPixelAt(p: WorldPoint): number
   screenDistance(a: WorldPoint, b: WorldPoint): number
-  screenAxesInWorld(at?: WorldPoint): { readonly right: WorldVector; readonly down: WorldVector }
+  screenAxesInWorld(): { readonly right: WorldVector; readonly down: WorldVector }
   /** Screen-aligned rectangle from two world corners: rotationDeg = the bearing (in [0, 360)). Shift's square and circle use `square`. */
   screenAlignedRect(a: WorldPoint, b: WorldPoint, options?: { readonly square?: boolean }):
     { readonly center: WorldPoint; readonly width: number; readonly height: number; readonly rotationDeg: number }
