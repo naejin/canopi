@@ -80,14 +80,14 @@ function expectProjectsLikeMapLibre(view: ViewTransform, transform: SourceTransf
 const SCRIPT: readonly CameraMove[] = [
   { kind: 'pan-by', deltaPx: { x: 10, y: -7 } },
   { kind: 'zoom-around', anchorPx: { x: 120, y: 80 }, factor: 1.5 },
-  { kind: 'rotate-around', anchorPx: { x: 300, y: 50 }, bearingDeg: 30, animation: 'none' },
+  { kind: 'rotate-around', anchorPx: { x: 300, y: 50 }, bearingDeg: 30 },
   { kind: 'pan-by', deltaPx: { x: -40.5, y: 25.25 } },
   { kind: 'zoom-around', anchorPx: { x: 50, y: 550 }, factor: 0.8 },
-  { kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 300, animation: 'none' },
+  { kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 300 },
   { kind: 'zoom-around', anchorPx: { x: 700, y: 20 }, factor: 3.2 },
-  { kind: 'rotate-around', anchorPx: { x: 10, y: 590 }, bearingDeg: 181.5, animation: 'none' },
+  { kind: 'rotate-around', anchorPx: { x: 10, y: 590 }, bearingDeg: 181.5 },
   { kind: 'pan-by', deltaPx: { x: 333, y: -111 } },
-  { kind: 'rotate-around', anchorPx: { x: 890, y: 300 }, bearingDeg: 0, animation: 'none' },
+  { kind: 'rotate-around', anchorPx: { x: 890, y: 300 }, bearingDeg: 0 },
   { kind: 'zoom-around', anchorPx: { x: 450, y: 300 }, factor: 0.5 },
 ]
 
@@ -96,13 +96,13 @@ const SCRIPT: readonly CameraMove[] = [
  * single-world floor (then the one-world hold), a pan the hold stops, and in past CLAMP_MAX_ZOOM about an off-centre anchor.
  */
 const CLAMP_SCRIPT: readonly CameraMove[] = [
-  { kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 45, animation: 'none' },
+  { kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 45 },
   { kind: 'zoom-around', anchorPx: { x: 200, y: 150 }, factor: 1e-9 },
   { kind: 'zoom-around', anchorPx: { x: 200, y: 150 }, factor: 4 },
   { kind: 'pan-by', deltaPx: { x: 5_000, y: -3_000 } },
   { kind: 'zoom-around', anchorPx: { x: 450, y: 300 }, factor: 2 ** 14 },
   { kind: 'zoom-around', anchorPx: { x: 700, y: 120 }, factor: 2 ** 10 },
-  { kind: 'rotate-around', anchorPx: { x: 100, y: 500 }, bearingDeg: 0, animation: 'none' },
+  { kind: 'rotate-around', anchorPx: { x: 100, y: 500 }, bearingDeg: 0 },
 ]
 /** The clamp script's zoom ceiling: today's 27 is beyond the zooms MercatorTransform checks to 1e-6 px. */
 const CLAMP_MAX_ZOOM = 20

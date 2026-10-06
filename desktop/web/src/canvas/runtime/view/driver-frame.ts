@@ -6,7 +6,7 @@
 import type { SessionPlane } from '../../session-plane'
 import { isWorkspaceOverviewScale } from '../../workspace-camera-policy'
 import type { CameraMove } from './camera-driver'
-import { scaleBoundsAt, zoomFloorForArc, type NavigationPolicy } from './navigation-policy'
+import { scaleBoundsAt, worldZoomFloor, type NavigationPolicy } from './navigation-policy'
 import type { ScreenInsets, ScreenPoint, ViewCamera, ViewFrame, ViewScreen } from './types'
 import { buildViewTransform } from './view-transform'
 
@@ -20,7 +20,7 @@ export interface DriverFrameState {
   readonly planeRevision: number
 }
 
-/** A driver's frame state for `camera`, with the scale bounds at its bearing. */
+/** A driver's frame state for `camera`, with the scale bounds of its screen. */
 export function driverFrameState(
   camera: ViewCamera,
   placed: { readonly screen: ViewScreen; readonly insets: ScreenInsets; readonly plane: SessionPlane; readonly planeRevision: number },
@@ -29,7 +29,7 @@ export function driverFrameState(
   return {
     ...placed,
     camera,
-    scaleBounds: scaleBoundsAt(placed.screen, policy, camera.bearingDeg),
+    scaleBounds: scaleBoundsAt(placed.screen, policy),
   }
 }
 
@@ -105,9 +105,9 @@ function finitePoint(point: ScreenPoint): boolean {
   return Number.isFinite(point.x) && Number.isFinite(point.y)
 }
 
-/** The zoom factor held inside the zoom range at the camera's bearing, so a zoom about an anchor keeps the anchor. */
+/** The zoom factor held inside the zoom range, so a zoom about an anchor keeps the anchor. */
 export function zoomFactorWithinRange(camera: ViewCamera, screen: ViewScreen, policy: NavigationPolicy, factor: number): number {
-  const floor = Math.max(policy.minZoom, zoomFloorForArc(screen, policy, camera.bearingDeg, camera.bearingDeg))
+  const floor = Math.max(policy.minZoom, worldZoomFloor(screen))
   const wanted = camera.zoom + Math.log2(factor)
   const zoom = Math.min(policy.maxZoom, Math.max(Math.min(policy.maxZoom, floor), wanted))
   return zoom === wanted ? factor : 2 ** (zoom - camera.zoom)

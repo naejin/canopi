@@ -28,19 +28,19 @@ const { canvasPdf } = await import('../app/canvas-pdf/live')
 
 describe('the live PDF workflow', () => {
   afterEach(() => { canvasPdf.close(); vi.useRealTimers() })
-  it('waits for a turn still easing on open and lays pages out at the bearing it ends at', async () => {
+  it('waits for a flight still turning on open and lays pages out at the bearing it lands at', async () => {
     vi.useFakeTimers()
     const prepare = vi.fn(async ({ input }: PdfPreparation): Promise<PreparedPdf> =>
       ({ bytes: new Uint8Array([1]), plan: { pages: [], outlines: {}, blocked: null, angleDeg: input.viewBearingDeg } }))
     fakes.prepare = prepare
-    // Shift+→ eases from 0 to 15 over 300 ms (ADR 0015); Ctrl+P about 150 ms in reads about 9 on the live camera.
+    // A saved view flies from 0 to 15; Ctrl+P during the flight reads about 9 on the live camera.
     view.live = 9
     canvasPdf.show()
     canvasPdf.configure({ mapOrientation: 'as-on-screen' })
     await vi.advanceTimersByTimeAsync(200)
     expect(prepare).not.toHaveBeenCalled()
     expect(canvasPdf.state.value).toMatchObject({ status: 'preparing', error: null })
-    // The turn ends at 15 and the view settles 150 ms later.
+    // The flight lands at 15 and the view settles 150 ms later.
     view.live = 15
     settledCamera.value = { ...settledCamera.peek(), bearingDeg: 15 }
     await vi.advanceTimersByTimeAsync(200)

@@ -74,8 +74,8 @@ describe('PDF workflow lifetime', () => {
       for (const area of family) expect(area.pivot).toEqual(parts[0]!.pivot)
     } finally { workflow.dispose() }
   })
-  it('waits for a turn still easing on open and holds the bearing it ends at', async () => {
-    // Shift+→ eases from 0 to 15 (ADR 0015); Ctrl+P about 150 ms in reads about 9 on the live camera.
+  it('waits for a flight still turning on open and holds the bearing it lands at', async () => {
+    // A saved view flies from 0 to 15; Ctrl+P during the flight reads about 9 on the live camera.
     const { workflow, prepare, startTurn, settleView } = fixture()
     const angle = () => layoutAngle(prepare.mock.lastCall![0].setup, prepare.mock.lastCall![0].input)
     try {

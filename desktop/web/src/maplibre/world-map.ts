@@ -46,7 +46,7 @@ export interface WorldMapLibreOptions {
   readonly center: [number, number]
   readonly zoom: number
   /** The request seam that authenticates official provider tiles. */
-  readonly transformRequest?: (url: string) => { url: string }
+  readonly transformRequest: (url: string) => { url: string }
 }
 
 export function createWorldMapLibreMap(
@@ -65,7 +65,9 @@ export function createWorldMapLibreMap(
     pitchWithRotate: false,
     dragRotate: false,
     touchZoomRotate: false,
-    ...(options.transformRequest ? { transformRequest: options.transformRequest } : {}),
+    // Shift+drag pans like any drag instead of drawing MapLibre's zoom box (spec §4.17).
+    boxZoom: false,
+    transformRequest: options.transformRequest,
   }) as unknown as WorldMapLibreMap
 
   // MapLibre prints an error event nobody listens to on the console, and a
@@ -75,7 +77,8 @@ export function createWorldMapLibreMap(
   map.on('error', (event) => logMapError('Passive MapLibre World map error:', event))
 
   // The World map stays north-up: its keyboard handler keeps arrow pans and
-  // +/- zoom, but Shift+arrows neither turn nor tilt it (INV-CAM-46).
+  // +/- zoom, but Shift+arrows neither turn nor tilt it (world-map-surface.test.tsx,
+  // "Shift+arrow keys do not turn or tilt the World map").
   map.keyboard.disableRotation()
 
   try {

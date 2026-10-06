@@ -13,7 +13,6 @@ import {
   nextStep,
   normaliseBearing,
   roundToStep,
-  scaleBoundsAt,
   shortestArc,
   snapBearing,
   type NavigationPolicy,
@@ -99,25 +98,20 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
     return { x: screen.width / 2, y: screen.height / 2 }
   }
 
-  function fitFrame(bearingDeg: number): FitFrame {
+  function fitFrame(): FitFrame {
     const current = frame()
     const { view } = current
-    return {
-      screen: view.screen,
-      insets: current.insets,
-      scaleBounds: bearingDeg === view.camera.bearingDeg ? current.scaleBounds : scaleBoundsAt(view.screen, deps.policy(), bearingDeg),
-      current: planarCameraOf(view),
-    }
+    return { screen: view.screen, insets: current.insets, scaleBounds: current.scaleBounds, current: planarCameraOf(view) }
   }
 
   /** A temporary focus's framing of `bounds` at the current bearing, or null when they cannot be framed. */
   function boundsFraming(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): PlanarCamera | null {
     const bearing = driver().bearingTarget()
-    return fitTemporaryBounds(fitFrame(bearing), bounds, options, bearing)
+    return fitTemporaryBounds(fitFrame(), bounds, options, bearing)
   }
 
   function turnTo(bearingDeg: number): void {
-    apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg, animation: 'ease' })
+    apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg })
   }
 
   function zoomAroundPx(anchor: ScreenPoint, factor: number): void {
@@ -136,19 +130,19 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
     },
     zoomToFit() {
       const bearing = driver().bearingTarget()
-      place(fitScene(fitFrame(bearing), deps.readSceneExtent(), bearing))
+      place(fitScene(fitFrame(), deps.readSceneExtent(), bearing))
     },
     zoomToSelection() {
       const points = deps.readSelectionPoints()
       if (points.length === 0) return
       const bearing = driver().bearingTarget()
       // Never empty here, so no empty-scene scale applies.
-      place(fitScene(fitFrame(bearing), { extentPoints: () => points, emptySceneScale: 0 }, bearing))
+      place(fitScene(fitFrame(), { extentPoints: () => points, emptySceneScale: 0 }, bearing))
     },
     returnToDesign() {
       // The fit when it reaches site scale and moves the view, else the plane origin centred at a usable scale.
       const bearing = driver().bearingTarget()
-      const framing = fitFrame(bearing)
+      const framing = fitFrame()
       const fitted = fitScene(framing, deps.readSceneExtent(), bearing)
       if (!isWorkspaceOverviewScale(fitted.scale) && !samePlanar(fitted, framing.current)) {
         place(fitted)
@@ -197,7 +191,7 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
         return
       }
       const bearing = empty ? 0 : normaliseBearing(bearingDeg)
-      const fitted = fitScene(fitFrame(bearing), extent, bearing)
+      const fitted = fitScene(fitFrame(), extent, bearing)
       // A fit that kept another bearing turns about the screen centre: the same centre and scale at the opening bearing.
       const { view } = frame()
       jump(cameraCentredOn(view, placementCentre(fitted, view.screen), fitted.scale, bearing))
@@ -247,7 +241,6 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
             kind: 'rotate-around',
             anchorPx: pivot,
             bearingDeg: step ? roundToStep(raw, ROTATION_STEP_DEG) : normaliseBearing(raw),
-            animation: 'none',
           })
         },
         end() {
@@ -255,7 +248,7 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
           rotation = null
           const bearing = frame().view.camera.bearingDeg
           if (bearing !== 0 && snapBearing(bearing) === 0) {
-            apply({ kind: 'rotate-around', anchorPx: pivot, bearingDeg: 0, animation: 'ease' })
+            apply({ kind: 'rotate-around', anchorPx: pivot, bearingDeg: 0 })
           }
         },
         cancel() {

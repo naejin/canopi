@@ -116,10 +116,10 @@ describe('view frame source', () => {
     expect(surface.mode.value).toBe('overview')
 
     // The needle reads a tenth of a degree; north-up allows 0.05°.
-    view.host.current().apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 359.96, animation: 'none' })
+    view.host.current().apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 359.96 })
     expect(surface.bearingDeg.value).toBe(0)
     expect(surface.northUp.value).toBe(true)
-    view.host.current().apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 12.345, animation: 'none' })
+    view.host.current().apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 12.345 })
     expect(surface.bearingDeg.value).toBe(12.3)
     expect(surface.northUp.value).toBe(false)
     for (const dispose of disposers) dispose()
@@ -180,7 +180,7 @@ describe('view frame source', () => {
     expect(captured.camera).toBe(view.view().camera)
     expect(captured.screen).toEqual({ width: 400, height: 300, devicePixelRatio: 1 })
 
-    view.host.current().apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 30, animation: 'none' })
+    view.host.current().apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 30 })
     const turned = surface.captureView()
     expect(turned.camera).toBe(view.view().camera)
     expect(turned.camera.bearingDeg).toBe(30)

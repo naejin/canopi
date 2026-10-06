@@ -417,6 +417,8 @@ describe('WorldMapSurface', () => {
       pitchWithRotate: false,
       dragRotate: false,
       touchZoomRotate: false,
+      // Shift+drag pans like any drag: no box zoom (spec §4.17).
+      boxZoom: false,
     })
     expect(maplibreMock.navigationControlConstructor).toHaveBeenCalledWith({
       visualizePitch: false,

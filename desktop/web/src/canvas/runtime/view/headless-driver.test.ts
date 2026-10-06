@@ -1,5 +1,5 @@
 import { effect } from '@preact/signals'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { createTestView, type TestView } from '../../../__tests__/support/test-view'
 import { mapZoomToStageScale, stageScaleToMapZoom } from '../../projection'
 import { createSessionPlane, type SessionPlane } from '../../session-plane'
@@ -68,10 +68,6 @@ function expectReadsAsToday(frame: ViewFrame, today: TodayReadback, compareMinim
 }
 
 describe('headless camera driver', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
   it('jumpTo publishes one frame with the requested camera', () => {
     const view = createTestView({ plane: createSessionPlane({ lon: 2.35, lat: 48.85 }) })
     const { driver, published } = driverOf(view)
@@ -99,39 +95,22 @@ describe('headless camera driver', () => {
     view.dispose()
   })
 
-  it('a tween advances on animation frames until it lands', () => {
-    vi.useFakeTimers()
+  it('a turn jumps in one frame and keeps the ground under its anchor', () => {
     const view = createTestView()
     const { driver, published } = driverOf(view)
     const start = driver.frames.viewFrame.peek()
+    const anchor = { x: 120, y: 80 }
 
-    driver.apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 90, animation: 'ease' })
-    expect(driver.bearingTarget()).toBe(90)
-    // The tween waits for the first animation frame.
-    expect(published).toHaveLength(0)
-    expect(start.view.camera.bearingDeg).toBe(0)
+    driver.apply({ kind: 'rotate-around', anchorPx: anchor, bearingDeg: 90 })
 
-    vi.advanceTimersByTime(100)
-    const midway = published.at(-1)!
-    expect(published.length).toBeGreaterThan(0)
-    expect(midway.view.camera.bearingDeg).toBeGreaterThan(0)
-    expect(midway.view.camera.bearingDeg).toBeLessThan(90)
-
-    vi.advanceTimersByTime(220)
-    const landed = published.at(-1)!
+    expect(published).toHaveLength(1)
+    const landed = published[0]!
     expect(landed.view.camera.bearingDeg).toBe(90)
     expect(driver.bearingTarget()).toBe(90)
-    // The ground under the screen centre stayed put.
-    const centre = { x: 200, y: 150 }
-    const startCentre = start.view.screenToWorld(centre)
-    const endCentre = landed.view.screenToWorld(centre)
-    expect(endCentre.x).toBeCloseTo(startCentre.x, 6)
-    expect(endCentre.y).toBeCloseTo(startCentre.y, 6)
-
-    // A landed tween publishes nothing more.
-    const count = published.length
-    vi.advanceTimersByTime(1000)
-    expect(published).toHaveLength(count)
+    const startGround = start.view.screenToWorld(anchor)
+    const endGround = landed.view.screenToWorld(anchor)
+    expect(endGround.x).toBeCloseTo(startGround.x, 6)
+    expect(endGround.y).toBeCloseTo(startGround.y, 6)
     view.dispose()
   })
 

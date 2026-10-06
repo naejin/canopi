@@ -6,15 +6,35 @@ import type { ScenePersistedState } from '../canvas/runtime/scene'
 import type { CameraDriver, CameraDriverDeps } from '../canvas/runtime/view/camera-driver'
 import { createCameraDriverHost } from '../canvas/runtime/view/driver-host'
 import { createViewNavigation } from '../canvas/runtime/view/navigation'
-import { createNavigationPolicy, zoomFloorForArc, type NavigationPolicy } from '../canvas/runtime/view/navigation-policy'
+import { createNavigationPolicy, type NavigationPolicy } from '../canvas/runtime/view/navigation-policy'
 import { planarToViewCamera } from '../canvas/runtime/view/camera-math'
 import type { GeoPoint, PlanarCamera, ViewCamera, ViewFrame, ViewScreen } from '../canvas/runtime/view/types'
 import { planarCameraOf } from '../canvas/runtime/view/view-transform'
 import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
-import { createMapLibreCameraDriver } from './camera-driver'
+import { Camera as SourceCameraClass } from 'maplibre-gl-source/ui/camera.ts'
+import { createMapLibreCameraDriver, type MapLibreCameraDriverMap } from './camera-driver'
 import type { MapLibreLngLat, MapLibreTransformConstrain } from './loader'
 
 const PLANE = createSessionPlane({ lon: 2.35, lat: 48.85 })
+interface SourceCamera {
+  readonly transform: {
+    readonly centerPoint: object
+    resize(width: number, height: number): void
+    setConstrainOverride(constrain: MapLibreTransformConstrain | null): void
+    screenPointToLocation(point: { x: number; y: number }): unknown
+    locationToScreenPoint(ground: unknown): { x: number; y: number }
+  }
+  jumpTo(options: object): void
+  flyTo(options: object): void
+  stop(): void
+  on(type: string, listener: (event?: unknown) => void): void
+  off(type: string, listener: (event?: unknown) => void): void
+  getCenter(): MapLibreLngLat
+  getZoom(): number
+  getBearing(): number
+  getPitch(): number
+}
+const SourceCamera = SourceCameraClass as new (options: object) => SourceCamera
 const POLICY = createNavigationPolicy(PLANE.origin.lat, signal(false))
 
 /** MapLibre's LngLat class: the constrain must hand back the class it was given. */
@@ -235,7 +255,7 @@ describe('MapLibre camera driver', () => {
     const { driver, published } = attach(map)
 
     driver.apply({ kind: 'zoom-around', anchorPx: { x: 100, y: 80 }, factor: 2 })
-    driver.apply({ kind: 'rotate-around', anchorPx: { x: 300, y: 200 }, bearingDeg: 300, animation: 'none' })
+    driver.apply({ kind: 'rotate-around', anchorPx: { x: 300, y: 200 }, bearingDeg: 300 })
     driver.apply({ kind: 'pan-by', deltaPx: { x: -7, y: 12 } })
     driver.apply({ kind: 'set', target: { center: { lon: 2.36, lat: 48.86 }, zoom: 17.5, bearingDeg: 15, pitchDeg: 0 }, animation: 'none' })
 
@@ -308,39 +328,34 @@ describe('MapLibre camera driver', () => {
     expect(moved.lat).toBeCloseTo(ground.lat, 10)
   })
 
-  it('the guard arc covers a flight', () => {
+  it('the guard holds every flight frame at the bearing-free world floor', () => {
     const screen = { width: 1000, height: 800 }
     const map = new ConsistentMap({ center: PLANE.origin, zoom: 3, bearing: 0 }, screen)
     const { driver, published } = attach(map)
-    const viewScreen = { ...screen, devicePixelRatio: 2 }
-    const floorAt = (fromDeg: number, toDeg: number) => zoomFloorForArc(viewScreen, POLICY, fromDeg, toDeg)
+    const floor = Math.log2(Math.hypot(1000, 800) / 512)
     // The guard installed on the map: MapLibre calls it on every candidate (centre, zoom), and it never sees the bearing.
     const guard = (zoom: number) => map.constrain!(new FakeLngLat(2.35, 48.85), zoom)
-    expect(guard(0).zoom).toBeCloseTo(floorAt(0, 0), 12)
+    expect(guard(0).zoom).toBeCloseTo(floor, 6)
 
     driver.apply({ kind: 'set', target: { center: { lon: 2.4, lat: 48.9 }, zoom: 5, bearingDeg: 90, pitchDeg: 0 }, animation: 'fly' })
 
     expect(map.flyTo).toHaveBeenCalledWith({ center: [2.4, 48.9], zoom: 5, bearing: 90 })
     expect(map.jumpTo).not.toHaveBeenCalled()
     expect(driver.bearingTarget()).toBe(90)
-    // For the whole flight the floor is the arc's: largest near 45°, above both ends.
-    expect(floorAt(0, 90)).toBeGreaterThan(floorAt(0, 0) + 0.1)
-    expect(floorAt(0, 90)).toBeGreaterThan(floorAt(90, 90) + 0.1)
     const inFlight = guard(0)
-    expect(inFlight.zoom).toBeCloseTo(floorAt(0, 90), 12)
+    expect(inFlight.zoom).toBeCloseTo(floor, 6)
     expect(inFlight.center).toBeInstanceOf(FakeLngLat)
 
     // Flight frames are MapLibre's own moves: each rebuilds the frame from the read-backs.
     map.flightFrame({ center: { lon: 2.38, lat: 48.88 }, zoom: 4, bearing: 45 })
     expect(published.at(-1)!.view.camera).toMatchObject({ zoom: 4, bearingDeg: 45 })
-    expect(guard(0).zoom).toBeCloseTo(floorAt(0, 90), 12)
+    expect(guard(0).zoom).toBeCloseTo(floor, 6)
 
     map.endFlight()
     const landed = published.at(-1)!
     expect(landed.view.camera).toEqual({ center: { lon: 2.4, lat: 48.9 }, zoom: 5, bearingDeg: 90, pitchDeg: 0 })
     expect(driver.bearingTarget()).toBe(90)
-    // Landed, the arc is the live bearing's alone.
-    expect(guard(0).zoom).toBeCloseTo(floorAt(90, 90), 12)
+    expect(guard(0).zoom).toBeCloseTo(floor, 6)
   })
 
   it('fly jumps under reducedMotion', () => {
@@ -414,7 +429,7 @@ describe('MapLibre camera driver', () => {
     expect(map.resize).toHaveBeenCalledTimes(1)
   })
 
-  it('resizing at 45 degrees near the world floor keeps zoom at or above zoomFloorForArc and keeps the bearing', () => {
+  it('resizing at 45 degrees near the world floor keeps zoom at or above the world floor and keeps the bearing', () => {
     const small = { width: 400, height: 300 }
     const map = new ConsistentMap({ center: { lon: 10, lat: 20 }, zoom: 0, bearing: 45 }, small)
     const { driver, published } = attach(map)
@@ -424,7 +439,7 @@ describe('MapLibre camera driver', () => {
     map.container = { width: large.width, height: large.height }
     driver.setScreen(large)
 
-    const floor = zoomFloorForArc(large, POLICY, 45, 45)
+    const floor = Math.log2(Math.hypot(large.width, large.height) / 512)
     expect(floor).toBeGreaterThan(1.5)
     expect(published).toHaveLength(1)
     const { camera } = published[0]!.view
@@ -465,38 +480,6 @@ describe('MapLibre camera driver', () => {
     expect(map.flight).toBeNull()
     expect(map.jumpTo).toHaveBeenLastCalledWith(expect.objectContaining({ bearing: 60, zoom: 13 }))
     expect(driver.bearingTarget()).toBe(60)
-  })
-
-  it('a pan at 100 ms during the ease to north keeps both', () => {
-    vi.useFakeTimers()
-    try {
-      const map = new ConsistentMap({ center: PLANE.origin, zoom: 18, bearing: 40 })
-      const { driver } = attach(map)
-      const start = map.getCenter()
-      driver.apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 0, animation: 'ease' })
-      vi.advanceTimersByTime(100)
-      const midway = map.getBearing()
-      expect(midway).toBeGreaterThan(0)
-      expect(midway).toBeLessThan(40)
-
-      const ground = map.unproject([120, 90])
-      driver.apply({ kind: 'pan-by', deltaPx: { x: 10, y: 0 } })
-      // The pan lands at once, at the tween's bearing: the ground under (120, 90) is now under (130, 90).
-      const moved = map.unproject([130, 90])
-      expect(moved.lng).toBeCloseTo(ground.lng, 9)
-      expect(moved.lat).toBeCloseTo(ground.lat, 9)
-      const panned = map.getCenter()
-      expect(panned.lng).not.toBeCloseTo(start.lng, 9)
-      expect(driver.bearingTarget()).toBe(0)
-
-      vi.advanceTimersByTime(300)
-      // The ease still ends at north, about the screen centre, so the panned centre stays.
-      expect(map.getBearing()).toBeCloseTo(0, 6)
-      expect(map.getCenter().lng).toBeCloseTo(panned.lng, 9)
-      expect(map.getCenter().lat).toBeCloseTo(panned.lat, 9)
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('dispose releases its map listeners and the guard', () => {
@@ -593,11 +576,12 @@ describe('MapLibre camera driver', () => {
     expect(driver.frames.viewFrame.peek()).toBe(boundary)
   })
 
-  it('zooming out at the single-world floor sends no jump and publishes nothing', () => {
-    const map = new ConsistentMap({ center: { lon: 2.35, lat: 0 }, zoom: 1 }, { width: 400, height: 1024 })
+  it('zooming out at the world floor sends no jump and publishes nothing', () => {
+    // The guard lifts the attached camera to the floor as it is installed.
+    const map = new ConsistentMap({ center: { lon: 2.35, lat: 0 }, zoom: 0 }, { width: 400, height: 1024 })
     const { driver, published } = attach(map)
     const boundary = driver.frames.viewFrame.peek()
-    expect(boundary.view.camera.zoom).toBe(1)
+    expect(boundary.view.camera.zoom).toBeCloseTo(Math.log2(Math.hypot(400, 1024) / 512), 6)
     expect(boundary.scaleBounds.min).toBeCloseTo(boundary.view.pixelsPerMetre, 12)
 
     for (let input = 0; input < 100; input += 1) driver.apply({ kind: 'zoom-around', anchorPx: { x: 200, y: 512 }, factor: 1 / 1.1 })
@@ -828,6 +812,78 @@ function runtimeCameraOn(map: ConsistentMap) {
 }
 
 // The attached re-origin, which the runtime's plane effect makes (it was the MapLibre shim's refreshOrigin before 0E).
+/** MapLibre 6.10.0's own Camera (the test-only `maplibre-gl-source` alias, vite.config.ts) on its MercatorTransform, with no WebGL:
+ *  the map methods the driver calls, over the real camera. Animation frames are only queued, never run. */
+function sourceCameraMap(screen: { readonly width: number; readonly height: number }) {
+  const frames: Array<() => void> = []
+  const camera = new SourceCamera({
+    minZoom: 0, maxZoom: 27, minPitch: 0, maxPitch: 60, bearingSnap: 0, zoomSnap: 0, renderWorldCopies: false,
+    centerClampedToGround: true, terrain: null, transformConstrain: null, transformCameraUpdate: null,
+    requestRenderFrame: (frame: () => void) => frames.push(frame),
+    cancelRenderFrame: () => { frames.length = 0 },
+  })
+  camera.transform.resize(screen.width, screen.height)
+  const canvas = { clientWidth: screen.width, clientHeight: screen.height, width: screen.width } as HTMLCanvasElement
+  const map: MapLibreCameraDriverMap = {
+    jumpTo: (options) => { camera.jumpTo(options) },
+    flyTo: (options) => { camera.flyTo(options) },
+    stop: () => { camera.stop() },
+    resize: () => {},
+    on: (type, listener) => { camera.on(type, listener) },
+    off: (type, listener) => { camera.off(type, listener) },
+    getCenter: () => camera.getCenter(),
+    getZoom: () => camera.getZoom(),
+    getBearing: () => camera.getBearing(),
+    getPitch: () => camera.getPitch(),
+    setTransformConstrain: (constrain) => { camera.transform.setConstrainOverride(constrain) },
+    getCanvas: () => canvas,
+  }
+  const Point = camera.transform.centerPoint.constructor as new (x: number, y: number) => { x: number; y: number }
+  return {
+    map,
+    frames,
+    /** MapLibre's own ground under a screen point, and the screen point it shows a ground point at. */
+    groundAt: (x: number, y: number) => camera.transform.screenPointToLocation(new Point(x, y)),
+    pixelOf: (ground: unknown) => camera.transform.locationToScreenPoint(ground),
+    camera: () => ({ lng: camera.getCenter().lng, lat: camera.getCenter().lat, zoom: camera.getZoom(), bearing: camera.getBearing() }),
+  }
+}
+
+describe('the MapLibre camera driver over MapLibre\'s own camera', () => {
+  it('a turn about an anchor keeps the anchor\'s ground and lands where the headless jump lands', () => {
+    const screen = { width: 900, height: 600 }
+    const options = { plane: PLANE, screen: { ...screen, devicePixelRatio: 1 }, camera: { center: { lon: 2.36, lat: 48.86 }, zoom: 18, bearingDeg: 40 } }
+    const source = sourceCameraMap(screen)
+    const attached = createTestView(options)
+    const headless = createTestView(options)
+    views.push(attached, headless)
+    attached.host.attach(createMapLibreCameraDriver(source.map, PLANE, attached.host.driverDeps))
+    const anchor = { x: 200, y: 150 }
+    const ground = source.groundAt(anchor.x, anchor.y)
+
+    // A free turn released within 7 degrees of north jumps to north about its pivot (U34).
+    for (const view of [attached, headless]) {
+      const session = view.navigation.beginRotation(anchor)
+      session.update(-35, { step: false })
+      session.end()
+    }
+
+    // Landed at once: MapLibre never needed an animation frame.
+    expect(source.frames).toHaveLength(0)
+    const landed = source.camera()
+    expect(landed.bearing).toBeCloseTo(0, 6)
+    const kept = source.pixelOf(ground)
+    expect(kept.x).toBeCloseTo(anchor.x, 6)
+    expect(kept.y).toBeCloseTo(anchor.y, 6)
+    const jumped = headless.view().camera
+    expect(jumped.bearingDeg).toBe(0)
+    expect(landed.lng).toBeCloseTo(jumped.center.lon, 9)
+    expect(landed.lat).toBeCloseTo(jumped.center.lat, 9)
+    expect(landed.zoom).toBeCloseTo(jumped.zoom, 9)
+    expect(attached.view().camera.bearingDeg).toBe(0)
+  })
+})
+
 describe('the runtime camera on an attached map', () => {
   it('an attached re-origin keeps the map still and frames in the new plane', () => {
     const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
