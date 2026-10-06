@@ -123,7 +123,7 @@ export interface ProjectedShellCommand<
   action(): void
 }
 
-interface ShellMenuProjection<
+export interface ShellMenuProjection<
   Id extends ShellCommandId = ShellCommandId,
 > {
   readonly id: ShellMenuId
