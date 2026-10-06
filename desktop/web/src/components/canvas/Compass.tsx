@@ -47,8 +47,9 @@ interface Press {
  */
 export function Compass({ command, className }: {
   readonly command: CanvasToolbarActionCommand
-  /** The zoom group's button class: size, hover and focus ring. */
-  readonly className?: string
+  /** The zoom group's button class: size, hover and focus ring. Required, so no caller leaves the compass unsized; a CSS
+   *  module's class reads as possibly undefined. */
+  readonly className: string | undefined
 }) {
   const view = currentCanvasQuerySurface.value?.view
   const bearingDeg = view?.bearingDeg.value ?? 0
