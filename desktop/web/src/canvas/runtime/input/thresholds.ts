@@ -6,12 +6,16 @@
 
 export interface Thresholds {
   readonly longPressMs: number               // 500
+  readonly multiClickMs: number              // 500: a primary press this soon after the last one counts as its next click
+  readonly multiClickSlopPx: number          // 6: and this close to it
   readonly twistStartArcPx: number           // 25: touch twist
   readonly trackpadTwistStartDeg: number     // 10: WebKit gesture rotation before any rotate is emitted
 }
 
 export const DEFAULT_THRESHOLDS: Thresholds = Object.freeze({
   longPressMs: 500,
+  multiClickMs: 500,
+  multiClickSlopPx: 6,
   twistStartArcPx: 25,
   trackpadTwistStartDeg: 10,
 })

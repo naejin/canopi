@@ -13,7 +13,7 @@ import type { SceneMeasurementGuideEntity, SceneZoneEntity } from '../../scene/t
 import type { ToolHandle } from '../draft'
 import type { CanvasTool, HitTarget, ToolContext, ToolGesture, ToolPoint, ToolReply } from '../tool'
 import { bandDraft, bandSelection, type Band } from './band'
-import { clickSelection, pressSelection, type ClickCandidate, type SelectPress } from './click'
+import { clickSelection, pressSelection, type SelectPress } from './click'
 import { draggableGuide, guideEndHandles, guideEnds, guideEndSubject, guideLengthShapes, type GuideEnd } from './guide-ends'
 import { abortMoveDrag, beginMoveDrag, commitMoveDrag, hasMoved, moveSelection, type MoveDrag } from './move-drag'
 import { noteExists, openNoteEntry, selectedEditableNoteId } from './note-edit'
@@ -50,7 +50,7 @@ const STILL_CORNER_PX = 2
 /** What the press started, from the press to its release or cancel. */
 type SelectGesture =
   | { readonly kind: 'band'; readonly band: Band; readonly press: SelectPress }
-  | { readonly kind: 'move'; readonly drag: MoveDrag; readonly click: Omit<ClickCandidate, 'atMs'>; readonly press: SelectPress }
+  | { readonly kind: 'move'; readonly drag: MoveDrag; readonly press: SelectPress }
   | { readonly kind: 'rotate'; readonly drag: RotationDrag }
   | { readonly kind: 'reshape'; readonly drag: PointHandleDrag<SceneZoneEntity> }
   | { readonly kind: 'guide-end'; readonly drag: PointHandleDrag<SceneMeasurementGuideEntity> }
@@ -60,7 +60,6 @@ type SelectGesture =
 export function createSelectTool(): CanvasTool {
   let context: ToolContext | null = null
   let gesture: SelectGesture | null = null
-  let lastClick: ClickCandidate | null = null
   let editingNoteId: string | null = null
   /** The turn so far while the rotation handle is dragged: its readout, shown while the host shows the handles. */
   let rotationDeltaDeg: number | null = null
@@ -121,12 +120,11 @@ export function createSelectTool(): CanvasTool {
     const c = ctx()
     selectedCorner = null
     if (clickCount >= 2 && addCornerOnEdge(point)) {
-      lastClick = null
       gesture = { kind: 'done' }
       refreshHandles()
       return
     }
-    const result = pressSelection(c, point, hit, clickCount, lastClick, c.now())
+    const result = pressSelection(c, point, hit, clickCount)
     switch (result.kind) {
       case 'band': {
         const band: Band = { start: point.world, additive: result.additive }
@@ -138,12 +136,10 @@ export function createSelectTool(): CanvasTool {
         gesture = {
           kind: 'move',
           drag: beginMoveDrag(c, c.scene.persisted, result.target, point),
-          click: { target: result.target, world: point.world },
           press: result,
         }
         break
       case 'edit-note':
-        lastClick = null
         gesture = { kind: 'done' }
         editNote(result.annotationId)
         break
@@ -181,7 +177,6 @@ export function createSelectTool(): CanvasTool {
     const c = ctx()
     const current = gesture
     if (!current) return
-    let clickCandidate: ClickCandidate | null = null
     try {
       if (current.kind === 'band') {
         const selection = dragged ? bandSelection(c, current.band, point.world) : null
@@ -194,12 +189,10 @@ export function createSelectTool(): CanvasTool {
         } else {
           abortMoveDrag(current.drag)
           clickSelection(c, current.press)
-          clickCandidate = { ...current.click, atMs: c.now() }
         }
       }
     } finally {
       if (!('drag' in current) || !current.drag.open) gesture = null
-      lastClick = clickCandidate
       c.effects.setDraft(null)
       refreshHandles()
     }
@@ -386,7 +379,6 @@ export function createSelectTool(): CanvasTool {
     },
     deactivate() {
       gesture = null
-      lastClick = null
       editingNoteId = null
       rotationDeltaDeg = null
       reshapePoints = new Map()

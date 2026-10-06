@@ -41,7 +41,8 @@ export interface PointerSession {
   /** True when a `press` reached the host, which owes it one end: a `tap` within slop, else `cancel('navigate')` for a pan
    *  (the Pan tool's press). */
   readonly pressed: boolean
-  /** The platform's pointerdown `detail`, as delivered (never counted here). */
+  /** The press's click count: the platform's pointerdown `detail`, or the recogniser's own count when that is higher
+   *  (clickCountOf). */
   readonly clickCount: number
   /** The PointerEvent.buttons bit of the button the press holds: the primary one for a consumed Mac Control press. A
    *  navigation or still secondary session whose move lacks it lost its release (spec §2.2 "Drag end"). */
@@ -74,6 +75,7 @@ export function initialRecogniserState(): RecogniserState {
     held: { space: false },
     trackpadTwistDeg: 0,
     deadlines: { longPressAt: null },
+    lastPrimaryPress: null,
     context: { tool: 'select', mode: 'site', pointingDevice: 'mouse' },
   }
 }
@@ -91,7 +93,7 @@ export function recognise(
 ): { readonly state: RecogniserState; readonly gestures: readonly Gesture[]; readonly effects: readonly AdapterEffect[] } {
   const step: Step = { state, gestures: [], effects: [] }
   switch (input.kind) {
-    case 'down': down(step, input); break
+    case 'down': down(step, input, config); break
     case 'move': move(step, input, config); break
     case 'up': up(step, input, config); break
     case 'cancel': cancel(step, input); break
@@ -125,7 +127,7 @@ export function recognise(
 
 type RawOf<K extends RawInput['kind']> = Extract<RawInput, { kind: K }>
 
-function down(step: Step, input: RawOf<'down'>): void {
+function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void {
   // The note editor, the canvas's own buttons and fields, and anything outside the map keep their own presses.
   if (input.target.kind === 'owned-text' || input.target.kind === 'owned-chrome' || input.target.kind === 'foreign') return
 
@@ -135,6 +137,7 @@ function down(step: Step, input: RawOf<'down'>): void {
   // A down for a live pointer id: its up was lost. End that session first.
   if (live) endSession(step, live, 'pointercancel')
 
+  const clickCount = clickCountOf(step, input, config)
   const { context, held } = step.state
   const base = {
     pointerId: input.id,
@@ -143,7 +146,7 @@ function down(step: Step, input: RawOf<'down'>): void {
     start: input.at,
     last: input.at,
     slopPassed: false,
-    clickCount: input.detail,
+    clickCount,
     buttonBit: input.ctrlConsumed ? BUTTON_BITS.primary : BUTTON_BITS[input.role],
   } as const
 
@@ -195,7 +198,7 @@ function down(step: Step, input: RawOf<'down'>): void {
     navigation,
     pressed,
   })
-  if (pressed) step.gestures.push(pressOf(input, pressTarget))
+  if (pressed) step.gestures.push(pressOf(input, pressTarget, clickCount))
   if (navigation) step.gestures.push({ kind: 'pan', phase: 'start', deltaPx: ZERO, source: navigation, at: input.at })
 }
 
@@ -376,8 +379,29 @@ function passesSlop(session: PointerSession, at: ScreenPoint, config: Recogniser
   return distance >= slop && distance > 0
 }
 
-function pressOf(input: RawOf<'down'>, target: PressTarget): Gesture {
-  return { kind: 'press', id: input.id, at: input.at, pointer: input.pointer, mods: input.mods, clickCount: input.detail, target }
+/**
+ * The press's click count: the platform's `detail`, or one more than the previous primary press's count when this primary
+ * press comes within `multiClickMs` and `multiClickSlopPx` of it from the same kind of pointer, whichever is higher, so a
+ * double-click finishes a polygon, adds a corner or opens a note on an engine whose pointerdown sends `detail` 0. Any
+ * other press starts the count again.
+ */
+function clickCountOf(step: Step, input: RawOf<'down'>, config: RecogniserConfig): number {
+  const previous = step.state.lastPrimaryPress
+  if (input.role !== 'primary') {
+    step.state = { ...step.state, lastPrimaryPress: null }
+    return input.detail
+  }
+  const follows = previous !== null
+    && previous.pointer === input.pointer
+    && input.t - previous.t <= config.thresholds.multiClickMs
+    && Math.hypot(input.at.x - previous.at.x, input.at.y - previous.at.y) <= config.thresholds.multiClickSlopPx
+  const count = Math.max(input.detail, follows ? previous.count + 1 : 1)
+  step.state = { ...step.state, lastPrimaryPress: { t: input.t, at: input.at, pointer: input.pointer, count } }
+  return count
+}
+
+function pressOf(input: RawOf<'down'>, target: PressTarget, clickCount: number): Gesture {
+  return { kind: 'press', id: input.id, at: input.at, pointer: input.pointer, mods: input.mods, clickCount, target }
 }
 
 /** A pointer pan's end, where the pointer last was: the router moves the host's resting pointer there. */

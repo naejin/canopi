@@ -523,8 +523,8 @@ Primary slop compares `d >= slop && d > 0`, so under 0 any movement is a drag, a
 // canvas/runtime/input/thresholds.ts  (plain numbers; tests may pass others)
 export interface Thresholds {
   readonly longPressMs: number               // 500
-  readonly multiClickMs: number              // today's double-click interval
-  readonly multiClickSlopPx: number          // 6 (today's DOUBLE_CLICK_DISTANCE_PX)
+  readonly multiClickMs: number              // 500: a primary press this soon after the last one counts as its next click
+  readonly multiClickSlopPx: number          // 6: and this close to it (the recogniser's click count)
   readonly twistStartArcPx: number           // 25: touch twist
   readonly trackpadTwistStartDeg: number     // 10: WebKit gesture rotation before any rotate is emitted
 }
@@ -1096,7 +1096,6 @@ export interface ToolContext {
   readonly settings: ToolSettingsPort
   /** The host's grid snapping of any world point (the move-drag snaps the dragged object's reference point, not the pointer). */
   snap(point: WorldPoint): WorldPoint
-  now(): number                                         // the host's clock (ToolHostDeps.timers.clock): double-click windows
   readonly translate: (key: string, options?: Readonly<Record<string, unknown>>) => string
 }
 
@@ -1584,7 +1583,7 @@ Phase 0's, F's and phase 1's deletions are done; P11 tombstones them. Left:
 |---|---|---|
 | `hover`, `hover-end` | pointer over the map with no button, with the target class under it; `hover-end` on leaving the map, and from F on moving over owned chrome, the text entry or a handle (§2.2 "Hover") | ToolHost → `subscribePointerWorld` (a `surface` target only), then the tool (world point, hit) and the passive hover |
 | `press` | primary button or finger down | ToolHost → tool |
-| `tap` | primary up within slop | ToolHost → tool (`clickCount`: the platform's `detail`) |
+| `tap` | primary up within slop | ToolHost → tool (`clickCount`: the platform's `detail`, or the recogniser's own count when higher: one more than the last primary press's within `multiClickMs` and `multiClickSlopPx`, by the same kind of pointer, since some engines send `detail` 0) |
 | `drag-start`, `drag-move`, `drag-end` | primary past slop | ToolHost → tool, or `handle-drag` when the press was on a handle |
 | `drop` | drag-and-drop from a panel | the ToolHost's shared drop handler, whatever tool is armed; dragover answers a drop effect |
 | `pan` | move the ground with the pointer; `deltaPx` is content movement | `ViewNavigation.panByPx` |

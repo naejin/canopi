@@ -809,6 +809,25 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('a double-click finishes a polygon when the platform sends detail 0, with no duplicate corner', () => {
+    const deps = createInteractionDeps(container, store, testView)
+    const session = createTestSession(deps)
+    session.setTool('polygon')
+
+    for (const point of [{ x: 10, y: 10 }, { x: 60, y: 10 }]) {
+      events.pointerDown(point, { button: 0, detail: 0 })
+      events.pointerUp(point, { button: 0 })
+    }
+    events.pointerDown({ x: 60, y: 50 }, { button: 0, detail: 0 })
+    events.pointerUp({ x: 60, y: 50 }, { button: 0 })
+    events.pointerDown({ x: 60, y: 50 }, { button: 0, detail: 0 })
+    events.pointerUp({ x: 60, y: 50 }, { button: 0 })
+
+    expect(store.persisted.zones).toHaveLength(1)
+    expect(store.persisted.zones[0]!.points).toEqual([{ x: 10, y: 10 }, { x: 60, y: 10 }, { x: 60, y: 50 }])
+    session.dispose()
+  })
+
   it('U39 a still right-click during a polygon draft keeps the selection, and the menu disables Cut and Delete', () => {
     store.updatePersisted((draft) => {
       draft.plants = [

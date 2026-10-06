@@ -2,8 +2,8 @@
 //
 // Owns what a Select press does to the selection, at the press, and what its click does at the release, with the
 // history-free selection effect: a hit on a directly locked object selects it (toggles it when additive, removes it on
-// Alt) and moves nothing; a double-click on a plant (the platform's click count) selects the plant's species; a double-click on a note (the platform's, or two presses within 500 ms on the host's clock and 6 px
-// on the same note after a click that did not move) opens the note for editing; an additive press toggles the hit; any
+// Alt) and moves nothing; a double-click (the press's click count, input/recognise.ts clickCountOf) on a plant selects the
+// plant's species, and on a note opens the note for editing; an additive press toggles the hit; any
 // other hit is selected unless it already is and starts a move-drag, and an Alt click on it (subtractive) removes it from
 // the selection the press found; empty ground (or a hit locked through its group or layer) clears the selection unless
 // additive and starts the band. A press inside a zone's fill with nothing else under it (HitFilter.fill) is empty ground
@@ -25,10 +25,6 @@ import { isDirectSceneDesignObjectLocked, isSceneDesignObjectLocked } from '../.
 import type { WorldPoint } from '../../view/types'
 import type { HitTarget, ToolContext, ToolPoint } from '../tool'
 
-/** Select's own note double-click, beside the platform's click count. */
-const DOUBLE_CLICK_INTERVAL_MS = 500
-const DOUBLE_CLICK_DISTANCE_PX = 6
-
 /** What the press goes on to do. */
 export type SelectPress =
   /** `fill`: the zone (or its group) whose fill the press was in, which the click selects. */
@@ -38,21 +34,12 @@ export type SelectPress =
   | { readonly kind: 'edit-note'; readonly annotationId: string }
   | { readonly kind: 'done' }
 
-/** A click that did not move, which a second press on the same note within the interval turns into a double-click. */
-export interface ClickCandidate {
-  readonly target: SceneDesignObjectTarget
-  readonly world: WorldPoint
-  readonly atMs: number
-}
-
-/** Selects for the press and says what follows. `lastClick` is the previous click that did not move. */
+/** Selects for the press and says what follows. */
 export function pressSelection(
   ctx: ToolContext,
   point: ToolPoint,
   rawHit: HitTarget | null,
   clickCount: number,
-  lastClick: ClickCandidate | null,
-  nowMs: number,
 ): SelectPress {
   const scene = ctx.scene.persisted
   const target = rawHit?.kind === 'object' ? rawHit.target : null
@@ -85,7 +72,7 @@ export function pressSelection(
     !additive
     && !subtractive
     && hit.kind === 'annotation'
-    && (clickCount >= 2 || isNoteDoubleClick(ctx, lastClick, hit, point.world, nowMs))
+    && clickCount >= 2
   ) {
     ctx.effects.setSelection([hit])
     return { kind: 'edit-note', annotationId: hit.id }
@@ -130,20 +117,6 @@ function clickedSelection(
   if (additive) return toggleSelectionTarget(selection, target)
   if (subtractive) return selection.filter((candidate) => sceneTargetKey(candidate) !== sceneTargetKey(target))
   return [target]
-}
-
-/** Select's own double-click on a note: the same note, within 500 ms and 6 px of the last click that did not move. */
-function isNoteDoubleClick(
-  ctx: ToolContext,
-  previous: ClickCandidate | null,
-  target: SceneDesignObjectTarget,
-  world: WorldPoint,
-  nowMs: number,
-): boolean {
-  if (!previous) return false
-  if (previous.target.kind !== target.kind || previous.target.id !== target.id) return false
-  if (nowMs - previous.atMs > DOUBLE_CLICK_INTERVAL_MS) return false
-  return ctx.view.screenDistance(previous.world, world) <= DOUBLE_CLICK_DISTANCE_PX
 }
 
 function toggleSelectionTarget(

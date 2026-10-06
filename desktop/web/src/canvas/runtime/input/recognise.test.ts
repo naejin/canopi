@@ -884,10 +884,25 @@ describe('recognise: sessions', () => {
     expect(result.gestures[3]).toMatchObject({ kind: 'tap', clickCount: 2 })
   })
 
-  it('clickCount is the platform\'s detail as delivered', () => {
-    const result = run(seq('jsdom click', WINDOWS, [down(100, 100, { detail: 0 }), up(100, 100)]))
-    expect(result.gestures[0]).toMatchObject({ kind: 'press', clickCount: 0 })
-    expect(result.gestures[1]).toMatchObject({ kind: 'tap', clickCount: 0 })
+  it('clickCount counts primary presses within 500 ms and 6 px when the platform sends detail 0', () => {
+    const result = run(seq('detail 0 double-click', WINDOWS, [
+      down(100, 100, { detail: 0, t: 0 }), up(100, 100, { t: 50 }),
+      down(103, 102, { detail: 0, t: 200 }), up(103, 102, { t: 250 }),
+      down(103, 102, { detail: 0, t: 1000 }), up(103, 102, { t: 1050 }),
+      down(120, 100, { detail: 0, t: 1200 }), up(120, 100, { t: 1250 }),
+    ]))
+    const counts = result.gestures.flatMap((g) => g.kind === 'press' || g.kind === 'tap' ? [`${g.kind}:${g.clickCount}`] : [])
+    expect(counts).toEqual(['press:1', 'tap:1', 'press:2', 'tap:2', 'press:1', 'tap:1', 'press:1', 'tap:1'])
+  })
+
+  it('clickCount keeps the platform\'s detail when it is higher, and a right press starts the count again', () => {
+    const result = run(seq('platform double-click', WINDOWS, [
+      down(100, 100, { detail: 2, t: 0 }), up(100, 100, { t: 50 }),
+      down(100, 100, { button: 2, t: 100 }), up(100, 100, { button: 2, t: 150 }),
+      down(100, 100, { detail: 0, t: 200 }), up(100, 100, { t: 250 }),
+    ]))
+    const presses = result.gestures.flatMap((g) => g.kind === 'press' ? [g.clickCount] : [])
+    expect(presses).toEqual([2, 1])
   })
 })
 

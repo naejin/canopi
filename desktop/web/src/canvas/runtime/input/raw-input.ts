@@ -58,5 +58,6 @@ export interface RecogniserState {
   readonly held: { readonly space: boolean }                    // the only gesture-state record of a held key (ADR 0017)
   readonly trackpadTwistDeg: number                             // WebKit gesture rotation accumulated before the 10° threshold
   readonly deadlines: { readonly longPressAt: number | null }
+  readonly lastPrimaryPress: { readonly t: number; readonly at: ScreenPoint; readonly pointer: PointerKind; readonly count: number } | null  // the click count's previous press
   readonly context: { readonly tool: ToolId; readonly mode: 'site' | 'overview'; readonly pointingDevice: 'mouse' | 'trackpad' }
 }

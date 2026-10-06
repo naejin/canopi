@@ -197,8 +197,6 @@ export interface ToolContext {
   readonly settings: ToolSettingsPort
   /** The host's grid and guide snapping of any world point (the move-drag snaps the dragged object's reference point, not the pointer). */
   snap(point: WorldPoint): WorldPoint
-  /** The host's clock in ms (ToolHostDeps.timers.clock): for double-click and similar windows; tests inject it. */
-  now(): number
   /** The handle that holds keyboard focus now (a tabbed-to zone corner), or null. */
   focusedHandle(): ToolHandleId | null
   readonly translate: (key: string, options?: Readonly<Record<string, unknown>>) => string

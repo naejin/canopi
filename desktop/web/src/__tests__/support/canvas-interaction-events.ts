@@ -13,6 +13,9 @@ interface SceneInteractionPointerOptions extends MouseEventInit {
   readonly pointerType?: string
   readonly isPrimary?: boolean
   readonly target?: EventTarget
+  /** The event's timeStamp (jsdom's is Date.now()): 0 puts a press long before the next, so the recogniser's click count
+   *  does not join them into a double-click. */
+  readonly timeStamp?: number
 }
 
 export interface SceneInteractionEventHarnessOptions {
@@ -309,6 +312,7 @@ function createPointerEvent(
     pointerType = 'mouse',
     isPrimary = true,
     target: _target,
+    timeStamp,
     button = 0,
     buttons = defaultPointerButtons(type, button),
     bubbles = true,
@@ -329,6 +333,7 @@ function createPointerEvent(
     pointerType,
     isPrimary,
   })
+  if (timeStamp !== undefined) Object.defineProperty(event, 'timeStamp', { configurable: true, value: timeStamp })
   return event as PointerEvent
 }
 

@@ -251,7 +251,7 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('select')
 
-    events.pointerDown({ x: 20, y: 30 }, { pointerId: 7 })
+    events.pointerDown({ x: 20, y: 30 }, { pointerId: 7, timeStamp: 0 })
     events.pointerMove({ x: 35, y: 45 }, { pointerId: 7 })
     expect(store.persisted.plants[0]?.position).toEqual({ x: 35, y: 45 })
 
@@ -306,7 +306,7 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(createInteractionDeps(container, store, testView, { onSceneEditCommit }))
     session.setTool('select')
 
-    events.pointerDown({ x: 20, y: 30 }, { pointerId: 18 })
+    events.pointerDown({ x: 20, y: 30 }, { pointerId: 18, timeStamp: 0 })
     events.pointerMove({ x: 35, y: 45 }, { pointerId: 18 })
     events.lostPointerCapture(18)
 
@@ -335,7 +335,7 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('select')
 
-    events.pointerDown({ x: 20, y: 30 }, { pointerId: 24 })
+    events.pointerDown({ x: 20, y: 30 }, { pointerId: 24, timeStamp: 0 })
 
     expect(events.pointerCapture.setCalls).toHaveBeenCalledWith(24)
     expect(events.pointerCapture.has(24)).toBe(false)
@@ -1978,9 +1978,9 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('select')
 
-    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 1 })
-    events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
-    events.pointerDown({ x: 27, y: 35 }, { button: 0, detail: 1, shiftKey: true })
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 1, timeStamp: 0 })
+    events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1, timeStamp: 0 })
+    events.pointerDown({ x: 27, y: 35 }, { button: 0, detail: 1, shiftKey: true, timeStamp: 100 })
     expect(container.querySelector('textarea')).toBeNull()
 
     events.pointerUp({ x: 27, y: 35 }, { button: 0, detail: 1, shiftKey: true })
@@ -2549,8 +2549,8 @@ describe('SceneInteractionSession', () => {
     const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
-    events.pointerDown({ x: 70, y: 20 }, { button: 0 })
-    events.pointerUp({ x: 70, y: 20 }, { button: 0 })
+    events.pointerDown({ x: 70, y: 20 }, { button: 0, timeStamp: 0 })
+    events.pointerUp({ x: 70, y: 20 }, { button: 0, timeStamp: 0 })
 
     const dot = container.querySelector<HTMLElement>('[data-canvas-handle="edge-mid:polygon-1:0"]')!
     expect(dot.dataset.canvasHandleGlyph).toBe('midpoint')
