@@ -2603,6 +2603,66 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('Delete selects the corner now at the removed index, wrapping and keeping focus, so Delete goes on down to 3; a press elsewhere or Esc clears it (U37)', () => {
+    const hexagon = [
+      { x: 20, y: 20 }, { x: 120, y: 20 }, { x: 160, y: 80 }, { x: 120, y: 140 }, { x: 20, y: 140 }, { x: 0, y: 80 },
+    ]
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone', locked: false, id: 'polygon-1', name: 'polygon-1', zoneType: 'polygon', rotationDeg: 0,
+        points: hexagon, fillColor: null, notes: null,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, testView)
+    const session = createTestSession(deps)
+    session.setTool('select')
+    events.pointerDown({ x: 70, y: 70 }, { button: 0 })
+    events.pointerUp({ x: 70, y: 70 }, { button: 0 })
+    const corner = (index: number) => container.querySelector<HTMLElement>(`[data-canvas-handle="vertex:polygon-1:${index}"]`)!
+    const active = () => container.querySelector('[data-canvas-handle-active="true"]')?.getAttribute('data-canvas-handle') ?? null
+
+    // The last corner pressed, the map focused: its removal selects the first corner (the index wraps).
+    events.pointerDown({ x: 0, y: 80 }, { button: 0, target: corner(5) })
+    events.pointerUp({ x: 0, y: 80 }, { button: 0 })
+    container.focus()
+    events.keyDown({ key: 'Delete', code: 'Delete', target: container })
+    expect(store.persisted.zones[0]!.points).toEqual(hexagon.slice(0, 5))
+    expect(active()).toBe('vertex:polygon-1:0')
+    // The next Delete removes that corner, and the one after it is selected.
+    events.keyDown({ key: 'Delete', code: 'Delete', target: container })
+    expect(store.persisted.zones[0]!.points).toEqual(hexagon.slice(1, 5))
+    expect(active()).toBe('vertex:polygon-1:0')
+
+    // A focused last corner: focus wraps to the first corner with the selection, and Delete goes on from there.
+    corner(3).focus()
+    events.keyDown({ key: 'Delete', code: 'Delete', target: corner(3) })
+    expect(store.persisted.zones[0]!.points).toEqual(hexagon.slice(1, 4))
+    expect(active()).toBe('vertex:polygon-1:0')
+    expect(document.activeElement).toBe(corner(0))
+    // Refused at 3: the shape, the selected corner and the focus stay; nothing else is deleted.
+    events.keyDown({ key: 'Delete', code: 'Delete', target: document.activeElement! })
+    expect(store.persisted.zones[0]!.points).toEqual(hexagon.slice(1, 4))
+    expect(active()).toBe('vertex:polygon-1:0')
+    expect(document.activeElement).toBe(corner(0))
+    expect(keyCommands).not.toHaveBeenCalledWith('canvas.deleteSelected')
+
+    // A press in the fill keeps the zone selected and clears the corner.
+    events.pointerDown({ x: 130, y: 80 }, { button: 0 })
+    events.pointerUp({ x: 130, y: 80 }, { button: 0 })
+    expect(session.keyboard.command({ kind: 'delete-handle' })).toBe(false)
+    expect(active()).toBeNull()
+    expect(store.persisted.zones[0]!.points).toEqual(hexagon.slice(1, 4))
+
+    // Esc clears a selected corner with the selection.
+    events.pointerDown({ x: 120, y: 20 }, { button: 0, target: corner(0) })
+    events.pointerUp({ x: 120, y: 20 }, { button: 0 })
+    expect(active()).toBe('vertex:polygon-1:0')
+    container.focus()
+    events.keyDown({ key: 'Escape', code: 'Escape', target: container })
+    expect(active()).toBeNull()
+    session.dispose()
+  })
+
   it("Backspace, the Mac's delete key, removes a focused or selected polygon corner, not the zone; with no corner it deletes the selection", () => {
     const pentagon = [{ x: 20, y: 20 }, { x: 120, y: 20 }, { x: 140, y: 80 }, { x: 70, y: 130 }, { x: 0, y: 80 }]
     store.updatePersisted((draft) => {
@@ -2631,7 +2691,10 @@ describe('SceneInteractionSession', () => {
     expect(store.persisted.zones[0]!.points).toEqual([pentagon[0], pentagon[2], pentagon[4]])
     expect(keyCommands).not.toHaveBeenCalledWith('canvas.deleteSelected')
 
-    // No corner focused or selected: the selection goes, as before.
+    // A press in the fill clears the corner selected after the removal (U37); with no corner focused or selected the
+    // selection goes, as before.
+    events.pointerDown({ x: 50, y: 60 }, { button: 0 })
+    events.pointerUp({ x: 50, y: 60 }, { button: 0 })
     events.keyDown({ key: 'Backspace', code: 'Backspace' })
     expect(keyCommands).toHaveBeenCalledWith('canvas.deleteSelected')
     session.dispose()

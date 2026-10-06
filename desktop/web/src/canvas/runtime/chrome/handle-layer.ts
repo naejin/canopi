@@ -3,7 +3,8 @@
 // Owns the DOM handles the ToolHost publishes (ToolHostDeps.chrome.setHandles, spec §1.4): each ToolHandle is drawn at its
 // anchor projected through the view frame plus its screen offset, and moves with every camera frame ('overlays'). The
 // points (zone corners and vertices, guide ends) are a 20 px hit box around an 8 px mark that grows under the pointer,
-// in the tab order, so Delete can reach a focused corner (focusedHandle); a polygon edge's midpoint dot is fainter
+// in the tab order, so Delete can reach a focused corner (focusedHandle), and focus on a handle that goes passes to the
+// active one (U37); a polygon edge's midpoint dot is fainter
 // (opacity 0.5, a 1 px ring: GeoLibre's edge marker), drawn under the corners and left out of the tab order. The rotate handle is a 28 px button
 // kept inside the visible map area, with its key swallow and click stop (INV-LSN-13). A handle's readout shows as a chip
 // under it, and the active handle (the one dragged, or Select's selected corner) is marked and its mark drawn hollow. Presses on a handle are
@@ -71,6 +72,7 @@ export function createHandleLayer(options: HandleLayerOptions): HandleLayer {
   function setHandles(handles: readonly ToolHandle[], next: ToolHandleId | null): void {
     active = next
     const kept = new Set(handles.map((handle) => handle.id as string))
+    const focusedId = focusedHandle()
     for (const [handleId, entry] of drawn) {
       if (kept.has(handleId)) continue
       entry.element.remove()
@@ -90,6 +92,15 @@ export function createHandleLayer(options: HandleLayerOptions): HandleLayer {
       if (entry.element.parentNode !== root) root.appendChild(entry.element)
     }
     root.style.display = handles.length > 0 ? 'block' : 'none'
+    // Focus on a handle that went passes to the active one: Delete on a focused corner goes on with the next (U37).
+    const focusNext = focusedId !== null && !kept.has(focusedId) && next !== null ? drawn.get(next) : undefined
+    focusNext?.element.focus()
+  }
+
+  function focusedHandle(): ToolHandleId | null {
+    const focused = root.ownerDocument.activeElement
+    if (!(focused instanceof HTMLElement) || !root.contains(focused)) return null
+    return (focused.dataset.canvasHandle as ToolHandleId | undefined) ?? null
   }
 
   function placeAll(frame: ViewFrame): void {
@@ -114,11 +125,7 @@ export function createHandleLayer(options: HandleLayerOptions): HandleLayer {
 
   return {
     setHandles,
-    focusedHandle() {
-      const focused = root.ownerDocument.activeElement
-      if (!(focused instanceof HTMLElement) || !root.contains(focused)) return null
-      return (focused.dataset.canvasHandle as ToolHandleId | undefined) ?? null
-    },
+    focusedHandle,
     dispose() {
       runCanvasRuntimeCleanups([
         () => stopFollowing(),

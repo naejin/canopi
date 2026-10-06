@@ -255,7 +255,8 @@ describe('polygon corners (spec §3.2, U33: every corner route)', () => {
     expect(h.chrome.activeHandle).toBe(vertex(1))
     expect(h.host.command({ kind: 'delete-handle' })).toBe('handled')
     expect(corners(h)).toEqual([SQUARE[0], SQUARE[2], SQUARE[3]])
-    expect(h.chrome.activeHandle).toBeNull()
+    // The corner now at the removed index is the selected corner (U37).
+    expect(h.chrome.activeHandle).toBe(vertex(1))
 
     // A focused corner: at 3 corners Delete keeps the shape and deletes nothing else.
     h.chrome.focusedHandle = vertex(0)

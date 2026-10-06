@@ -71,7 +71,8 @@ export function createSelectTool(): CanvasTool {
   let reshapePoints = new Map<ToolHandleId, ZoneControlPoint>()
   let edgeMidpoints = new Map<ToolHandleId, ZoneEdgeMidpoint>()
   let guideEndPoints = new Map<ToolHandleId, GuideEnd>()
-  /** The selected corner: the polygon corner last pressed without moving, shown as the active handle; Delete removes it. */
+  /** The selected corner: the polygon corner last pressed without moving, or the one after a removed corner, shown as the
+   *  active handle; Delete removes it. */
   let selectedCorner: ToolHandleId | null = null
 
   function ctx(): ToolContext {
@@ -291,15 +292,19 @@ export function createSelectTool(): CanvasTool {
     refreshHandles()
   }
 
-  /** Delete or Backspace on the focused corner, else the selected one: removed, keeping at least 3, and a refused removal
-   *  keeps the selected corner and the zone; with neither, the key passes. */
+  /** Delete or Backspace on the focused corner, else the selected one: removed, keeping at least 3, and the corner now at
+   *  its index (wrapped to the first) becomes the selected corner, which the handle layer focuses when the removed corner
+   *  had focus, so Delete goes on down to 3 (U37); a refused removal keeps the selected corner and the zone; with
+   *  neither, the key passes. */
   function deleteCorner(): ToolReply {
     const focused = ctx().focusedHandle()
     const id = focused && reshapePoints.has(focused) ? focused : selectedCorner
     const corner = id ? reshapePoints.get(id) : undefined
     if (!corner || !isPolygonCorner(corner)) return 'pass'
     if (removePolygonCorner(ctx(), corner.zoneId, corner.index)) {
-      selectedCorner = null
+      refreshHandles()
+      const left = [...reshapePoints.values()].filter((point) => point.zoneId === corner.zoneId && isPolygonCorner(point))
+      selectedCorner = left.find((point) => point.index === corner.index % left.length)?.id ?? null
       refreshHandles()
     }
     return 'handled'
