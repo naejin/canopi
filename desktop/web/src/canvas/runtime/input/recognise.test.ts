@@ -1064,6 +1064,17 @@ describe('recognise: sessions', () => {
     expect(counts).toEqual(['press:1', 'tap:1', 'press:2', 'tap:2', 'press:1', 'tap:1', 'press:1', 'tap:1'])
   })
 
+  it('a finger\'s double tap counts within 30 px (MapLibre\'s tap distance), a mouse\'s within 6 px', () => {
+    const tapsAt = (pointer: 'touch' | 'mouse', secondX: number) => run(seq(`${pointer} double tap`, ANDROID, [
+      down(100, 100, { pointer, detail: 0, t: 0 }), up(100, 100, { pointer, t: 50 }),
+      down(secondX, 100, { pointer, detail: 0, t: 200 }), up(secondX, 100, { pointer, t: 250 }),
+    ])).gestures.flatMap((g) => g.kind === 'tap' ? [g.clickCount] : [])
+    expect(tapsAt('touch', 129)).toEqual([1, 2])
+    expect(tapsAt('touch', 131)).toEqual([1, 1])
+    expect(tapsAt('mouse', 105)).toEqual([1, 2])
+    expect(tapsAt('mouse', 107)).toEqual([1, 1])
+  })
+
   it('clickCount keeps the platform\'s detail when it is higher, and a right press starts the count again', () => {
     const result = run(seq('platform double-click', WINDOWS, [
       down(100, 100, { detail: 2, t: 0 }), up(100, 100, { t: 50 }),

@@ -476,7 +476,7 @@ function clickCountOf(step: Step, input: RawOf<'down'>, config: RecogniserConfig
   const follows = previous !== null
     && previous.pointer === input.pointer
     && input.t - previous.t <= config.thresholds.multiClickMs
-    && Math.hypot(input.at.x - previous.at.x, input.at.y - previous.at.y) <= config.thresholds.multiClickSlopPx
+    && Math.hypot(input.at.x - previous.at.x, input.at.y - previous.at.y) <= config.thresholds.multiClickSlopPx[input.pointer]
   const count = Math.max(input.detail, follows ? previous.count + 1 : 1)
   step.state = { ...step.state, lastPrimaryPress: { t: input.t, at: input.at, pointer: input.pointer, count } }
   return count
