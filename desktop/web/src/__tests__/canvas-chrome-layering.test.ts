@@ -63,8 +63,8 @@ describe('floating chrome layering', () => {
       ['components/canvas/ToolRail.module.css', 'rail'],
       ['components/canvas/ZoomControls.module.css', 'group'],
       ['components/canvas/SelectionChip.module.css', 'chip'],
-      ['components/canvas/SpeciesFocusChip.module.css', 'chip'],
-      ['components/canvas/CanvasOverview.module.css', 'notice'],
+      // The top-centre slot holds the highlight, labels, found-place and overview chips.
+      ['components/canvas/SpeciesFocusChip.module.css', 'topSlot'],
     ] as const) {
       expect(sheet).toBeGreaterThan(classZIndex(file, name))
     }

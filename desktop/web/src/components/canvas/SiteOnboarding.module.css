@@ -63,7 +63,7 @@
   background: var(--color-control-hover);
 }
 
-/* The Start card sits in the tool card slot; the found-place chip follows it. */
+/* The Start card sits in the tool card slot; its found-place chip is in the top-centre slot. */
 .startRow {
   position: absolute;
   top: var(--chrome-rail-top);

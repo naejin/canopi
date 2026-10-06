@@ -29,14 +29,16 @@ function answerSiteLocate(placeLabel: string | null): void {
   finishSiteLocate(placeLabel)
 }
 
-/** New-Design guidance over the map: where the site is, then how to start. */
+/**
+ * New-Design guidance over the map: where the site is, then how to start. The found-place chip that goes with the
+ * Start card is a top chip (FoundSiteChip, in CanvasChrome's top-centre slot).
+ */
 export function SiteOnboarding() {
   if (siteLocateOpen.value) return <SiteLocateDialog />
   if (!startDesignCardOpen.value) return null
   return (
-    <div className={styles.startRow}>
+    <div className={styles.startRow} data-start-row>
       <StartDesignCard />
-      <FoundSiteChip />
     </div>
   )
 }
@@ -129,7 +131,9 @@ function StartDesignCard() {
   )
 }
 
-function FoundSiteChip() {
+/** While the Start card shows: the place "Where is your site?" found, or that none was searched, with Search again. */
+export function FoundSiteChip() {
+  if (siteLocateOpen.value || !startDesignCardOpen.value) return null
   const label = foundSiteLabel.value
   return (
     <div className={styles.foundChip} role="status" data-found-site>
