@@ -49,7 +49,7 @@ export function bandSelection(ctx: ToolContext, band: Band, end: WorldPoint): Sc
 
 /** The box with `a` and `b` as opposite corners, its sides along the screen's axes (the world's at bearing 0). */
 function screenAlignedQuad(view: ToolView, a: WorldPoint, b: WorldPoint): WorldQuad {
-  const { right } = view.screenAxesInWorld(a)
+  const { right } = view.screenAxesInWorld()
   const across = (b.x - a.x) * right.x + (b.y - a.y) * right.y
   return [
     a,

@@ -6,7 +6,7 @@ import type { TargetClass } from './raw-input'
 
 export type NavigationSource =
   | 'secondary-drag' | 'auxiliary-drag' | 'space-drag' | 'primary-drag'   // primary-drag: the Pan tool (and legacy overview)
-  | 'wheel' | 'trackpad-pinch' | 'trackpad-twist' | 'touch-two-finger'
+  | 'wheel' | 'trackpad-twist' | 'touch-two-finger'                         // a pinch is a 'wheel' (P14)
 
 export type MenuSource = 'mouse' | 'ctrl-click' | 'pen-barrel' | 'long-press' | 'keyboard' | 'native'
 // CancelReason, PointerKind, Modifiers, ToolHandleId, CanvasDropPayload: from ../interaction-types.ts (§1.2a); TargetClass: from ./raw-input.ts (§1.2)
@@ -14,7 +14,6 @@ export type MenuSource = 'mouse' | 'ctrl-click' | 'pen-barrel' | 'long-press' | 
 export type PressTarget =
   | { readonly kind: 'surface' }
   | { readonly kind: 'handle'; readonly id: ToolHandleId }
-  | { readonly kind: 'ruler'; readonly axis: 'h' | 'v' }
 
 export type Gesture =
   // editing: primary role only; the ToolHost converts to world space
@@ -22,8 +21,8 @@ export type Gesture =
   | { kind: 'hover'; at: ScreenPoint; pointer: PointerKind; mods: Modifiers; target: TargetClass }
   | { kind: 'hover-end' }
   | { kind: 'press'; id: number; at: ScreenPoint; pointer: PointerKind; mods: Modifiers; clickCount: number; target: PressTarget }
-  | { kind: 'tap'; id: number; at: ScreenPoint; pointer: PointerKind; mods: Modifiers; clickCount: number; target: PressTarget }
-  | { kind: 'drag-start'; id: number; from: ScreenPoint; at: ScreenPoint; pointer: PointerKind; mods: Modifiers; target: PressTarget }
+  | { kind: 'tap'; id: number; at: ScreenPoint; pointer: PointerKind; mods: Modifiers; clickCount: number }
+  | { kind: 'drag-start'; id: number; at: ScreenPoint; mods: Modifiers }
   | { kind: 'drag-move'; id: number; at: ScreenPoint; mods: Modifiers }
   | { kind: 'drag-end'; id: number; at: ScreenPoint; mods: Modifiers }
   | { kind: 'drop'; phase: 'over' | 'leave' | 'drop'; at: ScreenPoint; payload: CanvasDropPayload }

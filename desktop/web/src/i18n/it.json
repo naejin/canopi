@@ -157,10 +157,6 @@
       "commitLimitWarning": "Aumenta l’intervallo o accorcia la linea",
       "dragAlong": "trascina lungo la fila"
     },
-    "lockedObject": {
-      "locked": "Bloccato",
-      "unlock": "Sblocca"
-    },
     "contextMenu": {
       "ariaLabel": "Comandi di modifica della tela",
       "showName": "Mostra nome",
@@ -184,9 +180,7 @@
     "grid": {
       "grid": "Griglia",
       "snapToGrid": "Aggancia alla griglia",
-      "rulers": "Righelli",
-      "zoom": "Zoom",
-      "rulersNorthUpOnly": "I righelli compaiono quando il nord è in alto"
+      "zoom": "Zoom"
     },
     "overview": {
       "zoomInToEdit": "Ingrandisci per modificare. A questa scala le piante sono nascoste.",

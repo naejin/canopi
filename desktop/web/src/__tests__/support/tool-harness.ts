@@ -5,9 +5,9 @@
 // frame scale, the species cache and the localised names through injected functions, as interaction-session.ts passes
 // the runtime's.
 
-import { signal } from '@preact/signals'
+import { signal, type ReadonlySignal } from '@preact/signals'
 import type { CanvasToolGuidance } from '../../canvas/session-state'
-import { createSessionPlane, type GeoPosition, type SessionPlane } from '../../canvas/session-plane'
+import { createSessionPlane, type GeoPosition } from '../../canvas/session-plane'
 import type { Gesture, MenuSource, PressTarget } from '../../canvas/runtime/input/gestures'
 import { createInputRouter } from '../../canvas/runtime/input/input-router'
 import type { TargetClass } from '../../canvas/runtime/input/raw-input'
@@ -82,7 +82,6 @@ export function plantEntity(
     canonicalName,
     commonName: canonicalName,
     color: null,
-    stratum: null,
     canopySpreadM: 2,
     position,
     rotationDeg: null,
@@ -195,12 +194,12 @@ export function createToolSceneSource(store: SceneStore, options: ToolSceneSourc
 // (capturePress, recorded), end a session the host rejected, end the nudge series on focus-out and call interrupted
 // after a blur. Tools come from
 // tools/registry.ts, which a test replaces through vi.mock('…/tools/registry', () => ({ TOOL_REGISTRY: {} })) and fills
-// with useStubTools.
+// with useStubTools: like the real registry, it lists every tool id.
 
 export interface StubToolRecord {
   readonly gestures: ToolGesture[]
   readonly commands: ToolCommand[]
-  /** 'activate', 'deactivate:<reason>', 'cancelTransient:<reason>', 'viewChanged', 'planeChanged', 'sceneChanged', 'sourceChanged'. */
+  /** 'activate', 'deactivate:<reason>', 'cancelTransient:<reason>', 'viewChanged', 'sceneChanged', 'sourceChanged'. */
   readonly calls: string[]
 }
 
@@ -222,7 +221,7 @@ export function stubTool(id: ToolId, behaviour: StubToolBehaviour = {}): StubToo
   const commands: ToolCommand[] = []
   const calls: string[] = []
   let context: ToolContext | null = null
-  const { activate, gesture, command, cancelTransient, deactivate, sceneChanged, planeChanged, viewChanged, sourceChanged, ...rest } = behaviour
+  const { activate, gesture, command, cancelTransient, deactivate, sceneChanged, viewChanged, sourceChanged, ...rest } = behaviour
   return {
     ...rest,
     id,
@@ -262,16 +261,11 @@ export function stubTool(id: ToolId, behaviour: StubToolBehaviour = {}): StubToo
       calls.push('sceneChanged')
       sceneChanged?.()
     },
-    planeChanged(reproject) {
-      calls.push('planeChanged')
-      planeChanged?.(reproject)
-    },
     viewChanged() {
       calls.push('viewChanged')
       viewChanged?.()
     },
     hasTransient: rest.hasTransient ?? (() => false),
-    escapeHint: rest.escapeHint ?? (() => null),
     cancelTransient(reason) {
       calls.push(`cancelTransient:${reason}`)
       cancelTransient?.(reason)
@@ -283,13 +277,20 @@ export function stubTool(id: ToolId, behaviour: StubToolBehaviour = {}): StubToo
   }
 }
 
-/** Lists exactly `tools` in the vi.mock'ed tools/registry.ts, each factory returning its stub. */
+/** Every tool id: the record fails to type-check when ToolId gains or loses one. */
+const TOOL_IDS = Object.keys({
+  select: true, hand: true, 'plant-stamp': true, text: true, line: true, 'measurement-guide': true, rectangle: true,
+  ellipse: true, polygon: true, 'object-stamp': true, 'saved-object-stamp': true, 'plant-spacing': true,
+} satisfies Record<ToolId, true>) as ToolId[]
+
+/** Lists every tool id in the vi.mock'ed tools/registry.ts: each of `tools` returns its stub, and every other id a fresh
+ *  quiet stub, as the real registry lists them all. */
 export function useStubTools(...tools: readonly CanvasTool[]): void {
-  const registry = TOOL_REGISTRY as Partial<Record<ToolId, ToolFactory>>
+  const registry = TOOL_REGISTRY as Record<ToolId, ToolFactory>
   if (Object.isFrozen(registry)) {
     throw new Error('useStubTools needs tools/registry.ts replaced: vi.mock(\'…/tools/registry\', () => ({ TOOL_REGISTRY: {} })).')
   }
-  for (const id of Object.keys(registry) as ToolId[]) delete registry[id]
+  for (const id of TOOL_IDS) registry[id] = () => stubTool(id)
   for (const tool of tools) registry[tool.id] = () => tool
 }
 
@@ -353,7 +354,6 @@ export interface ToolHarnessChrome {
   readonly activeHandle: ToolHandleId | null
   readonly cursor: string
   readonly tooltip: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null
-  readonly lockedAffordance: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null
   /** The open text entry, which ToolHostDeps.chrome.isTextEntryOpen reports; it commits on the map's focus (its blur) while it
    *  holds focus, and on submitUnfocusedTextEntry once it has lost it. */
   readonly textEntry: ToolHarnessTextEntry | null
@@ -370,6 +370,8 @@ export interface PressOptions {
 
 export interface ToolHarness {
   readonly host: ToolHost
+  /** The session's tool signal the host arms and reads (ToolHostDeps.toolState.active). */
+  readonly toolState: ReadonlySignal<ToolId>
   readonly view: TestView
   readonly store: SceneStore
   readonly history: SceneHistory
@@ -381,8 +383,6 @@ export interface ToolHarness {
   readonly menuOpen: boolean
   /** Settings › Canvas snapping, read by the host at each point. */
   snapping: SnapSettings
-  /** The session's plane (ToolHostDeps.plane). */
-  readonly plane: SessionPlane
   /** The world point under a screen point of the current frame. */
   world(at: ScreenPoint): WorldPoint
   /** Arms a tool as the session does: its tool signal, then ToolHost.setTool. */
@@ -408,7 +408,7 @@ export interface ToolHarness {
   focusOut(): void
   /** A window blur: the recogniser ends the live session, then the session calls interrupted. */
   blur(): void
-  /** A re-origin: the session's plane moves to `origin` and the camera follows it. */
+  /** A re-origin: the camera moves into the plane at `origin`, keeping its ground (the host sees the plane change). */
   reorigin(origin: GeoPosition): void
   /** Runs the host's manual clock: its due timers (double-click windows, the nudge series). */
   advance(ms: number): void
@@ -435,9 +435,8 @@ const ARROW_DIRECTIONS = {
 } as const
 
 export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness {
-  let plane = createSessionPlane({ lon: 0, lat: 0 })
   const view = createTestView({
-    plane,
+    plane: createSessionPlane({ lon: 0, lat: 0 }),
     ...(options.viewport ? { viewport: options.viewport } : {}),
     ...(options.camera ? { camera: options.camera } : {}),
   })
@@ -471,7 +470,6 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
     activeHandle: null as ToolHandleId | null,
     cursor: 'default',
     tooltip: null as ToolHarnessChrome['tooltip'],
-    lockedAffordance: null as ToolHarnessChrome['lockedAffordance'],
     textEntry: null as ToolHarnessTextEntry | null,
   }
   let menuOpen = false
@@ -479,7 +477,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
   const timers = createHarnessTimers(() => now)
   const toolState = signal<ToolId>(options.tool ?? 'select')
   const scene = createToolScene(createToolSceneSource(store, { pixelsPerMetre: () => view.view().pixelsPerMetre }))
-  let snapping: SnapSettings = options.snapping ?? { grid: false, guides: false }
+  let snapping: SnapSettings = options.snapping ?? { grid: false }
 
   const host = createToolHost({
     frames: view.frames,
@@ -491,7 +489,6 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       store.setSelection(targets)
       record.selections.push([...targets])
     },
-    plane: () => plane,
     renderer,
     invalidate: () => {
       record.invalidations += 1
@@ -518,9 +515,6 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       setTooltip(tooltip) {
         chrome.tooltip = tooltip
       },
-      setLockedAffordance(affordance) {
-        chrome.lockedAffordance = affordance
-      },
     },
     menu: {
       open(request) {
@@ -533,8 +527,8 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       isOpen: () => menuOpen,
     },
     focus: {
-      focusMap(reason) {
-        record.focus.push(`map:${reason}`)
+      focusMap() {
+        record.focus.push('map')
         // A text entry that holds focus commits on its blur; one that has lost it hears nothing.
         const entry = chrome.textEntry
         if (entry?.focused) blurTextEntry(entry)
@@ -582,9 +576,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
   let nextPointerId = 1
   let session: {
     readonly id: number
-    readonly from: ScreenPoint
     readonly pointer: PointerKind
-    readonly target: PressTarget
     readonly clickCount: number
     last: ScreenPoint
     dragged: boolean
@@ -611,6 +603,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
 
   const harness: ToolHarness = {
     host,
+    toolState,
     view,
     store,
     history,
@@ -626,9 +619,6 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
     },
     set snapping(next) {
       snapping = next
-    },
-    get plane() {
-      return plane
     },
     world(at) {
       return view.view().screenToWorld(at)
@@ -651,7 +641,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       // The session reports the raw pointerdown before it routes what the recogniser made of it.
       host.rawPress('primary', target, id)
       const outcome = route({ kind: 'press', id, at, pointer, mods: mods(pressOptions.mods), clickCount, target })
-      session = outcome.rejectSession ? null : { id, from: at, pointer, target, clickCount, last: at, dragged: false }
+      session = outcome.rejectSession ? null : { id, pointer, clickCount, last: at, dragged: false }
       return outcome
     },
     move(at, partial) {
@@ -660,7 +650,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       live.last = at
       if (!live.dragged) {
         live.dragged = true
-        return route({ kind: 'drag-start', id: live.id, from: live.from, at, pointer: live.pointer, mods: mods(partial), target: live.target })
+        return route({ kind: 'drag-start', id: live.id, at, mods: mods(partial) })
       }
       return route({ kind: 'drag-move', id: live.id, at, mods: mods(partial) })
     },
@@ -670,7 +660,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       session = null
       const point = at ?? live.last
       if (live.dragged) return route({ kind: 'drag-end', id: live.id, at: point, mods: mods(partial) })
-      return route({ kind: 'tap', id: live.id, at: point, pointer: live.pointer, mods: mods(partial), clickCount: live.clickCount, target: live.target })
+      return route({ kind: 'tap', id: live.id, at: point, pointer: live.pointer, mods: mods(partial), clickCount: live.clickCount })
     },
     click(at, pressOptions) {
       const outcome = harness.press(at, pressOptions)
@@ -705,9 +695,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       host.interrupted()
     },
     reorigin(origin) {
-      const next = createSessionPlane(origin)
-      plane = next
-      view.host.current().planeChanged(next)
+      view.host.current().planeChanged(createSessionPlane(origin))
     },
     advance(ms) {
       now += ms
@@ -716,7 +704,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
     undo: () => coordinator.undo(),
     openTextEntry() {
       chrome.textEntry = {
-        request: { anchor: { x: 0, y: 0 }, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note', mode: 'edit' },
+        request: { anchor: { x: 0, y: 0 }, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note' },
         submit: () => 'close',
         onCancel: null,
         text: '',

@@ -27,7 +27,7 @@ export interface ScenePlantEntity {
   color: string | null
   symbol?: string | null
   pinnedName?: boolean
-  stratum: string | null
+  /** The catalog width when the plant was placed (the file's `scale`); never filled in later. */
   canopySpreadM: number | null
   position: ScenePoint
   rotationDeg: number | null
@@ -79,12 +79,6 @@ export interface SceneObjectGroupEntity {
   members: SceneObjectGroupMember[]
 }
 
-export interface SceneGuide {
-  id: string
-  axis: 'h' | 'v'
-  position: number
-}
-
 export interface ScenePersistedState {
   plantSpeciesColors: Record<string, string>
   plantSpeciesSymbols: Record<string, string>
@@ -95,7 +89,6 @@ export interface ScenePersistedState {
   annotations: SceneAnnotationEntity[]
   measurementGuides: SceneMeasurementGuideEntity[]
   groups: SceneObjectGroupEntity[]
-  guides: SceneGuide[]
 }
 
 export interface SceneSessionState {

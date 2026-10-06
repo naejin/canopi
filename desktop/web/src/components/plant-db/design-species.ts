@@ -18,9 +18,10 @@ const NO_SPECIES: ReadonlyMap<string, CatalogDesignSpecies> = new Map()
 export function useCatalogDesignSpecies(): ReadonlyMap<string, CatalogDesignSpecies> {
   const queries = currentCanvasQuerySurface.value
   const revision = queries?.revision.scene.value
+  const speciesRevision = queries?.revision.plantNames.value
   return useMemo(() => {
     if (!queries) return NO_SPECIES
-    const entries = buildSpeciesKey(queries.getSceneSnapshot(), NO_NAMES)
+    const entries = buildSpeciesKey(queries.getSceneSnapshot(), queries.getSpeciesCache(), NO_NAMES)
     if (entries.length === 0) return NO_SPECIES
     return new Map(entries.flatMap((entry) => {
       const appearance = entry.appearances[0]
@@ -28,5 +29,5 @@ export function useCatalogDesignSpecies(): ReadonlyMap<string, CatalogDesignSpec
         ? [[entry.canonicalName, { code: entry.code, count: entry.count, symbol: appearance.symbol, color: appearance.color }] as const]
         : []
     }))
-  }, [queries, revision])
+  }, [queries, revision, speciesRevision])
 }

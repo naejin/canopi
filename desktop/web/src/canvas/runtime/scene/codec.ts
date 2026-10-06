@@ -14,18 +14,13 @@ import { DEFAULT_NEW_DESIGN_VIEW, sessionPlaneOriginForPoints, type GeoPosition 
 import {
   createSceneGeoFrame,
   hydrateGeoEllipse,
-  hydrateGeoLatitude,
-  hydrateGeoLongitude,
   hydrateGeoPoint,
   serializeGeoEllipse,
-  serializeGeoLatitude,
-  serializeGeoLongitude,
   serializeGeoPoint,
   type SceneGeoFrame,
 } from './geo-frame'
 import type {
   SceneAnnotationEntity,
-  SceneGuide,
   SceneLayerEntity,
   SceneMeasurementGuideEntity,
   SceneObjectGroupEntity,
@@ -39,7 +34,6 @@ import {
   normalizeSceneDesignObjectTargets,
 } from './design-object-targets'
 import { cloneSceneObjectGroupMembers } from './group-members'
-import { SCENE_GUIDES_EXTRA_KEY } from '../scene-extra-keys'
 
 export interface SceneSerializeOptions {
   now?: Date
@@ -81,7 +75,6 @@ export function hydrateScenePersistedStateInFrame(file: CanopiFile, geo: SceneGe
     annotations: (file.annotations ?? []).map((annotation) => hydrateAnnotationEntity(annotation, geo)),
     measurementGuides: (file.measurement_guides ?? []).map((guide, index) => hydrateMeasurementGuideEntity(guide, index, geo)),
     groups: (file.groups ?? []).map(hydrateGroupEntity),
-    guides: hydrateGuides(file.extra?.[SCENE_GUIDES_EXTRA_KEY], geo),
   }
 }
 
@@ -111,7 +104,6 @@ export function serializeScenePersistedState(
     budget_currency: DEFAULT_BUDGET_CURRENCY,
     created_at: now.toISOString(),
     updated_at: now.toISOString(),
-    extra: state.guides.length > 0 ? { [SCENE_GUIDES_EXTRA_KEY]: state.guides.map((guide) => serializeGuide(guide, geo)) } : {},
   }
 }
 
@@ -127,7 +119,6 @@ export function cloneScenePersistedState(state: ScenePersistedState): ScenePersi
     annotations: state.annotations.map(cloneAnnotationEntity),
     measurementGuides: state.measurementGuides.map(cloneMeasurementGuideEntity),
     groups: state.groups.map(cloneGroupEntity),
-    guides: state.guides.map(cloneGuide),
   }
 }
 
@@ -177,7 +168,6 @@ function hydratePlantEntity(plant: PlacedPlant, geo: SceneGeoFrame): ScenePlantE
     color: plant.color,
     symbol: plant.symbol ?? null,
     pinnedName: plant.pinned_name ?? false,
-    stratum: null,
     canopySpreadM: plant.scale,
     position: hydrateGeoPoint(geo, plant.position),
     rotationDeg: plant.rotation,
@@ -342,43 +332,6 @@ function cloneGroupEntity(group: SceneObjectGroupEntity): SceneObjectGroupEntity
   return {
     ...group,
     members: cloneSceneObjectGroupMembers(group.members),
-  }
-}
-
-// Ruler guides persist in `extra.guides`: a horizontal guide is a latitude and
-// a vertical guide a longitude; the runtime holds their plane offsets.
-interface StoredGuide {
-  id: string
-  axis: 'h' | 'v'
-  lat?: number
-  lon?: number
-}
-
-function hydrateGuides(raw: unknown, geo: SceneGeoFrame): SceneGuide[] {
-  if (!Array.isArray(raw)) return []
-  const guides: SceneGuide[] = []
-  for (const candidate of raw as Partial<StoredGuide>[]) {
-    if (!candidate || typeof candidate !== 'object' || typeof candidate.id !== 'string') continue
-    if (candidate.axis === 'h' && Number.isFinite(candidate.lat)) {
-      guides.push({ id: candidate.id, axis: 'h', position: hydrateGeoLatitude(geo, candidate.lat!) })
-    } else if (candidate.axis === 'v' && Number.isFinite(candidate.lon)) {
-      guides.push({ id: candidate.id, axis: 'v', position: hydrateGeoLongitude(geo, candidate.lon!) })
-    }
-  }
-  return guides
-}
-
-function serializeGuide(guide: SceneGuide, geo: SceneGeoFrame): StoredGuide {
-  return guide.axis === 'h'
-    ? { id: guide.id, axis: 'h', lat: serializeGeoLatitude(geo, guide.position) }
-    : { id: guide.id, axis: 'v', lon: serializeGeoLongitude(geo, guide.position) }
-}
-
-function cloneGuide(guide: SceneGuide): SceneGuide {
-  return {
-    id: guide.id,
-    axis: guide.axis,
-    position: guide.position,
   }
 }
 

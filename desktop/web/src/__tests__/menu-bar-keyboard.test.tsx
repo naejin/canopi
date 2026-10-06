@@ -32,7 +32,7 @@ function menus(): MenuDefinition[] {
       label: 'View',
       items: [
         action('grid', { check: 'checkbox', checked: true }),
-        action('rulers', { check: 'checkbox', checked: false }),
+        action('snap', { check: 'checkbox', checked: false }),
         {
           type: 'submenu',
           id: 'background',
@@ -89,7 +89,7 @@ describe('MenuBar keyboard and semantics', () => {
     expect(grid.getAttribute('role')).toBe('menuitemcheckbox')
     expect(grid.getAttribute('aria-checked')).toBe('true')
     expect(grid.querySelector('svg')).not.toBeNull()
-    expect(view.querySelector('[data-command-id="rulers"]')!.getAttribute('aria-checked')).toBe('false')
+    expect(view.querySelector('[data-command-id="snap"]')!.getAttribute('aria-checked')).toBe('false')
     // A submenu whose key acts on it as a whole shows that key (View › Labels, Shift+L; View › Background, B).
     const background = view.querySelector('[data-submenu-id="background"]')!
     expect(background.textContent).toBe('BackgroundB')

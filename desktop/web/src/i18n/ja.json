@@ -157,10 +157,6 @@
       "commitLimitWarning": "間隔を広げるか線を短くしてください",
       "dragAlong": "列に沿ってドラッグ"
     },
-    "lockedObject": {
-      "locked": "ロック中",
-      "unlock": "ロック解除"
-    },
     "contextMenu": {
       "ariaLabel": "キャンバス編集コマンド",
       "showName": "名前を表示",
@@ -184,9 +180,7 @@
     "grid": {
       "grid": "グリッド",
       "snapToGrid": "グリッドにスナップ",
-      "rulers": "定規",
-      "zoom": "ズーム",
-      "rulersNorthUpOnly": "北が上のときに定規を表示します"
+      "zoom": "ズーム"
     },
     "overview": {
       "zoomInToEdit": "編集するには拡大してください。この縮尺では植物は表示されません。",

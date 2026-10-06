@@ -1,6 +1,7 @@
 import type { SpeciesFocusCommands } from './species-key'
 import { computed, type ReadonlySignal } from '@preact/signals'
 import { setCanvasTool } from '../session-state'
+import type { ToolId } from './interaction-types'
 import type {
   CanvasRuntimeSavedObjectStampAdapter,
   CanvasRuntimeSettingsAdapter,
@@ -43,11 +44,10 @@ import {
   type SceneEditCoordinator,
   type SceneEditTransaction,
   type SceneHistoryCommands,
-  type ScenePresentationMaintenance,
   type SettledSceneReader,
 } from './scene-runtime/transactions'
 
-type CommandInvalidationKind = 'scene' | 'chrome'
+type CommandInvalidationKind = 'scene'
 
 const DESIGN_OBJECTS_NOT_IMPORTED: CanvasDesignObjectImportReceipt = Object.freeze({
   committed: false,
@@ -101,7 +101,6 @@ interface SceneCanvasCommandSurfaceOptions {
     | 'setPlantSymbolForSpecies'
   >
   readonly sceneEdits: SceneEditCoordinator
-  readonly presentationMaintenance: ScenePresentationMaintenance
   readonly presentation: Pick<
     SceneRuntimePresentationController,
     | 'createPlantPresentationContext'
@@ -112,11 +111,11 @@ interface SceneCanvasCommandSurfaceOptions {
   >
   readonly settings: Pick<
     CanvasRuntimeSettingsAdapter,
-    'toggleGridVisible' | 'toggleSnapToGrid' | 'toggleRulersVisible'
+    'toggleGridVisible' | 'toggleSnapToGrid'
   >
-  readonly setInteractionTool: (name: string) => void
+  readonly setInteractionTool: (id: ToolId) => void
   /** The tool the interaction session has armed now, or null without a session. */
-  readonly readInteractionTool: () => string | null
+  readonly readInteractionTool: () => ToolId | null
   /** The active interaction session's Plant a row spacing field. */
   readonly plantRowSpacing: CanvasPlantRowSpacingField
   readonly invalidate: (kind: CommandInvalidationKind) => void
@@ -165,11 +164,11 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
 
     this.speciesFocus = options.speciesFocus
     this.tools = {
-      setTool: (name) => this.setTool(name),
+      setTool: (id) => this.setTool(id),
       plantRowSpacing: options.plantRowSpacing,
     }
     // View commands go to navigation as they are: every frame the camera publishes redraws the view and the chrome placed
-    // against it (rulers inside the visible map area, after new framing insets), so a refused move redraws nothing.
+    // against it, so a refused move redraws nothing.
     this.viewport = options.viewNavigation
     this.history = {
       canUndo,
@@ -206,7 +205,6 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     this.chrome = {
       toggleGrid: () => this.options.settings.toggleGridVisible(),
       toggleSnapToGrid: () => this.options.settings.toggleSnapToGrid(),
-      toggleRulers: () => this.toggleRulers(),
     }
     this.layers = {
       setSceneLayerVisibility: (name, visible) => this.setSceneLayerState(name, { visible }),
@@ -228,9 +226,9 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     }
   }
 
-  private setTool(name: string): void {
+  private setTool(id: ToolId): void {
     try {
-      this.options.setInteractionTool(name)
+      this.options.setInteractionTool(id)
     } catch (error) {
       // A failed switch leaves the session on the tool it kept or fell back to (Select after a failed activation,
       // the tool being left when leaving it failed): the app's own tool state follows the session, not the request.
@@ -238,7 +236,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       if (kept) setCanvasTool(kept)
       throw error
     }
-    setCanvasTool(name)
+    setCanvasTool(id)
   }
 
   private nudgeSelected(delta: ScenePoint): boolean {
@@ -281,7 +279,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     if (!series) return
     this.nudge = null
     if (options.abort || (series.total.x === 0 && series.total.y === 0)) series.edit.abort()
-    else series.edit.commit({ invalidate: 'scene' })
+    else series.edit.commit()
     this.options.invalidate('scene')
   }
 
@@ -305,7 +303,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
         selection,
         localizedCommonNames: new Map(this.options.presentation.getLocalizedCommonNames()),
       })
-    }, undefined, { resumePending: true })
+    }, undefined)
   }
 
   // Hydrates through a frame at the runtime's own plane origin, so imported
@@ -345,7 +343,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
         historyType: 'import-design-objects',
       })
       return { committed: receipt.committed, createdCount: receipt.createdCount }
-    }, DESIGN_OBJECTS_NOT_IMPORTED, { resumePending: true })
+    }, DESIGN_OBJECTS_NOT_IMPORTED)
   }
 
   private runSpatialEdit(operation: () => void): void {
@@ -357,19 +355,14 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     this.options.commandAdmission.runWhenSettled(() => {
       if (this.options.transientHistory.undo()) return
       this.options.history.undo()
-    }, undefined, { resumePending: true })
+    }, undefined)
   }
 
   private redo(): void {
     this.options.commandAdmission.runWhenSettled(() => {
       if (this.options.transientHistory.redo()) return
       this.options.history.redo()
-    }, undefined, { resumePending: true })
-  }
-
-  private toggleRulers(): void {
-    this.options.settings.toggleRulersVisible()
-    this.options.invalidate('chrome')
+    }, undefined)
   }
 
   private setSceneLayerOpacity(name: string, opacity: number): boolean {
@@ -378,14 +371,13 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       return this.setSceneLayerStateWhenSettled(name, {
         opacity: Math.min(1, Math.max(0, opacity)),
       })
-    }, false, { resumePending: true })
+    }, false)
   }
 
   private setSceneLayerState(name: string, edit: SceneLayerEdit): boolean {
     return this.options.commandAdmission.runWhenSettled(
       () => this.setSceneLayerStateWhenSettled(name, edit),
       false,
-      { resumePending: true },
     )
   }
 
@@ -406,7 +398,6 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     activeLocale: string,
   ): Promise<boolean> {
     if (!this.options.isRuntimeActive()) return false
-    const ticket = this.options.presentationMaintenance.issueTicket()
     const result = await this.options.presentation.refreshSpeciesCacheEntries(canonicalNames, activeLocale)
     if (!this.options.isRuntimeActive()) {
       if (result.failure) throw result.failure.error
@@ -417,9 +408,8 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       if (result.changed || plantNamesPublished) this.options.invalidate('scene')
       throw result.failure.error
     }
-    const backfillResult = this.options.presentationMaintenance.applyBackfills(ticket, result.backfills)
     if (result.changed || plantNamesPublished) this.options.invalidate('scene')
-    return result.changed || plantNamesPublished || backfillResult === 'applied'
+    return result.changed || plantNamesPublished
   }
 }
 

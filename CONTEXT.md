@@ -38,7 +38,7 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 **Place search**: The title-bar field (Search a place…, Ctrl K) that finds a place by name (on Enter) or by typed coordinates and moves the view there. Only the camera moves; objects never do. _Avoid:_ Location editing, geocoding
 
-**Last view**: The camera position and direction Canopi remembers on this device; reopening a Design restores it, and "Where is your site?" opens a new Design north-up over it. _Avoid:_ Design location, default site
+**Last view**: The map centre and zoom Canopi remembers on this device; "Where is your site?" opens a new Design north-up over it. _Avoid:_ Design location, default site
 
 **Saved view**: A named camera position and direction kept in the Design (View › Save current view…), with the background, layers, labels and focused species it showed, and a picture. Going to a view moves only the camera. _Avoid:_ Bookmark, camera preset
 

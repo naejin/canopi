@@ -43,6 +43,7 @@ function createQuerySurface() {
       blockedTargets: [],
       bounds: null,
       sameSpeciesReferenceCanonicalName: null,
+      plantNamePinning: { plantIds: [], allPinned: false },
     }),
     getSelectedPlantColorContext: () => ({
       plantIds: [],
@@ -67,6 +68,7 @@ function createQuerySurface() {
     getSettledDesignObjects: () => null,
     getLocalizedCommonNames: () => new Map<string, string | null>(),
     getEnglishFallbackNames: () => new Map<string, string>(),
+    getSpeciesCache: () => new Map(),
     subscribePointerWorld: () => () => {},
   } satisfies CanvasQuerySurface
 }
@@ -130,7 +132,6 @@ function createCommandSurface() {
     chrome: {
       toggleGrid: () => {},
       toggleSnapToGrid: () => {},
-      toggleRulers: () => {},
     },
     layers: {
       setSceneLayerVisibility: () => false,
@@ -152,7 +153,6 @@ function createDocumentSurface() {
   return {
     presented: signal(true),
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
-    attachRulersTo: () => {},
     showCanvasChrome: () => {},
     hideCanvasChrome: () => {},
     zoomToFit: () => {},
@@ -209,7 +209,6 @@ describe('canvas runtime surfaces', () => {
       expect(historyAvailabilitySource).toContain('options.settledReader.readWhenSettled(')
       expect(historyAvailabilitySource).not.toContain('commandAdmission')
       expect(historyAvailabilitySource).not.toContain('runWhenSettled')
-      expect(historyAvailabilitySource).not.toContain('resumePending')
     }
     expect(mutationsSource).toContain('settledReader: SettledSceneReader')
     expect(mutationsSource).toContain('this._settledReader.readWhenSettled(')

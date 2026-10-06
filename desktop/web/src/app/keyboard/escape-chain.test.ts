@@ -11,12 +11,11 @@ import { PlantColorMenu } from '../../components/canvas/PlantColorMenu'
 import { InspectionStatus } from '../../components/canvas/InspectionStatus'
 import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
 import { setCurrentCanvasSession } from '../../canvas/session'
-import { selectedObjectIds } from '../../canvas/session-state'
+import { currentCanvasSelection } from '../../canvas/session-state'
 import type { ToolHost } from '../../canvas/runtime/interaction-ports'
 import type { ToolId } from '../../canvas/runtime/interaction-types'
 import { createCanvasKeyboardPort } from '../../canvas/runtime/keyboard-port'
 import type { CanvasEscapeLayer, CanvasKeyboardPort } from '../../canvas/runtime/runtime'
-import { describeEscape } from './escape-chain'
 import { installKeyRouter, type KeyRouterHandle } from './key-router'
 import { CANVAS_KEYMAP_ROWS } from './keymap'
 
@@ -61,7 +60,7 @@ function canvasPort(): CanvasKeyboardPort {
     hasNudgeSeries: () => false,
     endNudgeSeries: () => {},
     activeToolIsSelect: () => canvas.tool === 'select',
-    activeToolHasTransient: () => canvas.transient,
+    activeToolHasEscapeTransient: () => canvas.transient,
     openTextEntryMode: () => null,
     interrupted: () => {},
   } as unknown as ToolHost
@@ -141,7 +140,7 @@ afterEach(() => {
   router?.dispose()
   for (const root of mounts) act(() => render(null, root))
   plantColorMenuOpen.value = false
-  selectedObjectIds.value = new Set()
+  currentCanvasSelection.value = new Set()
   setCurrentCanvasSession(null)
   document.body.replaceChildren()
 })
@@ -163,7 +162,7 @@ describe('the Esc chain', () => {
         }),
       },
     }))
-    selectedObjectIds.value = new Set(['plant-1'])
+    currentCanvasSelection.value = new Set(['plant-1'])
     plantColorMenuOpen.value = true
     canvas = { tool: 'polygon', transient: true, live: false, selected: true }
     mount(h(PlantColorMenu, { buttonRef: { current: null } }))
@@ -211,21 +210,19 @@ describe('the Esc chain', () => {
     expect(ran).toEqual(['tool', 'selection'])
   })
 
-  it('describeEscape agrees with the next escape', () => {
+  it('each Esc runs the next layer in order: the drag, the draft, the tool, the selection, then inspecting', () => {
     install()
     mount(h(InspectionStatus, {}))
     canvas = { tool: 'polygon', transient: true, live: true, selected: true }
     host.focus()
-    const described: (string | null)[] = []
     const done: string[] = []
     for (let press = 0; press < 5; press += 1) {
-      described.push(describeEscape()?.id ?? null)
       const before = ran.length
       escape(host)
       done.push(ran.length > before ? `canvas.${ran[ran.length - 1]}` : inspection.endInspection.mock.calls.length > 0 ? 'inspection' : 'none')
     }
     expect(done).toEqual(['canvas.gesture', 'canvas.tool-transient', 'canvas.tool', 'canvas.selection', 'inspection'])
-    expect(described).toEqual(done)
+    expect(canvas).toEqual({ tool: 'select', transient: false, live: false, selected: false })
   })
 
   it('an Esc that aborts a drag keeps the inspection lens open (I10)', () => {
@@ -264,7 +261,6 @@ describe('the Esc chain', () => {
     escape(host)
     expect(canvas.selected).toBe(false)
     expect(inspection.endInspection).not.toHaveBeenCalled()
-    expect(describeEscape()?.id).toBe('inspection')
     expect(escape(host).defaultPrevented).toBe(true)
     expect(inspection.endInspection).toHaveBeenCalledOnce()
   })
@@ -275,7 +271,6 @@ describe('the Esc chain', () => {
     canvas = { tool: 'polygon', transient: false, live: false, selected: false, overview: true }
     host.focus()
 
-    expect(describeEscape()?.id).toBe('inspection')
     expect(escape(host).defaultPrevented).toBe(true)
     expect(inspection.endInspection).toHaveBeenCalledOnce()
     expect(escape(outside('button')).defaultPrevented).toBe(true)

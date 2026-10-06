@@ -17,7 +17,6 @@ function fakePort(host: HTMLElement) {
     command: vi.fn((c: CanvasKeyCommand) => state.command(c)),
     escapeLayers: vi.fn(() => state.layers),
     escape: vi.fn((_layer: CanvasEscapeLayer) => {}),
-    describeEscape: () => state.layers[0] ?? null,
   } satisfies CanvasKeyboardPort
   return { port, state }
 }
@@ -295,8 +294,8 @@ describe('key router', () => {
 
   it('a pushed scope takes its key before the keymap, outside text fields', () => {
     install()
-    const handle = vi.fn((_e: unknown, chord: { key: string; mod: boolean }) => chord.key === 'z' && chord.mod)
-    const scope = pushKeyScope({ id: 'stories-undo-toast', handle })
+    const handle = vi.fn((chord: { key: string; mod: boolean }) => chord.key === 'z' && chord.mod)
+    const dispose = pushKeyScope(handle)
     const field = document.createElement('input')
     document.body.append(field)
     try {
@@ -305,7 +304,7 @@ describe('key router', () => {
       expect(press({ key: 'z', ctrlKey: true }, host).defaultPrevented).toBe(true)
       expect(run).not.toHaveBeenCalled()
     } finally {
-      scope.dispose()
+      dispose()
     }
     press({ key: 'z', ctrlKey: true }, host)
     expect(run).toHaveBeenCalledExactlyOnceWith('edit.undo')

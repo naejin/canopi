@@ -39,7 +39,7 @@ it('marks checkable, disabled and shortcut items with menu semantics', async () 
   try {
     await act(async () => render(<ActionMenu label="View" items={[
       { label: 'Grid', run: toggle, checked: true, shortcut: 'G' },
-      { label: 'Rulers', run: toggle, checked: false },
+      { label: 'Snap to grid', run: toggle, checked: false },
       { separator: true },
       { label: 'Lock', run: locked, disabled: true },
     ]} />, root))
@@ -49,7 +49,7 @@ it('marks checkable, disabled and shortcut items with menu semantics', async () 
     expect(grid.getAttribute('role')).toBe('menuitemcheckbox')
     expect(grid.getAttribute('aria-checked')).toBe('true')
     expect(grid.textContent).toContain('G')
-    expect(menu.querySelector('[aria-label="Rulers"]')!.getAttribute('aria-checked')).toBe('false')
+    expect(menu.querySelector('[aria-label="Snap to grid"]')!.getAttribute('aria-checked')).toBe('false')
     expect(menu.querySelectorAll('[role="separator"]')).toHaveLength(1)
 
     const lock = menu.querySelector<HTMLButtonElement>('[aria-label="Lock"]')!

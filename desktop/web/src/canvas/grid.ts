@@ -4,7 +4,7 @@
 
 import { scaleReaches } from './projection'
 
-/** Sorted ascending: the grid intervals (snapping and the world layers' grid) and the rulers' tick spacing. */
+/** Sorted ascending: the grid intervals (snapping and the world layers' grid). */
 export const NICE_DISTANCES = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
 
 /** Minimum screen-pixel gap between grid lines before the interval steps up. */

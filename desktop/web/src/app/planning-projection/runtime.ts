@@ -64,7 +64,7 @@ function readPlanningProjectionCanvasSnapshot(
     localizedNames: speciesDisplayNames(localizedNames, englishFallbackNames),
     englishFallbackNames,
     speciesKey: session
-      ? buildSpeciesKey(session.getSceneSnapshot(), localizedNames, englishFallbackNames)
+      ? buildSpeciesKey(session.getSceneSnapshot(), session.getSpeciesCache(), localizedNames, englishFallbackNames)
       : [],
     zones: session?.getSceneSnapshot().zones.map((zone) => ({ id: zone.id, label: zoneLabel(zone, activeLocale) })) ?? [],
     selectedPlantIds: session?.getSelectedPlantColorContext().plantIds ?? [],

@@ -16,7 +16,7 @@ import { SceneStore } from '../canvas/runtime/scene/store'
 import { setCurrentCanvasSession } from '../canvas/session'
 import {
   IDLE_CANVAS_TOOL_GUIDANCE,
-  getCanvasTool,
+  currentCanvasTool,
   setCanvasTool,
   setCanvasToolGuidance,
 } from '../canvas/session-state'
@@ -101,6 +101,10 @@ describe('Place plants species chooser', () => {
     queries = createTestCanvasQuerySurface({
       scene: store.persisted,
       localizedNames: new Map([['Malus domestica', 'Pommier'], ['Ficus carica', null]]),
+      speciesCache: new Map([
+        ['Malus domestica', { canonical_name: 'Malus domestica', stratum: 'high' }],
+        ['Ficus carica', { canonical_name: 'Ficus carica', stratum: 'emergent' }],
+      ]),
     })
     setCurrentCanvasSession({
       commands: createTestCanvasCommandSurface(),
@@ -220,6 +224,12 @@ describe('Place plants species chooser', () => {
     expect(glyph('Rubus idaeus').querySelector('svg')?.getAttribute('data-plant-symbol')).toBe('round')
   })
 
+  it('the chooser swatch for a Design species shows the cached stratum colour', async () => {
+    const fig = options().find((option) => option.dataset.speciesOption === 'Ficus carica')!
+    // getStratumColor('emergent'), #1B5E20: the colour the canvas draws a Fig with no colour of its own.
+    expect(fig.querySelector<HTMLElement>('[data-species-glyph]')!.style.color).toBe('rgb(27, 94, 32)')
+  })
+
   it('rings a species\' plants with the hover stroke only while its row is pointed at or focused', async () => {
     const apple = options().find((option) => option.dataset.speciesOption === 'Malus domestica')!
     expect(hoveredPanelTargets.value).toEqual([])
@@ -321,7 +331,7 @@ describe('Place plants species chooser', () => {
 
     expect(escape.defaultPrevented).toBe(true)
     expect(options()).toHaveLength(0)
-    expect(getCanvasTool()).toBe('plant-stamp')
+    expect(currentCanvasTool.value).toBe('plant-stamp')
     expect(readPlantStampSource()?.canonical_name).toBe('Ficus carica')
     expect(document.activeElement).toBe(map)
   })

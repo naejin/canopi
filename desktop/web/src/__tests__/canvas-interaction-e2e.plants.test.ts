@@ -8,7 +8,7 @@ import {
   writePlantStampDragData,
 } from '../canvas/plant-stamp-source'
 import {
-  selectedObjectIds,
+  currentCanvasSelection,
   setCanvasToolGuidance,
   type CanvasToolGuidance,
 } from '../canvas/session-state'
@@ -160,7 +160,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 20, y: 30 },
         rotationDeg: null,
@@ -193,7 +192,7 @@ describe('SceneInteractionSession', () => {
     expect(hud?.textContent).not.toContain('Plant Spacing')
     expect(hud?.querySelector('button')).toBeNull()
     expect(deps.setSelection).not.toHaveBeenCalled()
-    expect(selectedObjectIds.value).toEqual(new Set(['already-selected']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['already-selected']))
     session.dispose()
   })
 
@@ -251,7 +250,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 20, y: 30 },
         rotationDeg: null,
@@ -292,7 +290,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 20, y: 30 },
         rotationDeg: null,
@@ -329,7 +326,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 20, y: 30 },
         rotationDeg: null,
@@ -375,7 +371,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 20, y: 30 },
         rotationDeg: null,
@@ -416,7 +411,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 20, y: 30 },
         rotationDeg: null,
@@ -476,6 +470,27 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('Plant a row\'s preview stays put for the first 3 px, then follows the drag', () => {
+    plantSpacingIntervalM.value = 2
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('source', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('plant-spacing')
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    expect(rowSource('source')).toBe(true)
+
+    events.pointerMove({ x: 22, y: 30 }, { button: 0 })
+    expect(draftShapes('polyline')).toEqual([])
+
+    events.pointerMove({ x: 60, y: 30 }, { button: 0 })
+    const guideEnd = draftShapes('polyline')[0]?.points.at(-1)
+    expect(guideEnd?.x).toBeCloseTo(60, 6)
+    expect(guideEnd?.y).toBeCloseTo(30, 6)
+    events.pointerUp({ x: 60, y: 30 }, { button: 0 })
+    session.dispose()
+  })
+
   it('handles Escape from the focused Plant Spacing interval input', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
@@ -485,7 +500,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 20, y: 30 },
         rotationDeg: null,
@@ -520,7 +534,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 20, y: 30 },
         rotationDeg: null,
@@ -559,7 +572,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 20, y: 30 },
         rotationDeg: null,
@@ -600,7 +612,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 20, y: 30 },
         rotationDeg: null,
@@ -643,7 +654,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 20, y: 30 },
         rotationDeg: null,
@@ -682,7 +692,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 20, y: 30 },
         rotationDeg: null,
@@ -720,7 +729,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 2, y: 4 },
         rotationDeg: null,
@@ -757,7 +765,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 4, y: 4 },
         rotationDeg: null,
@@ -790,7 +797,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 20, y: 30 },
         rotationDeg: null,
@@ -826,7 +832,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 20, y: 30 },
         rotationDeg: null,
@@ -930,7 +935,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 20, y: 30 },
         rotationDeg: null,
@@ -954,7 +958,7 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('previews Plant Spacing from moves inside its 4 px drag slop', () => {
+  it('a Plant a row press that jitters inside the drag slop is a click: no row, and the field takes focus on its release', () => {
     plantSpacingIntervalM.value = 0.5
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('source', 'Malus domestica', { x: 20, y: 30 })]
@@ -968,8 +972,7 @@ describe('SceneInteractionSession', () => {
     const input = spacingInput()!
     events.pointerMove({ x: 22, y: 30 }, { button: 0 })
 
-    expect(draftShapes('polyline')[0]?.points).toEqual([{ x: 20, y: 30 }, { x: 22, y: 30 }])
-    expect(rowLength()).toBe('2 m')
+    expect(draftShapes('polyline')).toEqual([])
     // The field takes focus on the release of the press that picked the source, which a jitter leaves a click.
     expect(document.activeElement).not.toBe(input)
     events.pointerUp({ x: 22, y: 30 }, { button: 0 })
@@ -992,7 +995,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 20, y: 30 },
         rotationDeg: null,
@@ -1032,7 +1034,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 20, y: 30 },
         rotationDeg: null,
@@ -1155,7 +1156,7 @@ describe('SceneInteractionSession', () => {
       const droppedPlant = store.persisted.plants.find((plant) => plant.id !== 'plant-1')
 
       expect(droppedPlant).toBeDefined()
-      expect(selectedObjectIds.value).toEqual(new Set([droppedPlant!.id]))
+      expect(currentCanvasSelection.value).toEqual(new Set([droppedPlant!.id]))
       expect(setTool).toHaveBeenCalledWith('select')
       expect(document.activeElement).toBe(sourceControl)
       await nextAnimationFrame()
@@ -1304,6 +1305,29 @@ describe('SceneInteractionSession', () => {
 
       expect(store.persisted.plants).toHaveLength(1)
       expect(store.persisted.plants[0]!.position).toEqual({ x: 60, y: 40 })
+      session.dispose()
+    })
+
+    it('a waiting point is no Esc layer: Shift+Esc leaves nothing, and Esc leaves Place plants with the point (U35)', async () => {
+      const tools: string[] = []
+      const session = createTestSession(createInteractionDeps(container, store, testView, {
+        setTool: (name: string) => { tools.push(name) },
+      }))
+      session.setTool('select')
+      openContextMenu({ x: 30, y: 30 })
+      contextMenuCommand('place-plants-here').run()
+      expect(tools.at(-1)).toBe('plant-stamp')
+
+      // As with no point waiting, leaving the tool takes an Esc with no modifier.
+      events.keyDown({ key: 'Escape', shiftKey: true, target: container })
+      expect(tools.at(-1)).toBe('plant-stamp')
+
+      events.keyDown({ key: 'Escape', target: container })
+      expect(tools.at(-1)).toBe('select')
+      session.setTool('plant-stamp')
+      selectPlantStampSource(APPLE)
+      await Promise.resolve()
+      expect(store.persisted.plants).toHaveLength(0)
       session.dispose()
     })
 

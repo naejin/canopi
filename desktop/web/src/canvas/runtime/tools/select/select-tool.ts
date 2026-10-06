@@ -207,20 +207,17 @@ export function createSelectTool(): CanvasTool {
     }
   }
 
-  /** Rolls back what the gesture changed; an abort that fails keeps the gesture, which the host's retry cancels again. */
+  /** Rolls back what the gesture changed. */
   function cancelGesture(): void {
     const current = gesture
     if (!current) return
-    try {
-      if (current.kind === 'move') abortMoveDrag(current.drag)
-      else if (current.kind === 'rotate') abortRotation(current.drag)
-      else if (current.kind === 'reshape' || current.kind === 'guide-end') current.drag.cancel()
-      gesture = null
-    } finally {
-      rotationDeltaDeg = null
-      ctx().effects.setDraft(null)
-      refreshHandles()
-    }
+    if (current.kind === 'move') abortMoveDrag(current.drag)
+    else if (current.kind === 'rotate') abortRotation(current.drag)
+    else if (current.kind === 'reshape' || current.kind === 'guide-end') current.drag.cancel()
+    gesture = null
+    rotationDeltaDeg = null
+    ctx().effects.setDraft(null)
+    refreshHandles()
   }
 
   function editNote(annotationId: string): boolean {
@@ -292,7 +289,6 @@ export function createSelectTool(): CanvasTool {
       refreshHandles()
     },
     hasTransient: () => false,
-    escapeHint: () => (context && context.scene.selection().length > 0 ? 'clear-selection' : null),
     cancelTransient() {
       cancelGesture()
     },

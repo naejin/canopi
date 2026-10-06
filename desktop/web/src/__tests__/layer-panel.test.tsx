@@ -35,7 +35,6 @@ function baseSettings(): Settings {
     locale: 'en',
     theme: 'light',
     snap_to_grid: true,
-    snap_to_guides: true,
     side_panel_width: null,
     saved_stamps_frame_height: 220,
     basemap_style: 'liberty',
@@ -325,7 +324,6 @@ describe('LayerPanel', () => {
           annotations: [],
           measurementGuides: [],
           groups: [],
-          guides: [],
         },
       }),
     }))

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { signal } from '@preact/signals'
-import { activeTool, selectedObjectIds } from '../canvas/session-state'
+import { currentCanvasTool, currentCanvasSelection } from '../canvas/session-state'
 import { activePanel, sidePanel } from '../app/shell/state'
 import * as documentActions from '../app/document-session/actions'
 import { commandPaletteOpen } from '../commands/registry'
@@ -29,8 +29,8 @@ describe('Desktop keys', () => {
   beforeEach(() => {
     activePanel.value = 'canvas'
     sidePanel.value = null
-    activeTool.value = 'select'
-    selectedObjectIds.value = new Set()
+    currentCanvasTool.value = 'select'
+    currentCanvasSelection.value = new Set()
     setCurrentCanvasSession(null)
     designSessionFixture.file = null
     designSessionFixture.nonCanvasRevision = 0
@@ -42,8 +42,8 @@ describe('Desktop keys', () => {
   afterEach(() => {
     keys.dispose()
     setCurrentCanvasSession(null)
-    activeTool.value = 'select'
-    selectedObjectIds.value = new Set()
+    currentCanvasTool.value = 'select'
+    currentCanvasSelection.value = new Set()
     designSessionFixture.file = null
     commandPaletteOpen.value = false
   })
@@ -55,7 +55,7 @@ describe('Desktop keys', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'r' }))
 
     expect(setTool).toHaveBeenCalledWith('rectangle')
-    expect(activeTool.value).toBe('rectangle')
+    expect(currentCanvasTool.value).toBe('rectangle')
   })
 
   // A key the active tool consumed (Backspace in a polygon draft) is not also
@@ -69,7 +69,7 @@ describe('Desktop keys', () => {
     window.dispatchEvent(event)
 
     expect(setTool).not.toHaveBeenCalled()
-    expect(activeTool.value).toBe('select')
+    expect(currentCanvasTool.value).toBe('select')
   })
 
   it('routes the ellipse tool shortcut through the live canvas session', () => {
@@ -79,7 +79,7 @@ describe('Desktop keys', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e' }))
 
     expect(setTool).toHaveBeenCalledWith('ellipse')
-    expect(activeTool.value).toBe('ellipse')
+    expect(currentCanvasTool.value).toBe('ellipse')
   })
 
   it('routes the Line tool shortcut through the live canvas session', () => {
@@ -89,7 +89,7 @@ describe('Desktop keys', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l' }))
 
     expect(setTool).toHaveBeenCalledWith('line')
-    expect(activeTool.value).toBe('line')
+    expect(currentCanvasTool.value).toBe('line')
   })
 
   it('routes the polygon tool shortcut through the live canvas session', () => {
@@ -99,7 +99,7 @@ describe('Desktop keys', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z' }))
 
     expect(setTool).toHaveBeenCalledWith('polygon')
-    expect(activeTool.value).toBe('polygon')
+    expect(currentCanvasTool.value).toBe('polygon')
   })
 
   it('routes the Plant Spacing shortcut through the live canvas session', () => {
@@ -109,7 +109,7 @@ describe('Desktop keys', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w' }))
 
     expect(setTool).toHaveBeenCalledWith('plant-spacing')
-    expect(activeTool.value).toBe('plant-spacing')
+    expect(currentCanvasTool.value).toBe('plant-spacing')
   })
 
   it('does not route tool shortcuts while an editable input is focused', () => {
@@ -122,7 +122,7 @@ describe('Desktop keys', () => {
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', bubbles: true }))
 
     expect(setTool).not.toHaveBeenCalled()
-    expect(activeTool.value).toBe('select')
+    expect(currentCanvasTool.value).toBe('select')
     input.remove()
   })
 
@@ -131,7 +131,7 @@ describe('Desktop keys', () => {
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 't' }))
 
-    expect(activeTool.value).toBe('text')
+    expect(currentCanvasTool.value).toBe('text')
   })
 
   it('keeps panel shortcuts aligned with the command registry mapping', () => {
@@ -290,7 +290,7 @@ describe('Desktop keys', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true }))
     // Nothing is selected: selection edits stay quiet, Paste and Select all still run.
     expect(copy).not.toHaveBeenCalled()
-    selectedObjectIds.value = new Set(['plant-1'])
+    currentCanvasSelection.value = new Set(['plant-1'])
     const focusRequest = placeSearchFocusRequest.value
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true }))
@@ -305,7 +305,7 @@ describe('Desktop keys', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'L', ctrlKey: true, shiftKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', ctrlKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'G', ctrlKey: true, shiftKey: true }))
-    selectedObjectIds.value = new Set()
+    currentCanvasSelection.value = new Set()
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'L', ctrlKey: true, shiftKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))
 
@@ -334,7 +334,7 @@ describe('Desktop keys', () => {
     // No map selection: Copy is disabled, so the page's own copy (a panel's selected text) runs.
     expect(press().defaultPrevented).toBe(false)
     expect(copy).not.toHaveBeenCalled()
-    selectedObjectIds.value = new Set(['plant-1'])
+    currentCanvasSelection.value = new Set(['plant-1'])
     expect(press().defaultPrevented).toBe(true)
     expect(copy).toHaveBeenCalledOnce()
   })
@@ -349,19 +349,20 @@ describe('Desktop keys', () => {
       blockedTargets: [],
       bounds: { minX: 0, minY: 0, maxX: 10, maxY: 10 },
       sameSpeciesReferenceCanonicalName: null,
+      plantNamePinning: { plantIds: [], allPinned: false },
     })
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       commands: createTestCanvasCommandSurface({ sceneEdits: { rotateSelected } }),
       queries,
     }))
-    selectedObjectIds.value = new Set(['plant-1'])
+    currentCanvasSelection.value = new Set(['plant-1'])
 
     // A lone plant has nothing to turn.
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', ctrlKey: true, altKey: true, code: 'KeyR' }))
     expect(rotateSelectionDialog.value).toBeNull()
 
     rotatable = true
-    selectedObjectIds.value = new Set(['zone-1'])
+    currentCanvasSelection.value = new Set(['zone-1'])
     // On a Mac, Cmd Option R types ®: the physical key still names the shortcut.
     keys.dispose()
     keys = installDesktopKeys({ os: 'mac', gestureEvents: false })

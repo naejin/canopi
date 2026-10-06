@@ -46,6 +46,7 @@ function selection(overrides: Partial<CanvasDesignObjectSelectionModel> = {}): C
     blockedTargets: [],
     bounds: { minX: 0, minY: 0, maxX: 10, maxY: 10 },
     sameSpeciesReferenceCanonicalName: null,
+    plantNamePinning: { plantIds: [], allPinned: false },
     ...overrides,
   }
 }
@@ -103,7 +104,7 @@ function build(
   }
   const entries = buildCanvasContextMenuEntries(request, {
     translate: t,
-    ...(options.characterKeyShortcuts === undefined ? {} : { characterKeyShortcuts: options.characterKeyShortcuts }),
+    characterKeyShortcuts: options.characterKeyShortcuts ?? true,
     openPlantAppearance,
     summary: options.summary === undefined ? (model ? APPLE_SUMMARY : null) : options.summary,
     openSpeciesDetail,

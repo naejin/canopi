@@ -22,11 +22,12 @@ import type {
 import type { PointerWorld } from './interaction-ports'
 import type { SceneRuntimeMutationController } from './scene-runtime/mutations'
 import type { SceneRuntimePresentationController } from './scene-runtime/presentation'
-import { getDesignObjectSelectionModel } from './scene-runtime/selection'
+import { EMPTY_SELECTION_MODEL, getDesignObjectSelectionModel } from './scene-runtime/selection'
 import type { SettledSceneReader } from './scene-runtime/transactions'
 import { createViewReadSurface } from './view/frame-source'
 import type { ViewReadSurface } from './view/read-surface'
 import type { ViewFrameSource } from './view/types'
+import type { SpeciesCacheEntry } from './species-cache'
 
 type PointerWorldListener = (point: PointerWorld | null) => void
 
@@ -45,6 +46,7 @@ interface SceneCanvasQuerySurfaceOptions {
     SceneRuntimePresentationController,
     | 'createPlantPresentationContext'
     | 'getLocalizedCommonNames'
+    | 'getSpeciesCache'
     | 'getEnglishFallbackNames'
     | 'buildViewCaptureSnapshot'
     | 'buildRendererSnapshot'
@@ -133,13 +135,7 @@ class SceneCanvasQueryRole implements SceneCanvasQuerySurface {
   }
   getDesignObjectSelection(): CanvasDesignObjectSelectionModel {
     const selectedTargets = this.options.sceneStore.session.selectedTargets
-    if (selectedTargets.length === 0) {
-      return {
-        editableTargets: [], lockedTargets: [], blockedTargets: [], bounds: null,
-        sameSpeciesReferenceCanonicalName: null,
-        plantNamePinning: { plantIds: [], allPinned: false },
-      }
-    }
+    if (selectedTargets.length === 0) return EMPTY_SELECTION_MODEL
     const viewportScale = this.options.frames.viewFrame.peek().view.pixelsPerMetre
     const scene = this.options.sceneStore.persisted
     return getDesignObjectSelectionModel(
@@ -179,6 +175,9 @@ class SceneCanvasQueryRole implements SceneCanvasQuerySurface {
   }
   getLocalizedCommonNames(): ReadonlyMap<string, string | null> {
     return this.options.presentation.getLocalizedCommonNames()
+  }
+  getSpeciesCache(): ReadonlyMap<string, SpeciesCacheEntry> {
+    return this.options.presentation.getSpeciesCache()
   }
   getEnglishFallbackNames(): ReadonlyMap<string, string> {
     return this.options.presentation.getEnglishFallbackNames()

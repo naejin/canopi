@@ -76,23 +76,14 @@ export function hasMoved(drag: MoveDrag): boolean {
   return Math.abs(drag.lastDelta.x) > MOVED_THRESHOLD_M || Math.abs(drag.lastDelta.y) > MOVED_THRESHOLD_M
 }
 
-/** Commits a drag that moved; a failed commit is rolled back. */
+/** Commits a drag that moved. */
 export function commitMoveDrag(drag: MoveDrag): void {
   if (!drag.open) return
-  try {
-    drag.tx.commit({ invalidate: 'scene' })
-    drag.open = false
-  } catch (error) {
-    try {
-      abortMoveDrag(drag)
-    } catch {
-      // The commit's failure is the one reported; a failed rollback leaves the drag open for the next retry.
-    }
-    throw error
-  }
+  drag.open = false
+  drag.tx.commit()
 }
 
-/** Rolls the selection back; throws, still open, when the abort fails. */
+/** Rolls the selection back. */
 export function abortMoveDrag(drag: MoveDrag): void {
   if (!drag.open) return
   drag.tx.abort()

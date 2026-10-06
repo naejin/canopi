@@ -63,7 +63,6 @@ function sceneWithApple(): ScenePersistedState {
       canonicalName: 'Malus domestica',
       commonName: 'Apple',
       color: '#3E8E4E',
-      stratum: null,
       canopySpreadM: null,
       position: { x: 0, y: 0 },
       rotationDeg: null,

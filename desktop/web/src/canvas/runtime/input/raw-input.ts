@@ -13,11 +13,8 @@ export type ButtonRole = 'primary' | 'secondary' | 'auxiliary'
 export type TargetClass =
   | { readonly kind: 'surface' }                                   // host or [data-canvas-surface]
   | { readonly kind: 'handle'; readonly id: ToolHandleId }         // [data-canvas-handle] in the handle layer
-  | { readonly kind: 'ruler'; readonly axis: 'h' | 'v' }           // [data-canvas-ruler]
-  | { readonly kind: 'owned-chrome'; readonly lockedAffordance?: true }   // the session chrome ([data-canvas-chrome]), MapLibre's attribution (.maplibregl-ctrl, presses and hovers only: a wheel there is surface); any other button, input, select,
-                                                                   // [contenteditable] or [data-preserve-overlays] in the host (the inspection lens's skip set);
-                                                                   // lockedAffordance: the Unlock affordance ([data-locked-object-affordance], classified in
-                                                                   // dom-input-source.ts), which keeps the hover in every phase (§2.2)
+  | { readonly kind: 'owned-chrome' }                              // the session chrome ([data-canvas-chrome]), MapLibre's attribution (.maplibregl-ctrl, presses and hovers only: a wheel there is surface); any other button, input, select,
+                                                                   // [contenteditable] or [data-preserve-overlays] in the host (the inspection lens's skip set)
   | { readonly kind: 'owned-text' }                                // the text-entry host
   | { readonly kind: 'foreign' }
 
@@ -31,13 +28,13 @@ export type RawInput =
   | At & { kind: 'leave' }                                                    // host pointerleave: hover-end (the host's passive hover; the tool decides on its preview)
   | At & { kind: 'focus-out' }                                                // host focusout: the host ends the nudge series
   | At & { kind: 'reject'; id: number }                                       // the session, on a GestureOutcome.rejectSession: ends that session with no gesture
-  | At & { kind: 'wheel'; at: ScreenPoint; dxPx: number; dyPx: number; mods: Modifiers; pinch: boolean; target: TargetClass }
-  | At & { kind: 'platform-gesture'; phase: 'start' | 'change' | 'end'; at: ScreenPoint; scale: number; rotationDeg: number }
+  | At & { kind: 'wheel'; at: ScreenPoint; dxPx: number; dyPx: number; mods: Modifiers; target: TargetClass }
+  | At & { kind: 'platform-gesture'; phase: 'start' | 'change' | 'end'; at: ScreenPoint; rotationDeg: number }
   | At & { kind: 'native-contextmenu'; at: ScreenPoint | null; fromKeyboard: boolean; target: TargetClass }
   | At & { kind: 'key-state'; space: boolean; mods: Modifiers }               // from the KeyRouter
   | At & { kind: 'escape' }                                                   // from the Esc chain's 'gesture' layer
   | At & { kind: 'drop'; phase: 'over' | 'leave' | 'drop'; at: ScreenPoint; payload: CanvasDropPayload }
-  | At & { kind: 'configure'; context: { readonly tool: ToolId; readonly mode: 'site' | 'overview'; readonly pointingDevice: 'mouse' | 'trackpad'; readonly dragSlopPx?: number } }
+  | At & { kind: 'configure'; context: { readonly tool: ToolId; readonly mode: 'site' | 'overview'; readonly pointingDevice: 'mouse' | 'trackpad' } }
   | At & { kind: 'tick' }
 
 export interface RecogniserConfig {
@@ -58,8 +55,8 @@ export interface AdapterEffect {
 export interface RecogniserState {
   readonly sessions: ReadonlyMap<number, PointerSession>        // by pointerId: pointer kind, role, mode ('pending' | 'primary' | 'pan' | 'rotate' | 'ignored'), start, last point, press target, slop passed, capture held
   readonly touchPair: TouchPair | null                          // two touch ids, their start centroid, distance and angle, twist arc accumulated
-  readonly held: { readonly space: boolean; readonly mods: Modifiers }
+  readonly held: { readonly space: boolean }                    // the only gesture-state record of a held key (ADR 0017)
   readonly trackpadTwistDeg: number                             // WebKit gesture rotation accumulated before the 10° threshold
   readonly deadlines: { readonly longPressAt: number | null; readonly menuEchoUntil: number | null; readonly windowsTrailUntil: number | null; readonly lastSecondaryEndAt: number | null }
-  readonly context: { readonly tool: ToolId; readonly mode: 'site' | 'overview'; readonly pointingDevice: 'mouse' | 'trackpad'; readonly dragSlopPx: number | null }
+  readonly context: { readonly tool: ToolId; readonly mode: 'site' | 'overview'; readonly pointingDevice: 'mouse' | 'trackpad' }
 }

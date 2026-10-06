@@ -13,9 +13,7 @@ import {
   layerLockState,
   layerOpacity,
   layerVisibility,
-  rulersVisible,
   snapToGridEnabled,
-  snapToGuidesEnabled,
 } from '../canvas-settings/signals'
 import { mutateSettingsProjection } from '../settings/projection'
 import { lastView, locale, plantSpacingIntervalM, scrollWheel, theme } from '../settings/state'
@@ -65,17 +63,9 @@ export function createAppCanvasRuntimeAppAdapter(
     reducedMotion: reducedMotionPreference(),
     settings: {
       readLocale: () => locale.value,
-      // Presenting a story shows the map without the grid, rulers and ruler guides.
-      readChromeOverlay: () => {
-        const aids = !storyPresentationHidesEditingAids.value
-        return {
-          gridVisible: gridVisible.value && aids,
-          rulersVisible: rulersVisible.value && aids,
-          guidesVisible: aids,
-        }
-      },
+      // Presenting a story shows the map without the grid.
+      readChromeOverlay: () => ({ gridVisible: gridVisible.value && !storyPresentationHidesEditingAids.value }),
       readSnapToGridEnabled: () => snapToGridEnabled.value,
-      readSnapToGuidesEnabled: () => snapToGuidesEnabled.value,
       readScrollWheel: () => scrollWheel.peek(),
       readPlantSpacingIntervalMeters: () => plantSpacingIntervalM.value,
       readLastView: () => lastView.peek(),
@@ -92,9 +82,6 @@ export function createAppCanvasRuntimeAppAdapter(
           settings.snapToGrid = !settings.snapToGrid
         }, { persist: 'immediate' })
       },
-      toggleRulersVisible: () => {
-        rulersVisible.value = !rulersVisible.value
-      },
       subscribeTheme: (onChange) => effect(() => {
         void theme.value
         onChange()
@@ -105,7 +92,6 @@ export function createAppCanvasRuntimeAppAdapter(
       }),
       subscribeChromeOverlay: (onChange) => effect(() => {
         void gridVisible.value
-        void rulersVisible.value
         void storyPresentationHidesEditingAids.value
         onChange()
       }),

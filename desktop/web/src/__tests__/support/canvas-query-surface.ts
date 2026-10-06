@@ -12,6 +12,7 @@ import type {
 } from '../../canvas/runtime/runtime'
 import type { PointerWorld } from '../../canvas/runtime/interaction-ports'
 import type { PlacedPlant } from '../../types/design'
+import type { SpeciesCacheEntry } from '../../canvas/runtime/species-cache'
 import { createViewReadSurface } from '../../canvas/runtime/view/frame-source'
 import type { ViewReadSurface } from '../../canvas/runtime/view/read-surface'
 import type { ViewFrame, ViewFrameSource, ViewScreen } from '../../canvas/runtime/view/types'
@@ -37,6 +38,8 @@ interface TestCanvasQuerySurfaceOptions {
   /** Defaults to a plane at the shared test origin; pass `null` for no Design frame. */
   readonly sessionPlane?: SessionPlane | null
   readonly plantLabelCoverage?: CanvasPlantLabelCoverage
+  /** The catalog entries the runtime has loaded for the Design's species. */
+  readonly speciesCache?: ReadonlyMap<string, SpeciesCacheEntry>
 }
 
 export type TestCanvasQuerySurface = CanvasQuerySurface & {
@@ -65,6 +68,7 @@ export function createTestCanvasQuerySurface({
   selection = [],
   sessionPlane = createSessionPlane(TEST_GEO_ORIGIN),
   plantLabelCoverage = { labelled: 0, inView: 0 },
+  speciesCache = new Map(),
 }: TestCanvasQuerySurfaceOptions = {}): TestCanvasQuerySurface {
   const sessionPlaneSignal = signal<SessionPlane | null>(sessionPlane)
   const sceneRevision = signal(0)
@@ -149,6 +153,7 @@ export function createTestCanvasQuerySurface({
         : null
     },
     getLocalizedCommonNames: () => currentLocalizedNames,
+    getSpeciesCache: () => speciesCache,
     getEnglishFallbackNames: () => currentEnglishFallbackNames,
     setPlacement: (next) => {
       placementSignal.value = next

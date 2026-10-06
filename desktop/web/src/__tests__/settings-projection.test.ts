@@ -4,10 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BasemapStyle } from '../generated/contracts'
 import type { Settings, Theme } from '../types/settings'
 import type { SettingsProjectionInstallation } from '../app/settings/projection'
-import {
-  snapToGridEnabled,
-  snapToGuidesEnabled,
-} from '../app/canvas-settings/signals'
+import { snapToGridEnabled } from '../app/canvas-settings/signals'
 import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
 import { sidePanelWidth } from '../app/shell/state'
 import {
@@ -37,7 +34,6 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     locale: 'en',
     theme: 'light',
     snap_to_grid: false,
-    snap_to_guides: true,
     side_panel_width: null,
     basemap_style: 'liberty',
     basemap_visible: true,
@@ -70,7 +66,6 @@ function resetProjectionSignals(): void {
   locale.value = 'en'
   theme.value = 'light'
   snapToGridEnabled.value = false
-  snapToGuidesEnabled.value = true
   sidePanelWidth.value = null
   mapLayers.value = createDefaultMapLayers()
   plantSpacingIntervalM.value = 0.5
@@ -123,17 +118,9 @@ afterEach(() => {
 
 describe('settings projection', () => {
   it('hydrates, snapshots and normalizes the last view', () => {
-    hydrateSettingsProjectionForTests(baseSettings({ last_view: { lon: 2.3522, lat: 48.8566, zoom: 17.5, bearing: 30 } }))
-    expect(lastView.value).toEqual({ lon: 2.3522, lat: 48.8566, zoom: 17.5, bearing: 30 })
-    expect(snapshotSettingsProjection().last_view).toEqual({ lon: 2.3522, lat: 48.8566, zoom: 17.5, bearing: 30 })
-
-    // The bearing is folded into [0, 360); a missing or non-finite one reads as north up.
-    for (const [bearing, normalized] of [[390, 30], [-30, 330], [360, 0], [Number.NaN, 0], [undefined, 0]] as const) {
-      mutateSettingsProjection((draft) => {
-        draft.lastView = { lon: 2.3522, lat: 48.8566, zoom: 17.5, bearing }
-      }, { persist: 'none' })
-      expect(lastView.value?.bearing).toBeCloseTo(normalized, 9)
-    }
+    hydrateSettingsProjectionForTests(baseSettings({ last_view: { lon: 2.3522, lat: 48.8566, zoom: 17.5 } }))
+    expect(lastView.value).toEqual({ lon: 2.3522, lat: 48.8566, zoom: 17.5 })
+    expect(snapshotSettingsProjection().last_view).toEqual({ lon: 2.3522, lat: 48.8566, zoom: 17.5 })
 
     mutateSettingsProjection((draft) => {
       draft.lastView = { lon: 13, lat: 89, zoom: 4 }
@@ -151,7 +138,6 @@ describe('settings projection', () => {
       locale: 'fr',
       theme: 'dark',
       snap_to_grid: true,
-      snap_to_guides: false,
       side_panel_width: 460,
       saved_stamps_frame_height: 280,
       basemap_style: 'bright',
@@ -171,7 +157,6 @@ describe('settings projection', () => {
     expect(locale.value).toBe('fr')
     expect(theme.value).toBe('dark')
     expect(snapToGridEnabled.value).toBe(true)
-    expect(snapToGuidesEnabled.value).toBe(false)
     expect(sidePanelWidth.value).toBe(460)
     expect(savedStampsFrameHeight.value).toBe(280)
     expect(mapLayers.value).toEqual({
@@ -192,7 +177,6 @@ describe('settings projection', () => {
       settings.locale = 'de'
       settings.theme = 'dark'
       settings.snapToGrid = true
-      settings.snapToGuides = false
       settings.sidePanel.width = 440
       settings.savedStamps.frameHeight = 260
       settings.mapLayers = {
@@ -209,7 +193,6 @@ describe('settings projection', () => {
       locale: 'de',
       theme: 'dark',
       snap_to_grid: true,
-      snap_to_guides: false,
       side_panel_width: 440,
       saved_stamps_frame_height: 260,
       basemap_style: 'dark',
@@ -388,21 +371,6 @@ describe('settings projection', () => {
     expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
       locale: 'es',
       side_panel_width: 480,
-    }))
-  })
-
-  it('a bearing-only change to the last view is persisted', async () => {
-    hydrateSettingsProjectionForTests(baseSettings({ last_view: { lon: 2.3522, lat: 48.8566, zoom: 17.5, bearing: 0 } }))
-
-    mutateSettingsProjection((settings) => {
-      settings.lastView = { lon: 2.3522, lat: 48.8566, zoom: 17.5, bearing: 30 }
-    }, { persist: 'immediate' })
-    await Promise.resolve()
-
-    expect(lastView.value).toEqual({ lon: 2.3522, lat: 48.8566, zoom: 17.5, bearing: 30 })
-    expect(saveSettings).toHaveBeenCalledTimes(1)
-    expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
-      last_view: { lon: 2.3522, lat: 48.8566, zoom: 17.5, bearing: 30 },
     }))
   })
 
@@ -1023,7 +991,7 @@ describe('settings projection', () => {
     for (const source of sources) {
       expect(source).toContain('settings/projection')
       expect(source).not.toContain('settings/persistence')
-      expect(source).not.toMatch(/\b(?:locale|theme|mapLayers|snapToGridEnabled|snapToGuidesEnabled|sidePanelWidth|googleMapsApiKey)\.value\s*=(?!=)/)
+      expect(source).not.toMatch(/\b(?:locale|theme|mapLayers|snapToGridEnabled|sidePanelWidth|googleMapsApiKey)\.value\s*=(?!=)/)
     }
 
     // The Layers presentation routes map rows through the map layer actions

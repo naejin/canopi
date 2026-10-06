@@ -234,7 +234,7 @@ function drawPlantSymbolGlyph(
   entry: PlantPresentationEntry,
   viewportScale: number,
 ): void {
-  const symbol = entry.lod === 'dot' || entry.usesCanopyRadius ? 'round' : entry.symbol
+  const symbol = entry.lod === 'dot' ? 'round' : entry.symbol
   const { x, y } = entry.plant.position
   const r = entry.radiusWorld
   ctx.globalAlpha = 1

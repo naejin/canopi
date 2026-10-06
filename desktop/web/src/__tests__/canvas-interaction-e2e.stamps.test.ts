@@ -69,7 +69,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 40, y: 40 },
         rotationDeg: null,
@@ -137,14 +136,18 @@ describe('SceneInteractionSession', () => {
       groups: [],
     })
     const drafts: (DraftPresentation | null)[] = []
+    /** Where the ghost draws the stamp's plant, which sits on its anchor. */
     const ghostAnchor = () => {
       const shape = drafts.at(-1)?.shapes.find((entry) => entry.kind === 'ghost')
-      return shape?.kind === 'ghost' && shape.entity.kind === 'objects' ? shape.entity.anchor : null
+      return shape?.kind === 'ghost' && shape.entity.kind === 'objects' ? shape.entity.template.plants[0]!.entity.position : null
     }
-    /** Every ghost the last draft shows, by anchor and species. */
+    /** Every ghost the last draft shows, by its plants' positions and species. */
     const ghosts = () => (drafts.at(-1)?.shapes ?? []).flatMap((shape) =>
       shape.kind === 'ghost' && shape.entity.kind === 'objects'
-        ? [{ anchor: shape.entity.anchor, plants: shape.entity.template.plants.map(({ entity }) => entity.canonicalName) }]
+        ? [{
+            at: shape.entity.template.plants.map(({ entity }) => entity.position),
+            plants: shape.entity.template.plants.map(({ entity }) => entity.canonicalName),
+          }]
         : [])
     const session = createTestSession({
       ...createInteractionDeps(container, store, testView),
@@ -158,7 +161,7 @@ describe('SceneInteractionSession', () => {
       // Another saved stamp dragged from Favorites: its ghost, the host's drop preview, takes the held stamp's place, as
       // today's one preview element.
       dispatchDrag('dragover', { x: 60, y: 60 }, (transfer) => writeSavedObjectStampDragData(transfer, PEAR_STAMP))
-      expect(ghosts()).toEqual([{ anchor: { x: 60, y: 60 }, plants: ['Pyrus communis'] }])
+      expect(ghosts()).toEqual([{ at: [{ x: 60, y: 60 }], plants: ['Pyrus communis'] }])
       dispatchDrag('dragleave', { x: 60, y: 60 })
       expect(drafts.at(-1)).toBeNull()
       events.pointerMove({ x: 120, y: 120 }, { buttons: 0 })
@@ -194,20 +197,26 @@ describe('SceneInteractionSession', () => {
       groups: [],
     })
     const drafts: (DraftPresentation | null)[] = []
+    const published: CanvasToolGuidance[] = []
+    /** The ghost's plants, where a press would place them. */
     const ghost = () => {
       const shape = drafts.at(-1)?.shapes.find((entry) => entry.kind === 'ghost')
       if (shape?.kind !== 'ghost' || shape.entity.kind !== 'objects') return null
-      const { anchor, rotationDeg, template } = shape.entity
-      return { anchor, rotationDeg, plants: template.plants.map(({ entity }) => entity.canonicalName) }
+      return shape.entity.template.plants.map(({ entity }) => ({ name: entity.canonicalName, at: entity.position }))
     }
     const session = createTestSession({
-      ...createInteractionDeps(container, store, testView),
+      ...createInteractionDeps(container, store, testView, { publishToolGuidance: (guidance) => { published.push(guidance) } }),
       renderer: { setDraft: (draft) => { drafts.push(draft) } },
     })
     session.setTool('saved-object-stamp')
     events.pointerMove({ x: 100, y: 100 }, { buttons: 0 })
     events.keyDown({ key: ']', target: container })
-    expect(ghost()).toEqual({ anchor: { x: 100, y: 100 }, rotationDeg: 15, plants: ['Malus domestica'] })
+    // The apple saved 10 m east of the anchor turns 15° about the pointer.
+    const turned = ghost()!
+    expect(turned.map(({ name }) => name)).toEqual(['Malus domestica'])
+    expect(turned[0]!.at.x).toBeCloseTo(100 + 10 * Math.cos(Math.PI / 12), 6)
+    expect(turned[0]!.at.y).toBeCloseTo(100 + 10 * Math.sin(Math.PI / 12), 6)
+    expect(published.at(-1)?.stampRotationDeg).toBe(15)
 
     // Favorites' click: arming writes the read model, then arms the tool again (the session's setTool runs the cancellation).
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
@@ -218,7 +227,8 @@ describe('SceneInteractionSession', () => {
     expect(ghost()).toBeNull()
 
     events.pointerMove({ x: 120, y: 120 }, { buttons: 0 })
-    expect(ghost()).toEqual({ anchor: { x: 120, y: 120 }, rotationDeg: 0, plants: ['Pyrus communis'] })
+    expect(ghost()).toEqual([{ name: 'Pyrus communis', at: { x: 120, y: 120 } }])
+    expect(published.at(-1)?.stampRotationDeg).toBe(0)
     session.dispose()
   })
 
@@ -260,7 +270,7 @@ describe('SceneInteractionSession', () => {
       store.updatePersisted((draft) => {
         draft.plants = [{
           kind: 'plant', locked: false, id: 'plant-1', canonicalName: 'Malus domestica', commonName: 'Apple',
-          color: null, stratum: null, canopySpreadM: 2, position: { x: 50, y: 60 }, rotationDeg: null,
+          color: null, canopySpreadM: 2, position: { x: 50, y: 60 }, rotationDeg: null,
           notes: null, plantedDate: null, quantity: 1,
         }]
       })

@@ -84,7 +84,7 @@ export function ToolCard({ stampChooser: StampChooser }: {
     setChangingSpecies(false)
     setChoosingStamp(false)
     // The map takes focus back once a species or stamp is chosen, or the chooser closes.
-    focusOwner.focusMap('chooser-closed')
+    focusOwner.focusMap()
   }
 
   return (

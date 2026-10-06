@@ -12,7 +12,7 @@ import {
   type ToolHarness,
 } from '../../../__tests__/support/tool-harness'
 import { setCurrentCanvasSession } from '../../session'
-import { activeTool } from '../../session-state'
+import { currentCanvasTool } from '../../session-state'
 import { CURRENT_BINDINGS } from '../input/bindings'
 import type { Gesture } from '../input/gestures'
 import { createInputRouter } from '../input/input-router'
@@ -43,7 +43,7 @@ function panHarness(): { readonly h: ToolHarness; readonly gestures: ToolGesture
 afterEach(() => {
   for (const h of harnesses.splice(0)) h.dispose()
   setCurrentCanvasSession(null)
-  activeTool.value = 'select'
+  currentCanvasTool.value = 'select'
 })
 
 describe('Pan tool', () => {
@@ -58,7 +58,7 @@ describe('Pan tool', () => {
     expect(pressKey({ key: 'h' }).defaultPrevented).toBe(true)
     keys.dispose()
 
-    expect(h.host.activeTool.peek()).toBe('hand')
+    expect(h.toolState.peek()).toBe('hand')
     expect(h.chrome.cursor).toBe('grab')
 
     // The recogniser as the session configures it for the armed tool, and the router in front of the host.
@@ -72,7 +72,7 @@ describe('Pan tool', () => {
       move(110, 104, { buttons: 1 }),
       move(130, 120, { buttons: 1 }),
       up(130, 120),
-    ], { tool: h.host.activeTool.peek() }), CURRENT_BINDINGS)
+    ], { tool: h.toolState.peek() }), CURRENT_BINDINGS)
     h.host.rawPress('primary', { kind: 'surface' }, 1)
     for (const gesture of run.gestures as readonly Gesture[]) router.route(gesture)
 
@@ -100,7 +100,6 @@ describe('Pan tool', () => {
     expect(h.record.hovers).toContainEqual({ kind: 'plant', id: 'apple' })
     expect(h.store.session.selectedTargets).toEqual([])
     expect(h.renderer.lastDraft()).toBeNull()
-    expect(h.host.activeToolHasTransient()).toBe(false)
-    expect(h.host.escapeHint()).toBe('leave-tool')
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
   })
 })

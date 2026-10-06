@@ -178,7 +178,6 @@ export function plantEntityFromStampSource(
     commonName: source.common_name,
     color: scene.plantSpeciesColors[source.canonical_name] ?? null,
     ...(speciesSymbol ? { symbol: speciesSymbol } : {}),
-    stratum: source.stratum,
     canopySpreadM: source.width_max_m,
     position: world,
     rotationDeg: null,

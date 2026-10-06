@@ -157,10 +157,6 @@
       "commitLimitWarning": "간격을 늘리거나 선을 줄이세요",
       "dragAlong": "줄을 따라 드래그"
     },
-    "lockedObject": {
-      "locked": "잠김",
-      "unlock": "잠금 해제"
-    },
     "contextMenu": {
       "ariaLabel": "캔버스 편집 명령",
       "showName": "이름 표시",
@@ -184,9 +180,7 @@
     "grid": {
       "grid": "격자",
       "snapToGrid": "격자에 맞추기",
-      "rulers": "눈금자",
-      "zoom": "확대/축소",
-      "rulersNorthUpOnly": "북쪽이 위일 때 눈금자가 표시됩니다"
+      "zoom": "확대/축소"
     },
     "overview": {
       "zoomInToEdit": "편집하려면 확대하세요. 이 축척에서는 식물이 숨겨집니다.",

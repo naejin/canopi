@@ -26,7 +26,6 @@ vi.mock("../app/canvas-map-surface/desktop-workspace-runtime", () => ({
   createDesktopWorkspaceRuntimeComposition: vi.fn((options?: { container: HTMLElement }) => {
     let loaded = false;
     const documents = {
-      attachRulersTo: vi.fn(),
       showCanvasChrome: vi.fn(),
       hideCanvasChrome: vi.fn(),
       zoomToFit: vi.fn(),
@@ -102,16 +101,14 @@ import {
 function Harness() {
   const canvasAreaRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const rulerOverlayRef = useRef<HTMLDivElement>(null);
 
-  useCanvasDocumentSession({ canvasAreaRef, containerRef, rulerOverlayRef });
+  useCanvasDocumentSession({ canvasAreaRef, containerRef });
 
   return (
     <div>
       <div ref={canvasAreaRef}>
         <div ref={containerRef} />
       </div>
-      <div ref={rulerOverlayRef} />
     </div>
   );
 }

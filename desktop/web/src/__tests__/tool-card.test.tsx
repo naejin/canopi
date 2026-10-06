@@ -1,6 +1,7 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import type { ToolId } from '../canvas/runtime/interaction-types'
 import { locale, scrollWheel } from '../app/settings/state'
 import { t } from '../i18n'
 import { activePanel, sidePanel } from '../app/shell/state'
@@ -96,7 +97,7 @@ describe('Tool card', () => {
     activePanel.value = 'canvas'
   })
 
-  async function choose(tool: string, guidance: Partial<CanvasToolGuidance> = {}): Promise<void> {
+  async function choose(tool: ToolId, guidance: Partial<CanvasToolGuidance> = {}): Promise<void> {
     await act(() => {
       setCanvasTool(tool)
       setCanvasToolGuidance({ ...IDLE_CANVAS_TOOL_GUIDANCE, ...guidance })
@@ -238,7 +239,7 @@ describe('Tool card', () => {
     ['rectangle', 'Rectangle zone', 'Drag across the map to draw the rectangle.'],
     ['ellipse', 'Ellipse zone', 'Drag across the map to draw the ellipse.'],
     ['line', 'Line zone', 'Drag along the map to draw the line.'],
-  ])('explains the %s gesture', async (tool, title, instruction) => {
+  ] as const)('explains the %s gesture', async (tool, title, instruction) => {
     await choose(tool)
     expect(lines()).toEqual([title, instruction, 'Esc to go back to Select'])
   })
@@ -280,7 +281,7 @@ describe('Tool card', () => {
 
     it('opens a chooser of saved stamps that arms the chosen one and gives the map focus back', async () => {
       savedStamps.items = [savedStamp('stamp-1', 'Guilde pommier', ['Malus domestica', 'Rubus idaeus']), savedStamp('stamp-2', '', ['Malus domestica'])]
-      const setTool = vi.fn((tool: string) => setCanvasTool(tool))
+      const setTool = vi.fn((tool: ToolId) => setCanvasTool(tool))
       const map = document.createElement('div')
       map.tabIndex = 0
       document.body.append(map)
@@ -341,7 +342,7 @@ describe('Tool card', () => {
     })
 
     it('offers copying an object from the map instead, and closes on Esc', async () => {
-      const setTool = vi.fn((tool: string) => setCanvasTool(tool))
+      const setTool = vi.fn((tool: ToolId) => setCanvasTool(tool))
       setCurrentCanvasSession({
         commands: createTestCanvasCommandSurface({ tools: { setTool } }),
         queries: createTestCanvasQuerySurface(),

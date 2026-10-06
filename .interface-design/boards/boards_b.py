@@ -453,7 +453,7 @@ def menus():
               ('Lock', 'Ctrl Shift L'), ('Unlock all', ''), ('Save as stamp…', '')], 290, label='Edit')
     v = menu([('Zoom in', 'Ctrl +'), ('Zoom out', 'Ctrl −'), ('Fit to Design', 'Shift F'), ('Zoom to selection', 'Shift 2'), ('Search a place…', 'Ctrl K'), '-',
               ('Reset north', 'N'), ('Turn view left 15°', 'Shift ←'), ('Turn view right 15°', 'Shift →'), ('Pan', 'H'), '-',
-              ('Grid', 'Shift G', 'nochk'), ('Snap to grid', 'Shift S', 'chk'), ('Rulers', 'Shift R', 'nochk'), ('Labels', 'Shift L', 'sub'), ('Tool names', '', 'chk'), '-',
+              ('Grid', 'Shift G', 'nochk'), ('Snap to grid', 'Shift S', 'chk'), ('Labels', 'Shift L', 'sub'), ('Tool names', '', 'chk'), '-',
               ('Layers', 'Ctrl 1'), ('Plants in this Design', 'Ctrl 2'), ('Plant catalog', 'Ctrl 3'), ('Favorites and stamps', 'Ctrl 4'), ('Calendar', 'Ctrl 5'), ('Budget', 'Ctrl 6'), ('Consortium', 'Ctrl 7'), ('Design notebook', 'Ctrl 8'), '-',
               ('Background', '', 'sub'), ('Theme', '', 'sub')], 290, label='View')
     t = menu([('Select', 'V'), ('Pan', 'H'), '-', ('Place plants', 'P'), ('Plant a row', 'W'), ('Place a stamp', 'K'), '-', ('Polygon zone', 'Z'), ('Rectangle zone', 'R'), ('Ellipse zone', 'E'), ('Line zone', 'L'), '-', ('Text note', 'T'), ('Measure', 'M')], 240, label='Tools')
@@ -540,7 +540,7 @@ def shortcuts():
               ('Edit', [('Undo · Redo', 'Ctrl Z · Ctrl Shift Z'), ('Cut · Copy · Paste', 'Ctrl X · Ctrl C · Ctrl V'), ('Duplicate', 'Ctrl D'), ('Delete', 'Del'), ('Select all', 'Ctrl A'), ('Select all of this species', 'Ctrl Shift A'), ('Group · Ungroup', 'Ctrl G · Ctrl Shift G'), ('Rotate…', 'Ctrl Alt R'), ('Lock', 'Ctrl Shift L'),
                         ('Nudge 10 cm on screen', 'Arrows'), ('Nudge 1 m', 'Ctrl Arrows'), ('Reorder in a list', 'Alt ↑ · Alt ↓')]),
               ('View', [('Zoom in · out', '+ · − · Ctrl + · Ctrl −'), ('Fit the Design', 'Home · Shift F · Ctrl 0'), ('Zoom to selection', 'Shift 2'), ('Turn the view 15°', 'Shift ← · Shift →'), ('Reset north', 'N · Shift N · Shift ↑'),
-                        ('Search a place', 'Ctrl K'), ('Search in the open panel', 'Ctrl F'), ('Labels: none, codes, names', 'Shift L'), ('Grid · Snap · Rulers', 'Shift G · Shift S · Shift R'),
+                        ('Search a place', 'Ctrl K'), ('Search in the open panel', 'Ctrl F'), ('Labels: none, codes, names', 'Shift L'), ('Grid · Snap to grid', 'Shift G · Shift S'),
                         ('Layers · Plants · Catalog · Favorites', 'Ctrl 1 · 2 · 3 · 4'), ('Calendar · Budget · Consortium · Notebook', 'Ctrl 5 · 6 · 7 · 8')]),
               ('Mouse, trackpad and pen', [('Pan the map', 'Right-drag · Middle-drag · Space + drag'), ('Turn the view; add Ctrl (Cmd on Mac) for 15° steps', 'Shift + right-drag · Shift + middle-drag'),
                                            ('Click to reset north, drag to turn the view', 'Compass'), ('Open the menu', 'Right-click'), ('Zoom', 'Scroll wheel · Pinch · Ctrl + wheel'), ('Remove from the selection', 'Alt + click')]),
@@ -678,7 +678,7 @@ def french():
     t = topbar(ORCHARD, 'Enregistré', 'ok', menus=('Fichier', 'Édition', 'Affichage', 'Outils', 'Aide'), search_label='Lieu ou coordonnées')
     t = t.replace('Help and keyboard shortcuts (F1)', 'Aide et raccourcis (F1)').replace('Settings (Ctrl ,)', 'Réglages (Ctrl ,)')
     return (close_map() + selbox(574, 258, 38, 86) + t + toolrail('select', labelled=True, names=names) + panelrail(None) + m
-            + viewchip(names=('Grille', 'Aimanter à la grille', 'Règles')) + zoombar('1:75', '1 m', 52))
+            + viewchip(names=('Grille', 'Aimanter à la grille')) + zoombar('1:75', '1 m', 52))
 
 
 @board('FrenchDialogs', w=1440, h=900, title='Français · dialogs and footers that must wrap', group='theme')

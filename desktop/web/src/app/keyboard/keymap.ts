@@ -12,7 +12,7 @@ import { canvasCommandDefinitions } from '../canvas-commands'
 import type { ShellCommandCatalogEntry, ShellCommandId } from '../shell-commands'
 import { isCharacterKeyShortcut } from '../shell-commands/shortcut-text'
 import type { CanvasKeyCommand } from '../../canvas/runtime/runtime'
-import { chordMatches, chordsOfShortcut, type KeyboardEventLike, type KeyChord } from './key-chord'
+import { chordMatches, chordsOfShortcut, type KeyChord } from './key-chord'
 
 export type KeyScope =
   | 'global'          // every focus class except modal; in text only with worksInTextFields (every shell chord, Ctrl+K)
@@ -154,30 +154,24 @@ export function shellKeymapRows(
   })
 }
 
-/** Pushed scopes: non-modal surfaces that own keys while open (spec §1.6, step 7). Modal surfaces push none. */
-interface KeyScopeHandle { dispose(): void }
+/** A pushed scope takes a chord by answering true. */
+type PushedKeyScope = (chord: KeyChord) => boolean
 
-interface PushedKeyScope {
-  readonly id: 'stories-undo-toast'
-  handle(e: KeyboardEventLike, chord: KeyChord): boolean
-}
-
+/** Pushed scopes, the latest last: non-modal surfaces that own keys while open (spec §1.6, step 7). Modal surfaces push none. */
 const pushedScopes: PushedKeyScope[] = []
 
-export function pushKeyScope(scope: PushedKeyScope): KeyScopeHandle {
-  const entry = { ...scope }
-  pushedScopes.push(entry)
-  return {
-    dispose() {
-      const index = pushedScopes.lastIndexOf(entry)
-      if (index >= 0) pushedScopes.splice(index, 1)
-    },
+/** Pushes a scope until the returned function removes it. */
+export function pushKeyScope(handle: PushedKeyScope): () => void {
+  pushedScopes.push(handle)
+  return () => {
+    const index = pushedScopes.lastIndexOf(handle)
+    if (index >= 0) pushedScopes.splice(index, 1)
   }
 }
 
-/** The pushed scopes, the latest first. */
+/** The pushed scopes, the latest last; the key router tries them latest first. */
 export function pushedKeyScopes(): readonly PushedKeyScope[] {
-  return [...pushedScopes].reverse()
+  return pushedScopes
 }
 
 function keyRow(

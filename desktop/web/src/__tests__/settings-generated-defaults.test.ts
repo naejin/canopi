@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  snapToGridEnabled,
-  snapToGuidesEnabled,
-} from '../app/canvas-settings/signals'
+import { snapToGridEnabled } from '../app/canvas-settings/signals'
 import { sidePanelWidth } from '../app/shell/state'
 import {
   DEFAULT_SAVED_STAMPS_FRAME_HEIGHT,
@@ -27,7 +24,6 @@ describe('generated settings defaults', () => {
       DEFAULT_SETTINGS.saved_stamps_frame_height ?? DEFAULT_SAVED_STAMPS_FRAME_HEIGHT,
     )
     expect(snapToGridEnabled.value).toBe(DEFAULT_SETTINGS.snap_to_grid)
-    expect(snapToGuidesEnabled.value).toBe(DEFAULT_SETTINGS.snap_to_guides)
     expect(singleKeyShortcuts.value).toBe(DEFAULT_SETTINGS.single_key_shortcuts)
     expect(scrollWheel.value).toBe(DEFAULT_SETTINGS.scroll_wheel)
     expect(mapLayers.value).toEqual({

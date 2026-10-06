@@ -35,8 +35,6 @@ const STROKED = {
   play: 'M6.5 4.5v11l9-5.5z',
   expand: 'M3.5 7.5v-4h4M16.5 7.5v-4h-4M3.5 12.5v4h4M16.5 12.5v4h-4',
   collapse: 'M7.5 3.5v4h-4M12.5 3.5v4h4M7.5 16.5v-4h-4M12.5 16.5v-4h4',
-  // The rulers hint over a turned map (RulersNorthHint).
-  ruler: 'M3 14.5L14.5 3 17 5.5 5.5 17zM6.5 11l1.4 1.4M9 8.5l1.4 1.4M11.5 6l1.4 1.4',
   'window-minimize': 'M5 10h10',
   'window-maximize': 'M5 5h10v10H5z',
   // The outline of the filled star (favourite off).

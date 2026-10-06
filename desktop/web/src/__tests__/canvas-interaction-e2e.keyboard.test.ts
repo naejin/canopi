@@ -238,7 +238,7 @@ describe('SceneInteractionSession', () => {
       'line',
       'text',
       'measurement-guide',
-    ])('returns %s to Select, then clears the selection', (tool) => {
+    ] as const)('returns %s to Select, then clears the selection', (tool) => {
       store.updatePersisted((draft) => {
         draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 200, y: 200 })]
       })

@@ -34,7 +34,7 @@ export function createTextNoteTool(): CanvasTool {
     // A new note is level with the screen: it stores the bearing (spec §4.7), 0 when north is up.
     const rotationDeg = c.view.bearingDeg
     c.effects.requestTextEntry(
-      { anchor: at, rotationDeg, initialText: '', placeholderKey: 'canvas.textNote.placeholder', mode: 'create' },
+      { anchor: at, rotationDeg, initialText: '', placeholderKey: 'canvas.textNote.placeholder' },
       (text) => submit(at, text, rotationDeg),
       () => {
         if (anchor === at) entryClosed()
@@ -91,7 +91,6 @@ export function createTextNoteTool(): CanvasTool {
     },
     command: () => 'pass',
     hasTransient: () => false,
-    escapeHint: () => 'leave-tool',
     cancelTransient() {
       // Today's Text field outlived every cancellation; the host closes it itself on a tool change or replacement.
     },

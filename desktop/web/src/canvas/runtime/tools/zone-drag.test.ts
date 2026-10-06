@@ -168,7 +168,7 @@ describe('Zone drag tools', () => {
   })
 
   it('the draft and the zone come from the snapped points', () => {
-    const h = harness({ tool: 'rectangle', viewport: { x: 0, y: 0, scale: 4 }, snapping: { grid: true, guides: false } })
+    const h = harness({ tool: 'rectangle', viewport: { x: 0, y: 0, scale: 4 }, snapping: { grid: true } })
 
     // At 4 px/m the grid is 5 m.
     h.press({ x: 43, y: 87 })
@@ -236,23 +236,20 @@ describe('Zone drag tools', () => {
     expect(h.store.persisted.zones).toEqual([])
   })
 
-  it('a release whose commit fails leaves the host\'s own retry to finish it, with nothing left open for a later press', () => {
+  it('a release whose commit publication fails keeps the shape once, and the next press draws', () => {
     const h = harness({ tool: 'rectangle' })
     const record = h.history.record.bind(h.history)
-    let failures = 2
-    vi.spyOn(h.history, 'record').mockImplementation((command, transaction) => {
-      const recorded = record(command, transaction)
+    let failures = 1
+    vi.spyOn(h.history, 'record').mockImplementation((command, accepted) => {
+      record(command, accepted)
       if (command.type === 'interaction-rectangle' && failures > 0) {
         failures -= 1
         throw new Error('rectangle publication failed')
       }
-      return recorded
     })
 
-    // The commit fails, then the cancellation after the release (which retries the commit) fails too; the host's own
-    // retry inside that failure finishes the commit, so nothing is left open for a later press to resume.
+    // History accepted the rectangle before its publication threw: the commit keeps it and runs no step again.
     expect(() => h.drag({ x: 10, y: 20 }, { x: 40, y: 60 })).toThrow('rectangle publication failed')
-    expect(failures).toBe(0)
     expect(shapes(h).some((shape) => shape.kind === 'polygon')).toBe(false)
     expect(h.store.persisted.zones).toHaveLength(1)
 

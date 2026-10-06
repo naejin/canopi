@@ -1,20 +1,19 @@
 // canvas/runtime/tools/stamp-rotation.ts  (pure)
 //
 // Owns how a held stamp's angle steps (each stamp tool keeps its own pick's start: the saved stamp's in
-// saved-object-stamp.ts), how a stamp's objects turn about its anchor, and the ghosts that
-// show what a press would place: drafts of 'objects' ghosts, zones and plants in one at 0.62 and notes in a second at
-// 0.68 (today's opacities), for both stamp tools and the saved stamp's dragover preview for the drop route. `[` and `]`
-// reach the stamp tools as rotate-held commands of ±15° from the keyboard port, which keeps today's key gating (spec
-// §1.2a).
+// saved-object-stamp.ts), where a stamp's objects land (stampTemplateAt: turned about the stamp's anchor, then moved with
+// it to the pointer; the ghost and the placement both use it), and the ghosts that show what a press would place: drafts
+// of 'objects' ghosts, zones and plants in one at 0.62 and notes in a second at 0.68 (today's opacities), for both stamp
+// tools and the saved stamp's dragover preview for the drop route. `[` and `]` reach the stamp tools as rotate-held
+// commands of ±15° from the keyboard port, which keeps today's key gating (spec §1.2a).
 
-import type { SceneArrangementTemplate } from '../scene-runtime/arrangement-placement'
+import { type SceneArrangementTemplate, translatePoint, translateZonePoints } from '../scene-runtime/arrangement-placement'
 import {
   rotateAnnotationAbout,
   rotatePlantAbout,
   rotateZoneAbout,
 } from '../scene-runtime/selection-rotation'
-import type { SceneAnnotationEntity, ScenePlantEntity, ScenePoint, SceneZoneEntity } from '../scene/types'
-import type { WorldPoint } from '../view/types'
+import type { ScenePoint } from '../scene/types'
 import type { DraftShape } from './draft'
 
 const STAMP_GHOST_OPACITY = 0.62
@@ -26,24 +25,34 @@ export function turnStampRotation(current: number, step: number): number {
   return (((current + step) % 360) + 360) % 360
 }
 
-export interface StampEntities {
-  readonly plants: readonly ScenePlantEntity[]
-  readonly zones: readonly SceneZoneEntity[]
-  readonly annotations: readonly SceneAnnotationEntity[]
-}
-
-/** A stamp's objects turned about its anchor, as the selection rotation turns them. */
-export function rotateStampEntities(entities: StampEntities, pivot: ScenePoint, degrees: number): StampEntities {
-  if (degrees === 0) return entities
+/**
+ * The stamp's objects where a press with its anchor at `at` places them: turned by `degrees` about the anchor, as the
+ * selection rotation turns them, then moved by at − anchor. The ghost draws this template and the placement adds it.
+ */
+export function stampTemplateAt(
+  template: SceneArrangementTemplate,
+  anchor: ScenePoint,
+  at: ScenePoint,
+  degrees: number,
+): SceneArrangementTemplate {
+  const turned = rotateArrangementTemplate(template, anchor, degrees)
+  const delta = { x: at.x - anchor.x, y: at.y - anchor.y }
   return {
-    plants: entities.plants.map((plant) => rotatePlantAbout(plant, pivot, degrees)),
-    zones: entities.zones.map((zone) => rotateZoneAbout(zone, pivot, degrees)),
-    annotations: entities.annotations.map((annotation) => rotateAnnotationAbout(annotation, pivot, degrees)),
+    plants: turned.plants.map((entry) => ({ ...entry, entity: { ...entry.entity, position: translatePoint(entry.entity.position, delta) } })),
+    zones: turned.zones.map((entry) => ({ ...entry, entity: { ...entry.entity, points: translateZonePoints(entry.entity, delta) } })),
+    annotations: turned.annotations.map((entry) => ({
+      ...entry,
+      entity: { ...entry.entity, position: translatePoint(entry.entity.position, delta) },
+    })),
+    measurementGuides: turned.measurementGuides.map((entry) => ({
+      ...entry,
+      entity: { ...entry.entity, start: translatePoint(entry.entity.start, delta), end: translatePoint(entry.entity.end, delta) },
+    })),
+    groups: turned.groups,
   }
 }
 
-/** The placement template turned about the stamp's anchor, before it is moved under the pointer. */
-export function rotateArrangementTemplate(
+function rotateArrangementTemplate(
   template: SceneArrangementTemplate,
   pivot: ScenePoint,
   degrees: number,
@@ -58,27 +67,22 @@ export function rotateArrangementTemplate(
 }
 
 /**
- * A stamp's ghosts as drafts: zones and plants in one 'objects' ghost at 0.62, notes in a second at 0.68 (today's
- * opacities). The entities are already where a press would put them; `anchor` and `rotationDeg` describe the pick.
+ * A stamp's ghosts as drafts of a template already where a press would put it (stampTemplateAt): zones and plants in one
+ * 'objects' ghost at 0.62, notes in a second at 0.68 (today's opacities).
  */
-export function stampGhostShapes(entities: StampEntities, anchor: WorldPoint, rotationDeg: number): DraftShape[] {
+export function stampGhostShapes(template: SceneArrangementTemplate): DraftShape[] {
   const shapes: DraftShape[] = []
-  if (entities.plants.length + entities.zones.length > 0) {
-    shapes.push(ghostOf({ ...entities, annotations: [] }, anchor, rotationDeg, STAMP_GHOST_OPACITY))
+  if (template.plants.length + template.zones.length > 0) {
+    shapes.push(ghostOf({ ...NO_OBJECTS, plants: template.plants, zones: template.zones }, STAMP_GHOST_OPACITY))
   }
-  if (entities.annotations.length > 0) {
-    shapes.push(ghostOf({ plants: [], zones: [], annotations: entities.annotations }, anchor, rotationDeg, STAMP_GHOST_NOTE_OPACITY))
+  if (template.annotations.length > 0) {
+    shapes.push(ghostOf({ ...NO_OBJECTS, annotations: template.annotations }, STAMP_GHOST_NOTE_OPACITY))
   }
   return shapes
 }
 
-function ghostOf(entities: StampEntities, anchor: WorldPoint, rotationDeg: number, opacity: number): DraftShape {
-  const template: SceneArrangementTemplate = {
-    plants: entities.plants.map((entity) => ({ sourceId: entity.id, entity })),
-    zones: entities.zones.map((entity) => ({ sourceId: entity.id, entity })),
-    annotations: entities.annotations.map((entity) => ({ sourceId: entity.id, entity })),
-    measurementGuides: [],
-    groups: [],
-  }
-  return { kind: 'ghost', opacity, entity: { kind: 'objects', anchor, rotationDeg, template } }
+const NO_OBJECTS: SceneArrangementTemplate = Object.freeze({ plants: [], zones: [], annotations: [], measurementGuides: [], groups: [] })
+
+function ghostOf(template: SceneArrangementTemplate, opacity: number): DraftShape {
+  return { kind: 'ghost', opacity, entity: { kind: 'objects', template } }
 }

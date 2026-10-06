@@ -56,7 +56,7 @@ function recordingContext() {
 
 const MINT = {
   kind: 'plant' as const, id: 'mint', canonicalName: 'Mentha spicata', commonName: 'Menthe verte', position: { x: 1, y: 2 },
-  color: null, stratum: null, canopySpreadM: null, rotationDeg: null, notes: null,
+  color: null, canopySpreadM: null, rotationDeg: null, notes: null,
   plantedDate: null, quantity: null, locked: false,
 }
 
@@ -215,7 +215,7 @@ describe('Inspection Lens ownership', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
     let snapshot = createTestSceneRendererSnapshot({ scene: { layers: [{ kind: 'layer', name: 'plants', visible: true, opacity: 1, locked: false }], plants: [{
       kind: 'plant', id: 'mint', canonicalName: 'Mentha spicata', commonName: 'Menthe verte', position: { x: 0, y: 0 },
-      color: null, stratum: null, canopySpreadM: null, rotationDeg: null, notes: null,
+      color: null, canopySpreadM: null, rotationDeg: null, notes: null,
       plantedDate: null, quantity: null, locked: false,
     }] } })
     const revision = { scene: signal(0), plantNames: signal(0) }, setHoveredTarget = vi.fn(target => { snapshot = { ...snapshot, hoverTarget: target } })
@@ -234,7 +234,7 @@ describe('Inspection Lens ownership', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
     const snapshot = createTestSceneRendererSnapshot({ scene: { plants: Array.from({ length: 12 }, (_, i) => ({
       kind: 'plant', id: String(i), canonicalName: 'Mentha spicata', commonName: 'Menthe verte',
-      position: { x: (i % 4) * .2, y: Math.floor(i / 4) * .2 }, color: null, stratum: null,
+      position: { x: (i % 4) * .2, y: Math.floor(i / 4) * .2 }, color: null,
       canopySpreadM: null, rotationDeg: null, scale: null, notes: null, plantedDate: null, quantity: null, locked: false,
     })) } })
     const camera = createTestView(START)
@@ -320,7 +320,7 @@ describe('Inspection Lens ownership', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
     const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [{
       kind: 'plant', id: 'mint', canonicalName: 'Mentha spicata', commonName: 'Menthe verte', position: { x: 1, y: 2 },
-      color: null, stratum: null, canopySpreadM: null, rotationDeg: null, notes: null,
+      color: null, canopySpreadM: null, rotationDeg: null, notes: null,
       plantedDate: null, quantity: null, locked: false,
     }] } })
     const before = JSON.stringify(snapshot.scene)

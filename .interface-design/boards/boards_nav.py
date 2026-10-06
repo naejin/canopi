@@ -34,13 +34,7 @@ def turned_grid(step=190):
             f'<g transform="rotate(-{BEARING} {ORIGIN[0]} {ORIGIN[1]})">{lines}</g></svg>')
 
 
-def rulers_hint(bottom=60):
-    return (f'<div class="float" role="status" style="position: absolute; left: 12px; bottom: {bottom}px; height: 36px; display: flex; align-items: center; gap: 8px; '
-            f'padding: 0 4px 0 10px; border-radius: 11px; font-size: 12.5px; color: var(--ink-2);">{icon("ruler", "s16")}Rulers show when north is up'
-            f'{btn("Reset north", "link", size="sm")}</div>')
-
-
-@board('Navigation', title='Navigation · the map turned 30°: compass, rulers hint, Turn view to this edge', group='navigation')
+@board('Navigation', title='Navigation · the map turned 30°: compass, Turn view to this edge', group='navigation')
 def navigation():
     # A zone drawn north up (a ground rectangle), seen on the turned map; its south edge is the one right-clicked.
     corners = [turn(x, y) for x, y in [(620, 300), (760, 300), (760, 360), (620, 360)]]
@@ -64,13 +58,13 @@ def navigation():
              f' position: absolute; left: {px + 4:.0f}px; top: {py + 4:.0f}px;', label='Zone · Z04')
     card = toolcard('Select', ['Drag to select · Shift-click adds · Alt-click removes · right-drag pans · wheel zooms'])
     chip = statuschip(f'<span>Zone · Z04 · 118 m² · 46 m</span>{btn("Rename…", "ghost", size="sm")}{ib("close", "Clear selection", size="sm")}', 'Selection')
-    return (turned_map() + turned_grid() + zone + label + note + card + chip + rulers_hint()
-            + chrome(scale=TURNED_SCALE, bearing=BEARING, grid=True, rulers=True) + m)
+    return (turned_map() + turned_grid() + zone + label + note + card + chip
+            + chrome(scale=TURNED_SCALE, bearing=BEARING, grid=True) + m)
 
 
 @board('NavigationSettings', title='Settings › Canvas · one choice: mouse or trackpad', group='navigation')
 def navigation_settings():
-    return (turned_map() + turned_grid() + rulers_hint() + chrome(scale=TURNED_SCALE, bearing=BEARING, grid=True, rulers=True)
+    return (turned_map() + turned_grid() + chrome(scale=TURNED_SCALE, bearing=BEARING, grid=True)
             + '<div class="scrim"></div>' + f'<div style="position: absolute; left: 50%; top: 140px; transform: translateX(-50%);">{settings_dialog("canvas")}</div>')
 
 

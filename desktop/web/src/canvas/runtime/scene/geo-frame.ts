@@ -2,81 +2,33 @@ import {
   createSessionPlane,
   roundGeoDegrees,
   type GeoPosition,
-  type PlanePoint,
   type SessionPlane,
 } from '../../session-plane'
 import type { ScenePersistedState, ScenePoint, SceneZoneEntity } from './types'
 
-// The codec's memory of loaded lon/lat, keyed by the exact plane coordinates
-// each position hydrated to. A position whose plane coordinates are unchanged
-// writes its original lon/lat verbatim, so open → save is byte-identical;
-// anything else is converted and rounded to 1e-9 degree.
-class SceneGeoLedger {
-  private readonly _points = new Map<string, GeoPosition>()
-  private readonly _ellipses = new Map<string, readonly [GeoPosition, GeoPosition]>()
-  private readonly _latitudes = new Map<number, number>()
-  private readonly _longitudes = new Map<number, number>()
-
-  rememberPoint(plane: PlanePoint, geo: GeoPosition): void {
-    this._points.set(pointKey(plane), geo)
-  }
-
-  point(plane: PlanePoint): GeoPosition | undefined {
-    return this._points.get(pointKey(plane))
-  }
-
-  rememberEllipse(center: PlanePoint, radii: PlanePoint, corners: readonly [GeoPosition, GeoPosition]): void {
-    this._ellipses.set(ellipseKey(center, radii), corners)
-  }
-
-  ellipse(center: PlanePoint, radii: PlanePoint): readonly [GeoPosition, GeoPosition] | undefined {
-    return this._ellipses.get(ellipseKey(center, radii))
-  }
-
-  rememberLatitude(y: number, lat: number): void {
-    this._latitudes.set(y, lat)
-  }
-
-  latitude(y: number): number | undefined {
-    return this._latitudes.get(y)
-  }
-
-  rememberLongitude(x: number, lon: number): void {
-    this._longitudes.set(x, lon)
-  }
-
-  longitude(x: number): number | undefined {
-    return this._longitudes.get(x)
-  }
-}
-
-function pointKey(point: PlanePoint): string {
-  return `${point.x}|${point.y}`
-}
-
-function ellipseKey(center: PlanePoint, radii: PlanePoint): string {
-  return `${center.x}|${center.y}|${radii.x}|${radii.y}`
-}
-
 export interface SceneGeoFrame {
   readonly plane: SessionPlane
-  readonly ledger: SceneGeoLedger
 }
 
 export function createSceneGeoFrame(origin: GeoPosition): SceneGeoFrame {
-  return { plane: createSessionPlane(origin), ledger: new SceneGeoLedger() }
+  return { plane: createSessionPlane(origin) }
 }
 
+// The largest 1e-9 degree grid latitude inside Web Mercator's ±85.0511287798066.
+const GRID_MAX_LATITUDE_DEG = 85.051128779
+
+// Positions are written rounded to 1e-9 degree (about 0.1 mm), latitude clamped to the grid inside Web Mercator.
+// Rounding is idempotent through the session plane, so an unedited position on the grid is written unchanged after
+// any number of re-origins, and one with more decimals is rounded once.
 export function roundGeoPosition(point: GeoPosition): GeoPosition {
-  return { lon: roundGeoDegrees(point.lon), lat: roundGeoDegrees(point.lat) }
+  const lat = Math.min(GRID_MAX_LATITUDE_DEG, Math.max(-GRID_MAX_LATITUDE_DEG, roundGeoDegrees(point.lat)))
+  return { lon: roundGeoDegrees(point.lon), lat }
 }
 
-// --- hydrate: lon/lat -> plane, remembering the original -------------------
+// --- hydrate: lon/lat -> plane ------------------------------------------------
 
 export function hydrateGeoPoint(frame: SceneGeoFrame, geo: GeoPosition): ScenePoint {
-  const plane = frame.plane.toPlane(geo)
-  frame.ledger.rememberPoint(plane, { lon: geo.lon, lat: geo.lat })
-  return { x: plane.x, y: plane.y }
+  return frame.plane.toPlane(geo)
 }
 
 // Ellipses are stored as opposite corners of their unrotated bounding box and
@@ -89,30 +41,12 @@ export function hydrateGeoEllipse(
   const second = frame.plane.toPlane(corners[1])
   const center = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 }
   const radii = { x: (second.x - first.x) / 2, y: (second.y - first.y) / 2 }
-  frame.ledger.rememberEllipse(center, radii, [
-    { lon: corners[0].lon, lat: corners[0].lat },
-    { lon: corners[1].lon, lat: corners[1].lat },
-  ])
   return [center, radii]
 }
 
-export function hydrateGeoLatitude(frame: SceneGeoFrame, lat: number): number {
-  const y = frame.plane.toPlane({ lon: frame.plane.origin.lon, lat }).y
-  frame.ledger.rememberLatitude(y, lat)
-  return y
-}
-
-export function hydrateGeoLongitude(frame: SceneGeoFrame, lon: number): number {
-  const x = frame.plane.toPlane({ lon, lat: frame.plane.origin.lat }).x
-  frame.ledger.rememberLongitude(x, lon)
-  return x
-}
-
-// --- serialize: plane -> lon/lat, canonical when unchanged -----------------
+// --- serialize: plane -> rounded lon/lat --------------------------------------
 
 export function serializeGeoPoint(frame: SceneGeoFrame, point: ScenePoint): GeoPosition {
-  const original = frame.ledger.point(point)
-  if (original) return { lon: original.lon, lat: original.lat }
   return roundGeoPosition(frame.plane.toGeo(point))
 }
 
@@ -121,31 +55,18 @@ export function serializeGeoEllipse(
   center: ScenePoint,
   radii: ScenePoint,
 ): [GeoPosition, GeoPosition] {
-  const original = frame.ledger.ellipse(center, radii)
-  if (original) return [{ ...original[0] }, { ...original[1] }]
   return [
     roundGeoPosition(frame.plane.toGeo({ x: center.x - radii.x, y: center.y - radii.y })),
     roundGeoPosition(frame.plane.toGeo({ x: center.x + radii.x, y: center.y + radii.y })),
   ]
 }
 
-export function serializeGeoLatitude(frame: SceneGeoFrame, y: number): number {
-  return frame.ledger.latitude(y)
-    ?? roundGeoDegrees(frame.plane.toGeo({ x: 0, y }).lat)
-}
-
-export function serializeGeoLongitude(frame: SceneGeoFrame, x: number): number {
-  return frame.ledger.longitude(x)
-    ?? roundGeoDegrees(frame.plane.toGeo({ x, y: 0 }).lon)
-}
-
 // --- re-origin --------------------------------------------------------------
 
 // Moves every metre coordinate from one session plane to another through its
-// lon/lat: remembered positions re-project from their stored lon/lat, other
-// positions take their canonical (rounded) lon/lat now. The same reprojector
-// must be applied to every metre holder (scene, history, clipboard) so they
-// stay consistent; it records a fresh ledger for the next plane as it goes.
+// rounded lon/lat, as a save would write it. The same reprojector must be
+// applied to every metre holder (scene, history, clipboard) so they stay
+// consistent.
 export class ScenePlaneReprojector {
   readonly next: SceneGeoFrame
 
@@ -159,12 +80,6 @@ export class ScenePlaneReprojector {
 
   ellipse(center: ScenePoint, radii: ScenePoint): [ScenePoint, ScenePoint] {
     return hydrateGeoEllipse(this.next, serializeGeoEllipse(this.previous, center, radii))
-  }
-
-  guide(axis: 'h' | 'v', position: number): number {
-    return axis === 'h'
-      ? hydrateGeoLatitude(this.next, serializeGeoLatitude(this.previous, position))
-      : hydrateGeoLongitude(this.next, serializeGeoLongitude(this.previous, position))
   }
 
   zone(zone: SceneZoneEntity): SceneZoneEntity {
@@ -193,9 +108,6 @@ export class ScenePlaneReprojector {
         start: this.point(guide.start),
         end: this.point(guide.end),
       }))
-    }
-    if (state.guides) {
-      next.guides = state.guides.map((guide) => ({ ...guide, position: this.guide(guide.axis, guide.position) }))
     }
     return next as T
   }

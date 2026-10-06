@@ -15,7 +15,7 @@ import { readPlantStampSource, clearPlantStampSource, recentPlantStampSources } 
 import { clearSavedObjectStampSource, readSavedObjectStampName, readSavedObjectStampSource } from '../../canvas/saved-object-stamp-source'
 import { parseSavedObjectStampPayload } from '../../canvas/saved-object-stamp-payload'
 import { setCurrentCanvasSession } from '../../canvas/session'
-import { activeTool } from '../../canvas/session-state'
+import { currentCanvasTool } from '../../canvas/session-state'
 import { appCommandGraphChromeProjection } from '../../commands/registry'
 import type { MenuAction, MenuEntry } from '../../commands/registry'
 import { SiteOnboarding } from '../../components/canvas/SiteOnboarding'
@@ -95,7 +95,7 @@ beforeEach(() => {
   releases = [focusOwner.registerRegion('map', host)]
   activePanel.value = 'canvas'
   sidePanel.value = null
-  activeTool.value = 'select'
+  currentCanvasTool.value = 'select'
   singleKeyShortcuts.value = true
   connectCanvas()
   arm.mockClear()
@@ -132,16 +132,16 @@ describe('armCanvasTool', () => {
     elsewhere.focus()
     expect(armCanvasTool('polygon', { from: 'start-card' })).toBe(false)
     expect(activePanel.value).toBe('canvas')
-    expect(activeTool.value).toBe('polygon')
+    expect(currentCanvasTool.value).toBe('polygon')
     expect(setTool).not.toHaveBeenCalled()
     expect(document.activeElement).toBe(elsewhere)
 
     // A species from a panel is kept (and offered again by Place plants' chooser) with nothing to arm.
-    activeTool.value = 'select'
+    currentCanvasTool.value = 'select'
     expect(armCanvasTool('plant-stamp', { from: 'panel', source: { kind: 'species', species: HAZEL } })).toBe(false)
     expect(readPlantStampSource()?.canonical_name).toBe('Corylus avellana')
     expect(recentPlantStampSources.value.map((entry) => entry.canonical_name)).toEqual(['Corylus avellana'])
-    expect(activeTool.value).toBe('select')
+    expect(currentCanvasTool.value).toBe('select')
 
     // A saved stamp needs a canvas: nothing is written.
     const stamp = parseSavedObjectStampPayload(PEAR.payload_json)!

@@ -100,6 +100,7 @@ describe('Saved Object Stamp Workbench', () => {
         blockedTargets: [],
         bounds: { minX: 1, minY: 2, maxX: 1, maxY: 2 },
         sameSpeciesReferenceCanonicalName: null,
+        plantNamePinning: { plantIds: [], allPinned: false },
       }),
     } satisfies CanvasQuerySurface
     const created = makeStamp('stamp-new', 'New', 0)
@@ -141,6 +142,7 @@ describe('Saved Object Stamp Workbench', () => {
         blockedTargets: [],
         bounds: { minX: 2, minY: 3, maxX: 2, maxY: 3 },
         sameSpeciesReferenceCanonicalName: null,
+        plantNamePinning: { plantIds: [], allPinned: false },
       }),
     } satisfies CanvasQuerySurface
 
@@ -163,6 +165,7 @@ describe('Saved Object Stamp Workbench', () => {
         blockedTargets: [],
         bounds: { minX: 8, minY: 9, maxX: 8, maxY: 9 },
         sameSpeciesReferenceCanonicalName: null,
+        plantNamePinning: { plantIds: [], allPinned: false },
       }),
     } satisfies CanvasQuerySurface
     const createStamp = vi.fn(async (name: string, payloadJson: string): Promise<SavedObjectStamp> => ({
@@ -199,7 +202,6 @@ describe('Saved Object Stamp Workbench', () => {
       commonName: 'Apple',
       color: '#c0442e',
       symbol: 'canopy',
-      stratum: null,
       canopySpreadM: 2,
       position: { x: 12, y: 24 },
       rotationDeg: 15,
@@ -222,6 +224,7 @@ describe('Saved Object Stamp Workbench', () => {
         }],
         bounds: { minX: 10, minY: 20, maxX: 14, maxY: 28 },
         sameSpeciesReferenceCanonicalName: null,
+        plantNamePinning: { plantIds: [], allPinned: false },
       }),
     } satisfies CanvasQuerySurface
     const createStamp = vi.fn(async (name: string, payloadJson: string): Promise<SavedObjectStamp> => ({
@@ -271,7 +274,6 @@ describe('Saved Object Stamp Workbench', () => {
       commonName: 'Apple',
       color: null,
       symbol: null,
-      stratum: null,
       canopySpreadM: null,
       position: { x: 4, y: 5 },
       rotationDeg: null,
@@ -287,6 +289,7 @@ describe('Saved Object Stamp Workbench', () => {
         blockedTargets: [],
         bounds: { minX: 3, minY: 4, maxX: 5, maxY: 6 },
         sameSpeciesReferenceCanonicalName: null,
+        plantNamePinning: { plantIds: [], allPinned: false },
       }),
     } satisfies CanvasQuerySurface
     const createStamp = vi.fn(async (name: string, payloadJson: string): Promise<SavedObjectStamp> => ({
@@ -321,6 +324,7 @@ describe('Saved Object Stamp Workbench', () => {
             blockedTargets: [],
             bounds: null,
             sameSpeciesReferenceCanonicalName: null,
+            plantNamePinning: { plantIds: [], allPinned: false },
           }
         : {
             editableTargets: [{ kind: 'plant' as const, id: 'plant-1' }],
@@ -328,6 +332,7 @@ describe('Saved Object Stamp Workbench', () => {
             blockedTargets: [],
             bounds: { minX: 0, minY: 0, maxX: 2, maxY: 2 },
             sameSpeciesReferenceCanonicalName: null,
+            plantNamePinning: { plantIds: [], allPinned: false },
           },
     } satisfies CanvasQuerySurface
     setCurrentCanvasSession({
@@ -362,6 +367,7 @@ describe('Saved Object Stamp Workbench', () => {
         }],
         bounds: null,
         sameSpeciesReferenceCanonicalName: null,
+        plantNamePinning: { plantIds: [], allPinned: false },
       }),
     } satisfies CanvasQuerySurface
     const createStamp = vi.fn()
@@ -391,7 +397,6 @@ describe('Saved Object Stamp Workbench', () => {
       commonName: 'Apple',
       color: null,
       symbol: null,
-      stratum: null,
       canopySpreadM: null,
       position: { x: 2, y: 3 },
       rotationDeg: null,
@@ -438,6 +443,7 @@ describe('Saved Object Stamp Workbench', () => {
         blockedTargets: [],
         bounds: { minX: 0, minY: 0, maxX: 8, maxY: 8 },
         sameSpeciesReferenceCanonicalName: null,
+        plantNamePinning: { plantIds: [], allPinned: false },
       }),
     } satisfies CanvasQuerySurface
     const createStamp = vi.fn(async (name: string, payloadJson: string): Promise<SavedObjectStamp> => ({
@@ -503,6 +509,7 @@ describe('Saved Object Stamp Workbench', () => {
         blockedTargets: [],
         bounds: { minX: 0, minY: 0, maxX: 4, maxY: 4 },
         sameSpeciesReferenceCanonicalName: null,
+        plantNamePinning: { plantIds: [], allPinned: false },
       }),
     } satisfies CanvasQuerySurface
     const createStamp = vi.fn(async (name: string, payloadJson: string): Promise<SavedObjectStamp> => ({

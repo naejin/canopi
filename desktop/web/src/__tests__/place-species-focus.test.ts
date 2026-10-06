@@ -34,7 +34,7 @@ describe('Place moves focus to the map so Esc reaches the armed tool', () => {
   it('focuses the map surface itself, not the control last used inside it', () => {
     mapControl.focus()
     placeButton.focus()
-    focusOwner.focusMap('tool-armed')
+    focusOwner.focusMap()
     expect(document.activeElement).toBe(map)
   })
 

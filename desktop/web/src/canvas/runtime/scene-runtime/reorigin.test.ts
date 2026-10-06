@@ -7,6 +7,7 @@ vi.mock('../../../ipc/species', () => ({
   getCommonNames: vi.fn(async () => ({})),
 }))
 
+import { createSceneInteractionEventHarness } from '../../../__tests__/support/canvas-interaction-events'
 import { geoAt } from '../../../__tests__/support/geo-design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
 import type { CanopiFile } from '../../../types/design'
@@ -101,7 +102,7 @@ function makeFile(): CanopiFile {
     budget_currency: 'EUR',
     created_at: '2026-04-02T00:00:00.000Z',
     updated_at: '2026-04-02T00:00:00.000Z',
-    extra: { guides: [{ id: 'ruler-1', axis: 'h', lat: geoAt(0, 12).lat }] },
+    extra: {},
   }
 }
 
@@ -148,7 +149,32 @@ function savedScene(runtime: SceneCanvasRuntime, file: CanopiFile) {
     zones: content.zones,
     annotations: content.annotations,
     measurement_guides: content.measurement_guides,
-    extra: content.extra,
+  }
+}
+
+/** A runtime mounted over a renderer stub, with its interaction session live on a 400 × 300 map. */
+async function createMountedRuntime() {
+  const renderer = { id: 'test', syncScene: vi.fn(), setView: vi.fn(), setDraft: vi.fn(), dispose: vi.fn() }
+  const runtime = new SceneCanvasRuntime({
+    appAdapter: createDetachedCanvasRuntimeAppAdapter(),
+    renderer: { id: 'test', initialize: () => renderer as never },
+  })
+  const container = document.createElement('div')
+  Object.defineProperty(container, 'clientWidth', { configurable: true, value: SCREEN.width })
+  Object.defineProperty(container, 'clientHeight', { configurable: true, value: SCREEN.height })
+  await runtime.init(container)
+  runtime.documentSurface.loadDocument(makeFile())
+  runtime.documentSurface.resize(SCREEN.width, SCREEN.height)
+  centreViewOn(runtime, { x: 0, y: 0 })
+  const events = createSceneInteractionEventHarness(container)
+  return {
+    runtime,
+    container,
+    events,
+    dispose() {
+      events.dispose()
+      runtime.destroy()
+    },
   }
 }
 
@@ -320,6 +346,7 @@ describe('session plane re-origin', () => {
       sceneState: { sessionPlane: plane },
       authority: { reoriginSessionPlane },
       commandAdmission: { runWhenSettled: (run: () => void) => run() } as unknown as SceneCommandAdmission,
+      held: () => false,
     })
     try {
       controller.observe(view.frames.viewFrame.peek())
@@ -341,6 +368,66 @@ describe('session plane re-origin', () => {
     } finally {
       controller.dispose()
       view.dispose()
+    }
+  })
+
+  it('a live polygon draft holds re-origin, which runs on the last frame once the draft ends', async () => {
+    const mounted = await createMountedRuntime()
+    const { runtime, events } = mounted
+    try {
+      runtime.commandSurface.tools.setTool('polygon')
+      events.pointerDown({ x: 200, y: 150 })
+      events.pointerUp({ x: 200, y: 150 })
+      events.pointerDown({ x: 250, y: 150 })
+      events.pointerUp({ x: 250, y: 150 })
+      const previous = sessionPlane(runtime)
+
+      centreViewOn(runtime, { x: FAR_EAST_METERS, y: 0 })
+      await settleReorigin()
+      expect(sessionPlane(runtime)).toBe(previous)
+
+      // Esc drops the draft: the view has not moved since, and the plane moves to its centre.
+      runtime.keyboardPort!.escape('tool-transient')
+      await settleReorigin()
+      const next = sessionPlane(runtime)
+      expect(next).not.toBe(previous)
+      const expectedOrigin = previous.toGeo({ x: FAR_EAST_METERS, y: 0 })
+      expect(next.origin.lon).toBeCloseTo(expectedOrigin.lon, 9)
+      expect(next.origin.lat).toBeCloseTo(expectedOrigin.lat, 9)
+    } finally {
+      mounted.dispose()
+    }
+  })
+
+  it('an open new-note entry holds re-origin', async () => {
+    const mounted = await createMountedRuntime()
+    const { runtime, events, container } = mounted
+    try {
+      runtime.commandSurface.tools.setTool('text')
+      events.pointerDown({ x: 200, y: 150 })
+      events.pointerUp({ x: 200, y: 150 })
+      const textarea = container.querySelector<HTMLTextAreaElement>('textarea')
+      expect(textarea).not.toBeNull()
+      const previous = sessionPlane(runtime)
+
+      centreViewOn(runtime, { x: FAR_EAST_METERS, y: 0 })
+      await settleReorigin()
+      expect(sessionPlane(runtime)).toBe(previous)
+
+      textarea!.value = 'Gate'
+      textarea!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      expect(container.querySelector('textarea')).toBeNull()
+      // The note keeps the lon/lat it was typed at.
+      const note = runtime.querySurface.getSceneSnapshot().annotations.find((annotation) => annotation.text === 'Gate')
+      expect(note).toBeDefined()
+      const noteGeo = previous.toGeo(note!.position)
+      await settleReorigin()
+      const next = sessionPlane(runtime)
+      expect(next).not.toBe(previous)
+      const saved = runtime.querySurface.getSceneSnapshot().annotations.find((annotation) => annotation.text === 'Gate')!
+      expect(next.toGeo(saved.position)).toEqual(geoNear(noteGeo))
+    } finally {
+      mounted.dispose()
     }
   })
 

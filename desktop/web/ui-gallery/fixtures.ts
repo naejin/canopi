@@ -208,7 +208,7 @@ function symbolPlanting() {
       position: { x: column * .42 + (row % 2) * .21, y: row * .36 },
       color: PLANT_COLOR_PALETTE[(index * 5) % PLANT_COLOR_PALETTE.length]!.hex,
       symbol: designed[(index * 7) % designed.length]!,
-      stratum: null, canopySpreadM: .5, rotationDeg: null, scale: .5,
+      canopySpreadM: .5, rotationDeg: null, scale: .5,
       notes: null, plantedDate: null, quantity: null, locked: false,
     }
   })
@@ -286,7 +286,7 @@ export function designFixture(state = 'populated'): CanopiFile {
       commonName: state === 'long' ? `${commonName} — a particularly long local cultivar name` : commonName,
       position: state === 'dense' ? { x: ((speciesIndex === 0 ? i : 3 + (speciesIndex - 1) * 8 + i) % 7) * .32, y: Math.floor((speciesIndex === 0 ? i : 3 + (speciesIndex - 1) * 8 + i) / 7) * .36 } : { x: speciesIndex * 3 + (i % 3) * .7, y: (i % 4) * 2 + (speciesIndex % 2) },
       color: state === 'mixed' && i === 0 ? '#C44230' : specimens[speciesIndex]![3], symbol: state === 'mixed' && i === 0 ? 'conifer' : null,
-      stratum: null, canopySpreadM: speciesIndex === 0 ? 2 : .7, rotationDeg: null, scale: speciesIndex === 0 ? 2 : .7,
+      canopySpreadM: speciesIndex === 0 ? 2 : .7, rotationDeg: null, scale: speciesIndex === 0 ? 2 : .7,
       notes: null, plantedDate: null, quantity: null, locked: false,
     })))
   const activeSpecies = state === 'empty' ? [] : specimens.map(([canonicalName]) => canonicalName)

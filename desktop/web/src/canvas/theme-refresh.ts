@@ -15,9 +15,6 @@ import { signal } from '@preact/signals'
 
 type CanvasColorName =
   | 'background'
-  | 'ruler-bg'
-  | 'ruler-text'
-  | 'ruler-border'
   | 'guide-line'
   | 'overlay-casing'
   | 'zone-stroke'
@@ -38,9 +35,6 @@ type CanvasColorName =
 /** CSS variable read for each canvas colour. Most follow `--canvas-{key}`. */
 export const CANVAS_COLOR_CSS_VARS: { readonly [K in CanvasColorName]: string } = {
   background: '--canvas-bg',
-  'ruler-bg': '--canvas-ruler-bg',
-  'ruler-text': '--canvas-ruler-text',
-  'ruler-border': '--color-border',
   'guide-line': '--canvas-guide-line',
   'overlay-casing': '--canvas-overlay-casing',
   'zone-stroke': '--canvas-zone-stroke',
@@ -64,9 +58,6 @@ export const CANVAS_COLOR_CSS_VARS: { readonly [K in CanvasColorName]: string } 
 // Light-theme values from `styles/global.css`, used until the first refresh.
 const _colors: { [K in CanvasColorName]: string } = {
   background: '#EFE9DD',
-  'ruler-bg': '#F3EEE3',
-  'ruler-text': '#645A4C',
-  'ruler-border': 'rgba(58, 46, 28, 0.14)',
   'guide-line': '#FFF3D6',
   'overlay-casing': 'rgba(20, 16, 10, 0.6)',
   'zone-stroke': '#FFF3D6',

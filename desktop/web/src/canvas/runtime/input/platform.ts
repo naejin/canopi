@@ -2,7 +2,8 @@
 //
 // Owns the platform facts the input pipeline depends on, read from the user agent: the OS (the chord rule and phase 3's
 // touch gates) and WebKit gesture events. There is no engine sniffing. Pure over its arguments, so tests pass literal
-// user agents.
+// user agents. Its callers: the interaction session (unless a test injects one), the editions' key routers
+// (platform/desktop.ts, web/browser-shell-commands.ts), and the inspection lens and PDF page editor for the mod key.
 
 export interface InputPlatform {
   readonly os: 'windows' | 'mac' | 'linux' | 'ios' | 'android' | 'other'

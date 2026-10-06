@@ -10,7 +10,6 @@ import {
 import { SceneHistory } from "../canvas/runtime/scene-history";
 import { SceneStore } from "../canvas/runtime/scene";
 import { SceneRuntimeEditCoordinator } from "../canvas/runtime/scene-runtime/transactions";
-import { geoAt } from "./support/geo-design";
 import type { CanopiFile } from "../types/design";
 import {
   editDesignSessionForTest,
@@ -351,168 +350,6 @@ describe("Design Session replacement", () => {
     expect(store.readDesignName()).toBe("Later");
   });
 
-  it("does not report a byte-equivalent replacement from another path as the retained request", () => {
-    const events: string[] = [];
-    const store = createMemoryDesignSessionStore({
-      file: makeFile("Previous"),
-      path: "/previous.canopi",
-      name: "Previous",
-    });
-    let cleanStateFailures = 1;
-    const history = new SceneHistory({
-      reportCleanState: () => {
-        if (cleanStateFailures > 0) {
-          cleanStateFailures -= 1;
-          throw new Error("clean-state publication failed");
-        }
-      },
-    });
-    const sceneStore = new SceneStore().hydrate(makeFile("Previous"));
-    const authority = new SceneRuntimeEditCoordinator({
-      sceneStore,
-      history,
-      setSelection: (ids) => sceneStore.setSelection(ids),
-      incrementSceneRevision: () => {},
-      syncCanvasSignalsFromScene: () => {},
-      invalidate: () => {},
-    });
-    const canvas = makeCanvas(events);
-    vi.mocked(canvas.replaceDocument).mockImplementation((file, token, finalizeReplacement) => {
-      events.push("canvas.replace");
-      const callerFinalizerInvoked = authority.replaceDocument(file, {
-        token,
-        prepare: () => {},
-        finalizeReplacement,
-      });
-      return { callerFinalizerInvoked };
-    });
-    const replacement = createDesignSessionReplacement({
-      store,
-      workflowRunner: makeWorkflowRunner(events),
-    });
-    const file = makeFile("Shared contents");
-    const first = {
-      file,
-      kind: "loaded" as const,
-      path: "/first.canopi",
-      name: "First",
-    };
-    const competing = {
-      file: JSON.parse(JSON.stringify(file)) as CanopiFile,
-      kind: "loaded" as const,
-      path: "/competing.canopi",
-      name: "Competing",
-    };
-
-    expect(() => replacement.replace(first, canvas, () => true))
-      .toThrow("clean-state publication failed");
-    expect(() => replacement.replace(competing, canvas, () => true))
-      .toThrow("already owns the Scene");
-    expect(store.readDesignPath()).toBe("/first.canopi");
-    expect(store.readDesignName()).toBe("First");
-
-    const receipt = replacement.replace(competing, canvas, () => true);
-
-    expect(receipt.file?.name).toBe("Shared contents");
-    expect(store.readDesignPath()).toBe("/competing.canopi");
-    expect(store.readDesignName()).toBe("Competing");
-    expect(vi.mocked(canvas.replaceDocument).mock.calls[0]?.[1])
-      .not.toBe(vi.mocked(canvas.replaceDocument).mock.calls[1]?.[1]);
-    expect(vi.mocked(canvas.replaceDocument).mock.calls[1]?.[1])
-      .toBe(vi.mocked(canvas.replaceDocument).mock.calls[2]?.[1]);
-  });
-
-  it("does not repeat completed Design finalization when late backfill publication retries", () => {
-    const events: string[] = [];
-    const store = createMemoryDesignSessionStore({
-      file: makeFile("Previous"),
-      path: "/previous.canopi",
-      name: "Previous",
-    });
-    const replaceState = vi.spyOn(store, "replaceCurrentDesignState");
-    const resetBaselines = vi.spyOn(store, "resetDirtyBaselines");
-    let invalidationCalls = 0;
-    const next = makeFile("Recovered");
-    next.layers = [{ name: "plants", visible: true, locked: false, opacity: 1 }];
-    next.plants = [{
-      id: "plant-1",
-      canonical_name: "Malus domestica",
-      common_name: "Apple",
-      color: null,
-      position: geoAt(10, 10),
-      rotation: null,
-      scale: null,
-      notes: null,
-      planted_date: null,
-      quantity: 1,
-      locked: false,
-    }];
-    const sceneStore = new SceneStore().hydrate(makeFile("Previous"));
-    const authority = new SceneRuntimeEditCoordinator({
-      sceneStore,
-      history: new SceneHistory(),
-      setSelection: (ids) => sceneStore.setSelection(ids),
-      incrementSceneRevision: () => {},
-      syncCanvasSignalsFromScene: () => {},
-      invalidate: () => {
-        invalidationCalls += 1;
-        if (invalidationCalls === 2) throw new Error("late backfill invalidation failed");
-      },
-    });
-    const canvas = makeCanvas(events);
-    vi.mocked(canvas.replaceDocument).mockImplementation((file, token, finalizeReplacement) => {
-      events.push("canvas.replace");
-      const callerFinalizerInvoked = authority.replaceDocument(file, {
-        token,
-        prepare: () => {},
-        finalizeReplacement: () => {
-          finalizeReplacement();
-          const ticket = authority.issueTicket();
-          expect(authority.applyBackfills(ticket, [{
-            plantId: "plant-1",
-            canonicalName: "Malus domestica",
-            stratum: "canopy",
-            canopySpreadM: 4,
-          }])).toBe("deferred");
-        },
-      });
-      return { callerFinalizerInvoked };
-    });
-    const replacement = createDesignSessionReplacement({
-      store,
-      workflowRunner: makeWorkflowRunner(events),
-    });
-    const input = {
-      file: next,
-      kind: "loaded" as const,
-      path: "/recovered.canopi",
-      name: "Recovered",
-    };
-
-    expect(() => replacement.replace(input, canvas, () => true))
-      .toThrow("late backfill invalidation failed");
-    expect(replaceState).toHaveBeenCalledOnce();
-    expect(resetBaselines).toHaveBeenCalledOnce();
-
-    editDesignSessionForTest(store, (design) => ({
-      ...design,
-      description: "Intervening field note",
-    }));
-    expect(store.isDesignDirty()).toBe(true);
-
-    const receipt = replacement.replace(input, canvas, () => true);
-
-    expect(replaceState).toHaveBeenCalledOnce();
-    expect(resetBaselines).toHaveBeenCalledOnce();
-    expect(store.readCurrentDesign()?.description).toBe("Intervening field note");
-    expect(store.isDesignDirty()).toBe(true);
-    expect(receipt.file?.description).toBe("Intervening field note");
-    expect(sceneStore.persisted.plants[0]).toMatchObject({
-      stratum: "canopy",
-      canopySpreadM: 4,
-    });
-  });
-
   it("preserves edits made after Design identity applied but its publication threw", () => {
     const events: string[] = [];
     const store = createMemoryDesignSessionStore({
@@ -790,7 +627,6 @@ function makeCanvas(events: string[]): CanvasDocumentSurface {
   return {
     presented: signal(true),
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
-    attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(() => events.push("canvas.show-chrome")),
     hideCanvasChrome: vi.fn(() => events.push("canvas.hide-chrome")),
     zoomToFit: vi.fn(() => events.push("canvas.zoom-to-fit")),

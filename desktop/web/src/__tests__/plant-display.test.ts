@@ -73,7 +73,6 @@ function plant(id: string, canonicalName: string, x: number, color: string | nul
     canonicalName,
     commonName: null,
     color,
-    stratum: null,
     canopySpreadM: null,
     position: { x, y: 0 },
     rotationDeg: null,
@@ -173,7 +172,7 @@ describe('plant display rules', () => {
 
     const print = buildCanvasPrintSnapshot({
       plantSpeciesColors: {}, plantSpeciesSymbols: {}, plantSpeciesCodes: {}, layers: [], plants,
-      zones: [], annotations: [], measurementGuides: [], groups: [], guides: [],
+      zones: [], annotations: [], measurementGuides: [], groups: [],
     }, context)
     expect(print.plants.map((entry) => entry.color)).toEqual([STRATUM_DISPLAY_COLORS.emergent, NO_STRATUM_DISPLAY_COLOR])
   })

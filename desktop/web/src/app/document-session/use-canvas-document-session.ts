@@ -10,7 +10,6 @@ interface MutableDomRef<T> {
 interface CanvasDocumentSessionRefs {
   canvasAreaRef: MutableDomRef<HTMLDivElement>;
   containerRef: MutableDomRef<HTMLDivElement>;
-  rulerOverlayRef: MutableDomRef<HTMLDivElement>;
   onMapStateChange?: WorkspaceRuntimeMountOptions['onMapStateChange'];
 }
 
@@ -26,7 +25,6 @@ interface CanvasDocumentSession {
 export function useCanvasDocumentSession({
   canvasAreaRef,
   containerRef,
-  rulerOverlayRef,
   onMapStateChange,
 }: CanvasDocumentSessionRefs): CanvasDocumentSession {
   const lifecycleRef = useRef<DesignSessionLifecycle | null>(null);
@@ -71,7 +69,6 @@ export function useCanvasDocumentSession({
           lifecycle = createDesignSessionLifecycle({
             canvasArea,
             container,
-            rulerOverlay: rulerOverlayRef.current,
             onMapStateChange,
           }, {
             onInitializationFailure: release,

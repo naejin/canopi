@@ -3,10 +3,7 @@ import { join, relative } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { CANVAS_CHROME_FONT_FAMILY, CANVAS_CHROME_MONO_FONT_FAMILY } from '../canvas/chrome-fonts'
-import { createRulerOverlay } from '../canvas/runtime/chrome/rulers'
 import { createTextEntryHost } from '../canvas/runtime/chrome/text-entry-host'
-import type { ViewFrame } from '../canvas/runtime/view/types'
-import { testViewFrame } from './support/test-view'
 import { createTestView } from './support/test-view'
 
 const GLOBAL_CSS = readFileSync('src/styles/global.css', 'utf8')
@@ -49,10 +46,6 @@ function listSourceFiles(directory: string): string[] {
   })
 }
 
-function cameraFrame(): ViewFrame {
-  return testViewFrame({ screen: { width: 424, height: 324 }, viewport: { x: 12, y: 34, scale: 8 } })
-}
-
 async function loadFreshThemeRefresh() {
   vi.resetModules()
   return import('../canvas/theme-refresh')
@@ -83,28 +76,6 @@ describe('canvas chrome fonts', () => {
     expect(offenders).toEqual([])
   })
 
-  it('draws ruler labels in the canvas chrome font even before theme tokens resolve', () => {
-    const contexts: CanvasRenderingContext2D[] = []
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => {
-      const context = {
-        setTransform: vi.fn(), clearRect: vi.fn(), fillRect: vi.fn(), beginPath: vi.fn(),
-        moveTo: vi.fn(), lineTo: vi.fn(), stroke: vi.fn(), fillText: vi.fn(), translate: vi.fn(),
-        rotate: vi.fn(), save: vi.fn(), restore: vi.fn(), measureText: (text: string) => ({ width: text.length * 7 }),
-        fillStyle: '', strokeStyle: '', lineWidth: 0, font: '', textAlign: 'left', textBaseline: 'alphabetic', lineCap: 'butt',
-      } as unknown as CanvasRenderingContext2D
-      contexts.push(context)
-      return context as never
-    })
-    const host = document.createElement('div')
-    const overlay = createRulerOverlay(host, { onGuideCreate: vi.fn() })
-    overlay.update({ frame: cameraFrame(), chromeVisible: true, rulersVisible: true })
-
-    const fonts = contexts.map((context) => context.font).filter(Boolean)
-    expect(fonts.length).toBeGreaterThan(0)
-    for (const font of fonts) expect(font.endsWith(` ${CANVAS_CHROME_FONT_FAMILY}`)).toBe(true)
-    overlay.destroy()
-  })
-
   it('edits Text notes in the font Pixi draws them with', () => {
     const container = document.createElement('div')
     const view = createTestView({ viewport: { x: 0, y: 0, scale: 10 } })
@@ -119,11 +90,10 @@ describe('canvas chrome fonts', () => {
       rotationDeg: 0,
       initialText: 'Pond edge',
       placeholderKey: 'canvas.textNote.placeholder',
-      mode: 'edit',
       fontSizePx: 16,
     }, () => 'close')
 
-    const textarea = container.querySelector<HTMLTextAreaElement>('[data-annotation-inline-editor="true"]')!
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea[data-canvas-text-entry]')!
     expect(textarea.style.fontFamily.replace(/"/g, "'")).toBe(CANVAS_CHROME_FONT_FAMILY)
     entries.dispose()
     view.dispose()

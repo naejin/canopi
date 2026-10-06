@@ -134,7 +134,6 @@ function makeSceneSession(file: CanopiFile): SceneSession {
     sceneStore,
     presented: signal(true),
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
-    attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(),
     hideCanvasChrome: vi.fn(),
     zoomToFit: vi.fn(),
@@ -193,7 +192,7 @@ function openCurrent(file = makeFile('Current', 2)): void {
 function makeDirty(description: string): void {
   editDesignSessionForTest(store, (design) => ({ ...design, description }))
   // An undoable Scene edit the close must drop.
-  session.history.record({ type: 'test-edit' } as unknown as SceneCommand, {})
+  session.history.record({ type: 'test-edit' } as unknown as SceneCommand, () => {})
 }
 
 beforeEach(() => {

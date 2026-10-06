@@ -148,6 +148,28 @@ export function getSelectedTopLevelTargets(
   return targets
 }
 
+/** The read model of an empty selection, shared and frozen. */
+export const EMPTY_SELECTION_MODEL: CanvasDesignObjectSelectionModel = Object.freeze({
+  editableTargets: Object.freeze([]),
+  lockedTargets: Object.freeze([]),
+  blockedTargets: Object.freeze([]),
+  bounds: null,
+  sameSpeciesReferenceCanonicalName: null,
+  plantNamePinning: Object.freeze({ plantIds: Object.freeze([]), allPinned: false }),
+})
+
+/** The one editable target of `kind` when it is the whole selection, with nothing locked or blocked; else null. */
+export function singleEditableTarget<K extends CanvasDesignObjectSelectionTarget['kind']>(
+  selection: CanvasDesignObjectSelectionModel,
+  kind: K,
+): Extract<CanvasDesignObjectSelectionTarget, { kind: K }> | null {
+  if (selection.editableTargets.length !== 1 || selection.lockedTargets.length > 0 || selection.blockedTargets.length > 0) {
+    return null
+  }
+  const [target] = selection.editableTargets
+  return target?.kind === kind ? target as Extract<CanvasDesignObjectSelectionTarget, { kind: K }> : null
+}
+
 export function getDesignObjectSelectionModel(
   persisted: ScenePersistedState,
   selectedTargets: SceneDesignObjectSelection,

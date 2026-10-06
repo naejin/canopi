@@ -107,7 +107,7 @@ const disposeTheme = effect(() => { document.documentElement.dataset.theme = the
 // `plantDb=corrupt|missing` shows the plant database notice under the title bar.
 const plantDb = params.get('plantDb')
 plantDbStatus.value = plantDb === 'corrupt' || plantDb === 'missing' ? plantDb : 'available'
-// `bearing=30` turns the map 30° clockwise from north once the Design is fitted (compass, rulers hint, turned grid).
+// `bearing=30` turns the map 30° clockwise from north once the Design is fitted (compass, turned grid).
 const requestedBearing = Number(params.get('bearing') ?? 0)
 const bearingDeg = Number.isFinite(requestedBearing) ? requestedBearing : 0
 

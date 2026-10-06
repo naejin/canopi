@@ -30,7 +30,7 @@ import type { PlantDisplay } from '../canvas/runtime/plant-display'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene/defaults'
 import type { ScenePlantEntity } from '../canvas/runtime/scene'
 import { locale } from '../app/settings/state'
-import { gridVisible, rulersVisible } from '../app/canvas-settings/signals'
+import { gridVisible } from '../app/canvas-settings/signals'
 import { focusOwner } from '../app/keyboard/focus-owner'
 import { currentCanvasQuerySurface } from '../canvas/session'
 import type { CanopiFile, SavedView, Story } from '../types/design'
@@ -103,7 +103,7 @@ let container: HTMLDivElement
 
 function plant(id: string, canonicalName: string): ScenePlantEntity {
   return {
-    kind: 'plant', id, locked: false, canonicalName, commonName: null, color: null, stratum: null,
+    kind: 'plant', id, locked: false, canonicalName, commonName: null, color: null,
     canopySpreadM: null, position: { x: 0, y: 0 }, rotationDeg: null, notes: null, plantedDate: null, quantity: 1,
   }
 }
@@ -332,43 +332,42 @@ describe('presenting a story', () => {
     expect(presentStory('tour')).toBe(false)
   })
 
-  it('shows the step’s labels to the map and hides the grid, rulers and guides, then gives them back', () => {
+  it('shows the step’s labels to the map and hides the grid, then gives it back', () => {
     const adapter = createAppCanvasRuntimeAppAdapter({ presentationData: {} as never })
     const displays: PlantDisplay[] = []
     const dispose = adapter.plantDisplay!.subscribe((display) => { displays.push(display) })
+    gridVisible.value = true
     const overlay = () => adapter.settings.readChromeOverlay()
     const before = overlay()
-    expect(before.guidesVisible).toBe(true)
+    expect(before.gridVisible).toBe(true)
 
     presentStory('tour', 1)
     expect(displays.at(-1)?.labels).toBe('codes')
-    expect(overlay()).toEqual({ gridVisible: false, rulersVisible: false, guidesVisible: false })
+    expect(overlay()).toEqual({ gridVisible: false })
 
     leaveStoryPresentation()
     expect(displays.at(-1)?.labels).toBe('names')
     expect(overlay()).toEqual(before)
     dispose()
+    gridVisible.value = false
   })
 
   it('hides the editing aids for the whole presentation, whatever a step overrides', () => {
     const adapter = createAppCanvasRuntimeAppAdapter({ presentationData: {} as never })
     gridVisible.value = true
-    rulersVisible.value = true
     // No command surface: no step applies its overrides, yet the aids stay hidden.
     setCurrentCanvasSession({ ...createTestCanvasRuntimeSurfaces({ queries: currentCanvasQuerySurface.peek()! }), commands: null as never })
     try {
       presentStory('tour', 0)
       expect(storyPresentationOverrides.value).toBeNull()
       expect(storyPresentationHidesEditingAids.value).toBe(true)
-      expect(adapter.settings.readChromeOverlay()).toEqual({ gridVisible: false, rulersVisible: false, guidesVisible: false })
+      expect(adapter.settings.readChromeOverlay()).toEqual({ gridVisible: false })
       leaveStoryPresentation()
       expect(storyPresentationHidesEditingAids.value).toBe(false)
-      expect(adapter.settings.readChromeOverlay()).toEqual({ gridVisible: true, rulersVisible: true, guidesVisible: true })
+      expect(adapter.settings.readChromeOverlay()).toEqual({ gridVisible: true })
       expect(gridVisible.value).toBe(true)
-      expect(rulersVisible.value).toBe(true)
     } finally {
       gridVisible.value = false
-      rulersVisible.value = false
     }
   })
 

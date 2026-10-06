@@ -11,6 +11,7 @@ import {
   stubTool,
   useStubTools,
   type StubTool,
+  type StubToolBehaviour,
   type ToolHarness,
   type ToolHarnessOptions,
 } from '../../../__tests__/support/tool-harness'
@@ -18,10 +19,11 @@ import { createTestView } from '../../../__tests__/support/test-view'
 import { closeCanvasContextMenu, openCanvasContextMenu } from '../../../app/canvas-context-menu/state'
 import { CanvasContextMenu } from '../../../components/canvas/CanvasContextMenu'
 import { gridInterval, snapToGrid } from '../../grid'
+import { CanvasRuntimeCleanupError } from '../cleanup'
 import type { PlantStampSourceInput } from '../../plant-stamp-source'
 import { normalizeSavedObjectStampPayload } from '../../saved-object-stamp-payload'
 import type { CanvasContextMenuCommands, CanvasContextMenuRequest } from '../app-adapter'
-import type { CanvasDropPayload, ToolHandleId } from '../interaction-types'
+import type { CanvasDropPayload, ToolHandleId, ToolId } from '../interaction-types'
 import type { SceneDesignObjectTarget } from '../scene/design-object-targets'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
 import type { WorldPoint } from '../view/types'
@@ -30,6 +32,7 @@ import { applyToolConstraint } from './constraints'
 import type { DraftPresentation, DraftShape, ToolHandle } from './draft'
 import { measureLabelShapes, selectedZoneMeasurementLabels } from './measure-labels'
 import type { ToolReply } from './tool'
+import { TOOL_REGISTRY, type ToolFactory } from './registry'
 import { createContextMenuPort, createToolScene } from './tool-host'
 import '../../../__tests__/support/camera-tolerance'
 
@@ -74,24 +77,72 @@ function selectedZoneChips(h: ToolHarness): DraftShape[] {
 
 describe('ToolHost', () => {
   describe('points', () => {
-    it('re-projects the start on a plane change and calls planeChanged', () => {
-      let reproject: ((point: WorldPoint) => WorldPoint) | null = null
-      const rectangle = stubTool('rectangle', { planeChanged: (next) => { reproject = next } })
+    it('holds re-origin while a press is live, the tool has a transient or the text entry is open', () => {
+      let transient = false
+      const rectangle = stubTool('rectangle', { hasTransient: () => transient })
       useStubTools(rectangle)
       const h = harness({ tool: 'rectangle' })
+      expect(h.host.holdsReorigin()).toBe(false)
 
       h.press({ x: 100, y: 100 })
+      expect(h.host.holdsReorigin()).toBe(true)
       h.move({ x: 150, y: 120 })
-      const before = rectangle.last('drag-start')!.start.world
-      h.reorigin({ lon: 0.01, lat: 0.005 })
-      h.move({ x: 160, y: 130 })
+      h.release()
+      expect(h.host.holdsReorigin()).toBe(false)
 
-      expect(rectangle.calls).toContain('planeChanged')
-      const expected = reproject!(before)
-      expect(Math.hypot(expected.x - before.x, expected.y - before.y)).toBeGreaterThan(100)
-      const after = rectangle.last('drag-move')!.start.world
-      expect(after.x).toBeCloseTo(expected.x, 3)
-      expect(after.y).toBeCloseTo(expected.y, 3)
+      transient = true
+      expect(h.host.holdsReorigin()).toBe(true)
+      transient = false
+
+      h.openTextEntry()
+      expect(h.host.holdsReorigin()).toBe(true)
+      h.enterText()
+      expect(h.host.holdsReorigin()).toBe(false)
+    })
+
+    it('a plane change hides the tool\'s ghost until the next hover', () => {
+      const ghost: DraftShape = { kind: 'polyline', points: [{ x: 0, y: 0 }, { x: 1, y: 1 }], style: { token: 'draft', widthPx: 1 } }
+      // A ghost that stays when the pointer leaves the map, as the stamps' do.
+      const stamp: StubTool = stubTool('object-stamp', {
+        gesture: (g) => {
+          if (g.kind === 'hover') stamp.ctx().effects.setDraft({ shapes: [ghost] })
+          return 'pass'
+        },
+      })
+      useStubTools(stamp)
+      const h = harness({ tool: 'object-stamp' })
+
+      h.hover({ x: 100, y: 100 })
+      h.leave()
+      expect(h.renderer.lastDraft()?.shapes).toEqual([ghost])
+
+      h.reorigin({ lon: 0.01, lat: 0.005 })
+      expect(h.renderer.lastDraft()).toBeNull()
+
+      h.hover({ x: 120, y: 100 })
+      expect(h.renderer.lastDraft()?.shapes).toEqual([ghost])
+    })
+
+    it('a plane change under a still pointer on the map keeps the tool\'s ghost, re-emitted at the pointer', () => {
+      const hovers: WorldPoint[] = []
+      const stamp: StubTool = stubTool('object-stamp', {
+        gesture: (g) => {
+          if (g.kind !== 'hover') return 'pass'
+          hovers.push(g.point.world)
+          stamp.ctx().effects.setDraft({ shapes: [{ kind: 'polyline', points: [g.point.world, g.point.world], style: { token: 'draft', widthPx: 1 } }] })
+          return 'handled'
+        },
+      })
+      useStubTools(stamp)
+      const h = harness({ tool: 'object-stamp' })
+
+      h.hover({ x: 100, y: 100 })
+      h.reorigin({ lon: 0.01, lat: 0.005 })
+      h.advance(0)
+
+      const at = h.world({ x: 100, y: 100 })
+      expect(hovers.at(-1)).toEqual(at)
+      expect(h.renderer.lastDraft()?.shapes).toEqual([{ kind: 'polyline', points: [at, at], style: { token: 'draft', widthPx: 1 } }])
     })
 
     it('under LEGACY a Polygon Shift point snaps, then constrains', () => {
@@ -101,7 +152,7 @@ describe('ToolHost', () => {
       const h = harness({
         tool: 'polygon',
         viewport: { x: 0, y: 0, scale: 10 },
-        snapping: { grid: true, guides: false },
+        snapping: { grid: true },
       })
       const interval = gridInterval(10).interval
       const at = { x: 473, y: 191 }
@@ -126,7 +177,7 @@ describe('ToolHost', () => {
       const origin = { x: 0, y: 0 }
       const row = stubTool('plant-spacing', { constraint: () => ({ kind: 'direction', origin, stepDeg: 45 }) })
       useStubTools(row)
-      const h = harness({ tool: 'plant-spacing', viewport: { x: 0, y: 0, scale: 10 }, snapping: { grid: true, guides: true } })
+      const h = harness({ tool: 'plant-spacing', viewport: { x: 0, y: 0, scale: 10 }, snapping: { grid: true } })
       const at = { x: 473, y: 191 }
       const raw = h.world(at)
 
@@ -147,40 +198,32 @@ describe('ToolHost', () => {
     it('snapping follows the settings at each point', () => {
       const rectangle = stubTool('rectangle')
       useStubTools(rectangle)
-      const h = harness({
-        tool: 'rectangle',
-        scene: { guides: [{ id: 'g1', axis: 'v', position: 125 }] },
-        snapping: { grid: true, guides: false },
-      })
+      const h = harness({ tool: 'rectangle', snapping: { grid: true } })
       const at = { x: 123, y: 77 }
 
       h.hover(at)
       expect(rectangle.last('hover')!.point.snapped).toEqual(snapToGrid(123, 77, gridInterval(1).interval))
+      expect(rectangle.ctx().snap({ x: 124, y: 3 })).toEqual(snapToGrid(124, 3, gridInterval(1).interval))
 
-      h.snapping = { grid: false, guides: false }
+      h.snapping = { grid: false }
       h.hover(at)
       expect(rectangle.last('hover')!.point.snapped).toEqual(h.world(at))
-
-      h.snapping = { grid: false, guides: true }
-      h.hover(at)
-      expect(rectangle.last('hover')!.point.snapped).toEqual({ x: 125, y: 77 })
-      expect(rectangle.ctx().snap({ x: 124, y: 3 })).toEqual({ x: 125, y: 3 })
     })
 
     it('place-at is snapped and ignored in overview', () => {
       const stamp = stubTool('plant-stamp')
       useStubTools(stamp)
-      const h = harness({ snapping: { grid: true, guides: false } })
+      const h = harness({ snapping: { grid: true } })
 
       h.host.command({ kind: 'place-at', world: { x: 13.2, y: 27.9 } })
-      expect(h.host.activeTool.peek()).toBe('plant-stamp')
+      expect(h.toolState.peek()).toBe('plant-stamp')
       expect(stamp.commands).toEqual([
         { kind: 'place-at', world: snapToGrid(13.2, 27.9, gridInterval(1).interval) },
       ])
 
       const overview = harness({ viewport: OVERVIEW })
       expect(overview.host.command({ kind: 'place-at', world: { x: 13.2, y: 27.9 } })).toBe('pass')
-      expect(overview.host.activeTool.peek()).toBe('select')
+      expect(overview.toolState.peek()).toBe('select')
       expect(stamp.commands).toHaveLength(1)
     })
   })
@@ -433,8 +476,8 @@ describe('ToolHost', () => {
       const h = harness({
         admission: {
           revision: signal(0),
-          runWhenSettled: <T,>(operation: () => T, busyResult: T, options?: { resumePending?: boolean }) => {
-            admitted.push(`${busy ? 'refused' : 'admitted'}:${options?.resumePending ?? false}`)
+          runWhenSettled: <T,>(operation: () => T, busyResult: T) => {
+            admitted.push(busy ? 'refused' : 'admitted')
             return busy ? busyResult : operation()
           },
         },
@@ -445,7 +488,7 @@ describe('ToolHost', () => {
       h.move({ x: 60, y: 40 })
       admitted.length = 0
       expect(h.release({ x: 80, y: 60 })).toEqual({})
-      expect(admitted).toEqual(['admitted:true'])
+      expect(admitted).toEqual(['admitted'])
       expect(select.count('drag-end')).toBe(1)
 
       // The scene is busy at the release: the tool is cancelled, as today's refused pointerup cancelled the transient.
@@ -454,7 +497,7 @@ describe('ToolHost', () => {
       busy = true
       admitted.length = 0
       expect(h.release({ x: 80, y: 60 })).toEqual({ quarantine: true })
-      expect(admitted).toEqual(['refused:true'])
+      expect(admitted).toEqual(['refused'])
       expect(select.count('drag-end')).toBe(1)
       expect(select.last('cancel')).toEqual({ kind: 'cancel', reason: 'tool-change' })
       expect(select.calls.at(-1)).toBe('cancelTransient:tool-change')
@@ -485,7 +528,7 @@ describe('ToolHost', () => {
         gesture: (g) => {
           if (g.kind === 'tap') {
             text.ctx().effects.requestTextEntry(
-              { anchor: g.point.snapped, rotationDeg: 0, initialText: 'Compost', placeholderKey: 'canvas.note', mode: 'create' },
+              { anchor: g.point.snapped, rotationDeg: 0, initialText: 'Compost', placeholderKey: 'canvas.note' },
               (value) => {
                 submitted.push(value)
                 return 'close'
@@ -501,7 +544,7 @@ describe('ToolHost', () => {
       h.click({ x: 40, y: 40 })
       expect(h.chrome.textEntry?.request.initialText).toBe('Compost')
       h.press({ x: 90, y: 90 })
-      expect(h.record.focus.at(-1)).toBe('map:text-entry-closed')
+      expect(h.record.focus.at(-1)).toBe('map')
       expect(submitted).toEqual(['Compost'])
       expect(h.chrome.textEntry).toBeNull()
     })
@@ -513,7 +556,7 @@ describe('ToolHost', () => {
         command: (c) => {
           if (c.kind !== 'edit-text') return 'pass'
           select.ctx().effects.requestTextEntry(
-            { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Old', placeholderKey: 'canvas.note', mode: 'edit' },
+            { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Old', placeholderKey: 'canvas.note' },
             (text) => {
               submitted.push(text)
               return busy ? 'keep' : 'close'
@@ -554,12 +597,12 @@ describe('ToolHost', () => {
       expect(h.chrome.textEntry).toBeNull()
     })
 
-    it('openTextEntryMode answers the mode of the entry a tool opened, and null once it closes', () => {
+    it('textEntryOpen answers whether the entry a tool opened is open', () => {
       const text: StubTool = stubTool('text', {
         gesture: (g) => {
           if (g.kind === 'tap') {
             text.ctx().effects.requestTextEntry(
-              { anchor: g.point.snapped, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note', mode: 'create' },
+              { anchor: g.point.snapped, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note' },
               () => 'close',
             )
           }
@@ -569,11 +612,11 @@ describe('ToolHost', () => {
       useStubTools(text)
       const h = harness({ tool: 'text' })
 
-      expect(h.host.openTextEntryMode()).toBeNull()
+      expect(h.host.textEntryOpen()).toBe(false)
       h.click({ x: 10, y: 10 })
-      expect(h.host.openTextEntryMode()).toBe('create')
+      expect(h.host.textEntryOpen()).toBe(true)
       h.enterText()
-      expect(h.host.openTextEntryMode()).toBeNull()
+      expect(h.host.textEntryOpen()).toBe(false)
     })
 
     it('the host reads the text entry\'s state live', () => {
@@ -583,7 +626,7 @@ describe('ToolHost', () => {
         gesture: (g) => {
           if (g.kind === 'tap') {
             text.ctx().effects.requestTextEntry(
-              { anchor: g.point.snapped, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note', mode: 'create' },
+              { anchor: g.point.snapped, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note' },
               () => 'close',
             )
           }
@@ -600,14 +643,14 @@ describe('ToolHost', () => {
       expect(h.chrome.handles).toEqual([])
       // a menu takes focus first, so the entry commits on its blur and the handles return,
       h.menu({ x: 300, y: 250 })
-      expect(h.record.focus).toEqual(['map:text-entry-closed'])
+      expect(h.record.focus).toEqual(['map'])
       expect(h.chrome.textEntry).toBeNull()
       expect(h.chrome.handles).toEqual([handle])
       // and so does the next press, a middle one too.
       h.openTextEntry()
       h.host.sceneChanged()
       h.host.rawPress('middle', { kind: 'surface' })
-      expect(h.record.focus).toEqual(['map:text-entry-closed', 'map:text-entry-closed'])
+      expect(h.record.focus).toEqual(['map', 'map'])
       expect(h.chrome.textEntry).toBeNull()
       expect(h.chrome.handles).toEqual([handle])
 
@@ -617,7 +660,9 @@ describe('ToolHost', () => {
       expect(h.chrome.textEntry).not.toBeNull()
       h.escapeTextEntry()
       h.click({ x: 90, y: 90 })
-      expect(h.record.focus.at(-1)).toBe('map:tool-requested')
+      // The click reached Text, which opened a new entry there: a press that found an entry open would place nothing.
+      expect(h.record.focus.at(-1)).toBe('map')
+      expect(h.chrome.textEntry?.request.anchor.x).toBeCloseTo(90, 6)
     })
 
     it('under Text, the click whose raw press finds the note entry open commits it and reaches no tool', () => {
@@ -625,7 +670,7 @@ describe('ToolHost', () => {
         gesture: (g) => {
           if (g.kind === 'press') {
             text.ctx().effects.requestTextEntry(
-              { anchor: g.point.world, rotationDeg: 0, initialText: 'Compost', placeholderKey: 'canvas.note', mode: 'create' },
+              { anchor: g.point.world, rotationDeg: 0, initialText: 'Compost', placeholderKey: 'canvas.note' },
               () => 'close',
             )
           }
@@ -636,7 +681,7 @@ describe('ToolHost', () => {
         command: (c) => {
           if (c.kind !== 'edit-text') return 'pass'
           select.ctx().effects.requestTextEntry(
-            { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Old', placeholderKey: 'canvas.note', mode: 'edit' },
+            { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Old', placeholderKey: 'canvas.note' },
             () => 'close',
           )
           return 'handled'
@@ -649,7 +694,7 @@ describe('ToolHost', () => {
       const heard = text.gestures.length
       // The press's focus move commits the entry on its blur, and the click places nothing (spec §3.2, as today).
       expect(h.click({ x: 90, y: 90 })).toEqual({})
-      expect(h.record.focus.at(-1)).toBe('map:text-entry-closed')
+      expect(h.record.focus.at(-1)).toBe('map')
       expect(h.chrome.textEntry).toBeNull()
       expect(text.gestures).toHaveLength(heard)
       // The next click is the tool's again, and so is one after a middle press committed the entry.
@@ -663,55 +708,37 @@ describe('ToolHost', () => {
       // Select's in-place editor commits on the press too, and the press goes on to Select, as today.
       h.arm('select')
       h.host.command({ kind: 'edit-text' })
-      expect(h.chrome.textEntry?.request.mode).toBe('edit')
+      expect(h.chrome.textEntry).not.toBeNull()
       h.click({ x: 200, y: 200 })
       expect(h.chrome.textEntry).toBeNull()
       expect(select.count('press')).toBe(1)
     })
 
-    it('a new note\'s entry, whichever tool opened it, keeps its committing press from the tool and survives overview; an in-place editor does neither', () => {
-      /** A stand-in whose edit-text command opens an entry of `mode`, so the mode and the tool that opened it disagree. */
-      function opener(id: 'select' | 'text', mode: 'create' | 'edit'): StubTool {
-        const tool: StubTool = stubTool(id, {
-          command: (c) => {
-            if (c.kind !== 'edit-text') return 'pass'
-            tool.ctx().effects.requestTextEntry(
-              { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Compost', placeholderKey: 'canvas.note', mode },
-              () => 'close',
+    it('entering overview submits an open entry and closes it, even when its commit is refused', () => {
+      const submitted: string[] = []
+      const text: StubTool = stubTool('text', {
+        gesture: (g) => {
+          if (g.kind === 'tap') {
+            text.ctx().effects.requestTextEntry(
+              { anchor: g.point.world, rotationDeg: 0, initialText: 'Compost', placeholderKey: 'canvas.note' },
+              (value) => {
+                submitted.push(value)
+                return 'keep'
+              },
             )
-            return 'handled'
-          },
-        })
-        return tool
-      }
-      const select = opener('select', 'create')
-      const text = opener('text', 'edit')
-      useStubTools(select, text)
-      const h = harness()
+          }
+          return 'pass'
+        },
+      })
+      useStubTools(text)
+      const h = harness({ tool: 'text' })
 
-      // The press that commits a new note's entry reaches no tool (today's Text field took it), even under Select;
-      h.host.command({ kind: 'edit-text' })
-      h.click({ x: 300, y: 250 })
-      expect(h.chrome.textEntry).toBeNull()
-      expect(select.count('press')).toBe(0)
-      // and entering overview keeps a new note's entry.
-      h.host.command({ kind: 'edit-text' })
+      h.click({ x: 40, y: 40 })
       h.view.setViewport(OVERVIEW)
       h.advance(0)
-      expect(h.chrome.textEntry?.request.mode).toBe('create')
-      h.view.setViewport({ x: 0, y: 0, scale: 1 })
-      h.advance(0)
-
-      // An in-place editor's committing press goes on to the tool, even under Text, and overview closes the editor.
-      h.arm('text')
-      h.host.command({ kind: 'edit-text' })
-      h.click({ x: 300, y: 250 })
+      expect(submitted).toEqual(['Compost'])
       expect(h.chrome.textEntry).toBeNull()
-      expect(text.count('press')).toBe(1)
-      h.host.command({ kind: 'edit-text' })
-      h.view.setViewport(OVERVIEW)
-      h.advance(0)
-      expect(h.chrome.textEntry).toBeNull()
+      expect(h.host.textEntryOpen()).toBe(false)
     })
 
     it('the text entry\'s own Esc reaches the tool through onCancel, and what the tool publishes follows at once', () => {
@@ -721,7 +748,7 @@ describe('ToolHost', () => {
           if (g.kind !== 'press') return 'pass'
           const effects = text.ctx().effects
           effects.requestTextEntry(
-            { anchor: g.point.world, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note', mode: 'create' },
+            { anchor: g.point.world, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note' },
             () => 'close',
             () => {
               cancels.push(h.record.guidance.length)
@@ -748,29 +775,6 @@ describe('ToolHost', () => {
       expect(h.chrome.textEntry).toBeNull()
       expect(cancels).toHaveLength(1)
     })
-
-    it('a ruler drag reaches no tool and leaves the map\'s cursor alone', () => {
-      const rectangle: StubTool = stubTool('rectangle')
-      useStubTools(rectangle)
-      const h = harness()
-      h.arm('rectangle')
-      const pressesBefore = rectangle.count('press')
-      const cursor = h.chrome.cursor
-
-      // The session runs the drag and lands its guide (today's ruler listened beside the map).
-      expect(h.press({ x: 5, y: 0 }, { target: { kind: 'ruler', axis: 'h' } })).toEqual({})
-      expect(h.host.hasLiveGesture()).toBe(true)
-      h.move({ x: 5, y: 40 })
-      h.move({ x: 5, y: 60 })
-      // Today's drag cursor was the rulers' own: the map keeps the tool's.
-      expect(h.chrome.cursor).toBe(cursor)
-      expect(h.release({ x: 5, y: 90 })).toEqual({})
-      expect(h.host.hasLiveGesture()).toBe(false)
-      expect(rectangle.count('press')).toBe(pressesBefore)
-      expect(rectangle.count('drag-start')).toBe(0)
-      expect(h.chrome.cursor).toBe(cursor)
-    })
-
   })
 
   describe('raw presses', () => {
@@ -790,13 +794,11 @@ describe('ToolHost', () => {
       expect(h.menuOpen).toBe(true)
       expect(h.record.focus).toEqual([])
 
-      // A press inside the text entry or on the Unlock affordance commits the series and keeps the entry open.
+      // A press inside the text entry commits the series and keeps the entry open.
       h.openTextEntry()
       h.arrow('ArrowRight')
       h.host.rawPress('primary', { kind: 'owned-text' })
-      h.arrow('ArrowRight')
-      h.host.rawPress('middle', { kind: 'owned-chrome', lockedAffordance: true })
-      expect(h.record.nudges).toEqual(['nudge:0.1,0', 'end', 'nudge:0.1,0', 'end', 'nudge:0.1,0', 'end'])
+      expect(h.record.nudges).toEqual(['nudge:0.1,0', 'end', 'nudge:0.1,0', 'end'])
       expect(h.menuOpen).toBe(true)
       expect(h.record.focus).toEqual([])
       expect(h.chrome.textEntry).not.toBeNull()
@@ -806,7 +808,7 @@ describe('ToolHost', () => {
       h.host.rawPress('middle', { kind: 'owned-chrome' })
       expect(h.host.hasNudgeSeries()).toBe(false)
       expect(h.menuOpen).toBe(false)
-      expect(h.record.focus).toEqual(['map:text-entry-closed'])
+      expect(h.record.focus).toEqual(['map'])
       expect(h.chrome.textEntry).toBeNull()
 
       // A primary press: the same, once; the press it becomes moves focus no further.
@@ -815,7 +817,7 @@ describe('ToolHost', () => {
       h.click({ x: 200, y: 150 })
       expect(h.host.hasNudgeSeries()).toBe(false)
       expect(h.menuOpen).toBe(false)
-      expect(h.record.focus).toEqual(['map:text-entry-closed', 'map:tool-requested'])
+      expect(h.record.focus).toEqual(['map', 'map'])
       expect(h.history.canUndo.value).toBe(true)
     })
 
@@ -837,11 +839,11 @@ describe('ToolHost', () => {
       h.menu('selection', 'keyboard')
       h.host.rawPress('primary', SURFACE, 4)
       expect(h.menuOpen).toBe(true)
-      expect(h.record.focus).toEqual(['map:tool-requested'])
+      expect(h.record.focus).toEqual(['map'])
       // The live pointer pressed again, its up lost: today's _onPointerDown skipped only another pointer's press.
       h.host.rawPress('primary', SURFACE, 3)
       expect(h.menuOpen).toBe(false)
-      expect(h.record.focus).toEqual(['map:tool-requested', 'map:tool-requested'])
+      expect(h.record.focus).toEqual(['map', 'map'])
       h.release()
       h.menu('selection', 'keyboard')
 
@@ -849,7 +851,7 @@ describe('ToolHost', () => {
       busy = true
       h.host.rawPress('middle', SURFACE)
       expect(h.menuOpen).toBe(true)
-      expect(h.record.focus).toEqual(['map:tool-requested', 'map:tool-requested'])
+      expect(h.record.focus).toEqual(['map', 'map'])
       busy = false
 
       // A failed cancellation leaves no edit open to wait for: the next raw press moves focus at once.
@@ -901,20 +903,19 @@ describe('ToolHost', () => {
       const h = harness({ tool: 'plant-stamp' })
 
       h.hover({ x: 50, y: 50 })
-      // Over a map button, a ruler or off the map, the lens keeps its point, as today's skips buttons, inputs, textareas,
+      // Over a map button or off the map, the lens keeps its point, as today's skips buttons, inputs, textareas,
       // contenteditable and [data-preserve-overlays] and hears no move off the host.
       h.hover({ x: 60, y: 60 }, {}, { kind: 'owned-chrome' })
-      h.hover({ x: 70, y: 0 }, {}, { kind: 'ruler', axis: 'h' })
       h.hover({ x: 80, y: 80 }, {}, { kind: 'foreign' })
       expect(h.record.pointerWorld).toEqual([h.world({ x: 50, y: 50 })])
       // Only the lens is fed by target: the tool hears every hover, as today.
-      expect(stamp.count('hover')).toBe(4)
+      expect(stamp.count('hover')).toBe(3)
 
       h.hover({ x: 90, y: 90 })
       h.leave()
       expect(h.record.pointerWorld).toEqual([h.world({ x: 50, y: 50 }), h.world({ x: 90, y: 90 }), null])
 
-      // An id that arms no tool sends its moves to the lens by the same rule.
+      // Under Select the lens hears the moves by the same rule.
       h.arm('select')
       h.hover({ x: 60, y: 60 }, {}, { kind: 'owned-chrome' })
       h.hover({ x: 20, y: 30 })
@@ -935,17 +936,16 @@ describe('ToolHost', () => {
       h.hover({ x: 50, y: 50 })
       expect(h.record.hovers.at(-1)).toBeNull()
       expect(h.chrome.tooltip).toBeNull()
-      expect(h.chrome.lockedAffordance).toBeNull()
     })
 
-    it('a directly locked object under a passing hover shows the Unlock affordance', () => {
+    it('a passing hover restyles a directly locked object, which draws the locked hover stroke', () => {
       useStubTools(stubTool('select'))
       const h = harness({ scene: { plants: [appleAt({ x: 50, y: 50 }, { locked: true })] } })
 
       h.hover({ x: 50, y: 50 })
-      expect(h.chrome.lockedAffordance).toEqual({ target: P1, at: { x: 50, y: 50 } })
+      expect(h.record.hovers.at(-1)).toEqual(P1)
       h.hover({ x: 300, y: 250 })
-      expect(h.chrome.lockedAffordance).toBeNull()
+      expect(h.record.hovers.at(-1)).toBeNull()
     })
 
     it('hover-end clears the passive hover and leaves the preview to the tool', () => {
@@ -991,77 +991,8 @@ describe('ToolHost', () => {
     })
   })
 
-  describe('an id the registry does not list', () => {
-    it('arms no tool: it gets no hover, interceptor or re-emit from the host', () => {
-      useStubTools(stubTool('polygon'))
-      const inspect = vi.fn(() => true)
-      // Select is not listed here: the host arms no tool for it.
-      const h = harness({ scene: { plants: [appleAt({ x: 50, y: 50 })] }, inspect })
-      expect(h.host.activeTool.peek()).toBe('select')
-
-      h.hover({ x: 50, y: 50 })
-      expect(h.record.pointerWorld).toEqual([h.world({ x: 50, y: 50 })])
-      expect(h.press({ x: 50, y: 50 })).toEqual({})
-      h.release()
-      h.wheelZoom({ x: 50, y: 50 }, 2)
-
-      expect(h.record.hovers).toEqual([])
-      expect(h.chrome.tooltip).toBeNull()
-      expect(inspect).not.toHaveBeenCalled()
-      expect(h.record.focus).toEqual([])
-      expect(h.record.guidance).toEqual([])
-      expect(h.host.hasLiveGesture()).toBe(false)
-    })
-
-    it('a tool armed after it gets no stale hover on a camera frame', () => {
-      const stamp = stubTool('plant-stamp')
-      useStubTools(stamp)
-      const h = harness({ tool: 'plant-stamp' })
-
-      h.hover({ x: 100, y: 100 })
-      // Select is not listed here: the host publishes its moves but no longer follows the pointer.
-      h.arm('select')
-      h.hover({ x: 300, y: 200 })
-      h.arm('plant-stamp')
-      h.view.navigation.zoomIn()
-      expect(stamp.count('hover')).toBe(1)
-      expect(stamp.calls).toContain('viewChanged')
-    })
-
-    it('a tool that switches to it on its release leaves no still pointer behind', () => {
-      // A saved stamp places on its release, then returns to Select, which is not listed here.
-      const savedStamp: StubTool = stubTool('saved-object-stamp', {
-        gesture(g) {
-          if (g.kind !== 'tap' && g.kind !== 'drag-end') return 'pass'
-          savedStamp.ctx().effects.requestTool('select')
-          return 'handled'
-        },
-      })
-      const stamp = stubTool('plant-stamp')
-      useStubTools(savedStamp, stamp)
-      const h = harness({ tool: 'saved-object-stamp' })
-
-      h.click({ x: 100, y: 100 })
-      expect(h.host.activeTool.peek()).toBe('select')
-      // Under the unlisted Select the host no longer follows the pointer.
-      h.hover({ x: 300, y: 250 })
-      h.arm('plant-stamp')
-      h.wheelZoom({ x: 300, y: 250 }, 2)
-      expect(stamp.count('hover')).toBe(0)
-      expect(stamp.calls).toContain('viewChanged')
-
-      h.arm('saved-object-stamp')
-      h.drag({ x: 50, y: 50 }, { x: 80, y: 60 })
-      expect(h.host.activeTool.peek()).toBe('select')
-      h.hover({ x: 300, y: 250 })
-      h.arm('plant-stamp')
-      h.view.navigation.zoomOut()
-      expect(stamp.count('hover')).toBe(0)
-    })
-  })
-
   describe('activation rollback', () => {
-    it('a tool whose activation throws leaves Select armed and rethrows', () => {
+    it('a tool whose activation throws leaves Select armed, never no tool', () => {
       const select = stubTool('select')
       const hand = stubTool('hand')
       const broken = stubTool('polygon', {
@@ -1077,6 +1008,12 @@ describe('ToolHost', () => {
       expect(h.host.activeToolIsSelect()).toBe(true)
       expect(hand.calls).toContain('deactivate:switch')
       expect(select.calls).toContain('activate')
+      // The armed Select is a tool: it hears the next hover and press.
+      h.hover({ x: 40, y: 40 })
+      h.click({ x: 40, y: 40 })
+      expect(select.count('hover')).toBeGreaterThan(0)
+      expect(select.count('press')).toBe(1)
+      expect(broken.count('hover')).toBe(0)
     })
   })
 
@@ -1239,7 +1176,7 @@ describe('ToolHost', () => {
         command: (c) => {
           if (c.kind !== 'edit-text') return 'pass'
           select.ctx().effects.requestTextEntry(
-            { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Old', placeholderKey: 'canvas.note', mode: 'edit' },
+            { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Old', placeholderKey: 'canvas.note' },
             (text) => {
               submitted.push(text)
               return text.length > 0 ? 'close' : 'keep'
@@ -1534,12 +1471,12 @@ describe('ToolHost', () => {
       expect(h.host.hasLiveGesture()).toBe(true)
     })
 
-    it('the release of a press the tool never heard runs it: a new note\'s committing click, a ruler drag', () => {
+    it('the release of a press the tool never heard runs it: a new note\'s committing click', () => {
       const text = stubTool('text', {
         gesture: (g) => {
           if (g.kind === 'press') {
             text.ctx().effects.requestTextEntry(
-              { anchor: g.point.world, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note', mode: 'create' },
+              { anchor: g.point.world, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note' },
               () => 'close',
             )
           }
@@ -1557,71 +1494,191 @@ describe('ToolHost', () => {
       h.click({ x: 40, y: 40 })
       expect(text.count('press')).toBe(1)
       expect(navigates()).toBe(1)
-      h.drag({ x: 10, y: 10 }, { x: 60, y: 60 }, { target: { kind: 'ruler', axis: 'h' } })
-      expect(navigates()).toBe(2)
+    })
+  })
+
+  describe('faults (spec §1.4 "Faults")', () => {
+    /** A registered tool whose every arming builds a fresh, recorded stub: the host arms a fresh instance after a fault. */
+    function freshTools(id: ToolId, behaviour: (instance: number) => StubToolBehaviour = () => ({})): StubTool[] {
+      const instances: StubTool[] = []
+      ;(TOOL_REGISTRY as Partial<Record<ToolId, ToolFactory>>)[id] = () => {
+        const tool = stubTool(id, behaviour(instances.length))
+        instances.push(tool)
+        return tool
+      }
+      return instances
+    }
+
+    /** A press that opens a Scene Edit, draws `id` into it, and commits on release; `fails` makes the press throw. */
+    function zonePress(tool: () => StubTool, zoneId: () => string, fails: () => boolean): StubToolBehaviour {
+      let edit: SceneEditTransaction | null = null
+      return {
+        gesture: (g) => {
+          if (g.kind === 'press') {
+            edit = tool().ctx().effects.edits.begin('interaction-rectangle')
+            edit.mutate((draft) => {
+              draft.zones.push(rectZone(zoneId(), [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }, { x: 0, y: 5 }]))
+            })
+            if (fails()) throw new Error('press failed')
+          }
+          if (g.kind === 'tap' || g.kind === 'drag-end') edit?.commit()
+          return 'handled'
+        },
+      }
+    }
+
+    it('a press whose tool throws after begin() leaves the Scene as before, with one undo entry fewer, and the next press is admitted', () => {
+      let failing = false
+      let zones = 0
+      const instances: StubTool[] = freshTools('rectangle', (n) => zonePress(() => instances[n]!, () => `z${++zones}`, () => failing))
+      const h = harness({ tool: 'rectangle' })
+
+      h.click({ x: 10, y: 10 })
+      expect(h.store.persisted.zones.map((zone) => zone.id)).toEqual(['z1'])
+
+      failing = true
+      expect(() => h.press({ x: 20, y: 20 })).toThrow('press failed')
+      failing = false
+      // The press's zone is gone, and no edit is left open: the scene is as the first click left it.
+      expect(h.store.persisted.zones.map((zone) => zone.id)).toEqual(['z1'])
+      expect(h.host.hasLiveGesture()).toBe(false)
+      expect(h.undo()).toBe(true)
+      expect(h.store.persisted.zones).toEqual([])
+      expect(h.undo()).toBe(false)
+
+      expect(h.press({ x: 30, y: 30 })).toEqual({})
+      h.release({ x: 30, y: 30 })
+      expect(h.store.persisted.zones.map((zone) => zone.id)).toEqual(['z3'])
+    })
+
+    it('a tool call that throws aborts the open edits, ends the live press and arms a fresh instance of the tool, which never hears deactivate', () => {
+      let failing = true
+      let zones = 0
+      const instances: StubTool[] = freshTools('rectangle', (n) => zonePress(() => instances[n]!, () => `z${++zones}`, () => failing))
+      const h = harness({ tool: 'rectangle' })
+
+      expect(() => h.press({ x: 20, y: 20 })).toThrow('press failed')
+      failing = false
+      expect(h.host.hasLiveGesture()).toBe(false)
+      expect(h.store.persisted.zones).toEqual([])
+      expect(instances).toHaveLength(2)
+      expect(instances[0]!.calls).toEqual(['activate'])
+      expect(instances[1]!.calls).toEqual(['activate'])
+      expect(h.host.activeToolIsSelect()).toBe(false)
+
+      h.click({ x: 30, y: 30 })
+      expect(instances[1]!.count('press')).toBe(1)
+      expect(h.store.persisted.zones.map((zone) => zone.id)).toEqual(['z2'])
+    })
+
+    it('a release whose tool call throws arms a fresh instance, with no edit left open, so the next press is admitted', () => {
+      const instances = freshTools('rectangle', (n) => ({
+        gesture: (g) => {
+          if (g.kind === 'press') instances[n]!.ctx().effects.edits.begin('interaction-rectangle')
+          if (g.kind === 'drag-end' && n === 0) throw new Error('commit failed')
+          return 'handled'
+        },
+      }))
+      const h = harness({ tool: 'rectangle' })
+
+      expect(() => h.drag({ x: 10, y: 10 }, { x: 40, y: 40 })).toThrow('commit failed')
+      expect(instances).toHaveLength(2)
+      expect(instances[0]!.calls).not.toContain('cancelTransient:tool-change')
+      expect(h.press({ x: 50, y: 50 })).toEqual({})
+      expect(instances[1]!.count('press')).toBe(1)
+    })
+
+    it('an activation that throws arms a fresh Select', () => {
+      const selects = freshTools('select')
+      freshTools('ellipse', () => ({ activate: () => { throw new Error('activation failed') } }))
+      const h = harness()
+
+      expect(() => h.arm('ellipse')).toThrow('activation failed')
+      expect(h.host.activeToolIsSelect()).toBe(true)
+      expect(selects).toHaveLength(2)
+      expect(selects[0]!.calls).toEqual(['activate', 'cancelTransient:tool-change', 'deactivate:switch'])
+      expect(selects[1]!.calls).toEqual(['activate'])
+    })
+
+    it('any throw while arming another tool arms a fresh Select, a failed cancellation of the tool left too', () => {
+      const selects = freshTools('select')
+      const rectangles = freshTools('rectangle', () => ({ cancelTransient: () => { throw new Error('cancel failed') } }))
+      const ellipses = freshTools('ellipse')
+      const h = harness({ tool: 'rectangle' })
+
+      expect(() => h.arm('ellipse')).toThrow('cancel failed')
+      expect(h.host.activeToolIsSelect()).toBe(true)
+      expect(selects).toHaveLength(1)
+      expect(rectangles).toHaveLength(1)
+      expect(ellipses).toHaveLength(0)
+    })
+
+    it('a re-arm that throws is not handled again: the host keeps a fresh Select, and both failures are reported', () => {
+      const selects = freshTools('select')
+      const rectangles = freshTools('rectangle', (n) => ({
+        ...(n > 0 ? { activate: () => { throw new Error('re-arm failed') } } : {}),
+        gesture: (g) => {
+          if (g.kind === 'press') throw new Error('press failed')
+          return 'pass'
+        },
+      }))
+      const h = harness({ tool: 'rectangle' })
+
+      let reported: unknown = null
+      try {
+        h.press({ x: 20, y: 20 })
+      } catch (error) {
+        reported = error
+      }
+      expect(reported).toBeInstanceOf(CanvasRuntimeCleanupError)
+      expect((reported as CanvasRuntimeCleanupError).errors.map((error) => (error as Error).message))
+        .toEqual(['press failed', 're-arm failed'])
+      expect(rectangles).toHaveLength(2)
+      expect(h.host.activeToolIsSelect()).toBe(true)
+      expect(selects).toHaveLength(1)
+      expect(selects[0]!.calls).toEqual(['activate'])
+    })
+
+    it('only the outermost tool call handles a fault, once: a tool\'s request for a tool whose activation throws arms one fresh Select', () => {
+      const selects = freshTools('select')
+      const rectangles = freshTools('rectangle', (n) => ({
+        gesture: (g) => {
+          if (g.kind === 'press') rectangles[n]!.ctx().effects.requestTool('ellipse')
+          return 'handled'
+        },
+      }))
+      freshTools('ellipse', () => ({ activate: () => { throw new Error('activation failed') } }))
+      const h = harness({ tool: 'rectangle' })
+
+      expect(() => h.press({ x: 20, y: 20 })).toThrow('activation failed')
+      expect(h.host.activeToolIsSelect()).toBe(true)
+      expect(h.host.hasLiveGesture()).toBe(false)
+      expect(selects).toHaveLength(1)
+      expect(rectangles).toHaveLength(1)
+    })
+
+    it('a fault closes an open text entry', () => {
+      const instances = freshTools('text', (n) => ({
+        gesture: (g) => {
+          if (g.kind === 'press') {
+            instances[n]!.ctx().effects.requestTextEntry(
+              { anchor: g.point.world, rotationDeg: 0, initialText: '', placeholderKey: 'note' },
+              () => 'close',
+            )
+            throw new Error('press failed')
+          }
+          return 'handled'
+        },
+      }))
+      const h = harness({ tool: 'text' })
+
+      expect(() => h.press({ x: 20, y: 20 })).toThrow('press failed')
+      expect(h.chrome.textEntry).toBeNull()
+      expect(instances).toHaveLength(2)
     })
   })
 
   describe('cancellation', () => {
-    it('a cancellation that throws with an edit open aborts the edit and the next press is admitted', () => {
-      let edit: SceneEditTransaction | null = null
-      let failing = true
-      const rectangle: StubTool = stubTool('rectangle', {
-        gesture: (g) => {
-          if (g.kind === 'press') {
-            edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
-            edit.mutate((draft) => {
-              draft.zones = [rectZone('z2', [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }, { x: 0, y: 5 }])]
-            })
-          }
-          return 'pass'
-        },
-        cancelTransient: () => {
-          if (failing) throw new Error('cancel failed')
-        },
-      })
-      useStubTools(rectangle)
-      const h = harness({ tool: 'rectangle' })
-
-      h.press({ x: 10, y: 10 })
-      expect(h.store.persisted.zones.map((zone) => zone.id)).toEqual(['z2'])
-      expect(() => h.blur()).toThrow('cancel failed')
-      // The edit is aborted whether or not the tool's own cancelTransient succeeded: nothing is left open to retry.
-      expect(h.store.persisted.zones).toEqual([])
-      failing = false
-      expect(h.press({ x: 20, y: 20 })).toEqual({})
-      expect(rectangle.count('press')).toBe(2)
-    })
-
-    it('a second press that cancels the live gesture, whose cancel throws, aborts the edit and admits the next press', () => {
-      let edit: SceneEditTransaction | null = null
-      let failing = true
-      const rectangle: StubTool = stubTool('rectangle', {
-        gesture: (g) => {
-          if (g.kind === 'press') {
-            edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
-            edit.mutate((draft) => {
-              draft.zones = [rectZone('z2', [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }, { x: 0, y: 5 }])]
-            })
-          }
-          if (g.kind === 'cancel' && failing) throw new Error('cancel failed')
-          return 'pass'
-        },
-      })
-      useStubTools(rectangle)
-      const h = harness({ tool: 'rectangle' })
-
-      h.press({ x: 10, y: 10 }, { pointerId: 9 })
-      expect(h.store.persisted.zones.map((zone) => zone.id)).toEqual(['z2'])
-      // A press on the same pointer while live cancels it first (today's pointercancel); its cancel throws.
-      expect(() => h.press({ x: 20, y: 20 }, { pointerId: 9 })).toThrow('cancel failed')
-      // The edit is aborted whether or not the cancel succeeded: nothing is left open to retry.
-      expect(h.store.persisted.zones).toEqual([])
-      failing = false
-      expect(h.press({ x: 30, y: 30 }, { pointerId: 9 })).toEqual({})
-      expect(rectangle.count('press')).toBe(2)
-    })
-
     it('a tool cancel that throws during dispose still aborts the open edit', () => {
       let edit: SceneEditTransaction | null = null
       const rectangle: StubTool = stubTool('rectangle', {
@@ -1659,7 +1716,6 @@ describe('ToolHost', () => {
       expect(rectangle.calls).toEqual(['activate', 'cancelTransient:tool-change', 'deactivate:switch'])
       expect(ellipse.calls).toEqual(['activate'])
       expect(h.host.hasLiveGesture()).toBe(false)
-      expect(h.host.activeToolDragSlopPx()).toBeNull()
     })
 
     it('entering overview cancels the tool\'s transient with the overview reason', () => {
@@ -1675,93 +1731,6 @@ describe('ToolHost', () => {
   })
 
   describe('registered tools against today\'s session (0B-3 host rulings)', () => {
-    /** A drag tool whose press opens a Scene Edit that its cancelTransient aborts. */
-    function editingTool(
-      id: 'rectangle' | 'select',
-      behaviour: { readonly settledRelease?: () => boolean, readonly release?: () => void } = {},
-    ): { readonly tool: StubTool, readonly open: () => boolean } {
-      let edit: SceneEditTransaction | null = null
-      const tool: StubTool = stubTool(id, {
-        ...(behaviour.settledRelease ? { settledRelease: behaviour.settledRelease } : {}),
-        gesture: (g) => {
-          if (g.kind === 'press') edit = tool.ctx().effects.edits.begin(`interaction-${id}`)
-          if (g.kind === 'drag-end' || g.kind === 'tap') behaviour.release?.()
-          return 'pass'
-        },
-        cancelTransient: () => {
-          edit?.abort()
-          edit = null
-        },
-      })
-      return { tool, open: () => edit !== null }
-    }
-
-    it.each([
-      ['a drag', (h: ToolHarness) => h.drag({ x: 10, y: 10 }, { x: 40, y: 40 })],
-      ['a click', (h: ToolHarness) => h.click({ x: 10, y: 10 })],
-    ] as const)('%s whose release throws runs the cancellation at once, so the next press is admitted', (_name, gesture) => {
-      const { tool, open } = editingTool('rectangle', { release: () => { throw new Error('commit failed') } })
-      useStubTools(tool)
-      const h = harness({ tool: 'rectangle' })
-
-      expect(() => gesture(h)).toThrow('commit failed')
-      // Today's pointerup ran the cancellation in its finally: the edit closes at the release.
-      expect(tool.calls).toContain('cancelTransient:tool-change')
-      expect(open()).toBe(false)
-      expect(h.press({ x: 50, y: 50 })).toEqual({})
-      expect(tool.count('press')).toBe(2)
-    })
-
-    it('a release whose tool call and cancellation both throw reports the release and still aborts the edit', () => {
-      let edit: SceneEditTransaction | null = null
-      let failCancel = true
-      const rectangle: StubTool = stubTool('rectangle', {
-        gesture: (g) => {
-          if (g.kind === 'press') edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
-          if (g.kind === 'drag-end') throw new Error('commit failed')
-          return 'pass'
-        },
-        cancelTransient: () => {
-          if (failCancel) throw new Error('abort failed')
-          edit?.abort()
-          edit = null
-        },
-      })
-      useStubTools(rectangle)
-      const h = harness({ tool: 'rectangle' })
-
-      expect(() => h.drag({ x: 10, y: 10 }, { x: 40, y: 40 })).toThrow('commit failed')
-      expect(edit).not.toBeNull()
-      failCancel = false
-      // No edit is left open to wait for: the next press is admitted at once.
-      expect(h.press({ x: 50, y: 50 })).toEqual({})
-    })
-
-    it('a settled release whose tool call throws runs the cancellation at once, so the next press is admitted', () => {
-      let edit: SceneEditTransaction | null = null
-      const band: StubTool = stubTool('select', {
-        settledRelease: () => true,
-        gesture: (g) => {
-          if (g.kind === 'drag-end') {
-            edit = band.ctx().effects.edits.begin('interaction-band')
-            throw new Error('band failed')
-          }
-          return 'pass'
-        },
-        cancelTransient: () => {
-          edit?.abort()
-          edit = null
-        },
-      })
-      useStubTools(band)
-      const h = harness()
-
-      expect(() => h.drag({ x: 10, y: 10 }, { x: 40, y: 40 })).toThrow('band failed')
-      expect(band.calls).toContain('cancelTransient:tool-change')
-      expect(edit).toBeNull()
-      expect(h.press({ x: 50, y: 50 })).toEqual({})
-    })
-
     it('an admitted press takes its capture before the tool hears it, and a refused press takes none', () => {
       const order: string[] = []
       const rectangle = stubTool('rectangle', {
@@ -1962,16 +1931,19 @@ describe('ToolHost', () => {
       return committed
     }
 
-    function ghostAnchors(h: ToolHarness): WorldPoint[] {
+    /** The first corner of each bed the saved stamps' ghosts draw (GUILD's bed corner is its anchor). */
+    function ghostBedCorners(h: ToolHarness): WorldPoint[] {
       return (h.renderer.lastDraft()?.shapes ?? []).flatMap((shape) =>
-        shape.kind === 'ghost' && shape.entity.kind === 'objects' ? [shape.entity.anchor] : [])
+        shape.kind === 'ghost' && shape.entity.kind === 'objects'
+          ? shape.entity.template.zones.map(({ entity }) => entity.points[0]!)
+          : [])
     }
 
     it('a species drop places a plant and returns to Select in any tool', () => {
       for (const id of ['select', 'polygon', 'text', 'object-stamp', 'plant-spacing'] as const) {
         const armed = stubTool(id)
         useStubTools(armed, ...(id === 'select' ? [] : [stubTool('select')]))
-        const h = harness({ tool: id, snapping: { grid: true, guides: false } })
+        const h = harness({ tool: id, snapping: { grid: true } })
         const committed = committedEdits(h)
         const at = { x: 53, y: 67 }
         const interval = gridInterval(h.view.view().pixelsPerMetre).interval
@@ -1984,8 +1956,8 @@ describe('ToolHost', () => {
         expect(plant, id).toMatchObject({ canonicalName: 'Pyrus communis', commonName: 'Pear', position: snapped, canopySpreadM: 3 })
         expect(h.store.session.selectedTargets, id).toEqual([{ kind: 'plant', id: plant.id }])
         expect(committed, id).toEqual(['interaction-drop'])
-        expect(h.host.activeTool.value, id).toBe('select')
-        expect(h.record.focus, id).toEqual(['map:tool-requested'])
+        expect(h.toolState.value, id).toBe('select')
+        expect(h.record.focus, id).toEqual(['map'])
         expect(h.record.drops, id).toEqual(['species'])
         // A drop is no tool gesture.
         expect(armed.gestures, id).toEqual([])
@@ -1994,7 +1966,7 @@ describe('ToolHost', () => {
 
     it('a saved-stamp drop places its objects at the snapped point, selected, returns to Select and reports it', () => {
       useStubTools(stubTool('rectangle'), stubTool('select'))
-      const h = harness({ tool: 'rectangle', snapping: { grid: true, guides: false } })
+      const h = harness({ tool: 'rectangle', snapping: { grid: true } })
       const committed = committedEdits(h)
       const interval = gridInterval(h.view.view().pixelsPerMetre).interval
       const anchor = snapToGrid(83, 91, interval)
@@ -2005,8 +1977,8 @@ describe('ToolHost', () => {
       expect(h.store.persisted.plants.map((plant) => plant.position)).toEqual([{ x: anchor.x + 4, y: anchor.y + 3 }])
       expect(h.store.session.selectedTargets).toHaveLength(2)
       expect(committed).toEqual(['interaction-saved-object-stamp'])
-      expect(h.host.activeTool.value).toBe('select')
-      expect(h.record.focus).toEqual(['map:tool-requested'])
+      expect(h.toolState.value).toBe('select')
+      expect(h.record.focus).toEqual(['map'])
       expect(h.record.drops).toEqual(['saved-stamp'])
 
       // A stamp whose layer is locked places nothing and is not reported: the drag source stays with the panel.
@@ -2025,7 +1997,8 @@ describe('ToolHost', () => {
       // Its dragover ghost is the pick a click would make: turned by the bearing.
       h.drop('over', at, GUILD_DRAG)
       const ghost = (h.renderer.lastDraft()?.shapes ?? []).find((shape) => shape.kind === 'ghost' && shape.entity.kind === 'objects')
-      expect(ghost?.kind === 'ghost' && ghost.entity.kind === 'objects' ? ghost.entity.rotationDeg : null).toBe(30)
+      expect(ghost?.kind === 'ghost' && ghost.entity.kind === 'objects' ? ghost.entity.template.zones[0]!.entity.rotationDeg : null)
+        .toBe(30)
 
       h.drop('drop', at, GUILD_DRAG)
 
@@ -2070,7 +2043,7 @@ describe('ToolHost', () => {
       expect(h.drop('over', at, PEAR_OVER)).toEqual({ quarantine: true, dropEffect: 'none' })
       expect(h.drop('drop', at, PEAR_DROP)).toEqual({ quarantine: true })
       expect(h.store.persisted.plants).toHaveLength(0)
-      expect(h.host.activeTool.value).toBe('rectangle')
+      expect(h.toolState.value).toBe('rectangle')
 
       external.abort()
       expect(h.drop('over', at, PEAR_OVER)).toEqual({ dropEffect: 'copy' })
@@ -2080,7 +2053,7 @@ describe('ToolHost', () => {
 
     it('dragover shows the drop preview and dragleave, drop and overview clear it', () => {
       useStubTools(stubTool('rectangle'), stubTool('select'))
-      const h = harness({ tool: 'rectangle', snapping: { grid: true, guides: false } })
+      const h = harness({ tool: 'rectangle', snapping: { grid: true } })
       const at = { x: 83, y: 91 }
       const interval = gridInterval(h.view.view().pixelsPerMetre).interval
 
@@ -2098,7 +2071,7 @@ describe('ToolHost', () => {
 
       // A saved stamp: its ghosts with the anchor at the snapped point, as a placement would put them.
       h.drop('over', at, GUILD_DRAG)
-      expect(ghostAnchors(h)).toEqual([snapToGrid(83, 91, interval)])
+      expect(ghostBedCorners(h)).toEqual([snapToGrid(83, 91, interval)])
       h.drop('drop', at, { kind: 'unknown' })
       expect(h.renderer.lastDraft()).toBeNull()
 
@@ -2130,37 +2103,6 @@ describe('ToolHost', () => {
       expect(h.store.persisted.plants).toHaveLength(0)
     })
 
-    it('a dragover or a drop is admitted after a cancellation failure, with no edit left open', () => {
-      let edit: SceneEditTransaction | null = null
-      let failing = false
-      const rectangle: StubTool = stubTool('rectangle', {
-        gesture: (g) => {
-          if (g.kind === 'press') edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
-          return 'pass'
-        },
-        cancelTransient: () => {
-          if (failing) throw new Error('cancel failed')
-          edit?.abort()
-          edit = null
-        },
-      })
-      useStubTools(rectangle, stubTool('select'))
-      const h = harness({ tool: 'rectangle' })
-      const at = { x: 80, y: 90 }
-      const failedCancellation = (): void => {
-        failing = true
-        h.press({ x: 20, y: 20 })
-        expect(() => h.blur()).toThrow('cancel failed')
-        failing = false
-      }
-
-      failedCancellation()
-      expect(h.drop('over', at, PEAR_OVER)).toEqual({ dropEffect: 'copy' })
-
-      failedCancellation()
-      expect(h.drop('drop', at, PEAR_DROP)).toEqual({})
-      expect(h.store.persisted.plants).toHaveLength(1)
-    })
   })
 
   describe('menus', () => {
@@ -2171,15 +2113,15 @@ describe('ToolHost', () => {
       expect(h.menu({ x: 50, y: 50 })).toEqual({})
       expect(h.record.selections).toEqual([[P1]])
       expect(h.record.menus).toEqual([
-        { at: h.world({ x: 50, y: 50 }), source: 'mouse', screen: { x: 50, y: 50 }, hit: { kind: 'object', target: P1 } },
+        { at: h.world({ x: 50, y: 50 }), screen: { x: 50, y: 50 } },
       ])
 
       h.menu({ x: 300, y: 250 })
       expect(h.record.selections).toHaveLength(1)
-      expect(h.record.menus.at(-1)).toMatchObject({ hit: null, screen: { x: 300, y: 250 } })
+      expect(h.record.menus.at(-1)).toEqual({ at: h.world({ x: 300, y: 250 }), screen: { x: 300, y: 250 } })
 
       h.menu('selection', 'keyboard')
-      expect(h.record.menus.at(-1)).toEqual({ at: 'selection', source: 'keyboard', screen: null, hit: null })
+      expect(h.record.menus.at(-1)).toEqual({ at: 'selection', screen: null })
     })
 
     it('Turn view to this edge is offered within 8 px of a polygon, rectangle or line edge for a native menu, on a locked zone too, never from the keyboard and never for an ellipse', () => {
@@ -2205,7 +2147,7 @@ describe('ToolHost', () => {
         // 7 px off the field's slanted edge, beyond its 6 px hit: the empty map's menu, with the entry.
         const normal = { x: 2 / Math.sqrt(5), y: 1 / Math.sqrt(5) }
         h.menu({ x: 80 + normal.x * 7, y: 60 + normal.y * 7 }, 'native')
-        expect(h.record.menus.at(-1)!.hit).toBeNull()
+        expect(h.record.selections).toEqual([])
         expect(offered()).toBeTypeOf('function')
         offered()!()
         vi.advanceTimersByTime(400)
@@ -2219,7 +2161,7 @@ describe('ToolHost', () => {
         expect(offered()).toBeUndefined()
         // The locked bed: its own menu, with the entry; the view turns, no object moves.
         h.menu({ x: 200, y: 63 }, 'native')
-        expect(h.record.menus.at(-1)!.hit).toEqual({ kind: 'object', target: { kind: 'zone', id: 'bed' } })
+        expect(h.record.selections.at(-1)).toEqual([{ kind: 'zone', id: 'bed' }])
         expect(offered()).toBeTypeOf('function')
         h.menu({ x: 324, y: 78 }, 'native')
         expect(offered()).toBeTypeOf('function')
@@ -2301,28 +2243,28 @@ describe('ToolHost', () => {
         selectionModel: source.selectionModel,
       })
 
-      port.open({ at: { x: 50, y: 50 }, source: 'mouse', screen: { x: 50, y: 50 }, hit: null })
+      port.open({ at: { x: 50, y: 50 }, screen: { x: 50, y: 50 } })
       expect(opened.at(-1)!.selection?.editableTargets).toEqual([P1])
       expect(port.isOpen()).toBe(true)
 
-      port.open({ at: 'selection', source: 'keyboard', screen: null, hit: null })
+      port.open({ at: 'selection', screen: null })
       expect(opened.at(-1)!.selection).toEqual(source.selectionModel())
       expect(opened.at(-1)!.world).toEqual({ x: 50, y: 50 })
 
-      port.open({ at: { x: 300, y: 250 }, source: 'mouse', screen: null, hit: null })
+      port.open({ at: { x: 300, y: 250 }, screen: null })
       expect(opened.at(-1)!.selection).toBeNull()
       expect(opened.at(-1)!.turnViewToEdge).toBeUndefined()
       // The host's edge turn rides on the request, for the empty map's menu as for an object's.
       const turnViewToEdge = vi.fn()
-      port.open({ at: { x: 300, y: 250 }, source: 'native', screen: null, hit: null, turnViewToEdge })
+      port.open({ at: { x: 300, y: 250 }, screen: null, turnViewToEdge })
       expect(opened.at(-1)!.turnViewToEdge).toBe(turnViewToEdge)
-      port.open({ at: { x: 50, y: 50 }, source: 'native', screen: { x: 50, y: 50 }, hit: null, turnViewToEdge })
+      port.open({ at: { x: 50, y: 50 }, screen: { x: 50, y: 50 }, turnViewToEdge })
       expect(opened.at(-1)!.turnViewToEdge).toBe(turnViewToEdge)
 
       store.updatePersisted((draft) => {
         draft.layers = draft.layers.map((layer) => (layer.name === 'plants' ? { ...layer, locked: true } : layer))
       })
-      port.open({ at: { x: 150, y: 50 }, source: 'mouse', screen: { x: 150, y: 50 }, hit: null })
+      port.open({ at: { x: 150, y: 50 }, screen: { x: 150, y: 50 } })
       expect(opened.at(-1)!.selection?.editableTargets).toEqual([])
 
       port.close()
@@ -2349,7 +2291,7 @@ describe('ToolHost', () => {
         selectionModel: source.selectionModel,
       })
 
-      port.open({ at: 'selection', source: 'keyboard', screen: null, hit: null })
+      port.open({ at: 'selection', screen: null })
 
       // The bed on screen: a level 100 × 20 px box (1 px/m).
       const corners = getRectangularZoneCorners(bed)!.map((corner) => view.view().worldToScreen(corner))
@@ -2386,7 +2328,7 @@ describe('ToolHost', () => {
       })
       const menu = () => document.querySelector<HTMLElement>('[role="menu"]')
       const openMenu = async () => {
-        await act(async () => port.open({ at: { x: 10, y: 10 }, source: 'mouse', screen: { x: 10, y: 10 }, hit: null }))
+        await act(async () => port.open({ at: { x: 10, y: 10 }, screen: { x: 10, y: 10 } }))
         expect(menu()).not.toBeNull()
         expect(port.isOpen()).toBe(true)
       }

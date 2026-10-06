@@ -930,11 +930,11 @@ describe('screen-lock validation', () => {
       plants: [
         {
           kind: 'plant', locked: false, id: 'plant-1', canonicalName: 'Malus domestica', commonName: null, color: null,
-          stratum: null, canopySpreadM: null, position: { x: -40, y: 15 }, rotationDeg: null, notes: null, plantedDate: null, quantity: 1,
+          canopySpreadM: null, position: { x: -40, y: 15 }, rotationDeg: null, notes: null, plantedDate: null, quantity: 1,
         },
         {
           kind: 'plant', locked: false, id: 'plant-2', canonicalName: 'Prunus avium', commonName: null, color: null,
-          stratum: null, canopySpreadM: null, position: { x: 30, y: -20 }, rotationDeg: null, notes: null, plantedDate: null, quantity: 1,
+          canopySpreadM: null, position: { x: 30, y: -20 }, rotationDeg: null, notes: null, plantedDate: null, quantity: 1,
         },
       ],
       zones: [
@@ -946,7 +946,6 @@ describe('screen-lock validation', () => {
       annotations: [],
       measurementGuides: [],
       groups: [],
-      guides: [],
     }
   }
 

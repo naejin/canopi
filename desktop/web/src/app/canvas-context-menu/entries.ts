@@ -59,7 +59,7 @@ export type CanvasContextMenuEntry =
 export interface CanvasContextMenuEntryOptions {
   readonly translate: (key: string) => string
   /** Settings › Keyboard: false hides character-key shortcuts (`]`, `[`), which no longer work. */
-  readonly characterKeyShortcuts?: boolean
+  readonly characterKeyShortcuts: boolean
   openPlantAppearance(kind: PlantAppearanceKind, anchor: PlantAppearanceAnchor): void
   /** What the selection chip says about the selection (its species); null on the empty map. */
   readonly summary: MapSelectionSummary | null
@@ -86,7 +86,7 @@ export function buildCanvasContextMenuEntries(
 ): readonly CanvasContextMenuEntry[] {
   const { commands, selection, world } = request
   const edit = (id: CanvasEditAction, disabled: boolean, run: () => void, extra: Partial<CanvasContextMenuCommand> = {}) =>
-    editCommand(id, disabled, run, options.translate, options.characterKeyShortcuts ?? true, extra)
+    editCommand(id, disabled, run, options.translate, options.characterKeyShortcuts, extra)
   const paste = edit('paste', !commands.canPaste(), () => commands.pasteAt(world))
   // Turn view to this edge (spec §4.16): only when the menu opened on a zone's edge; it moves the view, never an object,
   // so a locked zone keeps it enabled.
@@ -247,14 +247,14 @@ function editCommand(
   )
   if (!definition) throw new Error(`Missing Canvas edit command '${id}'`)
   // Only real shortcuts: Deselect's Esc hint belongs to the map, not this menu.
-  const shortcut = definition.shortcuts ? canvasCommandDisplayKey(definition, { characterKeys }) : undefined
+  const shortcut = definition.shortcuts ? canvasCommandDisplayKey(definition, characterKeys) : undefined
   return {
     id,
     label: translate(definition.labelKey),
     ...(shortcut
       ? {
           shortcut: formatShortcut(shortcut, translate),
-          keyShortcuts: canvasCommandAriaKeys(definition, { characterKeys }),
+          keyShortcuts: canvasCommandAriaKeys(definition, characterKeys),
         }
       : {}),
     disabled,
@@ -270,8 +270,8 @@ function editCommand(
  * map" target, editable plants only), else at one lone zone; null otherwise.
  */
 function calendarTargetFor(selection: CanvasDesignObjectSelectionModel): CalendarAddTarget | null {
-  if ((selection.plantNamePinning?.plantIds.length ?? 0) > 0) return { kind: 'selected-plants' }
-  const targets = [...selection.editableTargets, ...selection.lockedTargets ?? []]
+  if (selection.plantNamePinning.plantIds.length > 0) return { kind: 'selected-plants' }
+  const targets = [...selection.editableTargets, ...selection.lockedTargets]
   const [only] = targets
   return targets.length === 1 && only?.kind === 'zone' ? { kind: 'zone', zoneId: only.id } : null
 }

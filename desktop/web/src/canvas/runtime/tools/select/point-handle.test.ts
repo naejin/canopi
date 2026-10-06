@@ -6,7 +6,6 @@ import {
   type ToolHarness,
 } from '../../../../__tests__/support/tool-harness'
 import type { ToolHandleId } from '../../interaction-types'
-import type { SceneEditCoordinator, SceneEditTransaction } from '../../scene-runtime/transactions'
 import type { ScreenPoint, WorldPoint } from '../../view/types'
 import '../../../../__tests__/support/camera-tolerance'
 
@@ -25,7 +24,6 @@ const cases = [
     label: 'Zone',
     handle: 'rect-corner:zone-1:se' as ToolHandleId,
     start: { x: 60, y: 50 },
-    editType: 'interaction-zone-control-point',
     create: () => createToolHarness({
       scene: { zones: [rectZone('zone-1', [{ x: 10, y: 10 }, { x: 60, y: 10 }, { x: 60, y: 50 }, { x: 10, y: 50 }])] },
     }),
@@ -36,7 +34,6 @@ const cases = [
     label: 'Measurement Guide',
     handle: 'guide-end:guide-1:b' as ToolHandleId,
     start: { x: 60, y: 10 },
-    editType: 'interaction-measurement-guide-control-point',
     create: () => createToolHarness({
       scene: { measurementGuides: [measurementGuide('guide-1', { x: 10, y: 10 }, { x: 60, y: 10 })] },
     }),
@@ -45,7 +42,7 @@ const cases = [
   },
 ] as const
 
-describe.each(cases)('$label point handle drags', ({ handle, start, editType, create, select, draggedPoint }) => {
+describe.each(cases)('$label point handle drags', ({ handle, start, create, select, draggedPoint }) => {
   function harness(): ToolHarness {
     const created = create()
     harnesses.push(created)
@@ -81,49 +78,6 @@ describe.each(cases)('$label point handle drags', ({ handle, start, editType, cr
     h.release()
     expect(begin).not.toHaveBeenCalled()
     expect(draggedPoint(h)).toEqual(start)
-  })
-
-  it('a press whose drag presentation fails after its Scene Edit opened rolls the edit back at once, and a retried press is admitted', () => {
-    const h = harness()
-    const coordinator: SceneEditCoordinator = h.edits
-    const beginEdit = coordinator.begin.bind(coordinator)
-    let open = false
-    vi.spyOn(coordinator, 'begin').mockImplementation((type, options) => {
-      const transaction = beginEdit(type, options)
-      open = true
-      return {
-        mutate: (edit) => transaction.mutate(edit),
-        setSelection: (targets) => transaction.setSelection(targets),
-        commit(commitOptions) {
-          const committed = transaction.commit(commitOptions)
-          open = false
-          return committed
-        },
-        get changed() {
-          return transaction.changed
-        },
-        abort() {
-          transaction.abort()
-          open = false
-        },
-      }
-    })
-    // The press's presentation (here clearing the passive hover, as today's drag presentation did) fails once the drag
-    // has opened its Scene Edit.
-    vi.spyOn(h.store, 'setHoveredTarget').mockImplementationOnce(() => {
-      throw new Error('presentation setup failed')
-    })
-
-    expect(() => pressHandle(h)).toThrow('presentation setup failed')
-    expect(open).toBe(false)
-    expect(h.host.hasLiveGesture()).toBe(false)
-    expect(draggedPoint(h)).toEqual(start)
-
-    pressHandle(h)
-    h.move({ x: 90, y: 70 })
-    h.release({ x: 90, y: 70 })
-    expect(draggedPoint(h)).toEqual({ x: 90, y: 70 })
-    expect(h.history.canUndo.value).toBe(true)
   })
 
   it('a drag within 2 px of the press changes nothing and records no history', () => {
@@ -163,41 +117,6 @@ describe.each(cases)('$label point handle drags', ({ handle, start, editType, cr
     expect(draggedPoint(h)).toEqual(start)
     expect(h.history.canUndo.value).toBe(false)
     expect(h.host.hasLiveGesture()).toBe(false)
-  })
-
-  it('a failed abort is retried at once, so the edit is rolled back before the cancellation reports its error', () => {
-    const h = harness()
-    const coordinator: SceneEditCoordinator = h.edits
-    const beginEdit = coordinator.begin.bind(coordinator)
-    let abortCalls = 0
-    const begin = vi.spyOn(coordinator, 'begin').mockImplementation((type, options) => {
-      const transaction = beginEdit(type, options)
-      if (type !== editType) return transaction
-      return {
-        mutate: (edit) => transaction.mutate(edit),
-        setSelection: (targets) => transaction.setSelection(targets),
-        commit: (commitOptions) => transaction.commit(commitOptions),
-        get changed() {
-          return transaction.changed
-        },
-        abort() {
-          abortCalls += 1
-          if (abortCalls === 1) throw new Error('abort failed')
-          transaction.abort()
-        },
-      } satisfies SceneEditTransaction
-    })
-
-    pressHandle(h)
-    h.move({ x: 90, y: 70 })
-    expect(() => h.cancel('pointercancel')).toThrow('abort failed')
-    // No edit is left open to wait for: the host's own retry has already rolled it back.
-    expect(abortCalls).toBe(2)
-    expect(begin).toHaveBeenCalledTimes(1)
-    expect(draggedPoint(h)).toEqual(start)
-    expect(h.chrome.handles.map((entry) => entry.id)).toContain(handle)
-
-    expect(h.press({ x: 200, y: 200 })).not.toEqual({ quarantine: true, rejectSession: true })
   })
 
   it('disposing the host mid-drag rolls the object back and removes the handles', () => {

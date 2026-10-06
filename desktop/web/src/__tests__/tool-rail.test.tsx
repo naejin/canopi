@@ -16,14 +16,13 @@ import { toolRailRoom, visibleMapFrame } from '../app/shell/visible-map-area'
 import { phoneLayout } from '../app/shell/phone-layout'
 import { toolNamesVisible, usedCanvasTools } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { activeTool, selectedObjectIds } from '../canvas/session-state'
+import { currentCanvasTool, currentCanvasSelection } from '../canvas/session-state'
 import { activePanel, sidePanel } from '../app/shell/state'
-import {
-  gridVisible,
-  rulersVisible,
-  snapToGridEnabled,
-} from '../app/canvas-settings/signals'
+import { gridVisible, snapToGridEnabled } from '../app/canvas-settings/signals'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import { appCommandGraphChromeProjection } from '../commands/graph/projections'
+import { flattenMenuActions } from '../app/shell-commands/menus'
+import { installDesktopKeys } from './support/desktop-key-router'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasRuntimeSurfaces,
@@ -47,13 +46,12 @@ describe('ToolRail', () => {
   const redo = vi.fn()
   const toggleGrid = vi.fn()
   const toggleSnapToGrid = vi.fn()
-  const toggleRulers = vi.fn()
 
   beforeEach(() => {
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
-    activeTool.value = 'select'
+    currentCanvasTool.value = 'select'
     canUndo.value = false
     canRedo.value = false
     setTool.mockReset()
@@ -61,13 +59,11 @@ describe('ToolRail', () => {
     redo.mockReset()
     toggleGrid.mockReset()
     toggleSnapToGrid.mockReset()
-    toggleRulers.mockReset()
-    selectedObjectIds.value = new Set()
+    currentCanvasSelection.value = new Set()
     activePanel.value = 'canvas'
     sidePanel.value = null
     gridVisible.value = true
     snapToGridEnabled.value = false
-    rulersVisible.value = true
     usedCanvasTools.value = []
     toolNamesVisible.value = null
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
@@ -82,7 +78,6 @@ describe('ToolRail', () => {
         chrome: {
           toggleGrid,
           toggleSnapToGrid,
-          toggleRulers,
         },
       }),
       queries: createTestCanvasQuerySurface(),
@@ -93,13 +88,12 @@ describe('ToolRail', () => {
     render(null, container)
     container.remove()
     phoneLayout.value = null
-    activeTool.value = 'select'
-    selectedObjectIds.value = new Set()
+    currentCanvasTool.value = 'select'
+    currentCanvasSelection.value = new Set()
     activePanel.value = 'canvas'
     sidePanel.value = null
     gridVisible.value = true
     snapToGridEnabled.value = false
-    rulersVisible.value = true
     setCurrentCanvasSession(null)
   })
 
@@ -134,9 +128,9 @@ describe('ToolRail', () => {
     const uninstall = installToolRailLearning()
     try {
       expect(usedCanvasTools.value).toEqual([])
-      await act(async () => { activeTool.value = 'polygon' })
-      await act(async () => { activeTool.value = 'select' })
-      await act(async () => { activeTool.value = 'polygon' })
+      await act(async () => { currentCanvasTool.value = 'polygon' })
+      await act(async () => { currentCanvasTool.value = 'select' })
+      await act(async () => { currentCanvasTool.value = 'polygon' })
       expect(usedCanvasTools.value).toEqual(['polygon', 'select'])
     } finally {
       uninstall()
@@ -196,7 +190,7 @@ describe('ToolRail', () => {
   })
 
   it('presses the active tool and groups tools as the Menus board does', async () => {
-    activeTool.value = 'ellipse'
+    currentCanvasTool.value = 'ellipse'
     await mount()
     const tools = [...container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')]
     expect(tools.map((button) => button.dataset.command)).toEqual([
@@ -215,7 +209,7 @@ describe('ToolRail', () => {
     await mount()
     await act(async () => { railButton('canvas.tool.line').click() })
     expect(setTool).toHaveBeenCalledWith('line')
-    expect(activeTool.value).toBe('line')
+    expect(currentCanvasTool.value).toBe('line')
     expect(sidePanel.value).toBe('plant-db')
     expect(activePanel.value).toBe('canvas')
   })
@@ -259,7 +253,7 @@ describe('ToolRail', () => {
     await mount()
     await act(async () => {
       usedCanvasTools.value = [...RAIL_TOOL_IDS]
-      selectedObjectIds.value = new Set(['plant-1'])
+      currentCanvasSelection.value = new Set(['plant-1'])
     })
 
     const labels = [...container.querySelectorAll('button')].map((button) =>
@@ -274,7 +268,7 @@ describe('ToolRail', () => {
     await mount()
     await act(async () => {
       phoneLayout.value = 'portrait'
-      activeTool.value = 'rectangle'
+      currentCanvasTool.value = 'rectangle'
     })
     const rail = container.querySelector<HTMLElement>('[role="toolbar"]')!
     expect(rail.dataset.toolRail).toBe('phone')
@@ -363,7 +357,7 @@ describe('ToolRail', () => {
       expect(items[2]!.getAttribute('aria-keyshortcuts')).toBe('R')
       await act(async () => { items[2]!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
       expect(setTool).toHaveBeenCalledWith('rectangle')
-      expect(activeTool.value).toBe('rectangle')
+      expect(currentCanvasTool.value).toBe('rectangle')
       // More shows that it holds the active tool.
       expect(container.querySelector('[data-tool-rail-more]')!.hasAttribute('data-holds-active')).toBe(true)
 
@@ -382,16 +376,16 @@ describe('ViewChip', () => {
   let container: HTMLDivElement
   const toggleGrid = vi.fn()
   const toggleSnapToGrid = vi.fn()
-  const toggleRulers = vi.fn()
 
   beforeEach(() => {
     container = document.createElement('div')
     document.body.appendChild(container)
+    toggleGrid.mockReset()
+    toggleSnapToGrid.mockReset()
     gridVisible.value = false
     snapToGridEnabled.value = true
-    rulersVisible.value = false
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
-      commands: createTestCanvasCommandSurface({ chrome: { toggleGrid, toggleSnapToGrid, toggleRulers } }),
+      commands: createTestCanvasCommandSurface({ chrome: { toggleGrid, toggleSnapToGrid } }),
     }))
   })
 
@@ -401,22 +395,51 @@ describe('ViewChip', () => {
     setCurrentCanvasSession(null)
   })
 
-  it('shows Grid, Snap to grid and Rulers as pressed toggles with a check when on', async () => {
+  it('the view chip and View menu show Grid and Snap to grid only, and Shift+R does nothing', async () => {
+    const setTool = vi.fn()
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      commands: createTestCanvasCommandSurface({ tools: { setTool }, chrome: { toggleGrid, toggleSnapToGrid } }),
+    }))
+    await act(async () => { render(<Chip />, container) })
+    expect([...container.querySelectorAll('button')].map((button) => button.textContent)).toEqual(['Grid', 'Snap to grid'])
+
+    const view = appCommandGraphChromeProjection.value.menus.find((menu) => menu.id === 'view')!
+    const toggles = flattenMenuActions([view]).filter((entry) => entry.id.startsWith('canvas.toggle'))
+    expect(toggles.map((entry) => entry.label)).toEqual(['Grid', 'Snap to grid'])
+
+    const keys = installDesktopKeys()
+    try {
+      const press = (key: string) => {
+        const event = new KeyboardEvent('keydown', { key, shiftKey: true, cancelable: true })
+        window.dispatchEvent(event)
+        return event.defaultPrevented
+      }
+      expect(press('R')).toBe(false)
+      expect(setTool).not.toHaveBeenCalled()
+      expect(toggleGrid).not.toHaveBeenCalled()
+      expect(toggleSnapToGrid).not.toHaveBeenCalled()
+      // The router is live: Shift+G still toggles the grid.
+      expect(press('G')).toBe(true)
+      expect(toggleGrid).toHaveBeenCalledOnce()
+    } finally {
+      keys.dispose()
+    }
+  })
+
+  it('shows Grid and Snap to grid as pressed toggles with a check when on', async () => {
     await act(async () => { render(<Chip />, container) })
     const toggles = [...container.querySelectorAll<HTMLButtonElement>('button')]
     expect(container.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe('View')
     expect(toggles.map((button) => [button.textContent, button.getAttribute('aria-pressed')])).toEqual([
       ['Grid', 'false'],
       ['Snap to grid', 'true'],
-      ['Rulers', 'false'],
     ])
-    expect(toggles.map((button) => button.querySelector('svg') !== null)).toEqual([false, true, false])
+    expect(toggles.map((button) => button.querySelector('svg') !== null)).toEqual([false, true])
     expect(toggles[0]!.getAttribute('aria-keyshortcuts')).toBe('Shift+G')
 
     await act(async () => { toggles.forEach((button) => button.click()) })
     expect(toggleGrid).toHaveBeenCalledOnce()
     expect(toggleSnapToGrid).toHaveBeenCalledOnce()
-    expect(toggleRulers).toHaveBeenCalledOnce()
 
     await act(async () => { gridVisible.value = true })
     expect(toggles[0]!.getAttribute('aria-pressed')).toBe('true')

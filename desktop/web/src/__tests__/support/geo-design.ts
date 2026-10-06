@@ -1,4 +1,4 @@
-import { createSessionPlane, type GeoPosition } from '../../canvas/session-plane'
+import { createSessionPlane, roundGeoDegrees, type GeoPosition } from '../../canvas/session-plane'
 import { hydrateSceneFromDesign } from '../../canvas/runtime/scene'
 import type { CanopiFile } from '../../types/design'
 
@@ -12,6 +12,12 @@ export const TEST_GEO_ORIGIN: GeoPosition = Object.freeze({ lon: 13, lat: 23 })
 export function geoAt(x: number, y: number, origin: GeoPosition = TEST_GEO_ORIGIN): { lon: number; lat: number } {
   const geo = createSessionPlane(origin).toGeo({ x, y })
   return { lon: geo.lon, lat: geo.lat }
+}
+
+/** geoAt on the 1e-9 degree grid Canopi writes, for fixtures a save must write back unchanged. */
+export function storedGeoAt(x: number, y: number, origin: GeoPosition = TEST_GEO_ORIGIN): { lon: number; lat: number } {
+  const geo = geoAt(x, y, origin)
+  return { lon: roundGeoDegrees(geo.lon), lat: roundGeoDegrees(geo.lat) }
 }
 
 /**

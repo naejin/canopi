@@ -73,7 +73,7 @@ const SCALE_READBACK_TOLERANCE = 1e-9
 /**
  * Whether a scale-derived value (px/m, or a screen gap in px) reaches a threshold. A camera holds a map zoom, so a scale placed at
  * a round value reads back a few ulps off it, often under (10 px/m at lat 47.2 reads 9.999999999999993). Every scale threshold
- * (the grid gap, the ruler step, the overview line) compares through this so such a placement lands on the side it was placed on.
+ * (the grid gap, the overview line) compares through this so such a placement lands on the side it was placed on.
  */
 export function scaleReaches(value: number, threshold: number): boolean {
   return value >= threshold * (1 - SCALE_READBACK_TOLERANCE)

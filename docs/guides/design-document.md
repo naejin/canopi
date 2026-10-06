@@ -6,9 +6,9 @@ The `.canopi` file, the Design session (open, continuous save, replacement, clos
 
 ## Authorities and boundaries
 
-- **Scene runtime** (`SceneStore` behind `SceneCanvasRuntime`) owns plants, zones, annotations, measurement guides, ruler guides (`extra.guides`), groups, locks, Design layers and the per-species colour, symbol and code maps. It changes only through runtime transactions; panels read it through `CanvasQuerySurface`. Every write carries the live view as `map_view`; Save always writes, a pan never does (U28, U30; `design-map-view.test.ts`).
-- **Design Edit** (`app/design-edit/`) owns `name`, `description`, `budget`, `budget_currency`, `timeline`, `consortiums`, `lidar` entries, `views`, `stories`, `created_at`, `extra.plant_display`, `extra.saved_view_display` and unknown root keys under `extra`. Nothing else writes them; its key names live in `app/design-edit/extra-keys.ts` and go through `readExtra`/`withExtra`.
-- **Settings** (`common-types/src/settings.rs`) own device state: locale, theme, map layers, `soften_background`, `scroll_wheel`, the Google key and `satellite_source`, `last_view` (centre, zoom and bearing; a missing bearing reads as 0), snapping, tool-rail learning, single-key shortcuts and New Design defaults. A setting never travels with a file; a Design field never depends on the device.
+- **Scene runtime** (`SceneStore` behind `SceneCanvasRuntime`) owns plants, zones, annotations, measurement guides, groups, locks, Design layers and the per-species colour, symbol and code maps. It changes only through runtime transactions; panels read it through `CanvasQuerySurface`. Every write carries the live view as `map_view`; Save always writes, a pan never does (U28, U30; `design-map-view.test.ts`).
+- **Design Edit** (`app/design-edit/`) owns `name`, `description`, `budget`, `budget_currency`, `timeline`, `consortiums`, `lidar` entries, `views`, `stories`, `created_at`, `extra.plant_display`, `extra.saved_view_display` and unknown root keys under `extra`: all of `extra`. Nothing else writes them; its key names live in `app/design-edit/extra-keys.ts` and go through `readExtra`/`withExtra`.
+- **Settings** (`common-types/src/settings.rs`) own device state: locale, theme, map layers, `soften_background`, `scroll_wheel`, the Google key and `satellite_source`, `last_view` (centre and zoom), snapping, tool-rail learning, single-key shortcuts and New Design defaults. A setting never travels with a file; a Design field never depends on the device.
 - **Undo** covers Scene edits only. Design Edit commands, map layers and settings are not undoable.
 - **Coordinates.** The file stores WGS84 `GeoPoint { lon, lat }` for every position, and zone and note rotation in degrees clockwise from true north. Metres exist only in the session plane (`canvas/session-plane.ts`); camera moves, turning the view included, never move objects or change a stored rotation ([ADR 0015](../adr/0015-rotating-map-and-canvas-controls.md)).
 - **Trust boundaries.** Native: `desktop/src/design/format.rs`. Web: `app/contracts/design-ingestion.ts`. Nothing else casts raw JSON to `CanopiFile`; `canopi-design-wire.ts` is the only serializer; nothing reads an older format.
@@ -21,7 +21,7 @@ The `.canopi` file, the Design session (open, continuous save, replacement, clos
 - `DESIGN_FILE_FIELDS` names every root field and its owner; `known-canopi-keys.ts` and `composeDocumentForSave()` (`app/contracts/document.ts`) derive from it. (`bindings-gen` fails on divergence; `npm run check:types`)
 - `OBSOLETE_CANOPI_ROOT_KEYS` and a root `extra` key are refused as `invalid_document`; in memory unknown roots live under `CanopiFile.extra`, and the encoder spreads them first so known fields win. Zone, annotation and group ids are unique and non-empty; a plant or guide without an id gets the first `plant-<n>` / `measurement-guide-<n>` no entry of its list declares, and only duplicate explicit ids are refused. (conformance corpus)
 - Files over `MAX_CANOPI_FILE_BYTES` (64 MiB) are refused before parsing; GeoJSON shares the limit. (`format.rs` tests)
-- Unchanged positions write their loaded lon/lat verbatim (`SceneGeoLedger`, `canvas/runtime/scene/geo-frame.ts`); changed ones round to 1e-9 degree. (`file-format-round-trip.test.ts`)
+- Positions write rounded to 1e-9 degree, latitude clamped to ±85.051128779 (`canvas/runtime/scene/geo-frame.ts`); an unedited one never drifts. (`geolocated-design-codec.test.ts`)
 - A zone's `id` (`zone-<uuid>`) is its identity; `name` is display only and nullable. Targets, groups and view highlights reference the id, so renaming is a Scene edit. (`file-format-round-trip.test.ts`, `canvas-context-menu-entries.test.ts`)
 - `map_view` passes `validate_map_view` with the saved-view camera rules; views and stories pass `validate_views_and_stories` (`common-types/src/views.rs`; mirror `app/contracts/views-admission.ts`): unique ids, camera in range, a recorded ground size (`camera.ground_size_m`) finite, above 0 and at most 1e8 m, steps naming an existing view, `https:`/`http:`/`mailto:` links, embedded PNG/JPEG/WebP/GIF images at most 1 MiB each and 10 MiB per Design; rich text is a block list, never HTML. (conformance corpus, `__tests__/story-rich-text.test.ts`)
 - Deleting a view deletes the steps that show it and returns a `SavedViewDeletion` that `restoreSavedView` puts back; a story or step Undo that meets a missing view parks the step until that view's Undo; no step dangles. (`__tests__/design-edit-views.test.ts`, `design-edit-stories.test.ts`)
@@ -29,7 +29,7 @@ The `.canopi` file, the Design session (open, continuous save, replacement, clos
 - A Design Edit command computes its update first, installs committed state, then publishes (`design-edit-authority.test.ts`); a no-op compares fields and does not dirty (`design-edit-views.test.ts`, `design-edit-stories.test.ts`, `plant-display.test.ts`).
 - `extra.plant_display` is Design data (travels with the file, not undoable); Soften background is a device setting. Readers repair invalid values and report it once (`design-edit:extra` diagnostic), writes prune `saved_view_display` entries of deleted views, and nothing rewrites a plant or species colour. (`plant-display.test.ts`, `design-edit-extra.test.ts`)
 - An open Design shows in the frame its first scene is drawn (`presented`; at once if the map or canvas failed). Until then its chrome, also outside the canvas (`data-design-chrome`), is transparent and inert so autofocus holds; the start screen covers the wait only for one opened from it. Once shown it stays until closed. (`design-reveal.spec.ts`)
-- Placed in that render inside its chrome, it opens at its saved view (`map_view`, saved-view rule), else on the fit at `last_view`'s bearing; new and empty Designs open north up. (`design-map-view.test.ts`, `last-view-bearing.test.ts`, `scene-runtime.test.ts`)
+- Placed in that render inside its chrome, it opens at its saved view (`map_view`, saved-view rule), else on the fit at the live bearing (north up on the runtime's first open); new and empty Designs open north up. (`design-map-view.test.ts`, `scene-runtime.test.ts`)
 - Every replacement first flushes the current Design to its home (`dirtyGuard: "flush"`); the only dialog is Retry / Discard / Cancel after a failed write; no unsaved-changes prompt. (`document-session-transition.test.ts`)
 - Only `attach()` and `replace()` (`app/document-session/replacement.ts`) load the runtime document; a transition captures a replacement guard and cancels if anything changed underneath. (`design-session-replacement.test.ts`)
 - Continuous save restarts a 1500 ms timer per committed change, coalesces writes and flushes on blur, hide, `pagehide`, replacement and close. (`continuous-save.test.ts`, `web-design-session.test.ts`)
@@ -48,7 +48,7 @@ The `.canopi` file, the Design session (open, continuous save, replacement, clos
 
 - Read or convert an older stored format anywhere, including inside `Deserialize` (ADR 0021).
 - Write a Design field from a component, workbench or raw `store.ts` signal.
-- Persist a runtime metre, a plane origin, an anchor or a Design-level bearing. Only view cameras carry a bearing: `views[].camera.bearing` and `map_view.bearing` in the Design, `last_view` in settings.
+- Persist a runtime metre, a plane origin, an anchor or a Design-level bearing. Only view cameras carry a bearing: `views[].camera.bearing` and `map_view.bearing` in the Design.
 - Call a serializer and then mark the Design saved; only `persistence.ts` acknowledges.
 - Infer a canvas replacement from `currentDesign` changing.
 - Read `updated_at` or `map_view` into a replacement guard: one is generated, the other is only the view. (`__tests__/design-map-view.test.ts`)
@@ -61,7 +61,7 @@ The `.canopi` file, the Design session (open, continuous save, replacement, clos
 |---|---|---|
 | Format, owners, limits | `common-types/src/design.rs`, `views.rs`, `lidar.rs` | `common-types/canopi-design-conformance.json`, `desktop/src/design/format.rs` |
 | Web admission and wire | `app/contracts/` | `canopi-design-*`, `file-format-round-trip` |
-| Geo ledger, re-origin | `canvas/runtime/scene/geo-frame.ts`, `scene-runtime/reorigin.ts` | `reorigin.test.ts`, `file-format-round-trip` |
+| Geo rounding, re-origin | `canvas/runtime/scene/geo-frame.ts`, `scene-runtime/reorigin.ts` | `reorigin.test.ts`, `geolocated-design-codec` |
 | Design Edit | `app/design-edit/` | `design-edit-*`, `frontend-architecture-policies` |
 | Views, stories, images | `app/saved-views/`, `app/stories/` | `saved-views*`, `story-*` |
 | Session, save, replacement | `app/document-session/` | `continuous-save*`, `document-session-*`, `design-session-*` |

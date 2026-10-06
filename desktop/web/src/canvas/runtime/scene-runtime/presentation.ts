@@ -1,9 +1,5 @@
 import { getRevealedAnnotationId } from '../annotation-layout'
-import {
-  resolvePlantCanopySpreadM,
-  resolvePlantStratum,
-  type PlantPresentationContext,
-} from '../plant-presentation'
+import type { PlantPresentationContext } from '../plant-presentation'
 import {
   createDetachedCanvasPlantLabelSource,
   createDetachedCanvasSpeciesPresentationCache,
@@ -12,6 +8,7 @@ import {
 } from '../presentation-data'
 import type { SceneEditingAids, SceneRendererHoverTarget, SceneRendererSnapshot } from '../renderers/scene-types'
 import type { PlantLabelMode } from '../plant-display'
+import type { SpeciesCacheEntry } from '../species-cache'
 import type {
   SceneDesignObjectTarget,
   ScenePersistedState,
@@ -38,16 +35,9 @@ interface SceneRuntimePresentationControllerOptions {
 
 export interface ScenePresentationRefreshResult {
   changed: boolean
+  /** Advances when plant names or species data loaded: lists and colours that read them refresh on it. */
   plantNamesRevision: number
-  backfills: PlantPresentationBackfill[] | null
   failure: { readonly error: unknown } | null
-}
-
-export interface PlantPresentationBackfill {
-  plantId: string
-  canonicalName: string
-  stratum: string | null
-  canopySpreadM: number | null
 }
 
 export class SceneRuntimePresentationController {
@@ -62,7 +52,7 @@ export class SceneRuntimePresentationController {
   private _publishedPlantNamesRevision = 0
   /** Layers a presented story shows; null when nothing is presented. */
   private _presentedLayerNames: ReadonlySet<string> | null = null
-  /** The workspace's grid and ruler guides (the chrome coordinator's); null draws none. */
+  /** The workspace's grid (SceneCanvasRuntime's, while the chrome shows and the grid is on); null draws none. */
   private _editingAids: SceneEditingAids | null = null
 
   constructor(options: SceneRuntimePresentationControllerOptions) {
@@ -75,7 +65,7 @@ export class SceneRuntimePresentationController {
     this._plantLabels = options.plantLabels ?? createDetachedCanvasPlantLabelSource()
   }
 
-  getSpeciesCache() {
+  getSpeciesCache(): ReadonlyMap<string, SpeciesCacheEntry> {
     return this._speciesCache.getCache()
   }
 
@@ -119,9 +109,8 @@ export class SceneRuntimePresentationController {
   }
 
   /**
-   * The grid and ruler guides the workspace map draws, the pattern of `presentLayers`: only the workspace snapshot
-   * carries them, never the overview, a capture or a presented story. Returns whether they changed, so the caller
-   * syncs the scene only then.
+   * The grid the workspace map draws, the pattern of `presentLayers`: only the workspace snapshot carries it, never
+   * the overview, a capture or a presented story. Returns whether it changed, so the caller syncs the scene only then.
    */
   setEditingAids(aids: SceneEditingAids | null): boolean {
     if (editingAidsEqual(this._editingAids, aids)) return false
@@ -169,7 +158,7 @@ export class SceneRuntimePresentationController {
       visibleLayerNames: [...visible],
       focusedSpecies: this._sceneStore.session.speciesFocus.canonicalName,
     })
-    // Measurement guides are an editing aid, like the grid and the ruler guides, which a presented story never draws.
+    // Measurement guides are an editing aid, like the grid, which a presented story never draws.
     return { ...snapshot, scene: { ...snapshot.scene, measurementGuides: [] } }
   }
 
@@ -213,53 +202,28 @@ export class SceneRuntimePresentationController {
     }
   }
 
+  /** Loads names and species data for `canonicalNames`; a load of either is a plant-names revision. */
   async refreshSpeciesCacheEntries(
     canonicalNames: string[],
     activeLocale: string,
   ): Promise<ScenePresentationRefreshResult> {
     const labelsChanged = await this._plantLabels.ensureEntries(canonicalNames, activeLocale)
-    const plantNamesRevision = this._notePreparedPlantNames(labelsChanged)
     try {
       const loaded = await this._speciesCache.ensureEntries(canonicalNames, activeLocale)
-      const backfills = this.derivePresentationBackfills()
-      return {
-        changed: labelsChanged || loaded || backfills !== null,
-        plantNamesRevision,
-        backfills,
-        failure: null,
-      }
+      const changed = labelsChanged || loaded
+      return { changed, plantNamesRevision: this._notePreparedPlantNames(changed), failure: null }
     } catch (error) {
-      return {
-        changed: labelsChanged,
-        plantNamesRevision,
-        backfills: null,
-        failure: { error },
-      }
+      return { changed: labelsChanged, plantNamesRevision: this._notePreparedPlantNames(labelsChanged), failure: { error } }
     }
   }
 
+  /** Loads names and species data for every placed species. */
   async refreshCurrentPresentationData(): Promise<ScenePresentationRefreshResult> {
-    const plants = this._sceneStore.persisted.plants
-    const canonicalNames = [...new Set(plants.map((plant) => plant.canonicalName))]
+    const canonicalNames = [...new Set(this._sceneStore.persisted.plants.map((plant) => plant.canonicalName))]
     if (canonicalNames.length === 0) {
-      return {
-        changed: false,
-        plantNamesRevision: this._preparedPlantNamesRevision,
-        backfills: null,
-        failure: null,
-      }
+      return { changed: false, plantNamesRevision: this._preparedPlantNamesRevision, failure: null }
     }
-
-    const needsSpeciesCache = plants.some((plant) => plant.stratum === null || plant.canopySpreadM === null)
-    if (needsSpeciesCache) return this.refreshSpeciesCacheEntries(canonicalNames, this._getLocale())
-
-    const labelsChanged = await this._plantLabels.ensureEntries(canonicalNames, this._getLocale())
-    return {
-      changed: labelsChanged,
-      plantNamesRevision: this._notePreparedPlantNames(labelsChanged),
-      backfills: null,
-      failure: null,
-    }
+    return this.refreshSpeciesCacheEntries(canonicalNames, this._getLocale())
   }
 
   publishRefresh(result: ScenePresentationRefreshResult): boolean {
@@ -273,38 +237,11 @@ export class SceneRuntimePresentationController {
     if (changed) this._preparedPlantNamesRevision += 1
     return this._preparedPlantNamesRevision
   }
-
-  derivePresentationBackfills(): PlantPresentationBackfill[] | null {
-    const speciesCache = this._speciesCache.getCache()
-    const backfills: PlantPresentationBackfill[] = []
-    for (const plant of this._sceneStore.persisted.plants) {
-      const nextStratum = resolvePlantStratum(plant, speciesCache)
-      // A spread the species data cannot resolve keeps the saved value.
-      const nextCanopySpreadM = resolvePlantCanopySpreadM(plant, speciesCache) ?? plant.canopySpreadM
-      if (
-        nextStratum === plant.stratum
-        && nextCanopySpreadM === plant.canopySpreadM
-      ) {
-        continue
-      }
-      backfills.push({
-        plantId: plant.id,
-        canonicalName: plant.canonicalName,
-        stratum: nextStratum,
-        canopySpreadM: nextCanopySpreadM,
-      })
-    }
-    return backfills.length > 0 ? backfills : null
-  }
 }
 
 function editingAidsEqual(a: SceneEditingAids | null, b: SceneEditingAids | null): boolean {
   if (a === null || b === null) return a === b
-  if (a.grid?.ink !== b.grid?.ink || a.grid?.majorInk !== b.grid?.majorInk) return false
-  return a.rulerGuides.length === b.rulerGuides.length && a.rulerGuides.every((guide, index) => {
-    const other = b.rulerGuides[index]!
-    return guide.axis === other.axis && guide.position === other.position
-  })
+  return a.grid.ink === b.grid.ink && a.grid.majorInk === b.grid.majorInk
 }
 
 function buildOverviewRendererSnapshot(
@@ -319,7 +256,6 @@ function buildOverviewRendererSnapshot(
       annotations: [],
       measurementGuides: [],
       groups: [],
-      guides: [],
     },
     speciesFocus,
     selectionLabelPlantIds: new Set(),

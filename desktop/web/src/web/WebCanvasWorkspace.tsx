@@ -52,7 +52,6 @@ export function WebCanvasWorkspace({
   const canvasAreaRef = useRef<HTMLDivElement>(null)
   useMapArea(canvasAreaRef)
   const containerRef = useRef<HTMLDivElement>(null)
-  const rulerOverlayRef = useRef<HTMLDivElement>(null)
   const runtimeRef = useRef<MountedRuntime | null>(null)
   const [mapState, setMapState] = useState<MapLibreCanvasSurfaceState | null>(null)
 
@@ -180,12 +179,6 @@ export function WebCanvasWorkspace({
         && !released
         && runtimeRef.current?.composition === activeComposition
       const documents = activeComposition.surfaces.documents
-      documents.attachRulersTo(rulerOverlayRef.current ?? canvasArea)
-      if (!runtimeIsActive()) {
-        release()
-        return
-      }
-
       let finishAttachment!: () => void
       attachmentSettlement = new Promise<void>((resolve) => {
         finishAttachment = resolve
@@ -244,7 +237,6 @@ export function WebCanvasWorkspace({
           data-map-active={mapState?.status === 'ready' ? 'true' : 'false'}
           data-testid="web-canvas-workspace-surface"
         />
-        <div ref={rulerOverlayRef} className={panelStyles.rulerOverlay} />
         {hasDesign && <CanvasChrome projection={workspaceCanvasCommandProjection.value} canvasRef={containerRef} />}
         <MapNotice notice={mapNotice} onRetry={() => runtimeRef.current?.composition.retryMap()} canvasRef={containerRef} />
         {reveal.startScreen && <WebWelcomeScreen controller={controller} />}

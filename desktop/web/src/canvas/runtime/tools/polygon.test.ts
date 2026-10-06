@@ -87,7 +87,7 @@ describe('Polygon tool', () => {
     expect(selectionWrites).toHaveBeenCalledTimes(1)
     expect(shapes(h).every((shape) => shape.kind === 'label')).toBe(true)
     expect(h.host.transientHistory.canUndo()).toBe(false)
-    expect(h.host.activeToolHasTransient()).toBe(false)
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
     expect(h.undo()).toBe(true)
     expect(h.store.persisted.zones).toEqual([])
     expect(h.undo()).toBe(false)
@@ -132,7 +132,7 @@ describe('Polygon tool', () => {
   it('Polygon closes on its first corner under snapping and Shift', () => {
     // Scale 1: the grid is 20 m. A Shift point would turn the closing edge to 45° from the last corner, 14 px away from
     // the first; the close test reads the snapped point without the constraint (today's snap(raw)).
-    const h = harness({ snapping: { grid: true, guides: false } })
+    const h = harness({ snapping: { grid: true } })
 
     h.click({ x: 21, y: 19 })
     h.click({ x: 99, y: 22 })
@@ -246,16 +246,14 @@ describe('Polygon tool', () => {
 
     h.click({ x: 10, y: 10 })
     h.click({ x: 60, y: 10 })
-    expect(h.host.escapeHint()).toBe('drop-transient')
     expect(h.host.command({ kind: 'escape' })).toBe('handled')
     expect(h.renderer.lastDraft()).toBeNull()
-    expect(h.host.activeToolHasTransient()).toBe(false)
-    expect(h.host.escapeHint()).toBe('leave-tool')
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
 
     // Only a redo left: Esc still drops it first, as today.
     h.click({ x: 10, y: 10 })
     expect(h.host.transientHistory.undo()).toBe(true)
-    expect(h.host.activeToolHasTransient()).toBe(true)
+    expect(h.host.activeToolHasEscapeTransient()).toBe(true)
     expect(h.host.command({ kind: 'escape' })).toBe('handled')
     expect(h.host.transientHistory.canRedo()).toBe(false)
     expect(h.host.command({ kind: 'escape' })).toBe('pass')
@@ -287,7 +285,7 @@ describe('Polygon tool', () => {
     expect(h.host.transientHistory.canUndo()).toBe(true)
 
     h.view.setViewport({ x: 200, y: 150, scale: 0.05 })
-    expect(h.host.activeToolHasTransient()).toBe(false)
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
     expect(h.renderer.lastDraft()).toBeNull()
 
     h.view.setViewport({ x: 0, y: 0, scale: 1 })
@@ -313,8 +311,7 @@ describe('Polygon tool', () => {
     expect(h.host.transientHistory.canRedo()).toBe(true)
     h.blur()
     expect(h.host.transientHistory.canRedo()).toBe(false)
-    expect(h.host.activeToolHasTransient()).toBe(false)
-    expect(h.host.escapeHint()).toBe('leave-tool')
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
   })
 
   it('a closed Zones layer drops the draft and commits nothing', () => {
@@ -328,26 +325,21 @@ describe('Polygon tool', () => {
     h.click({ x: 60, y: 50 })
 
     expect(h.renderer.lastDraft()).toBeNull()
-    expect(h.host.activeToolHasTransient()).toBe(false)
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
     expect(h.store.persisted.zones).toEqual([])
   })
 
-  it('a re-origin keeps the corners at their lon/lat', () => {
+  it('a draft holds re-origin until it ends', () => {
     const h = harness()
+    expect(h.host.holdsReorigin()).toBe(false)
 
     h.click({ x: 10, y: 10 })
+    expect(h.host.holdsReorigin()).toBe(true)
     h.click({ x: 60, y: 10 })
-    const before = h.plane
-    const geo = [before.toGeo({ x: 10, y: 10 }), before.toGeo({ x: 60, y: 10 })]
-    h.reorigin({ lon: 0.01, lat: 0.005 })
     h.click({ x: 60, y: 50 })
     expect(h.host.command({ kind: 'confirm' })).toBe('handled')
 
-    const points = h.store.persisted.zones[0]!.points
-    for (const [index, expected] of geo.entries()) {
-      const actual = h.plane.toGeo(points[index]!)
-      expect(actual.lon).toBeCloseTo(expected.lon, 8)
-      expect(actual.lat).toBeCloseTo(expected.lat, 8)
-    }
+    expect(h.store.persisted.zones).toHaveLength(1)
+    expect(h.host.holdsReorigin()).toBe(false)
   })
 })

@@ -38,7 +38,6 @@ function readBrowserSettings(stored: Record<string, unknown> | null): Settings {
     locale: readEnum(value.locale, SETTINGS_LOCALES, DEFAULT_SETTINGS.locale),
     theme: readEnum(value.theme, SETTINGS_THEMES, DEFAULT_SETTINGS.theme),
     snap_to_grid: readBoolean(value.snap_to_grid, DEFAULT_SETTINGS.snap_to_grid),
-    snap_to_guides: readBoolean(value.snap_to_guides, DEFAULT_SETTINGS.snap_to_guides),
     side_panel_width: readNullableU32(value.side_panel_width, DEFAULT_SETTINGS.side_panel_width),
     saved_stamps_frame_height: readNullableU32(
       value.saved_stamps_frame_height,
@@ -109,15 +108,9 @@ function readU32(value: unknown, fallback: number): number {
 
 function readLastView(value: unknown): Settings['last_view'] {
   if (!value || typeof value !== 'object') return null
-  const { lon, lat, zoom, bearing } = value as Record<string, unknown>
+  const { lon, lat, zoom } = value as Record<string, unknown>
   return [lon, lat, zoom].every((part) => typeof part === 'number' && Number.isFinite(part))
-    ? {
-        lon: lon as number,
-        lat: lat as number,
-        zoom: zoom as number,
-        // A view stored before the bearing existed reads as north up (common-types settings.rs: #[serde(default)]).
-        bearing: typeof bearing === 'number' && Number.isFinite(bearing) ? bearing : 0,
-      }
+    ? { lon: lon as number, lat: lat as number, zoom: zoom as number }
     : null
 }
 

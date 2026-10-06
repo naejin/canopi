@@ -8,7 +8,7 @@ function createStore() {
     draft.plants = [0, 3, 11].map((x, index) => ({
       kind: 'plant', id: String(index), locked: false,
       canonicalName: 'Malus domestica', commonName: null, color: null,
-      stratum: null, canopySpreadM: null, position: { x, y: 7 },
+      canopySpreadM: null, position: { x, y: 7 },
       rotationDeg: null, scale: null, notes: null, plantedDate: null, quantity: null,
     }))
   })

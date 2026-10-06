@@ -3,14 +3,13 @@ import { CURRENT_BINDINGS } from './bindings'
 import type { Gesture } from './gestures'
 import {
   FOREIGN,
-  HORIZONTAL_RULER,
+  MAC,
   MAC_GESTURES,
   OWNED_CHROME,
   OWNED_TEXT,
   ROTATE_HANDLE,
   SEQUENCES,
   SURFACE,
-  UNLOCK_AFFORDANCE,
   WINDOWS,
   blur,
   configure,
@@ -20,7 +19,6 @@ import {
   keyState,
   lostCapture,
   move,
-  moves,
   reject,
   runSequence,
   seq,
@@ -298,10 +296,10 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
 
   it('a twist the other way subtracts the threshold the other way', () => {
     const result = run(seq('anticlockwise twist', MAC_GESTURES, [
-      gesture('start', 1, 0),
-      gesture('change', 1, -15),
-      gesture('change', 1, -4),
-      gesture('end', 1, -4),
+      gesture('start', 0),
+      gesture('change', -15),
+      gesture('change', -4),
+      gesture('end', -4),
     ]))
     expect(result.gestures.map((gesture) => gesture.kind === 'rotate' && [gesture.phase, gesture.totalDeltaDeg])).toEqual([
       ['start', 0], ['move', 5], ['move', -6], ['end', -6],
@@ -314,11 +312,11 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
     ['configure', configure({ tool: 'polygon', mode: 'site', pointingDevice: 'trackpad' }), 'tool-change'],
   ] as const)('%s cancels a live twist, and the rest of the twist turns nothing', (_fence, fence, reason) => {
     const result = run(seq('fenced twist', MAC_GESTURES, [
-      gesture('start', 1, 0),
-      gesture('change', 1, 20),
+      gesture('start', 0),
+      gesture('change', 20),
       fence,
-      gesture('change', 1, 30),
-      gesture('end', 1, 30),
+      gesture('change', 30),
+      gesture('end', 30),
     ]))
     expect(kinds(result.gestures)).toEqual(['rotate:start', 'rotate:move', 'rotate:cancel', 'cancel'])
     expect(result.gestures.at(-1)).toEqual({ kind: 'cancel', reason })
@@ -329,30 +327,30 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
   it('a twist is ignored during a pointer pan or rotate, and a press during a twist is ignored', () => {
     const duringPan = run(seq('twist during a pan', MAC_GESTURES, [
       down(100, 100, { button: 1 }),
-      gesture('start', 1, 0),
-      gesture('change', 1, 20),
+      gesture('start', 0),
+      gesture('change', 20),
       move(120, 100, { buttons: 4 }),
-      gesture('end', 1, 20),
+      gesture('end', 20),
       up(120, 100, { button: 1 }),
     ]))
     expect(kinds(duringPan.gestures)).toEqual(['pan:start', 'pan:move', 'pan:end'])
     const duringRotate = run(seq('twist during a rotate', MAC_GESTURES, [
       down(100, 100, { button: 1, shift: true }),
       move(120, 100, { buttons: 4, shift: true }),
-      gesture('start', 1, 0),
-      gesture('change', 1, 20),
-      gesture('end', 1, 20),
+      gesture('start', 0),
+      gesture('change', 20),
+      gesture('end', 20),
       up(120, 100, { button: 1, shift: true }),
     ]))
     expect(duringRotate.gestures.every((gesture) => gesture.kind === 'rotate' && gesture.source === 'auxiliary-drag')).toBe(true)
     expect(kinds(duringRotate.gestures)).toEqual(['rotate:start', 'rotate:move', 'rotate:end'])
     const pressDuringTwist = run(seq('press during a twist', MAC_GESTURES, [
-      gesture('start', 1, 0),
-      gesture('change', 1, 20),
+      gesture('start', 0),
+      gesture('change', 20),
       down(100, 100),
       move(140, 100, { buttons: 1 }),
       up(140, 100),
-      gesture('end', 1, 20),
+      gesture('end', 20),
     ]))
     expect(kinds(pressDuringTwist.gestures)).toEqual(['rotate:start', 'rotate:move', 'rotate:end'])
     expect(pressDuringTwist.steps[2]!.effects).toEqual([])
@@ -407,7 +405,7 @@ describe('recognise: 5.6 wheel and trackpad', () => {
     const zooms = zoomsOf(result.gestures)
     expect(zooms).toHaveLength(1)
     expect(zooms[0]!.factor).toBeGreaterThan(1)
-    expect(zooms[0]!.source).toBe('trackpad-pinch')
+    expect(zooms[0]!.source).toBe('wheel')
     expect(result.effects).toEqual([{ kind: 'prevent-default' }])
   })
 
@@ -447,7 +445,19 @@ describe('recognise: 5.6 wheel and trackpad', () => {
   it('F12 WKWebView pinch with Ctrl wheels: the gesture\'s scale is ignored and each Ctrl wheel zooms', () => {
     const zooms = zoomsOf(run(SEQUENCES.F12).gestures)
     expect(zooms).toHaveLength(2)
-    expect(zooms.every((zoom) => zoom.factor > 1 && zoom.source === 'trackpad-pinch')).toBe(true)
+    expect(zooms.every((zoom) => zoom.factor > 1 && zoom.source === 'wheel')).toBe(true)
+  })
+
+  it('a Ctrl+wheel zooms continuously by its delta, a pinch\'s synthetic Ctrl and a held Control alike', () => {
+    const pinch = zoomsOf(run(SEQUENCES.F4_MOUSE).gestures)
+    const held = zoomsOf(run(seq('Ctrl+wheel with Control held', MAC, [
+      keyState(false, { ctrl: true }),
+      wheel(120, 80, { dy: -2.3, ctrl: true }),
+      keyState(false),
+    ])).gestures)
+    const zoom = { kind: 'zoom', anchorPx: { x: 120, y: 80 }, factor: Math.exp(2.3 * 0.002), source: 'wheel' }
+    expect(pinch).toEqual([zoom])
+    expect(held).toEqual([zoom])
   })
 
   it('F14 Momentum tail: wheels stay standalone and the press starts a fresh session', () => {
@@ -509,7 +519,6 @@ describe('recognise: 5.7 middle button and Space', () => {
     const result = run(SEQUENCES.G3B)
     expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-move', 'drag-move', 'drag-end'])
     expect(result.gestures[0]).toMatchObject({ kind: 'press', target: { kind: 'handle', id: 'rotate' } })
-    expect(result.gestures[1]).toMatchObject({ kind: 'drag-start', target: { kind: 'handle', id: 'rotate' } })
   })
 
   it('G4 Space then alt-tab: blur releases Space; the later drag is primary', () => {
@@ -662,27 +671,22 @@ describe('recognise: sessions', () => {
   it('a hover carries the target class it saw', () => {
     const result = run(seq('hover targets', WINDOWS, [
       move(50, 60),
-      move(54, 60, { target: HORIZONTAL_RULER }),
       move(56, 60, { target: FOREIGN }),
     ]))
-    expect(result.gestures.map((gesture) => gesture.kind === 'hover' ? gesture.target : null)).toEqual([
-      SURFACE, HORIZONTAL_RULER, FOREIGN,
-    ])
+    expect(result.gestures.map((gesture) => gesture.kind === 'hover' ? gesture.target : null)).toEqual([SURFACE, FOREIGN])
   })
 
-  it('a move over owned chrome ends the hover, with the Unlock affordance keeping it', () => {
-    // Owned chrome (a map button, the attribution), the text entry and a handle end the hover and its tooltip (U6); the
-    // Unlock affordance emits nothing, so the hover it belongs to stays until it is clicked.
+  it('owned chrome always ends the hover', () => {
+    // Owned chrome (a map button, the attribution), the text entry and a handle end the hover and its tooltip (U6).
     const result = run(seq('owned targets', WINDOWS, [
       move(50, 60),
       move(52, 60, { target: OWNED_CHROME }),
       move(54, 60, { target: OWNED_TEXT }),
       move(56, 60, { target: ROTATE_HANDLE }),
-      move(57, 60, { target: UNLOCK_AFFORDANCE }),
       move(58, 60, { target: FOREIGN }),
     ]))
     expect(result.steps.map((step) => kinds(step.gestures))).toEqual([
-      ['hover'], ['hover-end'], ['hover-end'], ['hover-end'], [], ['hover'],
+      ['hover'], ['hover-end'], ['hover-end'], ['hover-end'], ['hover'],
     ])
   })
 
@@ -702,19 +706,10 @@ describe('recognise: sessions', () => {
         up(103, 100, { pointer }),
       ]))
       expect(kinds(dragged.gestures)).toEqual(['press', 'drag-start', 'drag-end'])
-      // The drag starts where the press was, at the move that passed the threshold.
-      expect(dragged.gestures[1]).toMatchObject({ from: { x: 100, y: 100 }, at: { x: 103, y: 100 } })
+      // The press is where it was; the drag starts at the move that passed the threshold.
+      expect(dragged.gestures[0]).toMatchObject({ kind: 'press', at: { x: 100, y: 100 } })
+      expect(dragged.gestures[1]).toMatchObject({ kind: 'drag-start', at: { x: 103, y: 100 } })
     }
-  })
-
-  it('Plant a row keeps slop 0 through configure', () => {
-    const result = run(seq('plant a row', WINDOWS, [
-      { raw: { kind: 'configure', context: { tool: 'plant-spacing', mode: 'site', pointingDevice: 'mouse', dragSlopPx: 0 } } },
-      down(100, 100),
-      move(101, 100, { buttons: 1 }),
-      up(101, 100),
-    ]))
-    expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-end'])
   })
 
   it('a pointer-source pan carries the pointer\'s point and a wheel pan does not', () => {
@@ -767,19 +762,6 @@ describe('recognise: sessions', () => {
     ]))
     expect(result.gestures).toEqual([])
     expect(result.effects).toEqual([])
-  })
-
-  it('a ruler press is a primary press with no capture, whatever is held', () => {
-    const result = run(seq('ruler drag', WINDOWS, [
-      keyState(true),
-      down(100, 5, { target: HORIZONTAL_RULER }),
-      ...moves([100, 5], [100, 80], 2, { buttons: 1, target: FOREIGN }),
-      up(100, 80, { target: FOREIGN }),
-    ], { tool: 'hand' }))
-    expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-move', 'drag-end'])
-    expect(result.gestures[0]).toMatchObject({ kind: 'press', target: { kind: 'ruler', axis: 'h' } })
-    expect(result.gestures[1]).toMatchObject({ kind: 'drag-start', target: { kind: 'ruler', axis: 'h' } })
-    expect(result.effects).toEqual([{ kind: 'prevent-default' }])
   })
 
   it('a Pan-tool click reaches the host as a press and a tap', () => {
@@ -857,12 +839,10 @@ describe('recognise: cancel fences', () => {
     expect(kinds(leaving.gestures)).toEqual(['pan:start'])
   })
 
-  it('a lost capture ends only a session that holds capture', () => {
+  it('a lost capture ends the session that holds capture', () => {
     const captured = run(seq('lost capture', WINDOWS, [down(100, 100), lostCapture({ id: 1 })]))
     expect(kinds(captured.gestures)).toEqual(['press', 'cancel'])
     expect(captured.steps[1]!.effects).toEqual([])
-    const ruler = run(seq('lost capture on a ruler drag', WINDOWS, [down(100, 5, { target: HORIZONTAL_RULER }), lostCapture({ id: 1 })]))
-    expect(kinds(ruler.gestures)).toEqual(['press'])
   })
 
   it('a pointercancel for another pointer changes nothing; blur cancels and releases Space', () => {

@@ -4,15 +4,13 @@
 // recognise → InputRouter → ToolHost, with the keyboard port the key router reaches (spec §1.6), and prepares the map
 // host as a keyboard stop. Every tool and every drop runs on the host (spec §1.4, "Drops"). The session hears the view's mode on
 // its own 'tools' frame listener, which a throwing host listener cannot skip, nor it the host's (frame-source.ts): entering or
-// leaving overview reconfigures the recogniser, and entering it releases Space and closes the menu. refreshMeasurements reaches
-// ToolHost.sceneChanged(). It builds the host's chrome (chrome/: the handle layer,
-// the text entry, the plant tooltip and the Unlock affordance, whose Unlock it runs), bridges the plant and saved-stamp
+// leaving overview reconfigures the recogniser (entering it releases Space there), and entering it closes the menu.
+// refreshMeasurements reaches ToolHost.sceneChanged(). It builds the host's chrome (chrome/: the handle layer,
+// the text entry and the plant tooltip), bridges the plant and saved-stamp
 // read models to the armed tool, reads the snapping settings per point, calls ToolHost.rawPress for every raw press on
 // the map host, ToolHost.released() after a release that ended no press of the tool's and ToolHost.interrupted() after a
 // window blur, follows a placed drop (the saved stamp's drag source, the map's focus on the next frame), owns the
-// navigation cursor, and passes on no draft or handles while a story is presented. Ruler presses reach the source
-// beside the map: the session finds the pressed ruler's overlay (chrome/rulers.ts) and runs today's ruler drag under
-// any tool (its cursor, its end on a blur, its guide at the release), whatever the host does with the input.
+// navigation cursor, and passes on no draft or handles while a story is presented.
 
 import { effect, signal } from '@preact/signals'
 import { readPlantStampSource, clearPlantStampSource } from '../plant-stamp-source'
@@ -21,8 +19,7 @@ import {
   clearSavedObjectStampSource,
   readSavedObjectStampSource,
 } from '../saved-object-stamp-source'
-import type { SessionPlane } from '../session-plane'
-import { getCanvasTool, IDLE_CANVAS_TOOL_GUIDANCE, type CanvasToolGuidance } from '../session-state'
+import { currentCanvasTool, IDLE_CANVAS_TOOL_GUIDANCE, type CanvasToolGuidance } from '../session-state'
 import type {
   CanvasContextMenuCommands,
   CanvasFocusPort,
@@ -32,8 +29,6 @@ import type {
 } from './app-adapter'
 import { createHandleLayer, type HandleLayer } from './chrome/handle-layer'
 import { createHoverTooltip, type HoverTooltipController } from './chrome/hover-tooltip'
-import { createLockedAffordance, type LockedAffordanceController } from './chrome/locked-affordance'
-import { pressRuler, type RulerPress } from './chrome/rulers'
 import { createTextEntryHost, type TextEntryHost } from './chrome/text-entry-host'
 import { runCanvasRuntimeCleanups, throwCanvasRuntimeCleanupErrors } from './cleanup'
 import { CURRENT_BINDINGS } from './input/bindings'
@@ -56,17 +51,15 @@ import type {
   CanvasSceneEditCommandSurface,
 } from './runtime'
 import { isSceneLayerEditable, type SceneDesignObjectSelection, type SceneDesignObjectTarget, type ScenePoint, type SceneStateReader } from './scene'
-import { setSceneDesignObjectLocks } from './scene/locks'
 import type { SceneCommandAdmission, SceneEditCoordinator, SettledSceneReader } from './scene-runtime/transactions'
 import type { SpeciesCacheEntry } from './species-cache'
 import { createContextMenuPort, createToolHost, createToolScene } from './tools/tool-host'
 import type { ViewNavigation } from './view/navigation'
-import type { ScreenPoint, ViewFrame, ViewFrameSource } from './view/types'
+import type { ViewFrame, ViewFrameSource } from './view/types'
 
 /** Attributes the session sets on the map host and restores when it ends. */
 const HOST_ATTRIBUTES = ['tabindex', 'role', 'aria-label', 'aria-describedby'] as const
 const STORY_PRESENTING_ATTRIBUTE = 'data-story-presenting'
-const NO_MODIFIERS: Modifiers = Object.freeze({ shift: false, ctrl: false, alt: false, meta: false })
 const NO_DROP: readonly AdapterEffect[] = Object.freeze([{ kind: 'drop-effect', dropEffect: 'none' }])
 /** An actual drop (not a dragover or dragleave) prevents the browser's own drop (recognise.ts), unconditionally; a
  *  throwing route must not skip it, or the browser's default drop runs (today's pre-0B _onDrop prevented it before
@@ -112,10 +105,9 @@ export interface SceneInteractionSessionDeps {
   }
   /** Renders the right-click menu; absent in a detached runtime. */
   contextMenu?: CanvasRuntimeContextMenuAdapter
-  setTool: (name: string) => void
+  setTool: (id: ToolId) => void
   render: (kind: 'scene' | 'viewport') => void
   readSnapToGridEnabled: () => boolean
-  readSnapToGuidesEnabled: () => boolean
   /** Settings › Canvas › Scroll wheel. Pinch and Ctrl wheel zoom either way. */
   readScrollWheel: () => CanvasScrollWheelSetting
   readPlantSpacingIntervalMeters: () => number
@@ -136,7 +128,7 @@ export interface SceneInteractionSessionDeps {
   readonly renderer: Pick<SceneRenderer, 'setDraft'>
   /** The app's focus port (CanvasRuntimeAppAdapter.focus); absent, the session focuses the map host itself, as today. */
   readonly focus?: CanvasFocusPort
-  /** Injected for tests; detected from the browser otherwise (0C moves the call to the platform modules). */
+  /** Injected for tests; otherwise the session detects it from the browser, as the editions' key routers detect theirs. */
   readonly platform?: InputPlatform
 }
 
@@ -144,7 +136,7 @@ export interface SceneInteractionSession {
   /** The tool the session has armed now (after a failed switch: the one it kept or fell back to). */
   readonly tool: ToolId
 
-  setTool(name: string): void
+  setTool(id: ToolId): void
   /** Plant a row's spacing field in the tool card; does nothing under another tool. */
   readonly plantRowSpacing: CanvasPlantRowSpacingField
   prepareForDocumentReplacement(): void
@@ -159,6 +151,8 @@ export interface SceneInteractionSession {
   /** ToolHost.subscribePointerWorld: the pointer's world and screen points over the map, null when it leaves (the inspection
    *  lens). The session drops the point of a move made with any button held (its raw buttonMask), as today's lens skipped it. */
   subscribePointerWorld(listener: (point: PointerWorld | null) => void): () => void
+  /** ToolHost.holdsReorigin: re-origin waits while a press, a tool transient or the text entry is open (spec §4.19). */
+  holdsReorigin(): boolean
   dispose(): void
 }
 
@@ -186,7 +180,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   private readonly _config: RecogniserConfig
-  private readonly _tool = signal<ToolId>(getCanvasTool() as ToolId)
+  private readonly _tool = signal<ToolId>(currentCanvasTool.peek())
   private readonly _frames: ViewFrameSource
   /** The view's mode as the session last heard it on a 'tools' frame: what the recogniser is configured with. */
   private _mode: ViewFrame['mode']
@@ -196,7 +190,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private readonly _handleLayer: HandleLayer
   private readonly _textEntry: TextEntryHost
   private readonly _tooltip: HoverTooltipController
-  private readonly _lockedAffordance: LockedAffordanceController
   private readonly _toolHost: ToolHost
   private readonly _menu: ReturnType<typeof createContextMenuPort>
   private readonly _port: ReturnType<typeof createCanvasKeyboardPort>
@@ -209,16 +202,12 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private readonly _storyObserver: MutationObserver | null
   private _recogniser: RecogniserState = initialRecogniserState()
   private _pointingDevice: 'mouse' | 'trackpad'
-  private _spaceHeld = false
   private _panning = false
   private _navigationCursor: 'grab' | 'grabbing' | null = null
   private _toolCursor: string | null = null
   private _draft: DraftPresentation | null = null
   private _handles: HandleList = NO_HANDLES
   private _activeHandle: HandleId = null
-  /** The ruler pressed now, and its pointer: today's ruler drag, whose guide the session lands at the release. */
-  private _rulerPress: RulerPress | null = null
-  private _rulerPointer: number | null = null
   private _storyPresented = false
   /** Routing a move made with a button held: its hover reaches the host and the tool, not the lens (today's). */
   private _buttonHeld = false
@@ -274,11 +263,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         focus,
       }), (entry) => entry.dispose())
       this._tooltip = own(createHoverTooltip(container), (tooltip) => tooltip.dispose())
-      this._lockedAffordance = own(createLockedAffordance({
-        container,
-        translate: _deps.translate,
-        onUnlock: (target) => this._unlock(target),
-      }), (affordance) => affordance.dispose())
       const scene = createToolScene({
         store: liveStoreReader(_deps),
         selection: _deps.getSelection,
@@ -295,7 +279,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         commands: _deps.selectionCommands,
         saveSelectionAsObjectStamp: _deps.contextualCommands?.saveSelectionAsObjectStamp,
         placePlantsAt: (world) => { this._toolHost.command({ kind: 'place-at', world }) },
-        returnFocus: () => focus.focusMap('tool-requested'),
+        returnFocus: () => focus.focusMap(),
         scene,
         selectionModel: _deps.getDesignObjectSelection,
       }), (menu) => menu.close())
@@ -306,7 +290,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         admission: _deps.commandAdmission,
         settled: _deps.settledReader,
         setSelection: (targets) => _deps.setSelection(targets),
-        plane: (): SessionPlane => _deps.getSceneStore().sessionPlane,
         renderer: {
           setDraft: (draft) => this._setDraft(draft),
         },
@@ -326,7 +309,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
           submitUnfocusedTextEntry: () => this._textEntry.submitUnfocused(),
           isTextEntryOpen: () => this._textEntry.isOpen(),
           setTooltip: (tooltip) => this._showTooltip(tooltip),
-          setLockedAffordance: (affordance) => this._showLockedAffordance(affordance),
         },
         menu: this._menu,
         focus,
@@ -336,7 +318,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
           plantSpacingIntervalM: _deps.readPlantSpacingIntervalMeters,
           commitPlantSpacingIntervalM: _deps.commitPlantSpacingIntervalMeters,
         },
-        snapping: () => ({ grid: _deps.readSnapToGridEnabled(), guides: _deps.readSnapToGuidesEnabled() }),
+        snapping: () => ({ grid: _deps.readSnapToGridEnabled() }),
         translate: _deps.translate as ToolHostDeps['translate'],
         navigation: { turnToEdge: (a, b) => navigation.turnToEdge(a, b) },
         nudge: _deps.nudge,
@@ -358,7 +340,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         session: {
           pointerSessionLive: () => this._pointerSessionLive(),
           overview: () => this._mode === 'overview',
-          spaceHeld: () => this._spaceHeld,
+          spaceHeld: () => this._recogniser.held.space,
           keyState: (state) => this._setKeyState(state.space, state.mods),
           escapeGesture: () => this._escapeGesture(),
           requestTool: (id) => this._switchTool(id),
@@ -374,13 +356,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         host: container,
         platform,
         bindings: () => CURRENT_BINDINGS,
-        keys: {
-          physicalCtrl: () => this._port.physicalCtrl(),
-          lastKeyboardMenuAt: () => this._port.lastKeyboardMenuAt(),
-        },
+        keys: { lastKeyboardMenuAt: () => this._port.lastKeyboardMenuAt() },
         clock,
         timers,
-        listensToRulers: true,
       })
       this._stopWatchingSources = own(this._watchToolSources(), (stop) => stop())
       this._storyObserver = own(this._observeStoryPresentation(), (observer) => observer?.disconnect())
@@ -401,30 +379,24 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   /**
-   * Arms a tool on the host. A failure leaves the host on Select (its own rollback, not the tool left: that tool is
-   * already deactivated, and reactivating it risks the same failure) and still ends the live presses, as today's setTool
-   * had cleared the pointer gesture before the step that failed.
+   * Arms a tool on the host. Any failure leaves a fresh Select on the host (spec §1.4 "Faults"), drops the tool left's
+   * source and still ends the live presses, as today's setTool had cleared the pointer gesture before the step that failed.
    */
   get tool(): ToolId {
     return this._tool.peek()
   }
 
-  setTool(name: string): void {
+  setTool(id: ToolId): void {
     if (this._disposed) return
-    const id = name as ToolId
     const previous = this._tool.peek()
     this._tool.value = id
     this._navigationCursor = null
     try {
       this._toolHost.setTool(id, toolSourceFor(id))
     } catch (error) {
-      // The host's own rollback only runs once activation starts; a failure before that (cancelling the tool left) leaves
-      // the host on `previous`, unchanged. Either way, activeToolIsSelect() names the host's real tool.
-      const fellBackToSelect = this._toolHost.activeToolIsSelect()
-      this._tool.value = fellBackToSelect ? 'select' : previous
+      this._tool.value = 'select'
       this._endPressesAfterFailedSwitch()
-      // A fallback deactivates the tool left (unlike a re-arm of the same `previous`): its pick must not outlive it.
-      if (fellBackToSelect && previous !== 'select') clearToolSource(previous)
+      clearToolSource(previous)
       throw error
     }
     // The tool left drops its pick once it is deactivated, as today's tools did (the next tool never hears it).
@@ -457,7 +429,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   refreshTranslations(): void {
     if (this._disposed) return
     this._hostKeys.refreshTranslations()
-    this._lockedAffordance.refreshTranslations()
     this._toolHost.refreshTranslations()
   }
 
@@ -475,6 +446,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   redoTransientHistory(): boolean {
     return !this._disposed && this._toolHost.transientHistory.redo()
+  }
+
+  holdsReorigin(): boolean {
+    return !this._disposed && this._toolHost.holdsReorigin()
   }
 
   subscribePointerWorld(listener: (point: PointerWorld | null) => void): () => void {
@@ -499,14 +474,12 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
     const tool = this._tool.peek()
     attempt(() => this._detachSource())
-    attempt(() => this._endRulerPress())
     attempt(() => this._storyObserver?.disconnect())
     attempt(() => this._stopHearingMode())
     attempt(() => this._stopWatchingSources())
     attempt(() => clearToolSource(tool))
     attempt(() => this._cancelDropFocus())
     attempt(() => this._toolHost.dispose())
-    attempt(() => this._lockedAffordance.dispose())
     attempt(() => this._tooltip.dispose())
     attempt(() => this._textEntry.dispose())
     attempt(() => this._handleLayer.dispose())
@@ -528,7 +501,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   private _dispatch(input: RawInput): void {
-    const event = this._source.currentEvent()
     switch (input.kind) {
       case 'drop':
         this._routeDrop(input)
@@ -537,16 +509,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         this._toolHost.endNudgeSeries(true)
         return
       case 'down':
-        // A ruler sits beside the map host: its press is no press on the map (today's host listener never heard it).
-        if (input.target.kind === 'ruler') this._pressRuler(input.id, event)
-        else this._toolHost.rawPress(input.role === 'auxiliary' ? 'middle' : input.role, input.target, input.id)
+        this._toolHost.rawPress(input.role === 'auxiliary' ? 'middle' : input.role, input.target, input.id)
         break
       case 'wheel':
         this._syncPointingDevice()
-        break
-      case 'cancel':
-        // Today's ruler heard the blur itself: its drag ends with no guide, however the tool's blur fails.
-        if (input.id === 'all') this._endRulerPress()
         break
       default:
         break
@@ -562,21 +528,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     ], 'Scene Interaction window blur failed')
   }
 
-  /**
-   * The host's path, then today's ruler drag, which heard its own mousemove and mouseup: the drag cursor follows the
-   * pointer and the guide lands at the release whatever the tool did with the event, failure included.
-   */
-  private _route(input: RawInput): void {
-    try {
-      this._routeToHost(input)
-    } finally {
-      if (input.kind === 'move' && input.id === this._rulerPointer) this._rulerPress?.drag()
-      if (input.kind === 'up' && input.id === this._rulerPointer) this._releaseRuler(input.at)
-    }
-  }
-
   /** The input: recognised, routed, and the recogniser's and the host's effects applied to the event. */
-  private _routeToHost(input: RawInput): void {
+  private _route(input: RawInput): void {
     const result = recognise(this._recogniser, input, this._config)
     this._recogniser = result.state
     const wheel = input.kind === 'wheel'
@@ -622,8 +575,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
    * Whether this input ended no press of the tool's, so today's window pointerup (or a pan's pointercancel or lost
    * capture) would have run the cancellation (ToolHost.released): the up, cancel or Esc that ends a pointer pan or turn,
    * or an up with no press of the map's at all. Today's exceptions hold for the latter: nothing while another pointer's press is
-   * live, in overview (the recogniser swallows the up), or over the note editor, a handle or the Unlock affordance. The
-   * host handles the tap or drag-end of a ruler drag or of a press the tool never heard itself.
+   * live, in overview (the recogniser swallows the up), or over the note editor or a handle. The host handles the tap or drag-end of a press the tool never heard itself.
    */
   private _releasesOutsideTool(input: RawInput, gestures: readonly Gesture[]): boolean {
     if (gestures.some(endsPointerNavigation)) return input.kind === 'up' || (input.kind === 'cancel' && input.id !== 'all')
@@ -653,7 +605,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
    */
   private _routeDrop(input: Extract<RawInput, { kind: 'drop' }>): void {
     try {
-      this._routeToHost(input)
+      this._route(input)
     } catch (error) {
       if (input.phase === 'over') this._source.apply(NO_DROP)
       else if (input.phase === 'drop') this._source.apply(PREVENT_DEFAULT)
@@ -672,7 +624,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._cancelDropFocus()
     this._dropFocusFrame = window.requestAnimationFrame(() => {
       this._dropFocusFrame = null
-      this._focus.focusMap('tool-requested')
+      this._focus.focusMap()
     })
   }
 
@@ -682,40 +634,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._dropFocusFrame = null
   }
 
-  // ── Rulers ──────────────────────────────────────────────────────────────────────────────────────────────────────
-
-  /** A press on a ruler: its overlay's port for this press, found from the element under the pointer (the drag starts). */
-  private _pressRuler(pointerId: number, event: Event | null): void {
-    this._endRulerPress()
-    this._rulerPress = pressRuler(event?.target ?? null)
-    this._rulerPointer = this._rulerPress ? pointerId : null
-  }
-
-  /**
-   * Today's ruler drag at its release: the cursor comes back, then the guide lands where the pointer let go, only while
-   * north is up (spec §4.6), under any tool.
-   */
-  private _releaseRuler(at: ScreenPoint): void {
-    const press = this._rulerPress
-    this._rulerPress = null
-    this._rulerPointer = null
-    if (!press) return
-    press.end()
-    if (this._frames.viewFrame.peek().view.northUp) press.createGuideAt(at)
-  }
-
-  private _endRulerPress(): void {
-    const press = this._rulerPress
-    this._rulerPress = null
-    this._rulerPointer = null
-    press?.end()
-  }
-
   /** After a window blur has reached the recogniser (Space released, live sessions ended) and the armed tool's path, even
    *  when that path failed. */
   private _interrupted(): void {
-    this._spaceHeld = false
-    this._port.releaseKeys()
     this._cancelDropFocus()
     this._setNavigationCursor(null)
     this._toolHost.interrupted()
@@ -734,7 +655,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
    *  (released). */
   private _escapeGesture(): void {
     const gestures = this._feed({ kind: 'escape', t: Date.now() })
-    this._spaceHeld = false
     this._setNavigationCursor(this._panning ? 'grabbing' : null)
     if (gestures.some(endsPointerNavigation)) this._toolHost.released()
   }
@@ -749,7 +669,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     // A tool whose cancel throws (the configure ends its live press) still leaves Space released and the menu closed.
     runCanvasRuntimeCleanups([
       () => this._configure(),
-      ...(mode === 'overview' ? [() => this._releaseSpace(), () => this._menu.close()] : []),
+      ...(mode === 'overview' ? [() => this._menu.close()] : []),
     ], 'Interaction session mode change failed')
   }
 
@@ -761,7 +681,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         tool: this._tool.peek(),
         mode: this._mode,
         pointingDevice: this._pointingDevice,
-        dragSlopPx: this._toolHost.activeToolDragSlopPx() ?? undefined,
       },
     }
   }
@@ -779,16 +698,16 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   /** Arms a tool as a tool's own request does: the runtime's setTool first, then the session if it did not follow. */
-  private _switchTool(name: string): void {
-    this._deps.setTool(name)
-    if (this._tool.peek() !== name) this.setTool(name)
+  private _switchTool(id: ToolId): void {
+    this._deps.setTool(id)
+    if (this._tool.peek() !== id) this.setTool(id)
   }
 
   /**
    * After a failed switch the recogniser still ends its live sessions, with their captures and pans (today's cancellation
-   * had cleared the pointer gesture before the step that failed). The tool's own cancel was the host's setTool, whose
-   * failure it left pending: it is not retried here. A live rotate's cancel still reaches the router, which closes its
-   * RotationSession and restores the press bearing, so the view keys work again.
+   * had cleared the pointer gesture before the step that failed). The tool's own cancel was the host's setTool, whose fault
+   * rule has already aborted its edits. A live rotate's cancel still reaches the router, which closes its RotationSession
+   * and restores the press bearing, so the view keys work again.
    */
   private _endPressesAfterFailedSwitch(): void {
     const result = recognise(this._recogniser, this._configureInput(), this._config)
@@ -813,7 +732,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   // ── Keys, the navigation cursor and camera moves ───────────────────────────────────────────────────────────────
 
   private _setKeyState(space: boolean, mods: Modifiers): void {
-    this._spaceHeld = space
     this._feed({ kind: 'key-state', t: Date.now(), space, mods })
     if (space) {
       // Today's grab: always in overview; otherwise not during a press, nor with the Pan tool's own grab.
@@ -823,12 +741,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     } else if (!this._panning) {
       this._setNavigationCursor(null)
     }
-  }
-
-  private _releaseSpace(): void {
-    if (!this._spaceHeld) return
-    this._spaceHeld = false
-    this._recogniser = recognise(this._recogniser, { kind: 'key-state', t: Date.now(), space: false, mods: NO_MODIFIERS }, this._config).state
   }
 
   /** A pointer pan shows 'grabbing' until it ends; then the tool's cursor comes back (today's cancel). */
@@ -888,21 +800,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._tooltip.show(tooltip.at.x, tooltip.at.y, commonName, plant.canonicalName)
   }
 
-  private _showLockedAffordance(affordance: PassiveHoverAt | null): void {
-    if (!affordance) {
-      this._lockedAffordance.hide()
-      return
-    }
-    this._lockedAffordance.show({ target: affordance.target, screenX: affordance.at.x, screenY: affordance.at.y })
-  }
-
-  /** The Unlock affordance's button: today's unlock edit, after which the affordance goes. */
-  private _unlock(target: SceneDesignObjectTarget): void {
-    this._deps.sceneEdits.run('unlock-design-object', (tx) => {
-      tx.mutate((draft) => setSceneDesignObjectLocks(draft, [target], false))
-    }, { onCommitted: () => this._lockedAffordance.hide() })
-  }
-
   /**
    * Today's CSS hid the DOM previews, the rotation handle and the control points while a story is presented
    * (html[data-story-presenting]); the draft and the handles follow it.
@@ -940,7 +837,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         this._deps.commandAdmission.runWhenSettled(
           () => this._toolHost.sourceChanged(toolSourceFor('plant-stamp')),
           undefined,
-          { resumePending: true },
         )
       })
     })
@@ -1032,7 +928,6 @@ function liveStoreReader(deps: SceneInteractionSessionDeps): SceneStateReader {
   return {
     get persisted() { return deps.getSceneStore().persisted },
     get session() { return deps.getSceneStore().session },
-    get guides() { return deps.getSceneStore().guides },
     get hasObjects() { return deps.getSceneStore().hasObjects },
     get sessionPlane() { return deps.getSceneStore().sessionPlane },
     get sessionPlaneSignal() { return deps.getSceneStore().sessionPlaneSignal },
@@ -1065,9 +960,8 @@ function endsPointerNavigation(gesture: Gesture): boolean {
   return false
 }
 
-/** The note editor, a handle or the Unlock affordance: today's owned overlays, over which a release ran no cleanup. */
+/** The note editor or a handle: today's owned overlays, over which a release ran no cleanup. */
 function isOwnedOverlay(target: TargetClass): boolean {
-  if (target.kind === 'owned-chrome') return target.lockedAffordance === true
   return target.kind === 'owned-text' || target.kind === 'handle'
 }
 

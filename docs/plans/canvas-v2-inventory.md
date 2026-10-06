@@ -106,7 +106,7 @@ Phase F cleared the key router, Esc chain, focus owner and arming rows (plan §4
 
 | ID | Where | Handler | Fate | Phase |
 |---|---|---|---|---|
-| INV-KEY-06 | `app/canvas-commands/index.ts:314-397` | Keymap: tool letters V H P W K Z R E L T M, Cycle labels `N` (`:366`), zoom `Ctrl+Plus`/`Ctrl+Minus` (`:361-362`), Fit `Shift+F`/`Ctrl+0`, Rotate… `Ctrl+Alt+R` (`:356`), Grid/Snap/Rulers `Shift+G/S/R` | change; done in phase 1: N, Shift+N, Shift+←/→, Shift+↑, Cycle labels on Shift+L (convention), Shift+↓ unbound, mod+arrow large step; left: zoom step, `+`/`−`, Shift+2, Home; Rulers `Shift+R` deleted with the rulers (U33, cut stage) | 2 |
+| INV-KEY-06 | `app/canvas-commands/index.ts:314-397` | Keymap: tool letters V H P W K Z R E L T M, Cycle labels `N` (`:366`), zoom `Ctrl+Plus`/`Ctrl+Minus` (`:361-362`), Fit `Shift+F`/`Ctrl+0`, Rotate… `Ctrl+Alt+R` (`:356`), Grid/Snap/Rulers `Shift+G/S/R` | change; done in phase 1: N, Shift+N, Shift+←/→, Shift+↑, Cycle labels on Shift+L (convention), Shift+↓ unbound, mod+arrow large step; left: zoom step, `+`/`−`, Shift+2, Home; done in the cut stage: Rulers `Shift+R` deleted with the rulers (U33) | 2 |
 | INV-KEY-09 | `canvas/runtime/interaction/zone-drawing-tool.ts:231-252`; `object-stamp-tool.ts:316-328`; `saved-object-stamp-tool.ts:151-165`; `plant-spacing-tool.ts:205-211`, `:521-526`; `stamp-rotation.ts:22-33` | Tool keys by `isEditableTarget` only, so they act with focus on `<body>`; Place a stamp leaves on Esc with a pick held | change; tool commands from the keymap (until F the keyboard port with today's gating, Plant a row's Esc as today); every tool drops its transient first (convention) | 2 |
 | INV-KEY-14 | `app/tool-card/content.ts:69-74`, `:91` | Tool-card Esc meaning and the Select hint follow the Scroll wheel setting | change; the hints and F1's gesture rows as a static list with three platform notes (no `describeBindings`, cut 2026-10-01) | 2 |
 | INV-KEY-20 | `components/canvas/StampChooser.tsx:49-54`; `SpeciesChooser.tsx:86-90`; `SiteOnboarding.tsx:42-46`; `components/canvas/InspectionLens.tsx:121`; `ZoomControls.tsx:138-168`; `components/shared/ActionMenu.tsx:262-281`; `web/BrowserAppShell.tsx:199-203` (`PhoneSearch`, the phone search card) | Local widget keys (JSX `onKeyDown` on the widget's own element) | keep; the one-Esc rule is held by `app/keyboard/escape-chain.test.ts` (plan section 5, behaviour tests; no P13 allowlist is written). Their arrows are checked against the router's arrow-owning rule in INV-KEY-23 | — |
@@ -114,13 +114,13 @@ Phase F cleared the key router, Esc chain, focus owner and arming rows (plan §4
 
 ## 9. Stored data that touches bearing (INV-DATA)
 
-None of these changes the `.canopi` format. Settings gain one defaulted field, `LastView.bearing` (shipped in phase 1; ADR 0021: new settings fields have defaults, which is not a migration); the per-area PDF angle was dropped (U3). Any other stored-format change may be made when it improves the project and is named in the handoff (ADR 0021, "Later format changes").
+None of these changes the `.canopi` format. Settings lose `snap_to_guides` and `LastView.bearing`, which phase 1 added (phase 2's cut stage, U33); the per-area PDF angle was dropped (U3). Any other stored-format change may be made when it improves the project and is named in the handoff (ADR 0021, "Later format changes").
 
 | ID | Where | Today | Fate | Phase |
 |---|---|---|---|---|
 | INV-DATA-04 | `common-types/src/views.rs:199-220` | Story steps hold only a view id | keep (steps inherit the view's bearing) | — |
 | INV-DATA-11 | `common-types/src/settings.rs:77-79`, `:207-216` | `scroll_wheel: zoom \| pan` | keep the stored values; the UI becomes "Pointing device: Mouse / Trackpad" over the same field | 2 |
-| INV-DATA-16 | `canvas/runtime/scene/codec.ts:348-368` | Ruler guides stored as latitudes and longitudes in `extra.guides` | delete: ruler guides are removed (U33) | 2 (cut stage) |
+| INV-DATA-16 | `canvas/runtime/scene/codec.ts:348-368` | Ruler guides stored as latitudes and longitudes in `extra.guides` | delete; done in the cut stage: ruler guides are removed, and the scene reads and writes no `extra` (U33) | 2 (cut stage) |
 | INV-DATA-19 | `common-types/src/design.rs:14`; `generated/canopi-design-format.ts:18` | `north_bearing_deg` (v1 Design anchor) refused as a root key | keep refused; never reuse the name | — |
 
 ## 10. Documents, patterns, boards and locales (INV-DOC)
@@ -145,7 +145,7 @@ Line numbers are hints at the planning commit. Since U1 every document row is ch
 | INV-DOC-18 | `.interface-design/patterns/canvas-workspace.md:36`, `:41`, `:42`, `:50`, `:54` | Select card "Space + drag or H pans · wheel zooms"; Shift keeps 45°; "Space pans temporarily"; lens source rectangle; stories fly | change: pan hints per bindings, screen-relative constraints, lens and story bearing | release close, 2 |
 | INV-DOC-19 | `.interface-design/patterns/controls-and-shell.md:9`, `:34`, `:56` | View menu without rotation commands; Settings "Scroll wheel"; phone strip Select, Pan, Place plants, Polygon | change: Reset north, Turn view left/right 15° (1); Pointing device (2); phone keeps Pan, adds compass (1) | release close, 2 |
 | INV-DOC-20 | `.interface-design/patterns/controls-and-shell.md:15`, `:42`, `:44` | Recent sketch "north up"; PDF sheet; preview displacement by drag and arrows | keep `:15`; change `:42`, `:44` for Map orientation | release close |
-| INV-DOC-21 | `CONTEXT.md:31`, `:39`, `:41`, `:43`, `:75` | Settings › Canvas names Scroll wheel; "Only the camera moves"; Last view; Saved view "camera position"; right-click menu | change: Pointing device; position and direction; last view keeps the bearing; "a still right-click"; glossary term for the compass | release close, 2 |
+| INV-DOC-21 | `CONTEXT.md:31`, `:39`, `:41`, `:43`, `:75` | Settings › Canvas names Scroll wheel; "Only the camera moves"; Last view; Saved view "camera position"; right-click menu | change: Pointing device; position and direction; last view keeps centre and zoom; "a still right-click"; glossary term for the compass | release close, 2 |
 | INV-DOC-22 | `docs/review-checklist.md:21`, `:24`, `:27`, `:28`, `:87-88` | Pan, zoom, search; Esc; right-click; arrows with Shift; Scroll wheel | change: rotation checks, right-drag, mod large step, Pointing device | release close, 2 |
 | INV-DOC-23 | `docs/release-notes/v2.0.0.md:3`, `:12`, `:14`, `:56` | "Pan, zoom and search move only the view"; right-click; nudge 1 m with Shift; Scroll wheel setting | change in the release that ships each phase (2.0 is on hold) | release close, 2 |
 | INV-DOC-24 | `docs/plans/canvas-controls.md:1-65` | Draft controls plan, superseded by the rotation decision | delete; replaced by `canvas-v2-plan.md`, `canvas-v2-spec.md` and this inventory | plan |
@@ -177,4 +177,4 @@ Rows phases 0, F and 1 cleared are deleted (full text at the commits above). Two
 | ID | Fate |
 |---|---|
 | INV-LSN-13 | the rotation handle's `click` stop and `keydown` swallow moved to `chrome/handle-layer.ts:8` as is; handling only its own keys is a later behaviour change, not scheduled |
-| INV-KEY-18 | element keydown on runtime-owned controls and fields stays the P8 allowlist: `chrome/handle-layer.ts`, `chrome/text-entry-host.ts`, `chrome/locked-affordance.ts` |
+| INV-KEY-18 | element keydown on runtime-owned controls and fields stays the P8 allowlist: `chrome/handle-layer.ts`, `chrome/text-entry-host.ts` |

@@ -9,6 +9,7 @@ import { createSceneCanvasDocumentSurface, type SceneCanvasDocumentSurface } fro
 import { createSceneCanvasQuerySurface, type SceneCanvasQuerySurface } from '../query-surface'
 import { SceneCanvasInspectionOwner } from '../inspection-lens'
 import type { SceneRendererDefinition } from '../renderers/scene-types'
+import type { ToolId } from '../interaction-types'
 import type {
   CanvasCommandSurface,
   CanvasPlantRowSpacingField,
@@ -22,7 +23,6 @@ import {
   type SceneStateReader,
 } from '../scene'
 import { SceneHistory } from '../scene-history'
-import { SceneRuntimeChromeCoordinator } from './chrome-coordinator'
 import { SceneRuntimeDocumentBridge } from './document'
 import {
   createDetachedSceneRuntimePanelTargetAdapter,
@@ -48,7 +48,7 @@ import type { CameraDriverHost } from '../view/camera-driver'
 import { createCameraDriverHost } from '../view/driver-host'
 import type { ViewFrameSource } from '../view/types'
 
-type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
+type RuntimeInvalidationKind = 'scene' | 'viewport'
 
 /** A detached runtime has no platform preference: it eases. */
 const NO_REDUCED_MOTION: ReadonlySignal<boolean> = signal(false)
@@ -73,8 +73,8 @@ export interface SceneRuntimeConstructionCallbacks {
   readonly syncCanvasSignalsFromScene: () => void
   readonly invalidate: (kind: RuntimeInvalidationKind) => void
   readonly incrementSceneRevision: () => void
-  readonly renderChrome: () => void
-  readonly addGuide: (axis: 'h' | 'v', worldPosition: number) => void
+  /** The Design's canvas chrome shows (true) or hides: the grid draws only while it shows. */
+  readonly setChromeShown: (shown: boolean) => void
   readonly setHoveredTarget: (
     target: SceneDesignObjectTarget | null,
     options?: { invalidate?: boolean },
@@ -84,10 +84,12 @@ export interface SceneRuntimeConstructionCallbacks {
   readonly canRedoTransientHistory: () => boolean
   readonly undoTransientHistory: () => boolean
   readonly redoTransientHistory: () => boolean
-  readonly setInteractionTool: (name: string) => void
-  readonly readInteractionTool: () => string | null
+  readonly setInteractionTool: (id: ToolId) => void
+  readonly readInteractionTool: () => ToolId | null
   readonly plantRowSpacing: CanvasPlantRowSpacingField
   readonly disposeInteraction: () => void
+  /** The interaction session's re-origin hold (ToolHost.holdsReorigin); false with no session mounted. */
+  readonly holdsReorigin: () => boolean
 }
 
 export interface SceneRuntimeConstruction {
@@ -104,7 +106,6 @@ export interface SceneRuntimeConstruction {
   readonly rendering: SceneRuntimeRenderScheduler
   readonly presentation: SceneRuntimePresentationController
   readonly inspection: SceneCanvasInspectionOwner
-  readonly chrome: SceneRuntimeChromeCoordinator
   readonly appAdapter: CanvasRuntimeAppAdapter
   readonly commandSurface: CanvasCommandSurface
   readonly sceneCommands: SceneEditCoordinator & SceneCommandAdmission
@@ -191,7 +192,6 @@ export function createSceneRuntimeConstruction(
       })(scale)
     },
   })
-  const chrome = new SceneRuntimeChromeCoordinator()
   const disposeEffects: Array<() => void> = []
   // Every later Scene plane change reaches the camera. A re-origin, and any plane change while a map is attached (a hydration
   // on a mount-existing start), re-express the live driver in the new plane: headless, the placement keeps its ground; attached,
@@ -219,18 +219,15 @@ export function createSceneRuntimeConstruction(
           publish: () => presentation.buildRendererSnapshot({ overview: true }),
         }
       }
-      const ticket = sceneEdits.issueTicket()
       const refresh = await presentation.refreshCurrentPresentationData()
       return {
         publish: () => {
           presentation.publishRefresh(refresh)
-          if (!refresh.failure) sceneEdits.applyBackfills(ticket, refresh.backfills)
           return presentation.buildRendererSnapshot()
         },
       }
     },
     placeOpenedDesign: () => documentSurface.applyPendingOpen(),
-    renderChrome: callbacks.renderChrome,
   })
   const documents = new SceneRuntimeDocumentBridge({
     authority: sceneEdits,
@@ -247,24 +244,13 @@ export function createSceneRuntimeConstruction(
     getSnapshot: () => presentation.buildRendererSnapshot(),
     setHoveredTarget: callbacks.setHoveredTarget,
   })
-  // The opening bearing (spec §4.15): the stored last view's on the first Design opened, then the live target for later opens
-  // in the session, so the per-device last view carries over without waiting for it to settle and be written.
-  let lastViewBearingRead = false
-  const readOpeningBearing = () => {
-    if (lastViewBearingRead) return cameraHost.current().bearingTarget()
-    lastViewBearingRead = true
-    return appAdapter.settings.readLastView?.()?.bearing ?? 0
-  }
   const documentSurface = createSceneCanvasDocumentSurface({
-    readOpeningBearing,
     inspection,
     documents,
     cameraHost,
     viewNavigation,
-    chrome,
     rendering,
-    renderChrome: callbacks.renderChrome,
-    addGuide: callbacks.addGuide,
+    setChromeShown: callbacks.setChromeShown,
     clearHoveredEntity: () => callbacks.setHoveredTarget(null, { invalidate: false }),
     disposeRuntime: () => {
       runtimeActive = false
@@ -301,11 +287,18 @@ export function createSceneRuntimeConstruction(
     sceneState: sceneStore,
     authority: sceneEdits,
     commandAdmission: sceneEdits,
+    held: callbacks.holdsReorigin,
   })
   // Each frame that moved the placement, screen or mode re-reads the live frame's centre (the controller filters the rest).
   disposeEffects.push(effect(() => {
     const frame = cameraHost.frames.viewFrame.value
     untracked(() => reorigin.observe(frame))
+  }))
+  // A hold ends in a tool call (a release, a dropped transient) or with the text entry's close, and each bumps the transient
+  // history revision: a frame the hold turned away is observed then.
+  disposeEffects.push(effect(() => {
+    void transientHistoryRevision.value
+    untracked(() => reorigin.resume())
   }))
   disposeEffects.push(() => reorigin.dispose())
   const focusSpecies = (canonicalName: string | null) => {
@@ -338,7 +331,6 @@ export function createSceneRuntimeConstruction(
     },
     mutations,
     sceneEdits,
-    presentationMaintenance: sceneEdits,
     presentation,
     settings: appAdapter.settings,
     setInteractionTool: callbacks.setInteractionTool,
@@ -369,7 +361,6 @@ export function createSceneRuntimeConstruction(
     transientHistoryRevision,
     rendering,
     presentation,
-    chrome,
     appAdapter,
     commandSurface,
     sceneCommands: sceneEdits,

@@ -3,21 +3,33 @@ import {
   createToolHarness,
   createToolSceneSource,
   plantEntity,
+  sceneStoreWith,
   useStubTools,
   type ToolHarness,
   type ToolHarnessOptions,
 } from '../../../__tests__/support/tool-harness'
 import { t } from '../../../i18n'
+import { getStratumColor } from '../../plants'
 import type { PlantStampSourceInput } from '../../plant-stamp-source'
+import { resolvePlantBaseColor } from '../plant-presentation'
+import type { SpeciesCacheEntry } from '../species-cache'
 import type { WorldPoint } from '../view/types'
 import type { DraftShape } from './draft'
 import { createPlantStampTool, placePlantFromSpecies } from './plant-stamp'
+import { plantEntityFromStampSource } from './tool-actions'
 import { createToolScene } from './tool-host'
 import '../../../__tests__/support/camera-tolerance'
 
 vi.mock('./registry', () => ({ TOOL_REGISTRY: {} }))
 
 const APPLE: PlantStampSourceInput = { canonical_name: 'Malus domestica', common_name: 'Apple', stratum: null, width_max_m: 6 }
+
+/** The species' own symbol radius in CSS px: the plant a click would place, with no plant near it to crowd it. */
+function uncrowdedRadiusPx(species: PlantStampSourceInput, pixelsPerMetre: number): number {
+  const empty = sceneStoreWith({})
+  const plant = plantEntityFromStampSource(empty.persisted, species, { x: 0, y: 0 }, 'probe')
+  return createToolScene(createToolSceneSource(empty, { pixelsPerMetre: () => pixelsPerMetre })).plantPresentation(plant).radiusPx
+}
 
 const harnesses: ToolHarness[] = []
 
@@ -102,7 +114,7 @@ describe('Place plants tool', () => {
   })
 
   it('place-at waits at its snapped point for the species, then places once', () => {
-    const h = stampHarness(null, { scale: 4, snapping: { grid: true, guides: false } })
+    const h = stampHarness(null, { scale: 4, snapping: { grid: true } })
 
     // Place plants here, from the menu: the host snaps the point (5 m grid at 4 px/m).
     expect(h.host.command({ kind: 'place-at', world: { x: 13.25, y: 16.75 } })).toBe('handled')
@@ -118,6 +130,22 @@ describe('Place plants tool', () => {
     // The pick is spent: another species places nothing more.
     h.host.sourceChanged({ kind: 'species', species: { ...APPLE, canonical_name: 'Pyrus communis' } })
     expect(h.store.persisted.plants).toHaveLength(1)
+  })
+
+  it('the waiting point holds re-origin but is no Esc layer, and leaves with the tool', () => {
+    const h = stampHarness(null)
+    h.host.command({ kind: 'place-at', world: { x: 30, y: 20 } })
+    expect(h.host.holdsReorigin()).toBe(true)
+
+    // The tool layer's Esc leaves for Select at once (U35); the tool takes no Esc of its own.
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
+    expect(h.host.command({ kind: 'escape' })).toBe('pass')
+    h.arm('select')
+    expect(h.host.holdsReorigin()).toBe(false)
+
+    // The point left with the tool: a pick no longer places there.
+    h.arm('plant-stamp', { kind: 'species', species: APPLE })
+    expect(h.store.persisted.plants).toHaveLength(0)
   })
 
   it('place-at with a species chosen places at once', () => {
@@ -166,7 +194,7 @@ describe('Place plants tool', () => {
         kind: 'ellipse', center: at, radiusX: 3, radiusY: 3, rotationDeg: 0, style: { token: 'draft', widthPx: 1.5, dash: [6, 5] },
       }])
       expect(shapesOf(h, 'polyline')).toEqual([{ kind: 'polyline', points: [at, { x: 10, y: 10 }], style: { token: 'draft', widthPx: 1.5, dash: [4, 4] } }])
-      const radiusPx = createToolScene(createToolSceneSource(h.store, { pixelsPerMetre: () => 10 })).plantPresentation('Malus domestica')!.radiusPx
+      const radiusPx = uncrowdedRadiusPx(APPLE, 10)
       expect(shapesOf(h, 'label')).toEqual([
         { kind: 'label', anchor: { x: 13, y: 11 }, offsetPx: { x: 0, y: 0 }, text: 'Mature width up to 6 m', tone: 'hint' },
         { kind: 'label', anchor: at, offsetPx: { x: 0, y: Math.max(radiusPx, 6) + 16 }, text: '5 m to Pear', tone: 'measure' },
@@ -176,6 +204,32 @@ describe('Place plants tool', () => {
       // The preview replaces the hover restyle and the plant tooltip.
       expect(h.chrome.tooltip).toBeNull()
       expect(h.store.persisted).toEqual(before)
+    })
+
+    it('the Place plants ghost of a species not in the Design shows its stratum colour', () => {
+      // A Favorite or recent pick: no plant of it in the Design and no species-cache entry, so only the source has its stratum.
+      const h = stampHarness({ ...APPLE, stratum: 'emergent' }, { scale: 10 })
+
+      h.hover({ x: 130, y: 140 })
+
+      expect(ghostPlant(h)?.color).toBe(getStratumColor('emergent'))
+    })
+
+    it('the ghost of a Design species picked without a stratum takes the colour its placed plant draws in', () => {
+      // Plant detail's Place builds a source with no stratum; the renderer's species cache has the Design species' stratum.
+      const speciesCache = new Map([['Malus domestica', { stratum: 'high' } as SpeciesCacheEntry]])
+      const h = stampHarness(APPLE, {
+        scale: 10,
+        scene: { plants: [plantEntity('tree', 'Malus domestica', { x: 0, y: 0 })] },
+      })
+
+      h.hover({ x: 130, y: 140 })
+      const ghost = ghostPlant(h)!
+      h.click({ x: 130, y: 140 })
+      const placed = h.store.persisted.plants.at(-1)!
+
+      expect(resolvePlantBaseColor(placed, speciesCache)).toBe(getStratumColor('high'))
+      expect(resolvePlantBaseColor(ghost, speciesCache)).toBe(getStratumColor('high'))
     })
 
     it('has no ring without a mature width and no guide to a plant beyond 320 px', () => {
@@ -240,8 +294,7 @@ describe('Place plants tool', () => {
     it('sets the nearest plant\'s label below the symbol at its crowded radius', () => {
       // At 200 px/m the species' own radius is 6.3 px; 5 cm from a plant the symbol crowds to 4.2 px, under the 6 px floor.
       const h = stampHarness(APPLE, { scale: 200, scene: { plants: [plantEntity('pear', 'Pyrus communis', { x: 0.55, y: 0.5 })] } })
-      const scene = createToolScene(createToolSceneSource(h.store, { pixelsPerMetre: () => 200 }))
-      expect(scene.plantPresentation('Malus domestica')!.radiusPx).toBeGreaterThan(6)
+      expect(uncrowdedRadiusPx(APPLE, 200)).toBeGreaterThan(6)
 
       h.hover({ x: 100, y: 100 })
 

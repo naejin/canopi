@@ -1,6 +1,6 @@
 /**
  * Font stacks for text the canvas draws itself: Pixi labels and draft chips,
- * Canvas2D rulers and lens badges, and runtime-owned DOM overlays. Pixi and
+ * Canvas2D lens badges, and runtime-owned DOM overlays. Pixi and
  * Canvas2D cannot resolve CSS custom properties, so these mirror `--font-sans`
  * and `--font-mono` in `styles/global.css` (bundled Source Sans 3 and IBM Plex
  * Mono first, then Noto/system fallbacks for CJK and Cyrillic);

@@ -9,7 +9,7 @@ import {
   type ToolHarnessOptions,
 } from '../../../__tests__/support/tool-harness'
 import type { SceneArrangementTemplate } from '../scene-runtime/arrangement-placement'
-import type { ScenePersistedState } from '../scene/types'
+import type { ScenePersistedState, ScenePlantEntity } from '../scene/types'
 import type { WorldPoint } from '../view/types'
 import type { DraftShape } from './draft'
 import type { CanvasTool } from './tool'
@@ -60,9 +60,28 @@ function ghosts(h: ToolHarness): GhostShape[] {
   return (h.renderer.lastDraft()?.shapes ?? []).filter((shape): shape is GhostShape => shape.kind === 'ghost')
 }
 
-function objectsGhost(shape: GhostShape | undefined): { anchor: WorldPoint; rotationDeg: number; template: SceneArrangementTemplate } {
+function objectsGhost(shape: GhostShape | undefined): { template: SceneArrangementTemplate } {
   if (shape?.entity.kind !== 'objects') throw new Error('Expected an objects ghost.')
   return shape.entity
+}
+
+/** The first plant the stamp's ghost draws, where a press would place it. */
+function ghostPlant(h: ToolHarness): ScenePlantEntity {
+  return objectsGhost(ghosts(h)[0]).template.plants[0]!.entity
+}
+
+/** An offset from the pick's anchor turned by the held angle, as the placement turns it (the selection rotation's sense). */
+function turned(offset: WorldPoint, degrees: number): WorldPoint {
+  const radians = (degrees * Math.PI) / 180
+  return {
+    x: offset.x * Math.cos(radians) - offset.y * Math.sin(radians),
+    y: offset.x * Math.sin(radians) + offset.y * Math.cos(radians),
+  }
+}
+
+function expectPoint(actual: WorldPoint, expected: WorldPoint): void {
+  expect(actual.x).toBeCloseTo(expected.x, 6)
+  expect(actual.y).toBeCloseTo(expected.y, 6)
 }
 
 function selected(h: ToolHarness) {
@@ -73,7 +92,6 @@ const APPLE = plantEntity('plant-1', 'Malus domestica', { x: 50, y: 60 }, {
   commonName: 'Apple',
   color: '#C44230',
   symbol: 'triangle',
-  stratum: 'high',
   canopySpreadM: 4,
   rotationDeg: 15,
   notes: 'Source plant',
@@ -96,7 +114,6 @@ describe('object stamp tool', () => {
     // The pick's ghost sits on the picked plant, anchored where it was pressed, level.
     expect(ghosts(h)).toHaveLength(1)
     expect(ghosts(h)[0]!.opacity).toBe(0.62)
-    expect(objectsGhost(ghosts(h)[0])).toMatchObject({ anchor: { x: 54, y: 63 }, rotationDeg: 0 })
     expect(objectsGhost(ghosts(h)[0]).template.plants.map(({ entity }) => entity.position)).toEqual([{ x: 50, y: 60 }])
     expect(h.record.guidance.at(-1)).toMatchObject({
       stamp: { kind: 'plant', name: 'Apple', plants: 1, species: 1 },
@@ -121,7 +138,6 @@ describe('object stamp tool', () => {
       commonName: 'Apple',
       color: '#C44230',
       symbol: 'triangle',
-      stratum: 'high',
       canopySpreadM: 4,
       position: { x: 96, y: 117 },
       rotationDeg: 15,
@@ -132,7 +148,7 @@ describe('object stamp tool', () => {
     expect(selected(h)).toEqual([{ kind: 'plant', id: clone.id }])
     expect(commits).toEqual(['interaction-object-stamp'])
     // The ghost stands on the copy while the button is down; the release hides it.
-    expect(objectsGhost(ghosts(h)[0]).anchor).toEqual({ x: 100, y: 120 })
+    expect(ghostPlant(h).position).toEqual({ x: 96, y: 117 })
     h.release()
     expect(ghosts(h)).toEqual([])
     // Each later click places again: the pick is still held.
@@ -151,7 +167,8 @@ describe('object stamp tool', () => {
     expect(h.host.command({ kind: 'rotate-held', stepDeg: 15 })).toBe('handled')
     expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(15)
     // The release hid the ghost; the turn draws it again where it stood, about the pick's anchor (today's rotateBy).
-    expect(objectsGhost(ghosts(h)[0])).toMatchObject({ anchor: { x: 54, y: 63 }, rotationDeg: 15 })
+    const offset = turned({ x: -4, y: -3 }, 15)
+    expectPoint(ghostPlant(h).position, { x: 54 + offset.x, y: 63 + offset.y })
 
     for (let turn = 0; turn < 6; turn += 1) h.host.command({ kind: 'rotate-held', stepDeg: 15 })
     expect(h.host.command({ kind: 'rotate-held', stepDeg: -15 })).toBe('handled')
@@ -159,9 +176,7 @@ describe('object stamp tool', () => {
 
     // The plant was picked 4 m east and 3 m south of its centre; at 90° that offset turns too.
     h.hover({ x: 100, y: 120 })
-    const ghostPlant = objectsGhost(ghosts(h)[0]).template.plants[0]!.entity
-    expect(ghostPlant.position.x).toBeCloseTo(103, 6)
-    expect(ghostPlant.position.y).toBeCloseTo(116, 6)
+    expectPoint(ghostPlant(h).position, { x: 103, y: 116 })
     h.click({ x: 100, y: 120 })
     expect(h.store.persisted.plants[1]?.position).toEqual({ x: 103, y: 116 })
   })
@@ -176,7 +191,7 @@ describe('object stamp tool', () => {
 
     h.press({ x: 200, y: 150 })
     // Copies keep their source's orientation, like Paste and Duplicate: the pick is not turned to the screen.
-    expect(objectsGhost(ghosts(h)[0])).toMatchObject({ rotationDeg: 0 })
+    expectPoint(ghostPlant(h).position, { x: 3, y: 0 })
     expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(0)
     h.release()
 
@@ -189,7 +204,8 @@ describe('object stamp tool', () => {
     // ] turns it from there, and the tool card reads the turn.
     h.host.command({ kind: 'rotate-held', stepDeg: 15 })
     expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(15)
-    expect(objectsGhost(ghosts(h)[0])).toMatchObject({ rotationDeg: 15 })
+    const offset = turned({ x: 3, y: 0 }, 15)
+    expectPoint(ghostPlant(h).position, { x: placedAt.x + offset.x, y: placedAt.y + offset.y })
   })
 
   it('keeps the passive hover off while a pick is held, and runs it before', () => {
@@ -217,7 +233,7 @@ describe('object stamp tool', () => {
     h.press({ x: 120, y: 120 })
     expect(h.store.persisted.plants).toHaveLength(2)
     const placed = h.renderer.lastDraft()
-    expect(objectsGhost(ghosts(h)[0]).anchor).toEqual({ x: 120, y: 120 })
+    expect(ghostPlant(h).position).toEqual({ x: 120, y: 120 })
     h.cancel('pointercancel')
     expect(h.renderer.lastDraft()).toEqual(placed)
   })
@@ -226,7 +242,7 @@ describe('object stamp tool', () => {
     const h = stampHarness({ plants: [smallApple({ x: 40, y: 40 })] })
     const hoverShows = (at: { x: number; y: number }) => {
       h.hover(at)
-      expect(objectsGhost(ghosts(h)[0]).anchor).toEqual(at)
+      expect(ghostPlant(h).position).toEqual(at)
     }
 
     h.click({ x: 40, y: 40 })
@@ -236,7 +252,7 @@ describe('object stamp tool', () => {
     // A drag after a placing press: the ghost follows the pointer, and the release hides it.
     h.press({ x: 90, y: 90 })
     h.move({ x: 110, y: 100 })
-    expect(objectsGhost(ghosts(h)[0]).anchor).toEqual({ x: 110, y: 100 })
+    expect(ghostPlant(h).position).toEqual({ x: 110, y: 100 })
     h.release()
     expect(ghosts(h)).toEqual([])
     hoverShows({ x: 100, y: 130 })
@@ -286,8 +302,8 @@ describe('object stamp tool', () => {
     h.wheelZoom({ x: 40, y: 40 }, 2)
     h.advance(0)
     // The zoom keeps the ground under the pointer: the ghost stands where the pick was pressed.
-    expect(objectsGhost(ghosts(h)[0]).anchor.x).toBeCloseTo(40, 6)
-    expect(objectsGhost(ghosts(h)[0]).anchor.y).toBeCloseTo(40, 6)
+    expect(ghostPlant(h).position.x).toBeCloseTo(40, 6)
+    expect(ghostPlant(h).position.y).toBeCloseTo(40, 6)
   })
 
   it('every cancellation reason hides the ghost until the next hover; none drops the pick', () => {
@@ -308,48 +324,32 @@ describe('object stamp tool', () => {
     expect(h.store.persisted.plants).toHaveLength(2)
   })
 
-  it('keeps the ghost on its ground through a re-origin with the pointer off the map', () => {
+  it('a re-origin hides the ghost until the next hover, which shows it under the pointer with the pick', () => {
     const h = stampHarness({ plants: [smallApple({ x: 40, y: 40 })] })
     h.click({ x: 40, y: 40 })
     h.hover({ x: 90, y: 90 })
     h.leave()
-    const before = h.plane
-    const anchor = objectsGhost(ghosts(h)[0]).anchor
-    const plant = objectsGhost(ghosts(h)[0]).template.plants[0]!.entity.position
+    expect(ghosts(h)).toHaveLength(1)
 
     h.reorigin({ lon: 0.01, lat: 0.005 })
     h.advance(0)
-
-    const moved = h.plane.toPlane(before.toGeo(anchor))
-    expect(Math.hypot(moved.x - anchor.x, moved.y - anchor.y)).toBeGreaterThan(100)
-    const ghost = objectsGhost(ghosts(h)[0])
-    expect(ghost.anchor.x).toBeCloseTo(moved.x, 6)
-    expect(ghost.anchor.y).toBeCloseTo(moved.y, 6)
-    // The pick keeps its offset from the anchor.
-    expect(ghost.template.plants[0]!.entity.position.x - ghost.anchor.x).toBeCloseTo(plant.x - anchor.x, 6)
-    expect(ghost.template.plants[0]!.entity.position.y - ghost.anchor.y).toBeCloseTo(plant.y - anchor.y, 6)
-    // `]` turns it where it now stands.
-    h.host.command({ kind: 'rotate-held', stepDeg: 15 })
-    expect(objectsGhost(ghosts(h)[0]).anchor.x).toBeCloseTo(moved.x, 6)
-    expect(objectsGhost(ghosts(h)[0]).anchor.y).toBeCloseTo(moved.y, 6)
-
-    // In overview the ghost stays hidden through a re-origin.
-    h.view.setViewport({ x: 200, y: 150, scale: 0.05 })
-    h.advance(0)
-    h.reorigin({ lon: 0.02, lat: 0.01 })
-    h.advance(0)
     expect(ghosts(h)).toEqual([])
+    // `]` turns the pick; its ghost stays hidden.
+    h.host.command({ kind: 'rotate-held', stepDeg: 15 })
+    expect(ghosts(h)).toEqual([])
+
+    h.hover({ x: 120, y: 80 })
+    expectPoint(ghostPlant(h).position, h.world({ x: 120, y: 80 }))
   })
 
   it('Esc returns to Select at once under LEGACY, pick and all', () => {
     const h = stampHarness({ plants: [smallApple({ x: 40, y: 40 })] })
 
     h.click({ x: 40, y: 40 })
-    expect(h.host.activeToolHasTransient()).toBe(false)
-    expect(h.host.escapeHint()).toBe('leave-tool')
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
     expect(h.host.command({ kind: 'escape' })).toBe('handled')
 
-    expect(h.host.activeTool.value).toBe('select')
+    expect(h.toolState.value).toBe('select')
     expect(ghosts(h)).toEqual([])
   })
 
@@ -377,7 +377,7 @@ describe('object stamp tool', () => {
   it('snaps Object Stamp placement by the sampled plant anchor', () => {
     const h = stampHarness(
       { plants: [plantEntity('plant-1', 'Malus domestica', { x: 10, y: 10 }, { commonName: 'Apple', canopySpreadM: 4 })] },
-      { viewport: { x: 0, y: 0, scale: 4 }, snapping: { grid: true, guides: false } },
+      { viewport: { x: 0, y: 0, scale: 4 }, snapping: { grid: true } },
     )
 
     // Screen (44, 44) -> world (11, 11), so the sampled anchor is +1,+1 from the plant position.
@@ -559,7 +559,7 @@ describe('object stamp tool', () => {
   it('snaps Object Stamp placement by the sampled annotation anchor', () => {
     const h = stampHarness(
       { annotations: [textNote('annotation-1', { x: 10, y: 10 }, 'Note', { fontSize: 20 })] },
-      { viewport: { x: 0, y: 0, scale: 4 }, snapping: { grid: true, guides: false } },
+      { viewport: { x: 0, y: 0, scale: 4 }, snapping: { grid: true } },
     )
 
     // Screen (44, 44) -> world (11, 11), so the sampled anchor is +1,+1 from the annotation position.
@@ -654,7 +654,6 @@ describe('object stamp tool', () => {
       plants: [plantEntity('plant-1', 'Malus domestica', { x: 40, y: 40 }, {
         commonName: 'Apple',
         color: '#C44230',
-        stratum: 'high',
         canopySpreadM: 4,
         rotationDeg: 15,
         notes: 'Tree',

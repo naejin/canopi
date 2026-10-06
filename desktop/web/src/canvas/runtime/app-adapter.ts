@@ -13,7 +13,6 @@ import type {
   CanvasRuntimeDocumentMetadata,
   CanvasSceneEditCommandSurface,
 } from './runtime'
-import { SCENE_OWNED_EXTRA_KEYS } from './scene-extra-keys'
 
 export interface CanvasRuntimeLayerProjectionSource {
   readonly name: string
@@ -23,10 +22,8 @@ export interface CanvasRuntimeLayerProjectionSource {
 }
 
 interface CanvasRuntimeChromeSettingsSnapshot {
+  /** The grid; the app hides it while it presents the map. */
   readonly gridVisible: boolean
-  readonly rulersVisible: boolean
-  /** The Design's ruler guides; the app hides them while it presents the map. */
-  readonly guidesVisible: boolean
 }
 
 interface CanvasRuntimeCleanStateAdapter {
@@ -133,17 +130,15 @@ export interface CanvasRuntimeSettingsAdapter {
   readLocale(): string
   readChromeOverlay(): CanvasRuntimeChromeSettingsSnapshot
   readSnapToGridEnabled(): boolean
-  readSnapToGuidesEnabled(): boolean
   /** Settings › Canvas › Scroll wheel: what a plain wheel does; pinch and Ctrl wheel always zoom. */
   readScrollWheel(): CanvasScrollWheelSetting
   readPlantSpacingIntervalMeters(): number
-  /** The app's last view as stored, if any: the first Design opened turns to its bearing, and a new or empty Design opens at
-   *  its centre, zoomed out (spec §4.15; the clamp is the runtime's, scene-runtime/construction.ts). */
-  readLastView?(): { readonly lon: number; readonly lat: number; readonly zoom: number; readonly bearing?: number } | null
+  /** The app's last view as stored, if any: a new or empty Design opens at its centre, zoomed out (spec §4.15; the clamp
+   *  is the runtime's, scene-runtime/construction.ts). */
+  readLastView?(): { readonly lon: number; readonly lat: number; readonly zoom: number } | null
   commitPlantSpacingIntervalMeters(meters: number): void
   toggleGridVisible(): void
   toggleSnapToGrid(): void
-  toggleRulersVisible(): void
   subscribeTheme(onChange: () => void): () => void
   subscribeLocale(onChange: () => void): () => void
   subscribeChromeOverlay(onChange: () => void): () => void
@@ -203,14 +198,12 @@ export interface CanvasRuntimeAppAdapter {
 
 /** How a tool's focus request (ToolEffects.requestFocus) leaves the runtime. The FocusOwner implements it. */
 export interface CanvasFocusPort {
-  focusMap(reason: 'tool-requested' | 'text-entry-closed'): void
+  focusMap(): void
 }
 
 export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter {
   let gridVisible = false
   let snapToGrid = false
-  let snapToGuides = false
-  let rulersVisible = false
   let plantSpacingIntervalM = FALLBACK_PLANT_SPACING_INTERVAL_M
   const layerProjections = new Map<string, CanvasRuntimeLayerProjectionSource>()
 
@@ -224,9 +217,8 @@ export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter
     translate: detachedCanvasRuntimeTranslator,
     settings: {
       readLocale: () => 'en',
-      readChromeOverlay: () => ({ gridVisible, rulersVisible, guidesVisible: true }),
+      readChromeOverlay: () => ({ gridVisible }),
       readSnapToGridEnabled: () => snapToGrid,
-      readSnapToGuidesEnabled: () => snapToGuides,
       readScrollWheel: () => 'zoom',
       readPlantSpacingIntervalMeters: () => plantSpacingIntervalM,
       commitPlantSpacingIntervalMeters: (meters) => {
@@ -237,9 +229,6 @@ export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter
       },
       toggleSnapToGrid: () => {
         snapToGrid = !snapToGrid
-      },
-      toggleRulersVisible: () => {
-        rulersVisible = !rulersVisible
       },
       subscribeTheme: subscribeImmediately,
       subscribeLocale: subscribeImmediately,
@@ -288,33 +277,11 @@ function composeDetachedCanvasDocument({
     budget: document.budget,
     budget_currency: document.budget_currency,
     created_at: document.created_at,
-    extra: composeDetachedDocumentExtra(document.extra, canvas.extra),
+    extra: normalizeDetachedExtra(document.extra),
   }
 }
 
-/**
- * Scene-owned `extra` keys come from the scene, every other key from the
- * document. The app composer (app/contracts/document.ts) applies the same
- * rule with the format's owner table; this is the detached runtime's.
- */
-function composeDetachedDocumentExtra(
-  documentExtra: CanopiFile['extra'],
-  canvasExtra: CanopiFile['extra'],
-): Record<string, unknown> {
-  const nextExtra = normalizeDetachedExtra(documentExtra)
-  const sceneExtra = normalizeDetachedExtra(canvasExtra)
-
-  for (const key of SCENE_OWNED_EXTRA_KEYS) {
-    if (Object.prototype.hasOwnProperty.call(sceneExtra, key)) {
-      nextExtra[key] = sceneExtra[key]
-    } else {
-      delete nextExtra[key]
-    }
-  }
-
-  return nextExtra
-}
-
+/** The Design's `extra`, all of it Design Edit's: the scene owns no `extra` key. */
 function normalizeDetachedExtra(extra: CanopiFile['extra']): Record<string, unknown> {
   if (!extra || typeof extra !== 'object' || Array.isArray(extra)) return {}
   return { ...extra }

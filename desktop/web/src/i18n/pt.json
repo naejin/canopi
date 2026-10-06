@@ -157,10 +157,6 @@
       "commitLimitWarning": "Aumente o intervalo ou encurte a linha",
       "dragAlong": "arraste ao longo da fileira"
     },
-    "lockedObject": {
-      "locked": "Bloqueado",
-      "unlock": "Desbloquear"
-    },
     "contextMenu": {
       "ariaLabel": "Comandos de edição da tela",
       "showName": "Mostrar nome",
@@ -184,9 +180,7 @@
     "grid": {
       "grid": "Grade",
       "snapToGrid": "Alinhar à grade",
-      "rulers": "Réguas",
-      "zoom": "Zoom",
-      "rulersNorthUpOnly": "As réguas aparecem quando o norte está para cima"
+      "zoom": "Zoom"
     },
     "overview": {
       "zoomInToEdit": "Aproxime para editar. As plantas ficam ocultas nesta escala.",

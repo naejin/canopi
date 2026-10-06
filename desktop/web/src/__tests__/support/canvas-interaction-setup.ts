@@ -8,7 +8,7 @@ import { clearPlantStampSource } from '../../canvas/plant-stamp-source'
 import { clearSavedObjectStampSource } from '../../canvas/saved-object-stamp-source'
 import {
   IDLE_CANVAS_TOOL_GUIDANCE,
-  selectedObjectIds,
+  currentCanvasSelection,
   setCanvasTool,
   setCanvasToolGuidance,
 } from '../../canvas/session-state'
@@ -23,7 +23,7 @@ import {
   createTestCanvasKeyboardPort,
 } from './canvas-runtime-surfaces'
 import { createTestCanvasQuerySurface } from './canvas-query-surface'
-import { snapToGridEnabled, snapToGuidesEnabled } from '../../app/canvas-settings/signals'
+import { snapToGridEnabled } from '../../app/canvas-settings/signals'
 import { plantSpacingIntervalM, singleKeyShortcuts } from '../../app/settings/state'
 import type { KeyRouterHandle } from '../../app/keyboard/key-router'
 import { installCanvasKeyRouter } from './key-router'
@@ -169,6 +169,7 @@ export const contextMenuHost = {
 export function contextMenuEntryOptions() {
   return {
     translate: t,
+    characterKeyShortcuts: true,
     openPlantAppearance: vi.fn(),
     summary: null,
     openSpeciesDetail: vi.fn(),
@@ -235,12 +236,12 @@ export function createInteractionDeps(
   const setSelection = vi.fn((targets: Iterable<SceneDesignObjectTarget>) => {
     selection = [...targets].map((target) => ({ ...target }))
     store.setSelection(selection)
-    selectedObjectIds.value = new Set(selection.map((target) => target.id))
+    currentCanvasSelection.value = new Set(selection.map((target) => target.id))
   })
   const clearSelection = vi.fn(() => {
     selection = []
     store.setSelection(selection)
-    selectedObjectIds.value = new Set()
+    currentCanvasSelection.value = new Set()
   })
   const render = (overrides.render ?? ((kind: 'scene' | 'viewport') => {
     if (kind === 'scene' || kind === 'viewport') renderedSession?.refreshMeasurements()
@@ -318,7 +319,6 @@ export function createInteractionDeps(
     })) as SceneInteractionSessionDeps['setTool'],
     render,
     readSnapToGridEnabled: () => snapToGridEnabled.value,
-    readSnapToGuidesEnabled: () => snapToGuidesEnabled.value,
     readPlantSpacingIntervalMeters: overrides.readPlantSpacingIntervalMeters ?? (() => plantSpacingIntervalM.value),
     commitPlantSpacingIntervalMeters: overrides.commitPlantSpacingIntervalMeters ?? ((meters) => {
       plantSpacingIntervalM.value = meters
@@ -386,35 +386,6 @@ export function measurementGuideTarget(id: string): SceneDesignObjectTarget {
 
 export function groupTarget(id: string): SceneDesignObjectTarget {
   return { kind: 'group', id }
-}
-
-export function createRecoveringCommandAdmission(): {
-  readonly admission: SceneCommandAdmission
-  readonly recoveryCalls: ReturnType<typeof vi.fn>
-} {
-  let pendingSettlement = true
-  const recoveryCalls = vi.fn()
-  return {
-    admission: {
-      revision: signal(0),
-      // As the scene's coordinator: a pending settlement answers busy to every admission, and only one that asks to
-      // resume it recovers it (the ToolHost's raw-press admission does not ask; the press's own admission does).
-      runWhenSettled<T>(
-        operation: () => T,
-        busyResult: T,
-        options: { resumePending?: boolean } = {},
-      ): T {
-        if (pendingSettlement) {
-          if (options.resumePending !== true) return busyResult
-          pendingSettlement = false
-          recoveryCalls(true)
-          return busyResult
-        }
-        return operation()
-      },
-    },
-    recoveryCalls,
-  }
 }
 
 export function createAbortFailingSceneEdits(
@@ -488,11 +459,6 @@ export function plantHoverTooltip(container: HTMLElement): HTMLElement {
   return tooltip
 }
 
-/** The Unlock affordance the ToolHost's passive hover shows (chrome/locked-affordance.ts), once it has been shown. */
-export function lockedAffordance(container: HTMLElement): HTMLElement | null {
-  return container.querySelector<HTMLElement>('[data-canvas-chrome="locked-affordance"]')
-}
-
 export function nextAnimationFrame(): Promise<void> {
   return new Promise((resolve) => {
     requestAnimationFrame(() => resolve())
@@ -527,7 +493,6 @@ export function makePlant(
     canonicalName,
     commonName: canonicalName,
     color: null,
-    stratum: null,
     canopySpreadM: 2,
     position,
     rotationDeg: null,
@@ -825,11 +790,10 @@ export function installSceneInteractionFixture(
     testView = createTestView({ screen: { width: 400, height: 300 }, viewport: { x: 0, y: 0, scale: 1 } })
     store = new SceneStore()
     sessions = []
-    selectedObjectIds.value = new Set()
+    currentCanvasSelection.value = new Set()
     clearPlantStampSource()
     clearSavedObjectStampSource()
     snapToGridEnabled.value = false
-    snapToGuidesEnabled.value = false
     plantSpacingIntervalM.value = 0.5
     singleKeyShortcuts.value = true
     // The app's key router, with the canvas rows only: keys reach the latest session's port as they do in the workspace.
@@ -858,11 +822,10 @@ export function installSceneInteractionFixture(
     setCanvasTool('select')
     setCanvasToolGuidance(IDLE_CANVAS_TOOL_GUIDANCE)
     container.remove()
-    selectedObjectIds.value = new Set()
+    currentCanvasSelection.value = new Set()
     clearPlantStampSource()
     clearSavedObjectStampSource()
     snapToGridEnabled.value = false
-    snapToGuidesEnabled.value = false
     plantSpacingIntervalM.value = 0.5
     if (disposalErrors.length > 0) throw disposalErrors[0]
   })

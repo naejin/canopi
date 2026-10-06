@@ -157,10 +157,6 @@
       "commitLimitWarning": "Aumenta el intervalo o acorta la línea",
       "dragAlong": "arrastra a lo largo de la fila"
     },
-    "lockedObject": {
-      "locked": "Bloqueado",
-      "unlock": "Desbloquear"
-    },
     "contextMenu": {
       "ariaLabel": "Comandos de edición del lienzo",
       "showName": "Mostrar nombre",
@@ -184,9 +180,7 @@
     "grid": {
       "grid": "Cuadrícula",
       "snapToGrid": "Ajustar a la cuadrícula",
-      "rulers": "Reglas",
-      "zoom": "Zoom",
-      "rulersNorthUpOnly": "Las reglas se muestran cuando el norte está arriba"
+      "zoom": "Zoom"
     },
     "overview": {
       "zoomInToEdit": "Acerca la vista para editar. Las plantas se ocultan a esta escala.",

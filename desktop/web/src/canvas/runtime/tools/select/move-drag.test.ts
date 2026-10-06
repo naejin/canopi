@@ -61,7 +61,7 @@ describe('Select move-drag', () => {
     // At 4 px/m the grid is 5 m. The press is a quarter metre off the plant; the plant, not the pointer, lands on the grid.
     const h = harness({
       viewport: { x: 0, y: 0, scale: 4 },
-      snapping: { grid: true, guides: false },
+      snapping: { grid: true },
       scene: {
         plants: [
           plantEntity('a', 'Malus domestica', { x: 50, y: 50 }),

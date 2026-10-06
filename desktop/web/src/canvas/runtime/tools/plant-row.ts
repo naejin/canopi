@@ -2,8 +2,8 @@
 //
 // Owns Plant a row ('plant-spacing', key W; spec §1.4, §3.2, §3.7): a press on a placed plant picks it as the row's source
 // (the tool card's spacing field asks for focus on that press's release, unless it became a drag), then every hover and every move of a held press previews the row from it, and a press or a drag's release commits it, one
-// Scene Edit that selects the source and the new plants. The recogniser reports a held press's moves at once (slop 0) and
-// the tool keeps today's 4 px itself: a move 4 px from the press on screen makes it a drag, else its release is a click.
+// Scene Edit that selects the source and the new plants. A held press is a drag past the recogniser's slop (spec §1.4); a
+// release inside it is a click.
 // The row's plants repeat the source at the spacing interval of the tool card's field (the spacing commands; Settings keeps
 // the interval). Shift turns the row to 45° steps from the source and turns snapping off (the host's constraint and
 // noSnap), and the host clamps the pointer to the view (clampsToView). A pan, a blur and a tool re-arm keep the source; Esc
@@ -33,8 +33,6 @@ import type { CanvasTool, ToolCommand, ToolContext, ToolPoint } from './tool'
 const PLANT_ROW_DENSE_WARNING_THRESHOLD = 100
 const PLANT_ROW_PREVIEW_POSITION_LIMIT = 250
 const PLANT_ROW_COMMIT_POSITION_LIMIT = 5_000
-/** Today's drag start, on screen from the press; the tool measures it, so the moves inside it still preview. */
-const PLANT_ROW_DRAG_PX = 4
 const PLANT_ROW_GHOST_OPACITY = 0.35
 /** Two points closer than this on screen are the same pointer position (today's 0.001 px). */
 const SAME_POINTER_SCREEN_PX = 0.001
@@ -69,8 +67,6 @@ export function createPlantRowTool(): CanvasTool {
   let missed = false
   let shownCount: { readonly count: number; readonly density: CanvasPlantRowGuidance['density'] } | null = null
   let focusRequest = 0
-  /** A move of the held press went PLANT_ROW_DRAG_PX out: its release commits (today's drag), else it is a click. */
-  let dragging = false
   /** The held press picked the source: its field asks for focus on the release, unless the press became a drag (the map
    *  took focus then; a field focused on the next render would take Esc, Enter and letters from it). */
   let fieldFocusOnRelease = false
@@ -107,7 +103,7 @@ export function createPlantRowTool(): CanvasTool {
     const start = picked.plant.position
     // The ring sits at the radius the scene presents the plant with now (the plant in the scene, for its crowding).
     const presented = tool.scene.persisted.plants.find((plant) => plant.id === picked.sourceId) ?? picked.plant
-    const radiusPx = tool.scene.plantPresentation(presented)?.radiusPx ?? 0
+    const radiusPx = tool.scene.plantPresentation(presented).radiusPx
     const shapes: DraftShape[] = [{ kind: 'circle-px', center: start, radiusPx, style: SOURCE_RING_STROKE }]
     const end = endpoint
     if (!end) return shapes
@@ -173,10 +169,10 @@ export function createPlantRowTool(): CanvasTool {
     source = {
       sourceId: plant.id,
       plant: { ...plant, pinnedName: false, position: { ...plant.position } },
-      label: presentation?.commonName ?? plant.commonName ?? plant.canonicalName,
+      label: presentation.commonName,
       glyph: {
         symbol: resolvePlantSymbolForPlant(plant, persisted.plantSpeciesSymbols),
-        color: presentation?.color ?? plant.color ?? '',
+        color: presentation.color,
       },
     }
     intervalText = formatPlantSpacingIntervalInput(tool.settings.plantSpacingIntervalM())
@@ -222,17 +218,6 @@ export function createPlantRowTool(): CanvasTool {
   function previewAt(point: ToolPoint): void {
     previewPointer = { world: point.world, constrained: point.modifiers.constrain }
     updatePreview(point.snapped)
-  }
-
-  /** A move of the held press: the row follows it, and the first move 4 px out starts the drag and focuses the map. */
-  function followDrag(point: ToolPoint, start: ToolPoint): void {
-    const tool = context()
-    if (!dragging && tool.view.screenDistance(start.world, point.world) >= PLANT_ROW_DRAG_PX) {
-      dragging = true
-      fieldFocusOnRelease = false
-      tool.effects.requestFocus('map')
-    }
-    previewAt(point)
   }
 
   function commitPreview(nextEndpoint: WorldPoint): void {
@@ -329,8 +314,6 @@ export function createPlantRowTool(): CanvasTool {
 
   return {
     id: 'plant-spacing',
-    // The recogniser reports the drag at once, so the moves inside today's 4 px preview too (followDrag measures them).
-    dragSlopPx: 0,
     clampsToView: true,
     constraint() {
       return source ? { kind: 'direction', origin: source.plant.position, stepDeg: 45 } : null
@@ -343,22 +326,24 @@ export function createPlantRowTool(): CanvasTool {
     gesture(g) {
       switch (g.kind) {
         case 'press':
-          dragging = false
           fieldFocusOnRelease = false
           if (source) commitPreview(g.point.snapped)
           else pickSource(g.point)
           break
         case 'drag-start':
+          if (!source) return 'pass'
+          // The drag gives the map its focus, so the field asks for none on the release.
+          fieldFocusOnRelease = false
+          context().effects.requestFocus('map')
+          previewAt(g.point)
+          break
         case 'drag-move':
           if (!source) return 'pass'
-          followDrag(g.point, g.start)
+          previewAt(g.point)
           break
         case 'drag-end':
           if (!source) return 'pass'
-          // A release that never went 4 px out is a click: its press did all a click does but focus the field, and the
-          // preview stays.
-          if (dragging) commitPreview(dragCommitEndpoint(g.point))
-          else focusFieldOnRelease()
+          commitPreview(dragCommitEndpoint(g.point))
           break
         case 'tap':
           // The tap itself stays the host's, as before; only the field's focus request is published.
@@ -403,16 +388,7 @@ export function createPlantRowTool(): CanvasTool {
     },
     sceneChanged: publish,
     viewChanged: publish,
-    planeChanged(reproject) {
-      // A picked source outlives a re-origin (the tool holds no Scene Edit until it commits): its metres follow the plane.
-      if (source) source.plant = { ...source.plant, position: reproject(source.plant.position) }
-      if (endpoint) endpoint = reproject(endpoint)
-      if (previewPointer) previewPointer.world = reproject(previewPointer.world)
-      if (endpoint) updatePreview(endpoint)
-      publish()
-    },
     hasTransient: () => source !== null,
-    escapeHint: () => source ? 'drop-transient' : 'leave-tool',
     cancelTransient(reason) {
       if (reason !== 'escape' || !source) return
       clear()

@@ -1349,7 +1349,7 @@ const SOURCE_TOMBSTONE_POLICIES = [
       'src/app/shell/focus-regions.ts',
       'src/shortcuts/manager.ts',
       'src/web/canvas-shortcuts.ts',
-      // P11, phase 1 (spec §1.5): the grid and guides draw in the world layers;
+      // P11, phase 1 (spec §1.5): the grid and measurement guides draw in the world layers;
       // the Canvas2D scene chrome is gone.
       'src/canvas/runtime/scene-chrome.ts',
     ],
@@ -1625,9 +1625,9 @@ const SYMBOL_OWNERSHIP_POLICIES = [
   },
   {
     kind: 'forbid-source-symbols',
-    name: 'Scene effects do not own persisted layer or guide state',
+    name: 'Scene effects do not own persisted layer state',
     from: ['src/canvas/runtime/scene-runtime/effects.ts'],
-    names: ['layerVisibility', 'guides'],
+    names: ['layerVisibility'],
   },
   {
     kind: 'forbid-source-symbols',
@@ -2000,7 +2000,6 @@ const CANVAS_V2_POLICIES = [
       'src/canvas/runtime/input/selection-drag-guard.ts',
       'src/canvas/runtime/chrome/text-entry-host.ts',
       'src/canvas/runtime/chrome/handle-layer.ts',
-      'src/canvas/runtime/chrome/locked-affordance.ts',
       'src/canvas/runtime/inspection-lens.ts',
       ...TEST_SOURCE_PATTERNS,
     ],
@@ -2868,12 +2867,10 @@ describe('canvas v2 policies', () => {
       plantedSource('src/canvas/runtime/view/headless-driver.ts', build),
       plantedSource('src/canvas/runtime/inspection-lens.ts', build),
       plantedSource('src/__tests__/support/test-view.ts', build),
-      plantedSource('src/canvas/runtime/chrome/rulers.ts', build),
       plantedSource('src/app/canvas-map-surface/planted.ts', build),
     ])
 
     expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P3'))).toEqual([
-      `${P3_BUILDER} src/canvas/runtime/chrome/rulers.ts contains confined symbol buildViewTransform; allowed sources: ${allowed}`,
       `${P3_BUILDER} src/app/canvas-map-surface/planted.ts contains confined symbol buildViewTransform; allowed sources: ${allowed}`,
     ])
   })
@@ -3058,9 +3055,7 @@ describe('canvas v2 policies, end of 0B', () => {
       ]),
       plantedSource('src/canvas/runtime/chrome/handle-layer.ts', ["element.addEventListener('pointerenter', () => {})"]),
       plantedSource('src/canvas/runtime/chrome/text-entry-host.ts', ["textarea.addEventListener('blur', () => {})"]),
-      plantedSource('src/canvas/runtime/chrome/locked-affordance.ts', ["button.addEventListener('click', () => {})"]),
       plantedSource('src/canvas/runtime/inspection-lens.ts', ["document.fonts?.addEventListener('loadingdone', () => {})"]),
-      plantedSource('src/canvas/runtime/chrome/rulers.ts', ["element.addEventListener('pointerdown', () => {})"]),
       plantedSource('src/maplibre/workspace-map.ts', ["container.addEventListener('pointerdown', () => {})"]),
       plantedSource('src/maplibre/view-snapshot-map.ts', ["signal.addEventListener('abort', () => {})"]),
       plantedSource('src/canvas/runtime/planted.test.ts', ['host.setPointerCapture(1); host.addEventListener("pointerup", () => {})']),
@@ -3070,7 +3065,6 @@ describe('canvas v2 policies, end of 0B', () => {
       'src/canvas/runtime/input/selection-drag-guard.ts',
       'src/canvas/runtime/chrome/text-entry-host.ts',
       'src/canvas/runtime/chrome/handle-layer.ts',
-      'src/canvas/runtime/chrome/locked-affordance.ts',
       'src/canvas/runtime/inspection-lens.ts',
       ...TEST_SOURCE_PATTERNS,
     ].join(', ')
@@ -3082,7 +3076,6 @@ describe('canvas v2 policies, end of 0B', () => {
       `${P6_CAPTURE} src/canvas/runtime/planted.ts contains confined symbol releasePointerCapture; allowed sources: ${captureOwners}`,
       `${P6_LISTENERS} src/canvas/runtime/planted.ts contains confined symbol addEventListener; allowed sources: ${listenerOwners}`,
       `${P6_LISTENERS} src/canvas/planted-source.ts contains confined symbol addEventListener; allowed sources: ${listenerOwners}`,
-      `${P6_LISTENERS} src/canvas/runtime/chrome/rulers.ts contains confined symbol addEventListener; allowed sources: ${listenerOwners}`,
       `${P6_MAPLIBRE} src/maplibre/workspace-map.ts contains confined symbol addEventListener; allowed sources: ${abortOwners}`,
     ])
   })

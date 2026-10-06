@@ -157,10 +157,6 @@
       "commitLimitWarning": "增大间距或缩短线段",
       "dragAlong": "沿着这一行拖动"
     },
-    "lockedObject": {
-      "locked": "已锁定",
-      "unlock": "解锁"
-    },
     "contextMenu": {
       "ariaLabel": "画布编辑命令",
       "showName": "显示名称",
@@ -184,9 +180,7 @@
     "grid": {
       "grid": "网格",
       "snapToGrid": "吸附网格",
-      "rulers": "标尺",
-      "zoom": "缩放",
-      "rulersNorthUpOnly": "北向上时显示标尺"
+      "zoom": "缩放"
     },
     "overview": {
       "zoomInToEdit": "放大以编辑。此比例下植物已隐藏。",

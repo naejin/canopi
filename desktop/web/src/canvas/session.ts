@@ -1,11 +1,5 @@
 import { computed, signal } from '@preact/signals'
-import {
-  canvasHasSelectionState,
-  canvasSelectionState,
-  canvasToolGuidanceState,
-  canvasToolState,
-  setCanvasTool,
-} from './session-state'
+import { setCanvasTool } from './session-state'
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
@@ -18,40 +12,37 @@ import type {
   CanvasToolCommandSurface,
   CanvasViewportCommandSurface,
 } from './runtime/runtime'
+import type { ToolId } from './runtime/interaction-types'
 
 export const currentCanvasSession = signal<CanvasRuntimeSurfaces | null>(null)
 export const currentCanvasCommandSurface = computed<CanvasCommandSurface | null>(() =>
-  commandSurfaceFrom(currentCanvasSession.value),
+  currentCanvasSession.value?.commands ?? null,
 )
 export const currentCanvasToolCommandSurface = computed<CanvasToolCommandSurface | null>(() =>
-  commandSurfaceFrom(currentCanvasSession.value)?.tools ?? null,
+  currentCanvasSession.value?.commands.tools ?? null,
 )
 export const currentCanvasViewportCommandSurface = computed<CanvasViewportCommandSurface | null>(() =>
-  commandSurfaceFrom(currentCanvasSession.value)?.viewport ?? null,
+  currentCanvasSession.value?.commands.viewport ?? null,
 )
 const currentCanvasLayerCommandSurface = computed<CanvasLayerCommandSurface | null>(() =>
-  commandSurfaceFrom(currentCanvasSession.value)?.layers ?? null,
+  currentCanvasSession.value?.commands.layers ?? null,
 )
 export const currentCanvasSceneEditCommandSurface = computed<CanvasSceneEditCommandSurface | null>(() =>
-  commandSurfaceFrom(currentCanvasSession.value)?.sceneEdits ?? null,
+  currentCanvasSession.value?.commands.sceneEdits ?? null,
 )
 export const currentCanvasPlantPresentationCommandSurface = computed<CanvasPlantPresentationCommandSurface | null>(() =>
-  commandSurfaceFrom(currentCanvasSession.value)?.plantPresentation ?? null,
+  currentCanvasSession.value?.commands.plantPresentation ?? null,
 )
 export const currentCanvasSpeciesFocusCommands = computed(() =>
-  commandSurfaceFrom(currentCanvasSession.value)?.speciesFocus ?? null,
+  currentCanvasSession.value?.commands.speciesFocus ?? null,
 )
 export const currentCanvasQuerySurface = computed<CanvasQuerySurface | null>(() =>
-  querySurfaceFrom(currentCanvasSession.value),
+  currentCanvasSession.value?.queries ?? null,
 )
 export const currentCanvasDocumentSurface = computed<CanvasDocumentSurface | null>(() =>
-  documentSurfaceFrom(currentCanvasSession.value),
+  currentCanvasSession.value?.documents ?? null,
 )
-export const currentCanvasTool = canvasToolState
-/** The active tool's gesture and stamp state, for the tool card. */
-export const currentCanvasToolGuidance = canvasToolGuidanceState
-export const currentCanvasSelection = canvasSelectionState
-export const currentCanvasHasSelection = canvasHasSelectionState
+export { currentCanvasHasSelection, currentCanvasSelection, currentCanvasTool, currentCanvasToolGuidance } from './session-state'
 
 export function getCurrentCanvasSession(): CanvasRuntimeSurfaces | null {
   return currentCanvasSession.value
@@ -82,26 +73,11 @@ export function setCurrentCanvasSession(surfaces: CanvasRuntimeSurfaces | null):
   currentCanvasSession.value = surfaces
 }
 
-export function setCurrentCanvasTool(name: string): void {
+export function setCurrentCanvasTool(id: ToolId): void {
   const session = currentCanvasToolCommandSurface.value
   if (session) {
-    session.setTool(name)
+    session.setTool(id)
     return
   }
-  setCanvasTool(name)
-}
-
-function commandSurfaceFrom(session: CanvasRuntimeSurfaces | null): CanvasCommandSurface | null {
-  if (!session) return null
-  return session.commands
-}
-
-function querySurfaceFrom(session: CanvasRuntimeSurfaces | null): CanvasQuerySurface | null {
-  if (!session) return null
-  return session.queries
-}
-
-function documentSurfaceFrom(session: CanvasRuntimeSurfaces | null): CanvasDocumentSurface | null {
-  if (!session) return null
-  return session.documents
+  setCanvasTool(id)
 }

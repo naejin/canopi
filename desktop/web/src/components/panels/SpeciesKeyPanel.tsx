@@ -99,7 +99,12 @@ function PlantsInDesign({ renderDetail, onOpenDetail }: {
   const namesRevision = queries?.revision.plantNames.value
   const entries = useMemo(
     () => queries
-      ? buildSpeciesKey(queries.getSceneSnapshot(), queries.getLocalizedCommonNames(), queries.getEnglishFallbackNames())
+      ? buildSpeciesKey(
+        queries.getSceneSnapshot(),
+        queries.getSpeciesCache(),
+        queries.getLocalizedCommonNames(),
+        queries.getEnglishFallbackNames(),
+      )
       : [],
     [queries, revision, namesRevision],
   )

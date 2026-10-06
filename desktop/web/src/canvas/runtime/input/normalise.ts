@@ -18,7 +18,7 @@ export interface DomEventLike {
   readonly pointerId?: number; readonly pointerType?: string; readonly button?: number; readonly buttons?: number; readonly detail?: number
   readonly shiftKey: boolean; readonly ctrlKey: boolean; readonly altKey: boolean; readonly metaKey: boolean
   readonly deltaX?: number; readonly deltaY?: number; readonly deltaMode?: number
-  readonly scale?: number; readonly rotation?: number           // WebKit GestureEvent
+  readonly rotation?: number                                    // WebKit GestureEvent (its scale is never read: the pinch arrives as Ctrl+wheel)
   readonly target: TargetClass                                  // classified by the source from data attributes
   readonly fromKeyboard?: boolean                               // contextmenu: set by the source from the KeyRouter's echo record
   readonly dropPayload?: CanvasDropPayload                      // drag events: read by the source from dataTransfer
@@ -41,7 +41,6 @@ export function normalise(
   e: DomEventLike,
   platform: InputPlatform,
   bindings: Bindings,
-  keys: { readonly physicalCtrl: boolean },
   host: { readonly width: number; readonly height: number },
 ): RawInput | null {
   const t = e.timeStamp
@@ -49,7 +48,7 @@ export function normalise(
   switch (e.type) {
     case 'pointerdown': {
       const pointer = pointerKindOf(e.pointerType)
-      const press = e.target.kind === 'ruler' ? rulerPressRole(pointer) : pressRole(e, pointer, platform, bindings)
+      const press = pressRole(e, pointer, platform, bindings)
       if (!press) return null
       return {
         kind: 'down',
@@ -82,8 +81,8 @@ export function normalise(
       const pointer = pointerKindOf(e.pointerType)
       const release = pressRole(e, pointer, platform, bindings)
       // An up is never dropped: it ends its pointer's session whatever the button, as today's pointerup did. A button no
-      // press takes reads as primary: a mouse's back and forward (which only a ruler press accepts), and a pen's eraser or
-      // its barrel under 'ignore' (a drag whose tip lifted before the barrel).
+      // press takes reads as primary: a mouse's back and forward, and a pen's eraser or its barrel under 'ignore' (a drag
+      // whose tip lifted before the barrel).
       return {
         kind: 'up',
         t,
@@ -113,8 +112,6 @@ export function normalise(
         dxPx: (e.deltaX ?? 0) * xUnit,
         dyPx: (e.deltaY ?? 0) * yUnit,
         mods: modifiersOf(e),
-        // A trackpad pinch arrives as a Ctrl wheel with no Ctrl key down.
-        pinch: e.ctrlKey && !keys.physicalCtrl,
         target: e.target,
       }
     }
@@ -130,7 +127,6 @@ export function normalise(
         t,
         phase: e.type === 'gesturestart' ? 'start' : e.type === 'gesturechange' ? 'change' : 'end',
         at,
-        scale: e.scale ?? 1,
         rotationDeg: e.rotation ?? 0,
       }
     case 'dragover':
@@ -179,14 +175,6 @@ function pressRole(
   if (button === BUTTON_AUXILIARY) return { role: 'auxiliary', ctrlConsumed: false }
   if (button === BUTTON_SECONDARY) return { role: 'secondary', ctrlConsumed: false }
   return null   // back and forward (3, 4)
-}
-
-/**
- * Today's ruler drag listened for mousedown: a mouse or pen press of any button (a pen sends compatibility mouse events)
- * is a primary press; a touch press is dropped, since a touch sends its mousedown only after it lifts.
- */
-function rulerPressRole(pointer: PointerKind): { readonly role: ButtonRole; readonly ctrlConsumed: boolean } | null {
-  return pointer === 'touch' ? null : { role: 'primary', ctrlConsumed: false }
 }
 
 function buttonRoles(buttons: number, pointer: PointerKind, bindings: Bindings): ReadonlySet<ButtonRole> {

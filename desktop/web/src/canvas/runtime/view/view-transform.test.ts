@@ -98,7 +98,7 @@ describe('view transform', () => {
     expect(fromPlane({ x: 300, y: 200, scale: 4, bearingDeg: 359.98 }, plane).northUp).toBe(true)
 
     const turned = fromPlane({ x: 300, y: 200, scale: 4, bearingDeg: 30 }, plane)
-    const { right, down } = turned.screenAxesInWorld({ x: 5, y: 5 })
+    const { right, down } = turned.screenAxesInWorld()
     const origin = turned.worldToScreen({ x: 0, y: 0 })
     expectNear(turned.worldToScreen(right), { x: origin.x + 4, y: origin.y }, 1e-12)
     expectNear(turned.worldToScreen(down), { x: origin.x, y: origin.y + 4 }, 1e-12)

@@ -9,6 +9,7 @@
 import type { ToolHandleId } from '../../interaction-types'
 import { createMeasurementGuideDraftMeasurements } from '../../measurement-guides'
 import type { CanvasDesignObjectSelectionModel } from '../../runtime'
+import { singleEditableTarget } from '../../scene-runtime/selection'
 import type { SceneMeasurementGuideEntity, ScenePersistedState } from '../../scene/types'
 import type { WorldPoint } from '../../view/types'
 import type { DraftShape, ToolHandle } from '../draft'
@@ -33,14 +34,8 @@ export function draggableGuide(
   scene: Readonly<ScenePersistedState>,
   selection: CanvasDesignObjectSelectionModel,
 ): SceneMeasurementGuideEntity | null {
-  if (
-    selection.editableTargets.length !== 1
-    || (selection.lockedTargets?.length ?? 0) > 0
-    || selection.blockedTargets.length > 0
-  ) return null
-  const target = selection.editableTargets[0]
-  if (target?.kind !== 'measurement-guide') return null
-  return scene.measurementGuides.find((guide) => guide.id === target.id) ?? null
+  const target = singleEditableTarget(selection, 'measurement-guide')
+  return target ? scene.measurementGuides.find((guide) => guide.id === target.id) ?? null : null
 }
 
 export function guideEnds(guide: SceneMeasurementGuideEntity): GuideEnd[] {

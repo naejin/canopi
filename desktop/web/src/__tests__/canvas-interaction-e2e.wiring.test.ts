@@ -6,7 +6,7 @@ import { signal } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
 import { writePlantStampDragData } from '../canvas/plant-stamp-source'
 import { writeSavedObjectStampDragData } from '../canvas/saved-object-stamp-source'
-import { selectedObjectIds, type CanvasToolGuidance } from '../canvas/session-state'
+import { currentCanvasSelection, type CanvasToolGuidance } from '../canvas/session-state'
 import { SceneStore } from '../canvas/runtime/scene'
 import {
   createSceneInteractionSession,
@@ -53,7 +53,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 20, y: 30 }, { button: 0, detail: 2 })
     events.pointerUp({ x: 20, y: 30 }, { button: 0, detail: 2 })
 
-    expect(selectedObjectIds.value).toEqual(new Set())
+    expect(currentCanvasSelection.value).toEqual(new Set())
     expect(deps.setSelection).not.toHaveBeenCalled()
     session.dispose()
   })
@@ -213,13 +213,13 @@ describe('SceneInteractionSession', () => {
     events.dispose()
     events = createSceneInteractionEventHarness(container, { trackListeners: true })
     store.updatePersisted((draft) => {
-      draft.plants = [makePlant('locked-plant', 'Malus domestica', { x: 300, y: 250 }, { locked: true })]
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 300, y: 250 })]
     })
     const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
-    // Hovering a directly locked plant brings the session's Unlock affordance onto the map.
+    // Hovering a plant brings the session's plant tooltip onto the map.
     events.pointerMove({ x: 300, y: 250 })
-    expect(container.querySelector('[data-locked-object-affordance]')).not.toBeNull()
+    expect(container.querySelector('[data-hover-tooltip]')).not.toBeNull()
     expect(container.hasAttribute('tabindex')).toBe(true)
     expect(container.querySelector('[data-canvas-handle-layer]')).not.toBeNull()
     // The story-presentation observer: the host, the chrome, the handle layer and the map host's keyboard stop are torn
@@ -234,7 +234,7 @@ describe('SceneInteractionSession', () => {
     expect(events.listenerLog?.containerRemoves('pointerdown')).toHaveLength(2)
     expect(events.listenerLog?.containerRemoves('pointermove')).toHaveLength(1)
     expect(events.listenerLog?.windowRemoves('blur')).toHaveLength(1)
-    expect(container.querySelector('[data-locked-object-affordance]')).toBeNull()
+    expect(container.querySelector('[data-hover-tooltip]')).toBeNull()
     expect(container.querySelector('[data-canvas-handle-layer]')).toBeNull()
     expect(container.hasAttribute('tabindex')).toBe(false)
     expect(() => session.dispose()).not.toThrow()

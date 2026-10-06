@@ -1,7 +1,6 @@
 // canvas/runtime/tools/registry.ts
 //
-// Owns which tools the ToolHost runs: one factory per tool id, every tool id listed since the 0B-3 streams moved their tools
-// here (plan §4 0B). An id it does not list arms no tool.
+// Owns which tools the ToolHost runs: one factory for every tool id, so an armed id is always a tool.
 
 import type { ToolId } from '../interaction-types'
 import { createMeasurementGuideTool } from './measurement-guide'
@@ -18,7 +17,7 @@ import { createZoneDragTool } from './zone-drag'
 
 export type ToolFactory = () => CanvasTool
 
-export const TOOL_REGISTRY: Readonly<Partial<Record<ToolId, ToolFactory>>> = Object.freeze({
+export const TOOL_REGISTRY: Readonly<Record<ToolId, ToolFactory>> = Object.freeze({
   select: createSelectTool,
   hand: createPanTool,
   text: createTextNoteTool,

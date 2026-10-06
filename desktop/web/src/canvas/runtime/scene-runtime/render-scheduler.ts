@@ -8,7 +8,7 @@ import type {
 import type { DraftPresentation } from '../tools/draft'
 import type { ViewTransform } from '../view/types'
 
-export type SceneRuntimeRenderKind = 'scene' | 'viewport' | 'chrome'
+export type SceneRuntimeRenderKind = 'scene' | 'viewport'
 
 interface SceneRuntimePreparedRender {
   publish(): SceneRendererSnapshot
@@ -27,7 +27,6 @@ interface SceneRuntimeRenderSchedulerOptions {
    * opened Design where it opens, inside the chrome mounted since the open. A view-mode change it causes is this render's.
    */
   placeOpenedDesign(): void
-  renderChrome(): void
 }
 
 /** Unmount or disposal won the race against a pending renderer mount. */
@@ -122,10 +121,6 @@ export class SceneRuntimeRenderScheduler {
   }
 
   invalidate(kind: SceneRuntimeRenderKind): void {
-    if (kind === 'chrome') {
-      this._options.renderChrome()
-      return
-    }
     if (!this._renderer) return
     // Fence an in-flight preparation immediately, even though drawing waits for a frame.
     if (kind === 'scene') this._renderEpoch += 1
@@ -157,7 +152,6 @@ export class SceneRuntimeRenderScheduler {
       const snapshot = prepared.publish()
       if (renderEpoch !== this._renderEpoch || renderer !== this._renderer) return
       renderer.syncScene(snapshot, WHOLE_SCENE)
-      this._options.renderChrome()
     } catch (error) {
       this._settleSceneRender(renderEpoch)
       throw error
@@ -171,7 +165,6 @@ export class SceneRuntimeRenderScheduler {
     const renderer = this._renderer
     if (!renderer) return
     renderer.setView(this._options.getView())
-    this._options.renderChrome()
   }
 
   /**

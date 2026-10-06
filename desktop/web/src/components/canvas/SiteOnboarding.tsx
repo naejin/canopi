@@ -86,7 +86,7 @@ function StartDesignCard() {
     const openedByUser = startCardOpenedByUser
     startCardOpenedByUser = false
     const primary = card.current?.querySelector<HTMLButtonElement>('[data-start-primary]')
-    if (openedByUser && primary) focusOwner.focusOnOpen(primary, 'user-opened')
+    if (openedByUser && primary) focusOwner.focusOnOpen(primary)
   }, [])
 
   return (

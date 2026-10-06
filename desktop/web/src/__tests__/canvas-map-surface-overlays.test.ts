@@ -38,7 +38,6 @@ function createOverlayScene() {
       canonicalName: 'Malus domestica',
       commonName: 'Apple',
       color: null,
-      stratum: null,
       canopySpreadM: null,
       position: { x: 0, y: 0 },
       rotationDeg: null,

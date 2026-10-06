@@ -4,14 +4,15 @@
 // renderer (the draft sink scene-runtime.ts passes); the tools' own behaviour is tested in canvas/runtime/tools/*.test.ts.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { selectPlantStampSource } from '../canvas/plant-stamp-source'
-import { selectedObjectIds } from '../canvas/session-state'
-import { snapToGridEnabled, snapToGuidesEnabled } from '../app/canvas-settings/signals'
+import { currentCanvasSelection } from '../canvas/session-state'
+import { snapToGridEnabled } from '../app/canvas-settings/signals'
 import { SceneStore, type ScenePoint } from '../canvas/runtime/scene'
 import type {
   SceneInteractionSession,
   SceneInteractionSessionDeps,
 } from '../canvas/runtime/interaction-session'
 import { SceneHistory } from '../canvas/runtime/scene-history'
+import { SceneRuntimeReoriginController } from '../canvas/runtime/scene-runtime/reorigin'
 import {
   SceneRuntimeEditCoordinator,
   type SceneEditCoordinator,
@@ -30,7 +31,6 @@ import {
   createAbortFailingSceneEdits,
   withoutNativeRandomUUID,
   captureWindowErrors,
-  makePlant,
   installSceneInteractionFixture,
   enterOverview,
 } from './support/canvas-interaction-setup'
@@ -82,7 +82,7 @@ describe('SceneInteractionSession', () => {
 
   /**
    * The drag's Scene Edit with `hook` run first in its commit continuation, where the tool clears its draft (today the
-   * measurement overlay's replaceChildren): the fault point of the retained-cleanup tests.
+   * measurement overlay's replaceChildren): the fault point of the cleanup-fault test.
    */
   function withCommitContinuation(base: SceneEditCoordinator, type: string, hook: () => void): SceneEditCoordinator {
     return {
@@ -165,7 +165,7 @@ describe('SceneInteractionSession', () => {
   it.each([
     { label: 'Rectangle', tool: 'rectangle' },
     { label: 'Measurement Guide', tool: 'measurement-guide' },
-  ])('keeps a $label drag authoritative until pointer-up commits it', ({ tool }) => {
+  ] as const)('keeps a $label drag authoritative until pointer-up commits it', ({ tool }) => {
     const history = new SceneHistory()
     const record = history.record.bind(history)
     let unrelatedRecordFailures = 2
@@ -242,7 +242,7 @@ describe('SceneInteractionSession', () => {
       tool: 'measurement-guide',
       editType: 'interaction-measurement-guide',
     },
-  ])('a failed $label drag abort is retried at once, admitting the next gesture normally', ({
+  ] as const)('a failed $label drag abort is rolled back by the fault rule at once, admitting the next gesture normally', ({
     tool,
     editType,
   }) => {
@@ -267,7 +267,7 @@ describe('SceneInteractionSession', () => {
     expect(errors).toEqual([
       expect.objectContaining({ message: `${editType} abort failed` }),
     ])
-    // The host's own retry inside the same cancellation has already rolled the edit back.
+    // The fault rule's abort inside the same cancellation has already rolled the edit back.
     expect(abortFailure.abortCalls()).toBe(2)
     expect(abortFailure.beginTypes()).toEqual([editType])
 
@@ -323,7 +323,7 @@ describe('SceneInteractionSession', () => {
         pointerUpEvents.push(events.pointerUp({ x: 40, y: 60 }, { pointerId: 81 }))
       })
 
-      // The host's own retry inside the cancellation failure has already finished the commit and recorded it. A
+      // The commit ran once: history recorded it before its publication threw, and the fault rule aborted nothing. A
       // pointerup is not a press on the map host, so it rethrows and reaches the app rather than being quarantined.
       expect(errors).toHaveLength(1)
       expect(pointerUpEvents[0]?.defaultPrevented).toBe(false)
@@ -342,7 +342,7 @@ describe('SceneInteractionSession', () => {
   it.each([
     { label: 'Rectangle', tool: 'rectangle' },
     { label: 'Measurement Guide', tool: 'measurement-guide' },
-  ])('a retained $label cleanup is retried at once, leaving nothing open for the next drag', ({ tool }) => {
+  ] as const)('a $label commit whose cleanup throws keeps the shape once, leaving nothing open for the next drag', ({ tool }) => {
     const history = new SceneHistory()
     const baseDeps = createInteractionDeps(container, store, testView)
     const coordinator = new SceneRuntimeEditCoordinator({
@@ -353,7 +353,7 @@ describe('SceneInteractionSession', () => {
       syncCanvasSignalsFromScene: () => {},
       invalidate: () => {},
     })
-    let cleanupFailures = 2
+    let cleanupFailures = 1
     const session = createTestSession({
       ...baseDeps,
       sceneEdits: withCommitContinuation(coordinator, `interaction-${tool}`, () => {
@@ -375,7 +375,7 @@ describe('SceneInteractionSession', () => {
         events.pointerUp({ x: 40, y: 60 }, { pointerId: 91 })
       })
 
-      // The host's own retry inside the failure has already finished the cleanup: nothing is left open.
+      // The commit ran each step once: the shape is kept, the cleanup is not run again, and nothing is left open.
       expect(errors).toHaveLength(1)
       expect(cleanupFailures).toBe(0)
       expect(coordinator.canUndo.value).toBe(true)
@@ -402,89 +402,6 @@ describe('SceneInteractionSession', () => {
         expect(coordinator.undo()).toBe(true)
         expect(store.persisted.measurementGuides).toHaveLength(0)
       }
-      expect(coordinator.undo()).toBe(false)
-    } finally {
-      session.dispose()
-    }
-  })
-
-  it.each([
-    { label: 'Rectangle', tool: 'rectangle' },
-    { label: 'Measurement Guide', tool: 'measurement-guide' },
-  ])('a $label retained post-commit backfill failure is finished at once, with nothing left for a retry', ({ tool }) => {
-    store.updatePersisted((draft) => {
-      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 150, y: 150 }, {
-        stratum: null,
-        canopySpreadM: null,
-      })]
-    })
-    const history = new SceneHistory()
-    let invalidationCalls = 0
-    const baseDeps = createInteractionDeps(container, store, testView)
-    const coordinator = new SceneRuntimeEditCoordinator({
-      sceneStore: store,
-      history,
-      setSelection: baseDeps.setSelection,
-      incrementSceneRevision: () => {},
-      syncCanvasSignalsFromScene: () => {},
-      invalidate: () => {
-        invalidationCalls += 1
-        if (invalidationCalls === 2 || invalidationCalls === 3) {
-          throw new Error(`${tool} late backfill publication failed`)
-        }
-      },
-    })
-    let enqueueBackfill = true
-    const session = createTestSession({
-      ...baseDeps,
-      sceneEdits: withCommitContinuation(coordinator, `interaction-${tool}`, () => {
-        if (!enqueueBackfill) return
-        enqueueBackfill = false
-        const ticket = coordinator.issueTicket()
-        expect(coordinator.applyBackfills(ticket, [{
-          plantId: 'plant-1',
-          canonicalName: 'Malus domestica',
-          stratum: 'canopy',
-          canopySpreadM: 4,
-        }])).toBe('deferred')
-      }),
-      commandAdmission: coordinator,
-    })
-    session.setTool(tool)
-
-    events.pointerDown({ x: 10, y: 20 }, { pointerId: 94 })
-    events.pointerMove({ x: 40, y: 60 }, { pointerId: 94 })
-    if (draftChips().length === 0) throw new Error(`Expected ${tool} draft measurements`)
-
-    try {
-      const errors = captureWindowErrors(() => {
-        events.pointerUp({ x: 40, y: 60 }, { pointerId: 94 })
-      })
-
-      // The host's own retry inside the cancellation failure has already finished the backfill publication.
-      expect(errors).toHaveLength(1)
-      expect(store.persisted.plants[0]).toMatchObject({
-        stratum: 'canopy',
-        canopySpreadM: 4,
-      })
-      expect(coordinator.canUndo.value).toBe(true)
-      if (tool === 'rectangle') {
-        expect(store.persisted.zones).toHaveLength(1)
-      } else {
-        expect(store.persisted.measurementGuides).toHaveLength(1)
-      }
-
-      events.pointerDown({ x: 50, y: 70 }, { pointerId: 96 })
-      events.pointerMove({ x: 80, y: 100 }, { pointerId: 96 })
-      events.pointerUp({ x: 80, y: 100 }, { pointerId: 96 })
-
-      if (tool === 'rectangle') {
-        expect(store.persisted.zones).toHaveLength(2)
-      } else {
-        expect(store.persisted.measurementGuides).toHaveLength(2)
-      }
-      expect(coordinator.undo()).toBe(true)
-      expect(coordinator.undo()).toBe(true)
       expect(coordinator.undo()).toBe(false)
     } finally {
       session.dispose()
@@ -824,7 +741,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 80, y: 80 },
         rotationDeg: null,
@@ -840,7 +756,7 @@ describe('SceneInteractionSession', () => {
 
     events.pointerDown({ x: 10, y: 10 }, { button: 0 })
 
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
     // History-free, through the session's selection (ToolEffects.setSelection).
     expect(deps.setSelection).toHaveBeenCalledTimes(2)
     expect(deps.setSelection).toHaveBeenLastCalledWith([])
@@ -931,32 +847,51 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('keeps a polygon draft at its lon/lat when the session plane re-origins mid-draw', () => {
+  it('a live polygon draft holds re-origin, which runs after the draft ends and the camera moves', async () => {
     const view = createTestView({ screen: { width: 400, height: 300 }, viewport: { x: 0, y: 0, scale: 1 }, plane: store.sessionPlane })
     const deps = createInteractionDeps(container, store, view)
     const session = createTestSession(deps)
+    const edits = deps.sceneEdits as SceneRuntimeEditCoordinator
+    const reorigin = new SceneRuntimeReoriginController({
+      sceneState: store,
+      authority: edits,
+      commandAdmission: edits,
+      held: () => session.holdsReorigin(),
+    })
+    const settle = async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    }
     session.setTool('polygon')
-    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
-    events.pointerDown({ x: 60, y: 10 }, { button: 0 })
+    for (const corner of [{ x: 10, y: 10 }, { x: 60, y: 10 }]) {
+      events.pointerDown(corner, { button: 0 })
+      events.pointerUp(corner, { button: 0 })
+    }
     const previous = store.sessionPlane
     // The viewport is 1 px per metre at the origin, so screen (10, 10) is plane (10, 10).
-    const firstVertexGeo = previous.toGeo({ x: 10, y: 10 })
-    const secondVertexGeo = previous.toGeo({ x: 60, y: 10 })
+    const corners = [previous.toGeo({ x: 10, y: 10 }), previous.toGeo({ x: 60, y: 10 }), previous.toGeo({ x: 60, y: 50 })]
 
-    // Panning 20 km east re-origins the plane; the camera follows it.
-    ;(deps.sceneEdits as SceneRuntimeEditCoordinator).reoriginSessionPlane(previous.toGeo({ x: 20_000, y: 0 }))
-    expect(store.sessionPlane).not.toBe(previous)
-    view.setPlane(store.sessionPlane)
+    // The view's centre is 20 km east: the draft holds the plane.
+    view.navigation.panByPx({ x: -20_000, y: 0 })
+    reorigin.observe(view.frames.viewFrame.peek())
+    await settle()
+    expect(store.sessionPlane).toBe(previous)
 
+    view.navigation.panByPx({ x: 20_000, y: 0 })
     events.pointerDown({ x: 60, y: 50 }, { button: 0 })
+    events.pointerUp({ x: 60, y: 50 }, { button: 0 })
     events.keyDown({ key: 'Enter' })
-
-    const zone = store.persisted.zones[0]!
-    const plane = store.sessionPlane
     const near = (geo: { lon: number; lat: number }) => ({ lon: expect.closeTo(geo.lon, 8), lat: expect.closeTo(geo.lat, 8) })
-    expect(plane.toGeo(zone.points[0]!)).toEqual(near(firstVertexGeo))
-    expect(plane.toGeo(zone.points[1]!)).toEqual(near(secondVertexGeo))
-    expect(plane.toGeo(zone.points[2]!)).toEqual(near(previous.toGeo({ x: 60, y: 50 })))
+    expect(store.persisted.zones[0]!.points.map((point) => previous.toGeo(point))).toEqual(corners.map(near))
+
+    // The draft has ended: the next far frame re-origins, and the zone keeps its lon/lat.
+    view.navigation.panByPx({ x: -20_000, y: 0 })
+    reorigin.observe(view.frames.viewFrame.peek())
+    await settle()
+    const plane = store.sessionPlane
+    expect(plane).not.toBe(previous)
+    expect(store.persisted.zones[0]!.points.map((point) => plane.toGeo(point))).toEqual(corners.map(near))
+    reorigin.dispose()
     session.dispose()
     view.dispose()
   })
@@ -1255,46 +1190,6 @@ describe('SceneInteractionSession', () => {
       ],
     })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-rectangle')
-    session.dispose()
-  })
-
-  it('previews and commits rectangle zones from snap-adjusted guide points', () => {
-    testView.setViewport({ x: 0, y: 0, scale: 4 })
-    snapToGuidesEnabled.value = true
-    store.updatePersisted((draft) => {
-      draft.guides = [
-        { id: 'guide-v-start', axis: 'v', position: 12 },
-        { id: 'guide-h-start', axis: 'h', position: 22 },
-        { id: 'guide-v-end', axis: 'v', position: 36 },
-        { id: 'guide-h-end', axis: 'h', position: 61 },
-      ]
-    })
-
-    const deps = createInteractionDeps(container, store, testView)
-    const session = createTestSession(deps)
-    session.setTool('rectangle')
-
-    events.pointerDown({ x: 49, y: 85 }, { button: 0 })
-    events.pointerMove({ x: 142, y: 243 }, { button: 0 })
-
-    // Screen (48, 88) to (144, 244) at 4 px/m.
-    expect(draftOutline()).toMatchObject({
-      kind: 'polygon',
-      points: [{ x: 12, y: 22 }, { x: 36, y: 22 }, { x: 36, y: 61 }, { x: 12, y: 61 }],
-    })
-
-    events.pointerUp({ x: 142, y: 243 }, { button: 0 })
-
-    expect(store.persisted.zones[0]).toMatchObject({
-      zoneType: 'rect',
-      rotationDeg: 0,
-      points: [
-        { x: 12, y: 22 },
-        { x: 36, y: 22 },
-        { x: 36, y: 61 },
-        { x: 12, y: 61 },
-      ],
-    })
     session.dispose()
   })
 

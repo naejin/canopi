@@ -106,7 +106,6 @@ describe('Web Edition canvas workspace', () => {
         expect(currentCanvasSession.value).toBe(runtime.composition.surfaces)
         const startupOrder = [
           vi.mocked(runtime.composition.start).mock.invocationCallOrder[0]!,
-          vi.mocked(runtime.documents.attachRulersTo).mock.invocationCallOrder[0]!,
           attachCanvasSession.mock.invocationCallOrder[0]!,
           vi.mocked(runtime.documents.resize).mock.invocationCallOrder[0]!,
           observe.mock.invocationCallOrder[0]!,
@@ -157,7 +156,6 @@ describe('Web Edition canvas workspace', () => {
       })
       await flushMicrotasks()
 
-      expect(runtime.documents.attachRulersTo).not.toHaveBeenCalled()
       expect(runtime.documents.loadDocument).not.toHaveBeenCalled()
       expect(currentCanvasSession.value).toBeNull()
       expect(runtime.composition.dispose).toHaveBeenCalledOnce()
@@ -378,7 +376,7 @@ describe('Web Edition canvas workspace', () => {
 
     // The mounted owner cannot attach or publish after the component releases
     // its lease while composition start is pending.
-    expect(runtime.documents.attachRulersTo).not.toHaveBeenCalled()
+    expect(runtime.documents.loadDocument).not.toHaveBeenCalled()
     expect(currentCanvasSession.value).toBeNull()
     expect(runtime.composition.dispose).toHaveBeenCalledOnce()
   })
@@ -838,7 +836,6 @@ function fakeRuntimeComposition(
   const documents: CanvasDocumentSurface = {
     presented: signal(true),
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
-    attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(),
     hideCanvasChrome: vi.fn(),
     zoomToFit: vi.fn(),
@@ -929,7 +926,6 @@ function fakeCommandSurface(): CanvasCommandSurface {
     chrome: {
       toggleGrid: vi.fn(),
       toggleSnapToGrid: vi.fn(),
-      toggleRulers: vi.fn(),
     },
     layers: {
       setSceneLayerVisibility: vi.fn(() => true),
@@ -968,6 +964,7 @@ function fakeQuerySurface(): CanvasQuerySurface {
       blockedTargets: [],
       bounds: null,
       sameSpeciesReferenceCanonicalName: null,
+      plantNamePinning: { plantIds: [], allPinned: false },
     })),
     getSelectedPlantColorContext: vi.fn(() => ({
       plantIds: [],
@@ -992,6 +989,7 @@ function fakeQuerySurface(): CanvasQuerySurface {
     getSettledDesignObjects: vi.fn(() => null),
     getLocalizedCommonNames: vi.fn(() => new Map()),
     getEnglishFallbackNames: vi.fn(() => new Map()),
+    getSpeciesCache: vi.fn(() => new Map()),
     subscribePointerWorld: () => () => {},
   }
 }

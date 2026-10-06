@@ -71,7 +71,7 @@ vi.mock('../app/document-session/open-failure', async (importOriginal) => {
   }
 })
 
-import { activeTool, selectedObjectIds } from '../canvas/session-state'
+import { currentCanvasTool, currentCanvasSelection } from '../canvas/session-state'
 import {
   designSessionFixture,
   currentDesign,
@@ -159,7 +159,6 @@ function makeSession() {
       acknowledgeSaved,
     })),
     acknowledgeSaved,
-    attachRulersTo: vi.fn(),
     resize: vi.fn(),
     destroy: vi.fn(),
   }
@@ -212,8 +211,8 @@ beforeEach(() => {
   designSessionFixture.detachedCanvasDirty = false
   designContinuousSave.beginSession({ draftId: null, fingerprint: 'fp-current', writePending: false })
 
-  activeTool.value = 'rectangle'
-  selectedObjectIds.value = new Set(['selected-1'])
+  currentCanvasTool.value = 'rectangle'
+  currentCanvasSelection.value = new Set(['selected-1'])
 })
 
 describe('document replacement actions', () => {

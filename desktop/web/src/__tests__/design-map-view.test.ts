@@ -203,13 +203,21 @@ describe('opening a Design at the view it was saved with', () => {
     expect(host.surfaces.queries.view.mode.value).toBe('overview')
   })
 
-  it('a file without one opens with the fit at the last view\'s bearing', () => {
+  it('a file without one opens with the fit at the live bearing, north up on the runtime\'s first open', () => {
+    // A last view turned to 30 is this device's, not the file's: the first open is north up.
     persistLastView({ ...SITE, zoom: 18, bearing: 30 })
     const saved = savedOrchard()
-    const { host } = openOrchard()
+    const { host, store } = openOrchard()
 
-    expect(cameraOf(host).bearingDeg).toBeCloseTo(30, 6)
+    expect(cameraOf(host).bearingDeg).toBeCloseTo(0, 6)
     expect(cameraOf(host).zoom).not.toBeCloseTo(saved.map_view!.zoom, 3)
+
+    // A later open keeps the bearing the map shows.
+    host.surfaces.commands.viewport.showCamera({ ...cameraOf(host), bearingDeg: 60 }, { motion: 'jump' })
+    const replacement = createDesignSessionReplacement({ store, workflowRunner: { install: vi.fn(), dispose: vi.fn() } })
+    replacement.replace({ file: orchard(), kind: 'loaded', path: PATH, name: 'Orchard' }, host.surfaces.documents, () => true)
+
+    expect(cameraOf(host).bearingDeg).toBeCloseTo(60, 6)
   })
 
   it('a cold open restores it, and the renderer mount does not fit over it', async () => {

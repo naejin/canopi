@@ -9,7 +9,7 @@
   overflow: hidden;
 }
 
-/* Position:relative container for the map, rulers, chrome and the start screen. */
+/* Position:relative container for the map, its chrome and the start screen. */
 .canvasArea {
   /* The tool card slot sits beside the tool rail: wider while it shows names. */
   --canvas-tool-card-left: calc(2 * var(--chrome-inset) + var(--chrome-rail-width));
@@ -37,23 +37,10 @@
 }
 
 /* Transparent chrome stacked over the start screen must not take its clicks, including parts that ask for pointer input
-   (the rulers set it inline, so only !important wins; e2e/canvas/design-reveal.spec.ts). */
+   (!important wins over an inline style too; e2e/canvas/design-reveal.spec.ts). */
 .canvasArea[data-design-hidden] > :not([data-start-screen], :has([data-start-screen])),
 .canvasArea[data-design-hidden] > :not([data-start-screen], :has([data-start-screen])) * {
   pointer-events: none !important;
-}
-
-/* Rulers start below the floating title bar (and any notice) and right of the tool rail
-   (`--map-inset-left`, published by app/shell/visible-map-area.ts). */
-.rulerOverlay {
-  position: absolute;
-  /* Just above the rails' line, which a notice under the title bar lowers. */
-  top: calc(var(--chrome-rail-top) - var(--space-2));
-  right: 0;
-  bottom: 0;
-  left: var(--map-inset-left, 0px);
-  z-index: 15;
-  pointer-events: none;
 }
 
 .canvasContainer {

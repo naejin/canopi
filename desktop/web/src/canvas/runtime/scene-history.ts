@@ -7,21 +7,7 @@ interface SceneHistoryOptions {
   readonly reportCleanState?: (clean: boolean) => void
 }
 
-interface SceneHistoryRecordState {
-  readonly entry: SceneHistoryEntry
-  cursorApplied: boolean
-  publicationApplied: boolean
-}
-
 type SceneHistoryReplayDirection = 'undo' | 'redo'
-
-interface SceneHistoryReplayState {
-  readonly direction: SceneHistoryReplayDirection
-  readonly entry: SceneHistoryEntry
-  sceneApplied: boolean
-  cursorApplied: boolean
-  publicationApplied: boolean
-}
 
 interface SceneHistoryEntry {
   readonly command: SceneCommand
@@ -38,8 +24,6 @@ export interface SceneHistoryCheckpoint {
 interface SceneHistoryCheckpointState {
   readonly generation: number
   readonly state: object
-  baselineApplied: boolean
-  publicationApplied: boolean
 }
 
 export type SceneHistoryAcknowledgement = 'applied' | 'stale'
@@ -51,8 +35,6 @@ export class SceneHistory {
   private _savedState: object = this._currentState
   private _generation = 0
   private _checkpoints = new WeakMap<SceneHistoryCheckpoint, SceneHistoryCheckpointState>()
-  private _recordOperations = new WeakMap<object, SceneHistoryRecordState>()
-  private _replayOperations = new WeakMap<object, SceneHistoryReplayState>()
   private readonly _reportCleanState: (clean: boolean) => void
 
   readonly canUndo = signal(false)
@@ -66,54 +48,36 @@ export class SceneHistory {
     return this._currentState === this._savedState
   }
 
-  /** Records once per transaction token: a retry with the same token finishes what a failed call left. */
-  record(command: SceneCommand, transaction: object): boolean {
-    let state = this._recordOperations.get(transaction)
-    if (!state) {
-      state = {
-        entry: {
-          command,
-          beforeState: this._currentState,
-          afterState: {},
-        },
-        cursorApplied: false,
-        publicationApplied: false,
-      }
-      this._recordOperations.set(transaction, state)
-    }
-
-    const newlyRecorded = !state.cursorApplied
-    if (!state.cursorApplied) {
-      this._past.push(state.entry)
-      this._future = []
-      this._currentState = state.entry.afterState
-      this._truncateIfNeeded()
-      state.cursorApplied = true
-    }
-    if (!state.publicationApplied) {
-      this._updateSignals()
-      state.publicationApplied = true
-    }
-    return newlyRecorded
+  /**
+   * Accepts the command (an array step that cannot fail), tells `accepted`, then publishes `canUndo`, `canRedo` and the
+   * clean state. A publication throw leaves the command recorded.
+   */
+  record(command: SceneCommand, accepted: () => void): void {
+    this._past.push({ command, beforeState: this._currentState, afterState: {} })
+    this._future = []
+    this._currentState = this._past.at(-1)!.afterState
+    this._truncateIfNeeded()
+    accepted()
+    this._updateSignals()
   }
 
-  hasRecorded(transaction: object): boolean {
-    return this._recordOperations.get(transaction)?.cursorApplied === true
+  /**
+   * Moves the cursor back one step (an array step), hands its command to `apply` (the Scene's store update), then
+   * publishes as `record` does. When `apply` throws the cursor moves back and the error propagates; a publication
+   * throw keeps the step. Returns the command, or null when there is nothing to undo.
+   */
+  undo(apply: (command: SceneCommand) => void): SceneCommand | null {
+    return this._replay('undo', apply)
   }
 
-  undo(apply: (command: SceneCommand) => void, operation: object): boolean {
-    return this._replay('undo', apply, operation)
-  }
-
-  redo(apply: (command: SceneCommand) => void, operation: object): boolean {
-    return this._replay('redo', apply, operation)
+  /** As `undo`, one step forward. */
+  redo(apply: (command: SceneCommand) => void): SceneCommand | null {
+    return this._replay('redo', apply)
   }
 
   clear(): void {
     this._past = []
     this._future = []
-    this._recordOperations = new WeakMap<object, SceneHistoryRecordState>()
-    this._replayOperations = new WeakMap<object, SceneHistoryReplayState>()
     this._generation += 1
     this._currentState = {}
     this._savedState = this._currentState
@@ -130,12 +94,7 @@ export class SceneHistory {
 
   captureCheckpoint(): SceneHistoryCheckpoint {
     const checkpoint = Object.freeze({}) as SceneHistoryCheckpoint
-    this._checkpoints.set(checkpoint, {
-      generation: this._generation,
-      state: this._currentState,
-      baselineApplied: false,
-      publicationApplied: false,
-    })
+    this._checkpoints.set(checkpoint, { generation: this._generation, state: this._currentState })
     return checkpoint
   }
 
@@ -149,15 +108,8 @@ export class SceneHistory {
     const state = this._checkpoints.get(checkpoint)
     if (!state) throw new Error('Cannot acknowledge a foreign Scene history checkpoint')
     if (state.generation !== this._generation) return 'stale'
-
-    if (!state.baselineApplied) {
-      this._savedState = state.state
-      state.baselineApplied = true
-    }
-    if (!state.publicationApplied) {
-      this._updateSignals()
-      state.publicationApplied = true
-    }
+    this._savedState = state.state
+    this._updateSignals()
     return 'applied'
   }
 
@@ -166,59 +118,24 @@ export class SceneHistory {
     this._past.shift()
   }
 
-  private _replay(
-    direction: SceneHistoryReplayDirection,
-    apply: (command: SceneCommand) => void,
-    operation: object,
-  ): boolean {
-    let state = this._replayOperations.get(operation)
-    if (!state) {
-      const entry = direction === 'undo' ? this._past.at(-1) : this._future.at(-1)
-      if (!entry) return false
-      state = {
-        direction,
-        entry,
-        sceneApplied: false,
-        cursorApplied: false,
-        publicationApplied: false,
-      }
-      this._replayOperations.set(operation, state)
+  private _replay(direction: SceneHistoryReplayDirection, apply: (command: SceneCommand) => void): SceneCommand | null {
+    const from = direction === 'undo' ? this._past : this._future
+    const to = direction === 'undo' ? this._future : this._past
+    const entry = from.pop()
+    if (!entry) return null
+    const previousState = this._currentState
+    to.push(entry)
+    this._currentState = direction === 'undo' ? entry.beforeState : entry.afterState
+    try {
+      apply(entry.command)
+    } catch (error) {
+      to.pop()
+      from.push(entry)
+      this._currentState = previousState
+      throw error
     }
-    if (state.direction !== direction) {
-      throw new Error(`Scene history ${state.direction} is still finalizing`)
-    }
-
-    if (!state.sceneApplied) {
-      apply(state.entry.command)
-      state.sceneApplied = true
-    }
-    if (!state.cursorApplied) {
-      this._applyReplayCursor(state)
-      state.cursorApplied = true
-    }
-    if (!state.publicationApplied) {
-      this._updateSignals()
-      state.publicationApplied = true
-    }
-    return true
-  }
-
-  private _applyReplayCursor(state: SceneHistoryReplayState): void {
-    if (state.direction === 'undo') {
-      if (this._past.at(-1) !== state.entry) {
-        throw new Error('Scene history changed while undo was finalizing')
-      }
-      this._past.pop()
-      this._future.push(state.entry)
-      this._currentState = state.entry.beforeState
-      return
-    }
-    if (this._future.at(-1) !== state.entry) {
-      throw new Error('Scene history changed while redo was finalizing')
-    }
-    this._future.pop()
-    this._past.push(state.entry)
-    this._currentState = state.entry.afterState
+    this._updateSignals()
+    return entry.command
   }
 
   private _updateSignals(): void {

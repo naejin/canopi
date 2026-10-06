@@ -183,7 +183,6 @@ describe('Canvas Command Projection boundaries', () => {
       'view.cycleLabels',
       'canvas.toggleGrid',
       'canvas.toggleSnapToGrid',
-      'canvas.toggleRulers',
     ])
   })
 

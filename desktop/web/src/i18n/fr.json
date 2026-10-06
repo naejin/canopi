@@ -157,10 +157,6 @@
       "commitLimitWarning": "Augmentez l’intervalle ou raccourcissez la ligne",
       "dragAlong": "faites glisser le long de la rangée"
     },
-    "lockedObject": {
-      "locked": "Verrouillé",
-      "unlock": "Déverrouiller"
-    },
     "contextMenu": {
       "ariaLabel": "Commandes d’édition du canevas",
       "showName": "Afficher le nom",
@@ -184,9 +180,7 @@
     "grid": {
       "grid": "Grille",
       "snapToGrid": "Aimanter à la grille",
-      "rulers": "Règles",
-      "zoom": "Zoom",
-      "rulersNorthUpOnly": "Les règles s’affichent quand le nord est en haut"
+      "zoom": "Zoom"
     },
     "overview": {
       "zoomInToEdit": "Zoomez pour modifier. Les plantes sont masquées à cette échelle.",

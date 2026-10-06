@@ -6,7 +6,6 @@ export const DEFAULT_SETTINGS = {
   "locale": "en",
   "theme": "light",
   "snap_to_grid": true,
-  "snap_to_guides": true,
   "side_panel_width": null,
   "saved_stamps_frame_height": null,
   "basemap_style": "liberty",

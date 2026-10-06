@@ -33,7 +33,6 @@ export function InspectionStatus() {
   useEffect(() => {
     if (!target) return
     return registerEscapeLayer({
-      id: 'inspection',
       priority: ESCAPE_PRIORITY.inspection,
       isActive: () => true,
       escape: () => {

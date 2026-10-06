@@ -1,4 +1,4 @@
-import { DEFAULT_PLANT_COLOR, normalizeHexColor } from '../plant-colors'
+import { normalizeHexColor } from '../plant-colors'
 import {
   getPlantLOD,
   getStratumColor,
@@ -39,7 +39,6 @@ export interface PlantPresentationEntry {
   color: string
   baseColor: string
   symbol: PlantSymbolId
-  usesCanopyRadius: boolean
   stackPriority: number
   lod: PlantLOD
   selected: boolean
@@ -89,9 +88,7 @@ export function buildPlantPresentationEntries(
   const lod = getPlantLOD(context.pixelsPerMetre)
   context = { ...context, plants: context.plants ?? plants }
   return plants.map((plant) => {
-    const radiusPresentation = resolvePlantRadiusPresentation(plant, context)
-    const radiusWorld = radiusPresentation.radiusWorld
-    const radiusScreenPx = radiusPresentation.radiusScreenPx
+    const { radiusWorld, radiusScreenPx } = resolvePlantRadiusPresentation(plant, context)
     const baseColor = resolvePlantBaseColor(plant, context.speciesCache)
     const color = resolveDisplayedPlantColor(baseColor, plant.canonicalName, getCanvasPlantDisplay())
     const symbol = resolvePlantSymbolForPlant(plant, context.plantSpeciesSymbols ?? {})
@@ -103,7 +100,6 @@ export function buildPlantPresentationEntries(
       color,
       baseColor,
       symbol,
-      usesCanopyRadius: radiusPresentation.usesCanopyRadius,
       stackPriority: getStackPriority(plant, selected),
       lod: radiusScreenPx < 3.6 ? 'dot' : lod,
       selected,
@@ -151,36 +147,18 @@ export function hitTestPlant(
   return dx * dx + dy * dy <= radiusWorld * radiusWorld
 }
 
+/** The plant's own colour, else its species' stratum colour from the catalog entries the runtime has loaded. */
 export function resolvePlantBaseColor(
-  plant: ScenePlantEntity,
+  plant: Pick<ScenePlantEntity, 'canonicalName' | 'color'>,
   speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
 ): string {
-  const override = normalizeHexColor(plant.color)
-  if (override) return override
-  const stratum = resolvePlantStratum(plant, speciesCache)
-  return getStratumColor(stratum) || DEFAULT_PLANT_COLOR
+  return normalizeHexColor(plant.color) ?? getStratumColor(cachedStratum(speciesCache, plant.canonicalName))
 }
 
-export function resolvePlantStratum(
-  plant: ScenePlantEntity,
-  speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
-): string | null {
-  if (typeof plant.stratum === 'string' && plant.stratum.length > 0) return plant.stratum
-  const cached = speciesCache.get(plant.canonicalName)
-  return typeof cached?.stratum === 'string' && cached.stratum.length > 0
-    ? cached.stratum
-    : null
-}
-
-export function resolvePlantCanopySpreadM(
-  plant: ScenePlantEntity,
-  speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
-): number | null {
-  if (typeof plant.canopySpreadM === 'number' && plant.canopySpreadM > 0) return plant.canopySpreadM
-  const cached = speciesCache.get(plant.canonicalName)
-  return typeof cached?.width_max_m === 'number' && cached.width_max_m > 0
-    ? cached.width_max_m
-    : null
+/** The species' stratum in the loaded catalog entries; null when not loaded or the catalog has none. */
+export function cachedStratum(speciesCache: ReadonlyMap<string, SpeciesCacheEntry>, canonicalName: string): string | null {
+  const stratum = speciesCache.get(canonicalName)?.stratum
+  return typeof stratum === 'string' && stratum.length > 0 ? stratum : null
 }
 
 /** The colour the plant is drawn with under the current plant display; its stored colour never changes. */
@@ -235,13 +213,13 @@ function resolvePlantRadiusWorld(plant: ScenePlantEntity, context: PlantPresenta
 function resolvePlantRadiusPresentation(
   plant: ScenePlantEntity,
   context: PlantPresentationContext,
-): { radiusWorld: number; radiusScreenPx: number; usesCanopyRadius: boolean } {
+): { radiusWorld: number; radiusScreenPx: number } {
   const scale = Math.max(context.pixelsPerMetre, .001)
   const spacing = context.plants ? nearestPlantSpacing(context.plants, plant.position) : Infinity
   // Display › Symbol size scales the footprint, so drawing, hit testing and bounds agree.
   const radiusScreenPx = Math.max(.65, Math.min(getSymbolicPlantRadiusScreenPx(scale), spacing * scale * .42)
     * getCanvasPlantDisplay().symbolScale)
-  return { radiusWorld: radiusScreenPx / scale, radiusScreenPx, usesCanopyRadius: false }
+  return { radiusWorld: radiusScreenPx / scale, radiusScreenPx }
 }
 
 function getSymbolicPlantRadiusScreenPx(viewportScale: number): number {

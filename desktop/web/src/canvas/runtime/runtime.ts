@@ -19,9 +19,10 @@ import type { ScenePersistedState } from './scene'
 import type { PlantLabelMode } from './plant-display'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { PointerWorld } from './interaction-ports'
-import type { Modifiers } from './interaction-types'
+import type { Modifiers, ToolId } from './interaction-types'
 import type { ViewCommandSurface, ViewReadSurface } from './view/read-surface'
 import type { ViewTransform } from './view/types'
+import type { SpeciesCacheEntry } from './species-cache'
 
 export interface CanvasRuntimeDocumentMetadata {
   name: string
@@ -50,7 +51,7 @@ export interface CanvasDesignObjectSelectionModel {
   readonly blockedTargets: readonly CanvasDesignObjectSelectionBlockedTarget[]
   readonly bounds: SceneBounds | null
   readonly sameSpeciesReferenceCanonicalName: string | null
-  readonly plantNamePinning?: {
+  readonly plantNamePinning: {
     readonly plantIds: readonly string[]
     readonly allPinned: boolean
   }
@@ -74,7 +75,7 @@ export interface CanvasPlantRowSpacingField {
 }
 
 export interface CanvasToolCommandSurface {
-  setTool(name: string): void
+  setTool(id: ToolId): void
   readonly plantRowSpacing: CanvasPlantRowSpacingField
 }
 
@@ -160,7 +161,6 @@ export interface CanvasSceneEditCommandSurface {
 export interface CanvasChromeCommandSurface {
   toggleGrid(): void
   toggleSnapToGrid(): void
-  toggleRulers(): void
 }
 
 export interface CanvasLayerCommandSurface {
@@ -240,6 +240,11 @@ export interface CanvasQuerySurface {
   getSettledDesignObjects(): CanvasDesignObjects | null
   getLocalizedCommonNames(): ReadonlyMap<string, string | null>
   /**
+   * The catalog entries loaded for the Design's species (stratum, width): a plant without its own colour takes its
+   * stratum's from here, as the canvas draws it. A load advances `revision.plantNames`.
+   */
+  getSpeciesCache(): ReadonlyMap<string, SpeciesCacheEntry>
+  /**
    * English catalog names for the Design's species with no name in the UI
    * language (empty in English). Lists show them marked as English.
    */
@@ -303,7 +308,6 @@ export interface CanvasDocumentSurface {
    */
   readonly presented: ReadonlySignal<boolean>
   attachInspectionTo(element: HTMLElement): CanvasInspectionHandle
-  attachRulersTo(element: HTMLElement): void
   showCanvasChrome(): void
   hideCanvasChrome(): void
   zoomToFit(): void
@@ -328,21 +332,19 @@ export interface CanvasKeyboardPort {
   escapeLayers(): readonly CanvasEscapeLayer[]            // live canvas layers now, by Esc priority (spec §3.7)
   /** Runs a live layer; app/keyboard/escape-chain.ts decides which, from the focus. */
   escape(layer: CanvasEscapeLayer): void
-  /** What the next Esc will do, for the tool-card hint (same source as behaviour). */
-  describeEscape(): CanvasEscapeLayer | null
   /** False when nothing consumed it. confirm, remove-last, rotate-held, edit-text and context-menu return false in overview;
    *  edit-text only under Select, and confirm under Select edits the one selected note (Enter). context-menu stamps the
    *  keyboard-menu echo with the time keyState recorded for a Menu key or Shift+F10, only when that was the last keydown. */
   command(c: CanvasKeyCommand): boolean
   /** The key router's first call for every keydown (capture) and keyup: the nudge commit on any key but an arrow, a
-   *  modifier or Esc, the physical Ctrl, the Menu key's time and the Space hold (code Space, not text, and a live pointer
+   *  modifier or Esc, the Menu key's time and the Space hold (code Space, not text, and a live pointer
    *  session or not a control). The verdict tells the router what to do; the port never touches the event. */
   keyState(k: CanvasKeyState): CanvasKeyVerdict
   readonly host: HTMLElement
 }
 export interface CanvasKeyState {
   readonly type: 'keydown' | 'keyup'
-  readonly key: string             // 'Control' sets the physical Ctrl; arrows, modifiers and Escape keep a nudge series
+  readonly key: string             // arrows, modifiers and Escape keep a nudge series
   readonly code: string            // 'Space'
   readonly mods: Modifiers
   readonly timeStamp: number       // KeyboardEvent.timeStamp: the clock of the contextmenu echo

@@ -5,7 +5,7 @@ import { signal } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
 import { writePlantStampDragData } from '../canvas/plant-stamp-source'
 import { writeSavedObjectStampDragData } from '../canvas/saved-object-stamp-source'
-import { selectedObjectIds } from '../canvas/session-state'
+import { currentCanvasSelection } from '../canvas/session-state'
 import { snapToGridEnabled } from '../app/canvas-settings/signals'
 import { createMapLibreCameraDriver } from '../maplibre/camera-driver'
 import { createSessionPlane } from '../canvas/session-plane'
@@ -37,7 +37,6 @@ import {
   annotationTarget,
   measurementGuideTarget,
   groupTarget,
-  createRecoveringCommandAdmission,
   createAbortFailingSceneEdits,
   plantHoverTooltip,
   nextAnimationFrame,
@@ -53,7 +52,6 @@ import {
   zoneControlPointCenter,
   measurementGuideControlPoint,
   measurementGuideControlPointCenter,
-  lockedAffordance,
   draftLabelTexts,
   draftShapes,
   selectionBoundsCenter,
@@ -91,12 +89,6 @@ describe('SceneInteractionSession', () => {
         { x: 100, y: 100 },
         { x: 160, y: 150 },
       ])]
-      draft.plants = [makePlant(
-        'locked-plant',
-        'Malus domestica',
-        { x: 20, y: 30 },
-        { locked: true },
-      )]
     })
     const deps = createInteractionDeps(container, store, testView, {
       translate,
@@ -106,26 +98,19 @@ describe('SceneInteractionSession', () => {
     session.setTool('select')
     deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
-    events.pointerMove({ x: 20, y: 30 })
 
     const rotateButton = rotationHandle(container)!
-    const affordance = lockedAffordance(container)!
-    const unlock = affordance.querySelector<HTMLButtonElement>('[data-locked-object-unlock]')!
-    unlock.focus()
+    rotateButton.focus()
 
     expect(rotateButton.getAttribute('aria-label')).toBe('en:canvas.rotationHandle.label')
-    expect(unlock.getAttribute('aria-label')).toBe('en:canvas.lockedObject.unlock')
 
     language = 'fr'
     session.refreshTranslations()
 
     expect(rotationHandle(container)).toBe(rotateButton)
-    expect(lockedAffordance(container)).toBe(affordance)
     expect(rotateButton.style.display).toBe('inline-flex')
-    expect(affordance.style.display).toBe('inline-flex')
-    expect(document.activeElement).toBe(unlock)
+    expect(document.activeElement).toBe(rotateButton)
     expect(rotateButton.getAttribute('aria-label')).toBe('fr:canvas.rotationHandle.label')
-    expect(unlock.getAttribute('aria-label')).toBe('fr:canvas.lockedObject.unlock')
   })
 
   it('names zone control points and guide ends through translate, and relabels them on a locale switch', () => {
@@ -229,7 +214,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 20, y: 30 },
         rotationDeg: null,
@@ -249,7 +233,7 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 35, y: 45 })
     events.pointerUp({ x: 35, y: 45 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
     expect(store.persisted.plants[0]?.position).toEqual({ x: 35, y: 45 })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
     expect(deps.setSelection).toHaveBeenCalledWith([plantTarget('plant-1')])
@@ -733,12 +717,12 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('keeps active drag and rotation gestures moving through runtime overlay propagation guards', () => {
+  it('keeps active drag and rotation gestures moving over the canvas\'s own chrome', () => {
     store.updatePersisted((draft) => {
       draft.plants = [
         makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }),
-        // Directly locked: hovering it brings the session's Unlock affordance, which stops the moves made on it, onto the map.
-        makePlant('locked-plant', 'Malus domestica', { x: 300, y: 250 }, { locked: true }),
+        // Hovering it brings the plant tooltip, the session's own chrome, onto the map.
+        makePlant('plant-2', 'Malus domestica', { x: 300, y: 250 }),
       ]
       draft.zones = [makeRectZone('zone-1', [
         { x: 80, y: 80 },
@@ -759,7 +743,7 @@ describe('SceneInteractionSession', () => {
 
     deps.setSelection([plantTarget('plant-1')])
     session.refreshMeasurements()
-    const overlay = lockedAffordance(container)!
+    const overlay = plantHoverTooltip(container)
 
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     const overlayMove = events.pointerMove(
@@ -775,31 +759,31 @@ describe('SceneInteractionSession', () => {
     deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
     const handle = rotationHandle(container)!
-    const affordanceElement = lockedAffordance(container)!
+    const chromeElement = plantHoverTooltip(container)
     const pivot = selectionBoundsCenter(getDesignObjectSelectionFromStore(store, testView))
     const start = rotationHandleCenter(container)
     const end = quarterTurnClockwise(pivot, start)
 
     events.pointerDown(start, { button: 0, target: handle })
-    const affordanceMove = events.pointerMove(
+    const chromeMove = events.pointerMove(
       end,
-      { button: 0, target: affordanceElement },
+      { button: 0, target: chromeElement },
     )
-    expect(affordanceMove.target).toBe(affordanceElement)
+    expect(chromeMove.target).toBe(chromeElement)
 
     expect(store.persisted.zones[0]?.rotationDeg).toBeCloseTo(90)
 
-    events.pointerUp(end, { button: 0, target: affordanceElement })
+    events.pointerUp(end, { button: 0, target: chromeElement })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-rotate')
     session.dispose()
   })
 
-  it('ends middle-button panning when pointer continuation targets a runtime overlay', () => {
+  it('ends middle-button panning when pointer continuation targets the canvas\'s own chrome', () => {
     store.updatePersisted((draft) => {
       draft.plants = [
         makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }),
-        // Directly locked: hovering it brings the session's Unlock affordance onto the map.
-        makePlant('locked-plant', 'Malus domestica', { x: 300, y: 250 }, { locked: true }),
+        // Hovering it brings the plant tooltip, the session's own chrome, onto the map.
+        makePlant('plant-2', 'Malus domestica', { x: 300, y: 250 }),
       ]
     })
     const deps = createInteractionDeps(container, store, testView, {
@@ -811,8 +795,7 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 360, y: 280 })
     deps.setSelection([plantTarget('plant-1')])
     session.refreshMeasurements()
-    const overlay = lockedAffordance(container)!
-    expect(overlay).not.toBeNull()
+    const overlay = plantHoverTooltip(container)
 
     events.pointerDown({ x: 200, y: 150 }, { pointerId: 41, button: 1 })
     events.pointerMove(
@@ -861,7 +844,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 20, y: 30 }, { button: 0, detail: 2 })
     events.pointerUp({ x: 20, y: 30 }, { button: 0, detail: 2 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['apple-1', 'apple-2']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['apple-1', 'apple-2']))
     expect(deps.setSelection).toHaveBeenCalledWith([
       plantTarget('apple-1'),
       plantTarget('apple-2'),
@@ -888,12 +871,12 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 20, y: 30 }, { button: 0, detail: 2, shiftKey: true })
     events.pointerUp({ x: 20, y: 30 }, { button: 0, detail: 2, shiftKey: true })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['pear-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['pear-1']))
 
     events.pointerDown({ x: 20, y: 30 }, { button: 0, detail: 2, shiftKey: true })
     events.pointerUp({ x: 20, y: 30 }, { button: 0, detail: 2, shiftKey: true })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['pear-1', 'apple-1', 'apple-2']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['pear-1', 'apple-1', 'apple-2']))
     session.dispose()
   })
 
@@ -1328,84 +1311,25 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('shows a direct unlock affordance when hovering a locked Design Object', () => {
+  it('hovering a directly locked object shows the locked hover stroke and no chip', () => {
     store.updatePersisted((draft) => {
-      draft.plants = [{
-        kind: 'plant',
-        id: 'locked-plant',
-        locked: true,
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        stratum: null,
-        canopySpreadM: 2,
-        position: { x: 20, y: 30 },
-        rotationDeg: null,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
+      draft.plants = [makePlant('locked-plant', 'Malus domestica', { x: 20, y: 30 }, { locked: true })]
     })
-    const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
+    const hovered: unknown[] = []
+    const deps = createInteractionDeps(container, store, testView, {
+      setHoveredTarget: (target) => hovered.push(target),
+    })
     const session = createTestSession(deps)
     session.setTool('select')
 
     events.pointerMove({ x: 20, y: 30 })
 
-    const affordance = lockedAffordance(container)
-    expect(affordance).not.toBeNull()
-    expect(affordance?.dataset.lockedObjectId).toBe('locked-plant')
-    const unlock = affordance?.querySelector<HTMLButtonElement>('[data-locked-object-unlock]')!
-    expect(unlock.getAttribute('aria-label')).toContain('Unlock')
-    expect(selectedObjectIds.value).toEqual(new Set())
-
-    events.pointerDown({ x: 35, y: 45 }, { target: unlock })
-    events.pointerUp({ x: 35, y: 45 }, { target: unlock })
-
-    expect(affordance?.style.display).toBe('inline-flex')
-    expect(affordance?.dataset.lockedObjectId).toBe('locked-plant')
-
-    unlock.click()
-
-    expect(store.persisted.plants[0]?.locked).toBe(false)
-    expect(onSceneEditCommit).toHaveBeenCalledWith('unlock-design-object')
-    expect(selectedObjectIds.value).toEqual(new Set())
-    session.dispose()
-  })
-
-  it('does not show direct unlock affordances for Design Objects blocked by locked Layers', () => {
-    store.updatePersisted((draft) => {
-      draft.layers = draft.layers.map((layer) => (
-        layer.name === 'plants' ? { ...layer, locked: true } : layer
-      ))
-      draft.plants = [{
-        kind: 'plant',
-        id: 'locked-layer-plant',
-        locked: true,
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        stratum: null,
-        canopySpreadM: 2,
-        position: { x: 20, y: 30 },
-        rotationDeg: null,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
-    })
-    const deps = createInteractionDeps(container, store, testView)
-    const session = createTestSession(deps)
-    session.setTool('select')
-
-    events.pointerMove({ x: 20, y: 30 })
-
-    // The host's Unlock affordance joins the map at its first show: here it never shows.
-    const affordance = lockedAffordance(container)
-    expect(affordance?.style.display ?? 'none').toBe('none')
-    expect(affordance?.dataset.lockedObjectId).toBeUndefined()
-    expect(selectedObjectIds.value).toEqual(new Set())
+    // The renderer draws a hovered, directly locked object with the locked-object stroke (scene-runtime/presentation.ts).
+    expect(hovered.at(-1)).toEqual(plantTarget('locked-plant'))
+    const buttons = [...container.querySelectorAll('button')]
+    expect(buttons.filter((button) => /unlock/i.test(button.getAttribute('aria-label') ?? button.textContent ?? '')))
+      .toEqual([])
+    expect(currentCanvasSelection.value).toEqual(new Set())
     session.dispose()
   })
 
@@ -1422,6 +1346,7 @@ describe('SceneInteractionSession', () => {
         blockedTargets: [],
         bounds: { minX: 160, minY: 100, maxX: 220, maxY: 150 },
         sameSpeciesReferenceCanonicalName: null,
+        plantNamePinning: { plantIds: [], allPinned: false },
       }),
     }
     const session = createTestSession(deps)
@@ -1494,7 +1419,7 @@ describe('SceneInteractionSession', () => {
 
     expect(contextMenu.defaultPrevented).toBe(true)
     expect(downstreamContextMenu).not.toHaveBeenCalled()
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
     expect(store.persisted.plants.find((plant) => plant.id === 'plant-1')?.position)
       .toEqual({ x: 40, y: 50 })
     expect(contextMenuHost.opened).toHaveLength(0)
@@ -1506,76 +1431,6 @@ describe('SceneInteractionSession', () => {
       .toEqual({ x: 50, y: 60 })
     expect(onSceneEditCommit).toHaveBeenCalledOnce()
     session.dispose()
-  })
-
-  it('quarantines the pointerdown that recovers pending Scene settlement', () => {
-    store.updatePersisted((draft) => {
-      draft.plants = [
-        makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }),
-        makePlant('plant-2', 'Pyrus communis', { x: 120, y: 30 }),
-      ]
-    })
-    const { admission, recoveryCalls } = createRecoveringCommandAdmission()
-    const baseDeps = createInteractionDeps(container, store, testView)
-    const deps: SceneInteractionSessionDeps = {
-      ...baseDeps,
-      commandAdmission: admission,
-      setSelection: (ids) => admission.runWhenSettled(
-        () => baseDeps.setSelection(ids),
-        undefined,
-        { resumePending: true },
-      ),
-    }
-    const session = createTestSession(deps)
-    session.setTool('select')
-    baseDeps.setSelection([plantTarget('plant-1')])
-    const before = store.persisted
-
-    events.pointerDown({ x: 120, y: 30 }, { pointerId: 43 })
-    events.pointerMove({ x: 150, y: 60 }, { pointerId: 43 })
-    events.pointerUp({ x: 150, y: 60 }, { pointerId: 43 })
-
-    expect(recoveryCalls).toHaveBeenCalledOnce()
-    expect(recoveryCalls).toHaveBeenCalledWith(true)
-    expect(store.persisted).toEqual(before)
-    expect(store.session.selectedTargets).toEqual([plantTarget('plant-1')])
-  })
-
-  it('quarantines the contextmenu that recovers pending Scene settlement', () => {
-    store.updatePersisted((draft) => {
-      draft.plants = [
-        makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }),
-        makePlant('plant-2', 'Pyrus communis', { x: 120, y: 30 }),
-      ]
-    })
-    const { admission, recoveryCalls } = createRecoveringCommandAdmission()
-    const baseDeps = createInteractionDeps(container, store, testView)
-    const deps: SceneInteractionSessionDeps = {
-      ...baseDeps,
-      commandAdmission: admission,
-      setSelection: (ids) => admission.runWhenSettled(
-        () => baseDeps.setSelection(ids),
-        undefined,
-        { resumePending: true },
-      ),
-    }
-    const session = createTestSession(deps)
-    session.setTool('select')
-    baseDeps.setSelection([plantTarget('plant-1')])
-    const point = events.clientPoint({ x: 120, y: 30 })
-    const contextMenu = new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: point.x,
-      clientY: point.y,
-    })
-
-    container.dispatchEvent(contextMenu)
-
-    expect(recoveryCalls).toHaveBeenCalledOnce()
-    expect(recoveryCalls).toHaveBeenCalledWith(true)
-    expect(store.session.selectedTargets).toEqual([plantTarget('plant-1')])
-    expect(contextMenuHost.opened).toHaveLength(0)
   })
 
   it('opens the empty-map menu with Place plants here, Paste and Select all at the pointer', () => {
@@ -1618,7 +1473,7 @@ describe('SceneInteractionSession', () => {
     openContextMenu({ x: 300, y: 250 })
 
     expect(contextMenuHost.current?.selection).toBeNull()
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
     expect(deps.setSelection).not.toHaveBeenCalled()
     session.dispose()
   })
@@ -1634,7 +1489,7 @@ describe('SceneInteractionSession', () => {
 
     openContextMenu({ x: 20, y: 30 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
     expect(contextMenuHost.current?.selection?.editableTargets).toEqual([plantTarget('plant-1')])
     expect(contextMenuHost.current?.commands).toBe(commands)
     contextMenuCommand('copy').run()
@@ -1656,6 +1511,7 @@ describe('SceneInteractionSession', () => {
       blockedTargets: [],
       bounds: { minX: 20, minY: 20, maxX: 24, maxY: 24 },
       sameSpeciesReferenceCanonicalName: null,
+      plantNamePinning: { plantIds: [], allPinned: false },
     }
     const baseDeps = createInteractionDeps(container, store, testView, {
       getDesignObjectSelection: () => selectionModel,
@@ -1700,6 +1556,7 @@ describe('SceneInteractionSession', () => {
       }],
       bounds: { minX: 20, minY: 20, maxX: 60, maxY: 24 },
       sameSpeciesReferenceCanonicalName: null,
+      plantNamePinning: { plantIds: [], allPinned: false },
     }
     const commands = createSelectionCommands({ canPaste: vi.fn(() => true) })
     const session = createTestSession(createInteractionDeps(container, store, testView, {
@@ -1760,7 +1617,7 @@ describe('SceneInteractionSession', () => {
     vi.mocked(deps.setSelection).mockClear()
     openContextMenu({ x: 110, y: 30 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
     expect(deps.setSelection).not.toHaveBeenCalled()
     expect(contextMenuCommand('copy').disabled).toBe(true)
     expect(contextMenuCommand('delete').disabled).toBe(true)
@@ -1797,7 +1654,7 @@ describe('SceneInteractionSession', () => {
 
     openContextMenu({ x: 120, y: 30 })
 
-    expect(selectedObjectIds.value).toEqual(new Set())
+    expect(currentCanvasSelection.value).toEqual(new Set())
     expect(deps.setSelection).not.toHaveBeenCalled()
     expect(contextMenuHost.current?.selection).not.toBeNull()
     expect(contextMenuCommand('copy').disabled).toBe(true)
@@ -1822,7 +1679,7 @@ describe('SceneInteractionSession', () => {
     vi.mocked(deps.setSelection).mockClear()
     openContextMenu({ x: 80, y: 30 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-2']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-2']))
     expect(deps.setSelection).toHaveBeenCalledWith([plantTarget('plant-2')])
     expect(contextMenuHost.current?.selection?.editableTargets).toEqual([plantTarget('plant-2')])
 
@@ -1830,7 +1687,7 @@ describe('SceneInteractionSession', () => {
     vi.mocked(deps.setSelection).mockClear()
     openContextMenu({ x: 80, y: 30 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1', 'plant-2']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1', 'plant-2']))
     expect(deps.setSelection).not.toHaveBeenCalled()
     expect(contextMenuHost.current?.selection?.editableTargets).toHaveLength(2)
     session.dispose()
@@ -1847,7 +1704,7 @@ describe('SceneInteractionSession', () => {
 
     openContextMenu({ x: 20, y: 30 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['locked-plant']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['locked-plant']))
     expect(contextMenuCommand('copy').disabled).toBe(true)
     expect(contextMenuCommand('delete').disabled).toBe(true)
     expect(contextMenuCommand('unlock').disabled).toBe(false)
@@ -1921,7 +1778,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 20, y: 30 },
         rotationDeg: null,
@@ -1958,7 +1814,7 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 35, y: 45 }, { button: 0 })
     events.pointerUp({ x: 35, y: 45 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['locked-plant']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['locked-plant']))
     expect(store.persisted.plants[0]?.position).toEqual({ x: 20, y: 30 })
 
     openContextMenu({ x: 20, y: 30 })
@@ -1977,7 +1833,7 @@ describe('SceneInteractionSession', () => {
     expect(unlockSelected).toHaveBeenCalledTimes(1)
     expect(onSceneEditCommit).toHaveBeenCalledWith('unlock-selected')
     expect(store.persisted.plants[0]?.locked).toBe(false)
-    expect(selectedObjectIds.value).toEqual(new Set(['locked-plant']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['locked-plant']))
     openContextMenu({ x: 20, y: 30 })
     expect(contextMenuCommand('unlock').disabled).toBe(true)
     expect(contextMenuCommand('lock').disabled).toBe(false)
@@ -2011,7 +1867,7 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 35, y: 45 }, { button: 0 })
     events.pointerUp({ x: 35, y: 45 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['editable-plant', 'locked-plant']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['editable-plant', 'locked-plant']))
     expect(store.persisted.plants.find((plant) => plant.id === 'editable-plant')?.position).toEqual({ x: 35, y: 45 })
     expect(store.persisted.plants.find((plant) => plant.id === 'locked-plant')?.position).toEqual({ x: 60, y: 30 })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
@@ -2028,7 +1884,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 20, y: 30 },
         rotationDeg: null,
@@ -2052,13 +1907,13 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     events.pointerUp({ x: 20, y: 30 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set())
+    expect(currentCanvasSelection.value).toEqual(new Set())
 
     events.pointerDown({ x: 10, y: 20 }, { button: 0 })
     events.pointerMove({ x: 30, y: 40 }, { button: 0 })
     events.pointerUp({ x: 30, y: 40 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set())
+    expect(currentCanvasSelection.value).toEqual(new Set())
     session.dispose()
   })
 
@@ -2209,7 +2064,7 @@ describe('SceneInteractionSession', () => {
     events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
     events.pointerDown({ x: 27, y: 35 }, { button: 0, detail: 1 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['annotation-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['annotation-1']))
     expect(container.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('Portable note')
     session.dispose()
   })
@@ -2473,7 +2328,7 @@ describe('SceneInteractionSession', () => {
     textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
 
     expect(store.persisted.annotations).toHaveLength(0)
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-annotation-text')
     expect(container.querySelector('textarea')).toBeNull()
     session.dispose()
@@ -2710,7 +2565,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 80, y: 50 }, { button: 0 })
     events.pointerUp({ x: 80, y: 50 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['zone-ellipse']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['zone-ellipse']))
     expect(deps.setSelection).toHaveBeenCalledWith([zoneTarget('zone-ellipse')])
     session.dispose()
   })
@@ -2741,7 +2596,7 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 90, y: 65 }, { button: 0 })
     events.pointerUp({ x: 90, y: 65 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['zone-ellipse']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['zone-ellipse']))
     expect(store.persisted.zones[0]?.points).toEqual([
       { x: 60, y: 65 },
       { x: 30, y: 20 },
@@ -2858,7 +2713,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 15, y: 45 }, { button: 0 })
     events.pointerUp({ x: 15, y: 45 }, { button: 0 })
 
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
     expect(draftLabelTexts(deps)).toEqual([])
     session.dispose()
   })
@@ -2887,7 +2742,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 50, y: 13 }, { button: 0 })
     events.pointerUp({ x: 50, y: 13 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['line-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['line-1']))
     expect(draftLabelTexts(deps)).toEqual(['100 m'])
     session.dispose()
   })
@@ -2916,7 +2771,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 60, y: 60 }, { button: 0 })
     events.pointerUp({ x: 60, y: 60 }, { button: 0 })
 
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
     expect(draftLabelTexts(deps)).toEqual([])
     session.dispose()
   })
@@ -2946,7 +2801,7 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 80, y: 60 }, { button: 0 })
     events.pointerUp({ x: 80, y: 60 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['line-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['line-1']))
     session.dispose()
   })
 
@@ -3013,7 +2868,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 10, y: 20 }, { button: 0 })
     events.pointerUp({ x: 10, y: 20 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['zone-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['zone-1']))
     expect(draftLabelTexts(deps)).toEqual([
       '100 m',
       '80 m',
@@ -3071,7 +2926,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 150, y: 20 }, { button: 0, shiftKey: true })
     events.pointerUp({ x: 150, y: 20 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['zone-1', 'zone-2']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['zone-1', 'zone-2']))
     expect(draftLabelTexts(deps)).toEqual([])
     session.dispose()
   })
@@ -3109,7 +2964,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 10, y: 20 }, { button: 0 })
     events.pointerUp({ x: 10, y: 20 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['group-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['group-1']))
     expect(draftLabelTexts(deps)).toEqual([])
     session.dispose()
   })
@@ -3195,13 +3050,13 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 60, y: 50 }, { button: 0 })
     events.pointerUp({ x: 60, y: 50 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set())
+    expect(currentCanvasSelection.value).toEqual(new Set())
     expect(deps.setSelection).not.toHaveBeenCalledWith([zoneTarget('zone-1')])
 
     events.pointerDown({ x: 10, y: 50 }, { button: 0 })
     events.pointerUp({ x: 10, y: 50 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['zone-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['zone-1']))
     session.dispose()
   })
 
@@ -3222,7 +3077,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 10, y: 50 }, { button: 0 })
     events.pointerUp({ x: 10, y: 50 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
     session.dispose()
   })
 
@@ -3505,7 +3360,6 @@ describe('SceneInteractionSession', () => {
           canonicalName: 'Malus domestica',
           commonName: 'Apple',
           color: null,
-          stratum: null,
           canopySpreadM: 2,
           position: { x: 50, y: 50 },
           rotationDeg: null,
@@ -3619,7 +3473,7 @@ describe('SceneInteractionSession', () => {
     // scale and as its turned text closer in").
     const ghosts = () => draftShapes(deps).flatMap((shape) =>
       shape.kind === 'ghost' && shape.entity.kind === 'objects' ? [shape.entity] : [])
-    expect(ghosts().map((ghost) => ghost.anchor)).toEqual([{ x: 40, y: 45 }, { x: 40, y: 45 }])
+    expect(ghosts()).toHaveLength(2)
     const [objects, notes] = ghosts()
     expect(objects!.template.zones.map(({ entity }) => entity)).toEqual([expect.objectContaining({
       zoneType: 'rect',
@@ -3641,8 +3495,10 @@ describe('SceneInteractionSession', () => {
     const overviewViewport = testView.viewport()
     testView.setViewport({ ...overviewViewport, scale: 20 })
     container.dispatchEvent(dragOverEvent)
-    // Closer in, the ghosts follow the ground under the pointer.
-    expect(ghosts().map((ghost) => ghost.anchor)).toEqual([{ x: 4, y: 4.5 }, { x: 4, y: 4.5 }])
+    // Closer in, the ghosts follow the ground under the pointer: the bed's corner is the stamp's anchor.
+    const [closerObjects, closerNotes] = ghosts()
+    expect(closerObjects!.template.zones[0]!.entity.points[0]).toEqual({ x: 4, y: 4.5 })
+    expect(closerNotes!.template.annotations[0]!.entity.position).toEqual({ x: 6, y: -0.5 })
 
     testView.setViewport(overviewViewport)
     container.dispatchEvent(dragOverEvent)
@@ -3671,7 +3527,7 @@ describe('SceneInteractionSession', () => {
       rotationDeg: 45,
       position: { x: 42, y: 40 },
     })
-    expect(selectedObjectIds.value).toEqual(new Set([
+    expect(currentCanvasSelection.value).toEqual(new Set([
       store.persisted.plants[0]!.id,
       store.persisted.zones[0]!.id,
       store.persisted.annotations[0]!.id,
@@ -4064,13 +3920,13 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 24, y: 24 }, { button: 0 })
     events.pointerUp({ x: 24, y: 24 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['shared']))
+    expect(currentCanvasSelection.value).toEqual(new Set(['shared']))
     expect(deps.setSelection).toHaveBeenCalledWith([annotationTarget('shared')])
     session.dispose()
   })
 
   it('clears selection through the runtime seam when clicking empty canvas', () => {
-    selectedObjectIds.value = new Set(['plant-1'])
+    currentCanvasSelection.value = new Set(['plant-1'])
     const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
@@ -4078,7 +3934,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 380, y: 280 }, { button: 0 })
     events.pointerUp({ x: 380, y: 280 }, { button: 0 })
 
-    expect(selectedObjectIds.value.size).toBe(0)
+    expect(currentCanvasSelection.value.size).toBe(0)
     // The ToolHost's history-free selection (ToolHostDeps.setSelection); the runtime's clearSelection is the same write.
     expect(deps.setSelection).toHaveBeenCalledTimes(1)
     expect(deps.setSelection).toHaveBeenCalledWith([])
@@ -4430,7 +4286,7 @@ describe('SceneInteractionSession', () => {
 
       expect(errors).toHaveLength(1)
       expect(errors[0]).toEqual(expect.objectContaining({ message: `${kind} abort failed` }))
-      // The host's own retry inside the same cancellation has already rolled the edit back: nothing is left open.
+      // The fault rule's abort inside the same cancellation has already rolled the edit back: nothing is left open.
       expect(abortFailure.abortCalls()).toBe(2)
       expect(abortFailure.beginCalls()).toBe(1)
       expect(abortFailure.beginTypes()).toEqual([editType])
@@ -4439,7 +4295,7 @@ describe('SceneInteractionSession', () => {
       expect(container.querySelector('[data-canvas-handle]')).not.toBeNull()
       expect(container.querySelector('[data-canvas-handle-active]')).toBeNull()
 
-      // A fresh drag on the restored handle is an ordinary press: no retry fencing left to admit it through.
+      // A fresh drag on the restored handle is an ordinary press.
       const freshHandle = kind === 'Rotation Handle'
         ? rotationHandle(container)!
         : kind === 'Zone Control Point'
@@ -4511,9 +4367,8 @@ describe('SceneInteractionSession', () => {
       // The selected zone's chips, or the dragged guide's length chip, are the host's draft (today's measurement overlay).
       expect(baseDeps.renderer.lastDraft()).not.toBeNull()
 
-      // The ToolHost disposes the tool: the live drag's cancel fails, the host's own retry inside that same
-      // cancellation (dispose() now guards it like every other cancelLive, per the REFUSED_PRESS fix) fails too,
-      // and so does the tool's own transient cleanup after it.
+      // The ToolHost disposes the tool: the live drag's cancel fails, the fault rule's abort fails too, and so does the
+      // tool's own transient cleanup after it.
       expect(() => session.dispose()).toThrow('Tool host disposal failed')
       expect(abortFailure.abortCalls()).toBe(3)
       expect(container.querySelector('[data-canvas-handle-layer]')).toBeNull()
@@ -4549,7 +4404,7 @@ describe('SceneInteractionSession', () => {
 
     expect(errors).toHaveLength(1)
     expect(errors[0]).toEqual(expect.objectContaining({ message: 'shared drag abort failed' }))
-    // The host's own retry inside the same cancellation has already rolled the edit back.
+    // The fault rule's abort inside the same cancellation has already rolled the edit back.
     expect(abortFailure.abortCalls()).toBe(2)
     expect(abortFailure.beginCalls()).toBe(1)
     expect(store.persisted).toEqual(persistedBefore)
@@ -4590,15 +4445,14 @@ describe('SceneInteractionSession', () => {
     expect(abortFailure.beginCalls()).toBe(1)
     expect(store.persisted).toEqual(persistedBefore)
 
-    // A right-click on the map, a release outside the tool: the tool's own transaction reference survived its first,
-    // throwing abort, so it is asked to cancel again, and this abort is a harmless no-op on the already-closed transaction.
+    // A right-click on the map, a release outside the tool: the fault armed a fresh Select, so nothing is left to abort.
     events.pointerDown({ x: 40, y: 50 }, { pointerId: 29, button: 2 })
     events.pointerUp({ x: 40, y: 50 }, { pointerId: 29, button: 2 })
 
-    expect(abortFailure.abortCalls()).toBe(3)
+    expect(abortFailure.abortCalls()).toBe(2)
     expect(store.persisted).toEqual(persistedBefore)
     session.dispose()
-    expect(abortFailure.abortCalls()).toBe(3)
+    expect(abortFailure.abortCalls()).toBe(2)
   })
 
   it('a failed shared-drag cancellation is rolled back at once, admitting a later plant drop normally', () => {
@@ -4659,10 +4513,9 @@ describe('SceneInteractionSession', () => {
     expect(abortFailure.abortCalls()).toBe(2)
     expect(abortFailure.beginCalls()).toBe(1)
     expect(store.persisted.plants).toHaveLength(2)
-    // The tool's own transaction reference survived its first, throwing abort; disposal asks it to cancel again, a
-    // harmless no-op on the already-closed transaction.
+    // The fault armed a fresh Select: disposal has nothing left to abort.
     session.dispose()
-    expect(abortFailure.abortCalls()).toBe(3)
+    expect(abortFailure.abortCalls()).toBe(2)
   })
 
   it('a failed cancellation is rolled back at once, with no key swallowed for a later shortcut', () => {
@@ -4686,7 +4539,7 @@ describe('SceneInteractionSession', () => {
       events.pointerCancel({ x: 40, y: 50 }, { pointerId: 30 })
     })
     expect(errors).toHaveLength(1)
-    // The host's own retry inside the same cancellation has already rolled the edit back: no key needs swallowing.
+    // The fault rule's abort inside the same cancellation has already rolled the edit back: no key needs swallowing.
     expect(abortFailure.abortCalls()).toBe(2)
     expect(store.persisted).toEqual(persistedBefore)
     session.dispose()

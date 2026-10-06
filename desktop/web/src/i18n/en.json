@@ -157,10 +157,6 @@
       "commitLimitWarning": "Increase interval or shorten the line",
       "dragAlong": "drag along the row"
     },
-    "lockedObject": {
-      "locked": "Locked",
-      "unlock": "Unlock"
-    },
     "contextMenu": {
       "ariaLabel": "Canvas edit commands",
       "showName": "Show name",
@@ -184,9 +180,7 @@
     "grid": {
       "grid": "Grid",
       "snapToGrid": "Snap to grid",
-      "rulers": "Rulers",
-      "zoom": "Zoom",
-      "rulersNorthUpOnly": "Rulers show when north is up"
+      "zoom": "Zoom"
     },
     "overview": {
       "zoomInToEdit": "Zoom in to edit. Plants are hidden at this scale.",

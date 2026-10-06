@@ -26,7 +26,6 @@ import {
 interface DesignSessionLifecycleHost {
   readonly canvasArea: HTMLElement;
   readonly container: HTMLElement;
-  readonly rulerOverlay: HTMLElement | null;
   readonly onMapStateChange?: WorkspaceRuntimeMountOptions['onMapStateChange'];
 }
 
@@ -106,10 +105,6 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
         throw new Error('Shared workspace initialization was cancelled.');
       }
       this.runtimeInitialized = true;
-      if (this.host.rulerOverlay) {
-        this.documents.attachRulersTo(this.host.rulerOverlay);
-        if (this.cancelled) return;
-      }
 
       const result = await startAttachedDesignSession(this.documents);
       if (this.cancelled) return;

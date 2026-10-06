@@ -127,7 +127,7 @@ export function placeOnHost(
   host.current().apply({ kind: 'set', target, animation: 'none' })
 }
 
-/** The frame a test view built with these options shows: for chrome that takes one frame (the rulers, the grid). */
+/** The frame a test view built with these options shows: for chrome that takes one frame (the grid). */
 export function testViewFrame(options: TestViewOptions = {}): ViewFrame {
   const view = createTestView(options)
   const frame = view.frames.viewFrame.peek()

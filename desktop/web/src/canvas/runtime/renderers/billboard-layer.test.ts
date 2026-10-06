@@ -10,7 +10,7 @@ import { createBillboardLayer } from './billboard-layer'
 function createPlant(overrides: Partial<ScenePlantEntity> = {}): ScenePlantEntity {
   return {
     kind: 'plant', locked: false, id: 'plant', canonicalName: 'Malus domestica', commonName: 'Apple',
-    color: null, stratum: null, canopySpreadM: null, position: { x: 4, y: 3 }, rotationDeg: null,
+    color: null, canopySpreadM: null, position: { x: 4, y: 3 }, rotationDeg: null,
     notes: null, plantedDate: null, quantity: 1, ...overrides,
   }
 }

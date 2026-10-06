@@ -3,10 +3,7 @@ import {
   DOCUMENT_FILE_FIELD_OWNERS as GENERATED_DOCUMENT_FILE_FIELD_OWNERS,
   KNOWN_CANOPI_KEYS,
 } from '../../generated/known-canopi-keys'
-import type {
-  DocumentFileFieldOwner,
-  KnownCanopiKey,
-} from '../../generated/known-canopi-keys'
+import type { KnownCanopiKey } from '../../generated/known-canopi-keys'
 import type { CanopiFile } from '../../types/design'
 
 export { DEFAULT_BUDGET_CURRENCY }
@@ -29,10 +26,6 @@ const DOCUMENT_FILE_KNOWN_KEYS = KNOWN_CANOPI_KEYS
 const KNOWN_CANOPI_KEY_SET = new Set<string>(DOCUMENT_FILE_KNOWN_KEYS)
 /** Optional sections a Design writes only when it has them (the Rust side skips them when None). */
 const WRITTEN_ONLY_WHEN_PRESENT: ReadonlySet<KnownCanopiKey> = new Set(['lidar', 'map_view'])
-const SHARED_EXTRA_FIELD_OWNERS = {
-  guides: 'scene',
-} as const satisfies Record<string, DocumentFileFieldOwner>
-
 function normalizePersistedExtra(extra: CanopiFile['extra']): Record<string, unknown> {
   if (!extra || typeof extra !== 'object' || Array.isArray(extra)) return {}
   const normalized: Record<string, unknown> = {}
@@ -118,7 +111,8 @@ function composeKnownDocumentFields(
     output[key] = value
   }
 
-  output.extra = composeDocumentExtra(document.extra, canvas.extra)
+  // `extra` is all Design Edit's: the scene owns no `extra` key (ADR 0011).
+  output.extra = normalizePersistedExtra(document.extra)
   return output as CanopiFile
 }
 
@@ -155,38 +149,5 @@ function normalizeDocumentKnownFields(file: CanopiFile): CanopiFile {
     created_at: file.created_at,
     updated_at: file.updated_at,
     extra: normalizePersistedExtra(file.extra),
-  }
-}
-
-function composeDocumentExtra(
-  documentExtra: CanopiFile['extra'],
-  canvasExtra: CanopiFile['extra'],
-): Record<string, unknown> {
-  const nextExtra = normalizePersistedExtra(documentExtra)
-  const sceneExtra = normalizePersistedExtra(canvasExtra)
-
-  for (const [key, owner] of Object.entries(SHARED_EXTRA_FIELD_OWNERS)) {
-    const source = sharedExtraSource(owner, nextExtra, sceneExtra)
-    if (Object.prototype.hasOwnProperty.call(source, key)) {
-      nextExtra[key] = source[key]
-    } else {
-      delete nextExtra[key]
-    }
-  }
-
-  return nextExtra
-}
-
-function sharedExtraSource(
-  owner: DocumentFileFieldOwner,
-  documentExtra: Record<string, unknown>,
-  sceneExtra: Record<string, unknown>,
-): Record<string, unknown> {
-  switch (owner) {
-    case 'document':
-    case 'shared':
-      return documentExtra
-    case 'scene':
-      return sceneExtra
   }
 }

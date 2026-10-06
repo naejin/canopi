@@ -92,15 +92,6 @@ describe('ToolScene over today\'s hit tests', () => {
     }
   })
 
-  it('a kinds filter keeps only a top-level hit of those kinds', () => {
-    const scene = createToolScene(createToolSceneSource(orchardStore(), { pixelsPerMetre: () => 4 }))
-
-    expect(scene.hitAt({ x: 0, y: 0 }, { kinds: ['plant'] })).toEqual({ kind: 'object', target: { kind: 'plant', id: 'p1' } })
-    // A grouped plant is hit as its group, which a plant filter refuses.
-    expect(scene.hitAt({ x: 20, y: 20 }, { kinds: ['plant'] })).toBeNull()
-    expect(scene.hitAt({ x: 20, y: 20 }, { kinds: ['group'] })).toEqual({ kind: 'object', target: { kind: 'group', id: 'g1' } })
-  })
-
   it('reads the frame scale at every query, so screen-sized plants hit as drawn', () => {
     let pixelsPerMetre = 40
     const scene = createToolScene(createToolSceneSource(orchardStore(), { pixelsPerMetre: () => pixelsPerMetre }))
@@ -112,7 +103,7 @@ describe('ToolScene over today\'s hit tests', () => {
     expect(scene.hitAt(between)).not.toBeNull()
   })
 
-  it('with a pixel tolerance hitAt answers the nearest zone edge at the frame\'s scale, and hitInQuad refuses one', () => {
+  it('with a pixel tolerance hitAt answers the nearest zone edge at the frame\'s scale', () => {
     let pixelsPerMetre = 4
     const scene = createToolScene(createToolSceneSource(orchardStore(), { pixelsPerMetre: () => pixelsPerMetre }))
 
@@ -121,8 +112,6 @@ describe('ToolScene over today\'s hit tests', () => {
       .toEqual({ kind: 'zone-edge', zoneId: 'z1', edgeIndex: 0, distancePx: expect.closeTo(6, 6) })
     pixelsPerMetre = 8
     expect(scene.hitAt({ x: 10, y: 3.5 }, { toleranceScreenPx: 8 })).toBeNull()
-    expect(() => scene.hitInQuad([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }], { toleranceScreenPx: 8 }))
-      .toThrow(/toleranceScreenPx/)
   })
 
   it('a quad at 45 hits plants by their circles and shapes by their polygons, never a hidden layer', () => {
@@ -130,7 +119,7 @@ describe('ToolScene over today\'s hit tests', () => {
     // A diamond: the band of a square screen box seen at 45°. Its world box is [-10, 10]², which today's query read.
     const diamond: WorldQuad = [{ x: 10, y: 0 }, { x: 0, y: 10 }, { x: -10, y: 0 }, { x: 0, y: -10 }]
     const probe = createToolScene(createToolSceneSource(sceneStoreWith({}), { pixelsPerMetre: () => pixelsPerMetre }))
-    const radius = probe.plantPresentation(plantEntity('probe', 'Malus domestica', { x: 0, y: 0 }))!.radiusPx / pixelsPerMetre
+    const radius = probe.plantPresentation(plantEntity('probe', 'Malus domestica', { x: 0, y: 0 })).radiusPx / pixelsPerMetre
     // Off the diamond's south-east edge (x + y = 10) by 0.85 radius along the diagonal: the plant's square reaches the
     // diamond, its circle does not. Off the north-west edge by half a radius, the circle reaches it. (The plants stay far
     // enough apart that their spacing leaves the probe's radius alone.)
@@ -163,11 +152,14 @@ describe('ToolScene over today\'s hit tests', () => {
     store.updatePersisted((draft) => {
       draft.layers = draft.layers.map((layer) => layer.name === 'zones' ? { ...layer, visible: false } : layer)
     })
-    expect(scene.hitInQuad(diamond, { kinds: ['zone'] })).toEqual([])
-    expect(scene.hitInQuad(diamond, { kinds: ['plant'] })).toHaveLength(2)
+    expect(scene.hitInQuad(diamond)).toEqual([
+      { kind: 'object', target: { kind: 'plant', id: 'centre' } },
+      { kind: 'object', target: { kind: 'plant', id: 'circle-crosses' } },
+      { kind: 'object', target: { kind: 'measurement-guide', id: 'crossing' } },
+    ])
   })
 
-  it('nearestPlant keeps the first plant in scene order on a tie, as Place plants does today, and skips excluded plants', () => {
+  it('nearestPlant keeps the first plant in scene order on a tie, as Place plants does today', () => {
     const store = sceneStoreWith({
       plants: [
         plantEntity('b', 'Malus domestica', { x: 3, y: 4 }),
@@ -178,8 +170,6 @@ describe('ToolScene over today\'s hit tests', () => {
     const scene = createToolScene(createToolSceneSource(store))
 
     expect(scene.nearestPlant({ x: 0, y: 0 })).toEqual({ plant: store.persisted.plants[0], distanceM: 5 })
-    expect(scene.nearestPlant({ x: 0, y: 0 }, new Set(['b']))).toEqual({ plant: store.persisted.plants[1], distanceM: 5 })
-    expect(scene.nearestPlant({ x: 0, y: 0 }, new Set(['a', 'b', 'c']))).toBeNull()
 
     store.updatePersisted((draft) => {
       draft.layers = draft.layers.map((layer) => layer.name === 'plants' ? { ...layer, visible: false } : layer)
@@ -204,11 +194,8 @@ describe('ToolScene over today\'s hit tests', () => {
       color: entries[0]!.color,
       radiusPx: entries[0]!.radiusScreenPx,
     })
-    expect(scene.plantPresentation(pear!)?.commonName).toBe('Poirier')
-    expect(scene.plantPresentation({ ...apple!, commonName: null })?.commonName).toBe('Malus domestica')
-    expect(scene.plantPresentation('Pyrus communis')?.commonName).toBe('Poirier')
-    expect(scene.plantPresentation('Sorbus domestica')).toMatchObject({ commonName: 'Sorbus domestica' })
-    expect(scene.plantPresentation('')).toBeNull()
+    expect(scene.plantPresentation(pear!).commonName).toBe('Poirier')
+    expect(scene.plantPresentation({ ...apple!, commonName: null }).commonName).toBe('Malus domestica')
   })
 
   it('reads the scene, the selection and the selection model live', () => {

@@ -14,7 +14,7 @@ function createTestDocumentSurface(
   documents: Parameters<typeof createSceneCanvasDocumentSurface>[0]['documents'],
   renderingOverrides: Partial<
     Parameters<typeof createSceneCanvasDocumentSurface>[0]['rendering']
-  > & { invalidate?: (kind: 'scene' | 'viewport' | 'chrome') => void } = {},
+  > & { invalidate?: (kind: 'scene' | 'viewport') => void } = {},
   camera: TestView = createTestView(),
 ): CanvasDocumentSurface {
   const rendering = {
@@ -27,20 +27,12 @@ function createTestDocumentSurface(
     ...renderingOverrides,
   } as Parameters<typeof createSceneCanvasDocumentSurface>[0]['rendering']
   return createSceneCanvasDocumentSurface({
-    readOpeningBearing: () => 0,
     inspection: { mount: () => { throw new Error('Inspection is not used by this fixture.') }, reset: () => {}, dispose: () => {} },
     documents,
     cameraHost: camera.host,
     viewNavigation: camera.navigation,
-    chrome: {
-      attach: vi.fn(),
-      show: vi.fn(),
-      hide: vi.fn(),
-      destroy: vi.fn(),
-    },
     rendering,
-    renderChrome: vi.fn(),
-    addGuide: vi.fn(),
+    setChromeShown: vi.fn(),
     clearHoveredEntity: vi.fn(),
     disposeRuntime: vi.fn(),
     disposeInteraction: vi.fn(),
@@ -94,7 +86,6 @@ describe('Scene Canvas document surface lifecycle', () => {
     const calls: string[] = []
     const camera = createTestView()
     const surface = createSceneCanvasDocumentSurface({
-      readOpeningBearing: () => 0,
     inspection: { mount: () => { throw new Error('Inspection is not used by this fixture.') }, reset: () => {}, dispose: () => {} },
       documents: {
         loadDocument: vi.fn(),
@@ -110,14 +101,6 @@ describe('Scene Canvas document surface lifecycle', () => {
       },
       cameraHost: camera.host,
       viewNavigation: camera.navigation,
-      chrome: {
-        attach: vi.fn(),
-        show: vi.fn(),
-        hide: vi.fn(),
-        destroy: () => {
-          calls.push('chrome')
-        },
-      },
       rendering: {
         container: null,
         presented: signal(true),
@@ -128,8 +111,7 @@ describe('Scene Canvas document surface lifecycle', () => {
           calls.push('rendering')
         },
       },
-      renderChrome: vi.fn(),
-      addGuide: vi.fn(),
+      setChromeShown: vi.fn(),
       clearHoveredEntity: () => {
         calls.push('hover')
       },
@@ -149,7 +131,7 @@ describe('Scene Canvas document surface lifecycle', () => {
     })
 
     expect(() => surface.destroy()).toThrow('interaction disposal failed')
-    expect(calls).toEqual(['runtime', 'hover', 'interaction', 'chrome', 'effects', 'camera', 'rendering'])
+    expect(calls).toEqual(['runtime', 'hover', 'interaction', 'effects', 'camera', 'rendering'])
   })
 
   it('keeps first hydration authority-owned and persistence-busy until settlement succeeds', () => {

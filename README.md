@@ -22,7 +22,7 @@ Canopi combines a Plant catalog with a design canvas that is the map itself: eve
 ## Features
 
 - **Plant catalog**: ecological, morphological and agronomic data with search, filters, detail cards and favourites in 11 languages.
-- **Map canvas**: plants, zones, text notes, groups, measurements, stamps, undo/redo, rulers and grid on a MapLibre map with OpenFreeMap basemaps, satellite imagery, contours, hillshade and place search.
+- **Map canvas**: plants, zones, text notes, groups, measurements, stamps, undo/redo and a grid on a MapLibre map with OpenFreeMap basemaps, satellite imagery, contours, hillshade and place search.
 - **Planning**: Calendar, Budget (per-species pricing, CSV export), Consortium planning across strata and succession phases, saved views and stories.
 - **Files**: `.canopi` Designs (WGS84 positions), continuous save, GeoJSON import/export and a planting-plan PDF with field sheets.
 - **Field-notebook look**: parchment, ink and ochre; light and dark themes.

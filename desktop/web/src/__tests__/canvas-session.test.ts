@@ -1,5 +1,6 @@
 import { effect } from '@preact/signals'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ToolId } from '../canvas/runtime/interaction-types'
 import {
   currentCanvasSession,
   currentCanvasTool,
@@ -51,8 +52,8 @@ describe('canvas session seam', () => {
     setCurrentCanvasTool('rectangle')
     expect(currentCanvasTool.value).toBe('rectangle')
 
-    const setTool = vi.fn((name: string) => {
-      currentCanvasTool.value = name
+    const setTool = vi.fn((id: ToolId) => {
+      currentCanvasTool.value = id
     })
     const surfaces = createTestCanvasRuntimeSurfaces({
       commands: createTestCanvasCommandSurface({

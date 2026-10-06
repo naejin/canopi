@@ -39,7 +39,6 @@ describe('the Text tool', () => {
       rotationDeg: 0,
       initialText: '',
       placeholderKey: 'canvas.textNote.placeholder',
-      mode: 'create',
     })
     expect(h.record.guidance.at(-1)?.gesture).toBe(true)
     h.release()
@@ -84,7 +83,7 @@ describe('the Text tool', () => {
     h.typeText('Blurred note')
 
     h.click({ x: 80, y: 90 })
-    expect(h.record.focus.at(-1)).toBe('map:text-entry-closed')
+    expect(h.record.focus.at(-1)).toBe('map')
     expect(h.store.persisted.annotations).toEqual([expect.objectContaining({ position: { x: 24, y: 32 }, text: 'Blurred note' })])
     expect(h.chrome.textEntry).toBeNull()
 
@@ -177,22 +176,33 @@ describe('the Text tool', () => {
     const h = harness({ scene: { annotations: [textNote('note', { x: 100, y: 150 }, 'Prune in March')] } })
 
     h.click({ x: 104, y: 154 }, { clickCount: 2 })
-    expect(h.chrome.textEntry?.request).toMatchObject({ mode: 'create', anchor: { x: 104, y: 154 }, initialText: '' })
+    expect(h.chrome.textEntry?.request).toMatchObject({ anchor: { x: 104, y: 154 }, initialText: '' })
   })
 
-  it('entering overview keeps the open entry, which the next press there commits, as today; a tool change discards it', () => {
+  it('entering overview saves an in-place edit and commits a new note; a tool change discards an entry', () => {
     const h = harness()
     h.click({ x: 24, y: 32 })
     h.typeText('Zoomed out')
 
     h.view.setViewport(OVERVIEW)
     h.advance(0)
-    expect(h.chrome.textEntry?.text).toBe('Zoomed out')
-    h.click({ x: 300, y: 250 })
     expect(h.chrome.textEntry).toBeNull()
     expect(h.store.persisted.annotations).toEqual([expect.objectContaining({ position: { x: 24, y: 32 }, text: 'Zoomed out' })])
     h.view.setViewport(SITE)
     h.advance(0)
+
+    // An in-place edit is saved too.
+    h.arm('select')
+    h.select({ kind: 'annotation', id: h.store.persisted.annotations[0]!.id })
+    h.host.command({ kind: 'edit-text' })
+    h.typeText('Zoomed out twice')
+    h.view.setViewport(OVERVIEW)
+    h.advance(0)
+    expect(h.chrome.textEntry).toBeNull()
+    expect(h.store.persisted.annotations).toEqual([expect.objectContaining({ text: 'Zoomed out twice' })])
+    h.view.setViewport(SITE)
+    h.advance(0)
+    h.arm('text')
 
     h.click({ x: 48, y: 64 })
     h.typeText('Abandoned')
@@ -210,7 +220,7 @@ describe('editing a note in place under Select', () => {
     h.select({ kind: 'annotation', id: 'note' })
 
     expect(h.host.command({ kind: 'edit-text' })).toBe('handled')
-    expect(h.chrome.textEntry?.request).toMatchObject({ mode: 'edit', initialText: 'Prune in March', fontSizePx: 16 })
+    expect(h.chrome.textEntry?.request).toMatchObject({ initialText: 'Prune in March', fontSizePx: 16 })
     h.typeText('Prune in April')
     expect(h.enterText()).toBe('close')
     expect(h.store.persisted.annotations[0]!.text).toBe('Prune in April')
@@ -250,7 +260,7 @@ describe('editing a note in place under Select', () => {
 
     h.click({ x: 104, y: 154 }, { clickCount: 2 })
     expect(h.store.session.selectedTargets).toEqual([{ kind: 'annotation', id: 'note' }])
-    expect(h.chrome.textEntry?.request).toMatchObject({ mode: 'edit', anchor: { x: 100, y: 150 }, initialText: 'Prune in March' })
+    expect(h.chrome.textEntry?.request).toMatchObject({ anchor: { x: 100, y: 150 }, initialText: 'Prune in March' })
     h.typeText('Mulch in November')
 
     h.click({ x: 300, y: 250 })

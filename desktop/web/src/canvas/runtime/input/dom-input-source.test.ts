@@ -38,10 +38,9 @@ function deps(overrides: Partial<DomInputSourceDeps> = {}): DomInputSourceDeps {
     host,
     platform: PLATFORM,
     bindings: () => CURRENT_BINDINGS,
-    keys: { physicalCtrl: () => false, lastKeyboardMenuAt: () => null },
+    keys: { lastKeyboardMenuAt: () => null },
     clock: () => 1000,
     timers: { set: vi.fn(() => 1), clear: vi.fn() },
-    listensToRulers: false,
     ...overrides,
   }
 }
@@ -71,7 +70,7 @@ describe('createDomInputSource', () => {
       documentAdd: vi.spyOn(document, 'addEventListener'),
       documentRemove: vi.spyOn(document, 'removeEventListener'),
     }
-    const source = createDomInputSource(deps({ listensToRulers: true }))
+    const source = createDomInputSource(deps())
     const dispose = attachRecording(source)
 
     const hostAdds = listenerCalls(spies.hostAdd)
@@ -93,7 +92,7 @@ describe('createDomInputSource', () => {
     ])
     expect(hostAdds.find(([type]) => type === 'wheel')?.[2]).toEqual({ passive: false })
     expect(listenerCalls(spies.windowAdd).map(([type, , options]) => [type, captureFlag(options)])).toEqual([['blur', false]])
-    expect(listenerCalls(spies.documentAdd).map(([type, , options]) => [type, captureFlag(options)])).toEqual([['pointerdown', true]])
+    expect(listenerCalls(spies.documentAdd)).toEqual([])
     // A press on the map owns its pointer: the window listeners follow it, and detach removes them with the rest.
     events.pointerDown({ x: 10, y: 10 })
     expect(listenerCalls(spies.windowAdd).map(([type, , options]) => [type, captureFlag(options)])).toEqual([
@@ -120,7 +119,7 @@ describe('createDomInputSource', () => {
     for (const spy of Object.values(spies)) spy.mockRestore()
   })
 
-  it('installs no key listener (the key router owns them), and no ruler listener unless told to listen', () => {
+  it('installs no key listener (the key router owns them) and nothing on the document', () => {
     const windowAdd = vi.spyOn(window, 'addEventListener')
     const documentAdd = vi.spyOn(document, 'addEventListener')
     const dispose = attachRecording(createDomInputSource(deps()))
@@ -246,28 +245,6 @@ describe('createDomInputSource', () => {
     }
   })
 
-  it('a ruler press of any mouse button becomes a ruler target', () => {
-    const ruler = document.createElement('canvas')
-    ruler.dataset.canvasRuler = 'v'
-    document.body.appendChild(ruler)
-    const dispose = attachRecording(createDomInputSource(deps({ listensToRulers: true })))
-
-    for (const button of [0, 1, 2, 3, 4]) events.pointerDownClient({ x: 15, y: 120 }, { target: ruler, button, pointerId: 5 })
-    events.pointerDownClient({ x: 15, y: 120 }, { target: ruler, pointerType: 'pen', pointerId: 6 })
-    events.pointerDownClient({ x: 15, y: 120 }, { target: ruler, pointerType: 'touch', pointerId: 7 })
-
-    // A pen press is one too (today's ruler heard its compatibility mousedown); a touch press is dropped.
-    expect(received.map((input) => input.kind === 'down' && [input.role, input.target, input.at])).toEqual(
-      Array(6).fill(['primary', { kind: 'ruler', axis: 'v' }, { x: 5, y: 100 }]),
-    )
-    expect(received[5]).toMatchObject({ pointer: 'pen', id: 6 })
-    // A press inside the map is the host listener's alone.
-    events.pointerDown({ x: 50, y: 50 })
-    expect(received).toHaveLength(7)
-    expect(received[6]).toMatchObject({ kind: 'down', target: { kind: 'surface' } })
-    dispose()
-  })
-
   it('reads host-relative points and keeps a captured session\'s press rect', () => {
     const source = createDomInputSource(deps())
     const dispose = attachRecording(source, (input) => {
@@ -299,8 +276,7 @@ describe('createDomInputSource', () => {
     const plainHandle = child('<div data-canvas-handle="vertex:zone-1:2"></div>')
     const rotation = child('<div data-canvas-handle="rotate"><span data-canvas-handle-readout="true">+15°</span></div>')
     const controlPoint = child('<button data-canvas-handle="rect-corner:zone-1:ne"></button>')
-    const editor = child('<textarea data-annotation-inline-editor="true" data-preserve-overlays="true"></textarea>')
-    const unlock = child('<div data-locked-object-affordance="true"><span>Locked</span><button>Unlock</button></div>')
+    const editor = child('<textarea data-canvas-text-entry data-preserve-overlays="true"></textarea>')
     const chrome = child('<div data-canvas-chrome><span>©</span></div>')
     const surface = child('<canvas></canvas>')
     const outside = document.createElement('div')
@@ -312,8 +288,6 @@ describe('createDomInputSource', () => {
       rotation.firstElementChild!,
       controlPoint,
       editor,
-      unlock.firstElementChild!,
-      unlock.lastElementChild!,
       chrome.firstElementChild!,
       surface,
       host,
@@ -326,24 +300,22 @@ describe('createDomInputSource', () => {
       { kind: 'handle', id: 'rotate' },
       { kind: 'handle', id: 'rect-corner:zone-1:ne' },
       { kind: 'owned-text' },
-      { kind: 'owned-chrome', lockedAffordance: true },
-      { kind: 'owned-chrome', lockedAffordance: true },
       { kind: 'owned-chrome' },
       { kind: 'surface' },
       { kind: 'surface' },
     ])
 
-    // An up carries its target too: the session keeps today's release cleanup off the note editor, a handle and the
-    // Unlock affordance by it, and a release outside the map is foreign.
+    // An up carries its target too: the session keeps today's release cleanup off the note editor and a handle by it, and
+    // a release outside the map is foreign.
     received.length = 0
-    for (const target of [editor, plainHandle, unlock.lastElementChild!, surface, outside]) {
+    for (const target of [editor, plainHandle, chrome.firstElementChild!, surface, outside]) {
       events.pointerDown({ x: 5, y: 5 })
       events.pointerUp({ x: 5, y: 5 }, { target })
     }
     expect(received.flatMap((input) => input.kind === 'up' ? [input.target] : [])).toEqual([
       { kind: 'owned-text' },
       { kind: 'handle', id: 'vertex:zone-1:2' },
-      { kind: 'owned-chrome', lockedAffordance: true },
+      { kind: 'owned-chrome' },
       { kind: 'surface' },
       { kind: 'foreign' },
     ])
@@ -448,7 +420,7 @@ describe('createDomInputSource', () => {
   it('marks a contextmenu inside the keyboard menu\'s echo window as fromKeyboard', () => {
     let lastKeyboardMenuAt: number | null = null
     const dispose = attachRecording(createDomInputSource(deps({
-      keys: { physicalCtrl: () => false, lastKeyboardMenuAt: () => lastKeyboardMenuAt },
+      keys: { lastKeyboardMenuAt: () => lastKeyboardMenuAt },
     })))
     const openMenu = (): void => {
       host.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 30, clientY: 40 }))
@@ -773,10 +745,11 @@ describe('createDomInputSource', () => {
     }
     const events = [dispatch('gesturestart', 0), dispatch('gesturechange', 12.5), dispatch('gestureend', 12.5)]
 
+    // The scale is never read: the pinch zooms through WebKit's Ctrl wheels.
     expect(received).toEqual([
-      expect.objectContaining({ kind: 'platform-gesture', phase: 'start', at: { x: 200, y: 150 }, scale: 1.3, rotationDeg: 0 }),
-      expect.objectContaining({ kind: 'platform-gesture', phase: 'change', at: { x: 200, y: 150 }, scale: 1.3, rotationDeg: 12.5 }),
-      expect.objectContaining({ kind: 'platform-gesture', phase: 'end', rotationDeg: 12.5 }),
+      { kind: 'platform-gesture', t: expect.any(Number), phase: 'start', at: { x: 200, y: 150 }, rotationDeg: 0 },
+      { kind: 'platform-gesture', t: expect.any(Number), phase: 'change', at: { x: 200, y: 150 }, rotationDeg: 12.5 },
+      { kind: 'platform-gesture', t: expect.any(Number), phase: 'end', at: { x: 200, y: 150 }, rotationDeg: 12.5 },
     ])
     expect(events.map((event) => event.defaultPrevented)).toEqual([true, true, true])
     dispose()

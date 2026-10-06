@@ -11,7 +11,7 @@ import { TEST_GEO_ORIGIN } from '../../__tests__/support/geo-design'
 import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
 import { setCurrentCanvasSession } from '../../canvas/session'
 import { createSessionPlane } from '../../canvas/session-plane'
-import { selectedObjectIds } from '../../canvas/session-state'
+import { currentCanvasSelection } from '../../canvas/session-state'
 import { PlantAppearancePopovers } from '../../components/canvas/PlantAppearancePopovers'
 import { useFocusRegion } from '../../components/shared/useFocusRegion'
 import type { CanopiFile } from '../../types/design'
@@ -145,17 +145,17 @@ describe('F6 regions through the focus owner', () => {
   })
 
   it('F6 to the map focuses the host', () => {
-    // The Unlock affordance beside a locked object lives inside the map host; F6 never lands on it.
-    map.innerHTML = '<div data-canvas-chrome="locked-affordance"><button type="button">Unlock</button></div>'
-    const unlock = map.querySelector('button')!
-    unlock.focus()
+    // A handle beside the selection lives inside the map host; F6 never lands on it.
+    map.innerHTML = '<div data-canvas-handle-layer="true"><button type="button" data-canvas-handle="rotate">Rotate</button></div>'
+    const handle = map.querySelector('button')!
+    handle.focus()
     press()
     expect(document.activeElement).toBe(dock.querySelector('button'))
     press(true)
     expect(document.activeElement).toBe(map)
 
     // From outside the map too.
-    unlock.focus()
+    handle.focus()
     menu.focus()
     press()
     press()
@@ -215,7 +215,7 @@ describe('focus moves go through the focus owner', () => {
       expect(presentStory('tour', 0)).toBe(true)
       elsewhere.focus()
       leaveStoryPresentation()
-      await vi.waitFor(() => expect(focusMap).toHaveBeenCalledWith('story-exit'))
+      await vi.waitFor(() => expect(focusMap).toHaveBeenCalledWith())
       expect(document.activeElement).toBe(map)
     } finally {
       leaveStoryPresentation()
@@ -227,7 +227,7 @@ describe('focus moves go through the focus owner', () => {
     vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
     const container = document.createElement('div')
     document.body.append(container)
-    selectedObjectIds.value = new Set(['plant-1'])
+    currentCanvasSelection.value = new Set(['plant-1'])
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       queries: {
         ...createTestCanvasQuerySurface(),
@@ -252,11 +252,11 @@ describe('focus moves go through the focus owner', () => {
         dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
       })
       expect(plantColorMenuOpen.value).toBe(false)
-      expect(focusMap).toHaveBeenCalledWith('menu-closed')
+      expect(focusMap).toHaveBeenCalledWith()
       expect(document.activeElement).toBe(map)
     } finally {
       plantColorMenuOpen.value = false
-      selectedObjectIds.value = new Set()
+      currentCanvasSelection.value = new Set()
       await act(async () => { render(null, container) })
       vi.unstubAllGlobals()
     }

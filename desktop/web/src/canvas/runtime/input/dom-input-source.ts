@@ -2,15 +2,15 @@
 //
 // Owns every DOM listener for canvas input: the map host's pointer (hover moves included), wheel, contextmenu, drag and
 // focus events, WebKit's gesture events (only with trackpad gestures on a platform that has them), the window blur, the
-// window pointer listeners while it owns a pointer, the ruler presses at document capture and the copied GeoLibre
-// selection-drag guard on the host (keys are the key router's, app/keyboard). A press it delivers, on the map or a ruler, owns that pointer until
+// window pointer listeners while it owns a pointer and the copied GeoLibre selection-drag guard on the host (keys are
+// the key router's, app/keyboard). A press it delivers on the map owns that pointer until
 // its release, its cancel or a window blur: only then does it listen on window, and only to that pointer, so presses,
 // moves and releases that start elsewhere in the app reach the page untouched. It turns
 // each event into host-relative, classified fields for `normalise`, hands the raw input to the sink, and applies the
 // effects the sink sends back to the event being handled: prevent-default, stop-propagation, pointer capture, the drop
-// effect. Detaching releases every capture it still holds. A sink that throws on a press on the map, a release, a context menu, a dragover or a drop quarantines that event
-// first, as today's handlers did around their admitted work; any other event's error leaves the event to the app. It is
-// the one module of input/ that touches the browser (policy P7); the input core stays pure.
+// effect. Detaching releases every capture it still holds. A sink that throws on a press on the map host quarantines that
+// event, then rethrows; on any other event it rethrows and leaves the event to the app. It is the one module of input/
+// that touches the browser (policy P7); the input core stays pure.
 
 import { hasPlantStampDragData, readPlantStampDropSource } from '../../plant-stamp-source'
 import {
@@ -27,9 +27,9 @@ import type { AdapterEffect, RawInput, TargetClass } from './raw-input'
 import { installSelectionDragGuard } from './selection-drag-guard'
 import { DEFAULT_THRESHOLDS } from './thresholds'
 
-/** The note editor: D1's text-entry host, and today's inline annotation editor until it moves there. */
-const TEXT_ENTRY_SELECTOR = '[data-canvas-text-entry], [data-annotation-inline-editor]'
-/** The canvas's own controls and fields inside the map: the inspection lens's skip set, the chrome and the Unlock affordance. */
+/** The note's text entry (chrome/text-entry-host.ts). */
+const TEXT_ENTRY_SELECTOR = '[data-canvas-text-entry]'
+/** The canvas's own controls and fields inside the map: the inspection lens's skip set and the chrome. */
 const OWNED_CHROME_SELECTOR = [
   '[data-canvas-chrome]',
   'button',
@@ -45,9 +45,6 @@ const MAP_CONTROL_SELECTOR = '.maplibregl-ctrl'
 const SURFACE: TargetClass = Object.freeze({ kind: 'surface' })
 const OWNED_TEXT: TargetClass = Object.freeze({ kind: 'owned-text' })
 const OWNED_CHROME: TargetClass = Object.freeze({ kind: 'owned-chrome' })
-/** The Unlock affordance: owned chrome that keeps the hover in every phase (spec §2.2 "Hover"); a press there keeps focus. */
-const UNLOCK_AFFORDANCE: TargetClass = Object.freeze({ kind: 'owned-chrome', lockedAffordance: true })
-const UNLOCK_AFFORDANCE_SELECTOR = '[data-locked-object-affordance]'
 const FOREIGN: TargetClass = Object.freeze({ kind: 'foreign' })
 const NO_RECT = Object.freeze({ left: 0, top: 0, width: 0, height: 0 })
 
@@ -93,7 +90,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   const sessionRects = new Map<number, HostRect>()
   let sink: ((input: RawInput) => void) | null = null
   let tickTimer: number | null = null
-  /** Pointers pressed on the map or a ruler, until their release or cancel: the window listeners follow only these. */
+  /** Pointers pressed on the map, until their release or cancel: the window listeners follow only these. */
   const owned = new Set<number>()
   /** Installs the window pointer listeners (set while attached); returns their removal. */
   let listenOnWindow: (() => () => void) | null = null
@@ -132,9 +129,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   }
 
   function pointerInput(event: PointerEvent, type: DomEventLike['type'], rect: HostRect): RawInput | null {
-    return normalise(domEventLike(event, type, rect, classifyTarget(event.target, host)), deps.platform, deps.bindings(), {
-      physicalCtrl: deps.keys.physicalCtrl(),
-    }, rect)
+    return normalise(domEventLike(event, type, rect, classifyTarget(event.target, host)), deps.platform, deps.bindings(), rect)
   }
 
   function sessionRect(pointerId: number): HostRect {
@@ -146,15 +141,6 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     // Owned first: a sink that fails on the press may still have opened its session, whose release must reach it.
     own(event.pointerId)
     deliver(event, rect, pointerInput(event, 'pointerdown', rect), 'quarantine')
-  }
-  const onRulerPointerDown = (event: PointerEvent): void => {
-    // Presses inside the map are the host listener's; the rulers sit beside it.
-    if (event.target instanceof Node && host.contains(event.target)) return
-    if (classifyTarget(event.target, host).kind !== 'ruler') return
-    const rect = host.getBoundingClientRect()
-    own(event.pointerId)
-    // Today's ruler drag had no quarantine: a failure left its press to the app.
-    deliver(event, rect, pointerInput(event, 'pointerdown', rect))
   }
   /** A move of a pointer the source does not own, over the map: a hover (an owned pointer's moves come from window). */
   const onHostPointerMove = (event: PointerEvent): void => {
@@ -203,9 +189,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     try {
       if (!owned.has(event.pointerId) && event.pointerType !== 'touch') {
         const rect = host.getBoundingClientRect()
-        deliver(event, rect, normalise(domEventLike(event, 'pointermove', rect, classifyTarget(event.relatedTarget, host)), deps.platform, deps.bindings(), {
-          physicalCtrl: deps.keys.physicalCtrl(),
-        }, rect))
+        deliver(event, rect, normalise(domEventLike(event, 'pointermove', rect, classifyTarget(event.relatedTarget, host)), deps.platform, deps.bindings(), rect))
       }
     } finally {
       deliver(event, null, pointerInput(event, 'pointerleave', NO_RECT))
@@ -228,9 +212,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   const onWheel = (event: WheelEvent): void => {
     if (allowsNativeContextMenuTarget(event.target)) return
     const rect = host.getBoundingClientRect()
-    deliver(event, rect, normalise(domEventLike(event, 'wheel', rect, classifyTarget(event.target, host, 'surface')), deps.platform, deps.bindings(), {
-      physicalCtrl: deps.keys.physicalCtrl(),
-    }, rect))
+    deliver(event, rect, normalise(domEventLike(event, 'wheel', rect, classifyTarget(event.target, host, 'surface')), deps.platform, deps.bindings(), rect))
   }
   const onContextMenu = (event: MouseEvent): void => {
     if (allowsNativeContextMenuTarget(event.target)) return
@@ -241,12 +223,12 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
       // The keyboard menu opened from keydown; its own contextmenu follows within the echo window.
       fromKeyboard: lastKeyboardMenuAt !== null && event.timeStamp - lastKeyboardMenuAt < DEFAULT_THRESHOLDS.menuEchoMs,
     }
-    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), { physicalCtrl: deps.keys.physicalCtrl() }, rect))
+    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), rect))
   }
   const dragHandler = (type: 'dragover' | 'dragleave' | 'drop') => (event: DragEvent): void => {
     const rect = type === 'dragleave' ? NO_RECT : host.getBoundingClientRect()
     const like: DomEventLike = { ...domEventLike(event, type, rect, classifyTarget(event.target, host)), dropPayload: dropPayloadOf(event, type) }
-    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), { physicalCtrl: deps.keys.physicalCtrl() }, rect))
+    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), rect))
   }
   /**
    * True from a gesturestart the canvas does not take to its gestureend. A twist starts only over the map, as a wheel is
@@ -270,7 +252,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
       lastTwist = null
       ignoringTwist = true
       const rect = host.getBoundingClientRect()
-      deliver(event, rect, normalise(end, deps.platform, deps.bindings(), { physicalCtrl: deps.keys.physicalCtrl() }, rect))
+      deliver(event, rect, normalise(end, deps.platform, deps.bindings(), rect))
     }
     if (ignoringTwist) {
       event.preventDefault()
@@ -280,9 +262,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     const rect = host.getBoundingClientRect()
     const like = gestureEventLike(event, type, rect)
     lastTwist = type === 'gestureend' ? null : like
-    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), {
-      physicalCtrl: deps.keys.physicalCtrl(),
-    }, rect))
+    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), rect))
   }
   const onDragOver = dragHandler('dragover')
   const onDragLeave = dragHandler('dragleave')
@@ -363,7 +343,6 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
         listen(host, 'dragleave', onDragLeave as EventListener)
         listen(host, 'drop', onDrop as EventListener)
         listen(host, 'focusout', onFocusOut as EventListener)
-        if (deps.listensToRulers) listen(document, 'pointerdown', onRulerPointerDown as EventListener, { capture: true })
         if (deps.bindings().trackpadGestures && deps.platform.gestureEvents) {
           for (const type of ['gesturestart', 'gesturechange', 'gestureend'] as const) listen(host, type, gestureHandler(type))
         }
@@ -440,10 +419,6 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
         }
       }
     },
-
-    currentEvent() {
-      return handling.at(-1)?.event ?? null
-    },
   }
 }
 
@@ -476,11 +451,11 @@ function domEventLike(event: MouseEvent, type: DomEventLike['type'], rect: HostR
   }
 }
 
-/** WebKit's GestureEvent: a UIEvent with the pointer's client point, the pinch scale and the rotation in degrees. */
+/** WebKit's GestureEvent: a UIEvent with the pointer's client point and the rotation in degrees (its scale is never read: the
+ *  pinch arrives as Ctrl wheels). */
 interface GestureEventFields {
   readonly clientX: number
   readonly clientY: number
-  readonly scale: number
   readonly rotation: number
   readonly shiftKey: boolean
   readonly ctrlKey: boolean
@@ -499,7 +474,6 @@ function gestureEventLike(event: Event, type: 'gesturestart' | 'gesturechange' |
     ctrlKey: gesture.ctrlKey,
     altKey: gesture.altKey,
     metaKey: gesture.metaKey,
-    scale: gesture.scale,
     rotation: gesture.rotation,
     target: SURFACE,
   }
@@ -532,14 +506,10 @@ function keepsTextSelection(target: EventTarget | null, host: HTMLElement): bool
 function classifyTarget(target: EventTarget | null, host: HTMLElement, mapControls: 'chrome' | 'surface' = 'chrome'): TargetClass {
   const element = elementOf(target)
   if (!element) return FOREIGN
-  const ruler = element.closest('[data-canvas-ruler]')
-  const axis = ruler?.getAttribute('data-canvas-ruler')
-  if (axis === 'h' || axis === 'v') return { kind: 'ruler', axis }
   if (!host.contains(element)) return FOREIGN
   if (closestInside(element, TEXT_ENTRY_SELECTOR, host)) return OWNED_TEXT
   const handle = handleIdOf(element, host)
   if (handle) return { kind: 'handle', id: handle }
-  if (closestInside(element, UNLOCK_AFFORDANCE_SELECTOR, host)) return UNLOCK_AFFORDANCE
   if (closestInside(element, OWNED_CHROME_SELECTOR, host)) return OWNED_CHROME
   if (mapControls === 'chrome' && closestInside(element, MAP_CONTROL_SELECTOR, host)) return OWNED_CHROME
   return SURFACE

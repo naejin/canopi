@@ -12,7 +12,7 @@ function lensViewAt(plants: Parameters<typeof inspectionScale>[0], frame: { widt
 it('keeps full localized and fallback names for coincident plants, wrapping long names within the frame', () => {
   const plants = createTestSceneRendererSnapshot({ scene: { plants: ['a', 'b', 'c'].map((id, i) => ({
     kind: 'plant', id, canonicalName: `Species ${id}`, commonName: i === 1 ? 'Stored common name' : null,
-    position: { x: 0, y: 0 }, color: null, stratum: null, canopySpreadM: null, rotationDeg: null,
+    position: { x: 0, y: 0 }, color: null, canopySpreadM: null, rotationDeg: null,
     scale: null, notes: null, plantedDate: null, quantity: null, locked: false,
   })) } }).scene.plants
   const local = 'E\u0301rable à longues feuilles 稲 稲 稲 et une description botanique particulièrement longue'

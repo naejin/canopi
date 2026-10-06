@@ -198,7 +198,6 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
   useEffect(() => {
     if (!shown) return
     return registerEscapeLayer({
-      id: 'plant-color-menu',
       priority: ESCAPE_PRIORITY.popover,
       isActive: () => true,
       escape: () => {

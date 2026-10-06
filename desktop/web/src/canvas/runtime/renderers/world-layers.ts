@@ -1,11 +1,11 @@
 /**
- * The scene's world root (spec §1.5): the workspace's editing aids (the grid
- * and the ruler guides), then zones and measurement guides, in world metres
+ * The scene's world root (spec §1.5): the workspace's editing aid (the grid),
+ * then zones and measurement guides, in world metres
  * under the view's affine. A frame writes the affine and nothing else; the
  * strokes, which are CSS px wide at every scale, are traced again only when
  * the scale changes (policy P12's behavioural half, `world-layers.test.ts`).
- * The grid and the ruler guides are endless lines, traced over a box around the
- * visible quad with a margin, and again only when the view leaves that box.
+ * The grid is endless lines, traced over a box around the visible quad with a
+ * margin, and again only when the view leaves that box.
  */
 
 // Production CSP rejects Pixi's generated functions; its shim avoids eval.
@@ -43,16 +43,13 @@ import type { SceneEditingAids, SceneRendererHoverState, SceneRendererSnapshot }
 
 export const ZONE_STROKE_PX = 2
 const MEASUREMENT_GUIDE_STROKE_PX = 1.5
-/** The grid and the ruler guides are traced this far past the visible box, as a share of its width and height. */
+/** The grid is traced this far past the visible box, as a share of its width and height. */
 const EDITING_AIDS_MARGIN = 0.5
 /** A major grid line every this many steps up `NICE_DISTANCES` from the minor interval. */
 const GRID_MAJOR_STEP = 2
 /** Past this many lines across the traced box the grid is not drawn (a jump to the overview before its scene arrives). */
 const GRID_MAX_LINES = 1000
 const GRID_LINE_PX = 1
-const RULER_GUIDE_LINE_PX = 1
-const RULER_GUIDE_DASH_PX = 6
-const RULER_GUIDE_GAP_PX = 4
 
 export interface WorldLayers {
   /** The editing aids, zones, then measurement guides; its transform is the view's affine. */
@@ -106,12 +103,12 @@ export function createWorldLayers(): WorldLayers {
 }
 
 /**
- * The grid and the ruler guides (spec §1.5, §4.6): world east-west and north-south lines that turn with the map. The
- * grid is the lattice snapping uses (`gridInterval` at the view's scale). Both are traced over the visible box with a
- * margin, again when the view leaves it or the scale changes; the ink and the guides are part of the reuse key.
+ * The grid (spec §1.5, §4.6): world east-west and north-south lines that turn with the map, the lattice snapping uses
+ * (`gridInterval` at the view's scale). It is traced over the visible box with a margin, again when the view leaves it or
+ * the scale changes; the ink is part of the reuse key.
  */
 function createEditingAidsLayer(layer: Container) {
-  let parts: { readonly grid: Graphics; readonly rulerGuides: Graphics } | null = null
+  let grid: Graphics | null = null
   /** The traced box and the scale it was traced at. */
   let traced: { readonly box: SceneBounds; readonly pixelsPerMetre: number } | null = null
 
@@ -128,22 +125,18 @@ function createEditingAidsLayer(layer: Container) {
   return {
     sync(aids: SceneEditingAids | null, view: ViewTransform | null): void {
       if (!aids) {
-        for (const graphics of parts ? [parts.grid, parts.rulerGuides] : []) {
-          graphics.removeFromParent()
-          graphics.destroy()
-        }
-        parts = null
+        grid?.removeFromParent()
+        grid?.destroy()
+        grid = null
         traced = null
         return
       }
       if (!view) return
-      if (!parts) {
-        parts = { grid: new Graphics({ label: 'grid' }), rulerGuides: new Graphics({ label: 'ruler-guides' }) }
-        layer.addChild(parts.grid, parts.rulerGuides)
+      if (!grid) {
+        grid = new Graphics({ label: 'grid' })
+        layer.addChild(grid)
       }
-      const box = tracedBoxFor(view)
-      drawGrid(parts.grid, aids.grid, box, view.pixelsPerMetre)
-      drawRulerGuides(parts.rulerGuides, aids.rulerGuides, box, view.pixelsPerMetre)
+      drawGrid(grid, aids.grid, tracedBoxFor(view), view.pixelsPerMetre)
     },
   }
 }
@@ -161,7 +154,6 @@ function containsBounds(outer: SceneBounds, inner: SceneBounds): boolean {
 function drawGrid(graphics: Graphics, grid: SceneEditingAids['grid'], box: SceneBounds, pixelsPerMetre: number): void {
   if (reuseGeometry(graphics, [grid, box, pixelsPerMetre])) return
   graphics.clear()
-  if (!grid) return
   const { interval, index } = gridInterval(pixelsPerMetre)
   if (Math.max(box.maxX - box.minX, box.maxY - box.minY) > interval * GRID_MAX_LINES) return
   const majorInterval = NICE_DISTANCES[Math.min(index + GRID_MAJOR_STEP, NICE_DISTANCES.length - 1)]!
@@ -180,53 +172,6 @@ function traceLattice(graphics: Graphics, box: SceneBounds, step: number): void 
   }
   for (let index = Math.ceil(box.minY / step); index * step <= box.maxY; index += 1) {
     graphics.moveTo(box.minX, index * step).lineTo(box.maxX, index * step)
-  }
-}
-
-function drawRulerGuides(
-  graphics: Graphics,
-  guides: SceneEditingAids['rulerGuides'],
-  box: SceneBounds,
-  pixelsPerMetre: number,
-): void {
-  const visual = getGuideLineVisual()
-  if (reuseGeometry(graphics, [guides, box, pixelsPerMetre, visual])) return
-  graphics.clear()
-  if (guides.length === 0) return
-  const units = (px: number) => screenPxToWorldPx(px, pixelsPerMetre)
-  const trace = () => {
-    for (const guide of guides) {
-      if (guide.axis === 'v' && guide.position >= box.minX && guide.position <= box.maxX) {
-        traceWorldDashes(graphics, 'y', guide.position, box.minY, box.maxY, units(RULER_GUIDE_DASH_PX), units(RULER_GUIDE_GAP_PX))
-      } else if (guide.axis === 'h' && guide.position >= box.minY && guide.position <= box.maxY) {
-        traceWorldDashes(graphics, 'x', guide.position, box.minX, box.maxX, units(RULER_GUIDE_DASH_PX), units(RULER_GUIDE_GAP_PX))
-      }
-    }
-  }
-  // The dark casing first, so the light dashes read on any imagery.
-  trace()
-  graphics.stroke(resolveCasedStroke(null, visual, RULER_GUIDE_LINE_PX, pixelsPerMetre).casing)
-  trace()
-  graphics.stroke(resolveCasedStroke(null, visual, RULER_GUIDE_LINE_PX, pixelsPerMetre).stroke)
-}
-
-/** Dashes along one world axis from `from` to `to`, their phase fixed to the world so a retrace does not move them. */
-function traceWorldDashes(
-  graphics: Graphics,
-  along: 'x' | 'y',
-  at: number,
-  from: number,
-  to: number,
-  dash: number,
-  gap: number,
-): void {
-  const period = dash + gap
-  for (let index = Math.floor(from / period); index * period < to; index += 1) {
-    const start = Math.max(index * period, from)
-    const end = Math.min(index * period + dash, to)
-    if (end <= start) continue
-    if (along === 'x') graphics.moveTo(start, at).lineTo(end, at)
-    else graphics.moveTo(at, start).lineTo(at, end)
   }
 }
 

@@ -21,7 +21,7 @@ import { ROTATE_DEG_PER_PX } from '../view/navigation-policy'
 import type { ScreenPoint } from '../view/types'
 import type { Gesture, NavigationSource, PressTarget } from './gestures'
 import type { InputPlatform } from './platform'
-import type { AdapterEffect, ButtonRole, RawInput, RecogniserConfig, RecogniserState, TargetClass } from './raw-input'
+import type { AdapterEffect, ButtonRole, RawInput, RecogniserConfig, RecogniserState } from './raw-input'
 
 export interface PointerSession {
   readonly pointerId: number
@@ -32,11 +32,8 @@ export interface PointerSession {
   readonly mode: 'pending' | 'primary' | 'pan' | 'rotate' | 'ignored'
   readonly start: ScreenPoint
   readonly last: ScreenPoint
-  readonly target: TargetClass
   readonly slopPassed: boolean
   readonly captured: boolean
-  /** The press target its editing gestures carry. */
-  readonly pressTarget: PressTarget
   /** The pan's or the rotate's source while `mode` is 'pan' or 'rotate'. */
   readonly navigation: NavigationSource | null
   /** True when a `press` reached the host, which owes it one end: a `tap` within slop, else `cancel('navigate')` for a pan
@@ -54,7 +51,6 @@ export interface TouchPair {
   readonly twistDeg: number
 }
 
-const NO_MODIFIERS: Modifiers = Object.freeze({ shift: false, ctrl: false, alt: false, meta: false })
 const ZERO: ScreenPoint = Object.freeze({ x: 0, y: 0 })
 /** Wheel zoom: today's exp(clamp(−dy × 0.002, ±1)) per event. */
 const WHEEL_ZOOM_PER_PX = 0.002
@@ -67,10 +63,10 @@ export function initialRecogniserState(): RecogniserState {
   return {
     sessions: new Map(),
     touchPair: null,
-    held: { space: false, mods: NO_MODIFIERS },
+    held: { space: false },
     trackpadTwistDeg: 0,
     deadlines: { longPressAt: null, menuEchoUntil: null, windowsTrailUntil: null, lastSecondaryEndAt: null },
-    context: { tool: 'select', mode: 'site', pointingDevice: 'mouse', dragSlopPx: null },
+    context: { tool: 'select', mode: 'site', pointingDevice: 'mouse' },
   }
 }
 
@@ -98,7 +94,7 @@ export function recognise(
       releaseSpace(step)
       break
     case 'key-state':
-      step.state = { ...step.state, held: { space: input.space, mods: input.mods } }
+      step.state = { ...step.state, held: { space: input.space } }
       restepRotate(step, input.mods, config.platform)
       break
     case 'configure': configure(step, input.context); break
@@ -142,19 +138,9 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
     role: input.role,
     start: input.at,
     last: input.at,
-    target: input.target,
     slopPassed: false,
     clickCount: input.detail,
   } as const
-
-  if (input.target.kind === 'ruler') {
-    // Today's ruler drag (normalise makes any mouse button primary there): no capture, the drag follows the pointer anywhere.
-    step.effects.push({ kind: 'prevent-default' })
-    const pressTarget: PressTarget = { kind: 'ruler', axis: input.target.axis }
-    putSession(step, { ...base, mode: 'pending', captured: false, pressTarget, navigation: null, pressed: true })
-    step.gestures.push(pressOf(input, pressTarget))
-    return
-  }
 
   const pressTarget: PressTarget = input.target.kind === 'handle' ? { kind: 'handle', id: input.target.id } : { kind: 'surface' }
   const panIn = (panContext: 'hand-tool' | 'overview'): boolean => bindings.primaryDragPansIn.includes(panContext)
@@ -163,7 +149,7 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
     // Shift+middle (checked before overview, fixture G9c): a pending rotate, silent until it passes its slop, so a still
     // click turns nothing (G9b). Shift at the press decides the mode for the whole session.
     step.effects.push({ kind: 'prevent-default' }, { kind: 'capture', pointerId: input.id })
-    putSession(step, { ...base, mode: 'rotate', captured: true, pressTarget, navigation: 'auxiliary-drag', pressed: false })
+    putSession(step, { ...base, mode: 'rotate', captured: true, navigation: 'auxiliary-drag', pressed: false })
     return
   }
 
@@ -193,7 +179,6 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
     ...base,
     mode: navigation ? 'pan' : 'pending',
     captured: true,
-    pressTarget,
     navigation,
     pressed,
   })
@@ -214,7 +199,7 @@ function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void 
     rotateMove(step, session, input, config.platform)
     return
   }
-  const slopPassed = session.slopPassed || passesSlop(session, input.at, step.state, config)
+  const slopPassed = session.slopPassed || passesSlop(session, input.at, config)
   if (session.mode === 'pan') {
     const deltaPx = { x: input.at.x - session.last.x, y: input.at.y - session.last.y }
     putSession(step, { ...session, last: input.at, slopPassed })
@@ -226,15 +211,7 @@ function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void 
   if (session.mode === 'pending') {
     if (!slopPassed) return
     putSession(step, { ...session, mode: 'primary', last: input.at, slopPassed: true })
-    step.gestures.push({
-      kind: 'drag-start',
-      id: session.pointerId,
-      from: session.start,
-      at: input.at,
-      pointer: session.pointer,
-      mods: input.mods,
-      target: session.pressTarget,
-    })
+    step.gestures.push({ kind: 'drag-start', id: session.pointerId, at: input.at, mods: input.mods })
     return
   }
   if (session.mode === 'primary') {
@@ -311,7 +288,6 @@ function configure(step: Step, context: RawOf<'configure'>['context']): void {
       tool: context.tool,
       mode: context.mode,
       pointingDevice: context.pointingDevice,
-      dragSlopPx: context.dragSlopPx ?? null,
     },
   }
 }
@@ -325,12 +301,11 @@ function wheel(step: Step, input: RawOf<'wheel'>): void {
   const { dxPx, dyPx, mods } = input
   if (!Number.isFinite(dxPx) || !Number.isFinite(dyPx)) return
   const scrollPans = step.state.context.pointingDevice === 'trackpad'
-  // A pinch arrives as a Ctrl wheel and zooms whatever the setting says; so do Ctrl and Cmd wheels.
-  if (input.pinch || mods.ctrl || mods.meta || (!scrollPans && !mods.shift)) {
+  // A pinch arrives as a Ctrl wheel: it, Ctrl and Cmd wheels zoom whatever the setting says, continuously by their delta (one
+  // path, no notch detection: a 100 px notch is ×1.22).
+  if (mods.ctrl || mods.meta || (!scrollPans && !mods.shift)) {
     const factor = Math.exp(Math.max(-1, Math.min(1, -dyPx * WHEEL_ZOOM_PER_PX)))
-    if (factor !== 1) {
-      step.gestures.push({ kind: 'zoom', anchorPx: input.at, factor, source: input.pinch ? 'trackpad-pinch' : 'wheel' })
-    }
+    if (factor !== 1) step.gestures.push({ kind: 'zoom', anchorPx: input.at, factor, source: 'wheel' })
     return
   }
   // A mouse wheel has one axis: under the Trackpad setting Shift turns its scroll sideways.
@@ -343,12 +318,10 @@ function wheel(step: Step, input: RawOf<'wheel'>): void {
  * A move with no live session (buttons or not) is a hover wherever the source heard it: over the map, off it at the point a
  * hover left it (carried by the leave), or off it while the source still follows a pressed pointer whose session ended
  * (an Esc mid-press); off the map the host clears its own hover and the tool's still runs. Over the canvas's own things (owned chrome such as the attribution, the text entry,
- * a handle) it ends the hover and its tooltip (spec §2.2 "Hover", U6); the Unlock affordance emits nothing, so the hover
- * it belongs to stays until it is clicked.
+ * a handle) it ends the hover and its tooltip (spec §2.2 "Hover", U6).
  */
 function hover(step: Step, input: RawOf<'move'>): void {
   const { target } = input
-  if (target.kind === 'owned-chrome' && target.lockedAffordance) return
   if (target.kind === 'owned-text' || target.kind === 'handle' || target.kind === 'owned-chrome') {
     step.gestures.push({ kind: 'hover-end' })
     return
@@ -358,7 +331,7 @@ function hover(step: Step, input: RawOf<'move'>): void {
 
 function nativeContextMenu(step: Step, input: RawOf<'native-contextmenu'>): void {
   // The note editor and anything outside the map keep the native menu (copy and paste).
-  if (input.target.kind === 'owned-text' || input.target.kind === 'foreign' || input.target.kind === 'ruler') return
+  if (input.target.kind === 'owned-text' || input.target.kind === 'foreign') return
   step.effects.push({ kind: 'prevent-default' })
   if (step.state.context.mode === 'overview') return
   // The Menu key already opened the menu from keydown; its trailing event is the echo.
@@ -372,8 +345,8 @@ function withoutNegativeZero(point: ScreenPoint): ScreenPoint {
   return { x: point.x === 0 ? 0 : point.x, y: point.y === 0 ? 0 : point.y }
 }
 
-function passesSlop(session: PointerSession, at: ScreenPoint, state: RecogniserState, config: RecogniserConfig): boolean {
-  const slop = state.context.dragSlopPx ?? config.bindings.dragSlopPx[session.pointer]
+function passesSlop(session: PointerSession, at: ScreenPoint, config: RecogniserConfig): boolean {
+  const slop = config.bindings.dragSlopPx[session.pointer]
   const distance = Math.hypot(at.x - session.start.x, at.y - session.start.y)
   return distance >= slop && distance > 0
 }
@@ -413,10 +386,8 @@ function platformGesture(step: Step, input: RawOf<'platform-gesture'>, config: R
       mode: 'rotate',
       start: input.at,
       last: input.at,
-      target: { kind: 'surface' },
       slopPassed: false,
       captured: false,
-      pressTarget: { kind: 'surface' },
       navigation: 'trackpad-twist',
       pressed: false,
       clickCount: 0,
@@ -498,7 +469,6 @@ function tapOf(session: PointerSession, input: RawOf<'up'>): Gesture {
     pointer: session.pointer,
     mods: input.mods,
     clickCount: session.clickCount,
-    target: session.pressTarget,
   }
 }
 
@@ -530,5 +500,5 @@ function putSession(step: Step, session: PointerSession): void {
 
 function releaseSpace(step: Step): void {
   if (!step.state.held.space) return
-  step.state = { ...step.state, held: { ...step.state.held, space: false } }
+  step.state = { ...step.state, held: { space: false } }
 }

@@ -157,10 +157,6 @@
       "commitLimitWarning": "Intervall erhöhen oder Linie verkürzen",
       "dragAlong": "ziehen Sie entlang der Reihe"
     },
-    "lockedObject": {
-      "locked": "Gesperrt",
-      "unlock": "Entsperren"
-    },
     "contextMenu": {
       "ariaLabel": "Bearbeitungsbefehle der Zeichenfläche",
       "showName": "Namen anzeigen",
@@ -184,9 +180,7 @@
     "grid": {
       "grid": "Raster",
       "snapToGrid": "Am Raster ausrichten",
-      "rulers": "Lineale",
-      "zoom": "Zoom",
-      "rulersNorthUpOnly": "Lineale erscheinen, wenn Norden oben ist"
+      "zoom": "Zoom"
     },
     "overview": {
       "zoomInToEdit": "Zum Bearbeiten hineinzoomen. In diesem Maßstab sind Pflanzen ausgeblendet.",

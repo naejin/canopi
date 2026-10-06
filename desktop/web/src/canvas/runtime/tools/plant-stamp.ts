@@ -3,12 +3,13 @@
 // Owns Place plants ('plant-stamp', key P; spec §1.4, §3.2) and the plant placement the host's species drop calls (0B-4):
 // each press places one plant of the chosen species at the snapped point, selected, as one Scene Edit; with no species the
 // card asks for one, and "Place plants here" waits at its point for the pick (the species arrives through activate and
-// sourceChanged, which the session bridges from the plant read model). Its hover draws the read-only preview: the plant's
-// symbol where a click would place it, a dashed ring for the species' mature width when the catalog gives one (never
-// invented) and the distance to the nearest plant within 320 px on screen. The preview hides when the pointer leaves the map
-// and when the map enters overview.
+// sourceChanged, which the session bridges from the plant read model); Esc leaves the tool at once, a waiting point with
+// it. Its hover draws the read-only preview: the plant's symbol where a click would place it, a dashed ring for the
+// species' mature width when the catalog gives one (never invented) and the distance to the nearest plant within 320 px
+// on screen. The preview hides when the pointer leaves the map and when the map enters overview.
 
 import type { PlantStampSourceInput } from '../../plant-stamp-source'
+import { speciesPlacementAppearance } from '../species-key'
 import { formatMetricDistance } from '../zone-measurements'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import type { WorldPoint } from '../view/types'
@@ -149,17 +150,13 @@ export function createPlantStampTool(): CanvasTool {
     },
     sceneChanged: showPreview,
     viewChanged: showPreview,
-    planeChanged(reproject) {
-      if (pendingWorld) pendingWorld = reproject(pendingWorld)
-      if (previewWorld) previewWorld = reproject(previewWorld)
-      showPreview()
-    },
-    // Esc leaves Place plants at once (the chain's tool layer): nothing is held that Esc drops first.
-    hasTransient: () => false,
-    escapeHint: () => 'leave-tool',
+    // A waiting point is the tool's transient: it holds re-origin (spec §4.19), so it keeps its plane, and Delete and Ctrl+X
+    // delete nothing while it waits. It is no Esc layer: the tool layer's Esc leaves, and deactivate drops it (U35).
+    hasTransient: () => pendingWorld !== null,
+    escapeLeaves: true,
     cancelTransient(reason) {
-      // Only an overview entry hides the preview, as today's overview reset did. A pan, a blur, a re-arm of Place plants
-      // and a retried cancellation keep it under the pointer; a real tool change and a document replacement deactivate.
+      // Only an overview entry hides the preview, as today's overview reset did. A pan, a blur and a re-arm of Place plants
+      // keep it under the pointer; a real tool change and a document replacement deactivate.
       if (reason === 'overview') hidePreview()
     },
     deactivate() {
@@ -181,7 +178,7 @@ function previewShapes(ctx: ToolContext, species: PlantStampSourceInput, world: 
     const radius = width / 2
     shapes.push({ kind: 'ellipse', center: world, radiusX: radius, radiusY: radius, rotationDeg: 0, style: SPREAD_RING_STROKE })
     // Upright, above the ring's top on screen.
-    const { down } = view.screenAxesInWorld(world)
+    const { down } = view.screenAxesInWorld()
     labels.push({
       kind: 'label',
       anchor: { x: world.x - down.x * radius, y: world.y - down.y * radius },
@@ -191,12 +188,17 @@ function previewShapes(ctx: ToolContext, species: PlantStampSourceInput, world: 
     })
   }
 
-  const plant = plantEntityFromStampSource(scene.persisted, species, world, PREVIEW_PLANT_ID)
+  // A source with a stratum colours the ghost with it: a pick not yet in the Design has no species-cache entry. A source
+  // without one leaves the ghost reading the cache, as the plant a click places does.
+  const entity = plantEntityFromStampSource(scene.persisted, species, world, PREVIEW_PLANT_ID)
+  const plant = species.stratum === null
+    ? entity
+    : { ...entity, color: speciesPlacementAppearance(scene.persisted, { canonicalName: species.canonical_name, stratum: species.stratum }).color }
   const nearest = scene.nearestPlant(world)
   if (nearest && view.screenDistance(world, nearest.plant.position) <= NEAREST_PLANT_MAX_SCREEN_PX) {
-    const name = scene.plantPresentation(nearest.plant)?.commonName ?? nearest.plant.commonName ?? nearest.plant.canonicalName
+    const name = scene.plantPresentation(nearest.plant).commonName
     // Below the symbol, so a close neighbour's label never hides it: the symbol's radius among the scene's plants (crowded).
-    const symbolRadiusPx = scene.plantPresentation(plant)?.radiusPx ?? 0
+    const symbolRadiusPx = scene.plantPresentation(plant).radiusPx
     const [line, label] = distanceGuideShapes(
       world,
       nearest.plant.position,

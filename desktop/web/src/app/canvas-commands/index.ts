@@ -65,7 +65,6 @@ export type CanvasCommandId =
   | 'canvas.tool.measurementGuide'
   | 'canvas.toggleGrid'
   | 'canvas.toggleSnapToGrid'
-  | 'canvas.toggleRulers'
   | 'canvas.cut'
   | 'canvas.copy'
   | 'canvas.paste'
@@ -98,7 +97,6 @@ export type CanvasCommandIntent =
   | { readonly type: 'redo' }
   | { readonly type: 'toggle-grid' }
   | { readonly type: 'toggle-snap-to-grid' }
-  | { readonly type: 'toggle-rulers' }
   | { readonly type: 'edit', readonly action: CanvasEditAction }
   | { readonly type: 'view', readonly action: CanvasViewAction }
 
@@ -121,7 +119,6 @@ export interface CanvasCommandProjectionState {
   readonly settingsAvailable: boolean
   readonly gridVisible: boolean
   readonly snapToGridEnabled: boolean
-  readonly rulersVisible: boolean
 }
 
 /** Which surface ran a canvas command: armCanvasTool focuses the map after every one but a shortcut. */
@@ -133,7 +130,6 @@ export interface CanvasCommandIntentAdapter {
   redo(): void
   toggleGrid(): void
   toggleSnapToGrid(): void
-  toggleRulers(): void
   edit(action: CanvasEditAction): void
   view(action: CanvasViewAction): void
 }
@@ -210,8 +206,8 @@ interface CanvasHistoryCommandDefinition extends CanvasCommandDefinitionBase {
 
 interface CanvasSettingsCommandDefinition extends CanvasCommandDefinitionBase {
   readonly kind: 'settings'
-  readonly id: 'grid' | 'snap' | 'rulers'
-  readonly stateKey: 'gridVisible' | 'snapToGridEnabled' | 'rulersVisible'
+  readonly id: 'grid' | 'snap'
+  readonly stateKey: 'gridVisible' | 'snapToGridEnabled'
 }
 
 export interface CanvasEditCommandDefinition extends CanvasCommandDefinitionBase {
@@ -275,37 +271,24 @@ function edit(
   }
 }
 
-/** Which shortcuts are live: character keys can be turned off in Settings › Keyboard. */
-export interface CanvasShortcutOptions {
-  readonly characterKeys: boolean
-}
-
-const ALL_SHORTCUTS: CanvasShortcutOptions = { characterKeys: true }
-
-/** The command's live shortcuts, in order. */
+/** The command's live shortcuts, in order; `characterKeys` is Settings › Keyboard's switch (off hides `]`, `[`, …). */
 function liveShortcuts(
   definition: CanvasCommandDefinition,
-  options: CanvasShortcutOptions,
+  characterKeys: boolean,
 ): readonly string[] | undefined {
-  if (!definition.shortcuts || options.characterKeys) return definition.shortcuts
+  if (!definition.shortcuts || characterKeys) return definition.shortcuts
   const live = definition.shortcuts.filter((shortcut) => !isCharacterKeyShortcut(shortcut))
   return live.length > 0 ? live : undefined
 }
 
 /** The key a command shows: its first live shortcut, else its first key hint. */
-export function canvasCommandDisplayKey(
-  definition: CanvasCommandDefinition,
-  options: CanvasShortcutOptions = ALL_SHORTCUTS,
-): string | undefined {
-  return liveShortcuts(definition, options)?.[0] ?? definition.keyHints?.[0]
+export function canvasCommandDisplayKey(definition: CanvasCommandDefinition, characterKeys: boolean): string | undefined {
+  return liveShortcuts(definition, characterKeys)?.[0] ?? definition.keyHints?.[0]
 }
 
 /** `aria-keyshortcuts` for a command: every live shortcut, then every key hint. */
-export function canvasCommandAriaKeys(
-  definition: CanvasCommandDefinition,
-  options: CanvasShortcutOptions = ALL_SHORTCUTS,
-): string | undefined {
-  const keys = [...liveShortcuts(definition, options) ?? [], ...definition.keyHints ?? []]
+export function canvasCommandAriaKeys(definition: CanvasCommandDefinition, characterKeys: boolean): string | undefined {
+  const keys = [...liveShortcuts(definition, characterKeys) ?? [], ...definition.keyHints ?? []]
   return keys.length > 0 ? keys.map(ariaKeyShortcuts).join(' ') : undefined
 }
 
@@ -407,16 +390,6 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     intent: { type: 'toggle-snap-to-grid' },
     stateKey: 'snapToGridEnabled',
   },
-  {
-    kind: 'settings',
-    id: 'rulers',
-    commandId: 'canvas.toggleRulers',
-    labelKey: 'canvas.grid.rulers',
-    shortcuts: ['Shift+R'],
-    palette: true,
-    intent: { type: 'toggle-rulers' },
-    stateKey: 'rulersVisible',
-  },
 ]
 
 const SELECTION_EDITS: ReadonlySet<CanvasEditAction> = new Set([
@@ -466,7 +439,6 @@ export function isCanvasCommandDisabled(
       return !state.canRedo
     case 'toggle-grid':
     case 'toggle-snap-to-grid':
-    case 'toggle-rulers':
       return !state.settingsAvailable
     case 'view':
       return !state.canvasAvailable
@@ -512,9 +484,6 @@ function dispatchCanvasActionIntent(
     case 'toggle-snap-to-grid':
       adapter.toggleSnapToGrid()
       return
-    case 'toggle-rulers':
-      adapter.toggleRulers()
-      return
     case 'edit':
       adapter.edit(intent.action)
       return
@@ -527,25 +496,25 @@ interface CreateCanvasCommandProjectionOptions {
   readonly state: CanvasCommandProjectionState
   readonly intents: CanvasCommandIntentAdapter
   readonly translate: (key: string) => string
-  /** Settings › Keyboard; off hides character-key shortcuts from every surface. */
-  readonly shortcuts?: CanvasShortcutOptions
+  /** Settings › Keyboard; false hides character-key shortcuts from every surface. */
+  readonly characterKeys: boolean
 }
 
 export function createCanvasCommandProjection({
   state,
   intents,
   translate,
-  shortcuts = ALL_SHORTCUTS,
+  characterKeys,
 }: CreateCanvasCommandProjectionOptions): CanvasCommandProjection {
   const project = (definition: CanvasCommandDefinition): CanvasProjectedCommand => {
     const disabled = isCanvasCommandDisabled(definition.intent, state)
-    const shortcut = canvasCommandDisplayKey(definition, shortcuts)
+    const shortcut = canvasCommandDisplayKey(definition, characterKeys)
     const { intent } = definition
     return {
       commandId: definition.commandId,
       label: translate(definition.labelKey),
       shortcut: shortcut ? formatShortcut(shortcut, translate) : undefined,
-      ariaShortcut: canvasCommandAriaKeys(definition, shortcuts),
+      ariaShortcut: canvasCommandAriaKeys(definition, characterKeys),
       disabled,
       action: (from) => {
         if (disabled) return

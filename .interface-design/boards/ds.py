@@ -278,7 +278,6 @@ IC = {
     'sun': 'M10 13.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM10 2v1.5M10 16.5V18M2 10h1.5M16.5 10H18M4.3 4.3l1.1 1.1M14.6 14.6l1.1 1.1M4.3 15.7l1.1-1.1M14.6 5.4l1.1-1.1',
     'grid': 'M3.5 3.5h13v13h-13zM3.5 8h13M3.5 12h13M8 3.5v13M12 3.5v13',
     'magnet': 'M5 3.5v6.5a5 5 0 0 0 10 0V3.5h-3.2V10a1.8 1.8 0 0 1-3.6 0V3.5zM5 6.5h3.2M11.8 6.5H15',
-    'ruler': 'M3 14.5L14.5 3 17 5.5 5.5 17zM6.5 11l1.4 1.4M9 8.5l1.4 1.4M11.5 6l1.4 1.4',
     'globe': 'M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0zM3 10h14M10 3c2 2 2.8 4.4 2.8 7S12 15 10 17c-2-2-2.8-4.4-2.8-7S8 5 10 3z',
     'pin': 'M10 17.5s-5.5-5-5.5-9A5.5 5.5 0 0 1 15.5 8.5c0 4-5.5 9-5.5 9zM10 10.3a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z',
     'cloud-off': 'M3 3l14 14M7 6.3A4.5 4.5 0 0 1 14.3 9a3.2 3.2 0 0 1 2.4 4.2M14 15.5H6a3.5 3.5 0 0 1-.6-7',
@@ -543,12 +542,12 @@ def panelrail(active=None, top=72, labelled=False):
     return f'<nav class="float" aria-label="Panels" style="position: absolute; right: 12px; top: {top}px; width: {w}; padding: 5px; display: flex; flex-direction: column; gap: 2px;">{"".join(out)}</nav>'
 
 
-def viewchip(grid=False, snap=True, rulers=False, bottom=12, names=('Grid', 'Snap to grid', 'Rulers')):
+def viewchip(grid=False, snap=True, bottom=12, names=('Grid', 'Snap to grid')):
     def t(label, on):
         return (f'<button type="button" class="btn ghost sm plain" aria-pressed="{"true" if on else "false"}" style="gap: 5px; font-weight: {600 if on else 400};{" color: var(--accent-ink); background: var(--accent-soft);" if on else " color: var(--ink);"}">'
                 f'{icon("check", "s16") if on else ""}{esc(label)}</button>')
     return (f'<div class="float" role="group" aria-label="View" style="position: absolute; left: 12px; bottom: {bottom}px; height: 40px; display: flex; align-items: center; gap: 2px; padding: 0 5px; border-radius: 11px;">'
-            f'{t(names[0], grid)}{t(names[1], snap)}{t(names[2], rulers)}</div>')
+            f'{t(names[0], grid)}{t(names[1], snap)}</div>')
 
 
 def compass_glyph(bearing=0):

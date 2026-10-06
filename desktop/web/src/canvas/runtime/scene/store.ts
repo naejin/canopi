@@ -53,10 +53,6 @@ export class SceneStore {
     return cloneScenePersistedState(this._persisted)
   }
 
-  get guides(): ScenePersistedState['guides'] {
-    return this._persisted.guides.map((guide) => ({ ...guide }))
-  }
-
   // The runtime's metre frame for this Design; replaced on hydrate and re-origin.
   get sessionPlane(): SessionPlane {
     return this._geo.plane
@@ -67,7 +63,7 @@ export class SceneStore {
     return this._plane
   }
 
-  // The plane plus the ledger of loaded lon/lat that serialization needs.
+  // The session plane that serialization and re-origin need.
   get geoFrame(): SceneGeoFrame {
     return this._geo
   }
@@ -142,7 +138,7 @@ export class SceneStore {
 
 export type SceneStateReader = Pick<
   SceneStore,
-  'persisted' | 'session' | 'guides' | 'hasObjects' | 'sessionPlane' | 'sessionPlaneSignal'
+  'persisted' | 'session' | 'hasObjects' | 'sessionPlane' | 'sessionPlaneSignal'
 >
 export type SceneDocumentReader = Pick<SceneStore, 'toCanopiFile'>
 export type SceneSessionWriter = Pick<

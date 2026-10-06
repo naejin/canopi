@@ -13,7 +13,7 @@ function setup() {
     draft.plants = [0, 3].map((x, index) => ({
       kind: 'plant', id: String(index), locked: false,
       canonicalName: 'Malus domestica', commonName: null, color: null,
-      stratum: null, canopySpreadM: null, position: { x, y: 0 },
+      canopySpreadM: null, position: { x, y: 0 },
       rotationDeg: null, scale: null, notes: null, plantedDate: null, quantity: null,
     }))
   })
@@ -109,7 +109,7 @@ describe('scene query snapshot reuse', () => {
     expect(query.capturePrintSnapshot()?.plants[0]!.position.x).toBe(0)
   })
 
-  it('avoids scene reads when nothing is selected and returns owned results', () => {
+  it('avoids scene reads when nothing is selected and returns an empty model no caller can change', () => {
     const { store, query } = setup()
     store.setSelection([])
     const read = vi.spyOn(store, 'persisted', 'get')
@@ -119,9 +119,9 @@ describe('scene query snapshot reuse', () => {
       sameSpeciesReferenceCanonicalName: null, plantNamePinning: { plantIds: [], allPinned: false },
     })
     Reflect.set(empty.editableTargets, '0', { kind: 'plant', id: '0' })
-    Reflect.set(empty.plantNamePinning!.plantIds, '0', '0')
+    Reflect.set(empty.plantNamePinning.plantIds, '0', '0')
     expect(query.getDesignObjectSelection().editableTargets).toEqual([])
-    expect(query.getDesignObjectSelection().plantNamePinning?.plantIds).toEqual([])
+    expect(query.getDesignObjectSelection().plantNamePinning.plantIds).toEqual([])
     expect(read).not.toHaveBeenCalled()
   })
 

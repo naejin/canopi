@@ -38,8 +38,6 @@ export interface ToolModifiers {
   readonly subtractive: boolean
   /** Shift. Every phase: Polygon and Plant a row 45° steps; the rotate handle's 15° steps from the press angle. Phase 2 adds square/circle for Rectangle and Ellipse and 45° screen steps for Line and Measure. */
   readonly constrain: boolean
-  /** Alt, reserved (unused). */
-  readonly fromCentre: boolean
   /** Plant a row only. LEGACY/ROTATION: Shift. Phase 2: mod held during the drag. */
   readonly noSnap: boolean
 }
@@ -60,16 +58,14 @@ export interface ToolPoint {
 export type HitTarget =
   | { readonly kind: 'object'; readonly target: SceneDesignObjectTarget }                          // scene/design-object-targets.ts
   | { readonly kind: 'zone-edge'; readonly zoneId: string; readonly edgeIndex: number; readonly distancePx: number }
-  | { readonly kind: 'guide'; readonly guideId: string }
 /** No filter is today's hitTestTopLevel exactly: interactive layers, a group as the top-level target, guides, the revealed
- *  (selected or hovered) note, and object-locked objects, which the caller rejects itself (Select shows Unlock). */
+ *  (selected or hovered) note, and object-locked objects, which the caller rejects itself. */
 export interface HitFilter {
-  readonly kinds?: readonly SceneDesignObjectTarget['kind'][]
-  /** hitAt: also locked layers that are visible (today's hitTestVisibleTopLevel, the host's hover). hitInQuad: a phase-1
-   *  feature; the 0B façade throws a clear error (today's band select skips locked layers). */
+  /** hitAt: also locked layers that are visible (hitTestVisibleTopLevel, the host's hover). hitInQuad throws a clear error
+   *  (the band select skips locked layers). */
   readonly includeLocked?: boolean
   /** hitAt: answers only the nearest zone edge within this many CSS px ("Turn view to this edge", spec §4.16), converted at
-   *  the frame's pixelsPerMetre. hitInQuad throws a clear error (a band has no tolerance). */
+   *  the frame's pixelsPerMetre. hitAt only: a band has no tolerance. */
   readonly toleranceScreenPx?: number
 }
 /** The selection read model: today's CanvasDesignObjectSelectionModel (canvas/runtime/runtime.ts:48), unchanged. */
@@ -79,9 +75,9 @@ export type SelectionReadModel = CanvasDesignObjectSelectionModel
 export type SceneLayerKind = SceneLayerEntity['name']
 /**
  * A preview of what a placement would create, drawn with the draft by the scene's own drawing code (plan 0D1 "Ghosts").
- * The entities are already where a click would put them: the tool builds the plant as a click would (today plantEntityFromStampSource)
- * and applies the stamp's offset and held rotation to the template (today objectStampEntities and rotateStampEntities).
- * `anchor` and `rotationDeg` describe the pick for tests and guidance; the renderer never re-applies them.
+ * The entities are already where a click would put them: the tool builds the plant as a click would (plantEntityFromStampSource),
+ * and a stamp tool draws the template a press would add (stamp-rotation.ts stampTemplateAt: the held turn about the
+ * stamp's anchor, then the move to the pointer). The tool card reads the held turn from guidance, not from the ghost.
  * A plant ghost is the plant's mark only: the Place plants mature-width ring, its label and the nearest-plant guide are ellipse, label and polyline shapes.
  * mark 'symbol' (default) draws the plant's symbol; 'dot' draws Plant a row's look: a filled disc in the plant's display colour with a 2 px
  * border of the same colour, radius half the plant's world AABB (today's (a4c86d39) plant-spacing-overlay.ts:158-181; Plant a row emits
@@ -93,16 +89,15 @@ export type SceneLayerKind = SceneLayerEntity['name']
  */
 export type GhostEntity =
   | { readonly kind: 'plant'; readonly plant: ScenePlantEntity; readonly mark?: 'symbol' | 'dot'; readonly sizeFrom?: WorldPoint }
-  | { readonly kind: 'objects'; readonly anchor: WorldPoint; readonly rotationDeg: number; readonly template: SceneArrangementTemplate }  // stamp pick, saved stamp
+  | { readonly kind: 'objects'; readonly template: SceneArrangementTemplate }  // stamp pick, saved stamp
 /** A note's text entry; the host owns the textarea. The tool card's spacing field is not one (it sends spacing commands). */
 export interface TextEntryRequest {
   readonly anchor: WorldPoint
   readonly rotationDeg: number                     // stored note rotation; the host draws the textarea at rotationDeg − bearing
   readonly initialText: string
   readonly placeholderKey: string
-  /** 'create': today's new-note field (--text-base, line-height 1.4); 'edit': the in-place editor (the note's font size, line-height 1.25, select-all). */
-  readonly mode: 'create' | 'edit'
-  readonly fontSizePx?: number                     // 'edit': the note's stored font size
+  /** One mode: the field is drawn at the note's font size and line height, where the note will draw. */
+  readonly fontSizePx?: number                     // the note's stored font size; a new note's default 16 px
 }
 
 export type ToolGesture =
@@ -130,7 +125,7 @@ export type ToolCommand =
   | { readonly kind: 'spacing-cancel' }                                       // Esc in the field: drops the source, focus to the map
 
 /**
- * A 'handled' hover clears and skips the host's passive hover (restyle, tooltip, Unlock affordance); 'pass' lets it run.
+ * A 'handled' hover clears and skips the host's passive hover (restyle, tooltip); 'pass' lets it run.
  * A drag-start or drag-move is a hover with the button down unless the tool answers 'handled': a tool that keeps its press
  * to the release answers 'handled' (Select, Text, Place plants), one whose press let go of it answers 'pass'.
  */
@@ -138,14 +133,14 @@ export type ToolReply = 'handled' | 'pass'
 
 /** Read-only view queries: everything a tool may know about the camera. */
 export interface ToolView {
-  /** Normalised to [0, 360), so a tool can store it as a rotation without importing view/ (policy P5). */
+  /** In [0, 360) as the ViewCamera keeps it, so a tool can store it as a rotation without importing view/ (policy P5). */
   readonly bearingDeg: number
   readonly mode: 'site' | 'overview'
   metresPerPixelAt(p: WorldPoint): number
   screenDistance(a: WorldPoint, b: WorldPoint): number
-  screenAxesInWorld(at?: WorldPoint): { readonly right: WorldVector; readonly down: WorldVector }
-  /** Screen-aligned rectangle from two world corners: rotationDeg = normaliseBearing(bearing). Shift's square and circle use `square`. */
-  screenAlignedRect(a: WorldPoint, b: WorldPoint, options?: { readonly square?: boolean; readonly fromCentre?: boolean }):
+  screenAxesInWorld(): { readonly right: WorldVector; readonly down: WorldVector }
+  /** Screen-aligned rectangle from two world corners: rotationDeg = the bearing (in [0, 360)). Shift's square and circle use `square`. */
+  screenAlignedRect(a: WorldPoint, b: WorldPoint, options?: { readonly square?: boolean }):
     { readonly center: WorldPoint; readonly width: number; readonly height: number; readonly rotationDeg: number }
 }
 // Angle constraints are not a ToolView query: the host applies them (CanvasTool.constraint), so ToolPoint.snapped is always right.
@@ -155,10 +150,10 @@ export interface ToolScene {
   readonly persisted: Readonly<ScenePersistedState>
   hitAt(world: WorldPoint, filter?: HitFilter): HitTarget | null
   hitInQuad(quad: WorldQuad, filter?: HitFilter): readonly HitTarget[]
-  nearestPlant(world: WorldPoint, excluding?: ReadonlySet<string>): { readonly plant: ScenePlantEntity; readonly distanceM: number } | null
-  /** How the scene presents a plant (or a species by canonical name) now: the name in today's order (localised, stored common,
+  nearestPlant(world: WorldPoint): { readonly plant: ScenePlantEntity; readonly distanceM: number } | null
+  /** How the scene presents a plant now: the name in today's order (localised, stored common,
    *  canonical), the display colour and the symbol radius in CSS px. For tool-card names, row glyphs and the source ring. */
-  plantPresentation(plant: ScenePlantEntity | string): { readonly commonName: string; readonly color: string; readonly radiusPx: number } | null
+  plantPresentation(plant: ScenePlantEntity): { readonly commonName: string; readonly color: string; readonly radiusPx: number }
   isLayerOpenForCreation(layer: SceneLayerKind): boolean
   selection(): SceneDesignObjectSelection
   selectionModel(): SelectionReadModel         // read per call, not cached (as today)
@@ -172,7 +167,6 @@ export interface ToolEffects {
   setDraft(draft: DraftPresentation | null): void           // world-space; drawn by the renderer
   setHandles(handles: readonly ToolHandle[]): void          // DOM handle layer; hit by the source
   setGuidance(guidance: Partial<CanvasToolGuidance> | null): void
-  setCursor(cursor: 'default' | 'crosshair' | 'copy' | 'move' | 'not-allowed' | 'rotate' | 'grab' | 'grabbing'): void
   requestTool(id: ToolId): void
   /** Opens the host's text entry; submit runs on Enter and on blur and keeps the field open on 'keep' (a refused commit);
    *  onCancel runs when the entry closes without a submit (its own Esc), so the tool can follow the cancel. */
@@ -200,7 +194,6 @@ export interface ToolContext {
 
 export interface CanvasTool {
   readonly id: ToolId
-  readonly dragSlopPx?: number                    // per-tool threshold, sent through `configure` on every tool change (Plant a row: 0; it measures today's 4 px itself)
   /** True while the tool's next release must be admitted by the scene (Select's band: today's requiresSettledPointerUp). */
   settledRelease?(): boolean
   readonly clampsToView?: boolean                 // the host clamps the screen point to the view before converting (Plant a row)
@@ -219,15 +212,14 @@ export interface CanvasTool {
   command(c: ToolCommand): ToolReply
   /** Scene or selection changed outside the tool (undo, remote edit). */
   sceneChanged?(): void
-  /** The session plane changed (re-origin): re-project retained world points (corners, redo stack, row source) with reproject. */
-  planeChanged?(reproject: (p: WorldPoint) => WorldPoint): void
   /** A camera frame on which the host re-emitted nothing (the pointer off the map): rebuild a draft whose look depends on the
    *  scale, such as the polygon's edge chips hidden below 36 px (today's refreshViewportDependent). */
   viewChanged?(): void
-  /** True while the tool holds something Esc should drop first (draft, pick, row source). */
+  /** True while the tool holds a draft, pick, row source or Place plants' waiting point: Esc drops it first unless
+   *  `escapeLeaves`, and it holds re-origin (§4.19). */
   hasTransient(): boolean
-  /** Esc hint for the tool card, read by describeEscape. */
-  escapeHint(): 'drop-transient' | 'leave-tool' | 'clear-selection' | null
+  /** Esc leaves the tool even while it holds a transient, which is then no Esc layer (Place plants' waiting point, U35). */
+  readonly escapeLeaves?: true
   cancelTransient(reason: 'escape' | 'tool-change' | 'document-replaced' | 'navigate' | 'overview'): void   // 'overview': the map entered overview; drop what today's overview reset dropped (a stamp keeps its pick and hides only its ghost)
   /** Transient history (polygon corners), read by ToolHost.transientHistory; the tool acts on the undo-transient and redo-transient commands. */
   canUndoTransient?(): boolean

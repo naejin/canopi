@@ -8,6 +8,7 @@
 
 import type { ToolHandleId } from '../../interaction-types'
 import type { CanvasDesignObjectSelectionModel } from '../../runtime'
+import { singleEditableTarget } from '../../scene-runtime/selection'
 import type { ScenePersistedState, SceneZoneEntity } from '../../scene/types'
 import type { WorldPoint } from '../../view/types'
 import { getRectangularZoneCorners, polygonArea } from '../../zone-geometry'
@@ -46,14 +47,8 @@ export function reshapableZone(
   scene: Readonly<ScenePersistedState>,
   selection: CanvasDesignObjectSelectionModel,
 ): SceneZoneEntity | null {
-  if (
-    selection.editableTargets.length !== 1
-    || (selection.lockedTargets?.length ?? 0) > 0
-    || selection.blockedTargets.length > 0
-  ) return null
-  const target = selection.editableTargets[0]
-  if (target?.kind !== 'zone') return null
-  return scene.zones.find((zone) => zone.id === target.id) ?? null
+  const target = singleEditableTarget(selection, 'zone')
+  return target ? scene.zones.find((zone) => zone.id === target.id) ?? null : null
 }
 
 /** The zone's reshape points, in today's order. */

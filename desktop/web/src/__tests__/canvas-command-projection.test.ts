@@ -18,7 +18,6 @@ function intentAdapter(): CanvasCommandIntentAdapter {
     redo: vi.fn(),
     toggleGrid: vi.fn(),
     toggleSnapToGrid: vi.fn(),
-    toggleRulers: vi.fn(),
     edit: vi.fn(),
     view: vi.fn(),
   }
@@ -39,7 +38,6 @@ function state(overrides: Partial<CanvasCommandProjectionState> = {}): CanvasCom
     settingsAvailable: true,
     gridVisible: false,
     snapToGridEnabled: true,
-    rulersVisible: false,
     ...overrides,
   }
 }
@@ -56,7 +54,7 @@ const tagged = (k: string) => KEY_NAMES[k] ?? `t:${k}`
 
 describe('Canvas Command Projection', () => {
   it('owns the tool rail groups and single keys from the Menus board', () => {
-    const projection = createCanvasCommandProjection({ state: state(), intents: intentAdapter(), translate: (k) => k })
+    const projection = createCanvasCommandProjection({ state: state(), intents: intentAdapter(), translate: (k) => k, characterKeys: true })
 
     expect(projection.toolGroups.map((group) => ({
       id: group.id,
@@ -82,7 +80,7 @@ describe('Canvas Command Projection', () => {
 
   it('dispatches the chosen tool and marks the active one', () => {
     const intents = intentAdapter()
-    const projection = createCanvasCommandProjection({ state: state({ activeTool: 'ellipse' }), intents, translate: (k) => `t:${k}` })
+    const projection = createCanvasCommandProjection({ state: state({ activeTool: 'ellipse' }), intents, translate: (k) => `t:${k}`, characterKeys: true })
     const ellipse = projectedCanvasTools(projection).find((tool) => tool.tool === 'ellipse')!
 
     expect(ellipse).toMatchObject({ commandId: 'canvas.tool.ellipse', label: 't:canvas.tools.ellipse', active: true, disabled: false })
@@ -96,6 +94,7 @@ describe('Canvas Command Projection', () => {
       state: state({ spatialEditingAvailable: false, hasSelection: true }),
       intents,
       translate: (k) => k,
+      characterKeys: true,
     })
     const tools = projectedCanvasTools(projection)
 
@@ -108,13 +107,13 @@ describe('Canvas Command Projection', () => {
   })
 
   it('enables selection edits only with a selection, and same-species only for one species', () => {
-    const empty = createCanvasCommandProjection({ state: state(), intents: intentAdapter(), translate: (k) => k })
+    const empty = createCanvasCommandProjection({ state: state(), intents: intentAdapter(), translate: (k) => k, characterKeys: true })
     const disabled = (projection: typeof empty) => projection.editActions.filter((edit) => edit.disabled).map((edit) => edit.id)
     expect(disabled(empty)).toEqual([
       'cut', 'copy', 'duplicate', 'delete', 'select-same-species', 'deselect', 'group', 'ungroup',
       'bring-to-front', 'send-to-back', 'rotate', 'lock', 'unlock', 'unlock-all', 'save-as-stamp',
     ])
-    const onePlant = createCanvasCommandProjection({ state: state({ hasSelection: true }), intents: intentAdapter(), translate: (k) => k })
+    const onePlant = createCanvasCommandProjection({ state: state({ hasSelection: true }), intents: intentAdapter(), translate: (k) => k, characterKeys: true })
     // A single plant, a measurement or a locked object cannot turn.
     expect(disabled(onePlant)).toEqual(['select-same-species', 'rotate', 'unlock-all'])
 
@@ -123,6 +122,7 @@ describe('Canvas Command Projection', () => {
       state: state({ hasSelection: true, sameSpeciesSelectionAvailable: true, rotateAvailable: true, lockedObjectsPresent: true }),
       intents,
       translate: (k) => k,
+      characterKeys: true,
     })
     expect(disabled(selected)).toEqual([])
     selected.editActions.find((edit) => edit.id === 'select-same-species')!.action()
@@ -135,11 +135,11 @@ describe('Canvas Command Projection', () => {
     const deselect = selected.editActions.find((edit) => edit.id === 'deselect')!
     expect(deselect).toMatchObject({ commandId: 'canvas.clearSelection', label: 'menu.edit.deselect', shortcut: 'shortcutKeys.escape', ariaShortcut: 'Escape' })
     // Unlock all needs no selection, only a locked object somewhere in the Design.
-    const unlockAll = createCanvasCommandProjection({ state: state({ lockedObjectsPresent: true }), intents: intentAdapter(), translate: (k) => k })
+    const unlockAll = createCanvasCommandProjection({ state: state({ lockedObjectsPresent: true }), intents: intentAdapter(), translate: (k) => k, characterKeys: true })
       .editActions.find((edit) => edit.id === 'unlock-all')!
     expect(unlockAll).toMatchObject({ commandId: 'canvas.unlockAll', label: 'menu.edit.unlockAll', disabled: false })
 
-    const noCanvas = createCanvasCommandProjection({ state: state({ canvasAvailable: false }), intents: intentAdapter(), translate: (k) => k })
+    const noCanvas = createCanvasCommandProjection({ state: state({ canvasAvailable: false }), intents: intentAdapter(), translate: (k) => k, characterKeys: true })
     expect(noCanvas.editActions.every((edit) => edit.disabled)).toBe(true)
     expect(noCanvas.viewActions.every((view) => view.disabled)).toBe(true)
   })
@@ -150,6 +150,7 @@ describe('Canvas Command Projection', () => {
       state: state({ canUndo: true, gridVisible: true, snapToGridEnabled: false }),
       intents,
       translate: tagged,
+      characterKeys: true,
     })
 
     expect(projection.historyActions.map(({ action: _action, ...command }) => command)).toEqual([
@@ -183,11 +184,9 @@ describe('Canvas Command Projection', () => {
     expect(projection.settingsToggles.map((toggle) => [toggle.id, toggle.shortcut, toggle.pressed])).toEqual([
       ['grid', 'Shift G', true],
       ['snap', 'Shift S', false],
-      ['rulers', 'Shift R', false],
     ])
     projection.settingsToggles.forEach((toggle) => toggle.action())
     expect(intents.toggleGrid).toHaveBeenCalledOnce()
     expect(intents.toggleSnapToGrid).toHaveBeenCalledOnce()
-    expect(intents.toggleRulers).toHaveBeenCalledOnce()
   })
 })

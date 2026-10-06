@@ -20,11 +20,11 @@ function scene(): ScenePersistedState {
     plants: [
       {
         kind: 'plant', locked: false, id: 'apple', canonicalName: 'Malus domestica', commonName: 'Apple', color: null,
-        stratum: null, canopySpreadM: null, position: { x: 10, y: 20 }, rotationDeg: null, notes: null, plantedDate: null, quantity: null,
+        canopySpreadM: null, position: { x: 10, y: 20 }, rotationDeg: null, notes: null, plantedDate: null, quantity: null,
       },
       {
         kind: 'plant', locked: false, id: 'walnut', canonicalName: 'Juglans regia', commonName: 'Walnut', color: null,
-        stratum: null, canopySpreadM: 12, position: { x: -35, y: 62 }, rotationDeg: null, notes: null, plantedDate: null, quantity: null,
+        canopySpreadM: 12, position: { x: -35, y: 62 }, rotationDeg: null, notes: null, plantedDate: null, quantity: null,
       },
     ],
     zones: [
@@ -41,7 +41,6 @@ function scene(): ScenePersistedState {
     annotations: [note('label', 50, 60, 'A long note\nWith another line', 45), note('sign', -20, -15, 'Gate', null)],
     measurementGuides: [],
     groups: [],
-    guides: [],
   }
 }
 
@@ -327,7 +326,7 @@ describe('scene extent', () => {
       plants: [
         {
           kind: 'plant', locked: false, id: 'p1', canonicalName: 'Malus domestica', commonName: 'Apple', color: null,
-          stratum: null, canopySpreadM: null, position: { x: 10, y: 20 }, rotationDeg: null, notes: null, plantedDate: null, quantity: null,
+          canopySpreadM: null, position: { x: 10, y: 20 }, rotationDeg: null, notes: null, plantedDate: null, quantity: null,
         },
       ],
       zones: [
@@ -340,7 +339,6 @@ describe('scene extent', () => {
       annotations: [],
       measurementGuides: [],
       groups: [],
-      guides: [],
     }
   }
 
