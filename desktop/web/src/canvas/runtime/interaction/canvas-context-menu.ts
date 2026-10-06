@@ -9,7 +9,7 @@ import type { ScenePoint } from '../scene'
 import type { ViewTransform, WorldQuad } from '../view/types'
 
 /** The optional entries a pointer menu carries onto its request. */
-export type PointerMenuEntries = Pick<CanvasContextMenuRequest, 'finishShape' | 'turnViewToEdge'>
+type PointerMenuEntries = Pick<CanvasContextMenuRequest, 'finishShape' | 'turnViewToEdge'>
 
 interface CanvasContextMenuOptions {
   readonly container: HTMLElement

@@ -13,11 +13,11 @@ import { clickSelection, pressSelection, type SelectionContext, type SelectPress
 const OVERVIEW_FILTER = { overview: true } as const
 
 /** What the overview selector needs: selection, and the band's draft. */
-export type OverviewContext = SelectionContext & {
+type OverviewContext = SelectionContext & {
   readonly effects: SelectionContext['effects'] & { setDraft(draft: DraftPresentation | null): void }
 }
 
-export interface OverviewSelector {
+interface OverviewSelector {
   /** `hit` is the press's hit with plants hidden. */
   press(point: ToolPoint, hit: HitTarget | null): void
   drag(point: ToolPoint): void
