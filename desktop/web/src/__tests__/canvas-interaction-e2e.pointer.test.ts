@@ -321,6 +321,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('a right press or middle pan whose release was lost leaves native menus off the map to the page (B4, A35)', () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1000)
     const session = createTestSession(createInteractionDeps(container, store, testView))
     const panel = document.createElement('div')
     document.body.append(panel)
@@ -330,11 +331,14 @@ describe('SceneInteractionSession', () => {
       return event.defaultPrevented
     }
 
-    // A still right press, then a move with no button: its up was lost.
+    // A still right press, then a move with no button: its up was lost, and the move is its release (U37), whose
+    // native-menu trail ends 500 ms later.
     events.pointerDown({ x: 100, y: 100 }, { button: 2, buttons: 2 })
     expect(pageMenu()).toBe(true)
     events.pointerMove({ x: 101, y: 100 }, { buttons: 0 })
+    now.mockReturnValue(1500)
     expect(pageMenu()).toBe(false)
+    now.mockRestore()
 
     // A middle pan, then a move with no button.
     events.pointerDown({ x: 100, y: 100 }, { button: 1, buttons: 4 })
@@ -342,6 +346,32 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 150, y: 100 }, { buttons: 0 })
     expect(pageMenu()).toBe(false)
     panel.remove()
+    session.dispose()
+  })
+
+  it('a chorded right button released first counts as its release: the native-menu trail starts at that move (U37)', () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1000)
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    // WebView2's trail, retargeted to <html>, at a given time.
+    const trailingMenu = (at: number) => {
+      now.mockReturnValue(at)
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+      document.documentElement.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+
+    // A still right press; the left button is chorded (buttons 3), then the right one released first (buttons 1).
+    events.pointerDown({ x: 100, y: 100 }, { button: 2, buttons: 2 })
+    now.mockReturnValue(1050)
+    events.pointerMove({ x: 100, y: 100 }, { button: 0, buttons: 3 })
+    now.mockReturnValue(1100)
+    events.pointerMove({ x: 100, y: 100 }, { button: 2, buttons: 1 })
+
+    expect(trailingMenu(1150)).toBe(true)
+    expect(trailingMenu(1599)).toBe(true)
+    expect(trailingMenu(1600)).toBe(false)
+    expect(contextMenuHost.opened).toHaveLength(0)
+    now.mockRestore()
     session.dispose()
   })
 

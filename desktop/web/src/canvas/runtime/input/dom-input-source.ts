@@ -109,8 +109,9 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     if (!removeWindowListeners && listenOnWindow) removeWindowListeners = listenOnWindow()
   }
 
-  /** `release` is the up or cancel that ends the pointer; a canvas press's secondary release starts the native-menu trail. */
-  function disown(pointerId: number | 'all', release: PointerEvent | null = null): void {
+  /** `release` is the up, cancel or button-dropping move that ends the pointer; a canvas press's secondary release starts
+   *  the native-menu trail. */
+  function disown(pointerId: number | 'all', release: Pick<MouseEvent, 'button' | 'timeStamp'> | null = null): void {
     if (pointerId === 'all') {
       owned.clear()
       canvasPresses.clear()
@@ -402,8 +403,10 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
             if (effect.pointerId !== undefined) release(effect.pointerId)
             break
           case 'disown':
-            // Its release was lost: no up will end it, so its native menus are the page's again (B4).
-            if (effect.pointerId !== undefined) disown(effect.pointerId)
+            // Its release was lost: no up will end it, so its native menus are the page's again (B4). The move that
+            // dropped its button is its release, so a secondary press's trail starts there (a chorded right button
+            // released first, U37).
+            if (effect.pointerId !== undefined) disown(effect.pointerId, event instanceof MouseEvent ? event : null)
             break
           case 'drop-effect': {
             const transfer = event && 'dataTransfer' in event ? (event as DragEvent).dataTransfer : null
