@@ -56,7 +56,7 @@ export function createSavedObjectStampTool(): CanvasTool {
   function hold(source: ToolSource | null): boolean {
     const next = source?.kind === 'saved-stamp' ? source.stamp : null
     if (next === stamp) return false
-    startDeg = turnStampRotation(context().view.bearingDeg, 0)
+    startDeg = context().view.bearingDeg
     turnDeg = 0
     stamp = next
     return true

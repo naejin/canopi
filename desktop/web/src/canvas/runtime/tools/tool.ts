@@ -135,13 +135,13 @@ export type ToolReply = 'handled' | 'pass'
 
 /** Read-only view queries: everything a tool may know about the camera. */
 export interface ToolView {
-  /** Normalised to [0, 360), so a tool can store it as a rotation without importing view/ (policy P5). */
+  /** In [0, 360) as the ViewCamera keeps it, so a tool can store it as a rotation without importing view/ (policy P5). */
   readonly bearingDeg: number
   readonly mode: 'site' | 'overview'
   metresPerPixelAt(p: WorldPoint): number
   screenDistance(a: WorldPoint, b: WorldPoint): number
   screenAxesInWorld(at?: WorldPoint): { readonly right: WorldVector; readonly down: WorldVector }
-  /** Screen-aligned rectangle from two world corners: rotationDeg = normaliseBearing(bearing). Shift's square and circle use `square`. */
+  /** Screen-aligned rectangle from two world corners: rotationDeg = the bearing (in [0, 360)). Shift's square and circle use `square`. */
   screenAlignedRect(a: WorldPoint, b: WorldPoint, options?: { readonly square?: boolean; readonly fromCentre?: boolean }):
     { readonly center: WorldPoint; readonly width: number; readonly height: number; readonly rotationDeg: number }
 }

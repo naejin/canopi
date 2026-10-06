@@ -31,7 +31,6 @@ import { resolveSceneObjectGroupMembers, sceneObjectGroupMemberLayerName } from 
 import { isDirectSceneDesignObjectLocked, isSceneDesignObjectLocked } from '../scene/locks'
 import type { ScenePersistedState } from '../scene/types'
 import type { SceneEditCoordinator, SceneEditRunOptions, SceneEditTransaction } from '../scene-runtime/transactions'
-import { normaliseBearing } from '../view/navigation-policy'
 import type { ScreenPoint, ViewFrame, ViewScreen, ViewTransform, WorldPoint } from '../view/types'
 import { applyToolConstraint, type ScreenAxes } from './constraints'
 import type { DraftPresentation, DraftShape, ToolHandle } from './draft'
@@ -204,9 +203,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   const view: ToolView = {
-    /** Normalised to [0, 360), so a tool can store it as a rotation (a note, a saved stamp's pick). */
+    /** In [0, 360) by the ViewCamera contract, so a tool can store it as a rotation (a note, a saved stamp's pick). */
     get bearingDeg() {
-      return normaliseBearing(frame().view.camera.bearingDeg)
+      return frame().view.camera.bearingDeg
     },
     get mode() {
       return frame().mode
@@ -1420,7 +1419,7 @@ function screenAlignedRect(
     across = (across < 0 ? -1 : 1) * side
     along = (along < 0 ? -1 : 1) * side
   }
-  const rotationDeg = normaliseBearing(view.camera.bearingDeg)
+  const rotationDeg = view.camera.bearingDeg
   if (options.fromCentre) {
     return { center: a, width: Math.abs(across) * 2, height: Math.abs(along) * 2, rotationDeg }
   }
