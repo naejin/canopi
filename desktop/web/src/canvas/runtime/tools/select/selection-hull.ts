@@ -1,11 +1,12 @@
 // canvas/runtime/tools/select/selection-hull.ts
 //
-// Owns the selection's projected hull (spec §4.9, INV-XF-22): the screen box of the shapes the selection draws, as the
-// world quad of that box. Each target is measured along the screen's axes as it is drawn: a rectangle by its turned
-// corners, an ellipse by its turned radii, a polygon or a line by its points, a plant as the circle of its drawn radius,
-// a note as its turned text box, a guide by its ends, a group by its members. The selection's world bounds are never
-// used: on a turned map their box spreads into a diamond far wider than a shape drawn level on screen. The rotation handle
-// sits above this hull, and the keyboard menu opens beside it.
+// Owns the selection's projected hull (spec §4.9): the screen box of the shapes the selection draws, as the world quad
+// of that box. Each target is measured along the screen's axes as it is drawn: a rectangle by its turned corners, an
+// ellipse by its turned radii, a polygon or a line by its points, a plant as the circle of its drawn radius, a note as
+// its turned text box, a guide by its ends, a group by its members. The selection's world bounds are never used: on a
+// turned map their box spreads into a diamond far wider than a shape drawn level on screen. The rotation handle sits
+// above this hull (rotate-handle.test.ts, "the handle sits 28 px above the projected hull" and its shape cases), and the
+// keyboard menu opens beside it (tool-host.test.ts, "the keyboard menu opens beside a shape drawn level at 45").
 
 import { getAnnotationVisualWorldCorners, getRevealedAnnotationId } from '../../annotation-layout'
 import { getCanvasDetailLayout } from '../../automatic-detail'

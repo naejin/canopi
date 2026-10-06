@@ -28,7 +28,8 @@ export interface CanvasContextMenuController {
    *  edge (the request's entry, spec §4.16). */
   openAtPointer(screen: ScenePoint, selection: CanvasDesignObjectSelectionModel | null, turnViewToEdge?: () => void): void
   /** Menu key or Shift F10: beside the selection's projected hull (`hull`, the world quad of the screen box of the shapes it
-   *  draws, tools/select/selection-hull.ts; INV-XF-22), else mid-map (the empty-map menu without a selection). */
+   *  draws, tools/select/selection-hull.ts; tool-host.test.ts "the keyboard menu opens beside a shape drawn level at 45"),
+   *  else mid-map (the empty-map menu without a selection). */
   openFromKeyboard(selection: CanvasDesignObjectSelectionModel, hull: WorldQuad | null): void
   /** True from an open until the app closes the menu (the request's `closed`) or close() closes it. */
   isOpen(): boolean
