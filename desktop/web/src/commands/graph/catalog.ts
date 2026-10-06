@@ -122,7 +122,8 @@ function canvasAppCommandDefinition(
       const shortcut = canvasCommandDisplayKey(definition, singleKeyShortcuts.value)
       return shortcut ? formatShortcut(shortcut, t) : undefined
     },
-    palette: definition.palette,
+    // Every canvas command is in the palette, Pan included.
+    palette: true,
     run: (_state, from) => runCanvasIntent(definition.intent, from),
     disabled: () => isCanvasCommandDisabled(definition.intent, readWorkspaceCanvasProjectionState()),
   }

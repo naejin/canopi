@@ -140,7 +140,6 @@ export interface CanvasProjectedCommand {
 
 export interface CanvasToolbarToolCommand extends CanvasProjectedCommand {
   readonly tool: CanvasToolId
-  readonly group: CanvasToolGroupId
   readonly active: boolean
 }
 
@@ -178,7 +177,6 @@ interface CanvasCommandDefinitionBase {
    * when no live shortcut is left; `aria-keyshortcuts` lists every one.
    */
   readonly keyHints?: readonly string[]
-  readonly palette: boolean
   readonly intent: CanvasCommandIntent
   /** The shortcut also works while a text field has focus. */
   readonly worksInTextFields?: boolean
@@ -238,7 +236,6 @@ function tool(
     commandId,
     labelKey,
     shortcuts: [shortcut],
-    palette: true,
     intent: { type: 'select-tool', tool: toolId },
   }
 }
@@ -257,7 +254,6 @@ function edit(
     labelKey,
     shortcuts,
     ...(keyHints ? { keyHints } : {}),
-    palette: true,
     intent: { type: 'edit', action: id },
   }
 }
@@ -296,7 +292,6 @@ function view(
     labelKey,
     ...(keys.shortcuts ? { shortcuts: keys.shortcuts } : {}),
     ...(keys.keyHints ? { keyHints: keys.keyHints } : {}),
-    palette: true,
     intent: { type: 'view', action: id },
     worksInTextFields: keys.worksInTextFields ?? false,
   }
@@ -320,7 +315,6 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     commandId: 'edit.undo',
     labelKey: 'menu.edit.undo',
     shortcuts: ['Ctrl+Z'],
-    palette: true,
     intent: { type: 'undo' },
   },
   {
@@ -329,7 +323,6 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     commandId: 'edit.redo',
     labelKey: 'menu.edit.redo',
     shortcuts: ['Ctrl+Shift+Z', 'Ctrl+Y'],
-    palette: true,
     intent: { type: 'redo' },
   },
   edit('cut', 'canvas.cut', 'menu.edit.cut', ['Ctrl+X']),
@@ -367,7 +360,6 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     commandId: 'canvas.toggleGrid',
     labelKey: 'canvas.grid.grid',
     shortcuts: ['Shift+G'],
-    palette: true,
     intent: { type: 'toggle-grid' },
     stateKey: 'gridVisible',
   },
@@ -377,7 +369,6 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     commandId: 'canvas.toggleSnapToGrid',
     labelKey: 'canvas.grid.snapToGrid',
     shortcuts: ['Shift+S'],
-    palette: true,
     intent: { type: 'toggle-snap-to-grid' },
     stateKey: 'snapToGridEnabled',
   },
@@ -506,7 +497,6 @@ export function createCanvasCommandProjection({
           .map((definition) => ({
             ...project(definition),
             tool: definition.tool,
-            group: definition.group,
             active: state.activeTool === definition.tool,
           })),
       }
