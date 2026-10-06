@@ -21,7 +21,7 @@ import { MatchText, PlantFinder, StratumFormFilters } from '../shared/PlantFinde
 import { SpeciesCommonName } from '../shared/SpeciesIdentity'
 import { clearHoveredPanelTargets, setHoveredPanelTargets } from '../../app/panel-targets/presentation'
 import { speciesPlacementAppearance } from '../../canvas/runtime/species-key'
-import { cachedStratum } from '../../canvas/runtime/plant-presentation'
+import { cachedStratum, cachedWidth } from '../../canvas/runtime/plant-presentation'
 import { speciesTarget } from '../../target'
 import { PlantSymbolGlyph } from './PlantSymbolGlyph'
 import row from '../shared/species-row.module.css'
@@ -258,8 +258,8 @@ function designSpecies(): readonly { source: PlantStampSource, englishName?: str
         canonical_name: plant.canonicalName,
         common_name: localized ?? plant.commonName,
         stratum: cachedStratum(speciesCache, plant.canonicalName),
-        // The width the catalog gave when the species was placed.
-        width_max_m: plant.canopySpreadM,
+        // The width the catalog gave when the species was placed, else the cached catalog width.
+        width_max_m: plant.canopySpreadM ?? cachedWidth(speciesCache, plant.canonicalName),
       },
     })
   }

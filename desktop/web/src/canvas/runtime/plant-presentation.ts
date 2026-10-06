@@ -161,6 +161,12 @@ export function cachedStratum(speciesCache: ReadonlyMap<string, SpeciesCacheEntr
   return typeof stratum === 'string' && stratum.length > 0 ? stratum : null
 }
 
+/** The species' mature width in the loaded catalog entries; null when not loaded or the catalog has none. */
+export function cachedWidth(speciesCache: ReadonlyMap<string, SpeciesCacheEntry>, canonicalName: string): number | null {
+  const width = speciesCache.get(canonicalName)?.width_max_m
+  return typeof width === 'number' && width > 0 ? width : null
+}
+
 /** The colour the plant is drawn with under the current plant display; its stored colour never changes. */
 export function resolvePlantDisplayColor(
   plant: ScenePlantEntity,

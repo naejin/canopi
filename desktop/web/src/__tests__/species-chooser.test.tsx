@@ -286,6 +286,25 @@ describe('Place plants species chooser', () => {
     })
   })
 
+  it('a Design species with no saved width takes the cached catalog width', async () => {
+    const store = new SceneStore()
+    store.updatePersisted((draft) => {
+      draft.plants = [plant('p1', 'Prunus avium', 'Cherry', null)]
+    })
+    await act(() => setCurrentCanvasSession({
+      commands: createTestCanvasCommandSurface(),
+      queries: createTestCanvasQuerySurface({
+        scene: store.persisted,
+        speciesCache: new Map([['Prunus avium', { canonical_name: 'Prunus avium', stratum: 'high', width_max_m: 6 }]]),
+      }),
+      documents: createTestCanvasDocumentSurface(),
+      keyboard: createTestCanvasKeyboardPort(),
+    }))
+    await act(() => options().find((option) => option.dataset.speciesOption === 'Prunus avium')!.click())
+
+    expect(readPlantStampSource()?.width_max_m).toBe(6)
+  })
+
   it('opens the full catalog from its link', async () => {
     const link = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Open the full catalog')!
     await act(() => link.click())
