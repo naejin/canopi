@@ -25,7 +25,7 @@ let view: TestView
 let focusMap: Mock<CanvasFocusPort['focusMap']>
 let host: TextEntryHost | null = null
 
-function mount(): TextEntryHost {
+function mount(fromTouch = false): TextEntryHost {
   container = document.createElement('div')
   document.body.appendChild(container)
   view = createTestView({ viewport: { x: 5, y: 7, scale: 2 } })
@@ -36,6 +36,7 @@ function mount(): TextEntryHost {
     frames: view.frames,
     translate: (key) => `t:${key}`,
     focus: { focusMap },
+    openedByTouch: () => fromTouch,
   })
   return host
 }
@@ -86,6 +87,15 @@ describe('the text-entry host', () => {
 
     await nextAnimationFrame()
     expect(document.activeElement).toBe(textarea)
+  })
+
+  it('an entry opened from a touch takes focus at once, inside the tap\'s user activation, so iOS shows its keyboard (A15)', () => {
+    const entries = mount(true)
+
+    entries.open(NEW_NOTE, () => 'close')
+
+    expect(document.activeElement).toBe(entry())
+    expect(entry()!.selectionStart).toBe(0)
   })
 
   it('the entry keeps the native callout the map host turns off, so a long press selects its text (A13)', () => {

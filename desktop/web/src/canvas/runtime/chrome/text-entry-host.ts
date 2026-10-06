@@ -2,7 +2,8 @@
 //
 // Owns the note's text entry (ToolHostDeps.chrome.requestTextEntry, spec §1.4): one textarea over the map, which the host
 // opens for a tool and whose state it reads live (isOpen). One entry for a new note and a note edited in place: drawn at
-// the note's font size and line height where the note will draw, sized by autosize, its text all selected. Enter and a
+// the note's font size and line height where the note will draw, sized by autosize, its text all selected, focused on
+// the next frame, or at once when a finger opened it (A15). Enter and a
 // blur hand the text to the tool's submit, which closes the entry or keeps the same field open while its commit is
 // refused; an entry whose blur commit was refused no longer holds focus, so the press or menu that would have blurred it
 // submits it instead (submitUnfocused). Esc is the
@@ -21,6 +22,9 @@ export interface TextEntryHostOptions {
   readonly frames: ViewFrameSource
   readonly translate: (key: string) => string
   readonly focus: Pick<CanvasFocusPort, 'focusMap'>
+  /** Whether the input being handled is a finger's: its entry takes focus at once, inside the tap's user activation, or
+   *  iOS shows no keyboard (A15). */
+  readonly openedByTouch?: () => boolean
 }
 
 export interface TextEntryHost {
@@ -105,11 +109,14 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
         if (active === entry) submitActive()
       }
     })
-    requestAnimationFrame(() => {
+    const takeFocus = (): void => {
       if (active !== entry) return
       textarea.focus()
       textarea.select()
-    })
+    }
+    // A mouse or pen press opens the entry inside its pointerdown, whose own focus handling runs after: the next frame.
+    if (options.openedByTouch?.()) takeFocus()
+    else requestAnimationFrame(takeFocus)
   }
 
   function submitActive(): void {

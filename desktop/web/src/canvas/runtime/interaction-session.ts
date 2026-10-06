@@ -210,6 +210,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _storyPresented = false
   /** Routing a move made with a button held: its hover reaches the host and the tool, not the lens (today's). */
   private _buttonHeld = false
+  /** Routing a finger's input: a text entry it opens takes focus at once (A15). */
+  private _fingerInput = false
   /** Inside refreshMeasurements' ToolHost.sceneChanged(): the runtime is already redrawing. */
   private _refreshing = false
   /** The pointer of the press being routed whose capture waits for the host's admission (ToolHostDeps.capturePress). */
@@ -263,6 +265,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         frames: this._frames,
         translate: _deps.translate,
         focus,
+        openedByTouch: () => this._fingerInput,
       }), (entry) => entry.dispose())
       this._tooltip = own(createHoverTooltip(container), (tooltip) => tooltip.dispose())
       const scene = createToolScene({
@@ -498,10 +501,12 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (this._disposed) return
     // Every bit the pointer reports, a pen's eraser that no press takes included, as today's lens read it.
     this._buttonHeld = input.kind === 'move' && input.buttonMask !== 0
+    this._fingerInput = (input.kind === 'down' || input.kind === 'move' || input.kind === 'up') && input.pointer === 'touch'
     try {
       this._dispatch(input)
     } finally {
       this._buttonHeld = false
+      this._fingerInput = false
     }
   }
 

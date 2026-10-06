@@ -186,4 +186,17 @@ describe('SceneInteractionSession: touch', () => {
     expect(draftCorners()).toBe(2)
     session.dispose()
   })
+
+  it('a Text tap with a finger opens the note field focused at once, within the tap, so iOS shows its keyboard (A15)', () => {
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('text')
+
+    touchDown({ x: 120, y: 90 })
+    touchUp({ x: 121, y: 90 })
+
+    const field = container.querySelector<HTMLTextAreaElement>('[data-canvas-text-entry]')
+    expect(field).not.toBeNull()
+    expect(document.activeElement).toBe(field)
+    session.dispose()
+  })
 })
