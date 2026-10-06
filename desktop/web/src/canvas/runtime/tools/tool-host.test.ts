@@ -123,6 +123,28 @@ describe('ToolHost', () => {
       expect(h.renderer.lastDraft()?.shapes).toEqual([ghost])
     })
 
+    it('a plane change under a still pointer on the map keeps the tool\'s ghost, re-emitted at the pointer', () => {
+      const hovers: WorldPoint[] = []
+      const stamp: StubTool = stubTool('object-stamp', {
+        gesture: (g) => {
+          if (g.kind !== 'hover') return 'pass'
+          hovers.push(g.point.world)
+          stamp.ctx().effects.setDraft({ shapes: [{ kind: 'polyline', points: [g.point.world, g.point.world], style: { token: 'draft', widthPx: 1 } }] })
+          return 'handled'
+        },
+      })
+      useStubTools(stamp)
+      const h = harness({ tool: 'object-stamp' })
+
+      h.hover({ x: 100, y: 100 })
+      h.reorigin({ lon: 0.01, lat: 0.005 })
+      h.advance(0)
+
+      const at = h.world({ x: 100, y: 100 })
+      expect(hovers.at(-1)).toEqual(at)
+      expect(h.renderer.lastDraft()?.shapes).toEqual([{ kind: 'polyline', points: [at, at], style: { token: 'draft', widthPx: 1 } }])
+    })
+
     it('under LEGACY a Polygon Shift point snaps, then constrains', () => {
       const origin = { x: 0, y: 0 }
       const polygon = stubTool('polygon', { constraint: () => ({ kind: 'direction', origin, stepDeg: 45 }) })

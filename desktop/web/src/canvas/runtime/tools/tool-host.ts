@@ -6,8 +6,8 @@
 // press first commits the nudge series and, as today's pointerdown, closes the menu and moves focus to the map. A drag
 // starts at the press's world point, and every camera frame re-emits the live drag or the resting pointer, which a
 // pointer pan moves (plan §1, exception 1). It holds re-origin while a press, a tool transient or the text entry is open,
-// and a plane change hides the tool's draft until the next hover, so no tool re-projects a world point it keeps (spec
-// §4.19). The text entry's state is the chrome's, read live. It owns the passive
+// and a plane change with no pointer resting on the map hides the tool's draft until the next hover, so no tool
+// re-projects a world point it keeps (spec §4.19). The text entry's state is the chrome's, read live. It owns the passive
 // hover, the selection decorations, the arrow-nudge series, transient history and the Esc queries, and merges the
 // tool's draft with its decorations and the drop preview for the renderer. One drop route serves every tool (spec §1.4
 // "Drops"): a species drop places a plant with Place plants' placement, a saved stamp with the saved stamp's, then arms
@@ -177,7 +177,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let pressCommitsNote = false
   /** The tool's draft is hidden until the pointer next hovers or presses over the map: a panel drag passed over the map, whose
    *  drop preview replaces it (today's one preview element, which a dragover took over and a pointermove gave back), or a
-   *  re-origin moved the plane under the world points it was drawn at (spec §4.19). */
+   *  re-origin with no pointer resting on the map moved the plane under the world points it was drawn at (spec §4.19). */
   let draftHidden = false
   /** What a drop would place, while a panel drag is over the map: a species' band cue or a saved stamp's ghosts. */
   let dropPreview: readonly DraftShape[] | null = null
@@ -1021,10 +1021,11 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function onFrame(next: ViewFrame): void {
     if (disposed) return
     // A plane change (a re-origin, which waits while a press, a transient or the text entry holds it) leaves a ghost's
-    // world point in the old plane: no tool re-projects it, so the ghost hides until the next hover.
+    // world point in the old plane: no tool re-projects it. Under a still pointer on the map the re-emitted hover below
+    // redraws it in the new plane; with none it hides until the next hover.
     if (next.view.planeRevision !== planeRevision) {
       planeRevision = next.view.planeRevision
-      hideDraftUntilHover()
+      if (!restingPointer()) hideDraftUntilHover()
     }
     if (next.mode !== mode) {
       mode = next.mode
@@ -1052,11 +1053,16 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       deliverDrag(tool, gesture, 'drag-move')
       return true
     }
-    const still = lastHover
-    // A pointer pan may have carried the resting pointer past the map's edge.
-    if (!still || !insideScreen(still.screen, frame().view.screen)) return false
+    const still = restingPointer()
+    if (!still) return false
     deliverHover(tool, still.screen, still.mods, still.pointer)
     return true
+  }
+
+  /** The last hover while it rests on the map in site mode; a pointer pan may have carried it past the map's edge. */
+  function restingPointer(): StillPointer | null {
+    const still = lastHover
+    return frame().mode === 'site' && still && insideScreen(still.screen, frame().view.screen) ? still : null
   }
 
   // ── Menus ────────────────────────────────────────────────────────────────────────────────────────────────────────
