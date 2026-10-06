@@ -11,7 +11,7 @@ import { createTestCanvasCommandSurface, createTestCanvasRuntimeSurfaces } from 
 import { createTestCanvasQuerySurface, createTestViewReadSurface } from './support/canvas-query-surface'
 import { createTestView, type TestView } from './support/test-view'
 
-import { CanvasOverview } from '../components/canvas/CanvasOverview'
+import { CanvasOverview, OverviewNotice } from '../components/canvas/CanvasOverview'
 
 describe('CanvasOverview', () => {
   let container: HTMLDivElement
@@ -44,7 +44,7 @@ describe('CanvasOverview', () => {
       commands: createTestCanvasCommandSurface({ viewport: { returnToDesign } }),
     }))
 
-    await act(async () => render(<CanvasOverview />, container))
+    await act(async () => render(<><OverviewNotice /><CanvasOverview /></>, container))
     const notice = container.querySelector('[data-overview-notice]')!
     expect(notice.getAttribute('role')).toBe('status')
     expect(notice.textContent).toContain('Zoom in to edit. Plants are hidden at this scale.')
@@ -65,7 +65,7 @@ describe('CanvasOverview', () => {
       commands: createTestCanvasCommandSurface({ viewport: { returnToDesign } }),
     }))
 
-    await act(async () => render(<CanvasOverview />, container))
+    await act(async () => render(<><OverviewNotice /><CanvasOverview /></>, container))
     expect(container.textContent).toContain('Zoom in to edit')
     expect(container.querySelector('[data-overview-pin]')).toBeNull()
     const returnButton = Array.from(container.querySelectorAll('button'))
@@ -83,7 +83,7 @@ describe('CanvasOverview', () => {
       },
     }))
 
-    await act(async () => render(<CanvasOverview />, container))
+    await act(async () => render(<><OverviewNotice /><CanvasOverview /></>, container))
     const pin = container.querySelector<HTMLElement>('[data-overview-pin]')!
     expect([pin.style.left, pin.style.top]).toEqual(['123px', '45px'])
 

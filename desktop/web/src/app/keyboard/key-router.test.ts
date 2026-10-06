@@ -469,6 +469,24 @@ describe('key router', () => {
     expect(run).not.toHaveBeenCalled()
   })
 
+  it('en-US Shift+= types + and zooms one step in on the focused map (H20)', () => {
+    install()
+    host.focus()
+    expect(press({ key: '+', code: 'Equal', shiftKey: true }, host).defaultPrevented).toBe(true)
+    expect(fake.port.command).toHaveBeenCalledExactlyOnceWith({ kind: 'zoom-step', direction: 1 })
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('Shift+2 zooms to the selection by the digit key, whatever the layout types (H21, H22)', () => {
+    install()
+    host.focus()
+    // H21: en-US Shift+2 types @, so the digit row names it.
+    expect(press({ key: '@', code: 'Digit2', shiftKey: true }, host).defaultPrevented).toBe(true)
+    // H22: French AZERTY Shift+é types 2.
+    expect(press({ key: '2', code: 'Digit2', shiftKey: true }, host).defaultPrevented).toBe(true)
+    expect(run.mock.calls).toEqual([['view.zoomToSelection'], ['view.zoomToSelection']])
+  })
+
   it('a Mac Cmd+←/→ away from the map runs nothing and never reaches the browser, which would go Back (H17)', () => {
     install({ platform: { os: 'mac', gestureEvents: false } })
     const zoomIn = document.createElement('button')

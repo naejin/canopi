@@ -24,7 +24,7 @@ vi.mock('../maplibre/shared-scene-renderer', async (importOriginal) => {
 vi.mock('../web/WebCanvasToolbar', () => ({ WebCanvasToolbar: () => null }))
 vi.mock('../components/canvas/InspectionLens', () => ({ InspectionLens: () => null }))
 vi.mock('../components/canvas/SpeciesFocusChip', () => ({ SpeciesFocusChip: () => null }))
-vi.mock('../components/canvas/CanvasOverview', () => ({ CanvasOverview: () => null }))
+vi.mock('../components/canvas/CanvasOverview', () => ({ CanvasOverview: () => null, OverviewNotice: () => null }))
 vi.mock('../components/canvas/ZoomControls', () => ({ ZoomControls: () => null }))
 
 class InertResizeObserver {

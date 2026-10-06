@@ -168,7 +168,8 @@ describe('ZoomControls', () => {
     expect(zoomIn).toHaveBeenCalledOnce()
     expect(zoomOut).toHaveBeenCalledOnce()
     expect(zoomToFit).toHaveBeenCalledOnce()
-    expect(button('Fit to Design').getAttribute('aria-keyshortcuts')).toBe('Shift+F Control+0 Meta+0')
+    // Home fits too, with the map focused.
+    expect(button('Fit to Design').getAttribute('aria-keyshortcuts')).toBe('Shift+F Control+0 Meta+0 Home')
   })
 
   it('shows the world scale in overview and disables exhausted navigation', async () => {

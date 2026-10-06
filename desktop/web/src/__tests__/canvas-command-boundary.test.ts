@@ -176,6 +176,7 @@ describe('Canvas Command Projection boundaries', () => {
       'view.zoomIn',
       'view.zoomOut',
       'view.fitToDesign',
+      'view.zoomToSelection',
       'view.resetNorth',
       'view.turnViewLeft',
       'view.turnViewRight',

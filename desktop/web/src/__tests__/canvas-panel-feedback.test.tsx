@@ -55,6 +55,7 @@ describe('CanvasPanel basemap feedback', () => {
   beforeEach(() => {
     ;(globalThis as Record<string, unknown>).ResizeObserver = class {
       observe() {}
+      unobserve() {}
       disconnect() {}
     }
     container = document.createElement('div')

@@ -30,7 +30,7 @@ import { ZoomControls } from '../components/canvas/ZoomControls'
 import { InspectionLens } from '../components/canvas/InspectionLens'
 import { InspectionStatus } from '../components/canvas/InspectionStatus'
 import { SpeciesFocusChip } from '../components/canvas/SpeciesFocusChip'
-import { CanvasOverview } from '../components/canvas/CanvasOverview'
+import { CanvasOverview, OverviewNotice } from '../components/canvas/CanvasOverview'
 import { LayerPanel, type LayerPanelActions } from '../components/canvas/LayerPanel'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import {
@@ -110,7 +110,8 @@ describe('canvas icon-only buttons', () => {
 
   it('labels every icon-only tool and history button on the rail with a tooltip and shortcut hint', async () => {
     await mount(<ToolRail projection={workspaceCanvasCommandProjection.value} showNames={false} />)
-    expectIconButtonsFollowRules(container, 13)
+    // Ten tools (Pan is off the main rail), Undo and Redo.
+    expectIconButtonsFollowRules(container, 12)
   })
 
   it('labels the zoom buttons with tooltips and their View shortcuts', async () => {
@@ -161,7 +162,7 @@ describe('canvas icon-only buttons', () => {
   })
 
   it('keeps text canvas controls free of unlabeled icon buttons', async () => {
-    await mount(<><SpeciesFocusChip /><CanvasOverview /></>)
+    await mount(<><SpeciesFocusChip /><OverviewNotice /><CanvasOverview /></>)
     expect(container.querySelectorAll('button').length).toBeGreaterThan(0)
     expectIconButtonsFollowRules(container, 0)
   })
