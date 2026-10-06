@@ -22,7 +22,6 @@ import { SidePanelDock } from '../components/shared/SidePanelDock'
 import { InspectionLens } from '../components/canvas/InspectionLens'
 import type { CanvasInspectionHandle } from '../canvas/inspection'
 import { framingRect } from '../canvas/runtime/view/fit'
-import { phoneLayout } from '../app/shell/phone-layout'
 import type { ScenePersistedState } from '../canvas/runtime/scene'
 import { plantFinderMapMatches, zoomToPlantFinderMatches } from '../app/plant-finder/map-matches'
 import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
@@ -217,7 +216,6 @@ describe('visible map area', () => {
     const releaseArea = registerMapArea(area)
     const container = document.createElement('div')
     document.body.appendChild(container)
-    phoneLayout.value = 'portrait'
     try {
       await act(async () => render(<InspectionLens canvasRef={{ current: element(WINDOW) }} />, container))
       await act(async () => container.querySelector<HTMLButtonElement>('[data-inspection-launcher]')!.click())
@@ -226,9 +224,52 @@ describe('visible map area', () => {
       expect(visibleMapFrame.value.left).toBe(0)
       expect(area.style.getPropertyValue('--map-inset-left')).toBe('0px')
     } finally {
-      phoneLayout.value = null
       render(null, container)
       container.remove()
+      releaseArea()
+    }
+  })
+
+  it.each([
+    // An iPad held upright (768 x 1024, no phone layout): the named tool rail, the panel rail, and the compact lens at
+    // 248..638 would leave 66 px of map.
+    { name: 'a 768 px window', window: { left: 0, top: 0, width: 768, height: 1024 }, right: { left: 704, top: 72, width: 52, height: 420 }, expand: false },
+    // Desktop's default window with the dock open: the expanded lens at 248..868 meets the dock at 824.
+    { name: 'a 1280 px window beside the open dock', window: WINDOW, right: DOCK, expand: true },
+  ])('in $name the open lens, which would leave under 360 px of map, leaves Fit, Home and the chips to the rails', async ({ window: map, right, expand }) => {
+    const view: CanvasInspectionHandle = {
+      state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true, frame: { width: 390, height: 350 }, plants: [] }),
+      sourceQuad: signal(null),
+      inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panByScreen: vi.fn(), zoomBy: vi.fn(),
+      highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
+    }
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ attachInspectionTo: () => view }) }))
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.tagName === 'SECTION' && this.hasAttribute('data-expanded')) {
+        return rect({ left: 248, top: 72, width: this.dataset.expanded === 'true' ? 620 : 390, height: 420 })
+      }
+      return rect(boxes.get(this) ?? { left: 0, top: 0, width: 0, height: 0 })
+    })
+    const area = element(map)
+    const releaseArea = registerMapArea(area)
+    const releaseRail = registerMapOccluder(element(TOOL_RAIL), 'left')
+    const releaseRight = registerMapOccluder(element(right), 'right')
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    try {
+      await act(async () => render(<InspectionLens canvasRef={{ current: element(map) }} />, container))
+      const before = visibleMapFrame.value
+      await act(async () => container.querySelector<HTMLButtonElement>('[data-inspection-launcher]')!.click())
+      if (expand) await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand lens"]')!.click())
+      refreshVisibleMapArea()
+      expect(container.querySelector(`section[data-expanded="${expand}"]`)).not.toBeNull()
+      expect(visibleMapFrame.value).toEqual(before)
+      expect(area.style.getPropertyValue('--map-inset-left')).toBe('236px')
+    } finally {
+      render(null, container)
+      container.remove()
+      releaseRight()
+      releaseRail()
       releaseArea()
     }
   })

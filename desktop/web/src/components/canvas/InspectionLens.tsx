@@ -9,7 +9,7 @@ import { detectPlatform, modKeyIsCmd } from '../../canvas/runtime/input/platform
 import type { CanvasDocumentSurface, CanvasQuerySurface } from '../../canvas/runtime/runtime'
 import { currentCanvasDocumentSurface, currentCanvasQuerySurface } from '../../canvas/session'
 import { modKeyName } from '../../app/shell-commands/shortcut-text'
-import { phoneLayout } from '../../app/shell/phone-layout'
+import { toolRailCrowdsMap, visibleMapFrame } from '../../app/shell/visible-map-area'
 import { t } from '../../i18n'
 import { ControlIcon } from '../shared/ControlIcon'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
@@ -62,9 +62,17 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
   const panel = useRef<HTMLElement>(null)
   const handle = useSignal<CanvasInspectionHandle | null>(null)
   const failed = useSignal(false)
-  // The open panel covers the map's left edge: Home, Fit and framing land right of it (canopi-f47t.28). Not on a phone,
-  // where it spans nearly the whole width and would push the chips and credits off screen.
-  useMapOccluder(panel, 'left', phoneLayout.value === null)
+  // The open panel covers the map's left edge: Home, Fit and framing land right of it (canopi-f47t.28), when it leaves
+  // the labelled tool rail's least map width before the right chrome. With less (a phone, a tablet, a window beside the
+  // open dock) it stays out, or the chips would squeeze off screen and framing would fall back to the whole window.
+  // Reads only the frame's width and right edge (the map fills the window), so its own cover cannot feed back.
+  const frame = visibleMapFrame.value
+  const [covers, setCovers] = useState(false)
+  useLayoutEffect(() => {
+    const edge = panel.current?.getBoundingClientRect().right
+    setCovers(edge !== undefined && !toolRailCrowdsMap(frame, edge))
+  }, [frame.width, frame.right, expanded])
+  useMapOccluder(panel, 'left', covers)
   useLayoutEffect(() => {
     if (!preview.current) return
     let view: CanvasInspectionHandle
