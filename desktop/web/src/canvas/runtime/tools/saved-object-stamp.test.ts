@@ -499,12 +499,12 @@ describe('saved object stamp tool', () => {
       const at = { x: 100, y: 120 }
 
       expect(canPlaceSavedObjectStamp(scene, GUILD)).toBe(true)
-      const preview = savedObjectStampGhostShapes(scene, GUILD, at)
+      const preview = savedObjectStampGhostShapes(scene, GUILD, at, 0)
       expect(ghostsIn(preview).map((shape) => shape.opacity)).toEqual([0.62, 0.68])
       expect(templateOf(ghostsIn(preview)[0]).plants[0]!.entity.position).toEqual(at)
 
       const onCommitted = vi.fn()
-      placeSavedObjectStamp(h.edits, scene, GUILD, at, { onCommitted })
+      placeSavedObjectStamp(h.edits, scene, GUILD, at, { rotationDeg: 0, onCommitted })
 
       expect(onCommitted).toHaveBeenCalledOnce()
       expect(commits).toEqual(['interaction-saved-object-stamp'])
@@ -521,9 +521,9 @@ describe('saved object stamp tool', () => {
       expect(canPlaceSavedObjectStamp(scene, empty)).toBe(false)
       lockLayer(h, 'zones')
       expect(canPlaceSavedObjectStamp(scene, LOCKED_ZONE_ONLY)).toBe(false)
-      expect(savedObjectStampGhostShapes(scene, LOCKED_ZONE_ONLY, { x: 10, y: 10 })).toBeNull()
+      expect(savedObjectStampGhostShapes(scene, LOCKED_ZONE_ONLY, { x: 10, y: 10 }, 0)).toBeNull()
       const onCommitted = vi.fn()
-      placeSavedObjectStamp(h.edits, scene, LOCKED_ZONE_ONLY, { x: 10, y: 10 }, { onCommitted })
+      placeSavedObjectStamp(h.edits, scene, LOCKED_ZONE_ONLY, { x: 10, y: 10 }, { rotationDeg: 0, onCommitted })
       expect(onCommitted).not.toHaveBeenCalled()
       h.store.updatePersisted((draft) => {
         draft.layers = draft.layers.map((layer) => layer.name === 'plants' ? { ...layer, visible: false } : layer)

@@ -177,7 +177,7 @@ export function savedObjectStampGhostShapes(
   scene: StampScene,
   stamp: SavedObjectStampPayload,
   at: WorldPoint,
-  rotationDeg = 0,
+  rotationDeg: number,
 ): DraftShape[] | null {
   if (!canPlaceSavedObjectStamp(scene, stamp)) return null
   return stampGhostShapes(stampTemplateAt(savedObjectStampArrangementTemplate(stamp), stamp.anchor, at, rotationDeg))
@@ -193,11 +193,11 @@ export function placeSavedObjectStamp(
   scene: StampScene,
   stamp: SavedObjectStampPayload,
   at: WorldPoint,
-  options: { readonly rotationDeg?: number; readonly onCommitted: () => void },
+  options: { readonly rotationDeg: number; readonly onCommitted: () => void },
 ): void {
   if (!canPlaceSavedObjectStamp(scene, stamp)) return
   createSceneArrangementPlacement({ sceneEdits: edits }).place({
-    template: stampTemplateAt(savedObjectStampArrangementTemplate(stamp), stamp.anchor, at, options.rotationDeg ?? 0),
+    template: stampTemplateAt(savedObjectStampArrangementTemplate(stamp), stamp.anchor, at, options.rotationDeg),
     translateBy: ORIGIN,
     historyType: 'interaction-saved-object-stamp',
     onCommitted: options.onCommitted,

@@ -52,7 +52,7 @@ export function rotateHandle(
   selection: CanvasDesignObjectSelectionModel,
   view: ToolView,
   translate: ToolContext['translate'],
-  deltaDeg: number | null = null,
+  deltaDeg: number | null,
 ): ToolHandle | null {
   if (!isRotatableSelection(selection)) return null
   const hull = selectionScreenHull(scene, selection, view)
