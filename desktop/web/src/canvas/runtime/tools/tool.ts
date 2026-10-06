@@ -150,10 +150,10 @@ export interface ToolScene {
   readonly persisted: Readonly<ScenePersistedState>
   hitAt(world: WorldPoint, filter?: HitFilter): HitTarget | null
   hitInQuad(quad: WorldQuad, filter?: HitFilter): readonly HitTarget[]
-  nearestPlant(world: WorldPoint, excluding?: ReadonlySet<string>): { readonly plant: ScenePlantEntity; readonly distanceM: number } | null
-  /** How the scene presents a plant (or a species by canonical name) now: the name in today's order (localised, stored common,
+  nearestPlant(world: WorldPoint): { readonly plant: ScenePlantEntity; readonly distanceM: number } | null
+  /** How the scene presents a plant now: the name in today's order (localised, stored common,
    *  canonical), the display colour and the symbol radius in CSS px. For tool-card names, row glyphs and the source ring. */
-  plantPresentation(plant: ScenePlantEntity | string): { readonly commonName: string; readonly color: string; readonly radiusPx: number } | null
+  plantPresentation(plant: ScenePlantEntity): { readonly commonName: string; readonly color: string; readonly radiusPx: number }
   isLayerOpenForCreation(layer: SceneLayerKind): boolean
   selection(): SceneDesignObjectSelection
   selectionModel(): SelectionReadModel         // read per call, not cached (as today)

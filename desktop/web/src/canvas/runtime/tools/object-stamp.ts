@@ -148,8 +148,7 @@ export function createObjectStampTool(): CanvasTool {
     const source = objectStampSource
     if (!source) return null
     const { scene } = context()
-    const plantName = (plant: ScenePlantEntity): string =>
-      scene.plantPresentation(plant)?.commonName ?? plant.commonName ?? plant.canonicalName
+    const plantName = (plant: ScenePlantEntity): string => scene.plantPresentation(plant).commonName
     if (source.kind === 'plant') {
       return { kind: 'plant', name: plantName(source.plant), plants: 1, species: 1 }
     }

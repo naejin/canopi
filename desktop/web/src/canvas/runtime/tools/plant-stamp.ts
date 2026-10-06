@@ -194,9 +194,9 @@ function previewShapes(ctx: ToolContext, species: PlantStampSourceInput, world: 
   const plant = plantEntityFromStampSource(scene.persisted, species, world, PREVIEW_PLANT_ID)
   const nearest = scene.nearestPlant(world)
   if (nearest && view.screenDistance(world, nearest.plant.position) <= NEAREST_PLANT_MAX_SCREEN_PX) {
-    const name = scene.plantPresentation(nearest.plant)?.commonName ?? nearest.plant.commonName ?? nearest.plant.canonicalName
+    const name = scene.plantPresentation(nearest.plant).commonName
     // Below the symbol, so a close neighbour's label never hides it: the symbol's radius among the scene's plants (crowded).
-    const symbolRadiusPx = scene.plantPresentation(plant)?.radiusPx ?? 0
+    const symbolRadiusPx = scene.plantPresentation(plant).radiusPx
     const [line, label] = distanceGuideShapes(
       world,
       nearest.plant.position,

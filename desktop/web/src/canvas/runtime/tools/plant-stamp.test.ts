@@ -3,6 +3,7 @@ import {
   createToolHarness,
   createToolSceneSource,
   plantEntity,
+  sceneStoreWith,
   useStubTools,
   type ToolHarness,
   type ToolHarnessOptions,
@@ -12,12 +13,20 @@ import type { PlantStampSourceInput } from '../../plant-stamp-source'
 import type { WorldPoint } from '../view/types'
 import type { DraftShape } from './draft'
 import { createPlantStampTool, placePlantFromSpecies } from './plant-stamp'
+import { plantEntityFromStampSource } from './tool-actions'
 import { createToolScene } from './tool-host'
 import '../../../__tests__/support/camera-tolerance'
 
 vi.mock('./registry', () => ({ TOOL_REGISTRY: {} }))
 
 const APPLE: PlantStampSourceInput = { canonical_name: 'Malus domestica', common_name: 'Apple', stratum: null, width_max_m: 6 }
+
+/** The species' own symbol radius in CSS px: the plant a click would place, with no plant near it to crowd it. */
+function uncrowdedRadiusPx(species: PlantStampSourceInput, pixelsPerMetre: number): number {
+  const empty = sceneStoreWith({})
+  const plant = plantEntityFromStampSource(empty.persisted, species, { x: 0, y: 0 }, 'probe')
+  return createToolScene(createToolSceneSource(empty, { pixelsPerMetre: () => pixelsPerMetre })).plantPresentation(plant).radiusPx
+}
 
 const harnesses: ToolHarness[] = []
 
@@ -185,7 +194,7 @@ describe('Place plants tool', () => {
         kind: 'ellipse', center: at, radiusX: 3, radiusY: 3, rotationDeg: 0, style: { token: 'draft', widthPx: 1.5, dash: [6, 5] },
       }])
       expect(shapesOf(h, 'polyline')).toEqual([{ kind: 'polyline', points: [at, { x: 10, y: 10 }], style: { token: 'draft', widthPx: 1.5, dash: [4, 4] } }])
-      const radiusPx = createToolScene(createToolSceneSource(h.store, { pixelsPerMetre: () => 10 })).plantPresentation('Malus domestica')!.radiusPx
+      const radiusPx = uncrowdedRadiusPx(APPLE, 10)
       expect(shapesOf(h, 'label')).toEqual([
         { kind: 'label', anchor: { x: 13, y: 11 }, offsetPx: { x: 0, y: 0 }, text: 'Mature width up to 6 m', tone: 'hint' },
         { kind: 'label', anchor: at, offsetPx: { x: 0, y: Math.max(radiusPx, 6) + 16 }, text: '5 m to Pear', tone: 'measure' },
@@ -259,8 +268,7 @@ describe('Place plants tool', () => {
     it('sets the nearest plant\'s label below the symbol at its crowded radius', () => {
       // At 200 px/m the species' own radius is 6.3 px; 5 cm from a plant the symbol crowds to 4.2 px, under the 6 px floor.
       const h = stampHarness(APPLE, { scale: 200, scene: { plants: [plantEntity('pear', 'Pyrus communis', { x: 0.55, y: 0.5 })] } })
-      const scene = createToolScene(createToolSceneSource(h.store, { pixelsPerMetre: () => 200 }))
-      expect(scene.plantPresentation('Malus domestica')!.radiusPx).toBeGreaterThan(6)
+      expect(uncrowdedRadiusPx(APPLE, 200)).toBeGreaterThan(6)
 
       h.hover({ x: 100, y: 100 })
 

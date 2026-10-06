@@ -52,9 +52,8 @@ export function selectionScreenHull(scene: ToolScene, selection: CanvasDesignObj
       }
       case 'plant': {
         const plant = persisted.plants.find((entry) => entry.id === target.id)
-        const radiusPx = plant ? scene.plantPresentation(plant)?.radiusPx : undefined
-        if (!plant || radiusPx === undefined) return
-        const radius = radiusPx / pixelsPerMetreAt(plant.position)
+        if (!plant) return
+        const radius = scene.plantPresentation(plant).radiusPx / pixelsPerMetreAt(plant.position)
         span(plant.position, radius, radius)
         return
       }

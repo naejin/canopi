@@ -103,7 +103,7 @@ export function createPlantRowTool(): CanvasTool {
     const start = picked.plant.position
     // The ring sits at the radius the scene presents the plant with now (the plant in the scene, for its crowding).
     const presented = tool.scene.persisted.plants.find((plant) => plant.id === picked.sourceId) ?? picked.plant
-    const radiusPx = tool.scene.plantPresentation(presented)?.radiusPx ?? 0
+    const radiusPx = tool.scene.plantPresentation(presented).radiusPx
     const shapes: DraftShape[] = [{ kind: 'circle-px', center: start, radiusPx, style: SOURCE_RING_STROKE }]
     const end = endpoint
     if (!end) return shapes
@@ -169,10 +169,10 @@ export function createPlantRowTool(): CanvasTool {
     source = {
       sourceId: plant.id,
       plant: { ...plant, pinnedName: false, position: { ...plant.position } },
-      label: presentation?.commonName ?? plant.commonName ?? plant.canonicalName,
+      label: presentation.commonName,
       glyph: {
         symbol: resolvePlantSymbolForPlant(plant, persisted.plantSpeciesSymbols),
-        color: presentation?.color ?? plant.color ?? '',
+        color: presentation.color,
       },
     }
     intervalText = formatPlantSpacingIntervalInput(tool.settings.plantSpacingIntervalM())

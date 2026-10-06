@@ -57,29 +57,21 @@ export function createToolScene(source: ToolSceneSource): ToolScene {
         source.selection(),
       ).map((target) => ({ kind: 'object', target }))
     },
-    nearestPlant(world: WorldPoint, excluding?: ReadonlySet<string>) {
+    nearestPlant(world: WorldPoint) {
       const scene = persisted()
       if (scene.layers.find((layer) => layer.name === 'plants')?.visible === false) return null
       let best: { plant: ScenePlantEntity; distanceM: number } | null = null
       for (const plant of scene.plants) {
-        if (excluding?.has(plant.id)) continue
         const distanceM = Math.hypot(plant.position.x - world.x, plant.position.y - world.y)
         if (!best || distanceM < best.distanceM) best = { plant, distanceM }
       }
       return best
     },
-    plantPresentation(plant: ScenePlantEntity | string) {
-      const entity = typeof plant === 'string' ? speciesPlant(plant) : plant
-      if (!entity) return null
-      const scene = persisted()
+    plantPresentation(plant: ScenePlantEntity) {
       const context = plantContext(source.pixelsPerMetre())
-      const entry = buildPlantPresentationEntries(
-        [entity],
-        { ...context, plants: typeof plant === 'string' ? [] : scene.plants },
-        new Set(),
-      )[0]!
+      const entry = buildPlantPresentationEntries([plant], { ...context, plants: persisted().plants }, new Set())[0]!
       return {
-        commonName: context.localizedCommonNames?.get(entity.canonicalName) ?? entity.commonName ?? entity.canonicalName,
+        commonName: context.localizedCommonNames?.get(plant.canonicalName) ?? plant.commonName ?? plant.canonicalName,
         color: entry.color,
         radiusPx: entry.radiusScreenPx,
       }
@@ -87,24 +79,5 @@ export function createToolScene(source: ToolSceneSource): ToolScene {
     isLayerOpenForCreation: (layer) => source.isLayerOpenForCreation(layer),
     selection: () => source.selection(),
     selectionModel: () => source.selectionModel(),
-  }
-}
-
-/** A species the scene has not placed: its presentation as a plant with nothing stored beyond its name. */
-function speciesPlant(canonicalName: string): ScenePlantEntity | null {
-  if (canonicalName.length === 0) return null
-  return {
-    kind: 'plant',
-    id: '',
-    locked: false,
-    canonicalName,
-    commonName: null,
-    color: null,
-    canopySpreadM: null,
-    position: { x: 0, y: 0 },
-    rotationDeg: null,
-    notes: null,
-    plantedDate: null,
-    quantity: 1,
   }
 }

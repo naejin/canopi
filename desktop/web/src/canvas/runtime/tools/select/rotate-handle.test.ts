@@ -166,7 +166,7 @@ describe('Select rotation handle', () => {
       const h = harness({ camera: { bearingDeg: 45 }, scene: { zones: [bed], plants: [plantEntity('apple', 'Malus domestica', { x: 30, y: -60 })] } })
       h.select({ kind: 'zone', id: 'bed' }, { kind: 'plant', id: 'apple' })
       const plant = h.store.persisted.plants[0]!
-      const radiusPx = createToolScene(createToolSceneSource(h.store)).plantPresentation(plant)!.radiusPx
+      const radiusPx = createToolScene(createToolSceneSource(h.store)).plantPresentation(plant).radiusPx
       const centre = h.view.view().worldToScreen(plant.position)
       const corners = getRectangularZoneCorners(bed)!.map((corner) => h.view.view().worldToScreen(corner))
       expect(centre.y - radiusPx).toBeLessThan(Math.min(...corners.map((corner) => corner.y)))
