@@ -821,12 +821,13 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     return release(tool, () => {
       live = null
       try {
-        const point = pointAt(g.at, g.mods, g.pointer, gesture.handle)
         if (gesture.kind === 'handle') {
+          // A handle tap ends where it was pressed (A9): the jitter within the slop moves, turns or reshapes nothing.
           callTool(() => tool.gesture({
-            kind: 'handle-drag', phase: 'end', handle: gesture.handle!, point, start: gesture.start,
+            kind: 'handle-drag', phase: 'end', handle: gesture.handle!, point: gesture.start, start: gesture.start,
           }))
         } else {
+          const point = pointAt(g.at, g.mods, g.pointer)
           callTool(() => tool.gesture({ kind: 'tap', point, hit: hitAt(point.world), clickCount: g.clickCount }))
         }
       } finally {

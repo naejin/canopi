@@ -4748,4 +4748,45 @@ describe('SceneInteractionSession', () => {
 
     expect(setHoveredTarget).toHaveBeenCalledWith(null)
   })
+
+  it('a handle pressed and moved 2 px with a mouse, or 7 px with a finger, records no history (A9)', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [{ x: 20, y: 80 }, { x: 120, y: 80 }, { x: 120, y: 140 }, { x: 20, y: 140 }])]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
+    const session = createTestSession(deps)
+    session.setTool('select')
+    deps.setSelection([zoneTarget('zone-1')])
+    session.refreshMeasurements()
+    const before = store.persisted.zones[0]
+    /** The handle's box centre, whatever its size. */
+    const centre = (element: HTMLElement): ScenePoint => ({
+      x: Number.parseFloat(element.style.left) + Number.parseFloat(element.style.width) / 2,
+      y: Number.parseFloat(element.style.top) + Number.parseFloat(element.style.height) / 2,
+    })
+    let time = 0
+    /** A still press on `handle` that wanders `jitterPx` to the right before it lifts there, within its pointer's slop. */
+    const jitteredTap = (handle: () => HTMLElement, jitterPx: number, pointerType: 'mouse' | 'touch') => {
+      const element = handle()
+      const at = centre(element)
+      const moved = { x: at.x + jitterPx, y: at.y }
+      time += 1000
+      const options = { pointerType, pointerId: pointerType === 'touch' ? 7 : 1, isPrimary: true }
+      events.pointerDown(at, { ...options, button: 0, buttons: 1, target: element, timeStamp: time })
+      events.pointerMove(moved, { ...options, button: -1, buttons: 1, timeStamp: time + 20 })
+      events.pointerUp(moved, { ...options, button: 0, buttons: 0, timeStamp: time + 40 })
+    }
+    const corner = () => zoneControlPoint(container, 'rect-corner', 1)!
+    const rotate = () => rotationHandle(container)!
+
+    jitteredTap(corner, 2, 'mouse')
+    jitteredTap(rotate, 2, 'mouse')
+    jitteredTap(corner, 7, 'touch')
+    jitteredTap(rotate, 7, 'touch')
+
+    expect(store.persisted.zones[0]).toEqual(before)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    session.dispose()
+  })
 })
