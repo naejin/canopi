@@ -143,16 +143,16 @@ describe('the interaction session', () => {
     events.keyDown({ key: 'ArrowRight', target: container })
     expect(nudge.nudgeSelected).toHaveBeenCalledOnce()
 
-    // A right press never reaches the host as a gesture, yet it commits the nudge series.
+    // A right press never reaches the host as a gesture, yet it commits the nudge series and, like any press, moves focus to the map (A33).
     events.pointerDown({ x: 10, y: 10 }, { button: 2 })
     events.pointerUp({ x: 10, y: 10 }, { button: 2 })
     expect(nudge.endNudge).toHaveBeenCalledExactlyOnceWith()
-    expect(focus.focusMap).not.toHaveBeenCalled()
+    expect(focus.focusMap).toHaveBeenCalledOnce()
 
     // A middle press pans, and still moves focus to the map.
     events.pointerDown({ x: 10, y: 10 }, { button: 1 })
     events.pointerUp({ x: 10, y: 10 }, { button: 1 })
-    expect(focus.focusMap).toHaveBeenCalledExactlyOnceWith()
+    expect(focus.focusMap).toHaveBeenCalledTimes(2)
     expect(select.count('press')).toBe(0)
 
     order.length = 0
