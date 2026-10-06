@@ -5,7 +5,7 @@ Read the [design system](../system.md) first. Decisions: [ADR 0015](../../docs/a
 ## Moving the view
 
 - Left click and left drag always select or draw; a left drag never pans, except with the Pan tool. Shift + drag is never box zoom.
-- Right-drag, middle-drag and Space + drag pan in every tool. Right- and middle-drag also pan in the middle of a drawing, move or band drag, and the draft stays under the pointer; Space must be held before the press. A still right-click (under 3 px) opens the canvas menu on release; a right-drag never opens it. On a Mac, Control-click is a right-click and Control-drag pans.
+- Right-drag, middle-drag and Space + drag pan in every tool. A right or middle press during a drawing, move or band drag is ignored; the wheel and keys stay live; Space must be held before the press. A still right-click (under 3 px) opens the canvas menu on release; a right-drag never opens it. On a Mac, Control-click is a right-click and Control-drag pans.
 - Pointing device (Settings › Canvas): Mouse, the wheel zooms about the pointer and Shift + wheel pans; Trackpad, two fingers pan. Pinch and Ctrl + wheel always zoom. The wheel and a pinch zoom continuously; the zoom buttons and + / − change zoom by one step. On Linux a trackpad pinch does not reach the map; F1 says to use Ctrl + scroll.
 - Touch: one finger edits, two fingers pan, pinch and turn the view, press and hold opens the menu.
 - Pan tool (H) is for pens without a barrel button and one-finger use: a left drag pans. It is not on the main rail; it lives in View and Tools, the command palette and the phone tool strip. While it is armed no rail button is pressed and its tool card says "Drag to move the map" with the Esc line.
