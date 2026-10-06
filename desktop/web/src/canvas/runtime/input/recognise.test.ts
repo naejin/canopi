@@ -561,8 +561,11 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
     expect(pressDuringTwist.steps[2]!.effects).toEqual([])
   })
 
-  it('E12 iOS gesture events alongside pointers: one source of truth, the pointers; gesture events prevented', () => {
-    const result = run(SEQUENCES.E12)
+  it.each([
+    ['iOS', SEQUENCES.E12],
+    ['an iPad desktop user agent', SEQUENCES.E12_IPAD],
+  ])('E12 %s gesture events alongside pointers: one source of truth, the pointers; gesture events prevented', (_platform, sequence) => {
+    const result = run(sequence)
     expect(result.gestures.filter((gesture) => !NAVIGATION.has(gesture.kind))).toEqual([])
     expect(result.gestures.some((gesture) => gesture.kind === 'rotate' && gesture.source === 'trackpad-twist')).toBe(false)
     expect(zoomsOf(result.gestures).map((zoom) => zoom.source)).toEqual(['touch-two-finger', 'touch-two-finger'])

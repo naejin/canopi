@@ -11,7 +11,7 @@
 import type { CanvasDropPayload, ToolHandleId, ToolId } from '../../interaction-types'
 import type { Gesture } from '../gestures'
 import { normalise, type DomEventLike } from '../normalise'
-import type { InputPlatform } from '../platform'
+import { detectPlatform, type InputPlatform } from '../platform'
 import type { AdapterEffect, RawInput, RecogniserState, TargetClass } from '../raw-input'
 import { initialRecogniserState, recognise } from '../recognise'
 import { DEFAULT_THRESHOLDS, type Thresholds } from '../thresholds'
@@ -531,6 +531,22 @@ export const SEQUENCES = {
     move(110, 100, { pointer: 'touch', id: 1, buttons: 1 }),
     move(230, 100, { pointer: 'touch', id: 2, buttons: 1 }),
     gesture('end', 10),
+    up(230, 100, { pointer: 'touch', id: 2 }),
+    up(110, 100, { pointer: 'touch', id: 1 }),
+  ]),
+  // iPadOS Safari's desktop agent reads as a Mac's; with its touch points it is iOS (A8), so its pointers stay the one source.
+  E12_IPAD: seq('E12 iPadOS gesture events alongside pointers', detectPlatform({
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15',
+    platform: 'MacIntel',
+    maxTouchPoints: 5,
+  }, { GestureEvent: class {} }), [
+    down(100, 100, { pointer: 'touch', id: 1 }),
+    down(200, 100, { pointer: 'touch', id: 2 }),
+    gesture('start', 0),
+    gesture('change', 20),
+    move(110, 100, { pointer: 'touch', id: 1, buttons: 1 }),
+    move(230, 100, { pointer: 'touch', id: 2, buttons: 1 }),
+    gesture('end', 20),
     up(230, 100, { pointer: 'touch', id: 2 }),
     up(110, 100, { pointer: 'touch', id: 1 }),
   ]),
