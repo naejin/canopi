@@ -191,6 +191,45 @@ describe('polygon corners (spec §3.2, U33: every corner route)', () => {
     expect(rect.chrome.handles.filter((entry) => entry.glyph === 'midpoint')).toEqual([])
   })
 
+  /** The selected polygon's edge chips as the renderer gets them: each one's `beside`, or null on its edge. */
+  function edgeChipPlacements(h: ToolHarness): ({ normalPx: ScreenPoint; gapPx: number } | null)[] {
+    return (h.renderer.lastDraft()?.shapes ?? []).flatMap((shape) =>
+      shape.kind === 'label' && shape.tone === 'measure-quiet' ? [shape.beside ?? null] : [])
+  }
+
+  it('while its midpoint dots show, each dotted edge\'s length chip sits beside its dot, outside the polygon (U38)', () => {
+    // 40 × 60 px at scale 1: dots on the 60 px edges 1 (x = 140) and 3 (x = 100); the 40 px edges keep their chips on the edge.
+    const tall = [{ x: 100, y: 100 }, { x: 140, y: 100 }, { x: 140, y: 160 }, { x: 100, y: 160 }]
+    const outside = (x: number) => ({ normalPx: { x, y: expect.closeTo(0, 9) }, gapPx: 6 })
+    for (const corners of [tall, [...tall].reverse()]) {
+      const h = polygonHarness(corners)
+      const placements = edgeChipPlacements(h)
+      // Wound either way, the chip goes away from the interior: right of the right edge, left of the left one.
+      expect(placements).toEqual([null, outside(1), null, outside(-1)])
+
+      // Under another tool no dots show, so every chip is back on its edge.
+      h.arm('rectangle')
+      expect(edgeChipPlacements(h)).toEqual([null, null, null, null])
+    }
+  })
+
+  it('on a turned map an edge chip goes out along the edge\'s normal on screen (U38)', () => {
+    const h = createToolHarness({ scene: { zones: [rectZone('poly', [...SQUARE], { zoneType: 'polygon' })] }, camera: { bearingDeg: 30 } })
+    harnesses.push(h)
+    h.select(POLY)
+    const view = h.view.view()
+    const centre = view.worldToScreen({ x: 150, y: 150 })
+    const placements = edgeChipPlacements(h)
+    expect(placements).toHaveLength(4)
+    SQUARE.forEach((start, index) => {
+      const end = SQUARE[(index + 1) % SQUARE.length]!
+      const middle = view.worldToScreen({ x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 })
+      const length = Math.hypot(middle.x - centre.x, middle.y - centre.y)
+      expect(placements[index]!.normalPx.x).toBeCloseTo((middle.x - centre.x) / length, 9)
+      expect(placements[index]!.normalPx.y).toBeCloseTo((middle.y - centre.y) / length, 9)
+    })
+  })
+
   it('an edge shows its dot only with room for it and free outline beside it (52 px on screen); a zoom redraws the dots', () => {
     // At scale 1 the 40 m edges are 40 px: the corners' 10 px and the dot's 16 px would cover the outline that moves the zone.
     const h = polygonHarness([{ x: 100, y: 100 }, { x: 140, y: 100 }, { x: 140, y: 160 }, { x: 100, y: 160 }])

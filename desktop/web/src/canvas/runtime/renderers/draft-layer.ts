@@ -287,10 +287,18 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
 
     const chip = add(screen, new Container())
     chip.addChild(box, text)
-    addUpright(chip, shape.anchor, {
-      x: shape.offsetPx.x - width / 2,
-      y: shape.offsetPx.y - (visual.placement === 'centre' ? height / 2 : visual.gapPx + height),
-    }, true)
+    // Beside a point, the chip's centre goes out along the normal by its own half-extent that way plus the gap.
+    const beside = shape.beside
+    const reach = beside ? Math.abs(beside.normalPx.x) * width / 2 + Math.abs(beside.normalPx.y) * height / 2 + beside.gapPx : 0
+    addUpright(chip, shape.anchor, beside
+      ? {
+        x: shape.offsetPx.x + beside.normalPx.x * reach - width / 2,
+        y: shape.offsetPx.y + beside.normalPx.y * reach - height / 2,
+      }
+      : {
+        x: shape.offsetPx.x - width / 2,
+        y: shape.offsetPx.y - (visual.placement === 'centre' ? height / 2 : visual.gapPx + height),
+      }, true)
   }
 
   /**

@@ -34,7 +34,7 @@ import type { SceneEditCoordinator, SceneEditRunOptions, SceneEditTransaction } 
 import type { ScreenPoint, ViewFrame, ViewScreen, ViewTransform, WorldPoint } from '../view/types'
 import { applyToolConstraint, type ScreenAxes } from './constraints'
 import type { DraftPresentation, DraftShape, ToolHandle } from './draft'
-import { measureLabelShapes, selectedZoneMeasurementLabels } from './measure-labels'
+import { measureLabelShapes, selectedZoneMeasurementLabels, type EdgeDots } from './measure-labels'
 import { zoneEdgeSegment } from './hit-testing'
 import { placePlantFromSpecies } from './plant-stamp'
 import { TOOL_REGISTRY } from './registry'
@@ -503,8 +503,20 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
    */
   function decorationShapes(): DraftShape[] {
     if (zoneDraftHidesChips()) return []
-    const labels = selectedZoneMeasurementLabels(deps.scene.persisted, deps.scene.selection())
-    return labels.length > 0 ? measureLabelShapes(labels, (a, b) => frame().view.screenDistance(a, b)) : []
+    const selection = deps.scene.selection()
+    const labels = selectedZoneMeasurementLabels(deps.scene.persisted, selection)
+    if (labels.length === 0) return []
+    const view = frame().view
+    return measureLabelShapes(labels, (a, b) => view.screenDistance(a, b), shownEdgeDots(selection[0]!.id, view))
+  }
+
+  /** The selected polygon's edges whose midpoint dots show now, so their chips sit beside them (U38). */
+  function shownEdgeDots(zoneId: string, view: ViewTransform): EdgeDots | undefined {
+    const prefix = `edge-mid:${zoneId}:`
+    const edges = new Set(shownHandles().flatMap((handle) =>
+      handle.glyph === 'midpoint' && handle.id.startsWith(prefix) ? [Number(handle.id.slice(prefix.length))] : []))
+    const zone = edges.size > 0 ? deps.scene.persisted.zones.find((entry) => entry.id === zoneId) : undefined
+    return zone ? { corners: zone.points, edges, screenAxes: view.screenAxesInWorld() } : undefined
   }
 
   function zoneDraftHidesChips(): boolean {

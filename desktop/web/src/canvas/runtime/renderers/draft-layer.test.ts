@@ -561,6 +561,28 @@ describe('draft layer', () => {
     }
   })
 
+  it('a chip beside a point moves along its normal until its nearest side is the gap past the point, whatever its size (U38)', () => {
+    const layer = mountLayer()
+    const beside = (normalPx: { x: number; y: number }): DraftShape => ({
+      kind: 'label', anchor: { x: 3, y: 1 }, offsetPx: { x: 0, y: 0 }, text: '12 m', tone: 'measure-quiet', beside: { normalPx, gapPx: 6 },
+    })
+    layer.setDraft({ shapes: [beside({ x: 0, y: -1 }), beside({ x: 1, y: 0 }), beside({ x: 0.6, y: 0.8 })] })
+    layer.setView(at({ x: 100, y: 50 }, 10))
+
+    // The 52 × 22 chip (a 40 × 16 text, 2 × 5 padding, 1 px border) about the anchor's point (130, 60): above it, its
+    // bottom 6 px over the point; right of it, its left side 6 px past; along (0.6, 0.8), its nearest corner 6 px along.
+    const [above, right, diagonal] = layer.billboardDraftRoot.children
+    expect(global(above!)).toEqual({ x: 130 - 26, y: 60 - 6 - 22 })
+    expect(global(right!)).toEqual({ x: 130 + 6, y: 60 - 11 })
+    // Chips snap to whole pixels.
+    const reach = 0.6 * 26 + 0.8 * 11 + 6
+    expect(global(diagonal!)).toEqual({ x: Math.round(130 + 0.6 * reach - 26), y: Math.round(60 + 0.8 * reach - 11) })
+
+    // A pan carries the chip with its point.
+    layer.setView(at({ x: 0, y: 0 }, 10))
+    expect(global(layer.billboardDraftRoot.children[0]!)).toEqual({ x: 30 - 26, y: 10 - 6 - 22 })
+  })
+
   it('clearing the draft removes its display objects', () => {
     const destroyFilter = vi.spyOn(AlphaFilter.prototype, 'destroy')
     const layer = mountLayer()
