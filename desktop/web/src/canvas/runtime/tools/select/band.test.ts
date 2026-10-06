@@ -92,14 +92,9 @@ describe('Select band', () => {
     expect(h.store.session.selectedTargets).toEqual([plant('c'), plant('a'), plant('b')])
   })
 
-  it('a band shorter than 2 px selects nothing, and its release waits for a settled scene', () => {
+  it('its release waits for a settled scene', () => {
     const h = harness({ scene: orchard() })
     h.select(plant('c'))
-
-    h.press({ x: 20, y: 20 })
-    h.move({ x: 21, y: 21 })
-    h.release()
-    expect(h.store.session.selectedTargets).toEqual([])
 
     h.press({ x: 20, y: 20 })
     h.move({ x: 120, y: 120 })
@@ -126,5 +121,23 @@ describe('Select band', () => {
     expect(h.store.persisted.zones[0]!.points).toEqual(bed.points)
     expect(h.store.session.selectedTargets).toEqual([plant('a'), plant('b'), { kind: 'zone', id: 'bed' }])
     expect(h.history.canUndo.value).toBe(false)
+  })
+
+  it("a band dragged out and back to its press on a zone's fill selects the zone, and with Alt keeps it: a band never removes (A9)", () => {
+    const bed = rectZone('bed', [{ x: 10, y: 10 }, { x: 200, y: 10 }, { x: 200, y: 200 }, { x: 10, y: 200 }])
+    const h = harness({ scene: { ...orchard(), zones: [bed] } })
+    h.select(plant('c'))
+
+    h.press({ x: 30, y: 30 })
+    h.move({ x: 70, y: 30 })
+    h.move({ x: 30, y: 30 })
+    h.release()
+    expect(h.store.session.selectedTargets).toEqual([{ kind: 'zone', id: 'bed' }])
+
+    h.press({ x: 30, y: 30 }, { mods: { alt: true } })
+    h.move({ x: 70, y: 30 }, { alt: true })
+    h.move({ x: 30, y: 30 }, { alt: true })
+    h.release(undefined, { alt: true })
+    expect(h.store.session.selectedTargets).toEqual([{ kind: 'zone', id: 'bed' }])
   })
 })

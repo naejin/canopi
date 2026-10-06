@@ -176,9 +176,8 @@ export function createSelectTool(): CanvasTool {
     if (!current) return
     try {
       if (current.kind === 'band') {
-        const selection = dragged ? bandSelection(c, current.band, point.world) : null
-        if (selection) c.effects.setSelection(selection)
-        // A band shorter than its threshold is a click (band.ts); only a fill press's click selects.
+        if (dragged) c.effects.setSelection(bandSelection(c, current.band, point.world))
+        // Only a fill press's click selects.
         else clickSelection(c, current.press)
       } else if (current.kind === 'move') {
         // The release reads the last move: the pointer's travel since then moves nothing.

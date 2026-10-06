@@ -4,17 +4,15 @@
 // press is additive, and the drag draws a screen-aligned box from the press to the pointer (the band's `quad` draft:
 // the selection stroke at 2 px over the selection fill). The release selects every object the box touches, tested
 // against its world quad (turned with the view, never widened to its world box; spec §4.9), the locked ones left out,
-// added to the selection when the press was additive; a release within 2 px of the press selects nothing. The release
-// runs when the scene is settled (CanvasTool.settledRelease).
+// added to the selection when the press was additive, never removed from it (an Alt band adds what it touches). Only a
+// drag makes a band, whatever its size: the recogniser's slop tells it from a click (A9). The release runs when the
+// scene is settled (CanvasTool.settledRelease).
 
 import { isSceneDesignObjectLocked } from '../../scene/locks'
 import { sceneTargetKey, type SceneDesignObjectTarget } from '../../scene/design-object-targets'
 import type { WorldPoint, WorldQuad } from '../../view/types'
 import type { DraftPresentation } from '../draft'
 import type { ToolContext, ToolView } from '../tool'
-
-/** A band shorter than this on screen is a click. */
-const BAND_THRESHOLD_PX = 2
 
 export interface Band {
   readonly start: WorldPoint
@@ -33,9 +31,8 @@ export function bandDraft(view: ToolView, band: Band, end: WorldPoint): DraftPre
   }
 }
 
-/** What the band released at `end` selects, or null when the pointer stayed within the threshold (nothing changes). */
-export function bandSelection(ctx: ToolContext, band: Band, end: WorldPoint): SceneDesignObjectTarget[] | null {
-  if (ctx.view.screenDistance(band.start, end) <= BAND_THRESHOLD_PX) return null
+/** What the band released at `end` selects. */
+export function bandSelection(ctx: ToolContext, band: Band, end: WorldPoint): SceneDesignObjectTarget[] {
   const scene = ctx.scene.persisted
   const selected = new Map<string, SceneDesignObjectTarget>(
     band.additive ? ctx.scene.selection().map((target) => [sceneTargetKey(target), target]) : [],
