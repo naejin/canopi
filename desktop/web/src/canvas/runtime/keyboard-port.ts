@@ -42,7 +42,7 @@ interface CanvasKeySession {
   pointerSessionLive(): boolean
   /** The map is in overview (the session's mode). */
   overview(): boolean
-  /** Space is held for panning. */
+  /** Space is held for panning: the recogniser's held.space, the one record (ADR 0017). */
   spaceHeld(): boolean
   /** Space and the modifiers as the keys left them: the recogniser's key state and the navigation cursor. */
   keyState(state: { readonly space: boolean; readonly mods: Modifiers }): void

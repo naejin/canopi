@@ -200,6 +200,26 @@ describe('the interaction session', () => {
     expect(testView.viewport()).toEqual(before)
   })
 
+  it('after a pointercancel during a Space drag, Space\'s auto-repeat re-arms the pan, so the next press pans', () => {
+    const rectangle = stubTool('rectangle')
+    useStubTools(rectangle)
+    const { session } = createSession()
+    session.setTool('rectangle')
+
+    events.holdSpace()
+    events.pointerDown({ x: 100, y: 100 })
+    events.pointerMove({ x: 120, y: 100 })
+    events.pointerCancel({ x: 120, y: 100 })
+    // The key is still down: its auto-repeat arrives before the next press.
+    events.keyDown({ key: ' ', code: 'Space', repeat: true })
+    const before = testView.viewport()
+    events.pointerDown({ x: 100, y: 100 })
+    events.pointerMove({ x: 140, y: 120 })
+
+    expect(rectangle.count('drag-start')).toBe(0)
+    expect(testView.viewport()).not.toEqual(before)
+  })
+
   it('the active tool\'s slop reaches configure', () => {
     const row = stubTool('plant-spacing', { dragSlopPx: 4 })
     useStubTools(row)

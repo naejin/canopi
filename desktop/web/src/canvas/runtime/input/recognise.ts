@@ -54,7 +54,6 @@ export interface TouchPair {
   readonly twistDeg: number
 }
 
-const NO_MODIFIERS: Modifiers = Object.freeze({ shift: false, ctrl: false, alt: false, meta: false })
 const ZERO: ScreenPoint = Object.freeze({ x: 0, y: 0 })
 /** Wheel zoom: today's exp(clamp(−dy × 0.002, ±1)) per event. */
 const WHEEL_ZOOM_PER_PX = 0.002
@@ -67,7 +66,7 @@ export function initialRecogniserState(): RecogniserState {
   return {
     sessions: new Map(),
     touchPair: null,
-    held: { space: false, mods: NO_MODIFIERS },
+    held: { space: false },
     trackpadTwistDeg: 0,
     deadlines: { longPressAt: null, menuEchoUntil: null, windowsTrailUntil: null, lastSecondaryEndAt: null },
     context: { tool: 'select', mode: 'site', pointingDevice: 'mouse', dragSlopPx: null },
@@ -98,7 +97,7 @@ export function recognise(
       releaseSpace(step)
       break
     case 'key-state':
-      step.state = { ...step.state, held: { space: input.space, mods: input.mods } }
+      step.state = { ...step.state, held: { space: input.space } }
       restepRotate(step, input.mods, config.platform)
       break
     case 'configure': configure(step, input.context); break
@@ -518,5 +517,5 @@ function putSession(step: Step, session: PointerSession): void {
 
 function releaseSpace(step: Step): void {
   if (!step.state.held.space) return
-  step.state = { ...step.state, held: { ...step.state.held, space: false } }
+  step.state = { ...step.state, held: { space: false } }
 }

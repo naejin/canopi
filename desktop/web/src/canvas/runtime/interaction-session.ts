@@ -4,8 +4,8 @@
 // recognise → InputRouter → ToolHost, with the keyboard port the key router reaches (spec §1.6), and prepares the map
 // host as a keyboard stop. Every tool and every drop runs on the host (spec §1.4, "Drops"). The session hears the view's mode on
 // its own 'tools' frame listener, which a throwing host listener cannot skip, nor it the host's (frame-source.ts): entering or
-// leaving overview reconfigures the recogniser, and entering it releases Space and closes the menu. refreshMeasurements reaches
-// ToolHost.sceneChanged(). It builds the host's chrome (chrome/: the handle layer,
+// leaving overview reconfigures the recogniser (entering it releases Space there), and entering it closes the menu.
+// refreshMeasurements reaches ToolHost.sceneChanged(). It builds the host's chrome (chrome/: the handle layer,
 // the text entry and the plant tooltip), bridges the plant and saved-stamp
 // read models to the armed tool, reads the snapping settings per point, calls ToolHost.rawPress for every raw press on
 // the map host, ToolHost.released() after a release that ended no press of the tool's and ToolHost.interrupted() after a
@@ -60,7 +60,6 @@ import type { ViewFrame, ViewFrameSource } from './view/types'
 /** Attributes the session sets on the map host and restores when it ends. */
 const HOST_ATTRIBUTES = ['tabindex', 'role', 'aria-label', 'aria-describedby'] as const
 const STORY_PRESENTING_ATTRIBUTE = 'data-story-presenting'
-const NO_MODIFIERS: Modifiers = Object.freeze({ shift: false, ctrl: false, alt: false, meta: false })
 const NO_DROP: readonly AdapterEffect[] = Object.freeze([{ kind: 'drop-effect', dropEffect: 'none' }])
 /** An actual drop (not a dragover or dragleave) prevents the browser's own drop (recognise.ts), unconditionally; a
  *  throwing route must not skip it, or the browser's default drop runs (today's pre-0B _onDrop prevented it before
@@ -203,7 +202,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private readonly _storyObserver: MutationObserver | null
   private _recogniser: RecogniserState = initialRecogniserState()
   private _pointingDevice: 'mouse' | 'trackpad'
-  private _spaceHeld = false
   private _panning = false
   private _navigationCursor: 'grab' | 'grabbing' | null = null
   private _toolCursor: string | null = null
@@ -342,7 +340,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         session: {
           pointerSessionLive: () => this._pointerSessionLive(),
           overview: () => this._mode === 'overview',
-          spaceHeld: () => this._spaceHeld,
+          spaceHeld: () => this._recogniser.held.space,
           keyState: (state) => this._setKeyState(state.space, state.mods),
           escapeGesture: () => this._escapeGesture(),
           requestTool: (id) => this._switchTool(id),
@@ -645,7 +643,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   /** After a window blur has reached the recogniser (Space released, live sessions ended) and the armed tool's path, even
    *  when that path failed. */
   private _interrupted(): void {
-    this._spaceHeld = false
     this._cancelDropFocus()
     this._setNavigationCursor(null)
     this._toolHost.interrupted()
@@ -664,7 +661,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
    *  (released). */
   private _escapeGesture(): void {
     const gestures = this._feed({ kind: 'escape', t: Date.now() })
-    this._spaceHeld = false
     this._setNavigationCursor(this._panning ? 'grabbing' : null)
     if (gestures.some(endsPointerNavigation)) this._toolHost.released()
   }
@@ -679,7 +675,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     // A tool whose cancel throws (the configure ends its live press) still leaves Space released and the menu closed.
     runCanvasRuntimeCleanups([
       () => this._configure(),
-      ...(mode === 'overview' ? [() => this._releaseSpace(), () => this._menu.close()] : []),
+      ...(mode === 'overview' ? [() => this._menu.close()] : []),
     ], 'Interaction session mode change failed')
   }
 
@@ -743,7 +739,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   // ── Keys, the navigation cursor and camera moves ───────────────────────────────────────────────────────────────
 
   private _setKeyState(space: boolean, mods: Modifiers): void {
-    this._spaceHeld = space
     this._feed({ kind: 'key-state', t: Date.now(), space, mods })
     if (space) {
       // Today's grab: always in overview; otherwise not during a press, nor with the Pan tool's own grab.
@@ -753,12 +748,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     } else if (!this._panning) {
       this._setNavigationCursor(null)
     }
-  }
-
-  private _releaseSpace(): void {
-    if (!this._spaceHeld) return
-    this._spaceHeld = false
-    this._recogniser = recognise(this._recogniser, { kind: 'key-state', t: Date.now(), space: false, mods: NO_MODIFIERS }, this._config).state
   }
 
   /** A pointer pan shows 'grabbing' until it ends; then the tool's cursor comes back (today's cancel). */
