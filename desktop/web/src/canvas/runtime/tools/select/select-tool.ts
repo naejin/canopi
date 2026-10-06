@@ -200,7 +200,7 @@ export function createSelectTool(): CanvasTool {
         }
       }
     } finally {
-      if (!('drag' in current) || !current.drag.open) gesture = null
+      gesture = null
       c.effects.setDraft(null)
       refreshHandles()
     }
@@ -234,7 +234,7 @@ export function createSelectTool(): CanvasTool {
       const corner = current.kind === 'reshape' ? reshapePoints.get(g.handle) : undefined
       selectedCorner = still && corner && isPolygonCorner(corner) ? g.handle : null
     } finally {
-      if (!('drag' in current) || !current.drag.open) gesture = null
+      gesture = null
       rotationDeltaDeg = null
       c.effects.setDraft(null)
       refreshHandles()

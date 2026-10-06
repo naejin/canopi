@@ -33,7 +33,7 @@ export interface PointHandleDrag<TEntity> {
   move(point: ToolPoint): void
   /** Applies the release point, then commits a change or rolls back. */
   finish(point: ToolPoint): void
-  /** Rolls the object back; throws, still open, when the abort fails. */
+  /** Rolls the object back. */
   cancel(): void
 }
 
