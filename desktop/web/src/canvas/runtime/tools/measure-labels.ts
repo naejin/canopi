@@ -10,7 +10,7 @@ import type { SceneDesignObjectSelection } from '../scene/design-object-targets'
 import { isSceneObjectGroupMemberTarget } from '../scene/group-members'
 import type { ScenePersistedState } from '../scene/types'
 import type { ScreenPoint, WorldPoint, WorldVector } from '../view/types'
-import { getRectangularZoneCorners } from '../zone-geometry'
+import { getRectangularZoneCorners, polygonArea } from '../zone-geometry'
 import {
   createEllipticalZoneMeasurements,
   createLinearZoneMeasurements,
@@ -43,10 +43,12 @@ export function measureLabelShapes(
   dots?: EdgeDots,
 ): DraftShape[] {
   const shapes: DraftShape[] = []
+  // The interior lies left of every edge, as (−dy, dx) turns it, when the signed area is positive; computed once.
+  const interiorLeft = dots ? polygonArea(dots.corners) > 0 : false
   for (const label of labels) {
     if (label.kind === 'edge' && label.worldStart && label.worldEnd
       && screenDistance(label.worldStart, label.worldEnd) < MIN_EDGE_LABEL_PX) continue
-    const normalPx = dots && label.kind === 'edge' ? outwardNormalPx(dots, label.id) : null
+    const normalPx = dots && label.kind === 'edge' ? outwardNormalPx(dots, label.id, interiorLeft) : null
     shapes.push({
       kind: 'label',
       anchor: label.worldPosition,
@@ -59,24 +61,19 @@ export function measureLabelShapes(
   return shapes
 }
 
-/** The unit screen normal of edge `edge-<i>` pointing away from the polygon's interior, or null when it shows no dot. */
-function outwardNormalPx(dots: EdgeDots, labelId: string): ScreenPoint | null {
+/** The unit screen normal of edge `edge-<i>` pointing away from the polygon's interior, or null when it shows no dot.
+ *  `interiorLeft`: the polygon's signed area is positive. */
+function outwardNormalPx(dots: EdgeDots, labelId: string, interiorLeft: boolean): ScreenPoint | null {
   const index = Number(labelId.slice('edge-'.length))
   if (!labelId.startsWith('edge-') || !dots.edges.has(index)) return null
   const { corners, screenAxes } = dots
   const start = corners[index]
   const end = corners[(index + 1) % corners.length]
   if (!start || !end) return null
-  // The interior lies left of every edge, as (−dy, dx) turns it, when the shoelace sum is positive; the outside is the
-  // other side. Both turn together under any axis convention.
-  let shoelace = 0
-  corners.forEach((corner, at) => {
-    const next = corners[(at + 1) % corners.length]!
-    shoelace += corner.x * next.y - next.x * corner.y
-  })
+  // The outside is the side away from the interior; both turn together under any axis convention.
   const dx = end.x - start.x
   const dy = end.y - start.y
-  const outward = shoelace > 0 ? { x: dy, y: -dx } : { x: -dy, y: dx }
+  const outward = interiorLeft ? { x: dy, y: -dx } : { x: -dy, y: dx }
   const x = outward.x * screenAxes.right.x + outward.y * screenAxes.right.y
   const y = outward.x * screenAxes.down.x + outward.y * screenAxes.down.y
   const length = Math.hypot(x, y)
