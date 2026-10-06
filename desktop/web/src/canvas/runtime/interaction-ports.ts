@@ -17,7 +17,6 @@ import type { SceneStateReader } from './scene/store'
 import type { SceneCommandAdmission, SceneEditCoordinator, SettledSceneReader } from './scene-runtime/transactions'
 import type { ToolHandle } from './tools/draft'
 import type {
-  HitTarget,
   SceneLayerKind,
   TextEntryRequest,
   ToolCommand,
@@ -69,9 +68,7 @@ export interface DomInputSource {
 export interface ContextMenuPort {
   open(request: {
     readonly at: WorldPoint | 'selection'
-    readonly source: MenuSource
     readonly screen: ScreenPoint | null
-    readonly hit: HitTarget | null
     readonly turnViewToEdge?: () => void                        // a zone-edge hit within the source's tolerance (§4.16)
   }): void
   close(): void

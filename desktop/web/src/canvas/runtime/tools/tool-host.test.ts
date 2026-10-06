@@ -2087,15 +2087,15 @@ describe('ToolHost', () => {
       expect(h.menu({ x: 50, y: 50 })).toEqual({})
       expect(h.record.selections).toEqual([[P1]])
       expect(h.record.menus).toEqual([
-        { at: h.world({ x: 50, y: 50 }), source: 'mouse', screen: { x: 50, y: 50 }, hit: { kind: 'object', target: P1 } },
+        { at: h.world({ x: 50, y: 50 }), screen: { x: 50, y: 50 } },
       ])
 
       h.menu({ x: 300, y: 250 })
       expect(h.record.selections).toHaveLength(1)
-      expect(h.record.menus.at(-1)).toMatchObject({ hit: null, screen: { x: 300, y: 250 } })
+      expect(h.record.menus.at(-1)).toEqual({ at: h.world({ x: 300, y: 250 }), screen: { x: 300, y: 250 } })
 
       h.menu('selection', 'keyboard')
-      expect(h.record.menus.at(-1)).toEqual({ at: 'selection', source: 'keyboard', screen: null, hit: null })
+      expect(h.record.menus.at(-1)).toEqual({ at: 'selection', screen: null })
     })
 
     it('Turn view to this edge is offered within 8 px of a polygon, rectangle or line edge for a native menu, on a locked zone too, never from the keyboard and never for an ellipse', () => {
@@ -2121,7 +2121,7 @@ describe('ToolHost', () => {
         // 7 px off the field's slanted edge, beyond its 6 px hit: the empty map's menu, with the entry.
         const normal = { x: 2 / Math.sqrt(5), y: 1 / Math.sqrt(5) }
         h.menu({ x: 80 + normal.x * 7, y: 60 + normal.y * 7 }, 'native')
-        expect(h.record.menus.at(-1)!.hit).toBeNull()
+        expect(h.record.selections).toEqual([])
         expect(offered()).toBeTypeOf('function')
         offered()!()
         vi.advanceTimersByTime(400)
@@ -2135,7 +2135,7 @@ describe('ToolHost', () => {
         expect(offered()).toBeUndefined()
         // The locked bed: its own menu, with the entry; the view turns, no object moves.
         h.menu({ x: 200, y: 63 }, 'native')
-        expect(h.record.menus.at(-1)!.hit).toEqual({ kind: 'object', target: { kind: 'zone', id: 'bed' } })
+        expect(h.record.selections.at(-1)).toEqual([{ kind: 'zone', id: 'bed' }])
         expect(offered()).toBeTypeOf('function')
         h.menu({ x: 324, y: 78 }, 'native')
         expect(offered()).toBeTypeOf('function')
@@ -2217,28 +2217,28 @@ describe('ToolHost', () => {
         selectionModel: source.selectionModel,
       })
 
-      port.open({ at: { x: 50, y: 50 }, source: 'mouse', screen: { x: 50, y: 50 }, hit: null })
+      port.open({ at: { x: 50, y: 50 }, screen: { x: 50, y: 50 } })
       expect(opened.at(-1)!.selection?.editableTargets).toEqual([P1])
       expect(port.isOpen()).toBe(true)
 
-      port.open({ at: 'selection', source: 'keyboard', screen: null, hit: null })
+      port.open({ at: 'selection', screen: null })
       expect(opened.at(-1)!.selection).toEqual(source.selectionModel())
       expect(opened.at(-1)!.world).toEqual({ x: 50, y: 50 })
 
-      port.open({ at: { x: 300, y: 250 }, source: 'mouse', screen: null, hit: null })
+      port.open({ at: { x: 300, y: 250 }, screen: null })
       expect(opened.at(-1)!.selection).toBeNull()
       expect(opened.at(-1)!.turnViewToEdge).toBeUndefined()
       // The host's edge turn rides on the request, for the empty map's menu as for an object's.
       const turnViewToEdge = vi.fn()
-      port.open({ at: { x: 300, y: 250 }, source: 'native', screen: null, hit: null, turnViewToEdge })
+      port.open({ at: { x: 300, y: 250 }, screen: null, turnViewToEdge })
       expect(opened.at(-1)!.turnViewToEdge).toBe(turnViewToEdge)
-      port.open({ at: { x: 50, y: 50 }, source: 'native', screen: { x: 50, y: 50 }, hit: null, turnViewToEdge })
+      port.open({ at: { x: 50, y: 50 }, screen: { x: 50, y: 50 }, turnViewToEdge })
       expect(opened.at(-1)!.turnViewToEdge).toBe(turnViewToEdge)
 
       store.updatePersisted((draft) => {
         draft.layers = draft.layers.map((layer) => (layer.name === 'plants' ? { ...layer, locked: true } : layer))
       })
-      port.open({ at: { x: 150, y: 50 }, source: 'mouse', screen: { x: 150, y: 50 }, hit: null })
+      port.open({ at: { x: 150, y: 50 }, screen: { x: 150, y: 50 } })
       expect(opened.at(-1)!.selection?.editableTargets).toEqual([])
 
       port.close()
@@ -2265,7 +2265,7 @@ describe('ToolHost', () => {
         selectionModel: source.selectionModel,
       })
 
-      port.open({ at: 'selection', source: 'keyboard', screen: null, hit: null })
+      port.open({ at: 'selection', screen: null })
 
       // The bed on screen: a level 100 × 20 px box (1 px/m).
       const corners = getRectangularZoneCorners(bed)!.map((corner) => view.view().worldToScreen(corner))
@@ -2302,7 +2302,7 @@ describe('ToolHost', () => {
       })
       const menu = () => document.querySelector<HTMLElement>('[role="menu"]')
       const openMenu = async () => {
-        await act(async () => port.open({ at: { x: 10, y: 10 }, source: 'mouse', screen: { x: 10, y: 10 }, hit: null }))
+        await act(async () => port.open({ at: { x: 10, y: 10 }, screen: { x: 10, y: 10 } }))
         expect(menu()).not.toBeNull()
         expect(port.isOpen()).toBe(true)
       }

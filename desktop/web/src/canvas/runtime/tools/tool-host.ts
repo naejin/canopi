@@ -1071,19 +1071,13 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
    *  this edge" when the pointer is on a zone's edge. */
   function openMenuAt(at: ScreenPoint, source: MenuSource): void {
     const world = frame().view.screenToWorld(at)
-    const { visible, target } = contextMenuTargetAt(deps.scene, world)
+    const { target } = contextMenuTargetAt(deps.scene, world)
     if (target && !includesSceneDesignObjectTarget(deps.scene.selection(), target)) {
       deps.setSelection([target])
       notifySceneChanged()
     }
     const turnViewToEdge = edgeTurnAt(world, source)
-    deps.menu.open({
-      at: world,
-      source,
-      screen: at,
-      hit: visible ? { kind: 'object', target: visible } : null,
-      ...(turnViewToEdge ? { turnViewToEdge } : {}),
-    })
+    deps.menu.open({ at: world, screen: at, ...(turnViewToEdge ? { turnViewToEdge } : {}) })
   }
 
   /**
@@ -1257,7 +1251,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
           return true
         }
         if (deps.chrome.isTextEntryOpen()) focusMap()
-        if (at === 'selection') deps.menu.open({ at, source, screen: null, hit: null })
+        if (at === 'selection') deps.menu.open({ at, screen: null })
         else openMenuAt(at, source)
         return true
       }, false)
