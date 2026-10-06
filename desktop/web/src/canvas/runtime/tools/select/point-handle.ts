@@ -3,8 +3,7 @@
 // Owns the drag of one point handle of a selected object (a zone's corner, vertex or axis end, a guide's end); the
 // handles' DOM is the chrome's handle layer. One Scene Edit from the press, nothing applied until the pointer has moved
 // more than 2 px on screen from the press, the snapped point applied to a copy of the object as it was at the press, and
-// a commit only when the object changed. A cancelled drag rolls the object back; an abort that fails leaves the drag
-// open, so the host's retry reaches it again; a commit that fails is rolled back at once.
+// a commit only when the object changed. A cancelled drag rolls the object back.
 
 import type { SceneEditTransaction } from '../../scene-runtime/transactions'
 import type { ScenePersistedState } from '../../scene/types'
@@ -85,17 +84,8 @@ export function beginPointHandleDrag<TEntity>(
         abort()
         return
       }
-      try {
-        tx.commit()
-        open = false
-      } catch (error) {
-        try {
-          abort()
-        } catch {
-          // The commit's failure is the one reported; a failed rollback leaves the drag open for the next retry.
-        }
-        throw error
-      }
+      open = false
+      tx.commit()
     },
     cancel() {
       if (open) abort()

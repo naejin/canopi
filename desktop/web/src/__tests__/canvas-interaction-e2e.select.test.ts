@@ -4281,7 +4281,7 @@ describe('SceneInteractionSession', () => {
 
       expect(errors).toHaveLength(1)
       expect(errors[0]).toEqual(expect.objectContaining({ message: `${kind} abort failed` }))
-      // The host's own retry inside the same cancellation has already rolled the edit back: nothing is left open.
+      // The fault rule's abort inside the same cancellation has already rolled the edit back: nothing is left open.
       expect(abortFailure.abortCalls()).toBe(2)
       expect(abortFailure.beginCalls()).toBe(1)
       expect(abortFailure.beginTypes()).toEqual([editType])
@@ -4290,7 +4290,7 @@ describe('SceneInteractionSession', () => {
       expect(container.querySelector('[data-canvas-handle]')).not.toBeNull()
       expect(container.querySelector('[data-canvas-handle-active]')).toBeNull()
 
-      // A fresh drag on the restored handle is an ordinary press: no retry fencing left to admit it through.
+      // A fresh drag on the restored handle is an ordinary press.
       const freshHandle = kind === 'Rotation Handle'
         ? rotationHandle(container)!
         : kind === 'Zone Control Point'
@@ -4362,9 +4362,8 @@ describe('SceneInteractionSession', () => {
       // The selected zone's chips, or the dragged guide's length chip, are the host's draft (today's measurement overlay).
       expect(baseDeps.renderer.lastDraft()).not.toBeNull()
 
-      // The ToolHost disposes the tool: the live drag's cancel fails, the host's own retry inside that same
-      // cancellation (dispose() now guards it like every other cancelLive, per the REFUSED_PRESS fix) fails too,
-      // and so does the tool's own transient cleanup after it.
+      // The ToolHost disposes the tool: the live drag's cancel fails, the fault rule's abort fails too, and so does the
+      // tool's own transient cleanup after it.
       expect(() => session.dispose()).toThrow('Tool host disposal failed')
       expect(abortFailure.abortCalls()).toBe(3)
       expect(container.querySelector('[data-canvas-handle-layer]')).toBeNull()
@@ -4400,7 +4399,7 @@ describe('SceneInteractionSession', () => {
 
     expect(errors).toHaveLength(1)
     expect(errors[0]).toEqual(expect.objectContaining({ message: 'shared drag abort failed' }))
-    // The host's own retry inside the same cancellation has already rolled the edit back.
+    // The fault rule's abort inside the same cancellation has already rolled the edit back.
     expect(abortFailure.abortCalls()).toBe(2)
     expect(abortFailure.beginCalls()).toBe(1)
     expect(store.persisted).toEqual(persistedBefore)
@@ -4441,15 +4440,14 @@ describe('SceneInteractionSession', () => {
     expect(abortFailure.beginCalls()).toBe(1)
     expect(store.persisted).toEqual(persistedBefore)
 
-    // A right-click on the map, a release outside the tool: the tool's own transaction reference survived its first,
-    // throwing abort, so it is asked to cancel again, and this abort is a harmless no-op on the already-closed transaction.
+    // A right-click on the map, a release outside the tool: the fault armed a fresh Select, so nothing is left to abort.
     events.pointerDown({ x: 40, y: 50 }, { pointerId: 29, button: 2 })
     events.pointerUp({ x: 40, y: 50 }, { pointerId: 29, button: 2 })
 
-    expect(abortFailure.abortCalls()).toBe(3)
+    expect(abortFailure.abortCalls()).toBe(2)
     expect(store.persisted).toEqual(persistedBefore)
     session.dispose()
-    expect(abortFailure.abortCalls()).toBe(3)
+    expect(abortFailure.abortCalls()).toBe(2)
   })
 
   it('a failed shared-drag cancellation is rolled back at once, admitting a later plant drop normally', () => {
@@ -4510,10 +4508,9 @@ describe('SceneInteractionSession', () => {
     expect(abortFailure.abortCalls()).toBe(2)
     expect(abortFailure.beginCalls()).toBe(1)
     expect(store.persisted.plants).toHaveLength(2)
-    // The tool's own transaction reference survived its first, throwing abort; disposal asks it to cancel again, a
-    // harmless no-op on the already-closed transaction.
+    // The fault armed a fresh Select: disposal has nothing left to abort.
     session.dispose()
-    expect(abortFailure.abortCalls()).toBe(3)
+    expect(abortFailure.abortCalls()).toBe(2)
   })
 
   it('a failed cancellation is rolled back at once, with no key swallowed for a later shortcut', () => {
@@ -4537,7 +4534,7 @@ describe('SceneInteractionSession', () => {
       events.pointerCancel({ x: 40, y: 50 }, { pointerId: 30 })
     })
     expect(errors).toHaveLength(1)
-    // The host's own retry inside the same cancellation has already rolled the edit back: no key needs swallowing.
+    // The fault rule's abort inside the same cancellation has already rolled the edit back: no key needs swallowing.
     expect(abortFailure.abortCalls()).toBe(2)
     expect(store.persisted).toEqual(persistedBefore)
     session.dispose()

@@ -7,9 +7,8 @@
 // edit, and a cancel, a tool change or a closed layer aborts it. Rectangles and ellipses are level with the screen
 // (ToolView.screenAlignedRect, INV-TOOL-03): the zone stores the unturned box about its centre and the bearing as its
 // rotationDeg, so at bearing 0 they are today's world boxes. Shift does nothing here until phase 2. A release that adds
-// nothing aborts its edit, as today's cancellation after every pointerup did; a release whose commit throws leaves the edit
-// to the host's cancellation after the failed release, whose abort retries the commit; an abort that fails keeps the drag
-// for the host's retry before the next event.
+// nothing aborts its edit, as today's cancellation after every pointerup did; a release that throws is the host's fault
+// rule's (spec §1.4 "Faults").
 
 import type { ToolId } from '../interaction-types'
 import type { SceneDesignObjectTarget } from '../scene/design-object-targets'
@@ -190,7 +189,6 @@ export function createDragShapeTool(spec: DragShapeSpec): CanvasTool {
   function release(end: WorldPoint): void {
     const current = drag
     if (!current) return
-    // A commit that throws keeps the drag: the host's cancellation after the failed release aborts it, retrying the commit.
     commit(current, end)
     if (drag === current) cancelDrag()
     else clearDraft()
@@ -211,16 +209,13 @@ export function createDragShapeTool(spec: DragShapeSpec): CanvasTool {
     drag = null
   }
 
-  /** Aborts the drag's edit; one that fails to abort stays for the host's retry. The draft goes either way. */
+  /** Aborts the drag's edit and clears its draft. */
   function cancelDrag(): void {
     const current = drag
     if (!current) return
-    try {
-      current.edit.abort()
-      if (drag === current) drag = null
-    } finally {
-      clearDraft()
-    }
+    current.edit.abort()
+    drag = null
+    clearDraft()
   }
 
   return {

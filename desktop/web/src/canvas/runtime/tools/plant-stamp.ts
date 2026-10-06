@@ -159,8 +159,8 @@ export function createPlantStampTool(): CanvasTool {
     hasTransient: () => pendingWorld !== null,
     escapeHint: () => pendingWorld ? 'drop-transient' : 'leave-tool',
     cancelTransient(reason) {
-      // Only an overview entry hides the preview, as today's overview reset did. A pan, a blur, a re-arm of Place plants
-      // and a retried cancellation keep it under the pointer; a real tool change and a document replacement deactivate.
+      // Only an overview entry hides the preview, as today's overview reset did. A pan, a blur and a re-arm of Place plants
+      // keep it under the pointer; a real tool change and a document replacement deactivate.
       if (reason === 'overview') hidePreview()
     },
     deactivate() {

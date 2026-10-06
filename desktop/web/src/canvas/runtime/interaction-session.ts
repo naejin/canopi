@@ -379,9 +379,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   /**
-   * Arms a tool on the host. A failure leaves the host on Select (its own rollback, not the tool left: that tool is
-   * already deactivated, and reactivating it risks the same failure) and still ends the live presses, as today's setTool
-   * had cleared the pointer gesture before the step that failed.
+   * Arms a tool on the host. Any failure leaves a fresh Select on the host (spec §1.4 "Faults"), drops the tool left's
+   * source and still ends the live presses, as today's setTool had cleared the pointer gesture before the step that failed.
    */
   get tool(): ToolId {
     return this._tool.peek()
@@ -396,13 +395,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     try {
       this._toolHost.setTool(id, toolSourceFor(id))
     } catch (error) {
-      // The host's own rollback only runs once activation starts; a failure before that (cancelling the tool left) leaves
-      // the host on `previous`, unchanged. Either way, activeToolIsSelect() names the host's real tool.
-      const fellBackToSelect = this._toolHost.activeToolIsSelect()
-      this._tool.value = fellBackToSelect ? 'select' : previous
+      this._tool.value = 'select'
       this._endPressesAfterFailedSwitch()
-      // A fallback deactivates the tool left (unlike a re-arm of the same `previous`): its pick must not outlive it.
-      if (fellBackToSelect && previous !== 'select') clearToolSource(previous)
+      clearToolSource(previous)
       throw error
     }
     // The tool left drops its pick once it is deactivated, as today's tools did (the next tool never hears it).
@@ -712,9 +707,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   /**
    * After a failed switch the recogniser still ends its live sessions, with their captures and pans (today's cancellation
-   * had cleared the pointer gesture before the step that failed). The tool's own cancel was the host's setTool, whose
-   * failure it left pending: it is not retried here. A live rotate's cancel still reaches the router, which closes its
-   * RotationSession and restores the press bearing, so the view keys work again.
+   * had cleared the pointer gesture before the step that failed). The tool's own cancel was the host's setTool, whose fault
+   * rule has already aborted its edits. A live rotate's cancel still reaches the router, which closes its RotationSession
+   * and restores the press bearing, so the view keys work again.
    */
   private _endPressesAfterFailedSwitch(): void {
     const result = recognise(this._recogniser, this._configureInput(), this._config)

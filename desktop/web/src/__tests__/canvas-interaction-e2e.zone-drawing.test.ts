@@ -242,7 +242,7 @@ describe('SceneInteractionSession', () => {
       tool: 'measurement-guide',
       editType: 'interaction-measurement-guide',
     },
-  ])('a failed $label drag abort is retried at once, admitting the next gesture normally', ({
+  ])('a failed $label drag abort is rolled back by the fault rule at once, admitting the next gesture normally', ({
     tool,
     editType,
   }) => {
@@ -267,7 +267,7 @@ describe('SceneInteractionSession', () => {
     expect(errors).toEqual([
       expect.objectContaining({ message: `${editType} abort failed` }),
     ])
-    // The host's own retry inside the same cancellation has already rolled the edit back.
+    // The fault rule's abort inside the same cancellation has already rolled the edit back.
     expect(abortFailure.abortCalls()).toBe(2)
     expect(abortFailure.beginTypes()).toEqual([editType])
 
@@ -323,7 +323,7 @@ describe('SceneInteractionSession', () => {
         pointerUpEvents.push(events.pointerUp({ x: 40, y: 60 }, { pointerId: 81 }))
       })
 
-      // The host's own retry inside the cancellation failure has already finished the commit and recorded it. A
+      // The commit ran once: history recorded it before its publication threw, and the fault rule aborted nothing. A
       // pointerup is not a press on the map host, so it rethrows and reaches the app rather than being quarantined.
       expect(errors).toHaveLength(1)
       expect(pointerUpEvents[0]?.defaultPrevented).toBe(false)

@@ -32,7 +32,7 @@ import type { ScreenPoint, ViewFrameSource, WorldPoint } from './view/types'
 
 /** What a route answers for the event being handled; the source applies it. Every field optional; {} changes nothing. */
 export interface GestureOutcome {
-  /** preventDefault and stopImmediatePropagation (an unsettled scene, a pending failed cancellation, a refused drop). */
+  /** preventDefault and stopImmediatePropagation (an unsettled scene, a refused drop). */
   readonly quarantine?: boolean
   /** dragover and drop: dataTransfer.dropEffect. */
   readonly dropEffect?: 'copy' | 'move' | 'none'

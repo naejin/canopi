@@ -891,7 +891,7 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
-  it('keeps the app\'s own tool state on the tool the session kept when leaving it fails', async () => {
+  it('moves the app\'s own tool state to Select with the session when leaving a tool fails', async () => {
     const runtime = stubbedRuntime()
     await initRuntimeWithStubbedRenderer(runtime)
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
@@ -900,9 +900,9 @@ describe('scene canvas runtime', () => {
     try {
       runtime.commandSurface.tools.setTool('rectangle')
       expect(activeTool.value).toBe('rectangle')
-      // Leaving Rectangle throws before Ellipse is armed: the session stays on Rectangle, and so must the toolbar.
+      // Leaving Rectangle throws before Ellipse is armed: the host arms a fresh Select, and so does the toolbar.
       expect(() => runtime.commandSurface.tools.setTool('ellipse')).toThrow('deactivation failed')
-      expect(activeTool.value).toBe('rectangle')
+      expect(activeTool.value).toBe('select')
     } finally {
       rectangleActivation.deactivateFails = false
     }
@@ -933,7 +933,7 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
-  it('retries interaction cancellation before replacing a document', async () => {
+  it('rolls back a failed interaction cancellation before replacing a document', async () => {
     const runtime = stubbedRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
@@ -1136,68 +1136,6 @@ describe('scene canvas runtime', () => {
     expect(canvasContextMenuRequest.value).toBeNull()
     expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.id))
       .toEqual(['plant-2'])
-    events.dispose()
-    runtime.destroy()
-  })
-
-  it('restores the live Session tool when post-transition refresh fails', async () => {
-    const runtime = stubbedRuntime()
-    const { container } = await initRuntimeWithStubbedRenderer(runtime)
-    const events = createSceneInteractionEventHarness(container)
-    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
-    setInteractionViewport(runtime)
-    runtime.commandSurface.tools.setTool('hand')
-    events.pointerDown({ x: 100, y: 100 }, { pointerId: 52 })
-    events.pointerMove({ x: 110, y: 110 }, { pointerId: 52 })
-    expect(container.style.cursor).toBe('grabbing')
-    const selection = vi.spyOn(runtime.querySurface, 'getDesignObjectSelection')
-      .mockImplementation(() => {
-        throw new Error('selection refresh failed')
-      })
-
-    expect(() => runtime.commandSurface.tools.setTool('select'))
-      .toThrow('selection refresh failed')
-    expect(activeTool.value).toBe('hand')
-    expect(container.style.cursor).toBe('grab')
-
-    selection.mockRestore()
-    const beforeFreshPan = placementOf(runtime)
-    events.pointerDown({ x: 100, y: 100 }, { pointerId: 53 })
-    events.pointerMove({ x: 130, y: 120 }, { pointerId: 53 })
-    events.pointerUp({ x: 130, y: 120 }, { pointerId: 53 })
-
-    expect(placementOf(runtime)).toMatchObject({
-      x: beforeFreshPan.x + 30,
-      y: beforeFreshPan.y + 20,
-    })
-    events.dispose()
-    runtime.destroy()
-  })
-
-  it('restores the previous tool adapter when post-transition refresh fails', async () => {
-    const runtime = stubbedRuntime({
-      appAdapter: createDesktopCanvasRuntimeAppAdapter(),
-    })
-    const { container } = await initRuntimeWithStubbedRenderer(runtime)
-    const events = createSceneInteractionEventHarness(container)
-    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
-    setInteractionViewport(runtime)
-    runtime.commandSurface.tools.setTool('plant-spacing')
-    const selection = vi.spyOn(runtime.querySurface, 'getDesignObjectSelection')
-      .mockImplementation(() => {
-        throw new Error('selection refresh failed')
-      })
-
-    expect(() => runtime.commandSurface.tools.setTool('select'))
-      .toThrow('selection refresh failed')
-    expect(activeTool.value).toBe('plant-spacing')
-    // The tool card still explains Plant a row.
-    expect(currentCanvasToolGuidance.value.plantRow).toMatchObject({ phase: 'pick', plantName: null })
-
-    selection.mockRestore()
-    clickAt(events, { x: 10, y: 10 })
-
-    expect(currentCanvasToolGuidance.value.plantRow).toMatchObject({ phase: 'row' })
     events.dispose()
     runtime.destroy()
   })

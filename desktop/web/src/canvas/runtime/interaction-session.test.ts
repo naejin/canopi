@@ -828,9 +828,9 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
     expect(rectangle.count('drag-start')).toBe(0)
   })
 
-  it('leaving a registered tool cancels its press through the host even when the hover clear fails', () => {
+  it('leaving a registered tool cancels its press through the host even when the hover clear fails, and arms Select', () => {
     const { tool: rectangle, open } = editingTool('rectangle')
-    useStubTools(rectangle)
+    useStubTools(rectangle, stubTool('select'))
     let failHover = false
     const { session } = createSession({
       setHoveredTarget: () => {
@@ -848,8 +848,8 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
     expect(rectangle.last('cancel')).toEqual({ kind: 'cancel', reason: 'tool-change' })
     expect(open()).toBe(false)
     expect(events.pointerCapture.has(15)).toBe(false)
-    expect(builtHosts.at(-1)?.activeTool.value).toBe('rectangle')
-    expect(container.style.cursor).toBe('crosshair')
+    expect(builtHosts.at(-1)?.activeTool.value).toBe('select')
+    expect(container.style.cursor).toBe('default')
   })
 
   it('entering a registered tool whose activation fails leaves Select armed', () => {

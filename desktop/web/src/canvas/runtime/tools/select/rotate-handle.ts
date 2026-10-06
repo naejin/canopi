@@ -105,7 +105,7 @@ export function applyRotation(drag: RotationDrag, point: ToolPoint): number {
   return deltaDeg
 }
 
-/** Applies the release point, then commits a turn or rolls back; a failed commit is rolled back too. */
+/** Applies the release point, then commits a turn or rolls back. */
 export function finishRotation(drag: RotationDrag, point: ToolPoint): void {
   if (!drag.open) return
   const deltaDeg = applyRotation(drag, point)
@@ -113,20 +113,11 @@ export function finishRotation(drag: RotationDrag, point: ToolPoint): void {
     abortRotation(drag)
     return
   }
-  try {
-    drag.tx.commit()
-    drag.open = false
-  } catch (error) {
-    try {
-      abortRotation(drag)
-    } catch {
-      // The commit's failure is the one reported; a failed rollback leaves the drag open for the next retry.
-    }
-    throw error
-  }
+  drag.open = false
+  drag.tx.commit()
 }
 
-/** Rolls the selection back; throws, still open, when the abort fails. */
+/** Rolls the selection back. */
 export function abortRotation(drag: RotationDrag): void {
   if (!drag.open) return
   drag.tx.abort()

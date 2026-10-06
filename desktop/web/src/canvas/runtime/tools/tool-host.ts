@@ -16,7 +16,7 @@
 // from tools/ (P5b).
 
 import { signal, untracked } from '@preact/signals'
-import { runCanvasRuntimeCleanups } from '../cleanup'
+import { CanvasRuntimeCleanupError, runCanvasRuntimeCleanups } from '../cleanup'
 import type { Gesture, MenuSource, PressTarget } from '../input/gestures'
 import type { TargetClass } from '../input/raw-input'
 import { createCanvasContextMenu } from '../interaction/canvas-context-menu'
@@ -187,6 +187,10 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let nudging = false
   let nudgeTimer: number | null = null
   let callDepth = 0
+  /** A fault is being handled: a tool call that throws during it is not handled again. */
+  let faulting = false
+  /** An activation, or any step of arming a tool, threw during the outermost call: its fault arms Select. */
+  let selectOnFault = false
   let invalidateNeeded = false
   let planeRevision = frame().view.planeRevision
   let mode = frame().mode
@@ -220,18 +224,57 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   /**
    * Every call into the tool: afterwards transient history bumps, and drafts, handles, guidance and redraws are flushed.
    * Calls run untracked: the runtime refreshes the session from inside its camera-frame effect, which must not come to
-   * depend on what the tool reads, nor re-run on the transient-history revision the call bumps.
+   * depend on what the tool reads, nor re-run on the transient-history revision the call bumps. The outermost call that
+   * throws runs the fault rule (fault).
    */
   function callTool<T>(run: () => T): T {
     return untracked(() => {
       callDepth += 1
       try {
         return run()
+      } catch (error) {
+        if (callDepth === 1 && !faulting) throw fault(error)
+        throw error
       } finally {
         callDepth -= 1
-        if (callDepth === 0) afterToolCall()
+        if (callDepth === 0) {
+          selectOnFault = false
+          afterToolCall()
+        }
       }
     })
+  }
+
+  /**
+   * The fault rule (spec §1.4 "Faults"), at the outermost tool call only, once: the open edits are aborted, the live press
+   * ends, the text entry closes and a fresh instance of the current tool is armed (Select if arming threw). The faulted
+   * instance hears no deactivate. A re-arm that throws arms a fresh Select, and a failure during the re-arm is not handled
+   * again. Returns the call's error, or it with the recovery's own failures.
+   */
+  function fault(error: unknown): unknown {
+    faulting = true
+    const id = selectOnFault ? 'select' : currentId
+    live = null
+    const errors: unknown[] = [error]
+    for (const step of [abortOpenEdits, closeTextEntry, () => rearm(id)]) {
+      try {
+        step()
+      } catch (failure) {
+        errors.push(failure)
+      }
+    }
+    faulting = false
+    return errors.length === 1 ? error : new CanvasRuntimeCleanupError('A tool call failed, and so did its recovery', errors)
+  }
+
+  function rearm(id: ToolId): void {
+    if (disposed) return
+    try {
+      activate(id, id === currentId ? activeSource : null)
+    } catch (failure) {
+      if (id !== 'select') activate('select', null)
+      throw failure
+    }
   }
 
   function afterToolCall(): void {
@@ -611,7 +654,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     // A pen or a finger reaches the map with no hover after a panel drag: its press shows the tool's draft again.
     showDraftAfterDrop()
     if (!activeTool) return NOTHING
-    if (live) guardCancellation(() => cancelLive('pointercancel'))
+    if (live) cancelLive('pointercancel')
     // The pointer is pressed now: a frame re-emits its drag, not the hover before it.
     lastHover = null
     // Under LEGACY an overview press pans in the recogniser and never reaches the host; nothing here samples or edits.
@@ -638,11 +681,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (g.target.kind === 'handle') {
       const handle = g.target.id
       live = liveGesture(g, 'handle', point, null)
-      cancelOnFailure(() => {
-        publishHandles()
-        callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'start', handle, point, start: point }))
-        clearPassiveHoverForEdit()
-      })
+      publishHandles()
+      callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'start', handle, point, start: point }))
+      clearPassiveHoverForEdit()
       return false
     }
     // Inspection owns the plain primary press, after handles and the pan check and before the tool; a Pan-tool press
@@ -723,36 +764,16 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
    */
   function release(tool: CanvasTool, finish: () => void): GestureOutcome {
     if (!tool.settledRelease?.()) {
-      cancelOnFailure(finish)
+      finish()
       return NOTHING
     }
     const admitted = deps.admission.runWhenSettled(() => {
-      cancelOnFailure(finish)
+      finish()
       return true
     }, false)
     if (admitted) return NOTHING
     cancelTransientInteraction('tool-change')
     return QUARANTINE
-  }
-
-  /**
-   * A release whose tool call throws runs the cancellation at once, as today's pointerup ran it in its finally, so the
-   * tool's Scene Edit closes at the release; so does a handle press whose start or presentation throws once the drag has
-   * opened its Scene Edit, as today's control points rolled back a drag whose presentation failed (rollbackDragSetup), so
-   * the next press is admitted. A cancellation that fails too still leaves no edit open (guardCancellation aborts it).
-   * The gesture's error is the one reported.
-   */
-  function cancelOnFailure(run: () => void): void {
-    try {
-      run()
-    } catch (error) {
-      try {
-        cancelTransientInteraction('tool-change')
-      } catch {
-        // guardCancellation has already aborted the open edit; the gesture's failure is reported.
-      }
-      throw error
-    }
   }
 
   /** The drag at its last screen point, converted through the current frame; its start is the press's world point. */
@@ -915,7 +936,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   function cancel(g: Extract<Gesture, { kind: 'cancel' }>): GestureOutcome {
     if (!live) return NOTHING
-    guardCancellation(() => {
+    callTool(() => {
       cancelLive(g.reason)
       clearPassiveHover()
       resetCursor()
@@ -956,20 +977,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   // ── Cancellation and interruption ────────────────────────────────────────────────────────────────────────────────
 
-  /** Runs a cancellation; a failure while a Scene Edit is still open leaves it pending, retried before the next event. */
-  /** A cancellation that fails leaves no edit open: whatever `run` left behind is aborted before its error reaches the
-   *  caller, so the scene is clean and the next press is admitted with nothing to retry. */
-  function guardCancellation(run: () => void): void {
-    try {
-      run()
-    } catch (error) {
-      abortOpenEdits()
-      throw error
-    } finally {
-      flush()
-    }
-  }
-
   function abortOpenEdits(): void {
     for (const tx of [...openEdits]) {
       openEdits.delete(tx)
@@ -983,10 +990,10 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   /**
    * Today's _cancelTransientInteraction: the series, the live press, the drop preview (today's one preview element), the
-   * passive hover, the tool's transient, the cursor.
+   * passive hover, the tool's transient, the cursor. One tool call: a failure of any step faults once, after them all.
    */
   function cancelTransientInteraction(reason: CancelTransientReason): void {
-    guardCancellation(() => {
+    callTool(() => {
       const tool = activeTool
       runCanvasRuntimeCleanups([
         () => endNudgeSeries(true),
@@ -996,9 +1003,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         ...(tool
           ? [
               () => clearPassiveHover(),
-              () => {
-                callTool(() => tool.cancelTransient(reason))
-              },
+              () => tool.cancelTransient(reason),
               () => resetCursor(),
             ]
           : []),
@@ -1166,42 +1171,33 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       flush()
       return
     }
-    callTool(() => tool.activate(contextFor(tool), source))
+    callTool(() => {
+      try {
+        tool.activate(contextFor(tool), source)
+      } catch (error) {
+        selectOnFault = true
+        throw error
+      }
+    })
     resetCursor()
   }
 
+  /** One tool call: any throw while arming, the tool left's cancellation included, arms a fresh Select (spec §1.4 "Faults"). */
   function setTool(id: ToolId, source: ToolSource | null): void {
     if (disposed) return
-    const changing = id !== currentId
-    if (changing) closeTextEntry()
-    cancelTransientInteraction('tool-change')
-    if (!changing) return
-    const previous = activeTool
-    const previousId = currentId
-    const previousSource = activeSource
-    if (previous) callTool(() => previous.deactivate('switch'))
-    try {
-      activate(id, source)
-    } catch (error) {
-      // A tool whose activation throws leaves Select armed, not the tool left: that tool is already deactivated, and
-      // reactivating it risks the same failure (or a stale pick). Select is the one tool every mode falls back to, except
-      // when Select's own activation is what just failed: there is no further fallback, so the tool before it is armed
-      // again, as before.
-      runCanvasRuntimeCleanups([
-        () => activeTool?.deactivate('switch'),
-        () => {
-          if (id !== 'select') {
-            activate('select', null)
-          } else {
-            currentId = previousId
-            activeSource = previousSource
-            activeTool = previous
-            if (previous) callTool(() => previous.activate(contextFor(previous), previousSource))
-          }
-        },
-      ], 'Tool host activation rollback failed')
-      throw error
-    }
+    callTool(() => {
+      try {
+        const changing = id !== currentId
+        if (changing) closeTextEntry()
+        cancelTransientInteraction('tool-change')
+        if (!changing) return
+        activeTool?.deactivate('switch')
+        activate(id, source)
+      } catch (error) {
+        selectOnFault = true
+        throw error
+      }
+    })
   }
 
   // ── Nudges ───────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -1398,10 +1394,12 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     dispose(): void {
       if (disposed) return
       const tool = activeTool
+      // From here no tool owns its effects, and a fault aborts the open edits but arms nothing.
+      disposed = true
       runCanvasRuntimeCleanups([
         () => unsubscribeFrames(),
         () => endNudgeSeries(true),
-        () => guardCancellation(() => cancelLive('tool-change')),
+        () => cancelLive('tool-change'),
         () => tool?.cancelTransient('tool-change'),
         () => tool?.deactivate('dispose'),
         // The host is the menu's only opener: an open menu would hold commands for a disposed runtime.
@@ -1410,7 +1408,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
           if (tool) clearPassiveHover()
         },
         () => {
-          disposed = true
           activeTool = null
           pointerListeners.clear()
           if (publishedToolDraft || publishedDropPreview || publishedDecorations) deps.renderer.setDraft(null)
@@ -1418,7 +1415,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
           if (tool) deps.guidance(null)
         },
       ], 'Tool host disposal failed')
-      disposed = true
     },
   }
 }
