@@ -421,12 +421,6 @@ describe('ToolHost', () => {
       expect(stamp.calls).toEqual(['activate', 'viewChanged'])
       h.host.notePointer({ x: 150, y: 120 })
       expect(stamp.count('hover')).toBe(hovers + 1)
-
-      // null: no pointer rests on the map.
-      h.host.notePointer(null)
-      h.view.navigation.panByPx({ x: 10, y: 0 })
-      expect(stamp.count('hover')).toBe(hovers + 1)
-      expect(stamp.calls.filter((call) => call === 'viewChanged')).toHaveLength(2)
     })
 
     it('a camera frame with the pointer off the map calls viewChanged', () => {
