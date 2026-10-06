@@ -84,7 +84,8 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: "jsdom",
       // Test-only: MapLibre's TypeScript sources, for tests that run MapLibre's own code (view/camera-contract.test.ts,
-      // maplibre/workspace-map.test.ts, __tests__/openfreemap-basemap.test.ts). Builds never resolve it.
+      // maplibre/camera-driver.test.ts, maplibre/workspace-map.test.ts, __tests__/openfreemap-basemap.test.ts). Builds
+      // never resolve it.
       alias: { 'maplibre-gl-source': fileURLToPath(new URL('./node_modules/maplibre-gl/src', import.meta.url)) },
       // Playwright specs (e2e/) run under Playwright's own runner; its `test()` throws in vitest.
       exclude: [...configDefaults.exclude, "e2e/**"],

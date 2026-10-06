@@ -2,7 +2,7 @@
 //
 // geoToScreen: where a MapLibre map at a ViewCamera draws a lon/lat point, in CSS px (Web Mercator at 512 px tiles, turned by the
 // bearing about the screen centre). Production never projects a geographic point onto the screen (P3 keeps world-to-screen in
-// view-transform.ts); the fake maps and the bearing tween's anchor check do, through this copy.
+// view-transform.ts); the fake maps do, through this copy.
 
 import { geoToMercator, MAPLIBRE_WORLD_TILE_SIZE } from '../../canvas/projection'
 import { bearingCosSin } from '../../canvas/runtime/view/navigation-policy'

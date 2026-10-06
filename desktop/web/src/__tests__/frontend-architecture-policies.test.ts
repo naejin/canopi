@@ -1929,9 +1929,8 @@ const CANVAS_V2_POLICIES = [
   },
   {
     // view/ reaches no DOM module, MapLibre, Pixi or scene barrel: outside its own files it imports the pure canvas
-    // modules and signals, and scene/types.ts type-only (ScenePersistedState, ScenePlantEntity). Since 0E it calls
-    // performance.now, requestAnimationFrame and the window's timers itself (tests use Vitest fake timers), so P4 has
-    // no symbol rule.
+    // modules and signals, and scene/types.ts type-only (ScenePersistedState, ScenePlantEntity). Its one timer is
+    // frame-source.ts's settle setTimeout (tests use Vitest fake timers), so P4 has no symbol rule.
     kind: 'forbid-imports',
     name: 'P4 the view module imports only its pure dependencies',
     from: ['src/canvas/runtime/view/**'],

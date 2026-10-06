@@ -21,8 +21,6 @@ import { installCanvasKeyRouter } from '../../__tests__/support/key-router'
 import { createTestView, type TestView } from '../../__tests__/support/test-view'
 import { Compass } from './Compass'
 
-/** A tween and its frame: the 300 ms turn, with room for the last frame. */
-const TURN_MS = 320
 /** The compass's centre on screen; its box is a 28 px button about it. */
 const CENTRE = { x: 100, y: 100 }
 
@@ -129,10 +127,8 @@ describe('Compass', () => {
   })
 
   it('click resets north', () => {
-    vi.useFakeTimers()
     mount(30)
     act(() => { compass().click() })
-    act(() => { vi.advanceTimersByTime(TURN_MS) })
     expect(bearing()).toBe(0)
   })
 
@@ -166,7 +162,6 @@ describe('Compass', () => {
   })
 
   it('a press on the needle that drifts past 3 px turns nothing and is no click', () => {
-    vi.useFakeTimers()
     mount(30)
     // A press lands on the needle beside the centre and rolls 3.6 px across it: past 3 px it is a drag (spec §4.2), and
     // near the centre the pointer's angle means nothing, so the view does not turn.
@@ -175,12 +170,10 @@ describe('Compass', () => {
     expect(bearing()).toBe(30)
     pointer(compass(), 'pointerup', { x: CENTRE.x - 2, y: CENTRE.y + 2 })
     pointerClick()
-    act(() => { vi.advanceTimersByTime(TURN_MS) })
     expect(bearing()).toBe(30)
   })
 
   it('a drag from the face into the needle is no click', () => {
-    vi.useFakeTimers()
     mount(30)
     // 10 px of travel straight in to the centre: a drag, so its release does not reset north.
     pointer(compass(), 'pointerdown', { x: CENTRE.x + 10, y: CENTRE.y })
@@ -188,12 +181,10 @@ describe('Compass', () => {
     pointer(compass(), 'pointermove', CENTRE)
     pointer(compass(), 'pointerup', CENTRE)
     pointerClick()
-    act(() => { vi.advanceTimersByTime(TURN_MS) })
     expect(bearing()).toBe(30)
   })
 
   it('a drag that stays on the needle across the centre is no click', () => {
-    vi.useFakeTimers()
     mount(30)
     // From 5 px on one side of the centre to 5 px on the other: 10 px of travel, all of it inside the needle.
     pointer(compass(), 'pointerdown', { x: CENTRE.x - 5, y: CENTRE.y })
@@ -201,7 +192,6 @@ describe('Compass', () => {
     pointer(compass(), 'pointermove', { x: CENTRE.x + 5, y: CENTRE.y })
     pointer(compass(), 'pointerup', { x: CENTRE.x + 5, y: CENTRE.y })
     pointerClick()
-    act(() => { vi.advanceTimersByTime(TURN_MS) })
     expect(bearing()).toBe(30)
   })
 
@@ -231,7 +221,6 @@ describe('Compass', () => {
     // The tap's click comes from its own gesture, a task after the release.
     act(() => { vi.advanceTimersByTime(50) })
     pointerClick()
-    act(() => { vi.advanceTimersByTime(TURN_MS) })
     expect(bearing()).toBe(0)
   })
 
@@ -257,18 +246,15 @@ describe('Compass', () => {
     expect(bearing()).toBeCloseTo(320, 6)
     act(() => { vi.advanceTimersByTime(50) })
     pointerClick()
-    act(() => { vi.advanceTimersByTime(TURN_MS) })
     expect(bearing()).toBeCloseTo(320, 6)
     // The next press is a click again.
     pointer(compass(), 'pointerdown', around(-90, 15), touch)
     pointer(compass(), 'pointerup', around(-90, 15), touch)
     pointerClick()
-    act(() => { vi.advanceTimersByTime(TURN_MS) })
     expect(bearing()).toBe(0)
   })
 
   it('a screen reader activation after a drag that sent no click resets north', () => {
-    vi.useFakeTimers()
     mount(30)
     // A touch drag past the tap slop: the browser sends no click after its release.
     pointer(compass(), 'pointerdown', around(-90))
@@ -277,7 +263,6 @@ describe('Compass', () => {
     expect(bearing()).toBeCloseTo(60, 6)
     // A screen reader activates the button with a click of detail 0.
     act(() => { compass().click() })
-    act(() => { vi.advanceTimersByTime(TURN_MS) })
     expect(bearing()).toBe(0)
   })
 
@@ -296,21 +281,17 @@ describe('Compass', () => {
   })
 
   it('Enter and Space reset', () => {
-    vi.useFakeTimers()
     mount(30)
     compass().focus()
     expect(key(compass(), { key: 'Enter', code: 'Enter' }).defaultPrevented).toBe(true)
-    act(() => { vi.advanceTimersByTime(TURN_MS) })
     expect(bearing()).toBe(0)
 
     act(() => { view.navigation.showCamera({ ...view.view().camera, bearingDeg: 60 }) })
     expect(key(compass(), { key: ' ', code: 'Space' }).defaultPrevented).toBe(true)
-    act(() => { vi.advanceTimersByTime(TURN_MS) })
     expect(bearing()).toBe(0)
   })
 
   it('an Esc before 3 px ends the press with no reset', () => {
-    vi.useFakeTimers()
     mount(30)
     router = installCanvasKeyRouter(() => null)
     pointer(compass(), 'pointerdown', around(-90))
@@ -318,13 +299,11 @@ describe('Compass', () => {
     expect(key(compass(), { key: 'Escape', code: 'Escape' }).defaultPrevented).toBe(true)
     pointer(compass(), 'pointerup', around(-90))
     pointerClick()
-    act(() => { vi.advanceTimersByTime(TURN_MS) })
     expect(bearing()).toBe(30)
     // The next press is a click again.
     pointer(compass(), 'pointerdown', around(-90))
     pointer(compass(), 'pointerup', around(-90))
     pointerClick()
-    act(() => { vi.advanceTimersByTime(TURN_MS) })
     expect(bearing()).toBe(0)
   })
 

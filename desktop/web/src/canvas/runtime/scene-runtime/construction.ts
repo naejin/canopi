@@ -50,7 +50,7 @@ import type { ViewFrameSource } from '../view/types'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport'
 
-/** A detached runtime has no platform preference: it eases. */
+/** A detached runtime has no platform preference: it flies. */
 const NO_REDUCED_MOTION: ReadonlySignal<boolean> = signal(false)
 /** The closest a new or empty Design opens: about one country wide. */
 const NEW_DESIGN_OVERVIEW_MAX_ZOOM = 5
