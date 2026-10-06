@@ -7,8 +7,8 @@
 // The row's plants repeat the source at the spacing interval of the tool card's field (the spacing commands; Settings keeps
 // the interval). Shift turns the row to 45° steps against the screen from the source, its length then snapped along it
 // (the host's constraint), Ctrl or Cmd turns snapping off (noSnap), and the host clamps the pointer to the view
-// (clampsToView). A pan, a blur and a tool re-arm keep the source; Esc
-// drops it first, then leaves the tool (today's order, even mid-drag). The draft is the source ring at the plant's
+// (clampsToView). A pan, a blur and a tool re-arm keep the source; the source is the tool's transient, which Esc drops
+// (the chain's tool-transient layer), and with none the chain's tool layer leaves the tool. The draft is the source ring at the plant's
 // presented radius, the dashed row guide, a disc for each plant the row would add (at most 250) and the guide's length.
 
 import {
@@ -367,13 +367,10 @@ export function createPlantRowTool(): CanvasTool {
     command(c) {
       switch (c.kind) {
         case 'escape':
-          // Today's order: the source first, even mid-drag, then the tool itself.
-          if (source) {
-            clear()
-            publish()
-          } else {
-            context().effects.requestTool('select')
-          }
+          // The source is the transient; with none Esc passes, and the chain's tool layer leaves.
+          if (!source) return 'pass'
+          clear()
+          publish()
           return 'handled'
         case 'spacing-input':
         case 'spacing-commit':

@@ -146,8 +146,10 @@ describe('Plant a row tool', () => {
     h.release({ x: 26, y: 30 })
     expect(added(h)).toEqual([])
 
-    expect(h.host.command({ kind: 'escape' })).toBe('handled')
-    expect(h.toolState.peek()).toBe('select')
+    // Nothing held: the tool's Esc passes, and the chain's tool layer leaves.
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
+    expect(h.host.command({ kind: 'escape' })).toBe('pass')
+    expect(h.toolState.peek()).toBe('plant-spacing')
   })
 
   it('a blur keeps the row source and its preview', () => {
