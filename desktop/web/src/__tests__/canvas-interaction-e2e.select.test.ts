@@ -4789,4 +4789,27 @@ describe('SceneInteractionSession', () => {
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     session.dispose()
   })
+
+  it('a finger that jitters 5 px on empty ground draws no band (A9)', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const deps = createInteractionDeps(container, store, testView)
+    const session = createTestSession(deps)
+    session.setTool('select')
+    deps.setSelection([plantTarget('plant-1')])
+    const finger = { pointerType: 'touch', pointerId: 7, isPrimary: true }
+
+    const bands = () => deps.renderer.calls.filter((call) =>
+      call.method === 'setDraft' && call.draft?.shapes.some((shape) => shape.kind === 'quad')).length
+
+    events.pointerDown({ x: 200, y: 200 }, { ...finger, button: 0, buttons: 1 })
+    events.pointerMove({ x: 203, y: 204 }, { ...finger, button: -1, buttons: 1 })
+    events.pointerUp({ x: 204, y: 203 }, { ...finger, button: 0, buttons: 0 })
+
+    // The lift is a tap on empty ground: it clears the selection, and no band was drawn.
+    expect(bands()).toBe(0)
+    expect(currentCanvasSelection.value).toEqual(new Set())
+    session.dispose()
+  })
 })

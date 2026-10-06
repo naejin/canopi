@@ -125,12 +125,10 @@ export function createSelectTool(): CanvasTool {
     }
     const result = pressSelection(c, point, hit, clickCount)
     switch (result.kind) {
-      case 'band': {
-        const band: Band = { start: point.world, additive: result.additive }
-        gesture = { kind: 'band', band, press: result }
-        c.effects.setDraft(bandDraft(c.view, band, point.world))
+      case 'band':
+        // The band draws from its drag: a tap (a finger's held press resolves at its lift) draws none.
+        gesture = { kind: 'band', band: { start: point.world, additive: result.additive }, press: result }
         break
-      }
       case 'move':
         gesture = {
           kind: 'move',
