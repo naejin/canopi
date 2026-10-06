@@ -1801,7 +1801,13 @@
       "zoom": "Zoomen",
       "altClick": "Alt + klik",
       "removeFromSelection": "Uit de selectie verwijderen",
-      "linuxPinch": "Op Linux wordt knijpen op de trackpad nog niet ondersteund. Zoom met Ctrl + scrollen."
+      "linuxPinch": "Op Linux wordt knijpen op de trackpad nog niet ondersteund. Zoom met Ctrl + scrollen.",
+      "touchHeading": "Aanraken",
+      "oneFinger": "Eén vinger",
+      "oneFingerAction": "Selecteren of tekenen; met het gereedschap Pannen de kaart verschuiven",
+      "twoFingers": "Twee vingers",
+      "touchNavigate": "Verschuiven, zoomen en de weergave draaien",
+      "longPress": "Ingedrukt houden"
     }
   },
   "settings": {

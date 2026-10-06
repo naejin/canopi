@@ -1,4 +1,6 @@
+import { signal } from '@preact/signals'
 import { render } from 'preact'
+import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   mapAttributionFolded,
@@ -17,6 +19,8 @@ import {
 } from '../app/shell/visible-map-area'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { SidePanelDock } from '../components/shared/SidePanelDock'
+import { InspectionLens } from '../components/canvas/InspectionLens'
+import type { CanvasInspectionHandle } from '../canvas/inspection'
 import { framingRect } from '../canvas/runtime/view/fit'
 import type { ScenePersistedState } from '../canvas/runtime/scene'
 import { plantFinderMapMatches, zoomToPlantFinderMatches } from '../app/plant-finder/map-matches'
@@ -24,7 +28,7 @@ import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
 import type { CanopiFile } from '../types/design'
 import { createLiveTestCanvasRuntimeHost } from './support/live-canvas-runtime'
 import { geoAt } from './support/geo-design'
-import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
+import { createTestCanvasDocumentSurface, createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 import { createTestView } from './support/test-view'
 
 type Box = { left: number; top: number; width: number; height: number }
@@ -150,6 +154,174 @@ describe('visible map area', () => {
       releaseArea()
     }
     expect(area.style.getPropertyValue('--map-inset-left')).toBe('')
+  })
+
+  it('the open inspection lens covers the map\'s left edge, so Home and Fit frame the Design right of it', async () => {
+    const view: CanvasInspectionHandle = {
+      state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true, frame: { width: 430, height: 390 }, plants: [] }),
+      sourceQuad: signal(null),
+      inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panByScreen: vi.fn(), zoomBy: vi.fn(),
+      highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
+    }
+    const surfaces = createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ attachInspectionTo: () => view }) })
+    const setFramingInsets = vi.spyOn(surfaces.commands.viewport, 'setFramingInsets')
+    setCurrentCanvasSession(surfaces)
+    // The lens panel stands at the tool card's left, under the title bar: 390 px wide, 620 px expanded.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.tagName === 'SECTION' && this.hasAttribute('data-expanded')) {
+        return rect({ left: 248, top: 72, width: this.dataset.expanded === 'true' ? 620 : 390, height: 420 })
+      }
+      return rect(boxes.get(this) ?? { left: 0, top: 0, width: 0, height: 0 })
+    })
+    const area = element(WINDOW)
+    const releaseArea = registerMapArea(area)
+    const host = element(WINDOW)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    try {
+      await act(async () => render(<InspectionLens canvasRef={{ current: host }} />, container))
+      expect(visibleMapFrame.value.left).toBe(0)
+
+      await act(async () => container.querySelector<HTMLButtonElement>('[data-inspection-launcher]')!.click())
+      expect(visibleMapFrame.value.left).toBe(248 + 390)
+      expect(setFramingInsets).toHaveBeenLastCalledWith(expect.objectContaining({ left: 248 + 390 }))
+
+      await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand lens"]')!.click())
+      refreshVisibleMapArea()
+      expect(visibleMapFrame.value.left).toBe(248 + 620)
+
+      await act(async () => render(null, container))
+      expect(visibleMapFrame.value.left).toBe(0)
+    } finally {
+      render(null, container)
+      container.remove()
+      releaseArea()
+    }
+  })
+
+  it('on a phone the open inspection lens leaves the map area whole, so the selection chip and credits stay on screen', async () => {
+    const view: CanvasInspectionHandle = {
+      state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true, frame: { width: 284, height: 284 }, plants: [] }),
+      sourceQuad: signal(null),
+      inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panByScreen: vi.fn(), zoomBy: vi.fn(),
+      highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
+    }
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ attachInspectionTo: () => view }) }))
+    // A 360 px phone held upright: the panel runs from 68 px to 352 px, nearly the map's whole width.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.tagName === 'SECTION' && this.hasAttribute('data-expanded')) return rect({ left: 68, top: 60, width: 284, height: 420 })
+      return rect(boxes.get(this) ?? { left: 0, top: 0, width: 0, height: 0 })
+    })
+    const area = element({ left: 0, top: 0, width: 360, height: 740 })
+    const releaseArea = registerMapArea(area)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    try {
+      await act(async () => render(<InspectionLens canvasRef={{ current: element(WINDOW) }} />, container))
+      await act(async () => container.querySelector<HTMLButtonElement>('[data-inspection-launcher]')!.click())
+      expect(container.querySelector('section[data-expanded]')).not.toBeNull()
+      refreshVisibleMapArea()
+      expect(visibleMapFrame.value.left).toBe(0)
+      expect(area.style.getPropertyValue('--map-inset-left')).toBe('0px')
+    } finally {
+      render(null, container)
+      container.remove()
+      releaseArea()
+    }
+  })
+
+  it.each([
+    // An iPad held upright (768 x 1024, no phone layout): the named tool rail, the panel rail, and the compact lens at
+    // 248..638 would leave 66 px of map.
+    { name: 'a 768 px window', window: { left: 0, top: 0, width: 768, height: 1024 }, right: { left: 704, top: 72, width: 52, height: 420 }, expand: false },
+    // Desktop's default window with the dock open: the expanded lens at 248..868 meets the dock at 824.
+    { name: 'a 1280 px window beside the open dock', window: WINDOW, right: DOCK, expand: true },
+  ])('in $name the open lens, which would leave under 360 px of map, leaves Fit, Home and the chips to the rails', async ({ window: map, right, expand }) => {
+    const view: CanvasInspectionHandle = {
+      state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true, frame: { width: 390, height: 350 }, plants: [] }),
+      sourceQuad: signal(null),
+      inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panByScreen: vi.fn(), zoomBy: vi.fn(),
+      highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
+    }
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ attachInspectionTo: () => view }) }))
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.tagName === 'SECTION' && this.hasAttribute('data-expanded')) {
+        return rect({ left: 248, top: 72, width: this.dataset.expanded === 'true' ? 620 : 390, height: 420 })
+      }
+      return rect(boxes.get(this) ?? { left: 0, top: 0, width: 0, height: 0 })
+    })
+    const area = element(map)
+    const releaseArea = registerMapArea(area)
+    const releaseRail = registerMapOccluder(element(TOOL_RAIL), 'left')
+    const releaseRight = registerMapOccluder(element(right), 'right')
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    try {
+      await act(async () => render(<InspectionLens canvasRef={{ current: element(map) }} />, container))
+      const before = visibleMapFrame.value
+      await act(async () => container.querySelector<HTMLButtonElement>('[data-inspection-launcher]')!.click())
+      if (expand) await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand lens"]')!.click())
+      refreshVisibleMapArea()
+      expect(container.querySelector(`section[data-expanded="${expand}"]`)).not.toBeNull()
+      expect(visibleMapFrame.value).toEqual(before)
+      expect(area.style.getPropertyValue('--map-inset-left')).toBe('236px')
+    } finally {
+      render(null, container)
+      container.remove()
+      releaseRight()
+      releaseRail()
+      releaseArea()
+    }
+  })
+
+  it.each([
+    // Names to icons: the lens moves from 248..638 (198 px of map left) to 76..466 (370 px left), so it starts covering.
+    { name: 'names to icons', from: 'named', to: 'icons', before: 236, after: 466 },
+    // Icons to names: the lens moves from 76..466 to 248..638, so it stops covering and the selection chip keeps its room.
+    { name: 'icons to names', from: 'icons', to: 'named', before: 466, after: 236 },
+  ] as const)('in a 900 px window the open lens measures its room again when the tool rail switches $name', async ({ from, to, before, after }) => {
+    const view: CanvasInspectionHandle = {
+      state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true, frame: { width: 390, height: 350 }, plants: [] }),
+      sourceQuad: signal(null),
+      inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panByScreen: vi.fn(), zoomBy: vi.fn(),
+      highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
+    }
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ attachInspectionTo: () => view }) }))
+    // The lens stands at the tool card's left: 76 px beside the icon rail, 248 px beside the named rail.
+    const rails = { icons: { left: 12, width: 52 }, named: { left: 12, width: 224 } }
+    const lensLeft = { icons: 76, named: 248 }
+    let shown: 'icons' | 'named' = from
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.tagName === 'SECTION' && this.hasAttribute('data-expanded')) return rect({ left: lensLeft[shown], top: 72, width: 390, height: 420 })
+      return rect(boxes.get(this) ?? { left: 0, top: 0, width: 0, height: 0 })
+    })
+    const map = { left: 0, top: 0, width: 900, height: 800 }
+    const area = element(map)
+    const releaseArea = registerMapArea(area)
+    const rail = element({ ...rails[from], top: 72, height: 480 })
+    const releaseRail = registerMapOccluder(rail, 'left')
+    const releaseRight = registerMapOccluder(element({ left: 836, top: 72, width: 52, height: 420 }), 'right')
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    try {
+      await act(async () => render(<InspectionLens canvasRef={{ current: element(map) }} />, container))
+      await act(async () => container.querySelector<HTMLButtonElement>('[data-inspection-launcher]')!.click())
+      refreshVisibleMapArea()
+      expect(visibleMapFrame.value.left).toBe(before)
+
+      // The rail switches; its resize recomputes the frame while the lens keeps its size.
+      shown = to
+      boxes.set(rail, { ...rails[to], top: 72, height: 480 })
+      await act(async () => refreshVisibleMapArea())
+      refreshVisibleMapArea()
+      expect(visibleMapFrame.value.left).toBe(after)
+    } finally {
+      render(null, container)
+      container.remove()
+      releaseRight()
+      releaseRail()
+      releaseArea()
+    }
   })
 
   it('frames temporary focus and Fit to Design inside the visible map area', () => {

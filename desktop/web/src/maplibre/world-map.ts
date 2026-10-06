@@ -18,6 +18,7 @@ export interface WorldMapLibreMap extends MapLibreMapInstance {
   getCenter(): { lng: number; lat: number }
   getZoom(): number
   readonly keyboard: { disableRotation(): void }
+  readonly touchZoomRotate: { disableRotation(): void }
 }
 
 export interface WorldMapMarker {
@@ -64,7 +65,9 @@ export function createWorldMapLibreMap(
     interactive: true,
     pitchWithRotate: false,
     dragRotate: false,
-    touchZoomRotate: false,
+    // North-up and flat: two fingers sliding together would tilt it, and no control resets a tilt.
+    touchPitch: false,
+    maxPitch: 0,
     // Shift+drag pans like any drag instead of drawing MapLibre's zoom box (spec §4.17).
     boxZoom: false,
     transformRequest: options.transformRequest,
@@ -80,6 +83,8 @@ export function createWorldMapLibreMap(
   // +/- zoom, but Shift+arrows neither turn nor tilt it (world-map-surface.test.tsx,
   // "Shift+arrow keys do not turn or tilt the World map").
   map.keyboard.disableRotation()
+  // A pinch zooms the map, not the page, on a phone; a twist turns nothing (world-map-surface.test.tsx).
+  map.touchZoomRotate.disableRotation()
 
   try {
     const NavigationControl = (maplibre as WorldMapLibreApi).NavigationControl

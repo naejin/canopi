@@ -32,7 +32,7 @@ interface ShortcutRow {
  * Help › Keyboard shortcuts (F1): every menu command that has a shortcut,
  * grouped by menu, generated from the same menus so it cannot drift, then the
  * mouse, trackpad and pen gestures as a static list (not generated from the
- * input bindings), then the keys that are not commands (F6 between areas,
+ * input pipeline), then Touch (every device: touch laptops too), then the keys that are not commands (F6 between areas,
  * arrow-key nudges, turning a stamp). View shows turning the view and Reset
  * north as two static rows with every chord, in place of the menu's three
  * rotation rows, and Fit the Design with Home after the map's + and −. With
@@ -69,6 +69,7 @@ export function KeyboardShortcutsDialog({ menus, platform, linuxPinchNote = fals
     }))
     .filter((section) => section.rows.length > 0)
   const gestures = { id: 'gestures', label: t('shortcuts.gestures.heading'), rows: gestureRows(platform) }
+  const touch = { id: 'touch', label: t('shortcuts.gestures.touchHeading'), rows: touchRows() }
   // Keys that are not menu commands: moving between areas (F6), nudging or panning on the map and turning a stamp.
   const arrows = t('shortcuts.arrowKeys')
   // The large step is mod: Ctrl, or Cmd on macOS.
@@ -83,7 +84,7 @@ export function KeyboardShortcutsDialog({ menus, platform, linuxPinchNote = fals
     // Place a stamp's [ and ]: while the map has focus even with single-key shortcuts off, like the arrows.
     { id: 'rotate-stamp', label: t('shortcuts.rotateStamp'), shortcut: '[ ]' },
   ]
-  const allSections = [...sections, gestures, { id: 'workspace', label: t('shortcuts.workspaceHeading'), rows: workspaceRows }]
+  const allSections = [...sections, gestures, touch, { id: 'workspace', label: t('shortcuts.workspaceHeading'), rows: workspaceRows }]
 
   return (
     <WorkspaceDialog
@@ -112,7 +113,7 @@ export function KeyboardShortcutsDialog({ menus, platform, linuxPinchNote = fals
               {section.rows.map((row) => (
                 <div key={row.id} className={styles.row}>
                   <dt>{row.label}</dt>
-                  <dd><kbd className={section.id === 'gestures' ? `${styles.key} ${styles.wraps}` : styles.key}>{row.shortcut}</kbd></dd>
+                  <dd><kbd className={section.id === 'gestures' || section.id === 'touch' ? `${styles.key} ${styles.wraps}` : styles.key}>{row.shortcut}</kbd></dd>
                 </div>
               ))}
             </dl>
@@ -168,5 +169,15 @@ function gestureRows(platform: Pick<InputPlatform, 'os' | 'gestureEvents'> | und
     { id: 'zoom', label: g('zoom'), shortcut: g('pinch') },
     { id: 'remove', label: g('removeFromSelection'), shortcut: g('altClick') },
     { id: 'pen', label: `${g('pan')} · ${g('menu')}`, shortcut: g('penButton') },
+  ]
+}
+
+/** The touch gestures (spec §9.4): shown on every device, since a touch laptop runs Desktop with a mouse too. */
+function touchRows(): ShortcutRow[] {
+  const g = (name: string) => t(`shortcuts.gestures.${name}`)
+  return [
+    { id: 'one-finger', label: g('oneFingerAction'), shortcut: g('oneFinger') },
+    { id: 'two-fingers', label: g('touchNavigate'), shortcut: g('twoFingers') },
+    { id: 'long-press', label: g('menu'), shortcut: g('longPress') },
   ]
 }

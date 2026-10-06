@@ -91,6 +91,13 @@ class FakeWorldMap {
       this.keyboard.rotationDisabled = true
     }),
   }
+  // MapLibre's two-finger handler: a pinch zooms, and a twist turns the map unless its rotation is disabled.
+  readonly touchZoomRotate = {
+    rotationDisabled: false,
+    disableRotation: vi.fn(() => {
+      this.touchZoomRotate.rotationDisabled = true
+    }),
+  }
   // The background owner installs the Basemap's vector sources and layers and
   // the Satellite raster on the live map, so a faithful fake implements that
   // narrow surface. A map that cannot be reconciled is not a map this surface
@@ -416,7 +423,6 @@ describe('WorldMapSurface', () => {
     expect(maps[0]!.options).toMatchObject({
       pitchWithRotate: false,
       dragRotate: false,
-      touchZoomRotate: false,
       // Shift+drag pans like any drag: no box zoom (spec §4.17).
       boxZoom: false,
     })
@@ -462,6 +468,16 @@ describe('WorldMapSurface', () => {
     // Shift+arrow turn and tilt are off, so the World map stays north-up.
     expect(maps[0]!.options.keyboard).not.toBe(false)
     expect(maps[0]!.keyboard.rotationDisabled).toBe(true)
+  })
+
+  it('a pinch zooms the World map, which a twist never turns and two fingers never tilt', async () => {
+    await renderWorldMap(container, { templates: [], selectedId: null, onSelect: vi.fn() })
+    await vi.waitFor(() => expect(maps).toHaveLength(1))
+    // On a phone a pinch over the map zooms the map, not the page; the map stays north-up (spec §4.17).
+    expect(maps[0]!.options.touchZoomRotate).not.toBe(false)
+    expect(maps[0]!.touchZoomRotate.rotationDisabled).toBe(true)
+    // Two fingers sliding up together would tilt it, and nothing on the World map resets a tilt.
+    expect(maps[0]!.options).toMatchObject({ touchPitch: false, maxPitch: 0 })
   })
 
   it('switches between Basemap and Satellite on the live map instead of rebuilding it', async () => {

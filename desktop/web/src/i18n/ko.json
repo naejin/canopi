@@ -1801,7 +1801,13 @@
       "zoom": "확대/축소",
       "altClick": "Alt + 클릭",
       "removeFromSelection": "선택에서 제거",
-      "linuxPinch": "Linux에서는 아직 트랙패드 핀치를 지원하지 않습니다. Ctrl + 스크롤로 확대/축소하세요."
+      "linuxPinch": "Linux에서는 아직 트랙패드 핀치를 지원하지 않습니다. Ctrl + 스크롤로 확대/축소하세요.",
+      "touchHeading": "터치",
+      "oneFinger": "한 손가락",
+      "oneFingerAction": "선택 또는 그리기, 이동 도구로는 지도 이동",
+      "twoFingers": "두 손가락",
+      "touchNavigate": "이동, 확대/축소, 보기 회전",
+      "longPress": "길게 누르기"
     }
   },
   "settings": {

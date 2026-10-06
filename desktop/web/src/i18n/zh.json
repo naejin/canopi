@@ -1801,7 +1801,13 @@
       "zoom": "缩放",
       "altClick": "Alt + 单击",
       "removeFromSelection": "从选择中移除",
-      "linuxPinch": "在 Linux 上暂不支持触控板捏合。请使用 Ctrl + 滚动进行缩放。"
+      "linuxPinch": "在 Linux 上暂不支持触控板捏合。请使用 Ctrl + 滚动进行缩放。",
+      "touchHeading": "触摸",
+      "oneFinger": "单指",
+      "oneFingerAction": "选择或绘制；使用平移工具时平移地图",
+      "twoFingers": "双指",
+      "touchNavigate": "平移、缩放和旋转视图",
+      "longPress": "长按"
     }
   },
   "settings": {

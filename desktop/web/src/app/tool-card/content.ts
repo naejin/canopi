@@ -18,6 +18,8 @@ export interface ToolCardInput {
   /** Settings › Canvas › Pointing device (stored scroll_wheel: 'zoom' is Mouse, 'pan' is Trackpad): Select's line says
    *  how this device pans and zooms. */
   readonly scrollWheel: 'zoom' | 'pan'
+  /** A coarse primary pointer (a touch screen): Select's line names two fingers and a pinch, as for a trackpad. */
+  readonly coarsePointer: boolean
   /** The platform's mod key name (Ctrl, or Cmd on a Mac), for Plant a row's no-snap hint. */
   readonly modKey: string
   readonly translate: Translate
@@ -93,7 +95,7 @@ export function toolCardContent(input: ToolCardInput): ToolCardContent | null {
   switch (tool) {
     case 'select':
       // No Esc meaning: under Select, Esc only clears the selection.
-      return card(null, '', translate(input.scrollWheel === 'pan' ? 'canvas.toolCard.selectHintPan' : 'canvas.toolCard.selectHint'))
+      return card(null, '', translate(input.scrollWheel === 'pan' || input.coarsePointer ? 'canvas.toolCard.selectHintPan' : 'canvas.toolCard.selectHint'))
     case 'hand':
       return card(null, translate('canvas.toolCard.panHint'))
     case 'plant-stamp':

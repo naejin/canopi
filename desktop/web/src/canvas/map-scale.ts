@@ -26,3 +26,25 @@ export function formatMapScale(denominator: number, locale: string): string {
 export function zoomFactorForScale(currentDenominator: number, targetDenominator: number): number {
   return currentDenominator / targetDenominator
 }
+
+/** The zoom group's scale bar: a round ground distance whose bar fits about 100 CSS px at the current scale. */
+const SCALE_BAR_MAX_PX = 125
+
+interface ScaleBarDisplay {
+  readonly barScreenPx: number
+  /** The ground distance the bar spans, in metres. */
+  readonly meters: number
+}
+
+/** `scale` is CSS pixels per ground metre, positive and finite on a validated camera. */
+export function getScaleBarDisplay(scale: number): ScaleBarDisplay {
+  const meters = niceDistanceAtMost(SCALE_BAR_MAX_PX / scale)
+  return { barScreenPx: meters * scale, meters }
+}
+
+/** The largest 1, 2 or 5 times a power of ten that is at most `maximum`. */
+function niceDistanceAtMost(maximum: number): number {
+  const power = 10 ** Math.floor(Math.log10(maximum))
+  const normalized = maximum / power
+  return (normalized >= 5 ? 5 : normalized >= 2 ? 2 : 1) * power
+}

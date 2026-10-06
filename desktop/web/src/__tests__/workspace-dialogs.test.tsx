@@ -194,11 +194,12 @@ describe('Keyboard shortcuts dialog', () => {
       'Tools (anywhere except text fields)',
       'File',
       'Mouse, trackpad and pen',
+      'Touch',
       'Map and workspace',
     ])
     expect(sections[1]!.textContent).toBe('FileNew DesignCtrl N')
     // Keys that are not menu commands: regions, nudges, map pans and turning a stamp.
-    expect([...sections[3]!.querySelectorAll('dt')].map((row) => row.textContent)).toEqual([
+    expect([...sections[4]!.querySelectorAll('dt')].map((row) => row.textContent)).toEqual([
       'Next area: title bar, tools, map, panel',
       'Previous area',
       'Nudge the selection 10 cm in the arrow\'s direction on screen',
@@ -207,7 +208,7 @@ describe('Keyboard shortcuts dialog', () => {
       'Pan the map farther when nothing is selected',
       'Turn the stamp you are placing by 15°',
     ])
-    expect([...sections[3]!.querySelectorAll('dd')].map((row) => row.textContent)).toEqual([
+    expect([...sections[4]!.querySelectorAll('dd')].map((row) => row.textContent)).toEqual([
       'F6', 'Shift F6', 'Arrow keys', 'Ctrl Arrow keys', 'Arrow keys', 'Ctrl Arrow keys', '[ ]',
     ])
     expect(container.textContent).toContain('Esc does one thing at a time')
@@ -291,6 +292,23 @@ describe('Keyboard shortcuts dialog', () => {
       expect(gestureRows()).toContainEqual(['Open the menu', 'Right-click · Control-click'])
     } finally {
       setShortcutPlatform({ os: 'linux' })
+    }
+  })
+
+  it('a Touch section after the mouse gestures names one finger, two fingers and press and hold, on every platform', async () => {
+    for (const platform of [{ os: 'windows', gestureEvents: false }, { os: 'ios', gestureEvents: true }] as const) {
+      await act(async () => { render(<KeyboardShortcutsDialog menus={menus} platform={platform} />, container) })
+      await act(async () => { openKeyboardShortcutsDialog() })
+      const sections = [...container.querySelectorAll('section section')]
+      const touch = sections.find((candidate) => candidate.querySelector('h3')?.textContent === 'Touch')!
+      expect(sections.indexOf(touch)).toBe(sections.findIndex((candidate) => candidate.querySelector('h3')?.textContent === 'Mouse, trackpad and pen') + 1)
+      expect([...touch.querySelectorAll('dl > div')].map((row) => [row.querySelector('dt')!.textContent, row.querySelector('dd')!.textContent])).toEqual([
+        ['Select or draw; with the Pan tool, pan', 'One finger'],
+        ['Pan, zoom and turn the view', 'Two fingers'],
+        ['Open the menu', 'Press and hold'],
+      ])
+      await act(async () => { closeKeyboardShortcutsDialog() })
+      render(null, container)
     }
   })
 

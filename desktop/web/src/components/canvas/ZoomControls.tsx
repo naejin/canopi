@@ -5,11 +5,11 @@ import { phoneLayout } from '../../app/shell/phone-layout'
 import {
   COMMON_MAP_SCALES,
   formatMapScale,
+  getScaleBarDisplay,
   mapScaleDenominator,
   roundScaleDenominator,
   zoomFactorForScale,
 } from '../../canvas/map-scale'
-import { getScaleBarDisplay } from '../../canvas/scale-bar'
 import { currentCanvasQuerySurface, currentCanvasViewportCommandSurface } from '../../canvas/session'
 import { t } from '../../i18n'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
@@ -29,21 +29,21 @@ const VIEW_ACTION_ICONS: Readonly<Record<string, ControlIconName>> = {
  * a ratio (a menu of common scales), zoom in, Fit to Design and, after a
  * divider, the compass (always shown). The map attribution pill sits just
  * left of it. On a phone it is a column on the right above the panel sheet:
- * zoom in, zoom out, the ratio and the compass, with 44 px targets; it is
- * placed from the visible map frame, so it covers no edge. The compass is a
- * button of the group: the group's layer and map registration cover it.
+ * zoom in, zoom out, Fit to Design and the compass, with 44 px targets and no
+ * ratio (phones have no scale readout); it is placed from the visible map
+ * frame, so it covers no edge. The compass is a button of the group: the
+ * group's layer and map registration cover it.
  */
 export function ZoomControls({ viewActions }: { readonly viewActions: readonly CanvasToolbarActionCommand[] }) {
+  const zoomIn = viewCommand(viewActions, 'zoom-in')
+  const zoomOut = viewCommand(viewActions, 'zoom-out')
+  const fit = viewCommand(viewActions, 'fit-to-design')
+  const resetNorth = viewCommand(viewActions, 'reset-north')
   const group = useRef<HTMLDivElement>(null)
   const phone = phoneLayout.value !== null
   useMapOccluder(group, 'bottom', !phone)
   useUnderRail(group, 'panel')
   const view = currentCanvasQuerySurface.value?.view
-  const command = (id: string) => viewActions.find((action) => action.id === id)
-  const zoomIn = command('zoom-in')
-  const zoomOut = command('zoom-out')
-  const fit = command('fit-to-design')
-  const resetNorth = command('reset-north')
   const zoomLimit = view?.zoomLimit.value ?? null
   const atMinimum = zoomLimit === 'min'
   const atMaximum = zoomLimit === 'max'
@@ -57,10 +57,10 @@ export function ZoomControls({ viewActions }: { readonly viewActions: readonly C
   if (phone) {
     return (
       <div ref={group} className={`${styles.group} ${styles.phone}`} role="group" aria-label={t('canvas.grid.zoom')} data-zoom-group="phone">
-        {zoomIn && <ZoomButton command={zoomIn} disabled={zoomIn.disabled || atMaximum} />}
-        {zoomOut && <ZoomButton command={zoomOut} disabled={zoomOut.disabled || atMinimum} />}
-        {denominator !== null && <ScaleMenu denominator={denominator} />}
-        {resetNorth && <Compass command={resetNorth} className={styles.button} />}
+        <ZoomButton command={zoomIn} disabled={zoomIn.disabled || atMaximum} />
+        <ZoomButton command={zoomOut} disabled={zoomOut.disabled || atMinimum} />
+        <ZoomButton command={fit} disabled={fit.disabled} />
+        <Compass command={resetNorth} className={styles.button} />
       </div>
     )
   }
@@ -74,16 +74,21 @@ export function ZoomControls({ viewActions }: { readonly viewActions: readonly C
         </span>
       )}
       <span className={styles.rule} aria-hidden="true" />
-      {zoomOut && <ZoomButton command={zoomOut} disabled={zoomOut.disabled || atMinimum} />}
+      <ZoomButton command={zoomOut} disabled={zoomOut.disabled || atMinimum} />
       {denominator !== null && <ScaleMenu denominator={denominator} />}
-      {zoomIn && <ZoomButton command={zoomIn} disabled={zoomIn.disabled || atMaximum} />}
-      {fit && <ZoomButton command={fit} disabled={fit.disabled} />}
-      {resetNorth && <>
-        <span className={styles.rule} aria-hidden="true" />
-        <Compass command={resetNorth} className={styles.button} />
-      </>}
+      <ZoomButton command={zoomIn} disabled={zoomIn.disabled || atMaximum} />
+      <ZoomButton command={fit} disabled={fit.disabled} />
+      <span className={styles.rule} aria-hidden="true" />
+      <Compass command={resetNorth} className={styles.button} />
     </div>
   )
+}
+
+/** The group's commands are static view commands: a missing one is a wiring bug, not a state to render. */
+function viewCommand(viewActions: readonly CanvasToolbarActionCommand[], id: string): CanvasToolbarActionCommand {
+  const command = viewActions.find((action) => action.id === id)
+  if (!command) throw new Error(`ZoomControls: no view command '${id}'`)
+  return command
 }
 
 function ZoomButton({ command, disabled }: { readonly command: CanvasToolbarActionCommand; readonly disabled: boolean }) {

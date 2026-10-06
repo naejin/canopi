@@ -1801,7 +1801,13 @@
       "zoom": "Zoom",
       "altClick": "Alt + click",
       "removeFromSelection": "Remove from the selection",
-      "linuxPinch": "On Linux, trackpad pinch is not supported yet. Use Ctrl + scroll to zoom."
+      "linuxPinch": "On Linux, trackpad pinch is not supported yet. Use Ctrl + scroll to zoom.",
+      "touchHeading": "Touch",
+      "oneFinger": "One finger",
+      "oneFingerAction": "Select or draw; with the Pan tool, pan",
+      "twoFingers": "Two fingers",
+      "touchNavigate": "Pan, zoom and turn the view",
+      "longPress": "Press and hold"
     }
   },
   "settings": {

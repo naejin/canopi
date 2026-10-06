@@ -1801,7 +1801,13 @@
       "zoom": "Zoom",
       "altClick": "Alt + clic",
       "removeFromSelection": "Rimuovere dalla selezione",
-      "linuxPinch": "Su Linux il pizzico sul trackpad non è ancora supportato. Usa Ctrl + scorrimento per lo zoom."
+      "linuxPinch": "Su Linux il pizzico sul trackpad non è ancora supportato. Usa Ctrl + scorrimento per lo zoom.",
+      "touchHeading": "Touch",
+      "oneFinger": "Un dito",
+      "oneFingerAction": "Selezionare o disegnare; con lo strumento Sposta la vista, spostare la mappa",
+      "twoFingers": "Due dita",
+      "touchNavigate": "Spostare, zoomare e ruotare la vista",
+      "longPress": "Tenere premuto"
     }
   },
   "settings": {

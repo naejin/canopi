@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { getScaleBarDisplay } from '../canvas/scale-bar'
 import {
   COMMON_MAP_SCALES,
   formatMapScale,
+  getScaleBarDisplay,
   mapScaleDenominator,
   roundScaleDenominator,
   zoomFactorForScale,

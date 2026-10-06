@@ -83,6 +83,13 @@
   cursor: pointer;
 }
 
+/* Touch screens: rows a finger can hit (the long-press canvas menu). */
+@media (pointer: coarse) {
+  .item {
+    min-height: var(--control-size-touch);
+  }
+}
+
 .label {
   flex: 1 1 auto;
   min-width: 0;

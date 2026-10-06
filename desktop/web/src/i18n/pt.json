@@ -1801,7 +1801,13 @@
       "zoom": "Zoom",
       "altClick": "Alt + clique",
       "removeFromSelection": "Remover da seleção",
-      "linuxPinch": "No Linux, o gesto de pinça no trackpad ainda não é suportado. Use Ctrl + rolagem para dar zoom."
+      "linuxPinch": "No Linux, o gesto de pinça no trackpad ainda não é suportado. Use Ctrl + rolagem para dar zoom.",
+      "touchHeading": "Toque",
+      "oneFinger": "Um dedo",
+      "oneFingerAction": "Selecionar ou desenhar; com a ferramenta Mover a vista, deslocar o mapa",
+      "twoFingers": "Dois dedos",
+      "touchNavigate": "Deslocar, ampliar e girar a vista",
+      "longPress": "Manter pressionado"
     }
   },
   "settings": {
