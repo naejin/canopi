@@ -8,7 +8,7 @@
 import { signal, type ReadonlySignal } from '@preact/signals'
 import type { CanvasToolGuidance } from '../../canvas/session-state'
 import { createSessionPlane, type GeoPosition } from '../../canvas/session-plane'
-import type { Gesture, MenuSource, PressTarget } from '../../canvas/runtime/input/gestures'
+import type { Gesture, MenuSource, NavigationSource, PressTarget } from '../../canvas/runtime/input/gestures'
 import { createInputRouter } from '../../canvas/runtime/input/input-router'
 import type { TargetClass } from '../../canvas/runtime/input/raw-input'
 import type {
@@ -402,6 +402,8 @@ export interface ToolHarness {
   drag(from: ScreenPoint, to: ScreenPoint, options?: PressOptions): GestureOutcome
   cancel(reason: CancelReason): GestureOutcome
   wheelZoom(at: ScreenPoint, factor: number): GestureOutcome
+  /** A pointer pan from `from` to `to` (a right-drag by default), the ground following the pointer. */
+  pan(from: ScreenPoint, to: ScreenPoint, source?: NavigationSource): void
   menu(at: ScreenPoint | 'selection', source?: MenuSource): GestureOutcome
   /** A panel drag over the map (dragover, dragleave, drop), as the session routes it to the host's drop route. */
   drop(phase: 'over' | 'leave' | 'drop', at?: ScreenPoint, payload?: CanvasDropPayload): GestureOutcome
@@ -684,6 +686,11 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       return route({ kind: 'cancel', reason })
     },
     wheelZoom: (at, factor) => route({ kind: 'zoom', anchorPx: at, factor, source: 'wheel' }),
+    pan(from, to, source = 'secondary-drag') {
+      route({ kind: 'pan', phase: 'start', deltaPx: { x: 0, y: 0 }, source, at: from })
+      route({ kind: 'pan', phase: 'move', deltaPx: { x: to.x - from.x, y: to.y - from.y }, source, at: to })
+      route({ kind: 'pan', phase: 'end', deltaPx: { x: 0, y: 0 }, source, at: to })
+    },
     menu(at, source = 'mouse') {
       // A mouse menu follows its right press, which the session reports as a raw press.
       if (source === 'mouse') host.rawPress('secondary', { kind: 'surface' })

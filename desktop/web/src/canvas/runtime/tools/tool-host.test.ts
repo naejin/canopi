@@ -34,6 +34,7 @@ import { measureLabelShapes, selectedZoneMeasurementLabels } from './measure-lab
 import type { ToolReply } from './tool'
 import { TOOL_REGISTRY, type ToolFactory } from './registry'
 import { createContextMenuPort, createToolScene } from './tool-host'
+import { createPolygonTool } from './polygon'
 import '../../../__tests__/support/camera-tolerance'
 
 /** Shift at bearing 0: the nearest 45° direction from `origin` against the world axes, its length kept. */
@@ -266,6 +267,27 @@ describe('ToolHost', () => {
       }
     })
 
+    it('the draft stays under the cursor through a right-drag pan', () => {
+      useStubTools(createPolygonTool())
+      const h = harness({ tool: 'polygon' })
+      h.click({ x: 100, y: 100 })
+      h.click({ x: 160, y: 100 })
+      const corners = [h.world({ x: 100, y: 100 }), h.world({ x: 160, y: 100 })]
+      h.hover({ x: 200, y: 150 })
+
+      // The right press reaches the host only as a raw press; the recogniser pans while the pointer moves.
+      h.host.rawPress('secondary', { kind: 'surface' })
+      h.pan({ x: 200, y: 150 }, { x: 260, y: 190 })
+
+      const band = h.renderer.lastDraft()!.shapes.find((shape) => shape.kind === 'polyline')
+      const points = band?.kind === 'polyline' ? band.points : []
+      // The corners stay on the ground, and the rubber band ends under the moved pointer.
+      expect(points.slice(0, 2)).toEqual(corners)
+      expect(h.view.view().worldToScreen(points[2]!).x).toBeCloseTo(260, 6)
+      expect(h.view.view().worldToScreen(points[2]!).y).toBeCloseTo(190, 6)
+      expect(h.host.activeToolHasEscapeTransient()).toBe(true)
+    })
+
     it('re-emits the drag on a camera frame', () => {
       const rectangle = stubTool('rectangle')
       useStubTools(rectangle)
@@ -350,41 +372,41 @@ describe('ToolHost', () => {
       expect(stamp.calls.filter((call) => call === 'viewChanged')).toHaveLength(2)
     })
 
-    it('a pointer pan moves the resting pointer without emitting', () => {
+    it('a pointer pan moves the resting pointer, re-emitted at once and on each camera frame', () => {
       const stamp = stubTool('plant-stamp')
       useStubTools(stamp)
       const h = harness({ tool: 'plant-stamp' })
       const ghost = h.world({ x: 100, y: 100 })
 
       h.hover({ x: 100, y: 100 })
-      // A middle drag: the router notes where the pointer is, then the ground follows it.
-      h.host.notePointer({ x: 150, y: 120 })
-      expect(stamp.count('hover')).toBe(1)
-      expect(h.record.hovers).toHaveLength(1)
-      expect(h.record.pointerWorld).toHaveLength(1)
+      // A middle drag, in either order: the ground follows the pointer, and the router notes where the pointer is.
       h.view.navigation.panByPx({ x: 50, y: 20 })
-
-      // The camera frame re-emits under the moved pointer, so the ghost keeps its world point, as today.
-      expect(stamp.count('hover')).toBe(2)
+      h.host.notePointer({ x: 150, y: 120 })
       const reemitted = stamp.last('hover')!.point.world
       expect(reemitted.x).toBeCloseTo(ghost.x, 6)
       expect(reemitted.y).toBeCloseTo(ghost.y, 6)
+      h.host.notePointer({ x: 200, y: 140 })
+      h.view.navigation.panByPx({ x: 50, y: 20 })
+      const again = stamp.last('hover')!.point.world
+      expect(again.x).toBeCloseTo(ghost.x, 6)
+      expect(again.y).toBeCloseTo(ghost.y, 6)
+      // The pointer's world point is published only by hovers, never by a pan.
       expect(h.record.pointerWorld).toHaveLength(1)
       expect(stamp.calls).not.toContain('viewChanged')
 
       // Past the map's edge nothing is re-emitted; back on the map it is again.
+      const hovers = stamp.count('hover')
       h.host.notePointer({ x: 450, y: 120 })
       h.view.navigation.panByPx({ x: 300, y: 0 })
-      expect(stamp.count('hover')).toBe(2)
+      expect(stamp.count('hover')).toBe(hovers)
       expect(stamp.calls).toEqual(['activate', 'viewChanged'])
       h.host.notePointer({ x: 150, y: 120 })
-      h.view.navigation.panByPx({ x: -300, y: 0 })
-      expect(stamp.count('hover')).toBe(3)
+      expect(stamp.count('hover')).toBe(hovers + 1)
 
       // null: no pointer rests on the map.
       h.host.notePointer(null)
       h.view.navigation.panByPx({ x: 10, y: 0 })
-      expect(stamp.count('hover')).toBe(3)
+      expect(stamp.count('hover')).toBe(hovers + 1)
       expect(stamp.calls.filter((call) => call === 'viewChanged')).toHaveLength(2)
     })
 

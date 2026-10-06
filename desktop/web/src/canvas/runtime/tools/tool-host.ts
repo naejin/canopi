@@ -1338,10 +1338,15 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     rawPress,
     notePointer(screen: ScreenPoint | null): void {
       if (disposed) return
-      // Emits nothing: the next camera frame re-emits at the moved point, where the ground followed the pointer, so a
-      // ghost keeps its world point under it (today's). A pan with nothing resting on the map starts nothing.
+      // A pan with nothing resting on the map starts nothing. Otherwise the resting pointer moves and is re-emitted at
+      // once, and again on each camera frame: the router pans before it notes the pointer, and the driver publishes the
+      // pan's frame synchronously, so a draft or a ghost ends under the pointer whichever comes first.
       if (!screen) lastHover = null
-      else if (lastHover) lastHover = { ...lastHover, screen }
+      else if (lastHover) {
+        lastHover = { ...lastHover, screen }
+        reemit(activeTool)
+        flush()
+      }
     },
     sceneChanged(): void {
       if (!disposed) notifySceneChanged()

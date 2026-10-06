@@ -179,8 +179,9 @@ export interface ToolHost {
   rawPress(button: 'primary' | 'secondary' | 'middle', target: TargetClass, pointerId?: number): void
   /**
    * Where the pointer is during a pointer-source pan (the router, from the pan's `at`): updates the host's stored resting
-   * pointer and emits nothing; the next camera frame re-emits at the updated point, so a ghost stays under the pointer (today
-   * it keeps its world point). Wheel and key pans leave the resting pointer where it is. null: no pointer rests on the map.
+   * pointer and re-emits there at once, as each camera frame does, so a draft or a ghost stays under the pointer whatever
+   * the order of the pan's frame and this call. Wheel and key pans leave the resting pointer where it is. null: no pointer
+   * rests on the map.
    */
   notePointer(screen: ScreenPoint | null): void
   /** Scene or selection changed outside a tool call (select all, undo, menu commands, nudges): refresh handles and decorations. */
