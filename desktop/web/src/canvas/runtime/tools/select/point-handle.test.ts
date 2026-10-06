@@ -93,18 +93,6 @@ describe.each(cases)('$label point handle drags', ({ handle, start, create, sele
     expect(draggedPoint(h)).toEqual(start)
   })
 
-  it('a drag within 2 px of the press changes nothing and records no history', () => {
-    const h = harness()
-
-    pressHandle(h)
-    h.move({ x: start.x + 1, y: start.y })
-    h.release({ x: start.x + 1, y: start.y })
-
-    expect(draggedPoint(h)).toEqual(start)
-    expect(h.history.canUndo.value).toBe(false)
-    expect(h.host.hasLiveGesture()).toBe(false)
-  })
-
   it('the release point is applied and commits one changed edit', () => {
     const h = harness()
 

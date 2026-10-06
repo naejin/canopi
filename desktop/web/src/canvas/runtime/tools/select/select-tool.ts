@@ -261,13 +261,13 @@ export function createSelectTool(): CanvasTool {
     const reshapePoint = reshapePoints.get(handle)
     const zone = reshapePoint ? reshapableZone(scene, selection) : null
     if (reshapePoint && zone?.id === reshapePoint.zoneId) {
-      gesture = { kind: 'reshape', drag: beginPointHandleDrag(c, zoneReshapeSubject(zone, reshapePoint), start) }
+      gesture = { kind: 'reshape', drag: beginPointHandleDrag(c, zoneReshapeSubject(zone, reshapePoint)) }
       return
     }
     const end = guideEndPoints.get(handle)
     const guide = end ? draggableGuide(scene, selection) : null
     if (end && guide?.id === end.guideId) {
-      gesture = { kind: 'guide-end', drag: beginPointHandleDrag(c, guideEndSubject(guide, end), start) }
+      gesture = { kind: 'guide-end', drag: beginPointHandleDrag(c, guideEndSubject(guide, end)) }
     }
   }
 
