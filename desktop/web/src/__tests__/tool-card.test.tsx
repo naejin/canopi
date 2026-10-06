@@ -131,6 +131,27 @@ describe('Tool card', () => {
     expect(lines()).toEqual(['Sélection', 'Glisser pour sélectionner · Maj-clic ajoute · Alt-clic retire · deux doigts déplacent la carte · pincement zoome'])
   })
 
+  it('on a coarse pointer (a touch screen) the Select card names two fingers and a pinch, whatever the pointing device', async () => {
+    render(null, container)
+    let coarse = true
+    const listeners = new Set<() => void>()
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      get matches() { return query === '(pointer: coarse)' && coarse },
+      addEventListener: (_: string, listener: () => void) => listeners.add(listener),
+      removeEventListener: (_: string, listener: () => void) => listeners.delete(listener),
+    }))
+    try {
+      await act(() => render(<ToolCard />, container))
+      expect(lines()).toEqual(['Select', 'Drag to select · Shift-click adds · Alt-click removes · two fingers pan · pinch zooms'])
+      // A mouse plugged into a tablet makes the pointer fine again.
+      await act(() => { coarse = false; for (const listener of listeners) listener() })
+      expect(lines()).toEqual(['Select', 'Drag to select · Shift-click adds · Alt-click removes · right-drag pans · wheel zooms'])
+    } finally {
+      render(null, container)
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('names the species for Place plants, offers Change species and says Esc stops placing', async () => {
     selectPlantStampSource(APPLE)
     await choose('plant-stamp')

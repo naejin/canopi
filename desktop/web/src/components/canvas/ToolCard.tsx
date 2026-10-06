@@ -57,6 +57,7 @@ export function ToolCard({ stampChooser: StampChooser }: {
   const [changingSpecies, setChangingSpecies] = useState(false)
   const species = usePlantStampSpeciesName(source)
   const [choosingStamp, setChoosingStamp] = useState(false)
+  const coarsePointer = useCoarsePointer()
   const content = siteLocateOpen.value || overview
     ? null
     : toolCardContent({
@@ -65,6 +66,7 @@ export function ToolCard({ stampChooser: StampChooser }: {
         speciesName: species?.name ?? null,
         savedStamp,
         scrollWheel: scrollWheel.value,
+        coarsePointer,
         modKey: modKeyName(t),
         translate: t,
       })
@@ -266,4 +268,20 @@ function readSavedStampSummary(): SavedStampSummary | null {
     plants: payload.plants.length,
     species: new Set(payload.plants.map((plant) => plant.canonicalName)).size,
   }
+}
+
+const COARSE_POINTER_QUERY = '(pointer: coarse)'
+
+/** Whether the primary pointer is coarse (a touch screen), following a mouse plugged in or out. */
+function useCoarsePointer(): boolean {
+  const query = typeof window.matchMedia === 'function' ? window.matchMedia(COARSE_POINTER_QUERY) : null
+  const [coarse, setCoarse] = useState(query?.matches ?? false)
+  useEffect(() => {
+    if (!query) return
+    const update = () => setCoarse(query.matches)
+    update()
+    query.addEventListener('change', update)
+    return () => query.removeEventListener('change', update)
+  }, [])
+  return coarse
 }
