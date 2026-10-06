@@ -91,6 +91,7 @@ export interface MapBackgroundOptions {
 }
 
 export interface MapBackgroundHandle {
+  /** Applies the presentation when it differs from the last one; the same one again does nothing (no download). */
   update(presentation: MapBackgroundPresentation): void
   /** Retry: applies the presentation, downloading a Basemap that couldn't load (its style or its resources) again. */
   retry(presentation: MapBackgroundPresentation): void
@@ -196,18 +197,22 @@ export function mountMapBackground(options: MapBackgroundOptions): MapBackground
     })
   }
 
-  const update = (next: MapBackgroundPresentation) => {
-    if (disposed) return
+  const show = (next: MapBackgroundPresentation) => {
     presentation = captureMapBackgroundPresentation(next)
     schedule()
   }
 
   return {
-    update,
+    // A surface may send the same presentation again whenever anything else it reads changes (the view, the visible map
+    // area); only a change reaches the band, so a Basemap that failed to download stays failed until Retry (ADR 0004).
+    update(next) {
+      if (disposed || (presentation && mapBackgroundPresentationsEqual(presentation, next))) return
+      show(next)
+    },
     retry(next) {
       if (disposed) return
       vector.discardFailedResources()
-      update(next)
+      show(next)
     },
     claimMapError(event) {
       return !disposed && vector.claimResourceError(event)

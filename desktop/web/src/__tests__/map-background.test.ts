@@ -265,6 +265,34 @@ describe('map background band', () => {
     background.dispose()
   })
 
+  // The workspace sends its presentation again whenever the view or the visible map area changes; offline, each resend
+  // downloaded the style again and flickered the notice between loading and failed (ADR 0004: only Retry downloads).
+  it('downloads nothing again for the same presentation after a failed Basemap; Retry downloads it again', async () => {
+    const statuses: string[] = []
+    const loadStyle = vi.fn(async () => { throw new Error('Basemap style request failed (503).') })
+    const background = mountMapBackground({
+      map: createMap() as never,
+      maplibre: { AttributionControl: FakeControl },
+      tileAuth: new BasemapTileAuth(),
+      lifetime: { on: () => {}, off: () => {} },
+      loadStyle,
+      onBasemapStatus: (status) => statuses.push(status),
+    })
+    background.update(presentation())
+    await settle()
+    background.update(presentation())
+    background.update(presentation())
+    await settle()
+    expect(loadStyle).toHaveBeenCalledTimes(1)
+    expect(statuses).toEqual(['loading', 'failed'])
+
+    background.retry(presentation())
+    await settle()
+    expect(loadStyle).toHaveBeenCalledTimes(2)
+    expect(statuses).toEqual(['loading', 'failed', 'loading', 'failed'])
+    background.dispose()
+  })
+
   it('adds no remote source when every background row is hidden', async () => {
     const { map, background } = mount()
     background.update(presentation({ basemapVisible: false }))
