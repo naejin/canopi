@@ -911,7 +911,7 @@ describe('ToolHost', () => {
       h.leave()
       expect(h.record.pointerWorld).toEqual([h.world({ x: 50, y: 50 }), h.world({ x: 90, y: 90 }), null])
 
-      // An id that arms no tool sends its moves to the lens by the same rule.
+      // Under Select the lens hears the moves by the same rule.
       h.arm('select')
       h.hover({ x: 60, y: 60 }, {}, { kind: 'owned-chrome' })
       h.hover({ x: 20, y: 30 })
@@ -987,77 +987,8 @@ describe('ToolHost', () => {
     })
   })
 
-  describe('an id the registry does not list', () => {
-    it('arms no tool: it gets no hover, interceptor or re-emit from the host', () => {
-      useStubTools(stubTool('polygon'))
-      const inspect = vi.fn(() => true)
-      // Select is not listed here: the host arms no tool for it.
-      const h = harness({ scene: { plants: [appleAt({ x: 50, y: 50 })] }, inspect })
-      expect(h.host.activeTool.peek()).toBe('select')
-
-      h.hover({ x: 50, y: 50 })
-      expect(h.record.pointerWorld).toEqual([h.world({ x: 50, y: 50 })])
-      expect(h.press({ x: 50, y: 50 })).toEqual({})
-      h.release()
-      h.wheelZoom({ x: 50, y: 50 }, 2)
-
-      expect(h.record.hovers).toEqual([])
-      expect(h.chrome.tooltip).toBeNull()
-      expect(inspect).not.toHaveBeenCalled()
-      expect(h.record.focus).toEqual([])
-      expect(h.record.guidance).toEqual([])
-      expect(h.host.hasLiveGesture()).toBe(false)
-    })
-
-    it('a tool armed after it gets no stale hover on a camera frame', () => {
-      const stamp = stubTool('plant-stamp')
-      useStubTools(stamp)
-      const h = harness({ tool: 'plant-stamp' })
-
-      h.hover({ x: 100, y: 100 })
-      // Select is not listed here: the host publishes its moves but no longer follows the pointer.
-      h.arm('select')
-      h.hover({ x: 300, y: 200 })
-      h.arm('plant-stamp')
-      h.view.navigation.zoomIn()
-      expect(stamp.count('hover')).toBe(1)
-      expect(stamp.calls).toContain('viewChanged')
-    })
-
-    it('a tool that switches to it on its release leaves no still pointer behind', () => {
-      // A saved stamp places on its release, then returns to Select, which is not listed here.
-      const savedStamp: StubTool = stubTool('saved-object-stamp', {
-        gesture(g) {
-          if (g.kind !== 'tap' && g.kind !== 'drag-end') return 'pass'
-          savedStamp.ctx().effects.requestTool('select')
-          return 'handled'
-        },
-      })
-      const stamp = stubTool('plant-stamp')
-      useStubTools(savedStamp, stamp)
-      const h = harness({ tool: 'saved-object-stamp' })
-
-      h.click({ x: 100, y: 100 })
-      expect(h.host.activeTool.peek()).toBe('select')
-      // Under the unlisted Select the host no longer follows the pointer.
-      h.hover({ x: 300, y: 250 })
-      h.arm('plant-stamp')
-      h.wheelZoom({ x: 300, y: 250 }, 2)
-      expect(stamp.count('hover')).toBe(0)
-      expect(stamp.calls).toContain('viewChanged')
-
-      h.arm('saved-object-stamp')
-      h.drag({ x: 50, y: 50 }, { x: 80, y: 60 })
-      expect(h.host.activeTool.peek()).toBe('select')
-      h.hover({ x: 300, y: 250 })
-      h.arm('plant-stamp')
-      h.view.navigation.zoomOut()
-      expect(stamp.count('hover')).toBe(0)
-    })
-  })
-
   describe('activation rollback', () => {
-    it('a tool whose activation throws leaves Select armed and rethrows', () => {
+    it('a tool whose activation throws leaves Select armed, never no tool', () => {
       const select = stubTool('select')
       const hand = stubTool('hand')
       const broken = stubTool('polygon', {
@@ -1073,6 +1004,12 @@ describe('ToolHost', () => {
       expect(h.host.activeToolIsSelect()).toBe(true)
       expect(hand.calls).toContain('deactivate:switch')
       expect(select.calls).toContain('activate')
+      // The armed Select is a tool: it hears the next hover and press.
+      h.hover({ x: 40, y: 40 })
+      h.click({ x: 40, y: 40 })
+      expect(select.count('hover')).toBeGreaterThan(0)
+      expect(select.count('press')).toBe(1)
+      expect(broken.count('hover')).toBe(0)
     })
   })
 

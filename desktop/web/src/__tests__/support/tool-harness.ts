@@ -194,7 +194,7 @@ export function createToolSceneSource(store: SceneStore, options: ToolSceneSourc
 // (capturePress, recorded), end a session the host rejected, end the nudge series on focus-out and call interrupted
 // after a blur. Tools come from
 // tools/registry.ts, which a test replaces through vi.mock('…/tools/registry', () => ({ TOOL_REGISTRY: {} })) and fills
-// with useStubTools.
+// with useStubTools: like the real registry, it lists every tool id.
 
 export interface StubToolRecord {
   readonly gestures: ToolGesture[]
@@ -278,13 +278,20 @@ export function stubTool(id: ToolId, behaviour: StubToolBehaviour = {}): StubToo
   }
 }
 
-/** Lists exactly `tools` in the vi.mock'ed tools/registry.ts, each factory returning its stub. */
+/** Every tool id: the record fails to type-check when ToolId gains or loses one. */
+const TOOL_IDS = Object.keys({
+  select: true, hand: true, 'plant-stamp': true, text: true, line: true, 'measurement-guide': true, rectangle: true,
+  ellipse: true, polygon: true, 'object-stamp': true, 'saved-object-stamp': true, 'plant-spacing': true,
+} satisfies Record<ToolId, true>) as ToolId[]
+
+/** Lists every tool id in the vi.mock'ed tools/registry.ts: each of `tools` returns its stub, and every other id a fresh
+ *  quiet stub, as the real registry lists them all. */
 export function useStubTools(...tools: readonly CanvasTool[]): void {
-  const registry = TOOL_REGISTRY as Partial<Record<ToolId, ToolFactory>>
+  const registry = TOOL_REGISTRY as Record<ToolId, ToolFactory>
   if (Object.isFrozen(registry)) {
     throw new Error('useStubTools needs tools/registry.ts replaced: vi.mock(\'…/tools/registry\', () => ({ TOOL_REGISTRY: {} })).')
   }
-  for (const id of Object.keys(registry) as ToolId[]) delete registry[id]
+  for (const id of TOOL_IDS) registry[id] = () => stubTool(id)
   for (const tool of tools) registry[tool.id] = () => tool
 }
 

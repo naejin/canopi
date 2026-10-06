@@ -2,11 +2,12 @@ import { batch } from '@preact/signals'
 import { plantColorMenuOpen } from '../../plant-color-menu-state'
 import { plantSymbolMenuOpen } from '../../plant-symbol-menu-state'
 import { setCanvasSelection } from '../../session-state'
+import type { ToolId } from '../interaction-types'
 import type { SceneStateReader } from '../scene'
 import type { CanvasRuntimeLayerProjectionAdapter } from '../app-adapter'
 
 export function resetTransientRuntimeState(
-  setTool: (name: string) => void,
+  setTool: (id: ToolId) => void,
 ): void {
   setTool('select')
   plantColorMenuOpen.value = false

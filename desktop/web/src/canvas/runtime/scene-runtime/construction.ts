@@ -9,6 +9,7 @@ import { createSceneCanvasDocumentSurface, type SceneCanvasDocumentSurface } fro
 import { createSceneCanvasQuerySurface, type SceneCanvasQuerySurface } from '../query-surface'
 import { SceneCanvasInspectionOwner } from '../inspection-lens'
 import type { SceneRendererDefinition } from '../renderers/scene-types'
+import type { ToolId } from '../interaction-types'
 import type {
   CanvasCommandSurface,
   CanvasPlantRowSpacingField,
@@ -83,8 +84,8 @@ export interface SceneRuntimeConstructionCallbacks {
   readonly canRedoTransientHistory: () => boolean
   readonly undoTransientHistory: () => boolean
   readonly redoTransientHistory: () => boolean
-  readonly setInteractionTool: (name: string) => void
-  readonly readInteractionTool: () => string | null
+  readonly setInteractionTool: (id: ToolId) => void
+  readonly readInteractionTool: () => ToolId | null
   readonly plantRowSpacing: CanvasPlantRowSpacingField
   readonly disposeInteraction: () => void
   /** The interaction session's re-origin hold (ToolHost.holdsReorigin); false with no session mounted. */

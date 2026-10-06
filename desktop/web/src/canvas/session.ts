@@ -12,6 +12,7 @@ import type {
   CanvasToolCommandSurface,
   CanvasViewportCommandSurface,
 } from './runtime/runtime'
+import type { ToolId } from './runtime/interaction-types'
 
 export const currentCanvasSession = signal<CanvasRuntimeSurfaces | null>(null)
 export const currentCanvasCommandSurface = computed<CanvasCommandSurface | null>(() =>
@@ -72,11 +73,11 @@ export function setCurrentCanvasSession(surfaces: CanvasRuntimeSurfaces | null):
   currentCanvasSession.value = surfaces
 }
 
-export function setCurrentCanvasTool(name: string): void {
+export function setCurrentCanvasTool(id: ToolId): void {
   const session = currentCanvasToolCommandSurface.value
   if (session) {
-    session.setTool(name)
+    session.setTool(id)
     return
   }
-  setCanvasTool(name)
+  setCanvasTool(id)
 }

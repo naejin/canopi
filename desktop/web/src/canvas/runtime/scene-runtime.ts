@@ -79,8 +79,8 @@ export class SceneCanvasRuntime {
       canRedoTransientHistory: () => this._interaction?.canRedoTransientHistory() ?? false,
       undoTransientHistory: () => this._interaction?.undoTransientHistory() ?? false,
       redoTransientHistory: () => this._interaction?.redoTransientHistory() ?? false,
-      setInteractionTool: (name) => {
-        this._interaction?.setTool(name)
+      setInteractionTool: (id) => {
+        this._interaction?.setTool(id)
       },
       readInteractionTool: () => this._interaction?.tool ?? null,
       holdsReorigin: () => this._interaction?.holdsReorigin() ?? false,
@@ -218,7 +218,7 @@ export class SceneCanvasRuntime {
           }
         : undefined,
       contextMenu: this._appAdapter.contextMenu,
-      setTool: (name) => this._commandSurface.tools.setTool(name),
+      setTool: (id) => this._commandSurface.tools.setTool(id),
       render: (kind) => this._invalidate(kind),
       readSnapToGridEnabled: () => this._appAdapter.settings.readSnapToGridEnabled(),
       readScrollWheel: () => this._appAdapter.settings.readScrollWheel(),
@@ -335,8 +335,8 @@ export class SceneCanvasRuntime {
   }
 
   private _resetTransientRuntimeState(): void {
-    resetTransientRuntimeState((name) => {
-      this._commandSurface.tools.setTool(name)
+    resetTransientRuntimeState((id) => {
+      this._commandSurface.tools.setTool(id)
     })
   }
 

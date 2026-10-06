@@ -1,6 +1,7 @@
 import type { SpeciesFocusCommands } from './species-key'
 import { computed, type ReadonlySignal } from '@preact/signals'
 import { setCanvasTool } from '../session-state'
+import type { ToolId } from './interaction-types'
 import type {
   CanvasRuntimeSavedObjectStampAdapter,
   CanvasRuntimeSettingsAdapter,
@@ -112,9 +113,9 @@ interface SceneCanvasCommandSurfaceOptions {
     CanvasRuntimeSettingsAdapter,
     'toggleGridVisible' | 'toggleSnapToGrid'
   >
-  readonly setInteractionTool: (name: string) => void
+  readonly setInteractionTool: (id: ToolId) => void
   /** The tool the interaction session has armed now, or null without a session. */
-  readonly readInteractionTool: () => string | null
+  readonly readInteractionTool: () => ToolId | null
   /** The active interaction session's Plant a row spacing field. */
   readonly plantRowSpacing: CanvasPlantRowSpacingField
   readonly invalidate: (kind: CommandInvalidationKind) => void
@@ -163,7 +164,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
 
     this.speciesFocus = options.speciesFocus
     this.tools = {
-      setTool: (name) => this.setTool(name),
+      setTool: (id) => this.setTool(id),
       plantRowSpacing: options.plantRowSpacing,
     }
     // View commands go to navigation as they are: every frame the camera publishes redraws the view and the chrome placed
@@ -225,9 +226,9 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     }
   }
 
-  private setTool(name: string): void {
+  private setTool(id: ToolId): void {
     try {
-      this.options.setInteractionTool(name)
+      this.options.setInteractionTool(id)
     } catch (error) {
       // A failed switch leaves the session on the tool it kept or fell back to (Select after a failed activation,
       // the tool being left when leaving it failed): the app's own tool state follows the session, not the request.
@@ -235,7 +236,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       if (kept) setCanvasTool(kept)
       throw error
     }
-    setCanvasTool(name)
+    setCanvasTool(id)
   }
 
   private nudgeSelected(delta: ScenePoint): boolean {

@@ -1328,8 +1328,8 @@ export interface CanvasFocusPort {
 }
 
 // canvas/runtime/runtime.ts, continued
-/** The tool surface on the canvas session. Still setTool(name: string): typing it ToolId end to end is 0B-5's open item 7
- *  (plan §4, phase 0), with the source-text pin of item 18. */
+/** The tool surface on the canvas session. setTool takes a ToolId end to end, and TOOL_REGISTRY is a total
+ *  Record<ToolId, ToolFactory>: every id is a tool, so the armed tool is never none (phase 2, P28). */
 export interface CanvasToolCommandSurface {
   setTool(id: ToolId): void                                // only armCanvasTool calls it (P9, from F); no source parameter:
                                                            // the session reads the read models armCanvasTool writes first

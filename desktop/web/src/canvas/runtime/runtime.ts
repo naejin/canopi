@@ -19,7 +19,7 @@ import type { ScenePersistedState } from './scene'
 import type { PlantLabelMode } from './plant-display'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { PointerWorld } from './interaction-ports'
-import type { Modifiers } from './interaction-types'
+import type { Modifiers, ToolId } from './interaction-types'
 import type { ViewCommandSurface, ViewReadSurface } from './view/read-surface'
 import type { ViewTransform } from './view/types'
 import type { SpeciesCacheEntry } from './species-cache'
@@ -75,7 +75,7 @@ export interface CanvasPlantRowSpacingField {
 }
 
 export interface CanvasToolCommandSurface {
-  setTool(name: string): void
+  setTool(id: ToolId): void
   readonly plantRowSpacing: CanvasPlantRowSpacingField
 }
 

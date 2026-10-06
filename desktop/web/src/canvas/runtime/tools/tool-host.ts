@@ -11,7 +11,7 @@
 // hover, the selection decorations, the arrow-nudge series, transient history and the Esc queries, and merges the
 // tool's draft with its decorations and the drop preview for the renderer. One drop route serves every tool (spec §1.4
 // "Drops"): a species drop places a plant with Place plants' placement, a saved stamp with the saved stamp's, then arms
-// Select. Tools are plain objects listed in tools/registry.ts, which lists every tool; an id it does not list arms none.
+// Select. Tools are plain objects listed in tools/registry.ts, which lists every tool id.
 // The module re-exports createToolScene and builds the context-menu port, so interaction-session.ts imports nothing else
 // from tools/ (P5b).
 
@@ -109,7 +109,7 @@ interface LiveGesture {
 
 /** Where the pointer rests on the map: the last hover, or where a press was released, moved by a pointer pan (notePointer).
  *  Re-emitted on a camera frame while it is on the map; null with the pointer off the map or its place unknown (after a
- *  window blur, a document replacement or an id that arms no tool). */
+ *  window blur or a document replacement). */
 interface StillPointer {
   readonly screen: ScreenPoint
   readonly mods: Modifiers
@@ -165,7 +165,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   let disposed = false
   let currentId: ToolId = deps.toolState.active.peek()
-  let activeTool: CanvasTool | null = null
+  /** Armed at the end of construction and never cleared: the registry is total, so every id is a tool. */
+  let activeTool!: CanvasTool
   let activeSource: ToolSource | null = null
   let toolDraft: DraftPresentation | null = null
   let toolHandles: readonly ToolHandle[] = NO_HANDLES
@@ -449,14 +450,14 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   /** The tool's point at a screen point of the current frame. */
   function pointAt(screen: ScreenPoint, mods: Modifiers, pointer: PointerKind, handleDrag = false): ToolPoint {
     const view = frame().view
-    const at = activeTool?.clampsToView ? clampToScreen(screen, view.screen) : screen
+    const at = activeTool.clampsToView ? clampToScreen(screen, view.screen) : screen
     return resolvePoint(view.screenToWorld(at), mods, pointer, handleDrag)
   }
 
   function resolvePoint(world: WorldPoint, mods: Modifiers, pointer: PointerKind, handleDrag: boolean): ToolPoint {
     const modifiers = resolveModifiers(mods, handleDrag)
     const free = snap(world, modifiers.noSnap)
-    const constraint = modifiers.constrain ? activeTool?.constraint?.() ?? null : null
+    const constraint = modifiers.constrain ? activeTool.constraint?.() ?? null : null
     if (!constraint) return { world, free, constrained: world, snapped: free, modifiers, pointer }
     // Shift's steps turn against the screen axes (spec §4.7), which are the world's at bearing 0, bit for bit.
     const axes: ScreenAxes = frame().view.screenAxesInWorld()
@@ -480,7 +481,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   /** The tool's draft, the drop preview and the host's decorations, merged for the renderer. */
   function publishDraft(): void {
-    const shownToolDraft = activeTool && !draftHidden ? toolDraft : null
+    const shownToolDraft = draftHidden ? null : toolDraft
     const decorations = decorationShapes()
     const key = decorations.length > 0 ? JSON.stringify(decorations) : ''
     if (shownToolDraft === publishedToolDraft && dropPreview === publishedDropPreview && key === publishedDecorations) return
@@ -503,7 +504,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   function zoneDraftHidesChips(): boolean {
-    if (!activeTool || !ZONE_DRAFT_TOOLS.has(currentId)) return false
+    if (!ZONE_DRAFT_TOOLS.has(currentId)) return false
     return toolDraft?.shapes.some((shape) =>
       shape.kind === 'label' && (shape.tone === 'measure' || shape.tone === 'measure-quiet')) ?? false
   }
@@ -523,7 +524,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
    * as today's handle hid them at its drag's first update.
    */
   function shownHandles(): readonly ToolHandle[] {
-    if (!activeTool) return NO_HANDLES
     if (currentId !== 'select') return toolHandles
     const affordancesShown = frame().mode === 'site'
       && !deps.chrome.isTextEntryOpen()
@@ -532,7 +532,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   function publishGuidance(): void {
-    if (!activeTool || disposed) return
+    if (disposed) return
     const guidance = {
       gesture: toolGuidance?.gesture ?? hasActiveSceneEdit(),
       stamp: toolGuidance?.stamp ?? null,
@@ -547,7 +547,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   function resetCursor(): void {
-    if (activeTool) deps.chrome.setCursor(toolCursor ?? cursorForTool(currentId))
+    deps.chrome.setCursor(toolCursor ?? cursorForTool(currentId))
   }
 
   // ── Passive hover and the pointer's world point ─────────────────────────────────────────────────────────────────
@@ -588,7 +588,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     // redrew it.
     showDraftAfterDrop()
     const tool = activeTool
-    if (!tool) return NOTHING
     if (frame().mode === 'overview') {
       lastHover = null
       clearPassiveHover()
@@ -616,7 +615,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     publishPointer(null)
     lastHover = null
     const tool = activeTool
-    if (!tool) return NOTHING
     clearPassiveHover()
     callTool(() => tool.gesture({ kind: 'hover-end' }))
     return NOTHING
@@ -635,7 +633,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (disposed) return
     pressCommitsNote = false
     endNudgeSeries(true)
-    if (!activeTool || button === 'secondary') return
+    if (button === 'secondary') return
     if (live && live.id !== pointerId) return
     if (target.kind === 'owned-text') return
     // Runs only while the Scene is settled; a refused raw press does nothing, and the press that follows asks again.
@@ -653,7 +651,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     pressCommitsNote = false
     // A pen or a finger reaches the map with no hover after a panel drag: its press shows the tool's draft again.
     showDraftAfterDrop()
-    if (!activeTool) return NOTHING
     if (live) cancelLive('pointercancel')
     // The pointer is pressed now: a frame re-emits its drag, not the hover before it.
     lastHover = null
@@ -674,7 +671,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
    *  ends where today's Text adapter took it: the tool hears none of it, nor its drag or release. */
   function pressWhenSettled(g: Extract<Gesture, { kind: 'press' }>, commitsNote: boolean): boolean {
     const tool = activeTool
-    if (!tool) return false
     if (!deps.capturePress(g.id)) return true
     const handleDrag = g.target.kind === 'handle'
     const point = pointAt(g.at, g.mods, g.pointer, handleDrag)
@@ -737,13 +733,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     gesture.lastScreen = g.at
     gesture.lastMods = g.mods
     const tool = activeTool
-    if (!tool) {
-      if (g.kind === 'drag-end') {
-        endLive()
-        releasedOutsideTool()
-      }
-      return NOTHING
-    }
     if (g.kind !== 'drag-end') {
       deliverDrag(tool, gesture, g.kind)
       return NOTHING
@@ -802,17 +791,12 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function tap(g: Extract<Gesture, { kind: 'tap' }>): GestureOutcome {
     const gesture = live
     if (!gesture) {
-      // A press the tool never heard (a new note's committing click, no tool armed): its release is none of the tool's.
+      // A press the tool never heard (a new note's committing click): its release is none of the tool's.
       releasedOutsideTool()
       return NOTHING
     }
     if (gesture.id !== g.id) return NOTHING
     const tool = activeTool
-    if (!tool) {
-      endLive()
-      releasedOutsideTool()
-      return NOTHING
-    }
     return release(tool, () => {
       live = null
       try {
@@ -952,7 +936,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function endLive(released: StillPointer | null = null): void {
     live = null
     lastHover = released
-      && activeTool
       && released.pointer !== 'touch'
       && frame().mode === 'site'
       && insideScreen(released.screen, frame().view.screen)
@@ -968,10 +951,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (!gesture) return
     live = null
     const tool = activeTool
-    if (!tool) {
-      resetCursor()
-      return
-    }
     callTool(() => tool.gesture({ kind: 'cancel', reason }))
   }
 
@@ -999,14 +978,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         () => endNudgeSeries(true),
         () => cancelLive(reason === 'navigate' ? 'blur' : 'tool-change'),
         () => setDropPreview(null),
-        // With no tool armed there is no hover, transient or tool cursor to clear.
-        ...(tool
-          ? [
-              () => clearPassiveHover(),
-              () => tool.cancelTransient(reason),
-              () => resetCursor(),
-            ]
-          : []),
+        () => clearPassiveHover(),
+        () => tool.cancelTransient(reason),
+        () => resetCursor(),
       ], 'Tool host cancellation failed')
     })
   }
@@ -1046,7 +1020,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function enterOverview(): void {
     lastHover = null
     setDropPreview(null)
-    if (!activeTool) return
     runCanvasRuntimeCleanups([
       () => {
         if (openTextEntryMode() !== 'create') closeTextEntry()
@@ -1070,8 +1043,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       mode = next.mode
       if (mode === 'overview') enterOverview()
     }
-    const tool = activeTool
-    if (tool) refreshAtPointer(tool)
+    refreshAtPointer(activeTool)
     flush()
   }
 
@@ -1142,7 +1114,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   function notifySceneChanged(): void {
     const tool = activeTool
-    if (tool?.sceneChanged) callTool(() => tool.sceneChanged!())
+    if (tool.sceneChanged) callTool(() => tool.sceneChanged!())
     changed()
   }
 
@@ -1162,15 +1134,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     toolGuidance = null
     toolCursor = null
     publishedGuidance = null
-    const factory = TOOL_REGISTRY[id]
-    const tool = factory ? factory() : null
+    const tool = TOOL_REGISTRY[id]()
     activeTool = tool
-    if (!tool) {
-      // No tool hears the pointer, so the host forgets where it rests.
-      lastHover = null
-      flush()
-      return
-    }
     callTool(() => {
       try {
         tool.activate(contextFor(tool), source)
@@ -1191,7 +1156,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         if (changing) closeTextEntry()
         cancelTransientInteraction('tool-change')
         if (!changing) return
-        activeTool?.deactivate('switch')
+        activeTool.deactivate('switch')
         activate(id, source)
       } catch (error) {
         selectOnFault = true
@@ -1238,7 +1203,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   function stepTransientHistory(kind: 'undo-transient' | 'redo-transient'): boolean {
     const tool = activeTool
-    if (!tool || disposed) return false
+    if (disposed) return false
     const available = kind === 'undo-transient' ? tool.canUndoTransient?.() : tool.canRedoTransient?.()
     if (!available) return false
     return callTool(() => tool.command({ kind })) === 'handled'
@@ -1249,7 +1214,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     return deps.admission.runWhenSettled(() => {
       if (currentId !== 'plant-stamp') requestTool('plant-stamp')
       const tool = activeTool
-      if (!tool || currentId !== 'plant-stamp') return 'pass'
+      if (currentId !== 'plant-stamp') return 'pass'
       return callTool(() => tool.command({ kind: 'place-at', world: snap(world, false) }))
     }, 'pass' as ToolReply)
   }
@@ -1283,7 +1248,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       }
       if (c.kind === 'place-at') return placeAt(c.world)
       const tool = activeTool
-      if (!tool) return 'pass'
       return deps.admission.runWhenSettled(() => callTool(() => tool.command(c)), 'pass' as ToolReply)
     },
     menuAt(at: ScreenPoint | 'selection', source: MenuSource): GestureOutcome {
@@ -1291,7 +1255,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       // A menu commits the nudge series first, or its open Scene Edit would quarantine the menu: a mouse menu's right
       // press has already committed it (rawPress); a keyboard menu has no press, and today its key committed the series.
       endNudgeSeries(true)
-      if (!activeTool || frame().mode === 'overview') return NOTHING
+      if (frame().mode === 'overview') return NOTHING
       let duringEdit = false
       const admitted = deps.admission.runWhenSettled(() => {
         // A menu during a Scene Edit is swallowed (today's _showContextMenuWhenSettled).
@@ -1311,7 +1275,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       if (disposed) return
       activeSource = source
       const tool = activeTool
-      if (tool?.sourceChanged) callTool(() => tool.sourceChanged!(source))
+      if (tool.sourceChanged) callTool(() => tool.sourceChanged!(source))
     },
     activeTool: deps.toolState.active,
     rawPress,
@@ -1327,11 +1291,11 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     },
     openTextEntryMode: () => (disposed ? null : openTextEntryMode()),
     holdsReorigin: () => !disposed
-      && (live !== null || (activeTool?.hasTransient() ?? false) || deps.chrome.isTextEntryOpen()),
+      && (live !== null || activeTool.hasTransient() || deps.chrome.isTextEntryOpen()),
     hasLiveGesture: () => live !== null,
-    activeToolHasTransient: () => activeTool?.hasTransient() ?? false,
+    activeToolHasTransient: () => activeTool.hasTransient(),
     activeToolIsSelect: () => currentId === 'select',
-    escapeHint: () => activeTool?.escapeHint() ?? null,
+    escapeHint: () => activeTool.escapeHint(),
     nudge,
     hasNudgeSeries: () => nudging,
     endNudgeSeries(commit: boolean): void {
@@ -1344,13 +1308,12 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       if (disposed) return
       // After a window blur the pointer may be anywhere: nothing is re-emitted until it hovers the map again.
       lastHover = null
-      if (!activeTool) return
       cancelTransientInteraction('navigate')
     },
     transientHistory: {
       revision: transientRevision,
-      canUndo: () => activeTool?.canUndoTransient?.() ?? false,
-      canRedo: () => activeTool?.canRedoTransient?.() ?? false,
+      canUndo: () => activeTool.canUndoTransient?.() ?? false,
+      canRedo: () => activeTool.canRedoTransient?.() ?? false,
       undo: () => stepTransientHistory('undo-transient'),
       redo: () => stepTransientHistory('redo-transient'),
     },
@@ -1363,7 +1326,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         () => deps.menu.close(),
         () => {
           const tool = activeTool
-          if (!tool) return
           callTool(() => tool.deactivate('document-replaced'))
           activate(currentId, null)
         },
@@ -1378,10 +1340,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       // changed: the tool rebuilds as after a scene change and at the still pointer as on a camera frame (today's
       // refreshTranslations hooks refreshed the Place plants preview and the rotation handle).
       const tool = activeTool
-      if (tool) {
-        if (tool.sceneChanged) callTool(() => tool.sceneChanged!())
-        refreshAtPointer(tool)
-      }
+      if (tool.sceneChanged) callTool(() => tool.sceneChanged!())
+      refreshAtPointer(tool)
       flush()
     },
     subscribePointerWorld(listener) {
@@ -1399,19 +1359,16 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         () => unsubscribeFrames(),
         () => endNudgeSeries(true),
         () => cancelLive('tool-change'),
-        () => tool?.cancelTransient('tool-change'),
-        () => tool?.deactivate('dispose'),
+        () => tool.cancelTransient('tool-change'),
+        () => tool.deactivate('dispose'),
         // The host is the menu's only opener: an open menu would hold commands for a disposed runtime.
         () => deps.menu.close(),
+        () => clearPassiveHover(),
         () => {
-          if (tool) clearPassiveHover()
-        },
-        () => {
-          activeTool = null
           pointerListeners.clear()
           if (publishedToolDraft || publishedDropPreview || publishedDecorations) deps.renderer.setDraft(null)
           if (publishedHandles.length > 0) deps.chrome.setHandles(NO_HANDLES, null)
-          if (tool) deps.guidance(null)
+          deps.guidance(null)
         },
       ], 'Tool host disposal failed')
     },

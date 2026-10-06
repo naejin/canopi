@@ -105,7 +105,7 @@ export interface SceneInteractionSessionDeps {
   }
   /** Renders the right-click menu; absent in a detached runtime. */
   contextMenu?: CanvasRuntimeContextMenuAdapter
-  setTool: (name: string) => void
+  setTool: (id: ToolId) => void
   render: (kind: 'scene' | 'viewport') => void
   readSnapToGridEnabled: () => boolean
   /** Settings › Canvas › Scroll wheel. Pinch and Ctrl wheel zoom either way. */
@@ -136,7 +136,7 @@ export interface SceneInteractionSession {
   /** The tool the session has armed now (after a failed switch: the one it kept or fell back to). */
   readonly tool: ToolId
 
-  setTool(name: string): void
+  setTool(id: ToolId): void
   /** Plant a row's spacing field in the tool card; does nothing under another tool. */
   readonly plantRowSpacing: CanvasPlantRowSpacingField
   prepareForDocumentReplacement(): void
@@ -180,7 +180,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   private readonly _config: RecogniserConfig
-  private readonly _tool = signal<ToolId>(currentCanvasTool.peek() as ToolId)
+  private readonly _tool = signal<ToolId>(currentCanvasTool.peek())
   private readonly _frames: ViewFrameSource
   /** The view's mode as the session last heard it on a 'tools' frame: what the recogniser is configured with. */
   private _mode: ViewFrame['mode']
@@ -386,9 +386,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     return this._tool.peek()
   }
 
-  setTool(name: string): void {
+  setTool(id: ToolId): void {
     if (this._disposed) return
-    const id = name as ToolId
     const previous = this._tool.peek()
     this._tool.value = id
     this._navigationCursor = null
@@ -699,9 +698,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   /** Arms a tool as a tool's own request does: the runtime's setTool first, then the session if it did not follow. */
-  private _switchTool(name: string): void {
-    this._deps.setTool(name)
-    if (this._tool.peek() !== name) this.setTool(name)
+  private _switchTool(id: ToolId): void {
+    this._deps.setTool(id)
+    if (this._tool.peek() !== id) this.setTool(id)
   }
 
   /**

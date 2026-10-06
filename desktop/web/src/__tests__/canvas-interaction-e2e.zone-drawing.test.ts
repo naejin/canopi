@@ -165,7 +165,7 @@ describe('SceneInteractionSession', () => {
   it.each([
     { label: 'Rectangle', tool: 'rectangle' },
     { label: 'Measurement Guide', tool: 'measurement-guide' },
-  ])('keeps a $label drag authoritative until pointer-up commits it', ({ tool }) => {
+  ] as const)('keeps a $label drag authoritative until pointer-up commits it', ({ tool }) => {
     const history = new SceneHistory()
     const record = history.record.bind(history)
     let unrelatedRecordFailures = 2
@@ -242,7 +242,7 @@ describe('SceneInteractionSession', () => {
       tool: 'measurement-guide',
       editType: 'interaction-measurement-guide',
     },
-  ])('a failed $label drag abort is rolled back by the fault rule at once, admitting the next gesture normally', ({
+  ] as const)('a failed $label drag abort is rolled back by the fault rule at once, admitting the next gesture normally', ({
     tool,
     editType,
   }) => {
@@ -342,7 +342,7 @@ describe('SceneInteractionSession', () => {
   it.each([
     { label: 'Rectangle', tool: 'rectangle' },
     { label: 'Measurement Guide', tool: 'measurement-guide' },
-  ])('a $label commit whose cleanup throws keeps the shape once, leaving nothing open for the next drag', ({ tool }) => {
+  ] as const)('a $label commit whose cleanup throws keeps the shape once, leaving nothing open for the next drag', ({ tool }) => {
     const history = new SceneHistory()
     const baseDeps = createInteractionDeps(container, store, testView)
     const coordinator = new SceneRuntimeEditCoordinator({
