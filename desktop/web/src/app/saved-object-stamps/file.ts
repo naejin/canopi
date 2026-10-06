@@ -1,19 +1,17 @@
 import { SAVED_OBJECT_STAMP_PAYLOAD_VERSION, type SavedObjectStampPayload } from '../../canvas/saved-object-stamp-payload'
 import type { ObjectGroup, CanopiFile } from '../../types/design'
 import {
-  createSceneGeoFrame,
   designGeoPositions,
   hydrateGeoEllipse,
   hydrateGeoPoint,
   resolvePlantSymbolId,
   serializeGeoEllipse,
   serializeGeoPoint,
-  type SceneGeoFrame,
   type ScenePoint,
 } from '../../canvas/runtime/scene'
 import { getZoneWorldBounds } from '../../canvas/runtime/zone-geometry'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../generated/canopi-design-format'
-import { sessionPlaneOriginForPoints } from '../../canvas/session-plane'
+import { createSessionPlane, sessionPlaneOriginForPoints, type SessionPlane } from '../../canvas/session-plane'
 
 // A stamp is a relative arrangement in metres. Its portable `.canopi` file
 // places that arrangement around 0°/0°; import reads it back through a plane
@@ -38,7 +36,7 @@ export function composeSavedObjectStampCanopiFile({
   now = new Date(),
 }: ComposeSavedObjectStampCanopiFileOptions): CanopiFile {
   const timestamp = now.toISOString()
-  const geo = createSceneGeoFrame(STAMP_FILE_ORIGIN)
+  const plane = createSessionPlane(STAMP_FILE_ORIGIN)
   return {
     version: CURRENT_CANOPI_FILE_VERSION,
     name,
@@ -54,7 +52,7 @@ export function composeSavedObjectStampCanopiFile({
       color: plant.color,
       symbol: plant.symbol ?? null,
       pinned_name: false,
-      position: serializeGeoPoint(geo, plant.position),
+      position: serializeGeoPoint(plane, plant.position),
       rotation: plant.rotationDeg,
       scale: plant.scale,
       notes: null,
@@ -66,7 +64,7 @@ export function composeSavedObjectStampCanopiFile({
       name: zone.name,
       locked: false,
       zone_type: zone.zoneType,
-      points: stampZonePointsToGeo(geo, zone),
+      points: stampZonePointsToGeo(plane, zone),
       rotation: zone.rotationDeg,
       fill_color: zone.fillColor,
       notes: null,
@@ -75,7 +73,7 @@ export function composeSavedObjectStampCanopiFile({
       id: annotation.id,
       locked: false,
       annotation_type: annotation.annotationType,
-      position: serializeGeoPoint(geo, annotation.position),
+      position: serializeGeoPoint(plane, annotation.position),
       text: annotation.text,
       font_size: annotation.fontSize,
       rotation: annotation.rotationDeg,
@@ -94,7 +92,7 @@ export function composeSavedObjectStampCanopiFile({
 }
 
 export function savedObjectStampPayloadFromCanopiFile(file: CanopiFile): SavedObjectStampPayload | null {
-  const geo = createSceneGeoFrame(sessionPlaneOriginForPoints(designGeoPositions(file), STAMP_FILE_ORIGIN))
+  const plane = createSessionPlane(sessionPlaneOriginForPoints(designGeoPositions(file), STAMP_FILE_ORIGIN))
   const idMap = new Map<string, string>()
   const plants = layerVisible(file, 'plants')
     ? file.plants
@@ -108,7 +106,7 @@ export function savedObjectStampPayloadFromCanopiFile(file: CanopiFile): SavedOb
           commonName: plant.common_name,
           color: plant.color ?? null,
           symbol: resolvePlantSymbolId(plant.symbol ?? file.plant_species_symbols?.[plant.canonical_name]),
-          position: hydrateGeoPoint(geo, plant.position),
+          position: hydrateGeoPoint(plane, plant.position),
           rotationDeg: plant.rotation,
           scale: plant.scale,
         }
@@ -124,7 +122,7 @@ export function savedObjectStampPayloadFromCanopiFile(file: CanopiFile): SavedOb
           id,
           name: zone.name,
           zoneType: zone.zone_type,
-          points: stampZonePointsFromGeo(geo, zone),
+          points: stampZonePointsFromGeo(plane, zone),
           rotationDeg: zone.rotation,
           fillColor: zone.fill_color,
         }
@@ -139,7 +137,7 @@ export function savedObjectStampPayloadFromCanopiFile(file: CanopiFile): SavedOb
         return {
           id,
           annotationType: annotation.annotation_type,
-          position: hydrateGeoPoint(geo, annotation.position),
+          position: hydrateGeoPoint(plane, annotation.position),
           text: annotation.text,
           fontSize: annotation.font_size,
           rotationDeg: annotation.rotation,
@@ -178,18 +176,18 @@ export function importedSavedObjectStampName(
 }
 
 function stampZonePointsToGeo(
-  geo: SceneGeoFrame,
+  plane: SessionPlane,
   zone: SavedObjectStampPayload['zones'][number],
 ): CanopiFile['zones'][number]['points'] {
   return zone.zoneType === 'ellipse' && zone.points.length >= 2
-    ? serializeGeoEllipse(geo, zone.points[0]!, zone.points[1]!)
-    : zone.points.map((point) => serializeGeoPoint(geo, point))
+    ? serializeGeoEllipse(plane, zone.points[0]!, zone.points[1]!)
+    : zone.points.map((point) => serializeGeoPoint(plane, point))
 }
 
-function stampZonePointsFromGeo(geo: SceneGeoFrame, zone: CanopiFile['zones'][number]): ScenePoint[] {
+function stampZonePointsFromGeo(plane: SessionPlane, zone: CanopiFile['zones'][number]): ScenePoint[] {
   return zone.zone_type === 'ellipse' && zone.points.length >= 2
-    ? hydrateGeoEllipse(geo, [zone.points[0]!, zone.points[1]!])
-    : zone.points.map((point) => hydrateGeoPoint(geo, point))
+    ? hydrateGeoEllipse(plane, [zone.points[0]!, zone.points[1]!])
+    : zone.points.map((point) => hydrateGeoPoint(plane, point))
 }
 
 function validCapturedGroups(payload: SavedObjectStampPayload): ObjectGroup[] {

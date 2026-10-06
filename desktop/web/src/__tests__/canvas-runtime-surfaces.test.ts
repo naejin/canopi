@@ -12,7 +12,6 @@ import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
 import { createForwardingCanvasKeyboardPort } from '../canvas/runtime/keyboard-port'
 import {
   createDefaultScenePersistedState,
-  createSceneGeoFrame,
   serializeScenePersistedState,
 } from '../canvas/runtime/scene'
 import { createSessionPlane, DEFAULT_NEW_DESIGN_VIEW } from '../canvas/session-plane'
@@ -236,7 +235,7 @@ describe('canvas runtime surfaces', () => {
   it('routes representative command, query, and document behavior through role surfaces', () => {
     const runtime = new SceneCanvasRuntime()
     const surfaces = createCanvasRuntimeSurfaces(runtime)
-    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSceneGeoFrame(DEFAULT_NEW_DESIGN_VIEW))
+    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSessionPlane(DEFAULT_NEW_DESIGN_VIEW))
 
     try {
       surfaces.commands.tools.setTool('hand')
@@ -276,7 +275,7 @@ describe('canvas runtime surfaces', () => {
 
   it('keeps document consumers away from panel queries and toolbar commands', () => {
     const documentSurface = createDocumentSurface()
-    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSceneGeoFrame(DEFAULT_NEW_DESIGN_VIEW))
+    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSessionPlane(DEFAULT_NEW_DESIGN_VIEW))
     const replacementToken = createCanvasDocumentReplacementToken()
 
     if (false) {
@@ -296,7 +295,7 @@ describe('canvas runtime surfaces', () => {
   it('reports whether a runtime has loaded a document without caller monkey-patching', () => {
     const runtime = new SceneCanvasRuntime()
     const surfaces = createCanvasRuntimeSurfaces(runtime)
-    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSceneGeoFrame(DEFAULT_NEW_DESIGN_VIEW))
+    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSessionPlane(DEFAULT_NEW_DESIGN_VIEW))
 
     try {
       expect(surfaces.documents.hasLoadedDocument()).toBe(false)

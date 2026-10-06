@@ -10,14 +10,18 @@ import type {
 } from '../../../types/design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
 import { DEFAULT_BUDGET_CURRENCY } from '../../../generated/known-canopi-keys'
-import { DEFAULT_NEW_DESIGN_VIEW, sessionPlaneOriginForPoints, type GeoPosition } from '../../session-plane'
 import {
-  createSceneGeoFrame,
+  createSessionPlane,
+  DEFAULT_NEW_DESIGN_VIEW,
+  sessionPlaneOriginForPoints,
+  type GeoPosition,
+  type SessionPlane,
+} from '../../session-plane'
+import {
   hydrateGeoEllipse,
   hydrateGeoPoint,
   serializeGeoEllipse,
   serializeGeoPoint,
-  type SceneGeoFrame,
 } from './geo-frame'
 import type {
   SceneAnnotationEntity,
@@ -41,7 +45,7 @@ export interface SceneSerializeOptions {
 
 export interface SceneHydration {
   readonly persisted: ScenePersistedState
-  readonly geo: SceneGeoFrame
+  readonly plane: SessionPlane
 }
 
 // Every stored lon/lat of a Design, used to centre its session plane.
@@ -60,27 +64,27 @@ export function hydrateSceneFromDesign(
   file: CanopiFile,
   emptyOrigin: GeoPosition = DEFAULT_NEW_DESIGN_VIEW,
 ): SceneHydration {
-  const geo = createSceneGeoFrame(sessionPlaneOriginForPoints(designGeoPositions(file), emptyOrigin))
-  return { persisted: hydrateScenePersistedStateInFrame(file, geo), geo }
+  const plane = createSessionPlane(sessionPlaneOriginForPoints(designGeoPositions(file), emptyOrigin))
+  return { persisted: hydrateScenePersistedStateInFrame(file, plane), plane }
 }
 
-export function hydrateScenePersistedStateInFrame(file: CanopiFile, geo: SceneGeoFrame): ScenePersistedState {
+export function hydrateScenePersistedStateInFrame(file: CanopiFile, plane: SessionPlane): ScenePersistedState {
   return {
     plantSpeciesColors: { ...file.plant_species_colors },
     plantSpeciesSymbols: { ...(file.plant_species_symbols ?? {}) },
     plantSpeciesCodes: allocateSpeciesCodes(file.plant_species_codes ?? {}, file.plants.map((plant) => plant.canonical_name)),
     layers: file.layers.map(hydrateLayerEntity),
-    plants: file.plants.map((plant) => hydratePlantEntity(plant, geo)),
-    zones: file.zones.map((zone) => hydrateZoneEntity(zone, geo)),
-    annotations: (file.annotations ?? []).map((annotation) => hydrateAnnotationEntity(annotation, geo)),
-    measurementGuides: (file.measurement_guides ?? []).map((guide, index) => hydrateMeasurementGuideEntity(guide, index, geo)),
+    plants: file.plants.map((plant) => hydratePlantEntity(plant, plane)),
+    zones: file.zones.map((zone) => hydrateZoneEntity(zone, plane)),
+    annotations: (file.annotations ?? []).map((annotation) => hydrateAnnotationEntity(annotation, plane)),
+    measurementGuides: (file.measurement_guides ?? []).map((guide, index) => hydrateMeasurementGuideEntity(guide, index, plane)),
     groups: (file.groups ?? []).map(hydrateGroupEntity),
   }
 }
 
 export function serializeScenePersistedState(
   state: ScenePersistedState,
-  geo: SceneGeoFrame,
+  plane: SessionPlane,
   options: SceneSerializeOptions = {},
 ): CanopiFile {
   const now = options.now ?? new Date()
@@ -93,10 +97,10 @@ export function serializeScenePersistedState(
     plant_species_symbols: { ...state.plantSpeciesSymbols },
     plant_species_codes: { ...state.plantSpeciesCodes },
     layers: state.layers.map(serializeLayerEntity),
-    plants: state.plants.map((plant) => serializePlantEntity(plant, geo)),
-    zones: state.zones.map((zone) => serializeZoneEntity(zone, geo)),
-    annotations: state.annotations.map((annotation) => serializeAnnotationEntity(annotation, geo)),
-    measurement_guides: state.measurementGuides.map((guide) => serializeMeasurementGuideEntity(guide, geo)),
+    plants: state.plants.map((plant) => serializePlantEntity(plant, plane)),
+    zones: state.zones.map((zone) => serializeZoneEntity(zone, plane)),
+    annotations: state.annotations.map((annotation) => serializeAnnotationEntity(annotation, plane)),
+    measurement_guides: state.measurementGuides.map((guide) => serializeMeasurementGuideEntity(guide, plane)),
     consortiums: [],
     groups: state.groups.map(serializeGroupEntity),
     timeline: [],
@@ -158,7 +162,7 @@ function cloneLayerEntity(layer: SceneLayerEntity): SceneLayerEntity {
   }
 }
 
-function hydratePlantEntity(plant: PlacedPlant, geo: SceneGeoFrame): ScenePlantEntity {
+function hydratePlantEntity(plant: PlacedPlant, plane: SessionPlane): ScenePlantEntity {
   return {
     kind: 'plant',
     id: plant.id,
@@ -169,7 +173,7 @@ function hydratePlantEntity(plant: PlacedPlant, geo: SceneGeoFrame): ScenePlantE
     symbol: plant.symbol ?? null,
     pinnedName: plant.pinned_name ?? false,
     canopySpreadM: plant.scale,
-    position: hydrateGeoPoint(geo, plant.position),
+    position: hydrateGeoPoint(plane, plant.position),
     rotationDeg: plant.rotation,
     notes: plant.notes,
     plantedDate: plant.planted_date,
@@ -177,7 +181,7 @@ function hydratePlantEntity(plant: PlacedPlant, geo: SceneGeoFrame): ScenePlantE
   }
 }
 
-function serializePlantEntity(plant: ScenePlantEntity, geo: SceneGeoFrame): PlacedPlant {
+function serializePlantEntity(plant: ScenePlantEntity, plane: SessionPlane): PlacedPlant {
   const serialized: PlacedPlant = {
     id: plant.id,
     locked: plant.locked,
@@ -185,7 +189,7 @@ function serializePlantEntity(plant: ScenePlantEntity, geo: SceneGeoFrame): Plac
     common_name: plant.commonName,
     color: plant.color,
     pinned_name: plant.pinnedName === true,
-    position: serializeGeoPoint(geo, plant.position),
+    position: serializeGeoPoint(plane, plant.position),
     rotation: plant.rotationDeg,
     // The file's `scale` field is the plant's canopy spread in metres.
     scale: plant.canopySpreadM,
@@ -206,7 +210,7 @@ function clonePlantEntity(plant: ScenePlantEntity): ScenePlantEntity {
   }
 }
 
-function hydrateZoneEntity(zone: Zone, geo: SceneGeoFrame): SceneZoneEntity {
+function hydrateZoneEntity(zone: Zone, plane: SessionPlane): SceneZoneEntity {
   return {
     kind: 'zone',
     id: zone.id,
@@ -214,23 +218,23 @@ function hydrateZoneEntity(zone: Zone, geo: SceneGeoFrame): SceneZoneEntity {
     locked: zone.locked ?? false,
     zoneType: zone.zone_type,
     points: zone.zone_type === 'ellipse' && zone.points.length >= 2
-      ? hydrateGeoEllipse(geo, [zone.points[0]!, zone.points[1]!])
-      : zone.points.map((point) => hydrateGeoPoint(geo, point)),
+      ? hydrateGeoEllipse(plane, [zone.points[0]!, zone.points[1]!])
+      : zone.points.map((point) => hydrateGeoPoint(plane, point)),
     rotationDeg: zone.rotation ?? 0,
     fillColor: zone.fill_color,
     notes: zone.notes,
   }
 }
 
-function serializeZoneEntity(zone: SceneZoneEntity, geo: SceneGeoFrame): Zone {
+function serializeZoneEntity(zone: SceneZoneEntity, plane: SessionPlane): Zone {
   return {
     id: zone.id,
     name: zone.name,
     locked: zone.locked,
     zone_type: zone.zoneType,
     points: zone.zoneType === 'ellipse' && zone.points.length >= 2
-      ? serializeGeoEllipse(geo, zone.points[0]!, zone.points[1]!)
-      : zone.points.map((point) => serializeGeoPoint(geo, point)),
+      ? serializeGeoEllipse(plane, zone.points[0]!, zone.points[1]!)
+      : zone.points.map((point) => serializeGeoPoint(plane, point)),
     rotation: zone.rotationDeg,
     fill_color: zone.fillColor,
     notes: zone.notes,
@@ -244,25 +248,25 @@ function cloneZoneEntity(zone: SceneZoneEntity): SceneZoneEntity {
   }
 }
 
-function hydrateAnnotationEntity(annotation: Annotation, geo: SceneGeoFrame): SceneAnnotationEntity {
+function hydrateAnnotationEntity(annotation: Annotation, plane: SessionPlane): SceneAnnotationEntity {
   return {
     kind: 'annotation',
     id: annotation.id,
     locked: annotation.locked ?? false,
     annotationType: annotation.annotation_type,
-    position: hydrateGeoPoint(geo, annotation.position),
+    position: hydrateGeoPoint(plane, annotation.position),
     text: annotation.text,
     fontSize: annotation.font_size,
     rotationDeg: annotation.rotation,
   }
 }
 
-function serializeAnnotationEntity(annotation: SceneAnnotationEntity, geo: SceneGeoFrame): Annotation {
+function serializeAnnotationEntity(annotation: SceneAnnotationEntity, plane: SessionPlane): Annotation {
   return {
     id: annotation.id,
     locked: annotation.locked,
     annotation_type: annotation.annotationType,
-    position: serializeGeoPoint(geo, annotation.position),
+    position: serializeGeoPoint(plane, annotation.position),
     text: annotation.text,
     font_size: annotation.fontSize,
     rotation: annotation.rotationDeg,
@@ -279,23 +283,23 @@ function cloneAnnotationEntity(annotation: SceneAnnotationEntity): SceneAnnotati
 function hydrateMeasurementGuideEntity(
   guide: MeasurementGuide,
   index: number,
-  geo: SceneGeoFrame,
+  plane: SessionPlane,
 ): SceneMeasurementGuideEntity {
   return {
     kind: 'measurement-guide',
     id: guide.id || `measurement-guide-${index + 1}`,
     locked: guide.locked ?? false,
-    start: hydrateGeoPoint(geo, guide.start),
-    end: hydrateGeoPoint(geo, guide.end),
+    start: hydrateGeoPoint(plane, guide.start),
+    end: hydrateGeoPoint(plane, guide.end),
   }
 }
 
-function serializeMeasurementGuideEntity(guide: SceneMeasurementGuideEntity, geo: SceneGeoFrame): MeasurementGuide {
+function serializeMeasurementGuideEntity(guide: SceneMeasurementGuideEntity, plane: SessionPlane): MeasurementGuide {
   return {
     id: guide.id,
     locked: guide.locked,
-    start: serializeGeoPoint(geo, guide.start),
-    end: serializeGeoPoint(geo, guide.end),
+    start: serializeGeoPoint(plane, guide.start),
+    end: serializeGeoPoint(plane, guide.end),
   }
 }
 

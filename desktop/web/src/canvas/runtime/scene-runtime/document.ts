@@ -72,7 +72,7 @@ export class SceneRuntimeDocumentBridge {
     mapView: SavedViewCamera | null,
   ): CanvasPersistenceCapture {
     const capture = this._authority.capturePersistence()
-    const scene = serializeScenePersistedState(capture.scene, capture.geo, { now: new Date() })
+    const scene = serializeScenePersistedState(capture.scene, capture.plane, { now: new Date() })
     const canvas = mapView ? { ...scene, map_view: mapView } : scene
     const content = this._composeDocumentForSave({ metadata, document: doc, canvas })
     return Object.freeze({

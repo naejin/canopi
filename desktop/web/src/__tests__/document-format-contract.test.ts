@@ -216,7 +216,7 @@ describe('document format contract', () => {
   it('a new Design\'s save writes no extra.guides', () => {
     const document = normalizeNewDocument({ ...BASE_DOCUMENT, extra: {} })
     const hydrated = hydrateSceneFromDesign(document)
-    const canvas = serializeScenePersistedState(hydrated.persisted, hydrated.geo)
+    const canvas = serializeScenePersistedState(hydrated.persisted, hydrated.plane)
 
     const saved = composeDocumentForSave({ metadata: { name: 'New Design' }, document, canvas })
 
@@ -239,7 +239,7 @@ describe('document format contract', () => {
 
     const now = new Date('2026-04-13T12:00:00.000Z')
     const hydrated = hydrateSceneFromDesign(normalized)
-    const roundTripped = serializeScenePersistedState(hydrated.persisted, hydrated.geo, { now })
+    const roundTripped = serializeScenePersistedState(hydrated.persisted, hydrated.plane, { now })
 
     expect(roundTripped).not.toHaveProperty('extra')
     expect(roundTripped.updated_at).toBe(now.toISOString())
@@ -260,7 +260,7 @@ describe('document format contract', () => {
       }],
     } satisfies CanopiFile
 
-    const { persisted: scene, geo } = hydrateSceneFromDesign(file)
+    const { persisted: scene, plane } = hydrateSceneFromDesign(file)
     expect(scene.groups).toEqual([{
       kind: 'group',
       id: 'group-1',
@@ -277,7 +277,7 @@ describe('document format contract', () => {
     expect(scene.groups[0]).not.toHaveProperty('position')
     expect(scene.groups[0]).not.toHaveProperty('rotationDeg')
 
-    const serialized = serializeScenePersistedState(scene, geo)
+    const serialized = serializeScenePersistedState(scene, plane)
     expect(serialized.groups).toEqual([{
       id: 'group-1',
       locked: false,

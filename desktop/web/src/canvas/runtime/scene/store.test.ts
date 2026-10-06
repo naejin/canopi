@@ -6,7 +6,7 @@ import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../../../t
 import { SceneStore } from './store'
 import { createDefaultScenePersistedState, createDefaultSceneSessionState } from './defaults'
 import { serializeScenePersistedState } from './codec'
-import { createSceneGeoFrame } from './geo-frame'
+import { createSessionPlane } from '../../session-plane'
 
 const TEST_FRAME_ORIGIN = { lon: 13, lat: 23 }
 
@@ -211,11 +211,11 @@ describe('scene store', () => {
     expect(persisted.plants).toHaveLength(0)
     expect(persisted.measurementGuides).toEqual([])
     expect(session.selectedTargets).toEqual([])
-    expect(serializeScenePersistedState(persisted, createSceneGeoFrame(TEST_FRAME_ORIGIN), { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(CURRENT_CANOPI_FILE_VERSION)
+    expect(serializeScenePersistedState(persisted, createSessionPlane(TEST_FRAME_ORIGIN), { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(CURRENT_CANOPI_FILE_VERSION)
   })
 
   it('normalizes and round-trips a Design without Measurement Guides', () => {
-    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSceneGeoFrame(TEST_FRAME_ORIGIN))
+    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSessionPlane(TEST_FRAME_ORIGIN))
     delete file.measurement_guides
 
     const store = new SceneStore().hydrate(file)
@@ -390,7 +390,7 @@ describe('scene store', () => {
   })
 
   it('writes no extra: the scene owns no extra key', () => {
-    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSceneGeoFrame(TEST_FRAME_ORIGIN), {
+    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSessionPlane(TEST_FRAME_ORIGIN), {
       now: new Date('2026-04-02T00:00:00.000Z'),
     })
 

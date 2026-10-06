@@ -1,7 +1,8 @@
 import type { SpeciesDetail, SpeciesListItem } from '../src/types/species'
 import type { CanopiFile, RichTextBlock, SavedView, Story } from '../src/types/design'
 import { createDefaultScenePersistedState } from '../src/canvas/runtime/scene'
-import { createSceneGeoFrame, PLANT_SYMBOL_IDS, serializeScenePersistedState } from '../src/canvas/runtime/scene'
+import { PLANT_SYMBOL_IDS, serializeScenePersistedState } from '../src/canvas/runtime/scene'
+import { createSessionPlane } from '../src/canvas/session-plane'
 import { PLANT_COLOR_PALETTE } from '../src/canvas/plant-colors'
 
 export const detail: SpeciesDetail = {
@@ -300,7 +301,7 @@ export function designFixture(state = 'populated'): CanopiFile {
       }] : [],
       plantSpeciesColors: Object.fromEntries(specimens.map(([name, , , color]) => [name, color])),
       plantSpeciesSymbols: Object.fromEntries(specimens.map(([name, , symbol]) => [name, symbol])),
-    }, createSceneGeoFrame(state === 'located'
+    }, createSessionPlane(state === 'located'
       ? { lon: 0.033854, lat: 48.220272 }
       : { lon: 13, lat: 23 }), { now: new Date('2026-01-01T00:00:00Z') }),
     name: 'Orchard notebook',

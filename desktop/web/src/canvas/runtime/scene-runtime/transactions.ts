@@ -1,5 +1,5 @@
 import { batch, computed, signal, type ReadonlySignal } from '@preact/signals'
-import type { GeoPosition } from '../../session-plane'
+import type { GeoPosition, SessionPlane } from '../../session-plane'
 
 import type { CanopiFile } from '../../../types/design'
 import { collectCanvasRuntimeErrors, throwCanvasRuntimeCleanupErrors } from '../cleanup'
@@ -13,7 +13,6 @@ import {
   cloneScenePersistedState,
   type SceneDesignObjectTarget,
   type ScenePersistedState,
-  type SceneGeoFrame,
   type SceneStore,
 } from '../scene'
 import {
@@ -73,7 +72,7 @@ type ScenePersistenceAcknowledgement = 'applied' | 'stale'
 
 export interface ScenePersistenceCapture {
   readonly scene: ScenePersistedState
-  readonly geo: SceneGeoFrame
+  readonly plane: SessionPlane
   isCurrent(): boolean
   acknowledgeSaved(): ScenePersistenceAcknowledgement
 }
@@ -277,7 +276,7 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
 
     return Object.freeze({
       scene: cloneScenePersistedState(scene),
-      geo: this._sceneStore.geoFrame,
+      plane: this._sceneStore.sessionPlane,
       isCurrent: captureIsCurrent,
       acknowledgeSaved: (): ScenePersistenceAcknowledgement => {
         if (acknowledgement) return acknowledgement
