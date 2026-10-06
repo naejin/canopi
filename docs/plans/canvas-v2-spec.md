@@ -14,7 +14,7 @@ Paths are relative to `desktop/web/src/` unless they start with `docs/`, `common
 - **mod** is Cmd on macOS and Ctrl elsewhere. On macOS a physical Ctrl is never mod: from phase 2 it turns a left click into a right click, and Ctrl+arrows belong to Mission Control.
 - **Phases.** All phases ship together as 2.0 (user, 2026-10-01). There is one bindings constant, edited in place by the phase that changes a field (§1.2); in this document LEGACY names its values before phase 1 (phase 0's behaviour with F's hover end and 3 px slop), ROTATION its values from phase 1, V2 from phase 2 and TOUCH from phase 3. These are names of expectation columns, never constants: tests run `CURRENT_BINDINGS`, and each phase rewrites the expectations it changes in place. "From 1" means the behaviour exists from that phase on; a cell without a phase is unchanged from today.
 - **Decisions of 2026-10-01** (user; plan §1): one release; no second-button navigation during a drag; one map angle for the whole PDF layout; no edge highlight; a panel drag hides the tool's preview; the hover end lands in F; the keyboard is built once, in F; LiDAR's Return to Design keeps the exact view.
-- **Free gesture**: a rotation whose end angle the user did not choose exactly (pointer rotate drag, compass drag, touch twist, trackpad twist). **Explicit target**: a bearing Canopi was told (key step, reset, "Turn view to this edge", a saved view, a story step, the last view).
+- **Free gesture**: a rotation whose end angle the user did not choose exactly (pointer rotate drag, compass drag, touch twist, trackpad twist). **Explicit target**: a bearing Canopi was told (key step, reset, "Turn view to this edge", a saved view, a story step, the view a file was saved with, `map_view`).
 - Bearing: the compass direction that is up on screen, degrees clockwise from true north, normalised to [0, 360). Stored rotations (`rotationDeg` on zones, notes and stamps) are clockwise from true north, as today; Print Areas carry no angle (one layout angle, §4.12).
 
 ## 1. Interfaces
@@ -1892,7 +1892,7 @@ PDF page editor, every phase unless marked (today: `PdfPageEditor.tsx:60` accept
 
 ### 4.1 Where rotation comes from
 
-Rotation starts only from deliberate inputs (user): Shift+right-drag (from 2), Shift+middle-drag (from 1), macOS Ctrl+Shift+left-drag (from 2), pen barrel + Shift (from 2), Shift+← and Shift+→ (from 1), the compass ring (from 1), a macOS trackpad twist past 10° (from 1), a two-finger touch twist past 25 px of arc (from 3), "Turn view to this edge" (from 1), and restores (saved views, stories, last view). There is no Alt+wheel rotation and no setting to turn rotation off.
+Rotation starts only from deliberate inputs (user): Shift+right-drag (from 2), Shift+middle-drag (from 1), macOS Ctrl+Shift+left-drag (from 2), pen barrel + Shift (from 2), Shift+← and Shift+→ (from 1), the compass ring (from 1), a macOS trackpad twist past 10° (from 1), a two-finger touch twist past 25 px of arc (from 3), "Turn view to this edge" (from 1), and restores (saved views, stories, a file's `map_view`). There is no Alt+wheel rotation and no setting to turn rotation off.
 
 ### 4.2 Compass
 
@@ -1921,7 +1921,7 @@ Fixtures: "Shift+→ during a left drag keeps the draft's start on the ground" i
 | 15° steps while held, absolute multiples (`roundToStep`), raw angle again when released | mod added during Shift+right-drag or Shift+middle-drag (recorded resolution: Shift is already held); Shift during a compass drag |
 | A Mac Ctrl that made the press a right click never steps | macOS Ctrl+Shift+left-drag; adding Cmd steps |
 | Next 15° multiple in the key's direction (22 → 15 → 0; 0 → 345) | Shift+← and Shift+→ |
-| Never snapped | explicit targets: "Turn view to this edge", saved views, stories, `showPlace`, `centerOn` with a bearing, the last view; a saved view at 3° restores at 3° |
+| Never snapped | explicit targets: "Turn view to this edge", saved views, stories, `showPlace`, `centerOn` with a bearing, a file's `map_view`; a saved view at 3° restores at 3° |
 | No stepping | touch and trackpad twist |
 
 ### 4.6 Grid, snapping and guides
@@ -1993,7 +1993,7 @@ North-up, no rotation, no compass; left-drag pans (a navigation-only picker); Sh
 
 ### 4.18 Web Edition phone layout and touch
 
-- Phase 1: the compass joins the phone zoom column after the ratio, and the View menu, which phones share, gains its three rotation rows (convention), so a phone user who opens a rotated Design (last view, saved view, story) can always return north. The compass ring turns the view by touch from phase 1.
+- Phase 1: the compass joins the phone zoom column after the ratio, and the View menu, which phones share, gains its three rotation rows (convention), so a phone user who opens a rotated Design (its `map_view`, a saved view, a story) can always return north. The compass ring turns the view by touch from phase 1.
 - The Pan tool stays in the phone strip in every phase.
 - Phase 3: two-finger pan, pinch and twist; long press opens the menu; one finger edits; 44 px handle targets; Fit joins the phone zoom column.
 

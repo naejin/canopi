@@ -12,10 +12,10 @@ Read the [design system](../system.md) first. Decisions: [ADR 0015](../../docs/a
 
 ## Turning the map
 
-- The map turns like a map app; editing stays top-down. North up is the default: a new or empty Design opens north up; a Design reopens at the view it was saved with, and one saved without it reopens at the last bearing.
+- The map turns like a map app; editing stays top-down. North up is the default: a new or empty Design opens north up; a Design reopens at the view it was saved with, and one saved without it opens on the fit at the live bearing.
 - Only deliberate gestures turn it: Shift + right-drag or Shift + middle-drag about the press point (horizontal travel), the compass, a two-finger twist past 25 px of arc, a macOS trackpad twist past 10°. Adding Ctrl (Cmd on Mac) during a turn drag steps by 15°; on the compass Shift steps. No setting turns rotation off.
 - Keys: Shift ← and Shift → turn to the next 15° step; N, Shift N (always, even with single keys off), Shift ↑ and a compass click reset north. Every turn jumps, with no animation. Esc during a turn drag restores the starting view.
-- A free turn (drag, twist, compass ring) that ends within 7° of north settles on north. Explicit targets never snap: saved views, stories, Turn view to this edge, the last view.
+- A free turn (drag, twist, compass ring) that ends within 7° of north settles on north. Explicit targets never snap: saved views, stories, Turn view to this edge, the view a Design was saved with.
 - Turns with the map: imagery, zones, text notes, measurement guides, the grid and snapping (true east and north). Stays upright: plant symbols and names, measurements, stack badges, handles, chips and all chrome. The hillshade light stays top-left on screen, so relief reads the same at any bearing.
 - Arrows nudge and pan along the screen. Rectangles, ellipses, notes and saved-stamp picks start level to the screen, and an Object stamp pick keeps its source's orientation (a Print Area takes the layout's angle); Shift keeps squares, circles and 45° against the screen axes.
 - Turn view to this edge: a polygon, rectangle or line zone right-clicked within 8 px of an edge (22 px for a long press) adds this item to the canvas menu, as the first group of the empty-map menu and before Lock in the selection menu; the edge is not highlighted. Choosing it turns the view by the smaller angle until that edge is level. It is pointer-only, the one exception to the keyboard-path rule: from the keyboard, Shift ← and Shift → turn the view.
