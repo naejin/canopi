@@ -13,6 +13,7 @@ import {
   captureWindowErrors,
   makePlant,
   makeRectZone,
+  makeTextAnnotation,
   rotationHandle,
   installSceneInteractionFixture,
   enterOverview,
@@ -348,4 +349,42 @@ describe('SceneInteractionSession', () => {
     expect(contextMenuHost.opened).toHaveLength(0)
     session.dispose()
   })
+
+  it.each(['select', 'rectangle'] as const)(
+    'in overview a primary drag with %s armed band-selects the zones and the note, never a plant, and moves nothing',
+    (tool) => {
+      // At 0.05 px/m the bed spans (5, 5)–(25, 25) on screen, the pond (50, 5)–(70, 25) and the note sits at (150, 150).
+      store.updatePersisted((draft) => {
+        draft.zones = [
+          makeRectZone('bed', [{ x: 100, y: 100 }, { x: 500, y: 500 }]),
+          makeRectZone('pond', [{ x: 1000, y: 100 }, { x: 1400, y: 500 }]),
+        ]
+        draft.plants = [makePlant('apple', 'Malus domestica', { x: 300, y: 300 })]
+        draft.annotations = [makeTextAnnotation('note', { x: 3000, y: 3000 }, 'Gate')]
+      })
+      const onSceneEditCommit = vi.fn()
+      const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
+      const session = createTestSession(deps)
+      session.setTool(tool)
+      enterOverview(testView)
+      const scene = structuredClone(store.persisted)
+      const before = testView.viewport()
+
+      // From empty ground well clear of every outline, across all three objects.
+      events.pointerDown({ x: 190, y: 2 }, { button: 0 })
+      events.pointerMove({ x: 100, y: 100 }, { buttons: 1 })
+      events.pointerMove({ x: 0, y: 200 }, { buttons: 1 })
+      events.pointerUp({ x: 0, y: 200 }, { button: 0 })
+
+      expect(store.session.selectedTargets).toEqual([
+        { kind: 'zone', id: 'bed' },
+        { kind: 'zone', id: 'pond' },
+        { kind: 'annotation', id: 'note' },
+      ])
+      expect(store.persisted).toEqual(scene)
+      expect(testView.viewport()).toEqual(before)
+      expect(onSceneEditCommit).not.toHaveBeenCalled()
+      session.dispose()
+    },
+  )
 })
