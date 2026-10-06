@@ -1,16 +1,12 @@
 // canvas/runtime/view/navigation-policy.ts  (pure; shared by both drivers)
 //
 // Owns the navigation limits both camera drivers apply: the policy values, the one constrain function
-// (zoom range, the single-world floor for a bearing arc, the one-world hold of the rotated screen), and the
-// bearing arithmetic (normalising, snapping, steps, shortest arcs).
+// (zoom range, the bearing-free world floor, the one-world hold of the screen diagonal), and the bearing
+// arithmetic (normalising, snapping, steps, shortest arcs).
 
 import type { ReadonlySignal } from '@preact/signals'
 import { MAPLIBRE_WORLD_TILE_SIZE, mapZoomToStageScale, mercatorToGeo } from '../../projection'
-import {
-  singleWorldEffectiveMinimumZoom,
-  WORKSPACE_MAP_MAX_ZOOM,
-  WORKSPACE_MAP_MIN_ZOOM,
-} from '../../workspace-camera-policy'
+import { WORKSPACE_MAP_MAX_ZOOM, WORKSPACE_MAP_MIN_ZOOM } from '../../workspace-camera-policy'
 import type { ViewCamera, ViewScreen } from './types'
 
 /**
@@ -48,35 +44,22 @@ export function createNavigationPolicy(referenceLatitudeDeg: number, reducedMoti
 }
 
 /**
- * Clamp zoom to [max(policy.minZoom, zoomFloorForArc(screen, policy, arc)), policy.maxZoom], the floor keeping one world copy
- * under the viewport rotated by every bearing in `bearingArc` (renderWorldCopies:false), then hold the rotated screen quad inside
- * one world: latitude inside ±85.05° and longitude inside ±180°. It replaces all of MapLibre's defaultConstrain (setConstrainOverride
- * replaces the zoom range and the longitude hold too). Idempotent. The zoom floor depends on the screen and the arc, never on the
- * centre, because MapLibre calls the guard on intermediate (old centre, new zoom) states.
- *
- * The arc defaults to the camera's own bearing, and the camera's bearing is always covered. The hold keeps the screen's bounding
- * box at every bearing of the arc inside the Mercator square; its limits are computed in degrees from the zoom, screen and arc
- * alone, so a second call finds nothing to move. A camera that needs no change is returned as the same object.
+ * Clamp zoom to [max(policy.minZoom, worldZoomFloor(screen)), policy.maxZoom], then hold the screen centre at least half the
+ * screen diagonal (in px at that zoom) inside one world: latitude inside ±85.05° and longitude inside ±180°. Bearing-free (U34): the
+ * floor and the hold cover the viewport at every bearing, so a turn never changes them. It replaces all of MapLibre's
+ * defaultConstrain (setConstrainOverride replaces the zoom range and the longitude hold too). Idempotent. The floor depends on the
+ * screen only, never on the centre, because MapLibre calls the guard on intermediate (old centre, new zoom) states. A camera that
+ * needs no change is returned as the same object.
  */
-export function constrainCamera(camera: ViewCamera, screen: ViewScreen, policy: NavigationPolicy,
-  bearingArc?: { readonly fromDeg: number; readonly toDeg: number }): ViewCamera {
-  const fromDeg = bearingArc?.fromDeg ?? camera.bearingDeg
-  const toDeg = bearingArc?.toDeg ?? camera.bearingDeg
-  const floor = Math.max(
-    zoomFloorForArc(screen, policy, fromDeg, toDeg),
-    zoomFloorForArc(screen, policy, camera.bearingDeg, camera.bearingDeg),
-  )
-  const minimum = Math.min(policy.maxZoom, Math.max(policy.minZoom, floor))
+export function constrainCamera(camera: ViewCamera, screen: ViewScreen, policy: NavigationPolicy): ViewCamera {
+  const minimum = Math.min(policy.maxZoom, Math.max(policy.minZoom, worldZoomFloor(screen)))
   const zoom = Math.min(policy.maxZoom, Math.max(minimum, camera.zoom))
 
-  const extent = maximumRotatedExtent(screen, fromDeg, toDeg, camera.bearingDeg)
-  const worldSize = MAPLIBRE_WORLD_TILE_SIZE * 2 ** zoom
-  const halfWidth = extent.width / 2 / worldSize
-  const halfHeight = extent.height / 2 / worldSize
-  const west = halfWidth <= 0.5 ? mercatorToGeo(halfWidth, 0.5).lng : 0
-  const east = halfWidth <= 0.5 ? mercatorToGeo(1 - halfWidth, 0.5).lng : 0
-  const north = halfHeight <= 0.5 ? mercatorToGeo(0.5, halfHeight).lat : 0
-  const south = halfHeight <= 0.5 ? mercatorToGeo(0.5, 1 - halfHeight).lat : 0
+  const half = screenDiagonal(screen) / 2 / (MAPLIBRE_WORLD_TILE_SIZE * 2 ** zoom)
+  const west = half <= 0.5 ? mercatorToGeo(half, 0.5).lng : 0
+  const east = half <= 0.5 ? mercatorToGeo(1 - half, 0.5).lng : 0
+  const north = half <= 0.5 ? mercatorToGeo(0.5, half).lat : 0
+  const south = half <= 0.5 ? mercatorToGeo(0.5, 1 - half).lat : 0
   const lon = Math.min(east, Math.max(west, camera.center.lon))
   const lat = Math.min(north, Math.max(south, camera.center.lat))
 
@@ -85,19 +68,17 @@ export function constrainCamera(camera: ViewCamera, screen: ViewScreen, policy: 
   return { center, zoom, bearingDeg: camera.bearingDeg, pitchDeg: 0 }
 }
 
-/** Zoom floor for a bearing arc: the maximum over the arc (largest near 45° + k·90°); for the arc [0, 0] it equals singleWorldEffectiveMinimumZoom. */
-export function zoomFloorForArc(screen: ViewScreen, policy: NavigationPolicy, fromDeg: number, toDeg: number): number {
-  const extent = maximumRotatedExtent(screen, fromDeg, toDeg)
-  return singleWorldEffectiveMinimumZoom(extent.width, extent.height, policy.minZoom)
+/** The world floor: log2(hypot(width, height) / 512), so the screen diagonal never exceeds one world (U34); −∞ for an empty screen. */
+export function worldZoomFloor(screen: ViewScreen): number {
+  return Math.log2(screenDiagonal(screen) / MAPLIBRE_WORLD_TILE_SIZE)
 }
 
 /**
- * ViewFrame.scaleBounds at a bearing (spec §1.1b): the policy's zoom range with the single-world floor for that bearing, in px/m at
- * the reference latitude. At bearing 0 on a screen whose larger side is at most 512 px, the policy's zoom range alone: the
- * single-world floor does not bite.
+ * ViewFrame.scaleBounds (spec §1.1b): the policy's zoom range with the world floor, in px/m at the reference latitude. On a screen
+ * whose diagonal is at most 512 px, the policy's zoom range alone: the world floor does not bite.
  */
-export function scaleBoundsAt(screen: ViewScreen, policy: NavigationPolicy, bearingDeg: number): { readonly min: number; readonly max: number } {
-  const minZoom = Math.min(policy.maxZoom, zoomFloorForArc(screen, policy, bearingDeg, bearingDeg))
+export function scaleBoundsAt(screen: ViewScreen, policy: NavigationPolicy): { readonly min: number; readonly max: number } {
+  const minZoom = Math.min(policy.maxZoom, Math.max(policy.minZoom, worldZoomFloor(screen)))
   return Object.freeze({
     min: mapZoomToStageScale(minZoom, policy.referenceLatitudeDeg),
     max: mapZoomToStageScale(policy.maxZoom, policy.referenceLatitudeDeg),
@@ -156,33 +137,8 @@ export function bearingCosSin(deg: number): readonly [number, number] {
   return [Math.cos(radians), Math.sin(radians)]
 }
 
-/** Width and height of the screen's axis-aligned bounding box on the map, the largest over the arc (and any extra bearings). */
-function maximumRotatedExtent(screen: ViewScreen, fromDeg: number, toDeg: number, ...alsoDeg: readonly number[]): { width: number; height: number } {
-  const width = finiteSize(screen.width)
-  const height = finiteSize(screen.height)
-  const start = normaliseBearing(fromDeg)
-  const sweep = shortestArc(fromDeg, toDeg)
-  const bearings = [start, start + sweep, ...alsoDeg]
-  if (sweep !== 0 && width > 0 && height > 0) {
-    // Within each quarter turn the box's width peaks at atan2(h, w) and its height at atan2(w, h); between them it only falls
-    // or rises, so the arc's maximum is at an end or at one of these angles.
-    const low = Math.min(start, start + sweep)
-    const high = Math.max(start, start + sweep)
-    const widest = Math.atan2(height, width) / DEGREES_TO_RADIANS
-    for (const peak of [widest, 90 - widest]) {
-      for (let angle = peak + Math.ceil((low - peak) / 90) * 90; angle < high; angle += 90) {
-        if (angle > low) bearings.push(angle)
-      }
-    }
-  }
-  let widestBox = 0
-  let tallestBox = 0
-  for (const bearing of bearings) {
-    const [cos, sin] = bearingCosSin(bearing)
-    widestBox = Math.max(widestBox, width * Math.abs(cos) + height * Math.abs(sin))
-    tallestBox = Math.max(tallestBox, width * Math.abs(sin) + height * Math.abs(cos))
-  }
-  return { width: widestBox, height: tallestBox }
+function screenDiagonal(screen: ViewScreen): number {
+  return Math.hypot(finiteSize(screen.width), finiteSize(screen.height))
 }
 
 function finiteSize(value: number): number {

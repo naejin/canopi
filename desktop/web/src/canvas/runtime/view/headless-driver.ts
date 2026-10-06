@@ -53,7 +53,7 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
   let published = frameState()
   const frames = createDriverFrameSource(driverFrame(published, false))
 
-  /** The zoom range and the one-world hold at the camera's bearing. */
+  /** The zoom range and the one-world hold (bearing-free). */
   function constrained(candidate: ViewCamera): ViewCamera {
     const held = constrainCamera(candidate, screen, deps.policy())
     return Object.isFrozen(held) ? held : Object.freeze({ ...held, center: Object.freeze({ ...held.center }) })

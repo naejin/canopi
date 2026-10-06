@@ -6,7 +6,7 @@ import type { ScenePersistedState } from '../canvas/runtime/scene'
 import type { CameraDriver, CameraDriverDeps } from '../canvas/runtime/view/camera-driver'
 import { createCameraDriverHost } from '../canvas/runtime/view/driver-host'
 import { createViewNavigation } from '../canvas/runtime/view/navigation'
-import { createNavigationPolicy, zoomFloorForArc, type NavigationPolicy } from '../canvas/runtime/view/navigation-policy'
+import { createNavigationPolicy, type NavigationPolicy } from '../canvas/runtime/view/navigation-policy'
 import { planarToViewCamera } from '../canvas/runtime/view/camera-math'
 import type { GeoPoint, PlanarCamera, ViewCamera, ViewFrame, ViewScreen } from '../canvas/runtime/view/types'
 import { planarCameraOf } from '../canvas/runtime/view/view-transform'
@@ -308,39 +308,34 @@ describe('MapLibre camera driver', () => {
     expect(moved.lat).toBeCloseTo(ground.lat, 10)
   })
 
-  it('the guard arc covers a flight', () => {
+  it('the guard holds every flight frame at the bearing-free world floor', () => {
     const screen = { width: 1000, height: 800 }
     const map = new ConsistentMap({ center: PLANE.origin, zoom: 3, bearing: 0 }, screen)
     const { driver, published } = attach(map)
-    const viewScreen = { ...screen, devicePixelRatio: 2 }
-    const floorAt = (fromDeg: number, toDeg: number) => zoomFloorForArc(viewScreen, POLICY, fromDeg, toDeg)
+    const floor = Math.log2(Math.hypot(1000, 800) / 512)
     // The guard installed on the map: MapLibre calls it on every candidate (centre, zoom), and it never sees the bearing.
     const guard = (zoom: number) => map.constrain!(new FakeLngLat(2.35, 48.85), zoom)
-    expect(guard(0).zoom).toBeCloseTo(floorAt(0, 0), 12)
+    expect(guard(0).zoom).toBeCloseTo(floor, 6)
 
     driver.apply({ kind: 'set', target: { center: { lon: 2.4, lat: 48.9 }, zoom: 5, bearingDeg: 90, pitchDeg: 0 }, animation: 'fly' })
 
     expect(map.flyTo).toHaveBeenCalledWith({ center: [2.4, 48.9], zoom: 5, bearing: 90 })
     expect(map.jumpTo).not.toHaveBeenCalled()
     expect(driver.bearingTarget()).toBe(90)
-    // For the whole flight the floor is the arc's: largest near 45°, above both ends.
-    expect(floorAt(0, 90)).toBeGreaterThan(floorAt(0, 0) + 0.1)
-    expect(floorAt(0, 90)).toBeGreaterThan(floorAt(90, 90) + 0.1)
     const inFlight = guard(0)
-    expect(inFlight.zoom).toBeCloseTo(floorAt(0, 90), 12)
+    expect(inFlight.zoom).toBeCloseTo(floor, 6)
     expect(inFlight.center).toBeInstanceOf(FakeLngLat)
 
     // Flight frames are MapLibre's own moves: each rebuilds the frame from the read-backs.
     map.flightFrame({ center: { lon: 2.38, lat: 48.88 }, zoom: 4, bearing: 45 })
     expect(published.at(-1)!.view.camera).toMatchObject({ zoom: 4, bearingDeg: 45 })
-    expect(guard(0).zoom).toBeCloseTo(floorAt(0, 90), 12)
+    expect(guard(0).zoom).toBeCloseTo(floor, 6)
 
     map.endFlight()
     const landed = published.at(-1)!
     expect(landed.view.camera).toEqual({ center: { lon: 2.4, lat: 48.9 }, zoom: 5, bearingDeg: 90, pitchDeg: 0 })
     expect(driver.bearingTarget()).toBe(90)
-    // Landed, the arc is the live bearing's alone.
-    expect(guard(0).zoom).toBeCloseTo(floorAt(90, 90), 12)
+    expect(guard(0).zoom).toBeCloseTo(floor, 6)
   })
 
   it('fly jumps under reducedMotion', () => {
@@ -414,7 +409,7 @@ describe('MapLibre camera driver', () => {
     expect(map.resize).toHaveBeenCalledTimes(1)
   })
 
-  it('resizing at 45 degrees near the world floor keeps zoom at or above zoomFloorForArc and keeps the bearing', () => {
+  it('resizing at 45 degrees near the world floor keeps zoom at or above the world floor and keeps the bearing', () => {
     const small = { width: 400, height: 300 }
     const map = new ConsistentMap({ center: { lon: 10, lat: 20 }, zoom: 0, bearing: 45 }, small)
     const { driver, published } = attach(map)
@@ -424,7 +419,7 @@ describe('MapLibre camera driver', () => {
     map.container = { width: large.width, height: large.height }
     driver.setScreen(large)
 
-    const floor = zoomFloorForArc(large, POLICY, 45, 45)
+    const floor = Math.log2(Math.hypot(large.width, large.height) / 512)
     expect(floor).toBeGreaterThan(1.5)
     expect(published).toHaveLength(1)
     const { camera } = published[0]!.view
@@ -593,11 +588,12 @@ describe('MapLibre camera driver', () => {
     expect(driver.frames.viewFrame.peek()).toBe(boundary)
   })
 
-  it('zooming out at the single-world floor sends no jump and publishes nothing', () => {
-    const map = new ConsistentMap({ center: { lon: 2.35, lat: 0 }, zoom: 1 }, { width: 400, height: 1024 })
+  it('zooming out at the world floor sends no jump and publishes nothing', () => {
+    // The guard lifts the attached camera to the floor as it is installed.
+    const map = new ConsistentMap({ center: { lon: 2.35, lat: 0 }, zoom: 0 }, { width: 400, height: 1024 })
     const { driver, published } = attach(map)
     const boundary = driver.frames.viewFrame.peek()
-    expect(boundary.view.camera.zoom).toBe(1)
+    expect(boundary.view.camera.zoom).toBeCloseTo(Math.log2(Math.hypot(400, 1024) / 512), 6)
     expect(boundary.scaleBounds.min).toBeCloseTo(boundary.view.pixelsPerMetre, 12)
 
     for (let input = 0; input < 100; input += 1) driver.apply({ kind: 'zoom-around', anchorPx: { x: 200, y: 512 }, factor: 1 / 1.1 })

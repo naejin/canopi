@@ -2,7 +2,6 @@ import { signal } from '@preact/signals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestView, type TestView } from '../../../__tests__/support/test-view'
 import { mapZoomToStageScale } from '../../projection'
-import { singleWorldEffectiveMinimumZoom } from '../../workspace-camera-policy'
 import { getAnnotationWorldBounds } from '../annotation-layout'
 import { getPlantWorldBounds } from '../plant-presentation'
 import type { ScenePersistedState } from '../scene'
@@ -15,8 +14,8 @@ import { planarCameraOf } from './view-transform'
 const EQUATOR_MAX_SCALE = mapZoomToStageScale(27, 0)
 /** A 300 ms turn lands on the first animation frame (16 ms apart under fake timers) after its duration. */
 const TURN_MS = 320
-/** The single-world floor of a 1000 × 800 screen at bearing 0 (spec §1.1b): the named rewrite of camera-controller.test.ts:96, :212. */
-const WIDE_FLOOR_SCALE = mapZoomToStageScale(singleWorldEffectiveMinimumZoom(1000, 800), 0)
+/** The world floor of a 1000 × 800 screen at every bearing (spec §4.14): its diagonal is one world. */
+const WIDE_FLOOR_SCALE = mapZoomToStageScale(Math.log2(Math.hypot(1000, 800) / 512), 0)
 
 function createScene(): ScenePersistedState {
   return {
@@ -138,7 +137,7 @@ describe('view navigation', () => {
     view.navigation.showCamera({ center: { lon: 0, lat: 0 }, zoom: 30, bearingDeg: 0, pitchDeg: 0 })
     expect(view.view().pixelsPerMetre).toBe(EQUATOR_MAX_SCALE)
     view.navigation.showCamera({ center: { lon: 0, lat: 0 }, zoom: -5, bearingDeg: 0, pitchDeg: 0 })
-    expect(view.view().pixelsPerMetre).toBe(WIDE_FLOOR_SCALE)
+    expect(view.view().pixelsPerMetre / WIDE_FLOOR_SCALE).toBeCloseTo(1, 6)
     view.dispose()
   })
 

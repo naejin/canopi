@@ -1,7 +1,6 @@
 import { signal } from '@preact/signals'
 import { describe, expect, it } from 'vitest'
 import { geoToMercator, MAPLIBRE_WORLD_TILE_SIZE } from '../../projection'
-import { singleWorldEffectiveMinimumZoom } from '../../workspace-camera-policy'
 import {
   angularDistanceToNorth,
   constrainCamera,
@@ -11,7 +10,7 @@ import {
   roundToStep,
   shortestArc,
   snapBearing,
-  zoomFloorForArc,
+  worldZoomFloor,
 } from './navigation-policy'
 import type { ViewCamera, ViewScreen } from './types'
 
@@ -38,6 +37,10 @@ function groundCornersMercator(view: ViewCamera, screen: ViewScreen): Array<{ x:
   })
 }
 
+function lonLat(view: ViewCamera): [number, number] {
+  return [view.center.lon, view.center.lat]
+}
+
 function expectInsideOneWorld(view: ViewCamera, screen: ViewScreen): void {
   for (const corner of groundCornersMercator(view, screen)) {
     expect(corner.x).toBeGreaterThanOrEqual(-1e-9)
@@ -61,37 +64,56 @@ describe('navigation policy', () => {
     expect(Object.isFrozen(policy)).toBe(true)
   })
 
-  it('constrain at world zoom for bearings 0, 45 and 90', () => {
-    const cases = [
-      { bearingDeg: 0, boxSide: 1000 },
-      { bearingDeg: 45, boxSide: 1800 * Math.SQRT1_2 },
-      { bearingDeg: 90, boxSide: 1000 },
-    ]
-    for (const { bearingDeg, boxSide } of cases) {
-      const constrained = constrainCamera(camera(170, 80, 0, bearingDeg), LANDSCAPE, POLICY)
-
-      expect(constrained.zoom).toBeCloseTo(Math.log2(boxSide / MAPLIBRE_WORLD_TILE_SIZE), 12)
-      expect(constrained.zoom).toBe(zoomFloorForArc(LANDSCAPE, POLICY, bearingDeg, bearingDeg))
-      expect(constrained.bearingDeg).toBe(bearingDeg)
-      expectInsideOneWorld(constrained, LANDSCAPE)
+  it('the world floor is log2(hypot(w, h)/512) at every bearing', () => {
+    for (const screen of [SMALL, LANDSCAPE, PORTRAIT, { width: 1920, height: 1080, devicePixelRatio: 1.5 }]) {
+      const floor = Math.log2(Math.hypot(screen.width, screen.height) / MAPLIBRE_WORLD_TILE_SIZE)
+      expect(worldZoomFloor(screen)).toBeCloseTo(floor, 6)
+      for (const bearingDeg of [0, 20, 45, 90, 135, 200, 359.5]) {
+        const constrained = constrainCamera(camera(170, 80, -1, bearingDeg), screen, POLICY)
+        expect(constrained.zoom).toBeCloseTo(Math.max(POLICY.minZoom, floor), 6)
+        expect(constrained.bearingDeg).toBe(bearingDeg)
+      }
     }
-    // At the floor the box's larger side is the whole world, so that axis is centred on the world.
-    expect(constrainCamera(camera(170, 80, 0, 0), LANDSCAPE, POLICY).center.lon).toBeCloseTo(0, 9)
-    expect(constrainCamera(camera(170, 80, 0, 90), LANDSCAPE, POLICY).center.lat).toBeCloseTo(0, 9)
   })
 
-  it('a rotate-only move at bearing 45 is constrained', () => {
+  it('at the world floor the screen diagonal is the whole world, so the centre cannot move', () => {
+    for (const bearingDeg of [0, 45, 90]) {
+      const constrained = constrainCamera(camera(170, 80, 0, bearingDeg), LANDSCAPE, POLICY)
+      expect(constrained.center.lon).toBeCloseTo(0, 6)
+      expect(constrained.center.lat).toBeCloseTo(0, 6)
+      expectInsideOneWorld(constrained, LANDSCAPE)
+    }
+  })
+
+  it('a turn at the world floor keeps the zoom and the centre', () => {
     const atNorth = constrainCamera(camera(0, 0, 0, 0), LANDSCAPE, POLICY)
     expect(constrainCamera(atNorth, LANDSCAPE, POLICY)).toBe(atNorth)
 
-    const turned = constrainCamera({ ...atNorth, bearingDeg: 45 }, LANDSCAPE, POLICY)
+    for (const bearingDeg of [15, 45, 90, 200]) {
+      const turned = { ...atNorth, bearingDeg }
+      // The floor and the hold already cover the screen at every bearing: a turn has nothing to constrain.
+      expect(constrainCamera(turned, LANDSCAPE, POLICY)).toBe(turned)
+      expectInsideOneWorld(turned, LANDSCAPE)
+    }
+  })
 
-    expect(turned.zoom).toBeGreaterThan(atNorth.zoom)
-    expect(turned.zoom).toBe(zoomFloorForArc(LANDSCAPE, POLICY, 45, 45))
-    expect(turned.bearingDeg).toBe(45)
-    expectInsideOneWorld(turned, LANDSCAPE)
-    // Without the constrain, the turned screen's corners leave the world.
-    expect(groundCornersMercator({ ...atNorth, bearingDeg: 45 }, LANDSCAPE).some(({ x, y }) => x < 0 || y < 0 || x > 1 || y > 1)).toBe(true)
+  it('the pan hold keeps half the screen diagonal inside one world on both axes, at every bearing', () => {
+    const zoom = 3
+    const half = Math.hypot(LANDSCAPE.width, LANDSCAPE.height) / 2 / (MAPLIBRE_WORLD_TILE_SIZE * 2 ** zoom)
+    const held = constrainCamera(camera(250, 89, zoom, 0), LANDSCAPE, POLICY)
+    const centre = geoToMercator(held.center.lon, held.center.lat)
+    expect(centre.x).toBeCloseTo(1 - half, 6)
+    expect(centre.y).toBeCloseTo(half, 6)
+    const opposite = geoToMercator(...lonLat(constrainCamera(camera(-250, -89, zoom, 0), LANDSCAPE, POLICY)))
+    expect(opposite.x).toBeCloseTo(half, 6)
+    expect(opposite.y).toBeCloseTo(1 - half, 6)
+    for (const bearingDeg of [0, 30, 45, 90, 135, 300]) {
+      // The same hold at every bearing, and the held screen stays inside the world turned to any bearing.
+      const turned = constrainCamera(camera(250, 89, zoom, bearingDeg), LANDSCAPE, POLICY)
+      expect(turned.center.lon).toBeCloseTo(held.center.lon, 6)
+      expect(turned.center.lat).toBeCloseTo(held.center.lat, 6)
+      expectInsideOneWorld(turned, LANDSCAPE)
+    }
   })
 
   it('constrain is idempotent', () => {
@@ -103,9 +125,6 @@ describe('navigation policy', () => {
             for (const bearingDeg of [0, 30, 45, 90, 200, 359.5]) {
               const once = constrainCamera(camera(lon, lat, zoom, bearingDeg), screen, POLICY)
               expect(constrainCamera(once, screen, POLICY)).toBe(once)
-              const arc = { fromDeg: bearingDeg, toDeg: bearingDeg + 70 }
-              const onceOverArc = constrainCamera(camera(lon, lat, zoom, bearingDeg), screen, POLICY, arc)
-              expect(constrainCamera(onceOverArc, screen, POLICY, arc)).toBe(onceOverArc)
             }
           }
         }
@@ -121,8 +140,6 @@ describe('navigation policy', () => {
     expect(pastTheAntimeridian.zoom).toBe(5)
     expect(pastTheAntimeridian.center.lon).toBeLessThan(180)
     expectInsideOneWorld(pastTheAntimeridian, SMALL)
-    const east = groundCornersMercator(pastTheAntimeridian, SMALL)[1]!
-    expect(east.x).toBeCloseTo(1, 12)
 
     const westOfTheWorld = constrainCamera(camera(-181, -10, 5, 30), SMALL, POLICY)
     expect(westOfTheWorld.center.lon).toBeGreaterThan(-180)
@@ -136,43 +153,12 @@ describe('navigation policy', () => {
     expect(constrainCamera(inside, SMALL, POLICY)).toBe(inside)
   })
 
-  it('the zoom floor does not depend on the centre', () => {
+  it('the zoom floor does not depend on the centre or the bearing', () => {
     const centres = [[0, 0], [179, 85], [-120, -60], [45, 30]] as const
-    for (const bearingDeg of [0, 20, 45, 90]) {
-      const zooms = centres.map(([lon, lat]) => constrainCamera(camera(lon, lat, -1, bearingDeg), LANDSCAPE, POLICY).zoom)
-      expect(new Set(zooms).size).toBe(1)
-      expect(zooms[0]).toBe(zoomFloorForArc(LANDSCAPE, POLICY, bearingDeg, bearingDeg))
-    }
-    const overArc = centres.map(([lon, lat]) => constrainCamera(camera(lon, lat, -1, 10), LANDSCAPE, POLICY, { fromDeg: 10, toDeg: 80 }).zoom)
-    expect(new Set(overArc).size).toBe(1)
-    // The arc passes both of the box's peaks, so its floor is the screen diagonal's.
-    expect(overArc[0]).toBeCloseTo(Math.log2(Math.hypot(1000, 800) / MAPLIBRE_WORLD_TILE_SIZE), 12)
-  })
-
-  it('zoomFloorForArc at bearing 0 equals singleWorldEffectiveMinimumZoom', () => {
-    const screens: ViewScreen[] = [
-      SMALL, LANDSCAPE, PORTRAIT,
-      { width: 512, height: 512, devicePixelRatio: 1 },
-      { width: 513, height: 1, devicePixelRatio: 1 },
-      { width: 1920, height: 1080, devicePixelRatio: 1.5 },
-      { width: 0, height: 0, devicePixelRatio: 1 },
-    ]
-    for (const screen of screens) {
-      const expected = singleWorldEffectiveMinimumZoom(screen.width, screen.height, POLICY.minZoom)
-      expect(zoomFloorForArc(screen, POLICY, 0, 0)).toBe(expected)
-      expect(zoomFloorForArc(screen, POLICY, 360, -360)).toBe(expected)
-    }
-  })
-
-  it('zoomFloorForArc takes the largest box over the arc, along the shortest way round', () => {
-    const at = (deg: number) => zoomFloorForArc(LANDSCAPE, POLICY, deg, deg)
-    expect(zoomFloorForArc(LANDSCAPE, POLICY, 0, 30)).toBe(Math.max(at(0), at(30)))
-    // No peak lies between 350 and 10, and north is the box's narrowest there.
-    expect(zoomFloorForArc(LANDSCAPE, POLICY, 350, 10)).toBe(Math.max(at(350), at(10)))
-    // 20 → 350 runs back through north, not forwards through the box's peaks near 45.
-    expect(zoomFloorForArc(LANDSCAPE, POLICY, 20, 350)).toBe(Math.max(at(20), at(350)))
-    expect(zoomFloorForArc(LANDSCAPE, POLICY, 20, 350)).toBeLessThan(at(45))
-    expect(zoomFloorForArc(LANDSCAPE, POLICY, 0, 90)).toBeCloseTo(Math.log2(Math.hypot(1000, 800) / MAPLIBRE_WORLD_TILE_SIZE), 12)
+    const zooms = [0, 20, 45, 90].flatMap((bearingDeg) =>
+      centres.map(([lon, lat]) => constrainCamera(camera(lon, lat, -1, bearingDeg), LANDSCAPE, POLICY).zoom))
+    expect(new Set(zooms).size).toBe(1)
+    expect(zooms[0]).toBeCloseTo(Math.log2(Math.hypot(1000, 800) / MAPLIBRE_WORLD_TILE_SIZE), 6)
   })
 
   it('bearing helpers follow the spec examples', () => {
