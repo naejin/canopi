@@ -277,9 +277,18 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     try {
       activate(id, id === currentId ? activeSource : null)
     } catch (failure) {
-      if (id !== 'select') activate('select', null)
+      if (id !== 'select') {
+        activate('select', null)
+        followArmedTool()
+      }
       throw failure
     }
+  }
+
+  /** A fault outside setTool armed Select: the session's tool signal follows it through the tool-request path, so the rail
+   *  and the card name the tool that runs (B6). setTool's own caller names its fallback itself. */
+  function followArmedTool(): void {
+    if (deps.toolState.active.peek() !== currentId) deps.toolState.set(currentId)
   }
 
   function afterToolCall(): void {
@@ -1339,9 +1348,13 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         () => cancelTransientInteraction('document-replaced'),
         () => deps.menu.close(),
         () => {
-          const tool = activeTool
-          callTool(() => tool.deactivate('document-replaced'))
-          activate(currentId, null)
+          try {
+            const tool = activeTool
+            callTool(() => tool.deactivate('document-replaced'))
+            activate(currentId, null)
+          } finally {
+            followArmedTool()
+          }
         },
       ], 'Tool host document replacement preparation failed')
     },
