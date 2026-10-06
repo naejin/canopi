@@ -9,6 +9,7 @@ import {
   createRectangularZoneMeasurements,
 } from '../canvas/runtime/zone-measurements'
 import { createSessionPlane } from '../canvas/session-plane'
+import { decodeCanopiDesign } from '../app/contracts/design-ingestion'
 import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
 import type { CanopiFile } from '../types/design'
 import { geoAt } from './support/geo-design'
@@ -25,7 +26,7 @@ function currentDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
     plant_species_codes: {},
     layers: [{ name: 'plants', visible: true, locked: false, opacity: 1 }],
     plants: [
-      plant('p1', { lon: 2.2944812345678, lat: 48.8583701234567 }),
+      plant('p1', { lon: 2.294481234, lat: 48.858370123 }),
       plant('p2', { lon: 2.29452, lat: 48.85831 }),
       plant('p3', { lon: 2.2946, lat: 48.8584 }),
     ],
@@ -82,7 +83,7 @@ function sceneFields(file: CanopiFile): string {
 }
 
 describe('geolocated design codec', () => {
-  it('writes every loaded position back byte-identically when nothing changed', () => {
+  it('writes every unedited position on the 1e-9° grid back unchanged', () => {
     const file = currentDesign()
     const store = new SceneStore().hydrate(file)
     expect(sceneFields(store.toCanopiFile())).toBe(sceneFields(file))
@@ -116,7 +117,7 @@ describe('geolocated design codec', () => {
     expect(Math.abs(shift.y)).toBeLessThan(1e-3)
   })
 
-  it('keeps every stored lon/lat unchanged across a re-origin beyond 10 km', () => {
+  it('writes an unedited position on the 1e-9° grid unchanged after open, chained re-origins and save', () => {
     const file = currentDesign()
     const store = new SceneStore().hydrate(file)
     const farCentre = store.sessionPlane.toGeo({ x: 12_000, y: -3_000 })
@@ -126,6 +127,57 @@ describe('geolocated design codec', () => {
     expect(sceneFields(store.toCanopiFile())).toBe(sceneFields(file))
     store.commitReorigin(store.beginReorigin(file.plants[1]!.position))
     expect(sceneFields(store.toCanopiFile())).toBe(sceneFields(file))
+  })
+
+  it('writes a position with more decimals rounded once, then unchanged', () => {
+    const offGrid = { lon: 2.2944812345678, lat: 48.8583701234567 }
+    const file = currentDesign({ plants: [plant('p1', offGrid), ...currentDesign().plants.slice(1)] })
+    const once = new SceneStore().hydrate(file).toCanopiFile()
+    expect(once.plants[0]!.position).toEqual({ lon: 2.294481235, lat: 48.858370123 })
+    const store = new SceneStore().hydrate(once)
+    store.commitReorigin(store.beginReorigin(store.sessionPlane.toGeo({ x: 15_000, y: 4_000 })))
+    expect(sceneFields(store.toCanopiFile())).toBe(sceneFields(once))
+  })
+
+  it('writes a latitude at the Web Mercator limit as the largest 1e-9° grid value the decoder admits', () => {
+    const atLimit = (lat: number) => currentDesign({
+      plants: [plant('pole', { lon: 10, lat }), plant('near', { lon: 10.01, lat: Math.sign(lat) * 85.05 })],
+      zones: [], annotations: [], measurement_guides: [],
+    })
+    for (const lat of [85.0511287798066, -85.0511287798066]) {
+      const saved = new SceneStore().hydrate(atLimit(lat)).toCanopiFile()
+      expect(saved.plants[0]!.position.lat).toBe(Math.sign(lat) * 85.051128779)
+      expect(() => decodeCanopiDesign(JSON.parse(JSON.stringify(saved)))).not.toThrow()
+    }
+  })
+
+  it('writes 10k unedited grid positions and ellipses unchanged across 20 chained re-origins', () => {
+    let seed = 0x2f6a91
+    const random = () => {
+      seed = (seed + 0x6d2b79f5) | 0
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+    const onGrid = (min: number, max: number) => Math.round((min + random() * (max - min)) * 1e9) / 1e9
+    const near = () => ({ lon: onGrid(-0.2, 0.2) + 2.29, lat: onGrid(-0.2, 0.2) + 48.86 })
+    const grid = (point: { lon: number; lat: number }) => ({
+      lon: Math.round(point.lon * 1e9) / 1e9, lat: Math.round(point.lat * 1e9) / 1e9,
+    })
+    const plants = Array.from({ length: 6_000 }, (_, i) => plant(`p${i}`, grid(near())))
+    plants.push(plant('limit', { lon: 2.29, lat: 85.051128779 }))
+    const zones = Array.from({ length: 2_000 }, (_, i) => ({
+      ...currentDesign().zones[1]!, id: `e${i}`, points: [grid(near()), grid(near())],
+    }))
+    const file = currentDesign({ plants, zones, annotations: [], measurement_guides: [] })
+    const store = new SceneStore().hydrate(file)
+    for (let step = 0; step < 20; step += 1) {
+      store.commitReorigin(store.beginReorigin(grid(near())))
+    }
+    const saved = store.toCanopiFile()
+    const mismatches = [...SCENE_FIELDS].reduce((count, key) => count + (saved[key] as unknown[])
+      .filter((item, i) => JSON.stringify(item) !== JSON.stringify((file[key] as unknown[])[i])).length, 0)
+    expect(mismatches).toBe(0)
   })
 
   it('stores ellipses as opposite unrotated bounding-box corners', () => {

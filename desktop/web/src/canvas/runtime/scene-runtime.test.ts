@@ -2,6 +2,7 @@ import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { DraftPresentation } from './tools/draft'
 import type { ViewFrame, ViewTransform } from './view/types'
 import { planarCameraOf } from './view/view-transform'
+import { roundGeoPosition } from './scene/geo-frame'
 import { SceneRendererMountCancelledError } from './scene-runtime/render-scheduler'
 import { effect } from '@preact/signals'
 import { stageScaleToMapZoom } from '../projection'
@@ -2726,18 +2727,20 @@ describe('scene canvas runtime', () => {
     expect(serialized.plants[0]?.color).toBe('#228833')
   })
 
-  it('saves unchanged loaded positions back verbatim in detached composition', () => {
+  it('saves unedited loaded positions back on the 1e-9° grid in detached composition', () => {
     const runtime = new SceneCanvasRuntime()
     const file = makeFile()
     runtime.documentSurface.loadDocument(file)
 
     const serialized = runtime.documentSurface.captureForPersistence(
-      { name: 'Verbatim positions' },
+      { name: 'Grid positions' },
       file,
     ).content
 
-    expect(serialized.plants.map((plant) => plant.position)).toEqual(file.plants.map((plant) => plant.position))
-    expect(serialized.zones.map((zone) => zone.points)).toEqual(file.zones.map((zone) => zone.points))
+    expect(serialized.plants.map((plant) => plant.position))
+      .toEqual(file.plants.map((plant) => roundGeoPosition(plant.position)))
+    expect(serialized.zones.map((zone) => zone.points))
+      .toEqual(file.zones.map((zone) => zone.points.map(roundGeoPosition)))
   })
 
   it('publishes canvas-origin species hover targets without mutating selection', async () => {

@@ -21,7 +21,7 @@ The `.canopi` file, the Design session (open, continuous save, replacement, clos
 - `DESIGN_FILE_FIELDS` names every root field and its owner; `known-canopi-keys.ts` and `composeDocumentForSave()` (`app/contracts/document.ts`) derive from it. (`bindings-gen` fails on divergence; `npm run check:types`)
 - `OBSOLETE_CANOPI_ROOT_KEYS` and a root `extra` key are refused as `invalid_document`; in memory unknown roots live under `CanopiFile.extra`, and the encoder spreads them first so known fields win. Zone, annotation and group ids are unique and non-empty; a plant or guide without an id gets the first `plant-<n>` / `measurement-guide-<n>` no entry of its list declares, and only duplicate explicit ids are refused. (conformance corpus)
 - Files over `MAX_CANOPI_FILE_BYTES` (64 MiB) are refused before parsing; GeoJSON shares the limit. (`format.rs` tests)
-- Unchanged positions write their loaded lon/lat verbatim (`SceneGeoLedger`, `canvas/runtime/scene/geo-frame.ts`); changed ones round to 1e-9 degree. (`file-format-round-trip.test.ts`)
+- Positions write rounded to 1e-9 degree, latitude clamped to ±85.051128779 (`canvas/runtime/scene/geo-frame.ts`); an unedited one never drifts. (`geolocated-design-codec.test.ts`)
 - A zone's `id` (`zone-<uuid>`) is its identity; `name` is display only and nullable. Targets, groups and view highlights reference the id, so renaming is a Scene edit. (`file-format-round-trip.test.ts`, `canvas-context-menu-entries.test.ts`)
 - `map_view` passes `validate_map_view` with the saved-view camera rules; views and stories pass `validate_views_and_stories` (`common-types/src/views.rs`; mirror `app/contracts/views-admission.ts`): unique ids, camera in range, a recorded ground size (`camera.ground_size_m`) finite, above 0 and at most 1e8 m, steps naming an existing view, `https:`/`http:`/`mailto:` links, embedded PNG/JPEG/WebP/GIF images at most 1 MiB each and 10 MiB per Design; rich text is a block list, never HTML. (conformance corpus, `__tests__/story-rich-text.test.ts`)
 - Deleting a view deletes the steps that show it and returns a `SavedViewDeletion` that `restoreSavedView` puts back; a story or step Undo that meets a missing view parks the step until that view's Undo; no step dangles. (`__tests__/design-edit-views.test.ts`, `design-edit-stories.test.ts`)
@@ -61,7 +61,7 @@ The `.canopi` file, the Design session (open, continuous save, replacement, clos
 |---|---|---|
 | Format, owners, limits | `common-types/src/design.rs`, `views.rs`, `lidar.rs` | `common-types/canopi-design-conformance.json`, `desktop/src/design/format.rs` |
 | Web admission and wire | `app/contracts/` | `canopi-design-*`, `file-format-round-trip` |
-| Geo ledger, re-origin | `canvas/runtime/scene/geo-frame.ts`, `scene-runtime/reorigin.ts` | `reorigin.test.ts`, `file-format-round-trip` |
+| Geo rounding, re-origin | `canvas/runtime/scene/geo-frame.ts`, `scene-runtime/reorigin.ts` | `reorigin.test.ts`, `geolocated-design-codec` |
 | Design Edit | `app/design-edit/` | `design-edit-*`, `frontend-architecture-policies` |
 | Views, stories, images | `app/saved-views/`, `app/stories/` | `saved-views*`, `story-*` |
 | Session, save, replacement | `app/document-session/` | `continuous-save*`, `document-session-*`, `design-session-*` |

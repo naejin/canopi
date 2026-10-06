@@ -63,7 +63,7 @@ export class SceneStore {
     return this._plane
   }
 
-  // The plane plus the ledger of loaded lon/lat that serialization needs.
+  // The session plane that serialization and re-origin need.
   get geoFrame(): SceneGeoFrame {
     return this._geo
   }

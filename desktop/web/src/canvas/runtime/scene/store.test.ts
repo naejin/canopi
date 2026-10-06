@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { CanopiFile } from '../../../types/design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
-import { geoAt } from '../../../__tests__/support/geo-design'
+import { geoAt, storedGeoAt } from '../../../__tests__/support/geo-design'
 import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../../../target'
 import { SceneStore } from './store'
 import { createDefaultScenePersistedState, createDefaultSceneSessionState } from './defaults'
@@ -106,7 +106,7 @@ describe('scene store', () => {
           color: '#228833',
           symbol: 'square',
           pinned_name: false,
-          position: geoAt(12, 18),
+          position: storedGeoAt(12, 18),
           rotation: 45,
           scale: 1.2,
           notes: 'heritage tree',
@@ -120,10 +120,10 @@ describe('scene store', () => {
           locked: false,
           zone_type: 'rect',
           points: [
-            geoAt(0, 0),
-            geoAt(10, 0),
-            geoAt(10, 8),
-            geoAt(0, 8),
+            storedGeoAt(0, 0),
+            storedGeoAt(10, 0),
+            storedGeoAt(10, 8),
+            storedGeoAt(0, 8),
           ],
           rotation: 0,
           fill_color: '#ddeeff',
@@ -134,8 +134,8 @@ describe('scene store', () => {
       measurement_guides: [{
         id: 'measurement-guide-1',
         locked: false,
-        start: geoAt(1, 1),
-        end: geoAt(4, 1),
+        start: storedGeoAt(1, 1),
+        end: storedGeoAt(4, 1),
       }],
       consortiums: [{ target: consortiumTarget('Quercus robur'), stratum: 'high', start_phase: 0, end_phase: 3 }],
       groups: [
@@ -358,7 +358,7 @@ describe('scene store', () => {
           common_name: 'English oak',
           color: null,
           pinned_name: false,
-          position: geoAt(12, 18),
+          position: storedGeoAt(12, 18),
           rotation: null,
           scale: 1.2,
           notes: null,

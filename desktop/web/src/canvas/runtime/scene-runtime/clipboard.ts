@@ -45,7 +45,7 @@ export function createClipboardPayload(
 /**
  * Copied objects keep their geographic position: a paste after a re-origin or
  * in another Design first moves the payload into the current plane through
- * lon/lat. Copies are new objects, so the geo ledger is not involved.
+ * lon/lat.
  */
 export function reprojectClipboardPayload(
   payload: SceneClipboardPayload,
