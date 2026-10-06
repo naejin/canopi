@@ -227,9 +227,9 @@ export interface ToolHost {
    */
   interrupted(): void
   /** Transient history (today's canUndo/…TransientHistory): sends the active tool the 'undo-transient' and 'redo-transient' commands and
-   *  reads its canUndoTransient?/canRedoTransient?; revision bumps after every call into the tool and after a deferred onCommitted. */
+   *  reads its canUndoTransient?/canRedoTransient?. deps.transientHistoryChanged runs after every call into the tool and after a
+   *  deferred onCommitted. */
   readonly transientHistory: {
-    readonly revision: ReadonlySignal<number>
     canUndo(): boolean; canRedo(): boolean; undo(): boolean; redo(): boolean
   }
   prepareForDocumentReplacement(): void                         // deactivate('document-replaced') and drop live sessions

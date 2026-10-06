@@ -14,7 +14,7 @@
 // The module re-exports createToolScene and builds the context-menu port, so interaction-session.ts imports nothing else
 // from tools/ (P5b).
 
-import { signal, untracked } from '@preact/signals'
+import { untracked } from '@preact/signals'
 import { CanvasRuntimeCleanupError, runCanvasRuntimeCleanups } from '../cleanup'
 import type { Gesture, MenuSource, PressTarget } from '../input/gestures'
 import type { TargetClass } from '../input/raw-input'
@@ -171,7 +171,6 @@ export function createContextMenuPort(options: ContextMenuPortOptions): ContextM
 }
 
 export function createToolHost(deps: ToolHostDeps): ToolHost {
-  const transientRevision = signal(0)
   const pointerListeners = new Set<(point: PointerWorld | null) => void>()
   /** Transactions a tool began and has not committed or aborted: its Scene Edit is open. */
   const openEdits = new Set<SceneEditTransaction>()
@@ -300,8 +299,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   function afterToolCall(): void {
-    // A write that reads nothing: a deferred commit may settle inside a caller's effect.
-    transientRevision.value = transientRevision.peek() + 1
     deps.transientHistoryChanged()
     flush()
   }
@@ -1366,7 +1363,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       cancelTransientInteraction('navigate')
     },
     transientHistory: {
-      revision: transientRevision,
       canUndo: () => activeTool.canUndoTransient?.() ?? false,
       canRedo: () => activeTool.canRedoTransient?.() ?? false,
       undo: () => stepTransientHistory('undo-transient'),
