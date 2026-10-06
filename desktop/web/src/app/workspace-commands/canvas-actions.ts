@@ -1,11 +1,9 @@
 import { computed } from '@preact/signals'
 import {
   createCanvasCommandProjection,
-  dispatchCanvasCommandIntent,
   isCanvasCommandDisabled,
   type CanvasCommandFrom,
   type CanvasCommandIntent,
-  type CanvasCommandIntentAdapter,
   type CanvasCommandProjectionState,
   type CanvasEditAction,
   type CanvasViewAction,
@@ -30,7 +28,7 @@ import { armCanvasTool } from '../keyboard/arming'
 
 /**
  * The canvas half of the command graph, shared by both editions: projection
- * state read from the live canvas session, and the intent adapter that runs
+ * state read from the live canvas session, and runCanvasIntent, which runs
  * each command on the command surface current at dispatch time.
  */
 export function readWorkspaceCanvasProjectionState(): CanvasCommandProjectionState {
@@ -118,29 +116,46 @@ function runCanvasViewAction(action: CanvasViewAction): void {
   })
 }
 
-/** Runs each intent on the surface current at dispatch time. */
-export const workspaceCanvasIntentAdapter: CanvasCommandIntentAdapter = {
-  // Each surface arms with its own caller (the rail, a menu, the palette, a key).
-  selectTool: (tool, from) => { armCanvasTool(tool, { from }) },
-  undo: () => withCanvas((canvas) => { if (canvas.history.canUndo.peek()) canvas.history.undo() }),
-  redo: () => withCanvas((canvas) => { if (canvas.history.canRedo.peek()) canvas.history.redo() }),
-  toggleGrid: () => withCanvas((canvas) => canvas.chrome.toggleGrid()),
-  toggleSnapToGrid: () => withCanvas((canvas) => canvas.chrome.toggleSnapToGrid()),
-  edit: runCanvasEditAction,
-  view: runCanvasViewAction,
+/**
+ * Runs one intent on the surface current at dispatch time: the projection's actions, the palette and both editions'
+ * key sinks all come here. Each surface arms a tool with its own `from` (the rail, a menu, the palette, a key).
+ */
+export function runCanvasIntent(intent: CanvasCommandIntent, from: CanvasCommandFrom): void {
+  switch (intent.type) {
+    case 'select-tool':
+      armCanvasTool(intent.tool, { from })
+      return
+    case 'undo':
+      withCanvas((canvas) => { if (canvas.history.canUndo.peek()) canvas.history.undo() })
+      return
+    case 'redo':
+      withCanvas((canvas) => { if (canvas.history.canRedo.peek()) canvas.history.redo() })
+      return
+    case 'toggle-grid':
+      withCanvas((canvas) => canvas.chrome.toggleGrid())
+      return
+    case 'toggle-snap-to-grid':
+      withCanvas((canvas) => canvas.chrome.toggleSnapToGrid())
+      return
+    case 'edit':
+      runCanvasEditAction(intent.action)
+      return
+    case 'view':
+      runCanvasViewAction(intent.action)
+  }
 }
 
 /** Dispatch one intent unless the live state disables it; true when it ran. */
 export function dispatchWorkspaceCanvasIntent(intent: CanvasCommandIntent, from: CanvasCommandFrom): boolean {
   if (isCanvasCommandDisabled(intent, readWorkspaceCanvasProjectionState())) return false
-  dispatchCanvasCommandIntent(intent, workspaceCanvasIntentAdapter, from)
+  runCanvasIntent(intent, from)
   return true
 }
 
 /** The canvas command projection both editions render: tool rail, view chip, zoom group, menus. */
 export const workspaceCanvasCommandProjection = computed(() => createCanvasCommandProjection({
   state: readWorkspaceCanvasProjectionState(),
-  intents: workspaceCanvasIntentAdapter,
+  run: runCanvasIntent,
   translate: t,
   characterKeys: singleKeyShortcuts.value,
 }))

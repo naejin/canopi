@@ -124,15 +124,8 @@ export interface CanvasCommandProjectionState {
 /** Which surface ran a canvas command: armCanvasTool focuses the map after every one but a shortcut. */
 export type CanvasCommandFrom = 'rail' | 'menu' | 'palette' | 'shortcut'
 
-export interface CanvasCommandIntentAdapter {
-  selectTool(tool: CanvasToolId, from: CanvasCommandFrom): void
-  undo(): void
-  redo(): void
-  toggleGrid(): void
-  toggleSnapToGrid(): void
-  edit(action: CanvasEditAction): void
-  view(action: CanvasViewAction): void
-}
+/** Runs one intent; `from` reaches arming for a tool and is unused by the rest. */
+export type CanvasIntentRunner = (intent: CanvasCommandIntent, from: CanvasCommandFrom) => void
 
 /** A command as chrome shows it: menus, the tool rail, the view chip, the palette. */
 export interface CanvasProjectedCommand {
@@ -457,44 +450,9 @@ function isNavigationTool(toolId: CanvasToolId): boolean {
   return toolId === 'select' || toolId === 'hand'
 }
 
-/** Runs one intent; `from` reaches arming for a tool and is unused by the rest. */
-export function dispatchCanvasCommandIntent(
-  intent: CanvasCommandIntent,
-  adapter: CanvasCommandIntentAdapter,
-  from: CanvasCommandFrom,
-): void {
-  if (intent.type === 'select-tool') adapter.selectTool(intent.tool, from)
-  else dispatchCanvasActionIntent(intent, adapter)
-}
-
-function dispatchCanvasActionIntent(
-  intent: Exclude<CanvasCommandIntent, { readonly type: 'select-tool' }>,
-  adapter: CanvasCommandIntentAdapter,
-): void {
-  switch (intent.type) {
-    case 'undo':
-      adapter.undo()
-      return
-    case 'redo':
-      adapter.redo()
-      return
-    case 'toggle-grid':
-      adapter.toggleGrid()
-      return
-    case 'toggle-snap-to-grid':
-      adapter.toggleSnapToGrid()
-      return
-    case 'edit':
-      adapter.edit(intent.action)
-      return
-    case 'view':
-      adapter.view(intent.action)
-  }
-}
-
 interface CreateCanvasCommandProjectionOptions {
   readonly state: CanvasCommandProjectionState
-  readonly intents: CanvasCommandIntentAdapter
+  readonly run: CanvasIntentRunner
   readonly translate: (key: string) => string
   /** Settings › Keyboard; false hides character-key shortcuts from every surface. */
   readonly characterKeys: boolean
@@ -502,7 +460,7 @@ interface CreateCanvasCommandProjectionOptions {
 
 export function createCanvasCommandProjection({
   state,
-  intents,
+  run,
   translate,
   characterKeys,
 }: CreateCanvasCommandProjectionOptions): CanvasCommandProjection {
@@ -517,8 +475,7 @@ export function createCanvasCommandProjection({
       ariaShortcut: canvasCommandAriaKeys(definition, characterKeys),
       disabled,
       action: (from) => {
-        if (disabled) return
-        dispatchCanvasCommandIntent(intent, intents, from)
+        if (!disabled) run(intent, from)
       },
     }
   }
@@ -529,13 +486,10 @@ export function createCanvasCommandProjection({
       | CanvasViewCommandDefinition,
   ): CanvasToolbarActionCommand => {
     const command = project(definition)
-    const { intent } = definition
     return {
       ...command,
-      action: () => {
-        if (command.disabled || intent.type === 'select-tool') return
-        dispatchCanvasActionIntent(intent, intents)
-      },
+      // Arms no tool, so its surface does not matter.
+      action: () => command.action('menu'),
       id: definition.id,
       ...(definition.kind === 'settings' ? { pressed: state[definition.stateKey] } : {}),
     }

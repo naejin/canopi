@@ -1,9 +1,9 @@
 // app/keyboard/arming.ts
 //
 // The one way app code arms a canvas tool (spec §1.6, policy P9). Each caller passes its own `from`: the rail, menus,
-// palette and both editions' keys reach here through the shared canvas dispatch (dispatchCanvasCommandIntent, the
-// intent adapter's selectTool, runCatalogCommand and the projected action(from)); a catalog panel's Place, Favorites'
-// Place stamp, the tool card's stamp chooser and the Start card call it directly. Arming writes the source to the
+// palette and both editions' keys reach here through the one canvas runner (runCanvasIntent in
+// app/workspace-commands/canvas-actions.ts, behind runCatalogCommand and the projected action(from)); a catalog panel's
+// Place, Favorites' Place stamp, the tool card's stamp chooser and the Start card call it directly. Arming writes the source to the
 // module read models first (canvas/plant-stamp-source.ts, canvas/saved-object-stamp-source.ts: what the tool card,
 // recents and choosers show, and what the session reads when the tool activates), selects the canvas panel for the
 // command and Start-card callers, sets the tool on the live canvas session and focuses the map for every `from` but a
