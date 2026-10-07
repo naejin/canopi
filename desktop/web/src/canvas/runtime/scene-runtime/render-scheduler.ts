@@ -28,9 +28,8 @@ export class SceneRuntimeRenderScheduler {
   private _snapshot: SceneRendererSnapshot | null = null
   private _draft: DraftPresentation | null = null
   private _renderEpoch = 0
+  /** The frame a scene invalidation waits for. */
   private _frame: number | null = null
-  /** A scene invalidation waits for its frame. */
-  private _sceneFrameQueued = false
   /** The epoch of the latest scene render, until it has drawn or failed; a newer epoch fences it. */
   private _sceneRenderEpoch: number | null = null
   /**
@@ -123,14 +122,11 @@ export class SceneRuntimeRenderScheduler {
     if (!this._container) return
     // Fence an in-flight preparation immediately, even though drawing waits for a frame.
     this._renderEpoch += 1
-    this._sceneFrameQueued = true
-    this._publishScenePending()
-    if (this._frame !== null) return
-    this._frame = requestAnimationFrame(() => {
+    this._frame ??= requestAnimationFrame(() => {
       this._frame = null
-      this._sceneFrameQueued = false
       this._runDetached(this.renderScene(), 'Scene Canvas render failed:')
     })
+    this._publishScenePending()
   }
 
   async renderScene(): Promise<void> {
@@ -192,7 +188,6 @@ export class SceneRuntimeRenderScheduler {
   private _cancelFrame(): void {
     if (this._frame !== null) cancelAnimationFrame(this._frame)
     this._frame = null
-    this._sceneFrameQueued = false
   }
 
   /**
@@ -212,7 +207,7 @@ export class SceneRuntimeRenderScheduler {
 
   /** A scene invalidation waits for its frame, or the latest scene render has not drawn yet. */
   private _publishScenePending(): void {
-    this._scenePending.value = this._sceneFrameQueued || this._sceneRenderEpoch === this._renderEpoch
+    this._scenePending.value = this._frame !== null || this._sceneRenderEpoch === this._renderEpoch
   }
 
   private _runDetached(operation: Promise<void>, failureMessage: string): void {
