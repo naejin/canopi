@@ -17,7 +17,7 @@ import 'pixi.js/unsafe-eval'
 import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import { SPECIES_FOCUS_DIM_OPACITY, speciesFocusOpacity } from '../species-key'
 import { AlphaFilter, CanvasTextMetrics, Container, Graphics, GraphicsContext, Rectangle, type Text } from 'pixi.js'
-import { ANNOTATION_OUTLINE_PADDING_PX, getAnnotationFontEpoch, getAnnotationPresentation } from '../annotation-layout'
+import { annotationOutlineCorners, getAnnotationFontEpoch, getAnnotationPresentation } from '../annotation-layout'
 import { getCanvasDetailLayout, isMeasurementLabelVisible } from '../automatic-detail'
 import {
   createMeasurementGuidePresentation,
@@ -842,19 +842,8 @@ function presentNote(notes: NoteGraphics, built: BuiltNotes, note: BuiltNote, pi
 
   const outlineGraphics = notes.outlineById.get(annotation.id)
   if (!outline || !outlineGraphics) return
-  // The text frame (or the marker's square) padded 4 px across and 2 px down, turned by its angle on the ground: also
-  // the shown note's click target (annotation-layout.ts).
-  const { frame } = presentation
-  const radians = (frame.rotationDeg * Math.PI) / 180
-  const cos = Math.cos(radians)
-  const sin = Math.sin(radians)
-  const { x: padX, y: padY } = ANNOTATION_OUTLINE_PADDING_PX
-  const corners = [
-    { x: -padX, y: -padY },
-    { x: frame.widthPx + padX, y: -padY },
-    { x: frame.widthPx + padX, y: frame.heightPx + padY },
-    { x: -padX, y: frame.heightPx + padY },
-  ].map(({ x, y }) => ({ x: frame.origin.x + x * cos - y * sin, y: frame.origin.y + x * sin + y * cos }))
+  // The text frame (or the marker's square) as outlined: also the shown note's click target (annotation-layout.ts).
+  const corners = annotationOutlineCorners(presentation.frame)
   if (!reuseGeometry(outlineGraphics, [corners, outline])) {
     outlineGraphics.clear()
     drawClosedPath(outlineGraphics, corners).stroke(outline.casing)

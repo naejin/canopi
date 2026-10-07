@@ -552,7 +552,7 @@ function annotationIntersectsPolygon(
   revealText: boolean,
   textAllowed: boolean,
 ): boolean {
-  return polygonsIntersect(getAnnotationVisualWorldCorners(annotation, viewportScale, revealText, undefined, textAllowed), area)
+  return polygonsIntersect(getAnnotationVisualWorldCorners(annotation, viewportScale, revealText, textAllowed), area)
 }
 
 function isLayerVisible(scene: ScenePersistedState, layerName: string): boolean {
