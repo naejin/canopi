@@ -1099,13 +1099,17 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   /**
    * Re-emits the live drag or the resting pointer to the tool only; false when nothing is under a still pointer on the
    * map. The hover stays put while the map moves (U44, Q3 D): the ring, a note's revealed text or a guide's chip stays
-   * on its object until the next pointer move, so a pan frame does no hover sync, and the tooltip hides.
+   * on its object until the next pointer move, so a pan frame does no hover sync, and the tooltip hides, also under a
+   * press that has not dragged yet.
    */
   function reemit(tool: CanvasTool): boolean {
     if (frame().mode !== 'site') return false
     const gesture = live
     if (gesture) {
-      if (!gesture.dragging) return false
+      if (!gesture.dragging) {
+        deps.chrome.setTooltip(null)
+        return false
+      }
       deliverDrag(tool, gesture, 'drag-move', false)
     } else {
       const still = restingPointer()

@@ -369,6 +369,18 @@ describe('ToolHost', () => {
       expect(h.chrome.tooltip).toBeNull()
     })
 
+    it('a camera frame during a press that has not dragged hides the plant tooltip', () => {
+      useStubTools(stubTool('select'))
+      const h = harness({ scene: { plants: [appleAt({ x: 50, y: 50 })] } })
+
+      h.hover({ x: 50, y: 50 })
+      h.press({ x: 50, y: 50 })
+      expect(h.chrome.tooltip?.target).toEqual(P1)
+      h.wheelZoom({ x: 0, y: 0 }, 2)
+
+      expect(h.chrome.tooltip).toBeNull()
+    })
+
     it('a click or a drag leaves a still pointer that the next camera frame re-emits; a touch tap does not', () => {
       const stamp = stubTool('plant-stamp')
       useStubTools(stamp)
