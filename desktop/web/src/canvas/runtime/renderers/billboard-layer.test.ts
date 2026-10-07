@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createTestRendererView, createTestSceneRendererSnapshot } from '../../../__tests__/support/scene-renderer-snapshot'
 import { refreshCanvasColorCache } from '../../theme-refresh'
-import { getAnnotationVisualWorldCorners } from '../annotation-layout'
+import { getAnnotationPresentation } from '../annotation-layout'
 import { getCanvasDetailLayout } from '../automatic-detail'
 import { buildPlantPresentationEntries } from '../plant-presentation'
 import { ROUND_PLANT_SYMBOL_RADIUS } from '../plant-symbol-recipes'
@@ -283,8 +283,15 @@ describe('billboard layer', () => {
       const outline = shownGraphics(layer.root).find((graphics) => strokeColours(graphics.context).length === 2)!
       outline.updateLocalTransform()
       const drawn = strokedPoints(outline.context).map((point) => outline.localTransform.apply(point))
-      // The selected note shows its text at every scale; its frame is padded 4 px across and 2 px down.
-      const expected = getAnnotationVisualWorldCorners(NOTE, scale, true, { x: 4, y: 2 }, true).map((point) => view.worldToScreen(point))
+      // The selected note shows its text at every scale; its frame is padded 4 px across and 2 px down, then turned by the
+      // note's angle about the frame's origin.
+      const { frame } = getAnnotationPresentation(NOTE, scale, true, true)
+      const turn = (frame.rotationDeg * Math.PI) / 180
+      const padded = [[-4, -2], [frame.widthPx + 4, -2], [frame.widthPx + 4, frame.heightPx + 2], [-4, frame.heightPx + 2]] as const
+      const expected = padded.map(([x, y]) => view.worldToScreen({
+        x: NOTE.position.x + (frame.origin.x + x * Math.cos(turn) - y * Math.sin(turn)) / scale,
+        y: NOTE.position.y + (frame.origin.y + x * Math.sin(turn) + y * Math.cos(turn)) / scale,
+      }))
       expected.forEach((point, index) => {
         expect(drawn[index]!.x, `bearing ${bearingDeg}`).toBeCloseTo(point.x, 6)
         expect(drawn[index]!.y, `bearing ${bearingDeg}`).toBeCloseTo(point.y, 6)
