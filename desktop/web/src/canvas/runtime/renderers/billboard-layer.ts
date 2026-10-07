@@ -17,7 +17,7 @@ import 'pixi.js/unsafe-eval'
 import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import { SPECIES_FOCUS_DIM_OPACITY, speciesFocusOpacity } from '../species-key'
 import { AlphaFilter, Container, Graphics, GraphicsContext, Rectangle, type Text } from 'pixi.js'
-import { ANNOTATION_OUTLINE_PADDING_PX, getAnnotationPresentation } from '../annotation-layout'
+import { ANNOTATION_OUTLINE_PADDING_PX, getAnnotationFontEpoch, getAnnotationPresentation } from '../annotation-layout'
 import { getCanvasDetailLayout, isMeasurementLabelVisible } from '../automatic-detail'
 import {
   createMeasurementGuidePresentation,
@@ -168,6 +168,7 @@ export function createBillboardLayer(options: BillboardLayerOptions): BillboardL
     highlightLayer: annotationHighlightLayer,
     shared,
     textById: new Map(),
+    fontEpoch: getAnnotationFontEpoch(),
     markerById: new Map(),
     outlineById: new Map(),
     built: null,
@@ -698,6 +699,8 @@ interface NoteGraphics {
   readonly highlightLayer: Container
   readonly shared: SharedContexts
   readonly textById: Map<string, Text>
+  /** The web-font loads the note texts were drawn after (`getAnnotationFontEpoch`). */
+  fontEpoch: number
   /** Each note's marker, bound to the shared normal or compact marker. */
   readonly markerById: Map<string, Graphics>
   /** Each outlined note's frame, in CSS px about its anchor on the ground; a frame turns it by the bearing. */
@@ -726,7 +729,12 @@ interface BuiltNote {
 function buildNotes(createText: () => Text, notes: NoteGraphics, snapshot: SceneRendererSnapshot, pixelsPerMetre: number): void {
   const { textLayer, highlightLayer, shared, textById, markerById, outlineById } = notes
   const keep = new Set(snapshot.scene.annotations.filter((annotation) => annotation.annotationType === 'text').map((annotation) => annotation.id))
-  destroyEntriesNotIn(textById, keep)
+  // Pixi keeps a text's raster while its text and style stay the same, and nothing in Pixi listens for fonts: a note
+  // drawn before its web font loaded would keep the fallback's glyphs inside an outline measured in the web font. So
+  // a font load lets every note text go, which frees the raster, and draws them anew.
+  const fontEpoch = getAnnotationFontEpoch()
+  destroyEntriesNotIn(textById, notes.fontEpoch === fontEpoch ? keep : new Set())
+  notes.fontEpoch = fontEpoch
   destroyEntriesNotIn(markerById, keep, destroySharedGraphics)
   destroyEntriesNotIn(outlineById, keep)
   const layer = getSceneLayerStyle(snapshot.scene, 'annotations')

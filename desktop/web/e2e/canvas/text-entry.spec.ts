@@ -3,8 +3,8 @@
 // in both engines: two typed lines stay inside the box with the start of the text in view, for a new note and for a
 // note edited in place while it is turned 30° on screen, and an empty field shows its whole placeholder in Russian and
 // Japanese. The committed note is drawn at the width the browser measures (canvas/runtime/annotation-layout.ts): its
-// selection outline ends at its last letter, and follows the web font once a late font file arrives. No baselines:
-// nothing here is compared with a recorded screenshot.
+// selection outline ends at its last letter, also once a late font file arrives and the outline and the glyphs follow
+// the web font. No baselines: nothing here is compared with a recorded screenshot.
 import { fileURLToPath } from 'node:url'
 import type { Page, Route } from '@playwright/test'
 import { expectCanvasDrawn } from '../support/canvas'
@@ -169,7 +169,7 @@ test('a committed note\'s selection outline ends within 6 px of its last glyph',
   expect(pastLastGlyph).toBeLessThanOrEqual(6)
 })
 
-test('a note measured before its web font arrives is measured again once the font has loaded', async ({ page, browserName }) => {
+test('a note drawn before its web font arrives is measured and drawn again once the font has loaded', async ({ page, browserName }) => {
   // Playwright 1.63's WebKit reports a face whose request is held as failed (FontFace.status 'error', so fonts.check()
   // is true) until the response arrives, so the page cannot tell that the font is still coming. Whether WebKit does the
   // same on a slow network is untested.
@@ -191,6 +191,10 @@ test('a note measured before its web font arrives is measured again once the fon
   // Whether the frame widens or narrows depends on the fallback the host has (Noto Sans and DejaVu Sans are wider).
   release()
   await expect.poll(frameMiddle, 'the frame follows the loaded font').not.toBe(fallbackMiddle)
+  // Pixi keeps a text's raster while its text and style stay the same: the glyphs are drawn again in the loaded font.
+  const { pastLastGlyph } = await noteEdges(page)
+  expect(pastLastGlyph, 'the outline ends at the last glyph drawn').toBeGreaterThanOrEqual(0)
+  expect(pastLastGlyph).toBeLessThanOrEqual(6)
 })
 
 for (const { locale, selectTool, textTool, placeholder } of [

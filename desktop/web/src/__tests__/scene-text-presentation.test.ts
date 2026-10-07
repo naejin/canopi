@@ -1,3 +1,6 @@
+// Production CSP rejects Pixi's generated functions; its shim avoids eval.
+import 'pixi.js/unsafe-eval'
+import { Text } from 'pixi.js'
 import { describe, expect, it, vi } from 'vitest'
 import {
   getAnnotationPresentation,
@@ -14,10 +17,12 @@ import {
   type ScenePersistedState,
 } from '../canvas/runtime/scene'
 import { SceneRuntimePresentationController } from '../canvas/runtime/scene-runtime/presentation'
+import { createBillboardLayer } from '../canvas/runtime/renderers/billboard-layer'
 import { getDesignObjectSelectionModel } from '../canvas/runtime/scene-runtime/selection'
 import { projectScenePlantLabels } from '../canvas/runtime/selection-labels'
 import { selectionScreenHull } from '../canvas/runtime/tools/select/selection-hull'
 import type { ToolScene } from '../canvas/runtime/tools/tool'
+import { createTestRendererView, createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
 import { createZoomCalibrationScene } from './support/zoom-calibration-scenes'
 
 // jsdom has no 2D canvas and no font loading API, so this file measures through stubs: a context whose glyphs are half
@@ -157,6 +162,38 @@ describe('scene text presentation', () => {
     } finally {
       stopListening()
       fontSet.loaded = true
+    }
+  })
+
+  it('a font load draws the note\'s text anew, as its outline is measured anew', async () => {
+    // Pixi keeps a text's raster while its text and style stay the same, and nothing in Pixi listens for fonts: a text
+    // drawn in the fallback would keep the fallback's glyphs inside an outline measured in the web font.
+    const scene = noteScene('Willow cuttings')
+    const snapshot = () => createTestSceneRendererSnapshot({ scene, selectedTargets: [{ kind: 'annotation', id: 'note' }] })
+    const view = createTestRendererView({ x: 0, y: 0, scale: SCALE })
+    const layer = createBillboardLayer({ createText: () => new Text(), viewSize: { width: 400, height: 300 } })
+    const noteText = () => layer.root.children.flatMap((layerRoot) => layerRoot.children)
+      .find((node): node is Text => node instanceof Text && node.text === 'Willow cuttings')!
+    const loads = vi.fn()
+    const stopListening = onAnnotationFontLoad(loads)
+    try {
+      fontSet.loaded = false
+      layer.present(view, snapshot())
+      const drawnInFallback = noteText()
+      layer.present(view, snapshot())
+      expect(noteText(), 'a scene sync keeps the drawn text').toBe(drawnInFallback)
+
+      fontSet.finishLoad!()
+      await vi.waitFor(() => expect(loads).toHaveBeenCalledTimes(1))
+      // The runtime syncs the scene on the load (scene-runtime.ts).
+      layer.present(view, snapshot())
+      expect(drawnInFallback.destroyed, 'the fallback raster is let go').toBe(true)
+      expect(noteText()).toBeDefined()
+      expect(noteText()).not.toBe(drawnInFallback)
+    } finally {
+      stopListening()
+      fontSet.loaded = true
+      layer.dispose()
     }
   })
 })
