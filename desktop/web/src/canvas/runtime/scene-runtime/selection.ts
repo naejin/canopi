@@ -330,49 +330,23 @@ function getBlockedSelectionTargets(
 
   for (const target of selectedTargets) {
     if (!sceneContainsTarget(persisted, target)) {
-      pushBlocked(blockedTargets, seen, {
-        target,
-        reason: 'missing-design-object',
-        layerName: null,
-      })
+      pushBlocked(blockedTargets, seen, { target, reason: 'missing-design-object' })
       continue
     }
 
     const member = sceneObjectGroupMemberFromTarget(target)
-    const groupId = member ? groupedMemberKeys.get(sceneObjectGroupMemberKey(member)) : null
-    if (groupId) {
-      pushBlocked(blockedTargets, seen, {
-        target,
-        reason: 'grouped-member',
-        layerName: getSelectionLayer(target),
-        groupId,
-      })
+    if (member && groupedMemberKeys.has(sceneObjectGroupMemberKey(member))) {
+      pushBlocked(blockedTargets, seen, { target, reason: 'grouped-member' })
       continue
     }
 
     const layerBlock = getTargetLayerBlock(persisted, target)
-    if (layerBlock?.reason === 'hidden-layer') {
-      pushBlocked(blockedTargets, seen, {
-        target,
-        reason: 'hidden-layer',
-        layerName: layerBlock.layerName,
-      })
-      continue
-    }
-    if (layerBlock?.reason === 'locked-layer') {
-      pushBlocked(blockedTargets, seen, {
-        target,
-        reason: 'locked-layer',
-        layerName: layerBlock.layerName,
-      })
+    if (layerBlock) {
+      pushBlocked(blockedTargets, seen, { target, reason: layerBlock })
       continue
     }
     if (isSceneDesignObjectLocked(persisted, target)) {
-      pushBlocked(blockedTargets, seen, {
-        target,
-        reason: 'locked-design-object',
-        layerName: getTargetPrimaryLayerName(persisted, target),
-      })
+      pushBlocked(blockedTargets, seen, { target, reason: 'locked-design-object' })
     }
   }
 
@@ -403,31 +377,13 @@ function sceneContainsTarget(
   return persisted.measurementGuides.some((guide) => guide.id === target.id)
 }
 
-function getTargetPrimaryLayerName(
-  persisted: ScenePersistedState,
-  target: SceneSelectionTarget,
-): string | null {
-  if (target.kind === 'group') {
-    const group = persisted.groups.find((entry) => entry.id === target.id)
-    const firstMember = group?.members.find((member) => resolveSceneObjectGroupMemberLayer(persisted, member) !== null)
-    return firstMember ? sceneObjectGroupMemberLayerName(firstMember) : null
-  }
-  return getSelectionLayer(target)
-}
-
 function getTargetLayerBlock(
   persisted: ScenePersistedState,
   target: SceneSelectionTarget,
-): { reason: 'hidden-layer' | 'locked-layer'; layerName: string } | null {
-  const layerNames = getTargetLayerNames(persisted, target)
-  for (const layerName of layerNames) {
-    const layer = findLayer(persisted, layerName)
-    if (layer?.visible === false) return { reason: 'hidden-layer', layerName }
-  }
-  for (const layerName of layerNames) {
-    const layer = findLayer(persisted, layerName)
-    if (layer?.locked === true) return { reason: 'locked-layer', layerName }
-  }
+): 'hidden-layer' | 'locked-layer' | null {
+  const layers = getTargetLayerNames(persisted, target).map((layerName) => findLayer(persisted, layerName))
+  if (layers.some((layer) => layer?.visible === false)) return 'hidden-layer'
+  if (layers.some((layer) => layer?.locked === true)) return 'locked-layer'
   return null
 }
 

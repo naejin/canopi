@@ -1439,8 +1439,6 @@ describe('SceneInteractionSession', () => {
       blockedTargets: [{
         target: { kind: 'plant' as const, id: 'grouped-plant' },
         reason: 'grouped-member' as const,
-        layerName: 'plants',
-        groupId: 'group-1',
       }],
     }
     openContextMenuFromKeyboard()
@@ -1457,7 +1455,6 @@ describe('SceneInteractionSession', () => {
       blockedTargets: [{
         target: { kind: 'plant' as const, id: 'locked-plant' },
         reason: 'locked-design-object' as const,
-        layerName: 'plants',
       }],
       bounds: { minX: 20, minY: 20, maxX: 60, maxY: 24 },
       sameSpeciesReferenceCanonicalName: null,
@@ -1485,8 +1482,6 @@ describe('SceneInteractionSession', () => {
       blockedTargets: [{
         target: { kind: 'plant' as const, id: 'grouped-plant' },
         reason: 'grouped-member' as const,
-        layerName: 'plants',
-        groupId: 'group-1',
       }],
     }
     openContextMenuFromKeyboard()

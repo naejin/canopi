@@ -41,8 +41,6 @@ type CanvasDesignObjectSelectionBlockReason =
 export interface CanvasDesignObjectSelectionBlockedTarget {
   readonly target: CanvasDesignObjectSelectionTarget
   readonly reason: CanvasDesignObjectSelectionBlockReason
-  readonly layerName: string | null
-  readonly groupId?: string
 }
 
 export interface CanvasDesignObjectSelectionModel {

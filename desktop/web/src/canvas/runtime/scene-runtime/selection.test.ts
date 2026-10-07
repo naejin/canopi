@@ -140,12 +140,10 @@ describe('scene design object selection model', () => {
       {
         target: { kind: 'annotation', id: 'missing-shared' },
         reason: 'missing-design-object',
-        layerName: null,
       },
       {
         target: { kind: 'zone', id: 'missing-shared' },
         reason: 'missing-design-object',
-        layerName: null,
       },
     ])
   })
@@ -160,8 +158,6 @@ describe('scene design object selection model', () => {
     expect(model.blockedTargets).toContainEqual({
       target: { kind: 'plant', id: 'plant-1' },
       reason: 'grouped-member',
-      layerName: 'plants',
-      groupId: 'group-1',
     })
   })
 
@@ -173,7 +169,6 @@ describe('scene design object selection model', () => {
     expect(model.blockedTargets).toEqual([{
       target: { kind: 'plant', id: 'plant-2' },
       reason: 'locked-design-object',
-      layerName: 'plants',
     }])
     expect(model.bounds?.minX).toBeLessThan(30)
     expect(model.bounds?.minY).toBeLessThan(30)
@@ -243,7 +238,6 @@ describe('scene design object selection model', () => {
     expect(model.blockedTargets).toEqual([{
       target: { kind: 'zone', id: 'zone-1' },
       reason: 'hidden-layer',
-      layerName: 'zones',
     }])
     expect(model.bounds).toBeNull()
   })
@@ -300,7 +294,6 @@ describe('scene design object selection model', () => {
     expect(groupModel.blockedTargets).toEqual([{
       target: { kind: 'group', id: 'group-1' },
       reason: 'hidden-layer',
-      layerName: 'zones',
     }])
     expect(groupModel.bounds).toBeNull()
 
@@ -309,8 +302,6 @@ describe('scene design object selection model', () => {
     expect(visibleMemberModel.blockedTargets).toEqual([{
       target: { kind: 'plant', id: 'plant-1' },
       reason: 'grouped-member',
-      layerName: 'plants',
-      groupId: 'group-1',
     }])
   })
 
@@ -327,7 +318,6 @@ describe('scene design object selection model', () => {
     expect(model.blockedTargets).toEqual([{
       target: { kind: 'group', id: 'group-1' },
       reason: 'locked-layer',
-      layerName: 'zones',
     }])
   })
 })

@@ -220,7 +220,6 @@ describe('Saved Object Stamp Workbench', () => {
         blockedTargets: [{
           target: { kind: 'plant' as const, id: 'source-plant-9' },
           reason: 'locked-design-object' as const,
-          layerName: 'plants',
         }],
         bounds: { minX: 10, minY: 20, maxX: 14, maxY: 28 },
         sameSpeciesReferenceCanonicalName: null,
@@ -363,7 +362,6 @@ describe('Saved Object Stamp Workbench', () => {
         blockedTargets: [{
           target: { kind: 'zone' as const, id: 'Hidden zone' },
           reason: 'hidden-layer' as const,
-          layerName: 'zones',
         }],
         bounds: null,
         sameSpeciesReferenceCanonicalName: null,
