@@ -10,8 +10,6 @@ export interface WorkspaceGenerationLifecycle {
   requestGenerationDisconnect(): Promise<void>
   activate(snapshot: WorkspaceActivationSnapshot): Promise<WorkspaceActivationOutcome>
   teardown(): Promise<void>
-  /** True when this lifecycle already observes rejection of this exact result. */
-  ownsLifecycleFailureObservation?(result: Promise<unknown>): boolean
   /** Accepts a user Retry of an unavailable map (WorkspaceActivationCoordinator.retry). */
   retry(): boolean
 }
@@ -141,9 +139,7 @@ export class WorkspaceGenerationReconciler {
       teardown = Promise.reject(error)
     }
     this.teardown = teardown
-    if (!this.options.workspace.ownsLifecycleFailureObservation?.(teardown)) {
-      this.observeTerminalTeardown(teardown)
-    }
+    this.observeTerminalTeardown(teardown)
     return teardown
   }
 
