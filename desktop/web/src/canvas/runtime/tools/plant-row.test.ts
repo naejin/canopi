@@ -290,9 +290,9 @@ describe('Plant a row tool', () => {
     }
 
     // A zoom at the pointer redraws the row, whose discs the renderer sizes at the new scale.
-    const drafts = h.renderer.calls.length
+    const drafts = h.renderer.drafts.length
     h.wheelZoom({ x: 60, y: 30 }, 2)
-    expect(h.renderer.calls.length).toBeGreaterThan(drafts)
+    expect(h.renderer.drafts.length).toBeGreaterThan(drafts)
     expect(shapesOf(h, 'ghost').every((ghost) => ghost.entity.kind === 'plant' && ghost.entity.sizeFrom?.x === 2)).toBe(true)
   })
 

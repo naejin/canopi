@@ -4899,8 +4899,7 @@ describe('SceneInteractionSession', () => {
     deps.setSelection([plantTarget('plant-1')])
     const finger = { pointerType: 'touch', pointerId: 7, isPrimary: true }
 
-    const bands = () => deps.renderer.calls.filter((call) =>
-      call.method === 'setDraft' && call.draft?.shapes.some((shape) => shape.kind === 'quad')).length
+    const bands = () => deps.renderer.drafts.filter((draft) => draft?.shapes.some((shape) => shape.kind === 'quad')).length
 
     events.pointerDown({ x: 200, y: 200 }, { ...finger, button: 0, buttons: 1 })
     events.pointerMove({ x: 203, y: 204 }, { ...finger, button: -1, buttons: 1 })
