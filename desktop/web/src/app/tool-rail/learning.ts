@@ -3,7 +3,7 @@ import { canvasCommandDefinitions, type CanvasToolId } from '../canvas-commands'
 import { currentCanvasTool } from '../../canvas/session'
 import { mutateSettingsProjection } from '../settings/projection'
 import { toolNamesVisible, usedCanvasTools } from '../settings/state'
-import { toolRailCrowdsMap, visibleMapFrame } from '../shell/visible-map-area'
+import { leftChromeCrowdsMap, visibleMapFrame } from '../shell/visible-map-area'
 
 /**
  * Every tool on the main rail; names show until each has been used once on this device. Pan is not on it: it lives in
@@ -27,7 +27,7 @@ export const toolRailShowsNames = computed(() => {
  * window with a dock open). Then it keeps to icons with labelled tooltips.
  */
 export const toolRailShowsNamesOnMap = computed(() => (
-  toolRailShowsNames.value && !toolRailCrowdsMap(visibleMapFrame.value, labelledToolRailEdgePx())
+  toolRailShowsNames.value && !leftChromeCrowdsMap(visibleMapFrame.value, labelledToolRailEdgePx())
 ))
 
 /** Where the labelled rail's right edge sits from the map's left edge: `--chrome-inset` + `--chrome-rail-named-width`. */

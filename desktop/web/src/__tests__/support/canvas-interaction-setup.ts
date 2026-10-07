@@ -578,17 +578,20 @@ export function rotationHandle(container: HTMLElement): HTMLElement | null {
   return container.querySelector<HTMLElement>('[data-canvas-handle="rotate"]')
 }
 
+/** The centre of the rotation handle's hit box: 28 px after a mouse, 44 px after a finger. */
 export function rotationHandleCenter(container: HTMLElement): ScenePoint {
   const handle = rotationHandle(container)
   if (!handle) throw new Error('Expected rotation handle to be visible')
   const left = Number.parseFloat(handle.style.left)
   const top = Number.parseFloat(handle.style.top)
-  if (!Number.isFinite(left) || !Number.isFinite(top)) {
-    throw new Error('Expected rotation handle to be positioned')
+  const width = Number.parseFloat(handle.style.width)
+  const height = Number.parseFloat(handle.style.height)
+  if (![left, top, width, height].every(Number.isFinite)) {
+    throw new Error('Expected rotation handle to be positioned and sized')
   }
   return {
-    x: left + 14,
-    y: top + 14,
+    x: left + width / 2,
+    y: top + height / 2,
   }
 }
 

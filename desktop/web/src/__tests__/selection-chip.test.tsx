@@ -252,6 +252,29 @@ describe('Selection chip', () => {
     expect(renameZoneDialog.value).toBeNull()
   })
 
+  it('ignores the click of a tap that pressed elsewhere: a finger finishing a zone under the chip opens no Rename', async () => {
+    await act(() => render(<><SelectionChip /><RenameZoneDialog /></>, container))
+    await select([{ kind: 'zone', id: RECT_ID }])
+    const rename = () => [...chip()!.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === 'Rename…')!
+    const pointerClick = (target: Element) => target.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }))
+
+    // The press went to the map; the chip appeared before the lift's click.
+    await act(() => { pointerClick(rename()) })
+    expect(renameZoneDialog.value).toBeNull()
+    await act(() => { pointerClick([...chip()!.querySelectorAll('button')].at(-1)!) })
+    expect(clearSelection).not.toHaveBeenCalled()
+
+    // A press that began on Rename and slid off within the chip leaves no press for a later stray click.
+    await act(() => { rename().dispatchEvent(new Event('pointerdown', { bubbles: true })) })
+    await act(() => { pointerClick(chip()!) })
+    await act(() => { pointerClick(rename()) })
+    expect(renameZoneDialog.value).toBeNull()
+
+    await act(() => { rename().dispatchEvent(new Event('pointerdown', { bubbles: true })) })
+    await act(() => { pointerClick(rename()) })
+    expect(renameZoneDialog.value).not.toBeNull()
+  })
+
   it('names a text note by its text and a measurement by its length', async () => {
     await act(() => render(<SelectionChip />, container))
     await select([{ kind: 'annotation', id: 'note-1' }])

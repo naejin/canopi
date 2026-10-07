@@ -9,7 +9,7 @@ import { detectPlatform, modKeyIsCmd } from '../../canvas/runtime/input/platform
 import type { CanvasDocumentSurface, CanvasQuerySurface } from '../../canvas/runtime/runtime'
 import { currentCanvasDocumentSurface, currentCanvasQuerySurface } from '../../canvas/session'
 import { modKeyName } from '../../app/shell-commands/shortcut-text'
-import { toolRailCrowdsMap, visibleMapFrame } from '../../app/shell/visible-map-area'
+import { leftChromeCrowdsMap, visibleMapFrame } from '../../app/shell/visible-map-area'
 import { t } from '../../i18n'
 import { ControlIcon } from '../shared/ControlIcon'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
@@ -72,7 +72,7 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
   const [covers, setCovers] = useState(false)
   useLayoutEffect(() => {
     const edge = panel.current?.getBoundingClientRect().right
-    setCovers(edge !== undefined && !toolRailCrowdsMap(frame, edge))
+    setCovers(edge !== undefined && !leftChromeCrowdsMap(frame, edge))
   })
   useMapOccluder(panel, 'left', covers)
   useLayoutEffect(() => {

@@ -188,6 +188,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let toolGuidance: Parameters<ToolEffects['setGuidance']>[0] = null
   let live: LiveGesture | null = null
   let lastHover: StillPointer | null = null
+  /** The pointer kind that last hovered, pressed or tapped the map (ToolContext.pointer): a tool armed later, or a selection
+   *  made off the map, sizes its handles for it. */
+  let pointerKind: PointerKind = 'mouse'
   /** Under Text, the raw press found the note's entry open: its focus move committed the note, and the press places
    *  nothing. */
   let pressCommitsNote = false
@@ -379,6 +382,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       settings: deps.settings,
       snap: (point) => snap(point, false),
       focusedHandle: () => deps.chrome.focusedHandle(),
+      pointer: () => pointerKind,
       translate: deps.translate,
     }
   }
@@ -1278,6 +1282,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   return {
     gesture(g: Gesture): GestureOutcome {
       if (disposed) return NOTHING
+      if (g.kind === 'hover' || g.kind === 'press' || g.kind === 'tap') pointerKind = g.pointer
       switch (g.kind) {
         case 'hover': return hover(g)
         case 'hover-end': return hoverEnd()

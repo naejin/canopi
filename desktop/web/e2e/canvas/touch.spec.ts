@@ -22,11 +22,7 @@ interface Layout {
   readonly apple: Point
 }
 
-/**
- * Corners of a new polygon at 1024x768, on empty ground clear of the selection chip that the finished zone brings up at
- * the bottom centre. A finishing tap over that chip lands its click on the chip's Rename (reported at the phase-3
- * Input→D1 merge for a bead); these scenarios test the shape, not that defect.
- */
+/** Corners of a new polygon at 1024x768, on empty ground clear of the selection chip the finished zone brings up. */
 const POLYGON = [{ x: 860, y: 560 }, { x: 940, y: 560 }, { x: 940, y: 620 }] as const
 /** A point on the rectangle zone's left edge at 1024x768. */
 const RECT_EDGE = { x: 311, y: 285 }
@@ -437,6 +433,79 @@ test.describe('Chromium touch', () => {
     const field = page.locator('textarea[data-canvas-text-entry]')
     await expect(field, 'the tap opens the note field focused').toBeFocused()
     expect(await field.evaluate((element) => getComputedStyle(element).fontSize), 'iOS does not zoom a 16 px field').toBe('16px')
+  })
+
+  test('a double tap that finishes a polygon where the selection chip appears opens no Rename zone dialog', async ({ page }) => {
+    await openBaseFixture(page, TABLET)
+    const fingers = await Fingers.of(page)
+    await fingers.tap(TABLET.ground)
+    await page.keyboard.press('z')
+    await expect(tool(page, 'Polygon zone')).toHaveAttribute('aria-pressed', 'true')
+
+    // The finishing tap lands at the bottom centre, where the finished zone's chip shows Rename.
+    await fingers.tap({ x: 520, y: 560 })
+    await page.waitForTimeout(600)
+    await fingers.tap({ x: 720, y: 560 })
+    await page.waitForTimeout(600)
+    await fingers.tap({ x: 620, y: 690 })
+    await fingers.tap({ x: 620, y: 700 })
+
+    await expect(selectionChip(page), 'the double tap finished the shape').toHaveText(/^Polygon zone/)
+    const rename = page.getByRole('group', { name: 'Selection' }).getByRole('button', { name: 'Rename…' })
+    const box = await rename.boundingBox()
+    if (!box) throw new Error('the finished zone\'s chip shows no Rename')
+    expect(box.x <= 620 && 620 <= box.x + box.width && box.y <= 700 && 700 <= box.y + box.height, 'Rename is under the finger').toBe(true)
+    await page.waitForTimeout(300)
+    await expect(page.getByRole('dialog', { name: 'Rename zone' }), 'the lift opens no dialog').toHaveCount(0)
+  })
+
+  test('Q1: Select keeps a finger\'s 44 px handles after a finger switches tools and back', async ({ page }) => {
+    await openBaseFixture(page, TABLET)
+    const fingers = await Fingers.of(page)
+    await fingers.tap(RECT_EDGE)
+    await expect(selectionChip(page)).toHaveText(RECT_ZONE_CHIP)
+
+    await tool(page, 'Measure').tap()
+    await expect(tool(page, 'Measure')).toHaveAttribute('aria-pressed', 'true')
+    await tool(page, 'Select').tap()
+    await expect(tool(page, 'Select')).toHaveAttribute('aria-pressed', 'true')
+
+    await expect.poll(async () => (await zoneCorners(page)).map((handle) => Math.round(handle.width)), 'the new Select sizes them for the finger')
+      .toEqual([44, 44, 44, 44])
+  })
+
+  test('A13: the page never overscrolls', async ({ page }) => {
+    await openBaseFixture(page, TABLET)
+    const behaviour = await page.evaluate(() => {
+      const style = getComputedStyle(document.documentElement)
+      return [style.overscrollBehaviorX, style.overscrollBehaviorY]
+    })
+    expect(behaviour).toEqual(['none', 'none'])
+  })
+
+  test('a long press opens a canvas menu whose rows are finger-sized', async ({ page }) => {
+    await openBaseFixture(page, TABLET)
+    const fingers = await Fingers.of(page)
+    await fingers.tap(TABLET.apple, { holdMs: 600 })
+    const menu = page.getByRole('menu', { name: 'Apple' })
+    await expect(menu).toBeVisible()
+
+    const touchSize = await page.evaluate(() => Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--control-size-touch')))
+    expect(touchSize).toBeGreaterThan(0)
+    const heights = await menu.getByRole('menuitem').evaluateAll((rows) => rows.map((row) => row.getBoundingClientRect().height))
+    expect(heights.length).toBeGreaterThan(0)
+    for (const height of heights) expect(height, 'each row is a touch target').toBeGreaterThanOrEqual(touchSize)
+  })
+
+  test('a tapped button keeps its tooltip hidden', async ({ page }) => {
+    await openBaseFixture(page, TABLET)
+    const button = page.getByRole('group', { name: 'Zoom' }).getByRole('button', { name: 'Fit to Design' })
+    const tooltip = button.locator('[role="tooltip"]')
+    await expect(tooltip).toHaveCount(1)
+    await button.tap()
+    // Past the tooltip's 400 ms delay and its fade.
+    await page.waitForTimeout(1000)
+    expect(await tooltip.evaluate((element) => getComputedStyle(element).visibility), 'the tap leaves no tooltip').toBe('hidden')
   })
 })
 

@@ -14,7 +14,7 @@ import {
   registerRail,
   registerUnderRail,
   toolRailRoom,
-  toolRailCrowdsMap,
+  leftChromeCrowdsMap,
   visibleMapFrame,
 } from '../app/shell/visible-map-area'
 import { setCurrentCanvasSession } from '../canvas/session'
@@ -474,9 +474,9 @@ describe('visible map area', () => {
 
   it('lets the labelled tool rail give way when it would crowd the map', () => {
     // 720 px window with a 380 px dock: names would leave far less than 360 px of map.
-    expect(toolRailCrowdsMap({ width: 720, height: 800, top: 60, right: 456, bottom: 0, left: 236 }, 224)).toBe(true)
-    expect(toolRailCrowdsMap({ width: 1280, height: 800, top: 60, right: 456, bottom: 0, left: 236 }, 224)).toBe(false)
-    expect(toolRailCrowdsMap({ width: 720, height: 800, top: 60, right: 64, bottom: 0, left: 64 }, 224)).toBe(false)
+    expect(leftChromeCrowdsMap({ width: 720, height: 800, top: 60, right: 456, bottom: 0, left: 236 }, 224)).toBe(true)
+    expect(leftChromeCrowdsMap({ width: 1280, height: 800, top: 60, right: 456, bottom: 0, left: 236 }, 224)).toBe(false)
+    expect(leftChromeCrowdsMap({ width: 720, height: 800, top: 60, right: 64, bottom: 0, left: 64 }, 224)).toBe(false)
   })
 
 

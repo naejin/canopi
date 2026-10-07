@@ -5,7 +5,7 @@
 // (move-drag.ts) or nothing more; a double-click opens a note for editing in the host's text entry (note-edit.ts), as do
 // Enter and F2 on one selected note ('edit-text'). Its handles are the rotation handle (rotate-handle.ts), the selected
 // zone's reshape points (reshape.ts) and the selected guide's ends (guide-ends.ts), sized for the pointer kind that last
-// pressed or hovered (handle-size.ts: 44 px targets after a touch, Q1); the host shows them while Select is
+// hovered, pressed or tapped the map (ToolContext.pointer; handle-size.ts: 44 px targets after a touch, Q1); the host shows them while Select is
 // armed, the text entry is closed and no Scene Edit is open. Hovers pass, so the host's passive hover runs, and the tool
 // card's gesture flag stays off.
 
@@ -68,8 +68,7 @@ export function createSelectTool(): CanvasTool {
   /** The scale the handles were placed at (screen px per world metre): the midpoint dots' room and the hull of screen-sized
    *  plants and notes depend on it. */
   let handlesPixelsPerMetre = 0
-  /** The pointer kind that last pressed or hovered, which sizes the handles (Q1), and the one they were sized for. */
-  let pointer: PointerKind = 'mouse'
+  /** The pointer kind the handles were sized for (ToolContext.pointer, Q1). */
   let handlesPointer: PointerKind = 'mouse'
   let reshapePoints = new Map<ToolHandleId, ZoneControlPoint>()
   let edgeMidpoints = new Map<ToolHandleId, ZoneEdgeMidpoint>()
@@ -91,6 +90,7 @@ export function createSelectTool(): CanvasTool {
     const handles: ToolHandle[] = []
     // A point handle's drag hides the rotation handle from its press to its release.
     const pointDrag = gesture?.kind === 'reshape' || gesture?.kind === 'guide-end'
+    const pointer = c.pointer()
     const size = handleSizeFor(pointer)
     const zone = reshapableZone(scene, selection)
     const points = zone ? zoneControlPoints(zone) : []
@@ -121,7 +121,7 @@ export function createSelectTool(): CanvasTool {
     if (!context) return
     const { view } = context
     // A pan changes none of them, so it recomputes nothing.
-    if (view.bearingDeg === handlesBearingDeg && pixelsPerMetre(view) === handlesPixelsPerMetre && pointer === handlesPointer) {
+    if (view.bearingDeg === handlesBearingDeg && pixelsPerMetre(view) === handlesPixelsPerMetre && context.pointer() === handlesPointer) {
       return
     }
     refreshHandles()
@@ -129,7 +129,6 @@ export function createSelectTool(): CanvasTool {
 
   function press(point: ToolPoint, hit: HitTarget | null, clickCount: number): void {
     const c = ctx()
-    pointer = point.pointer
     selectedCorner = null
     if (clickCount >= 2 && addCornerOnEdge(point)) {
       gesture = { kind: 'done' }
@@ -211,7 +210,6 @@ export function createSelectTool(): CanvasTool {
   function handleDrag(g: Extract<ToolGesture, { kind: 'handle-drag' }>): void {
     const c = ctx()
     if (g.phase === 'start') {
-      pointer = g.point.pointer
       startHandleDrag(g)
       refreshHandles()
       return
@@ -357,7 +355,6 @@ export function createSelectTool(): CanvasTool {
           break
         case 'hover':
           // The host re-emits the resting pointer on a camera frame instead of calling viewChanged.
-          pointer = g.point.pointer
           followView()
           break
         default:
