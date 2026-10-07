@@ -1,9 +1,5 @@
 import type { SceneRenderTarget } from '../canvas/runtime/renderers/scene-types'
-import {
-  createSharedMapSceneLayer,
-  type SharedMapSceneLayer,
-  type SharedMapSceneLayerOptions,
-} from './shared-scene-layer'
+import { createSharedMapSceneLayer, type SharedMapSceneLayer, type SharedMapSceneLayerOptions } from './shared-scene-layer'
 
 export interface SharedMapSceneRendererComposition {
   createLayer(options: SharedMapSceneLayerOptions): SharedMapSceneLayer
@@ -19,30 +15,5 @@ export interface SharedMapSceneRendererComposition {
 export function createSharedMapSceneRendererComposition(
   connect: (target: SceneRenderTarget) => () => void,
 ): SharedMapSceneRendererComposition {
-  return {
-    createLayer(options) {
-      const adapter = createSharedMapSceneLayer(options)
-      let disconnect: (() => void) | null = null
-
-      return {
-        layer: {
-          ...adapter.layer,
-          onAdd(map, gl) {
-            adapter.layer.onAdd?.(map, gl)
-            if (adapter.diagnostics.phase === 'attached') disconnect ??= connect(adapter)
-          },
-        },
-        get diagnostics() { return adapter.diagnostics },
-        initialize: (map, gl) => adapter.initialize(map, gl),
-        setSnapshot: (snapshot) => adapter.setSnapshot(snapshot),
-        requestRender: () => adapter.requestRender(),
-        dispose() {
-          // Leave the slot first: a disposal that fails must not keep a dead layer as the runtime's target.
-          disconnect?.()
-          disconnect = null
-          return adapter.dispose()
-        },
-      }
-    },
-  }
+  return { createLayer: (options) => createSharedMapSceneLayer({ ...options, connect }) }
 }

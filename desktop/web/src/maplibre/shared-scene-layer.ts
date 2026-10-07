@@ -91,6 +91,11 @@ export interface SharedMapSceneLayerOptions {
    */
   readonly frames: Pick<ViewFrameSource, 'viewFrame'> & Partial<Pick<ViewFrameSource, 'settledViewFrame'>>
   readonly onFailure?: (error: Error) => void
+  /**
+   * Connects the layer to the runtime's one target slot (`connectRenderTarget`) once MapLibre has attached it, until its
+   * disposal begins; the workspace map passes it, the snapshot map does not.
+   */
+  readonly connect?: (target: SceneRenderTarget) => () => void
   readonly createRenderer?: () => SharedPixiRenderer
   readonly createStage?: () => Container
   readonly createPresentation?: (input: {
@@ -121,8 +126,8 @@ type Phase = SharedMapSceneDiagnostics['phase']
 
 /**
  * The layer is also the runtime's scene render target (its one slot, `SceneCanvasRuntime.connectRenderTarget`): it keeps
- * the latest snapshot until it draws it, and drops it on dispose. The workspace connects it once MapLibre has attached it
- * (shared-scene-renderer.ts), so a draft always finds its presentation.
+ * the latest snapshot until it draws it, and drops it on dispose. `connect` runs once MapLibre has attached it, so a draft
+ * always finds its presentation.
  */
 export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): SharedMapSceneLayer & SceneRenderTarget {
   let phase: Phase = 'new'
@@ -143,6 +148,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
   let rendererSize: { width: number; height: number; resolution: number } | null = null
   let sceneSyncCount = 0
   let failureReported = false
+  let disconnect: (() => void) | undefined
 
   // The settled frame keeps the view of the last move, which the layer presented already: one repaint presents it as settled.
   const stopSettleRepaints = options.frames.settledViewFrame?.subscribe(() => requestRepaint()) ?? (() => {})
@@ -175,6 +181,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
         return
       }
       phase = 'attached'
+      disconnect ??= options.connect?.(target)
     },
     render(gl: WebGL2RenderingContext, _input: CustomRenderMethodInput) {
       if (gl !== context || !renderer) return
@@ -209,7 +216,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
     },
   } satisfies CustomLayerInterface
 
-  return {
+  const target: SharedMapSceneLayer & SceneRenderTarget = {
     layer,
     get diagnostics() { return diagnostics() },
     async initialize(nextMap, gl) {
@@ -275,6 +282,9 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
       requestRepaint()
     },
     dispose() {
+      // Leave the slot first: a disposal that fails must not keep a dead layer as the runtime's target.
+      disconnect?.()
+      disconnect = undefined
       if (disposePromise) return disposePromise
       phase = 'disposing'
       disposePromise = (initializePromise ?? Promise.resolve())
@@ -290,6 +300,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
       return disposePromise
     },
   }
+  return target
 
   function requestRepaint(): void {
     if (!map) return
