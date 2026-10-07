@@ -315,6 +315,31 @@ describe('SceneRuntimeRenderScheduler', () => {
       scheduler.dispose()
     })
 
+    it('a scene render with an empty slot stays unpresented until a target connects and draws it', async () => {
+      const { scheduler, runFrame, prepare, frames } = await createControlledScheduler()
+      // A Design switch or a Retry: the old layer has disconnected and the new one has not connected yet.
+      scheduler.connect(createTarget())()
+      scheduler.awaitPresentation()
+
+      scheduler.invalidate('scene')
+      runFrame()
+      prepare(0)
+      await Promise.resolve()
+      await Promise.resolve()
+      while (frames.size > 0) runFrame()
+      expect(scheduler.scenePending.value, 'nothing has drawn the scene').toBe(true)
+      expect(scheduler.presented.value).toBe(false)
+
+      const layer = createTarget()
+      scheduler.connect(layer)
+      expect(layer.setSnapshot).toHaveBeenCalledOnce()
+      expect(scheduler.presented.value, 'MapLibre draws the snapshot in its next frame').toBe(false)
+      runFrame()
+      expect(scheduler.scenePending.value).toBe(false)
+      expect(scheduler.presented.value).toBe(true)
+      scheduler.dispose()
+    })
+
     it('is idle once a scene render fails', async () => {
       const failure = new Error('renderer draw failed')
       const logError = vi.spyOn(console, 'error').mockImplementation(() => {})
