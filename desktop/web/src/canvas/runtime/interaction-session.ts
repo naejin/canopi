@@ -330,6 +330,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         navigation: { turnToEdge: (a, b) => navigation.turnToEdge(a, b) },
         nudge: _deps.nudge,
         timers: { ...timers, clock },
+        initialPointer: platform.os === 'ios' || platform.os === 'android' ? 'touch' : 'mouse',
         hover: (target) => _deps.setHoveredTarget(target),
         inspect: _deps.tryInspectAt,
         capturePress: (pointerId) => this._capturePress(pointerId),

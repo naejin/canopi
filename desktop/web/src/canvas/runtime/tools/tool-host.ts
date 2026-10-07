@@ -188,9 +188,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let toolGuidance: Parameters<ToolEffects['setGuidance']>[0] = null
   let live: LiveGesture | null = null
   let lastHover: StillPointer | null = null
-  /** The pointer kind that last hovered, pressed or tapped the map (ToolContext.pointer): a tool armed later, or a selection
-   *  made off the map, sizes its handles for it. */
-  let pointerKind: PointerKind = 'mouse'
+  /** The pointer kind that last hovered, pressed, tapped or long-pressed the map, from the platform's until then
+   *  (ToolContext.pointer): a tool armed later, or a selection made off the map, sizes its handles for it. */
+  let pointerKind: PointerKind = deps.initialPointer
   /** Under Text, the raw press found the note's entry open: its focus move committed the note, and the press places
    *  nothing. */
   let pressCommitsNote = false
@@ -1308,6 +1308,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     },
     menuAt(at: ScreenPoint | 'selection', source: MenuSource): GestureOutcome {
       if (disposed) return NOTHING
+      // A long press reaches the host as no press: the finger sizes the handles of the selection the menu retargets.
+      if (source === 'long-press') pointerKind = 'touch'
       // A menu commits the nudge series first, or its open Scene Edit would quarantine the menu: a mouse menu's right
       // press has already committed it (rawPress); a keyboard menu has no press, and today its key committed the series.
       endNudgeSeries(true)
