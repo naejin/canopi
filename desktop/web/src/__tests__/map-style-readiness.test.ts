@@ -4,7 +4,7 @@ import { MAPLIBRE_SATELLITE_SOURCE_ID } from '../maplibre/config'
 import { BasemapTileAuth } from '../maplibre/basemap-tile-auth'
 import { mountMapBackground, type MapBackgroundPresentation } from '../maplibre/map-background'
 import type { VectorStyleDocument } from '../maplibre/openfreemap-basemap'
-import { mapStyleReadiness, mountSatelliteLifecycle, type SatelliteMountOptions } from '../maplibre/satellite-bind'
+import { mapStyleReadiness, mountSatelliteLifecycle } from '../maplibre/satellite-bind'
 import { SatelliteImageryProvider, type SatelliteHttp } from '../maplibre/satellite-provider-session'
 
 const STYLE: VectorStyleDocument = {
@@ -81,6 +81,9 @@ function createMap() {
     setGlyphs: vi.fn(),
     setSprite: vi.fn(),
     getZoom: () => 16,
+    getBounds: () => ({ getWest: () => 2.35, getSouth: () => 48.85, getEast: () => 2.36, getNorth: () => 48.86 }),
+    getContainer: () => document.createElement('div'),
+    setGlobalStateProperty: vi.fn(),
     addControl: vi.fn(),
     removeControl: vi.fn(),
   }
@@ -103,7 +106,7 @@ function mount() {
   const map = createMap()
   const lifetime = fakeLifetime()
   const background = mountMapBackground({
-    map: map as never,
+    map,
     maplibre: { AttributionControl: FakeControl },
     tileAuth: new BasemapTileAuth(),
     lifetime,
@@ -117,6 +120,7 @@ const satelliteAdds = (map: ReturnType<typeof createMap>) =>
 
 afterEach(() => {
   googleMapsApiKey.value = null
+  vi.unstubAllGlobals()
 })
 
 describe('map style readiness', () => {
@@ -152,8 +156,21 @@ describe('map style readiness after the first load', () => {
     const lifetime = fakeLifetime()
     // MapLibre's isStyleLoaded() is false while any tile loads; the style's own
     // loaded flag is what addSource and addLayer check.
-    const readiness = mapStyleReadiness({ style: { _loaded: true }, isStyleLoaded: () => false } as never, lifetime)
+    const map = { style: { _loaded: true }, isStyleLoaded: () => false }
+    const readiness = mapStyleReadiness(map, lifetime)
     expect(readiness.isReady()).toBe(true)
+  })
+
+  it('is not ready on a MapLibre map with no style yet, whose isStyleLoaded() returns nothing', async () => {
+    vi.stubGlobal('URL', class extends URL {
+      static createObjectURL() { return 'blob:map-worker' }
+    })
+    const { Map: MapLibreMap } = await import('maplibre-gl')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const lifetime = fakeLifetime()
+    const readiness = mapStyleReadiness(Object.create(MapLibreMap.prototype) as InstanceType<typeof MapLibreMap>, lifetime)
+    expect(readiness.isReady()).toBe(false)
+    warn.mockRestore()
   })
 
   it('releases a wait when readiness returns without a load or style.load event', () => {
@@ -248,7 +265,7 @@ describe('satellite mount style-ready wait', () => {
     const readiness = mapStyleReadiness(map, lifetime)
     const mount = () => mountSatelliteLifecycle({
       provider: new SatelliteImageryProvider(inertHttp, () => ({ googleMapsApiKey: null, locale: 'en' })),
-      map: map as unknown as SatelliteMountOptions['map'],
+      map,
       readViewport: () => ({ west: -1, south: 48, east: 1, north: 49, zoom: 14 }),
       styleReady: readiness,
       beforeLayerId: () => null,

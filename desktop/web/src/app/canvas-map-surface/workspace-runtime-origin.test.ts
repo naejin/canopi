@@ -67,7 +67,7 @@ describe('workspace runtime composition origin effect', () => {
         updateBackgroundPresentation: vi.fn(),
         setAttributionCompact: vi.fn(),
         retryBasemap: vi.fn(),
-        installStyleRestorer: vi.fn(() => () => {}),
+        reconcileLayerStack: vi.fn(),
         watchFailure: vi.fn(() => () => {}),
       }),
       createWorkspace,

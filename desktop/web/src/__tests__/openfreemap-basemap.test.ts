@@ -80,12 +80,6 @@ class FakeMap implements VectorBasemapMap {
   setGlyphs(url: string | null) { this.glyphs = url }
   setSprite(url: string | null) { this.sprite = url }
   setGlobalStateProperty(name: string, value: unknown) { this.globalState = { ...this.globalState, [name]: value } }
-  /** What a same-map `setStyle()` does: every source, layer and global state value of the old style is gone. */
-  reloadStyle() {
-    this.sources.clear()
-    this.layers.splice(0, this.layers.length, { id: 'canopi-scene' })
-    this.globalState = {}
-  }
   /** A layer property as MapLibre evaluates it here: global state read from the map, products and concatenations folded. */
   resolved(id: string, kind: 'paint' | 'layout', name: string): unknown {
     const layer = this.getLayer(id) as Record<string, Record<string, unknown> | undefined>
@@ -488,23 +482,6 @@ describe('OpenFreeMap vector basemap', () => {
       first.dispose()
       second.dispose()
     })
-  })
-
-  it('keeps the basemap opacity and label language through a same-map style reload', async () => {
-    const map = new FakeMap()
-    const basemap = install(map)
-    basemap.update({ style: 'liberty', visible: true, opacity: 1, locale: 'fr' })
-    await settle()
-    basemap.update({ style: 'liberty', visible: true, opacity: 0.5, locale: 'de' })
-
-    map.reloadStyle()
-    basemap.restore()
-    await settle()
-
-    expect(map.resolved('ofm:water', 'paint', 'fill-opacity')).toBe(0.4)
-    expect(map.resolved('ofm:road', 'paint', 'line-opacity')).toEqual(['interpolate', ['linear'], ['zoom'], 5, 0.1, 12, 0.5])
-    expect(map.resolved('ofm:place', 'paint', 'icon-opacity')).toBe(0.5)
-    expect(map.resolved('ofm:place', 'layout', 'text-field')).toEqual(['coalesce', ['get', 'name:de'], ['get', 'name']])
   })
 
   it('installs a style MapLibre accepts, whose opacity and labels follow the map\'s global state', async () => {

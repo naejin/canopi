@@ -23,7 +23,7 @@ Canvas v2 ([plan](../plans/canvas-v2-plan.md), [spec](../plans/canvas-v2-spec.md
 - `app/**` and `components/**` never import `maplibre-gl`; Web composition never imports raster display, the LiDAR library or display stores or the Desktop contribution adapter; production never imports the UI gallery. (`__tests__/frontend-architecture-policies.test.ts`)
 - Every map-layer log goes through `maplibre/redact-credentials.ts`, because MapLibre copies request URLs, key included, into errors; no bare `console` in `maplibre/` or `app/canvas-map-surface/`. (policy test)
 - Only `activeGoogleMapsApiKey` reaches the satellite provider, only while `satellite_source` is `google_key`, only through the map's `transformRequest`. The key never enters published state, a Design, an export, a snapshot, a log or page markup. (`__tests__/settings-sections.test.tsx`, `satellite-bind.test.ts`, `map-background.test.ts`, `settings-projection.test.ts`)
-- Background changes never call `setStyle()` or recreate map, camera, layer or runtime; `maplibre/map-background.ts` owns Basemap, Satellite and attribution; `app/map-layers/bands.ts` is the one layer order. (`__tests__/map-background.test.ts`, `app/map-layers/bands.test.ts`)
+- Maps take only their first `style.load`; nothing calls `setStyle()` or recreates map, camera, layer or runtime for a background change. `maplibre/map-background.ts` owns the background; `app/map-layers/bands.ts` orders layers. (policy test, `map-background.test.ts`, `bands.test.ts`)
 - MapLibre owns context, framebuffer, frame scheduling and resize. The custom layer draws only in its callback (`clear: false`); it never clears the context, starts a ticker or resizes. (`__tests__/v2-shared-map-scene-layer.test.ts`)
 - A view change never routes through a scene render or, once retained, rebuilds scene geometry; the custom layer reads the camera frame in its own `render` ([ADR 0019](../adr/0019-rendering-and-the-view-transform.md)). (`canvas/runtime/scene-runtime/render-scheduler.test.ts`)
 - Design object identity is the typed pair `{ kind, id }`; ids repeat across kinds (`scene-runtime-boundaries.test.ts`); `currentCanvasSelection` is a notification, never authority (advice).
@@ -45,7 +45,7 @@ Canvas v2 ([plan](../plans/canvas-v2-plan.md), [spec](../plans/canvas-v2-spec.md
 - Publish a raw `SceneCanvasRuntime` or cast it to a role; tests use `createTestCanvasRuntimeSurfaces()` (policy test).
 - Read the plane origin from the document; use `CanvasQuerySurface.sessionPlane`.
 - Fit with a map-only `fitBounds`, call MapLibre camera methods outside the camera driver, project through a workspace map (P2), or convert world to screen outside the view transform.
-- Await an owner operation from a child setup or disposal promise.
+- Await or return an owner operation from a child setup or disposal callback: the cycle never settles, and nothing checks it at run time (advice).
 - Claim a contribution was omitted while parts remain (a failed rollback is a core failure).
 - Mirror Target geometry or layer rows into map state.
 - Add a tile proxy, offline tile store, bulk download or service-worker cache.
@@ -54,7 +54,7 @@ Canvas v2 ([plan](../plans/canvas-v2-plan.md), [spec](../plans/canvas-v2-spec.md
 
 | Area | Module | Tests |
 |---|---|---|
-| Host, loader, map | `maplibre/host.ts`, `loader.ts`, `workspace-map.ts` | `__tests__/maplibre-*` |
+| Map surface | `maplibre/surface.ts`, `loader.ts`, `workspace-map.ts` | `__tests__/maplibre-*` |
 | Composition, admission | `app/canvas-map-surface/` | `workspace-*.test.ts` |
 | Background, satellite | `maplibre/map-background.ts`, `satellite-*.ts`, `basemap-tile-auth.ts` | `__tests__/map-background`, `satellite-*` |
 | Map layers, terrain | `app/map-layers/`, `maplibre/terrain*.ts` | `__tests__/map-layers-store`, `maplibre-terrain` |

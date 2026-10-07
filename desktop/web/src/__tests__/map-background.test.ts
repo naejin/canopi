@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
+import type { Map as MapLibreMap } from 'maplibre-gl'
 import { signal } from '@preact/signals'
 import { googleMapsApiKey, satelliteSource } from '../app/settings/state'
 import { MAPLIBRE_SATELLITE_LAYER_ID, MAPLIBRE_SATELLITE_SOURCE_ID } from '../maplibre/config'
 import { BasemapTileAuth } from '../maplibre/basemap-tile-auth'
-import { mountMapBackground, type MapBackgroundPresentation } from '../maplibre/map-background'
+import { mountMapBackground, type MapBackgroundMap, type MapBackgroundPresentation } from '../maplibre/map-background'
 import type { VectorStyleDocument } from '../maplibre/openfreemap-basemap'
 import { GOOGLE_KEYLESS_TILES } from '../maplibre/satellite-provider'
 
@@ -61,6 +62,7 @@ function createMap() {
     setSprite: vi.fn(),
     setGlobalStateProperty: vi.fn(),
     getZoom: () => 16,
+    getBounds: () => ({ getWest: () => 2.35, getSouth: () => 48.85, getEast: () => 2.36, getNorth: () => 48.86 }),
     addControl: (control: FakeControl) => { controls.push(control) },
     removeControl: (control: FakeControl) => {
       const index = controls.indexOf(control)
@@ -87,7 +89,7 @@ async function settle(): Promise<void> {
 
 function mount(map = createMap()) {
   const background = mountMapBackground({
-    map: map as never,
+    map,
     maplibre: { AttributionControl: FakeControl },
     tileAuth: new BasemapTileAuth(),
     lifetime: { on: () => {}, off: () => {} },
@@ -105,6 +107,13 @@ afterEach(() => {
 })
 
 describe('map background band', () => {
+  // Every surface hands the band a MapLibre map; the band calls the methods it adds to the Basemap's and Satellite's own
+  // with no fallback for a missing one.
+  it('calls only methods a MapLibre map has', () => {
+    type BandMethods = 'getLayersOrder' | 'setPaintProperty' | 'isStyleLoaded' | 'getBounds' | 'getZoom' | 'addControl' | 'removeControl' | 'getContainer'
+    expectTypeOf<MapLibreMap>().toExtend<Pick<MapBackgroundMap, BandMethods>>()
+  })
+
   it('installs the OpenFreeMap basemap beneath Canopi layers without setStyle and with one attribution control', async () => {
     const { map, background } = mount()
     background.update(presentation())
@@ -248,7 +257,7 @@ describe('map background band', () => {
   it('reports a Basemap that failed to load until Satellite hides it', async () => {
     const statuses: string[] = []
     const background = mountMapBackground({
-      map: createMap() as never,
+      map: createMap(),
       maplibre: { AttributionControl: FakeControl },
       tileAuth: new BasemapTileAuth(),
       lifetime: { on: () => {}, off: () => {} },
@@ -271,7 +280,7 @@ describe('map background band', () => {
     const statuses: string[] = []
     const loadStyle = vi.fn(async () => { throw new Error('Basemap style request failed (503).') })
     const background = mountMapBackground({
-      map: createMap() as never,
+      map: createMap(),
       maplibre: { AttributionControl: FakeControl },
       tileAuth: new BasemapTileAuth(),
       lifetime: { on: () => {}, off: () => {} },

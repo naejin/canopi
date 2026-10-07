@@ -243,8 +243,8 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'MapLibre Host stays infrastructure-only',
-    from: ['src/maplibre/host.ts'],
+    name: 'MapLibre Surface stays infrastructure-only',
+    from: ['src/maplibre/surface.ts'],
     targets: [
       'src/app.tsx',
       'src/app/**',
@@ -357,7 +357,7 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'World Map requests MapLibre through the Surface Adapter',
+    name: 'World Map requests MapLibre through the MapLibre Surface',
     from: ['src/components/world-map/WorldMapSurface.tsx'],
     targets: ['maplibre-gl'],
   },
@@ -847,9 +847,9 @@ const REQUIRED_IMPORT_POLICIES = [
   },
   {
     kind: 'require-imports',
-    name: 'World Map uses the MapLibre Surface Adapter',
+    name: 'World Map uses the MapLibre Surface',
     from: ['src/components/world-map/WorldMapSurface.tsx'],
-    targets: ['src/maplibre/surface-adapter.ts'],
+    targets: ['src/maplibre/surface.ts'],
   },
   {
     kind: 'require-imports',
@@ -1850,8 +1850,17 @@ const SYMBOL_OWNERSHIP_POLICIES = [
     callKinds: ['new'],
   },
   {
+    // ADR 0004: a map is admitted on its first style.load and a later one is ignored, so nothing may reload a style;
+    // Basemap, Satellite, terrain and LiDAR install through sources and layers (docs/guides/map-workspace.md).
     kind: 'forbid-calls',
-    name: 'World Map delegates resize observation to the MapLibre Host',
+    name: 'Production never reloads a map style',
+    from: ['src/**'],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    properties: ['setStyle'],
+  },
+  {
+    kind: 'forbid-calls',
+    name: 'World Map delegates resize observation to the MapLibre Surface',
     from: ['src/components/world-map/WorldMapSurface.tsx'],
     targets: ['ResizeObserver'],
     callKinds: ['new'],
@@ -2488,6 +2497,26 @@ describe('declarative frontend architecture policies', () => {
       expect.stringContaining('[GeoJSON, continuous save and map layers stay free of Desktop capabilities] src/app/map-layers/state.ts transitively imports @tauri-apps/api/core'),
       expect.stringContaining('[Place Search reaches native geocoding only through the edition transport] src/components/canvas/PlaceSearch.tsx transitively imports src/ipc/lidar.ts'),
       expect.stringContaining('[Web entry graph stays free of Desktop capabilities] src/main.web.tsx transitively imports @tauri-apps/api/core via src/main.web.tsx -> src/app/geocoding/transport.browser.ts'),
+    ])
+  })
+
+  it('rejects a map style reload anywhere in production, the World map included', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/maplibre/planted.ts', [
+        'map.setStyle(style)',
+        'this.map?.setStyle(url, { diff: true })',
+        'setStyleFilter(value)',
+        '// map.setStyle() would reload the style',
+      ]),
+      plantedSource('src/components/world-map/WorldMapSurface.tsx', ['worldMap!.setStyle(style)']),
+      plantedSource('src/maplibre/planted.test.ts', ['map.setStyle(style)']),
+    ])
+    const policy = '[Production never reloads a map style]'
+
+    expect(collectArchitecturePolicyViolations(graph, FRONTEND_ARCHITECTURE_POLICIES.filter(({ name }) => `[${name}]` === policy))).toEqual([
+      `${policy} src/maplibre/planted.ts:1 calls map.setStyle`,
+      `${policy} src/maplibre/planted.ts:2 calls this.map?.setStyle`,
+      `${policy} src/components/world-map/WorldMapSurface.tsx:1 calls worldMap!.setStyle`,
     ])
   })
 

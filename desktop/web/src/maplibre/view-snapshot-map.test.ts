@@ -112,6 +112,7 @@ class FakeMap {
   redraw(): void { this.redraws += 1 }
   remove(): void { this.removed = true }
   loaded(): boolean { return true }
+  isStyleLoaded(): boolean { return true }
   areTilesLoaded(): boolean { return this.tilesLoaded }
   triggerRepaint(): void {
     if (FakeMap.autoIdle) queueMicrotask(() => this.fire('idle'))

@@ -1,7 +1,6 @@
 import { WorkspaceMapContributions, type WorkspaceMapContributionsOptions } from './workspace-map-contributions'
 import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
-import type { MapLibreSurfaceAdapter } from '../../maplibre/surface-adapter'
-import { createMapLibreSurfaceAdapter } from '../../maplibre/surface-adapter'
+import { MapLibreSurface, type MapLibreSurfaceLifetime } from '../../maplibre/surface'
 import {
   MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
   MAPLIBRE_SATELLITE_LAYER_ID,
@@ -17,13 +16,11 @@ import {
 import { OPENFREEMAP_LAYER_PREFIX, OPENFREEMAP_SOURCE_PREFIX } from '../../maplibre/openfreemap-basemap'
 import { mapErrorResourceId } from '../../maplibre/map-error-owner'
 import { describeMapErrorEvent, logMapError, redactCredentials, redactError } from '../../maplibre/redact-credentials'
-import type { MapLibreSurfaceLifetime } from '../../maplibre/surface-adapter'
 import { UNAVAILABLE_MAPLIBRE_CANVAS_SURFACE_STATE } from '../../maplibre/canvas-surface-state'
 import {
   createWorkspaceMapLibreMap,
   type WorkspaceMapSnapshot,
 } from '../../maplibre/workspace-map'
-import type { MapLibreMapInstance } from '../../maplibre/loader'
 import type { ViewScreen } from '../../canvas/runtime/view/types'
 import {
   createMapLayerStackDescriptors,
@@ -50,8 +47,6 @@ interface WorkspaceMapAttempt {
   settled: boolean
   released: boolean
   admitted: boolean
-  styleRestorer: (() => void) | null
-  pendingStyleRestore: boolean
   pendingPresentationSync: boolean
   reconciling: boolean
   pendingFailure: Error | null
@@ -65,28 +60,28 @@ interface WorkspaceMapAttempt {
 export interface WorkspaceActivationMapControlsOptions {
   readonly contributions: Omit<WorkspaceMapContributionsOptions, 'onFailure'>
   readonly container: HTMLElement
-  readonly surface?: MapLibreSurfaceAdapter<MapLibreMapInstance>
+  readonly surface?: MapLibreSurface
   readonly logError?: (message?: unknown, ...optionalParams: unknown[]) => void
   readonly canCreateWebGL2Context?: () => boolean
   /**
    * The workspace request's resize owner (spec §1.1 "Resize"): the map container's new size goes to the camera, whose driver
-   * resizes the map (CameraDriver.setScreen). The MapLibre host never resizes the map itself.
+   * resizes the map (CameraDriver.setScreen). The MapLibre surface never resizes the map itself.
    */
   readonly setScreen: (screen: ViewScreen) => void
 }
 
 /**
- * Bridges the coordinator's awaited map admission to the Surface Adapter.
- * The adapter remains the only owner allowed to remove the MapLibre map.
+ * Bridges the coordinator's awaited map admission to the MapLibre surface,
+ * the only owner allowed to remove the map.
  */
 export class WorkspaceMapControls implements WorkspaceActivationMapControls {
-  private readonly surface: MapLibreSurfaceAdapter<MapLibreMapInstance>
+  private readonly surface: MapLibreSurface
   private readonly logError: (message?: unknown, ...optionalParams: unknown[]) => void
   private attempt: WorkspaceMapAttempt | null = null
   private attributionCompact: boolean | null = null
 
   constructor(private readonly options: WorkspaceActivationMapControlsOptions) {
-    this.surface = options.surface ?? createMapLibreSurfaceAdapter()
+    this.surface = options.surface ?? new MapLibreSurface()
     this.logError = options.logError ?? logMapError
   }
 
@@ -112,7 +107,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
         contributions: new WorkspaceMapContributions({
           ...this.options.contributions,
           logError: this.logError,
-          onFailure: (error) => this.reportRestorationFailure(attempt, error),
+          onFailure: (error) => this.failAttempt(attempt, error),
         }),
         contributionSnapshot: null,
         signal,
@@ -125,8 +120,6 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
         settled: false,
         released: false,
         admitted: false,
-        styleRestorer: null,
-        pendingStyleRestore: false,
         pendingPresentationSync: false,
         reconciling: false,
         pendingFailure: null,
@@ -147,7 +140,6 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
       }
 
       this.surface.requestMap({
-        key: 'shared-workspace',
         createMap: (maplibre, container) => createWorkspaceMapLibreMap(
           maplibre,
           container,
@@ -183,7 +175,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
               this.rejectAttempt(attempt, error)
               return
             }
-            this.reportRestorationFailure(attempt, error)
+            this.failAttempt(attempt, error)
           }
           const handleContextLoss = (event?: unknown) => {
             const error = contextLossError(event)
@@ -192,14 +184,15 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
               this.rejectAttempt(attempt, error)
               return
             }
-            this.reportRestorationFailure(attempt, error)
+            this.failAttempt(attempt, error)
           }
           const handleStyleLoad = () => {
             if (!isLive()) return
             if (attempt.admitted) {
-              if (attempt.failureReported) return
-              attempt.pendingStyleRestore = true
-              this.drainReconciliation(attempt)
+              // Canopi never reloads a style (ADR 0004): the map is admitted on its first style.load and a later
+              // one is logged once and ignored.
+              context.lifetime.off('style.load', handleStyleLoad)
+              this.logError('MapLibre loaded a later style; Canopi never reloads it, so it is ignored.')
               return
             }
             if (attempt.settled) return
@@ -210,7 +203,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
             try {
               this.applyBackground(attempt)
               if (attempt.failureReported || attempt.released) return
-              attempt.contributions.restoreStyle()
+              attempt.contributions.admitStyle()
               if (attempt.failureReported || attempt.released) return
               attempt.settled = true
               signal.removeEventListener('abort', abort)
@@ -301,43 +294,17 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     }
   }
 
-  installStyleRestorer(
-    map: WorkspaceActivationMap,
-    restore: () => void,
-  ): () => void {
+  /**
+   * Puts the present Canopi layers in their bands (app/map-layers/bands.ts): the shared scene above the basemap and
+   * LiDAR, below the interaction overlays. Activation calls it once, after adding the scene layer.
+   */
+  reconcileLayerStack(map: WorkspaceActivationMap): void {
     const attempt = this.attempt
-    if (
-      !attempt
-      || attempt.map !== map
-      || attempt.released
-      || attempt.failureReported
-      || !attempt.admitted
-    ) return () => {}
-    let active = true
-    const restoreCurrentStyle = () => {
-      if (!active) return
-      try {
-        restore()
-      } catch (error) {
-        this.reportRestorationFailure(attempt, error)
-      }
-    }
-    attempt.styleRestorer = restoreCurrentStyle
-    const hadPendingStyleRestore = attempt.pendingStyleRestore
-    this.drainReconciliation(attempt)
-    if (!hadPendingStyleRestore) {
-      try {
-        this.reconcileLayerStack(attempt)
-      } catch (error) {
-        this.reportRestorationFailure(attempt, error)
-      }
-    }
-    return () => {
-      active = false
-      if (attempt.styleRestorer === restoreCurrentStyle) {
-        attempt.styleRestorer = null
-      }
-    }
+    if (!attempt || attempt.map !== map || attempt.released || attempt.failureReported) return
+    reconcileMapLayerStack(
+      map,
+      createMapLayerStackDescriptors(attempt.contributionSnapshot?.lidar.map((layer) => layer.id) ?? []),
+    )
   }
 
   private publishUnavailable(): void {
@@ -365,65 +332,25 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
   }
 
   private drainReconciliation(attempt: WorkspaceMapAttempt): void {
-    if (
-      (!attempt.pendingStyleRestore && !attempt.pendingPresentationSync)
-      || attempt.reconciling
-      || attempt.released
-      || attempt.failureReported
-    ) return
+    if (!attempt.pendingPresentationSync || attempt.reconciling || attempt.released || attempt.failureReported) return
     attempt.reconciling = true
     try {
-      while (
-        (attempt.pendingStyleRestore || attempt.pendingPresentationSync)
-        && !attempt.released
-        && !attempt.failureReported
-      ) {
-        const restoreScene = attempt.pendingStyleRestore && attempt.styleRestorer != null
-        const syncPresentation = attempt.pendingPresentationSync
-        if (!restoreScene && !syncPresentation) break
-        if (restoreScene) attempt.pendingStyleRestore = false
-        if (syncPresentation) attempt.pendingPresentationSync = false
-        // A reloaded style is an empty stack again, so the background band is
-        // re-installed; an unexpired imagery session is reused.
-        if (restoreScene) attempt.background?.restore()
-        if (attempt.failureReported) break
+      while (attempt.pendingPresentationSync && !attempt.released && !attempt.failureReported) {
+        attempt.pendingPresentationSync = false
         this.applyBackground(attempt)
-        if (attempt.failureReported) break
-        if (restoreScene) {
-          attempt.contributions.restoreStyle()
-          if (attempt.released || attempt.failureReported) break
-          attempt.styleRestorer?.()
-        }
-        if (attempt.failureReported) break
-        this.reconcileLayerStack(attempt)
+        if (attempt.failureReported || !attempt.map) break
+        this.reconcileLayerStack(attempt.map)
       }
     } catch (error) {
-      this.reportRestorationFailure(attempt, error)
+      this.failAttempt(attempt, error)
     } finally {
       attempt.reconciling = false
-      if (
-        (attempt.pendingPresentationSync
-          || (attempt.pendingStyleRestore && attempt.styleRestorer != null))
-        && !attempt.released
-        && !attempt.failureReported
-      ) {
-        queueMicrotask(() => this.drainReconciliation(attempt))
-      }
     }
   }
 
-  private reconcileLayerStack(attempt: WorkspaceMapAttempt): void {
-    if (!attempt.map || attempt.released) return
-    reconcileMapLayerStack(
-      attempt.map,
-      createMapLayerStackDescriptors(attempt.contributionSnapshot?.lidar.map((layer) => layer.id) ?? []),
-    )
-  }
-
-  private reportRestorationFailure(attempt: WorkspaceMapAttempt, error: unknown): void {
+  private failAttempt(attempt: WorkspaceMapAttempt, error: unknown): void {
     if (attempt.released || attempt.failureReported) return
     attempt.failureReported = true
-    attempt.pendingStyleRestore = false
     attempt.pendingPresentationSync = false
     const failure = mapError(error)
     attempt.pendingFailure = failure
@@ -452,8 +379,8 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     attempt.lifetime = null
     attempt.signal.removeEventListener('abort', attempt.abort)
     if (this.attempt === attempt) this.attempt = null
-    // Host/Surface Adapter performs listener cleanup, observer disconnect, and
-    // final map removal. No app-layer code calls map.remove().
+    // The surface releases the map's listeners, disconnects its observer and
+    // removes it. No app-layer code calls map.remove().
     try {
       attempt.contributions.dispose(attempt.pendingFailure ?? undefined)
     } finally {

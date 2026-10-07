@@ -133,7 +133,7 @@ describe('createWorkspaceDocumentSurface', () => {
         updateBackgroundPresentation: () => {},
         setAttributionCompact: () => {},
         retryBasemap: vi.fn(),
-        installStyleRestorer: () => () => {},
+        reconcileLayerStack: () => {},
         watchFailure: () => () => {},
       },
       readOrigin: () => ({ lat: 0, lon: 0 }),
