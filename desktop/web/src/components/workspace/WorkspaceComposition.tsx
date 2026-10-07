@@ -1,6 +1,6 @@
 import type { ComponentType } from 'preact'
 import { Suspense } from 'preact/compat'
-import { useEffect, useMemo, useRef } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'preact/hooks'
 import { usePlanningViewState } from '../../app/planning-view/state'
 import { phoneLayout } from '../../app/shell/phone-layout'
 import { siteLocateOpen } from '../../app/site-onboarding/state'
@@ -29,11 +29,12 @@ import styles from './WorkspaceComposition.module.css'
 type PrimaryPanel = Exclude<Panel, SidePanel>
 type WorkspaceSurface = ComponentType<Record<string, never>>
 
+/** Each edition's panel-bar commands; an open side panel whose command is `disabled` closes. */
 export type WorkspacePanelProjection = {
-  readonly [Group in keyof ShellPanelBarProjection]: readonly Pick<
+  readonly [Group in keyof ShellPanelBarProjection]: readonly (Pick<
     ShellPanelBarProjection[Group][number],
     'panel'
-  >[]
+  > & Partial<Pick<ShellPanelBarProjection[Group][number], 'disabled'>>)[]
 }
 
 export interface WorkspaceSurfaces {
@@ -70,9 +71,14 @@ export function WorkspaceComposition({
   const locating = siteLocateOpen.value
   // A presented story fills the window; the dock comes back when it ends.
   const presenting = storyPresentationActive.value
+  // An open panel whose command became unavailable closes in the same render: Close Design closes every design
+  // panel, while the Catalog (and anything else that runs from the start screen) stays (canopi-f47t.41).
+  const unavailable = requestedSide !== null && [...panelProjection.design, ...panelProjection.planning]
+    .some(command => command.panel === requestedSide && command.disabled)
   const mountedSide = primary === 'canvas'
     && !locating
     && !presenting
+    && !unavailable
     && requestedSide
     && registrations.side.has(requestedSide)
       ? requestedSide
@@ -91,6 +97,10 @@ export function WorkspaceComposition({
       </Suspense>
     </div>
   ) : null
+
+  useLayoutEffect(() => {
+    if (unavailable) sidePanel.value = null
+  }, [unavailable])
 
   useEffect(() => {
     if (

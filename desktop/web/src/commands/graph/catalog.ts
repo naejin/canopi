@@ -153,8 +153,7 @@ function isGeoJsonTransferDisabled(state: { readonly hasDesign: boolean }): bool
 function designPanel(panel: Panel) {
   return {
     execute: () => navigateTo(panel),
-    // An open panel can always close, even after its Design went away.
-    isExecutionDisabled: (state: ShellCommandState) => !state.hasDesign && state.sidePanel !== panel,
+    isExecutionDisabled: (state: ShellCommandState) => !state.hasDesign,
   }
 }
 
