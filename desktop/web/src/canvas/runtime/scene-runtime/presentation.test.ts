@@ -272,6 +272,33 @@ describe('scene runtime presentation controller', () => {
     })
   })
 
+  it('marks a hovered cross-Layer group locked when any member Layer is locked, and drops a missing hover target', () => {
+    const { controller, sceneStore } = createController()
+    sceneStore.updatePersisted((draft) => {
+      draft.groups = [{
+        kind: 'group',
+        id: 'group-1',
+        locked: false,
+        name: null,
+        members: [{ kind: 'plant', id: 'plant-1' }, { kind: 'zone', id: 'zone-1' }],
+      }]
+      draft.layers = draft.layers.map((layer) => (
+        layer.name === 'zones' ? { ...layer, locked: true } : layer
+      ))
+    })
+    sceneStore.setHoveredTarget({ kind: 'group', id: 'group-1' })
+
+    expect(controller.buildRendererSnapshot().hoverTarget).toEqual({
+      kind: 'group',
+      id: 'group-1',
+      state: 'locked-layer',
+    })
+
+    sceneStore.setHoveredTarget({ kind: 'group', id: 'missing-group' })
+
+    expect(controller.buildRendererSnapshot().hoverTarget).toBeNull()
+  })
+
   it('treats label-only refreshes as presentation changes', async () => {
     vi.mocked(getCommonNames).mockResolvedValue({
       'Malus domestica': 'Pommier',

@@ -10,15 +10,16 @@ import type {
   CanvasDesignObjectSelectionModel,
   CanvasDesignObjectSelectionTarget,
 } from '../runtime'
-import type { SceneLayerEntity, ScenePersistedState } from '../scene'
+import type { ScenePersistedState } from '../scene'
 import { isDirectSceneDesignObjectLocked, isSceneDesignObjectLocked } from '../scene'
 import {
   getSceneGroupedMemberKeys,
   resolveSceneObjectGroupMembers,
+  sceneContainsTarget,
   sceneObjectGroupMemberFromTarget,
-  sceneObjectGroupMemberLayerName,
   sceneObjectGroupMemberKey,
   sceneTargetKey,
+  sceneTargetLayerNames,
   type SceneDesignObjectSelection,
 } from '../scene'
 import { getZoneWorldBounds } from '../zone-geometry'
@@ -93,14 +94,10 @@ export function getSelectedTopLevelTargets(
 ): SceneSelectionTarget[] {
   const groupedMemberKeys = getSceneGroupedMemberKeys(persisted)
   const selectedKeys = new Set(selectedTargets.map(sceneTargetKey))
-  const seen = new Set<string>()
   const targets: SceneSelectionTarget[] = []
 
   for (const group of persisted.groups) {
     if (!selectedKeys.has(sceneTargetKey({ kind: 'group', id: group.id }))) continue
-    const key = `group:${group.id}`
-    if (seen.has(key)) continue
-    seen.add(key)
     targets.push({ kind: 'group', id: group.id })
   }
 
@@ -109,9 +106,6 @@ export function getSelectedTopLevelTargets(
       !selectedKeys.has(sceneTargetKey({ kind: 'plant', id: plant.id }))
       || groupedMemberKeys.has(sceneTargetKey({ kind: 'plant', id: plant.id }))
     ) continue
-    const key = `plant:${plant.id}`
-    if (seen.has(key)) continue
-    seen.add(key)
     targets.push({ kind: 'plant', id: plant.id })
   }
 
@@ -120,9 +114,6 @@ export function getSelectedTopLevelTargets(
       !selectedKeys.has(sceneTargetKey({ kind: 'zone', id: zone.id }))
       || groupedMemberKeys.has(sceneTargetKey({ kind: 'zone', id: zone.id }))
     ) continue
-    const key = `zone:${zone.id}`
-    if (seen.has(key)) continue
-    seen.add(key)
     targets.push({ kind: 'zone', id: zone.id })
   }
 
@@ -131,17 +122,11 @@ export function getSelectedTopLevelTargets(
       !selectedKeys.has(sceneTargetKey({ kind: 'annotation', id: annotation.id }))
       || groupedMemberKeys.has(sceneTargetKey({ kind: 'annotation', id: annotation.id }))
     ) continue
-    const key = `annotation:${annotation.id}`
-    if (seen.has(key)) continue
-    seen.add(key)
     targets.push({ kind: 'annotation', id: annotation.id })
   }
 
   for (const guide of persisted.measurementGuides) {
     if (!selectedKeys.has(sceneTargetKey({ kind: 'measurement-guide', id: guide.id }))) continue
-    const key = `measurement-guide:${guide.id}`
-    if (seen.has(key)) continue
-    seen.add(key)
     targets.push({ kind: 'measurement-guide', id: guide.id })
   }
 
@@ -220,13 +205,6 @@ function getPlantNamePinning(
     plantIds,
     allPinned: plantIds.every((id) => pinnedById.get(id) === true),
   }
-}
-
-function getSelectionLayer(target: SceneSelectionTarget): string {
-  if (target.kind === 'zone') return 'zones'
-  if (target.kind === 'annotation') return 'annotations'
-  if (target.kind === 'measurement-guide') return 'measurement-guides'
-  return 'plants'
 }
 
 export function getCombinedTargetBounds(
@@ -364,60 +342,13 @@ function pushBlocked(
   blockedTargets.push(blocked)
 }
 
-function sceneContainsTarget(
-  persisted: ScenePersistedState,
-  target: SceneSelectionTarget,
-): boolean {
-  if (target.kind === 'group') return persisted.groups.some((group) => group.id === target.id)
-  if (target.kind === 'plant') return persisted.plants.some((plant) => plant.id === target.id)
-  if (target.kind === 'zone') return persisted.zones.some((zone) => zone.id === target.id)
-  if (target.kind === 'annotation') {
-    return persisted.annotations.some((annotation) => annotation.id === target.id)
-  }
-  return persisted.measurementGuides.some((guide) => guide.id === target.id)
-}
-
 function getTargetLayerBlock(
   persisted: ScenePersistedState,
   target: SceneSelectionTarget,
 ): 'hidden-layer' | 'locked-layer' | null {
-  const layers = getTargetLayerNames(persisted, target).map((layerName) => findLayer(persisted, layerName))
+  const layers = sceneTargetLayerNames(persisted, target)
+    .map((layerName) => persisted.layers.find((layer) => layer.name === layerName))
   if (layers.some((layer) => layer?.visible === false)) return 'hidden-layer'
   if (layers.some((layer) => layer?.locked === true)) return 'locked-layer'
   return null
-}
-
-function getTargetLayerNames(
-  persisted: ScenePersistedState,
-  target: SceneSelectionTarget,
-): string[] {
-  if (target.kind !== 'group') return [getSelectionLayer(target)]
-  const group = persisted.groups.find((entry) => entry.id === target.id)
-  if (!group) return []
-  const layerNames = new Set<string>()
-  for (const member of group.members) {
-    if (!resolveSceneObjectGroupMemberLayer(persisted, member)) continue
-    layerNames.add(sceneObjectGroupMemberLayerName(member))
-  }
-  return [...layerNames]
-}
-
-function resolveSceneObjectGroupMemberLayer(
-  persisted: ScenePersistedState,
-  member: { kind: 'plant' | 'zone' | 'annotation'; id: string },
-): string | null {
-  if (member.kind === 'plant') {
-    return persisted.plants.some((plant) => plant.id === member.id) ? 'plants' : null
-  }
-  if (member.kind === 'zone') {
-    return persisted.zones.some((zone) => zone.id === member.id) ? 'zones' : null
-  }
-  return persisted.annotations.some((annotation) => annotation.id === member.id) ? 'annotations' : null
-}
-
-function findLayer(
-  persisted: ScenePersistedState,
-  layerName: string,
-): SceneLayerEntity | null {
-  return persisted.layers.find((layer) => layer.name === layerName) ?? null
 }

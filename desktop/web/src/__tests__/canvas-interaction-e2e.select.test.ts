@@ -1564,6 +1564,50 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('disables Context Menu edits for a topmost cross-Layer Object Group with a locked member Layer', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [
+        makeRectZone('editable-zone', [
+          { x: 110, y: 20 },
+          { x: 130, y: 20 },
+          { x: 130, y: 40 },
+          { x: 110, y: 40 },
+        ]),
+        makeRectZone('grouped-zone', [
+          { x: 10, y: 120 },
+          { x: 30, y: 120 },
+          { x: 30, y: 140 },
+          { x: 10, y: 140 },
+        ]),
+      ]
+      draft.plants = [makePlant('grouped-plant', 'Malus domestica', { x: 120, y: 30 })]
+      draft.groups = [{
+        kind: 'group',
+        id: 'group-1',
+        locked: false,
+        name: 'Group',
+        members: [
+          { kind: 'plant', id: 'grouped-plant' },
+          { kind: 'zone', id: 'grouped-zone' },
+        ],
+      }]
+      draft.layers = draft.layers.map((layer) =>
+        layer.name === 'plants' ? { ...layer, locked: true } : layer,
+      )
+    })
+    const commands = createSelectionCommands({ canPaste: vi.fn(() => true) })
+    const deps = createInteractionDeps(container, store, testView, { selectionCommands: commands })
+    const session = createTestSession(deps)
+
+    openContextMenu({ x: 120, y: 30 })
+
+    expect(currentCanvasSelection.value).toEqual(new Set())
+    expect(deps.setSelection).not.toHaveBeenCalled()
+    expect(contextMenuCommand('copy').disabled).toBe(true)
+    expect(contextMenuCommand('delete').disabled).toBe(true)
+    session.dispose()
+  })
+
   it('updates Context Menu target selection like a design tool', () => {
     store.updatePersisted((draft) => {
       draft.plants = [
