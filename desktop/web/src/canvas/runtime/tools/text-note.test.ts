@@ -258,6 +258,7 @@ describe('editing a note in place under Select', () => {
   it('a double-click on a note opens it for editing, and the click that blurs the entry commits it', () => {
     const h = harness({ tool: 'select', scene: { annotations: [NOTE] } })
 
+    h.click({ x: 104, y: 154 })
     h.click({ x: 104, y: 154 }, { clickCount: 2 })
     expect(h.store.session.selectedTargets).toEqual([{ kind: 'annotation', id: 'note' }])
     expect(h.chrome.textEntry?.request).toMatchObject({ anchor: { x: 100, y: 150 }, initialText: 'Prune in March' })

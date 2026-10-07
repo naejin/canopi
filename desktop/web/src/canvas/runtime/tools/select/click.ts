@@ -3,8 +3,8 @@
 // Owns what a Select press does to the selection, at the press, and what its click does at the release, with the
 // history-free selection effect: a hit on a directly locked object selects it (toggles it when additive, removes it on
 // Alt) and moves nothing; a double-click (the press's click count, input/recognise.ts clickCountOf) on a plant selects the
-// plant's species when the press before it hit the same plant, else it is a single click (U42: a finger's double tap
-// counts within 30 px, which spans two plants), and on a note opens the note for editing; an additive press toggles the hit; any
+// plant's species, and on a note opens the note for editing, when the press before it hit the same object, else it is a
+// single click (U42: a finger's double tap counts within 30 px, which spans two objects); an additive press toggles the hit; any
 // other hit is selected unless it already is and starts a move-drag, and an Alt click on it (subtractive) removes it from
 // the selection the press found; empty ground (or a hit locked through its group or layer) clears the selection unless
 // additive and starts the band. A press inside a zone's fill with nothing else under it (HitFilter.fill) starts the band
@@ -63,7 +63,8 @@ export function pressSelection(
     return { kind: 'done' }
   }
 
-  if (clickCount >= 2 && hit.kind === 'plant' && previous && sceneTargetKey(previous) === sceneTargetKey(hit)) {
+  const repeated = clickCount >= 2 && previous !== null && sceneTargetKey(previous) === sceneTargetKey(hit)
+  if (repeated && hit.kind === 'plant') {
     const plant = scene.plants.find((entry) => entry.id === hit.id)
     if (!plant) return { kind: 'done' }
     const speciesPlantIds = getSelectablePlantIdsForSpecies(scene, plant.canonicalName)
@@ -72,12 +73,7 @@ export function pressSelection(
     return { kind: 'done' }
   }
 
-  if (
-    !additive
-    && !subtractive
-    && hit.kind === 'annotation'
-    && clickCount >= 2
-  ) {
+  if (repeated && !additive && !subtractive && hit.kind === 'annotation') {
     ctx.effects.setSelection([hit])
     return { kind: 'edit-note', annotationId: hit.id }
   }

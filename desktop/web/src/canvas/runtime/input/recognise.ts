@@ -247,7 +247,9 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
 function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void {
   const session = step.state.sessions.get(input.id)
   if (!session) {
-    if (step.state.sessions.size > 0) return
+    // A finger whose session ended while it stayed down (Esc or a tool change mid-pinch, a refused press) moves nothing:
+    // touch never hovers.
+    if (step.state.sessions.size > 0 || input.pointer === 'touch') return
     hover(step, input)
     return
   }

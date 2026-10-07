@@ -93,9 +93,23 @@ describe('Select clicks', () => {
     // The locked apple is not selectable.
     expect(h.store.session.selectedTargets).toEqual([APPLE])
 
+    h.click({ x: 104, y: 154 })
     h.click({ x: 104, y: 154 }, { clickCount: 2 })
     expect(h.store.session.selectedTargets).toEqual([{ kind: 'annotation', id: 'note' }])
     expect(h.chrome.textEntry?.request).toMatchObject({ initialText: 'Prune in March', fontSizePx: 16 })
+  })
+
+  it('a double tap whose first press hit another note is a single click (U42)', () => {
+    const h = harness({
+      scene: {
+        annotations: [textNote('a', { x: 100, y: 150 }, 'Prune'), textNote('b', { x: 100, y: 175 }, 'Mulch')],
+      },
+    })
+
+    h.click({ x: 104, y: 154 })
+    h.click({ x: 104, y: 179 }, { clickCount: 2 })
+    expect(h.store.session.selectedTargets).toEqual([{ kind: 'annotation', id: 'b' }])
+    expect(h.chrome.textEntry).toBeNull()
   })
 
   it("a click in a zone's fill selects it", () => {

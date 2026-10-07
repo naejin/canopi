@@ -440,6 +440,19 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
     expect(kinds(result.steps.at(-1)!.gestures)).toEqual(['pan:end', 'rotate:end', 'cancel'])
   })
 
+  it.each([
+    ['Esc', escape()],
+    ['a tool change', configure({ tool: 'polygon', mode: 'site', pointingDevice: 'mouse' })],
+    ['the browser taking a finger', pointerCancel({ pointer: 'touch', id: 2 })],
+  ] as const)('a finger still down after %s ends its pair moves nothing: touch never hovers', (_fence, fence) => {
+    const result = run(seq('fenced pair, then a move', ANDROID, [
+      ...twist(0),
+      fence,
+      move(230, 150, { pointer: 'touch', id: 1, buttons: 1 }),
+    ]))
+    expect(result.steps.at(-1)!.gestures).toEqual([])
+  })
+
   it('E5 Second finger after a drag started: the drag is cancelled (multitouch), the pair starts, and nothing resumes', () => {
     const result = run(SEQUENCES.E5)
     expect(result.steps.map((step) => kinds(step.gestures))).toEqual([
