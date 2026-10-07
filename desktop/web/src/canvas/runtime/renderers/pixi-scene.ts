@@ -3,7 +3,7 @@ import 'pixi.js/unsafe-eval'
 import type { Container, Text } from 'pixi.js'
 import { getAnnotationPresentation } from '../annotation-layout'
 import { buildPlantPresentationEntries } from '../plant-presentation'
-import { getAnnotationTextColor, resolveZoneVisual } from '../scene-visuals'
+import { getMapTextColor, resolveZoneVisual } from '../scene-visuals'
 import type { DraftPresentation } from '../tools/draft'
 import type { ViewTransform } from '../view/types'
 import { createBillboardLayer, drawPlantGlyph, styleAnnotationText, traceAnnotationMarker } from './billboard-layer'
@@ -133,7 +133,7 @@ export function createDraftScenePainters(getSnapshot: () => SceneRendererSnapsho
       styleAnnotationText(text, annotation, textFrame.lineHeightPx, 0)
       // Today's ghost marker has no halo.
       traceAnnotationMarker(marker, markerPaths, { x: 0, y: 0 })
-      marker.stroke({ color: toPixiColor(getAnnotationTextColor()), width: markerStrokePx })
+      marker.stroke({ color: toPixiColor(getMapTextColor()), width: markerStrokePx })
       return { textOpacity, markerOpacity }
     },
   }

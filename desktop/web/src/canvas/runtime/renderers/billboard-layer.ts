@@ -31,10 +31,9 @@ import {
 import { getPlantSymbolArt, ROUND_PLANT_SYMBOL_RADIUS, tracePlantSymbolContours } from '../plant-symbol-recipes'
 import type { PlantSymbolId, SceneAnnotationEntity, ScenePlantEntity, ScenePoint } from '../scene'
 import {
-  getAnnotationTextColor,
   getCanvasInteractionStrokeVisual,
   getMapBackdropInk,
-  getPlantLabelColor,
+  getMapTextColor,
   getPlantSymbolEdgeColor,
   getPlantSymbolEdgeWidth,
   getSceneLayerStyle,
@@ -719,7 +718,7 @@ function syncAnnotations(
         nextHighlight.stroke({ color: toPixiColor(getMapBackdropInk().halo),
           width: presentation.markerStrokePx + OVERLAY_CASING_EXTRA_PX, alpha: presentation.markerOpacity, cap: 'round', join: 'round' })
         traceAnnotationMarker(nextHighlight, presentation.markerPaths, origin)
-        nextHighlight.stroke({ color: toPixiColor(getAnnotationTextColor()),
+        nextHighlight.stroke({ color: toPixiColor(getMapTextColor()),
           width: presentation.markerStrokePx, alpha: presentation.markerOpacity })
       }
       if (interactionState) {
@@ -763,7 +762,7 @@ export function styleAnnotationText(text: Text, annotation: SceneAnnotationEntit
     fontFamily: CANVAS_CHROME_FONT_FAMILY,
     fontSize: annotation.fontSize,
     lineHeight: lineHeightPx,
-    fill: getAnnotationTextColor(),
+    fill: getMapTextColor(),
     stroke: labelHaloStroke(annotation.fontSize),
   })
   text.rotation = (((annotation.rotationDeg ?? 0) - bearingDeg) * Math.PI) / 180
@@ -818,7 +817,7 @@ function syncMeasurementLabels(
       fontFamily: CANVAS_CHROME_FONT_FAMILY,
       fontSize: MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX,
       // Map text follows the backdrop; the guide's own stroke carries the interaction state.
-      fill: toPixiColor(getAnnotationTextColor()),
+      fill: toPixiColor(getMapTextColor()),
       stroke: labelHaloStroke(MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX),
     })
     const pose = measurementGuideLabelPoseIn(guide, view)
@@ -863,7 +862,7 @@ function syncSelectionLabels(
       fontSize: 12,
       fontWeight: '600',
       fontStyle: label.fontStyle,
-      fill: toPixiColor(getPlantLabelColor()),
+      fill: toPixiColor(getMapTextColor()),
       stroke: labelHaloStroke(12),
     })
     text.position.set(projected[index * 2]! + label.offsetPx.x, projected[index * 2 + 1]! + label.offsetPx.y)
@@ -908,7 +907,7 @@ function syncPlantNameLabels(
         fontSize: 12,
         fontWeight: '600',
         fontStyle: label.fontStyle,
-        fill: toPixiColor(getPlantLabelColor()),
+        fill: toPixiColor(getMapTextColor()),
         stroke: labelHaloStroke(12),
       })
       text.position.set(projected[index * 2]! + label.offsetPx.x, projected[index * 2 + 1]! + label.offsetPx.y)

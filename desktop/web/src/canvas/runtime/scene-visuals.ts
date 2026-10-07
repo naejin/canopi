@@ -277,11 +277,8 @@ export function getMapBackdropInk(): CanvasBackdropInk {
   return resolveBackdropInk(mapBackdropColor())
 }
 
-export function getAnnotationTextColor(): string {
-  return getMapBackdropInk().text
-}
-
-export function getPlantLabelColor(): string {
+/** The one ink of map text (plant names, notes, measurement labels), from the map backdrop. */
+export function getMapTextColor(): string {
   return getMapBackdropInk().text
 }
 
