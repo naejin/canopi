@@ -1221,7 +1221,7 @@ export interface SceneRendererSnapshot {
 }
 ```
 
-The presentation controller gains `setEditingAids(aids)`, the pattern of `presentLayers`; `SceneCanvasRuntime` keeps `_chromeShown` and computes `editingAids = shown && gridVisible ? { grid: ink } : null`, recomputed by `onChromeOverlay` and `onMapBackdrop`, then `invalidate('scene')`. There is no `'chrome'` render kind, chrome coordinator or per-frame `renderChrome` (phase 2's cut stage). `world-layers.ts` traces the grid over a padded box around `visibleWorldQuad()` and retraces only it when the view leaves that box or the scale changes (zones keep the scale-only rule); the grid uses `snapping.ts`'s `gridInterval`, and its ink is part of the reuse key.
+The presentation controller gains `setEditingAids(aids)`, the pattern of `presentLayers`; `SceneCanvasRuntime` keeps `_chromeShown` and computes `editingAids = shown && gridVisible ? { grid: ink } : null`, recomputed by `onChromeOverlay` and `onMapBackdrop`, then `invalidate('scene')`. There is no `'chrome'` render kind, chrome coordinator or per-frame `renderChrome` (phase 2's cut stage). `world-layers.ts` traces zones, measurement guides and the grid at the zoom band's centre scale (ADR 0019): zones and guides are retraced only when the band changes, the grid over a padded box around `visibleWorldQuad()` and retraced only when the view leaves that box, the band changes or the snap interval steps; the grid uses `snapping.ts`'s `gridInterval`, and its ink is part of the reuse key.
 
 ```ts
 export interface SceneRenderTarget {
