@@ -84,6 +84,7 @@ describe('canvas chrome fonts', () => {
       frames: view.frames,
       translate: (key) => key,
       focus: { focusMap: vi.fn() },
+      openedByTouch: () => false,
     })
     entries.open({
       anchor: { x: 1, y: 1 },
