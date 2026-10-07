@@ -48,7 +48,7 @@ import {
   OVERLAY_CASING_EXTRA_PX,
   type CanvasInteractionVisualState,
 } from '../scene-visuals'
-import type { PlantNameLabel, SelectionLabel } from '../selection-labels'
+import type { PlantNameLabel } from '../selection-labels'
 import type { ViewTransform } from '../view/types'
 import { LabelAdmission, type AdmittedLabels } from './label-admission'
 import {
@@ -199,8 +199,12 @@ export function createBillboardLayer(options: BillboardLayerOptions): BillboardL
       const admitted = labels.admit(view.pixelsPerMetre, settled)!
       const restyle = admitted !== drawnLabels
       drawnLabels = admitted
-      syncPlantNameLabels(createText, plantNameLabelLayer, plantNameLabelById, snapshot, view, labelProjection, admitted.plantNameLabels, restyle)
-      syncSelectionLabels(createText, selectionLabelLayer, selectionLabelBySpecies, view, labelProjection, admitted.selectionLabels, restyle)
+      // The admitted names are empty while the Plants layer is hidden; its opacity fades them.
+      if (restyle) plantNameLabelLayer.alpha = getSceneLayerStyle(snapshot.scene, 'plants').opacity
+      syncNameLabels(createText, plantNameLabelLayer, plantNameLabelById, (label) => label.plantId, view, labelProjection,
+        admitted.plantNameLabels, restyle)
+      syncNameLabels(createText, selectionLabelLayer, selectionLabelBySpecies, (label) => label.canonicalName, view, labelProjection,
+        admitted.selectionLabels, restyle)
     },
     resize(width, height) {
       viewSize.width = width
@@ -942,22 +946,26 @@ function placeMeasurementLabels(labels: MeasurementLabelGraphics, snapshot: Scen
   }
 }
 
-/** The single selection's name: its text and style when admission ran again, its position on every frame. */
-function syncSelectionLabels(
+/** A name the layer draws below its anchor; `opacity` fades a plant's name, a selection's name is opaque. */
+type NameLabel = Omit<PlantNameLabel, 'plantId' | 'opacity'> & { readonly opacity?: number }
+
+/** Name labels: text, style and fade when admission ran again, positions on every frame. */
+function syncNameLabels<L extends NameLabel>(
   createText: () => Text,
   layer: Container,
-  labelBySpecies: Map<string, Text>,
+  textByKey: Map<string, Text>,
+  keyOf: (label: L) => string,
   view: ViewTransform,
   projection: AnchorProjection,
-  labels: readonly SelectionLabel[],
+  labels: readonly L[],
   restyle: boolean,
 ): void {
   if (restyle) {
     for (const label of labels) {
-      let text = labelBySpecies.get(label.canonicalName)
+      let text = textByKey.get(keyOf(label))
       if (!text) {
         text = createText()
-        labelBySpecies.set(label.canonicalName, text)
+        textByKey.set(keyOf(label), text)
         layer.addChild(text)
       }
       text.text = label.text
@@ -970,59 +978,13 @@ function syncSelectionLabels(
         stroke: labelHaloStroke(12),
       })
       text.anchor.set(0.5, 0)
-      text.visible = true
+      text.alpha = label.opacity ?? 1
     }
-    destroyEntriesNotIn(labelBySpecies, new Set(labels.map((label) => label.canonicalName)))
+    destroyEntriesNotIn(textByKey, new Set(labels.map(keyOf)))
   }
   const projected = projection.project(view, labels.map((label) => label.anchor))
   labels.forEach((label, index) => {
-    labelBySpecies.get(label.canonicalName)!
-      .position.set(projected[index * 2]! + label.offsetPx.x, projected[index * 2 + 1]! + label.offsetPx.y)
-  })
-}
-
-/** The admitted plant names: text, style and fade when admission ran again, positions on every frame. */
-function syncPlantNameLabels(
-  createText: () => Text,
-  layer: Container,
-  labelByPlantId: Map<string, Text>,
-  snapshot: SceneRendererSnapshot,
-  view: ViewTransform,
-  projection: AnchorProjection,
-  labels: readonly PlantNameLabel[],
-  restyle: boolean,
-): void {
-  const plantLayer = getSceneLayerStyle(snapshot.scene, 'plants')
-  if (restyle) {
-    layer.visible = plantLayer.visible
-    layer.alpha = plantLayer.opacity
-    const shown = plantLayer.visible ? labels : []
-    for (const label of shown) {
-      let text = labelByPlantId.get(label.plantId)
-      if (!text) {
-        text = createText()
-        labelByPlantId.set(label.plantId, text)
-        layer.addChild(text)
-      }
-      text.text = label.text
-      setTextStyle(text, {
-        fontFamily: CANVAS_CHROME_FONT_FAMILY,
-        fontSize: 12,
-        fontWeight: '600',
-        fontStyle: label.fontStyle,
-        fill: toPixiColor(getMapTextColor()),
-        stroke: labelHaloStroke(12),
-      })
-      text.anchor.set(0.5, 0)
-      text.alpha = label.opacity
-      text.visible = true
-    }
-    destroyEntriesNotIn(labelByPlantId, new Set(shown.map((label) => label.plantId)))
-  }
-  if (!plantLayer.visible) return
-  const projected = projection.project(view, labels.map((label) => label.anchor))
-  labels.forEach((label, index) => {
-    labelByPlantId.get(label.plantId)!
+    textByKey.get(keyOf(label))!
       .position.set(projected[index * 2]! + label.offsetPx.x, projected[index * 2 + 1]! + label.offsetPx.y)
   })
 }
