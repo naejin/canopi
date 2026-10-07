@@ -153,6 +153,31 @@ describe('SceneInteractionSession: touch', () => {
     session.dispose()
   })
 
+  it('a double tap selects a species only on one plant: taps 25 px apart on two plants of it select the second alone (U42)', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [
+        makePlant('plant-1', 'Malus domestica', { x: 100, y: 100 }),
+        makePlant('plant-2', 'Malus domestica', { x: 125, y: 100 }),
+        makePlant('plant-3', 'Malus domestica', { x: 300, y: 300 }),
+      ]
+    })
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('select')
+
+    touchDown({ x: 100, y: 100 }, 1, 0)
+    touchUp({ x: 100, y: 100 }, 1, 60)
+    touchDown({ x: 125, y: 100 }, 1, 200)
+    touchUp({ x: 125, y: 100 }, 1, 260)
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-2']))
+
+    touchDown({ x: 300, y: 300 }, 1, 2000)
+    touchUp({ x: 300, y: 300 }, 1, 2060)
+    touchDown({ x: 302, y: 301 }, 1, 2200)
+    touchUp({ x: 302, y: 301 }, 1, 2260)
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1', 'plant-2', 'plant-3']))
+    session.dispose()
+  })
+
   it('E14 a long press with Plant stamp opens the menu at the finger and places nothing, the lift included', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     choosePlant()
