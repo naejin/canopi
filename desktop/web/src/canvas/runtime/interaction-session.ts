@@ -105,7 +105,8 @@ export interface SceneInteractionSessionDeps {
   /** Renders the right-click menu; absent in a detached runtime. */
   contextMenu?: CanvasRuntimeContextMenuAdapter
   setTool: (id: ToolId) => void
-  render: (kind: 'scene' | 'viewport') => void
+  /** A scene render; a camera frame repaints on its own (the runtime's onCameraFrame). */
+  render: (kind: 'scene') => void
   readSnapToGridEnabled: () => boolean
   /** Settings › Canvas › Pointing device (stored scrollWheel: 'zoom' is Mouse, 'pan' is Trackpad). Pinch and Ctrl wheel zoom either way. */
   readScrollWheel: () => CanvasScrollWheelSetting

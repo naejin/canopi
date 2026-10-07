@@ -244,9 +244,8 @@ export function createInteractionDeps(
     store.setSelection(selection)
     currentCanvasSelection.value = new Set()
   })
-  const render = (overrides.render ?? ((kind: 'scene' | 'viewport') => {
-    if (kind === 'scene' || kind === 'viewport') renderedSession?.refreshMeasurements()
-  })) as SceneInteractionSessionDeps['render']
+  // As the runtime does: only a scene render refreshes the session; a camera frame reaches the tools on their own listener.
+  const render = overrides.render ?? (() => { renderedSession?.refreshMeasurements() })
   const history = new SceneHistory()
   if (overrides.onSceneEditCommit) {
     const record = history.record.bind(history)
@@ -262,7 +261,7 @@ export function createInteractionDeps(
     incrementSceneRevision: () => {},
     syncCanvasSignalsFromScene: () => {},
     invalidate: (kind) => {
-      if (kind === 'scene' || kind === 'viewport') render(kind)
+      if (kind === 'scene') render(kind)
     },
   })
   const commandAdmission = overrides.commandAdmission
