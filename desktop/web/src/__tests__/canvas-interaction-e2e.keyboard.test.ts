@@ -508,7 +508,7 @@ describe('SceneInteractionSession', () => {
       const right = events.keyDown({ key: 'ArrowRight', cancelable: true, target: container })
       expect(right.defaultPrevented).toBe(true)
       expect(testView.viewport()).toEqual({ x: before.x - 64, y: before.y, scale: before.scale })
-      expect(render).toHaveBeenCalledWith('viewport')
+      expect(render, 'its camera frame repaints the layer, not the session').not.toHaveBeenCalled()
 
       events.keyDown({ key: 'ArrowDown', ctrlKey: true, target: container })
       events.keyDown({ key: 'ArrowLeft', target: container })

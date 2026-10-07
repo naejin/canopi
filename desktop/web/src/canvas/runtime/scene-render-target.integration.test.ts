@@ -122,6 +122,38 @@ describe('SceneCanvasRuntime and the shared map scene layer', () => {
     runtime.destroy()
   })
 
+  it('a pan or a container resize asks the layer for exactly one repaint', async () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(orchard())
+    const container = createContainer()
+    await runtime.init(container)
+    const composition = createSharedMapSceneRendererComposition((target) => runtime.connectRenderTarget(target))
+    const map = createMap()
+    const gl = {} as WebGL2RenderingContext
+    const layer = composition.createLayer({
+      id: 'canopi-shared-scene',
+      frames: runtime.cameraHost.frames,
+      createRenderer: createPixiRenderer,
+      createPresentation: (input) => createPixiScenePresentation({ ...input, createText: () => new MeasuredText() }),
+    })
+    await layer.initialize(map, gl)
+    layer.layer.onAdd!(map as never, gl)
+    layer.layer.render(gl, {} as never)
+
+    // A mouse's Shift wheel pans through the session's navigation: its camera frame is the one repaint.
+    map.triggerRepaint.mockClear()
+    container.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, clientX: 400, clientY: 300, deltaY: 60, shiftKey: true }))
+    expect(map.triggerRepaint).toHaveBeenCalledOnce()
+
+    // The container's resize gives the camera a new screen, whose frame is the one repaint.
+    map.triggerRepaint.mockClear()
+    runtime.documentSurface.resize(640, 480)
+    expect(map.triggerRepaint).toHaveBeenCalledOnce()
+
+    await layer.dispose()
+    runtime.destroy()
+  })
+
   it('draws nothing after a map failure unmounts it, and a remount draws the kept Scene on the connected target', async () => {
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(orchard())

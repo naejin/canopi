@@ -123,9 +123,8 @@ describe('SceneRuntimeRenderScheduler', () => {
     const scheduler = mountedScheduler(target)
 
     scheduler.invalidate('viewport')
-    scheduler.resize(400, 300)
 
-    expect(target.requestRender).toHaveBeenCalledTimes(2)
+    expect(target.requestRender).toHaveBeenCalledOnce()
     expect(target.setSnapshot).not.toHaveBeenCalled()
     expect(request, 'no frame of its own').not.toHaveBeenCalled()
     expect(scheduler.scenePending.value).toBe(false)

@@ -155,11 +155,6 @@ export class SceneRuntimeRenderScheduler {
     this._target?.setDraft(draft)
   }
 
-  /** MapLibre owns the drawing surface size; a resize is a camera-only update. */
-  resize(_width: number, _height: number): void {
-    this.invalidate('viewport')
-  }
-
   /**
    * Stops drawing and fences pending work. The runtime keeps its Scene, and the slot keeps its target; nothing draws
    * until the runtime mounts again.

@@ -31,7 +31,7 @@ interface SceneCanvasDocumentSurfaceOptions {
   readonly viewNavigation: Pick<ViewNavigation, 'openAt' | 'clearTemporaryFocus'>
   readonly rendering: Pick<
     SceneRuntimeRenderScheduler,
-    'container' | 'invalidate' | 'resize' | 'dispose' | 'presented' | 'awaitPresentation'
+    'container' | 'invalidate' | 'dispose' | 'presented' | 'awaitPresentation'
   >
   /** Shows (true) or hides the Design's canvas chrome: the grid draws only while it shows. */
   readonly setChromeShown: (shown: boolean) => void
@@ -194,9 +194,9 @@ class SceneCanvasDocumentRole implements SceneCanvasDocumentSurface {
     return this.options.documents.captureForPersistence(metadata, doc, this._mapViewForSave())
   }
 
+  /** The camera takes the new screen; its frame repaints the layer, which MapLibre has already resized. */
   resize(width: number, height: number): void {
     this.options.cameraHost.current().setScreen({ width, height, devicePixelRatio: window.devicePixelRatio })
-    this.options.rendering.resize(width, height)
   }
 
   destroy(): void {
