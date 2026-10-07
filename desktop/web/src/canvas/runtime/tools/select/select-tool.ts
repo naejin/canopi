@@ -5,7 +5,7 @@
 // (move-drag.ts) or nothing more; a double-click opens a note for editing in the host's text entry (note-edit.ts), as do
 // Enter and F2 on one selected note ('edit-text'). Its handles are the rotation handle (rotate-handle.ts), the selected
 // zone's reshape points (reshape.ts) and the selected guide's ends (guide-ends.ts), sized for the pointer kind that last
-// hovered, pressed or tapped the map (ToolContext.pointer; handle-size.ts: 44 px targets after a touch, Q1); the host shows them while Select is
+// hovered or pressed the map (ToolContext.pointer; handle-size.ts: 44 px targets after a touch, Q1); the host shows them while Select is
 // armed, the text entry is closed and no Scene Edit is open. Hovers pass, so the host's passive hover runs, and the tool
 // card's gesture flag stays off.
 

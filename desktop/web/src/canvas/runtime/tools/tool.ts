@@ -199,7 +199,7 @@ export interface ToolContext {
   snap(point: WorldPoint): WorldPoint
   /** The handle that holds keyboard focus now (a tabbed-to zone corner), or null. */
   focusedHandle(): ToolHandleId | null
-  /** The pointer kind that last hovered, pressed or tapped the map, whichever tool heard it (Select's handle size, Q1). */
+  /** The pointer kind that last hovered or pressed the map, whichever tool heard it (Select's handle size, Q1). */
   pointer(): PointerKind
   readonly translate: (key: string, options?: Readonly<Record<string, unknown>>) => string
 }
