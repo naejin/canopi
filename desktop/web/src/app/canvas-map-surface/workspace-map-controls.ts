@@ -100,7 +100,6 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
       this.publishUnavailable()
       return Promise.reject(new WorkspaceWebGL2UnavailableError())
     }
-    this.surface.attach(this.options.container)
 
     return new Promise<WorkspaceActivationMap>((resolve, reject) => {
       const attempt: WorkspaceMapAttempt = {
@@ -139,7 +138,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
         return
       }
 
-      this.surface.requestMap({
+      this.surface.open(this.options.container, {
         createMap: (maplibre, container) => createWorkspaceMapLibreMap(
           maplibre,
           container,

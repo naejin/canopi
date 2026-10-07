@@ -87,16 +87,10 @@ export class MapLibreSurface<TMap extends MapLibreMapInstance = MapLibreMapInsta
     return this.live?.context.maplibre ?? null
   }
 
-  attach(container: HTMLElement): void {
-    if (this.container === container) return
+  /** Replaces any map with the request's own, created in the container. */
+  open(container: HTMLElement, request: MapLibreSurfaceRequest<TMap>): void {
     this.removeMap()
     this.container = container
-    void this.createMap()
-  }
-
-  /** Replaces any map with the request's own, created once the surface is attached. */
-  requestMap(request: MapLibreSurfaceRequest<TMap>): void {
-    this.removeMap()
     this.request = request
     void this.createMap()
   }

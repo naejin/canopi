@@ -44,13 +44,12 @@ export function WorldMapSurface({
     const surface = surfaceRef.current
     if (!surface) return
 
-    surface.attach(container)
     // Created before the map, because MapLibre takes its request transform as a
     // construction option.
     const tileAuth = tileAuthRef.current ?? new BasemapTileAuth()
     // One map for the surface's life: a basemap change is reconciled into the live map by the background mount below,
     // so it cannot reset the camera, the markers or any other layer.
-    surface.requestMap({
+    surface.open(container, {
       createMap: (maplibre, target) => createWorldMapLibreMap(maplibre, target, tileAuth.transformRequest),
       // The World map has no camera driver: its request owns the map's resize (spec §1.1 "Resize").
       onResize: (context) => context.map.resize(),
