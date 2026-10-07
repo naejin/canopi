@@ -14,6 +14,7 @@ import type {
 import { createRecordingRenderer, type RecordingRenderer } from './support/recording-renderer'
 import type { SceneInteractionEventHarness } from './support/canvas-interaction-events'
 import type { TestView } from './support/test-view'
+import type { PointerWorld } from '../canvas/runtime/interaction-ports'
 import {
   contextMenuHost,
   createInteractionDeps,
@@ -105,6 +106,33 @@ describe('SceneInteractionSession: touch', () => {
     touchUp({ x: 112, y: 100 })
 
     expect(store.persisted.plants.map((plant) => plant.position)).toEqual([{ x: 100, y: 100 }])
+    session.dispose()
+  })
+
+  it('A16 a finger\'s tap moves the inspection lens to the tap; a Pan-tool drag or a pinch moves it nowhere', () => {
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('select')
+    // The lens's consumer (InspectionLens): it samples at each published point and keeps its point on null.
+    const points: (PointerWorld | null)[] = []
+    session.subscribePointerWorld((point) => { points.push(point) })
+    const published = () => points.filter((point): point is PointerWorld => point !== null)
+
+    events.pointerMove({ x: 76, y: 30 }, { buttons: 0 })
+    // A rolling tap: the lens samples at the resolved press, the down point, as a mouse's hover before its press.
+    touchDown({ x: 300, y: 250 })
+    touchMove({ x: 303, y: 252 })
+    touchUp({ x: 304, y: 253 })
+    expect(published().at(-1)).toEqual({ world: testView.view().screenToWorld({ x: 300, y: 250 }), screen: { x: 300, y: 250 } })
+
+    // A finger dragging past its slop under the Pan tool pans the map; a pinch navigates: neither moves the lens.
+    const before = published().length
+    session.setTool('hand')
+    touchDown({ x: 100, y: 100 })
+    touchMove({ x: 115, y: 100 })
+    touchMove({ x: 130, y: 100 })
+    touchUp({ x: 130, y: 100 })
+    pinch({ x: 100, y: 100 }, { x: 200, y: 100 })
+    expect(published()).toHaveLength(before)
     session.dispose()
   })
 
