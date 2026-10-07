@@ -5,7 +5,7 @@
 // PointerSession and TouchPair are type exports imported only inside input/; RecogniserState is opaque to callers.
 // raw-input.ts and recognise.ts import each other's types with `import type` only (no runtime cycle).
 //
-// It implements spec §2.2 and §5 (fixtures in __fixtures__/sequences.ts): one pointer session at a time;
+// It implements spec §2.2 and §5 (fixtures in __fixtures__/sequences.ts): one pointer session at a time, or two fingers;
 // a secondary press (the right button, a Mac Control-click, a pen's barrel) pending until it passes 3 px: a still release
 // opens the menu at the release point (none in overview), a drag pans, and with Shift at the press it turns the view,
 // stepped while mod is held; no native contextmenu reaches it (the DOM source's listener prevents them); a middle drag, a
@@ -14,8 +14,8 @@
 // rotating about its press once it passes 3 px (silent before, so a still click turns nothing), stepped while mod is
 // held, with the wheel ignored while a pointer rotate lives;
 // a button-less move over owned chrome, the text entry or a handle ends the hover; wheels, over the map or a handle, zoom
-// or pan by the pointing-device setting; a WebKit trackpad twist rotating past 10° as a session of its own; no touch gestures or pen
-// barrel. A touch press is held (spec §2.2 "Touch", A2): the host hears nothing until the finger passes 8 px (its press at
+// or pan by the pointing-device setting; a WebKit trackpad twist rotating past 10° as a session of its own.
+// A touch press is held (spec §2.2 "Touch", A2): the host hears nothing until the finger passes 8 px (its press at
 // the down point, then the drag) or lifts (its press and tap at the down point), so a pinch never reaches a tool; a
 // second finger before the slop ends the held press silently, and one after the drag started cancels it ('multitouch');
 // the fingers left resume nothing until every one is up. Two fingers pan by their centroid, zoom about it past 0.1 zoom
