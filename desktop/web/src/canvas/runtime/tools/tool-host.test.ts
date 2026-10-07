@@ -2339,6 +2339,56 @@ describe('ToolHost', () => {
       view.dispose()
     })
 
+    it('a right-click inside a zone\'s fill opens the zone\'s menu only when the zone is already selected (Q4, canopi-f47t.40)', () => {
+      const store = sceneStoreWith({
+        zones: [rectZone('z1', [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }])],
+        plants: [appleAt({ x: 50, y: 50 })],
+      })
+      const source = createToolSceneSource(store)
+      const opened: CanvasContextMenuRequest[] = []
+      const view = createTestView()
+      const port = createContextMenuPort({
+        container: document.createElement('div'),
+        view: view.view,
+        adapter: { open: (request) => opened.push(request), close: () => {} },
+        commands: {} as never,
+        returnFocus: () => {},
+        scene: createToolScene(source),
+        selectionModel: source.selectionModel,
+      })
+
+      // Unselected: the empty map's menu, with Place plants here.
+      port.open({ at: { x: 30, y: 70 }, screen: null })
+      expect(opened.at(-1)!.selection).toBeNull()
+
+      store.updateSession((session) => { session.selectedTargets = [Z1] })
+      port.open({ at: { x: 30, y: 70 }, screen: null })
+      expect(opened.at(-1)!.selection?.editableTargets).toEqual([Z1])
+
+      // A locked Zones layer: the empty map's menu again.
+      store.updatePersisted((draft) => {
+        draft.layers = draft.layers.map((layer) => (layer.name === 'zones' ? { ...layer, locked: true } : layer))
+      })
+      port.open({ at: { x: 30, y: 70 }, screen: null })
+      expect(opened.at(-1)!.selection).toBeNull()
+      port.close()
+      view.dispose()
+    })
+
+    it('a right-click inside a selected zone keeps it selected; a plant inside it takes the selection', () => {
+      useStubTools(stubTool('select'))
+      const h = harness({ scene: {
+        zones: [rectZone('z1', [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }])],
+        plants: [appleAt({ x: 50, y: 50 })],
+      } })
+      h.store.updateSession((session) => { session.selectedTargets = [Z1] })
+
+      h.menu({ x: 30, y: 70 })
+      expect(h.record.selections).toEqual([])
+      h.menu({ x: 50, y: 50 })
+      expect(h.record.selections).toEqual([[P1]])
+    })
+
     it('the keyboard menu opens beside a shape drawn level at 45, not beside its world box', () => {
       const bed = rectZone('bed', [{ x: -50, y: -10 }, { x: 50, y: -10 }, { x: 50, y: 10 }, { x: -50, y: 10 }], { rotationDeg: 45 })
       const store = sceneStoreWith({ zones: [bed] })
