@@ -36,10 +36,8 @@ interface VectorStyleLayer {
 
 /** The map operations the installer needs; a real MapLibre map satisfies it. */
 export interface VectorBasemapMap {
-  getSource(id: string): unknown
   addSource(id: string, source: Record<string, unknown>): void
   removeSource(id: string): void
-  getLayer(id: string): unknown
   addLayer(layer: Record<string, unknown>, beforeId?: string): void
   removeLayer(id: string): void
   setGlobalStateProperty(name: string, value: unknown): void
@@ -167,7 +165,7 @@ export class VectorBasemap {
     const installed = this.installed
     // Opacity and language reach the style on screen, also while another style loads or has failed.
     if (installed) this.applyPresentation(presentation)
-    if (installed && installed.style === presentation.style && this.layersPresent(installed)) {
+    if (installed && installed.style === presentation.style) {
       // The style on screen is the one asked for: a load still running for
       // another style is stale, and an earlier failure no longer applies.
       this.generation += 1
@@ -261,10 +259,6 @@ export class VectorBasemap {
     this.options.onStatus?.(status)
   }
 
-  private layersPresent(installed: Installed): boolean {
-    return installed.layerIds.every((id) => this.map.getLayer(id))
-  }
-
   private install(presentation: VectorBasemapPresentation, document: VectorStyleDocument): void {
     const prepared = prepareOpenFreeMapStyle(document)
     // install() sets only a string sprite, so only its requests can fail.
@@ -295,12 +289,8 @@ export class VectorBasemap {
     if (!installed) return
     this.installed = null
     this.spriteInFlight = false
-    for (const id of [...installed.layerIds].reverse()) {
-      if (this.map.getLayer(id)) this.map.removeLayer(id)
-    }
-    for (const id of installed.sourceIds) {
-      if (this.map.getSource(id)) this.map.removeSource(id)
-    }
+    for (const id of [...installed.layerIds].reverse()) this.map.removeLayer(id)
+    for (const id of installed.sourceIds) this.map.removeSource(id)
   }
 
   /** MapLibre repaints only for a value that changed. */

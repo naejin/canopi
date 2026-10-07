@@ -171,7 +171,6 @@ function createFakeLayer(options: SharedMapSceneLayerOptions): FakeLayer {
       snapshots.push(snapshot)
       sceneSyncCount += 1
     },
-    requestRender: () => undefined,
     dispose: vi.fn(async () => undefined),
   }
   layers.push(layer)

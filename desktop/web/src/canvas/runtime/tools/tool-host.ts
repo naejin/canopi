@@ -410,8 +410,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         if (live) live.mutated = true
       },
       setSelection: (targets) => tx.setSelection(targets),
-      commit(options) {
-        const committed = tx.commit(options)
+      commit() {
+        const committed = tx.commit()
         openEdits.delete(tx)
         return committed
       },

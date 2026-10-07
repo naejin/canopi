@@ -24,7 +24,7 @@ export interface AnnotationScreenFrame {
 }
 
 /** The drawn outline's margin about a note's text frame, CSS px; a shown note's click target is that outline (Q7). */
-export const ANNOTATION_OUTLINE_PADDING_PX = { x: 4, y: 2 } as const
+const ANNOTATION_OUTLINE_PADDING_PX = { x: 4, y: 2 } as const
 const ANNOTATION_MARKER_SIZE_PX = 8
 const ANNOTATION_MARKER_STROKE_PX = 1.5
 const ANNOTATION_MARKER_PATHS: readonly (readonly ScenePoint[])[] = [
@@ -73,19 +73,21 @@ export function getAnnotationVisualWorldCorners(
   annotation: SceneAnnotationEntity,
   viewportScale: number,
   revealText = false,
-  paddingPx: { x: number; y: number } = { x: 0, y: 0 },
   textAllowed = true,
 ): ScenePoint[] {
   const { frame } = getAnnotationPresentation(annotation, viewportScale, revealText, textAllowed)
   const safeScale = Math.max(viewportScale, 0.001)
-  return rotatedRectCorners({
-    origin: { x: annotation.position.x + frame.origin.x / safeScale, y: annotation.position.y + frame.origin.y / safeScale },
-    width: frame.widthPx / safeScale,
-    height: frame.heightPx / safeScale,
-    paddingX: paddingPx.x / safeScale,
-    paddingY: paddingPx.y / safeScale,
-    rotationDeg: frame.rotationDeg,
-  })
+  return rotatedRectCorners(
+    { x: annotation.position.x + frame.origin.x / safeScale, y: annotation.position.y + frame.origin.y / safeScale },
+    frame.widthPx / safeScale,
+    frame.heightPx / safeScale,
+    frame.rotationDeg,
+  )
+}
+
+/** A note's drawn outline in CSS px about its anchor: `frame` padded 4 px across and 2 px down, turned by its angle. */
+export function annotationOutlineCorners(frame: AnnotationScreenFrame): ScenePoint[] {
+  return rotatedRectCorners(frame.origin, frame.widthPx, frame.heightPx, frame.rotationDeg, ANNOTATION_OUTLINE_PADDING_PX)
 }
 
 export function getAnnotationVisualWorldBounds(
@@ -94,7 +96,7 @@ export function getAnnotationVisualWorldBounds(
   revealText = false,
   textAllowed = true,
 ): AnnotationWorldBounds {
-  return boundsForPoints(getAnnotationVisualWorldCorners(annotation, viewportScale, revealText, undefined, textAllowed))
+  return boundsForPoints(getAnnotationVisualWorldCorners(annotation, viewportScale, revealText, textAllowed))
 }
 
 export function isPointInAnnotationPresentation(
@@ -240,14 +242,7 @@ function annotationScreenFrameAt(
 function getAnnotationWorldCorners(annotation: SceneAnnotationEntity, viewportScale: number): ScenePoint[] {
   const safeScale = Math.max(viewportScale, 0.001)
   const metrics = getAnnotationTextMetrics(annotation)
-  return rotatedRectCorners({
-    origin: annotation.position,
-    width: metrics.widthPx / safeScale,
-    height: metrics.heightPx / safeScale,
-    paddingX: 0,
-    paddingY: 0,
-    rotationDeg: annotation.rotationDeg ?? 0,
-  })
+  return rotatedRectCorners(annotation.position, metrics.widthPx / safeScale, metrics.heightPx / safeScale, annotation.rotationDeg ?? 0)
 }
 
 function isPointInAnnotationOutline(
@@ -268,21 +263,21 @@ function isPointInAnnotationOutline(
   )
 }
 
-function rotatedRectCorners(options: {
-  origin: ScenePoint
-  width: number
-  height: number
-  paddingX: number
-  paddingY: number
-  rotationDeg: number
-}): ScenePoint[] {
+/** A `width` by `height` rectangle grown by `padding` on each side, turned by `rotationDeg` about `origin`, its unpadded corner. */
+function rotatedRectCorners(
+  origin: ScenePoint,
+  width: number,
+  height: number,
+  rotationDeg: number,
+  padding: ScenePoint = { x: 0, y: 0 },
+): ScenePoint[] {
   const localCorners = [
-    { x: -options.paddingX, y: -options.paddingY },
-    { x: options.width + options.paddingX, y: -options.paddingY },
-    { x: options.width + options.paddingX, y: options.height + options.paddingY },
-    { x: -options.paddingX, y: options.height + options.paddingY },
+    { x: -padding.x, y: -padding.y },
+    { x: width + padding.x, y: -padding.y },
+    { x: width + padding.x, y: height + padding.y },
+    { x: -padding.x, y: height + padding.y },
   ]
-  return localCorners.map((point) => rotateLocalPoint(point, options.origin, options.rotationDeg))
+  return localCorners.map((point) => rotateLocalPoint(point, origin, rotationDeg))
 }
 
 function rotateLocalPoint(point: ScenePoint, origin: ScenePoint, rotationDeg: number): ScenePoint {

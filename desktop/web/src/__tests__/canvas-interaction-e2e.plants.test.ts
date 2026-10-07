@@ -857,12 +857,12 @@ describe('SceneInteractionSession', () => {
       return Math.hypot(b.x - a.x, b.y - a.y)
     }
     const widthBefore = guideOnScreen()
-    const draftsBefore = drafts.calls.length
+    const draftsBefore = drafts.drafts.length
 
     // At the still pointer, where the host's re-emit and today's world-fixed endpoint agree (plan §1, exception 1).
     events.wheel({ x: 26, y: 30 }, { deltaY: -120, ctrlKey: true })
 
-    expect(drafts.calls.length).toBeGreaterThan(draftsBefore)
+    expect(drafts.drafts.length).toBeGreaterThan(draftsBefore)
     expect(rowLength()).toBe('6 m')
     expect(guideOnScreen()).not.toBe(widthBefore)
     session.dispose()

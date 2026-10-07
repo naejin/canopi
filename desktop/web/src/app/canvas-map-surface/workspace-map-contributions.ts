@@ -77,7 +77,7 @@ export class WorkspaceMapContributions {
 
   /** The map's first `style.load` admitted it, so contributions may install; a later one never reaches here (ADR 0004). */
   admitStyle(): void {
-    if (!this.live() || this.styleReady) return
+    if (!this.live()) return
     this.styleReady = true
     this.dirty = true
     this.drain()

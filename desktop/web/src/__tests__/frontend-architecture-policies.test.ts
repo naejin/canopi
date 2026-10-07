@@ -1194,12 +1194,6 @@ const FORBIDDEN_EXPORT_POLICIES = [
   },
   {
     kind: 'forbid-exports',
-    name: 'Renderer contracts omit retired priority and probe aliases',
-    from: ['src/canvas/runtime/renderers/scene-types.ts'],
-    names: ['RendererBackendPriority', 'RendererBackendProbe'],
-  },
-  {
-    kind: 'forbid-exports',
     name: 'Projection exposes canonical operations instead of strategies',
     from: ['src/canvas/projection.ts'],
     names: [
@@ -1481,12 +1475,6 @@ const SYMBOL_OWNERSHIP_POLICIES = [
     names: ['activeEntityId', 'activeLayerName', 'setActiveLayerName'],
   },
   {
-    kind: 'forbid-source-symbols',
-    name: 'Renderer definitions keep retired priority metadata deleted',
-    from: ['src/canvas/runtime/renderers/scene-types.ts'],
-    names: ['RendererBackendPriority', 'RendererBackendProbe', 'priority'],
-  },
-  {
     // ADR 0004: one renderer (Pixi inside MapLibre); no selection, probing or fallback.
     kind: 'forbid-source-symbols',
     name: 'Scene rendering keeps renderer selection and fallback deleted',
@@ -1508,6 +1496,8 @@ const SYMBOL_OWNERSHIP_POLICIES = [
       'reportRendererFailure',
       'failActiveLayer',
       'failActiveBackend',
+      'RendererBackendPriority',
+      'RendererBackendProbe',
       // The renderer seam is one target slot on the render scheduler (ADR 0019, U33 P12 and P9).
       'SceneRendererDefinition',
       'SceneChangeSet',

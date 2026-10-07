@@ -91,7 +91,7 @@ export function selectionExtentPoints(
         if (!annotation) return
         detailAnnotationIds ??= getCanvasDetailLayout(scene, pixelsPerMetre).annotationIds
         points.push(...getAnnotationVisualWorldCorners(
-          annotation, pixelsPerMetre, annotation.id === revealedAnnotationId, undefined, detailAnnotationIds.has(annotation.id),
+          annotation, pixelsPerMetre, annotation.id === revealedAnnotationId, detailAnnotationIds.has(annotation.id),
         ))
         return
       }

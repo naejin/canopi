@@ -113,12 +113,10 @@ describe('label admission', () => {
     expect(admission.admit(40, true)!.plantNameLabels).toEqual([])
   })
 
-  it('admits nothing before a scene or after disposal', () => {
+  it('admits nothing before a scene', () => {
     const admission = new LabelAdmission()
     expect(admission.admit(20, true)).toBeNull()
     admission.setScene(snapshot())
     expect(admission.admit(20, true)).not.toBeNull()
-    admission.dispose()
-    expect(admission.admit(20, true)).toBeNull()
   })
 })

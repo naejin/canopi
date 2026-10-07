@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import type { TemplateMeta } from '../../types/community'
 import type { MapLibreApi } from '../../maplibre/loader'
 import { MapLibreSurface } from '../../maplibre/surface'
@@ -25,7 +25,7 @@ export function WorldMapSurface({
   onSelect: (template: TemplateMeta) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const surfaceRef = useRef<MapLibreSurface<WorldMapLibreMap> | null>(null)
+  const [surface] = useState(() => new MapLibreSurface<WorldMapLibreMap>())
   const markersRef = useRef<WorldMapMarker[]>([])
   const lastTemplateLayoutKeyRef = useRef<string>('')
   const templatesRef = useRef(templates)
@@ -34,23 +34,17 @@ export function WorldMapSurface({
   templatesRef.current = templates
   selectedIdRef.current = selectedId
   onSelectRef.current = onSelect
-  if (!surfaceRef.current) surfaceRef.current = new MapLibreSurface()
-  const tileAuthRef = useRef<BasemapTileAuth | null>(null)
-  if (!tileAuthRef.current) tileAuthRef.current = new BasemapTileAuth()
 
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
-    const surface = surfaceRef.current
-    if (!surface) return
 
-    surface.attach(container)
     // Created before the map, because MapLibre takes its request transform as a
     // construction option.
-    const tileAuth = tileAuthRef.current ?? new BasemapTileAuth()
+    const tileAuth = new BasemapTileAuth()
     // One map for the surface's life: a basemap change is reconciled into the live map by the background mount below,
     // so it cannot reset the camera, the markers or any other layer.
-    surface.requestMap({
+    surface.open(container, {
       createMap: (maplibre, target) => createWorldMapLibreMap(maplibre, target, tileAuth.transformRequest),
       // The World map has no camera driver: its request owns the map's resize (spec §1.1 "Resize").
       onResize: (context) => context.map.resize(),
@@ -82,11 +76,9 @@ export function WorldMapSurface({
     // effect installed above.
   }, [])
 
-  // Markers are rebuilt when the map is recreated, so the map itself is the
-  // signal here rather than the basemap style.
+  // The live map gets new markers when the templates change; the map's creation places the first ones.
   useEffect(() => {
-    const map = surfaceRef.current?.map
-    const maplibre = surfaceRef.current?.maplibre
+    const { map, maplibre } = surface
     if (map && maplibre) syncTemplateMarkers(map, maplibre)
   }, [templates])
 
@@ -95,7 +87,7 @@ export function WorldMapSurface({
   }, [selectedId, templates])
 
   useEffect(() => {
-    const map = surfaceRef.current?.map
+    const map = surface.map
     if (map) flyToSelectedTemplate(map)
   }, [selectedId, templates])
 

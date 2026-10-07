@@ -115,8 +115,8 @@ function createController(file = makeFile()) {
     syncCanvasSignalsFromScene: () => {
       state.plantSpeciesColorSyncs += 1
     },
-    invalidate: (kind) => {
-      if (kind === 'scene') state.invalidations += 1
+    invalidate: () => {
+      state.invalidations += 1
     },
   })
   const controller = new SceneRuntimeMutationController({

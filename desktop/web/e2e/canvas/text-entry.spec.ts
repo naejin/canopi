@@ -125,11 +125,12 @@ async function commitNote(page: Page, text: string): Promise<void> {
 const NOTE_STRIP = { x: NEUTRAL.x - 40, y: NEUTRAL.y - 6, width: 520, height: 30 }
 
 /**
- * The selected note's outline (the selection's ochre, #9C5A16) and its last glyph (the map text's dark ink, #27231D) in
- * the note strip, as screen x, read from a screenshot's pixels: the outline and the text are drawn in the map's canvas.
- * Only a glyph's core is that dark and grey; the grid's lines, the glyphs' antialiased edges and plants are not.
+ * Expects the selected note's outline (the selection's ochre, #9C5A16) to end within 6 CSS px past its last glyph (the
+ * map text's dark ink, #27231D) in the note strip, read from a screenshot's pixels: the outline and the text are drawn
+ * in the map's canvas. Only a glyph's core is that dark and grey; the grid's lines, the glyphs' antialiased edges and
+ * plants are not.
  */
-async function noteEdges(page: Page) {
+async function expectOutlineEndsAtLastGlyph(page: Page) {
   const png = await page.screenshot({ clip: NOTE_STRIP })
   const edges = await page.evaluate(async (data) => {
     const bytes = Uint8Array.from(atob(data), (character) => character.charCodeAt(0))
@@ -155,8 +156,25 @@ async function noteEdges(page: Page) {
     return { outlineRight, lastGlyph }
   }, png.toString('base64'))
   expect(Number.isFinite(edges.outlineRight) && Number.isFinite(edges.lastGlyph), 'the strip shows the outline and the text').toBe(true)
-  /** How far the outline runs past the last glyph, in CSS px. */
-  return { pastLastGlyph: edges.outlineRight - edges.lastGlyph }
+  const pastLastGlyph = edges.outlineRight - edges.lastGlyph
+  expect(pastLastGlyph, 'the outline ends at the last glyph drawn').toBeGreaterThanOrEqual(0)
+  expect(pastLastGlyph).toBeLessThanOrEqual(6)
+}
+
+/** Holds back the interface font's face for one character subset until the returned release is called. */
+async function holdFace(page: Page, subset: string): Promise<() => void> {
+  let release = (): void => {}
+  const arrived = new Promise<void>((resolve) => { release = resolve })
+  await page.route(`**/source-sans-3-${subset}-400-normal*.woff2`, async (route: Route) => {
+    await arrived
+    await route.continue()
+  })
+  return release
+}
+
+/** The middle of the selected note's frame, as screen x, read from the rotate handle above it. */
+async function frameMiddle(page: Page): Promise<number> {
+  return Number(await page.locator('[data-canvas-handle="rotate"]').getAttribute('data-canvas-handle-screen-x'))
 }
 
 const HAZELNUT = 'Hazelnut hedge, prune in February'
@@ -166,9 +184,7 @@ const RESERVOIR = 'Водохранилище'
 test('a committed note\'s selection outline ends within 6 px of its last glyph', async ({ page }) => {
   await openBaseFixture(page, 'Select')
   await commitNote(page, HAZELNUT)
-  const { pastLastGlyph } = await noteEdges(page)
-  expect(pastLastGlyph).toBeGreaterThanOrEqual(0)
-  expect(pastLastGlyph).toBeLessThanOrEqual(6)
+  await expectOutlineEndsAtLastGlyph(page)
 })
 
 test('a note drawn before its web font arrives is measured and drawn again once the font has loaded', async ({ page }) => {
@@ -176,51 +192,32 @@ test('a note drawn before its web font arrives is measured and drawn again once 
   // is true) until it arrives; the note is measured again all the same.
   // The interface font's Latin face is held back until the note has been drawn in a fallback font. A screenshot waits
   // for fonts, so until then the frame is read from the rotate handle, which sits above the middle of the note's frame.
-  let release = (): void => {}
-  const held = new Promise<void>((resolve) => { release = resolve })
-  await page.route('**/source-sans-3-latin-400-normal*.woff2', async (route: Route) => {
-    await held
-    await route.continue()
-  })
+  const release = await holdFace(page, 'latin')
   await openBaseFixture(page, 'Select', 'domcontentloaded')
   await commitNote(page, HAZELNUT)
-  const rotateHandle = page.locator('[data-canvas-handle="rotate"]')
-  const frameMiddle = async () => Number(await rotateHandle.getAttribute('data-canvas-handle-screen-x'))
-  const fallbackMiddle = await frameMiddle()
+  const fallbackMiddle = await frameMiddle(page)
 
   // Whether the frame widens or narrows depends on the fallback the host has (Noto Sans and DejaVu Sans are wider).
   release()
-  await expect.poll(frameMiddle, 'the frame follows the loaded font').not.toBe(fallbackMiddle)
+  await expect.poll(() => frameMiddle(page), 'the frame follows the loaded font').not.toBe(fallbackMiddle)
   // Pixi keeps a text's raster while its text and style stay the same: the glyphs are drawn again in the loaded font.
-  const { pastLastGlyph } = await noteEdges(page)
-  expect(pastLastGlyph, 'the outline ends at the last glyph drawn').toBeGreaterThanOrEqual(0)
-  expect(pastLastGlyph).toBeLessThanOrEqual(6)
+  await expectOutlineEndsAtLastGlyph(page)
 })
 
 test('a Cyrillic note measured while a Latin note waits for the same font is measured again once its face arrives', async ({ page }) => {
   // The interface font's faces cover character ranges (src/styles/fonts.css). Its Latin face is held back, so the
   // opened Design's Latin notes wait for the font, while a Cyrillic note is committed and measured in a fallback; then
   // the Cyrillic face arrives, the Latin one still held back.
-  const held = new Map<string, () => void>()
-  for (const subset of ['latin', 'cyrillic']) {
-    const arrived = new Promise<void>((resolve) => { held.set(subset, resolve) })
-    await page.route(`**/source-sans-3-${subset}-400-normal*.woff2`, async (route: Route) => {
-      await arrived
-      await route.continue()
-    })
-  }
+  const releaseLatin = await holdFace(page, 'latin')
+  const releaseCyrillic = await holdFace(page, 'cyrillic')
   await openBaseFixture(page, 'Select', 'domcontentloaded')
   await commitNote(page, RESERVOIR)
-  const rotateHandle = page.locator('[data-canvas-handle="rotate"]')
-  const frameMiddle = async () => Number(await rotateHandle.getAttribute('data-canvas-handle-screen-x'))
-  const fallbackMiddle = await frameMiddle()
+  const fallbackMiddle = await frameMiddle(page)
 
-  held.get('cyrillic')!()
-  await expect.poll(frameMiddle, 'the frame follows the Cyrillic face').not.toBe(fallbackMiddle)
-  held.get('latin')!()
-  const { pastLastGlyph } = await noteEdges(page)
-  expect(pastLastGlyph, 'the outline ends at the last glyph drawn').toBeGreaterThanOrEqual(0)
-  expect(pastLastGlyph).toBeLessThanOrEqual(6)
+  releaseCyrillic()
+  await expect.poll(() => frameMiddle(page), 'the frame follows the Cyrillic face').not.toBe(fallbackMiddle)
+  releaseLatin()
+  await expectOutlineEndsAtLastGlyph(page)
 })
 
 for (const { locale, selectTool, textTool, placeholder } of [

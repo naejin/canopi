@@ -47,8 +47,6 @@ import type { CameraDriverHost } from '../view/camera-driver'
 import { createCameraDriverHost } from '../view/driver-host'
 import type { ViewFrameSource } from '../view/types'
 
-type RuntimeInvalidationKind = 'scene' | 'viewport'
-
 /** A detached runtime has no platform preference: it flies. */
 const NO_REDUCED_MOTION: ReadonlySignal<boolean> = signal(false)
 /** The closest a new or empty Design opens: about one country wide. */
@@ -68,7 +66,7 @@ export interface SceneRuntimeConstructionCallbacks {
   readonly prepareForDocumentReplacement: () => void
   readonly syncHoveredCanvasTargets: (target: SceneDesignObjectTarget | null) => void
   readonly syncCanvasSignalsFromScene: () => void
-  readonly invalidate: (kind: RuntimeInvalidationKind) => void
+  readonly invalidate: () => void
   readonly incrementSceneRevision: () => void
   /** The Design's canvas chrome shows (true) or hides: the grid draws only while it shows. */
   readonly setChromeShown: (shown: boolean) => void
@@ -275,7 +273,7 @@ export function createSceneRuntimeConstruction(
       getSuggestedPlantColor: (canonicalName) =>
         presentation.getSuggestedPlantColor(canonicalName),
     },
-    invalidateScene: () => callbacks.invalidate('scene'),
+    invalidateScene: () => callbacks.invalidate(),
   })
   const reorigin = new SceneRuntimeReoriginController({
     sceneState: sceneStore,
@@ -303,7 +301,7 @@ export function createSceneRuntimeConstruction(
     if (current.canonicalName === next.canonicalName) return
     sceneStore.updateSession((draft) => { draft.speciesFocus = next })
     callbacks.incrementSceneRevision()
-    callbacks.invalidate('scene')
+    callbacks.invalidate()
   }
   const commandSurface = createSceneCanvasCommandSurface({
     speciesFocus: {

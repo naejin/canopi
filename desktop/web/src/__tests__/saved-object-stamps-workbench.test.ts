@@ -361,7 +361,7 @@ describe('Saved Object Stamp Workbench', () => {
         lockedTargets: [],
         blockedTargets: [{
           target: { kind: 'zone' as const, id: 'Hidden zone' },
-          reason: 'hidden-layer' as const,
+          reason: 'structural' as const,
         }],
         bounds: null,
         sameSpeciesReferenceCanonicalName: null,

@@ -35,7 +35,6 @@ function createMap() {
     sources,
     layers,
     controls,
-    setStyle: vi.fn(),
     isStyleLoaded: () => true,
     getLayersOrder: () => layers.map((layer) => String(layer.id)),
     getSource: (id: string) => sources.get(id),
@@ -114,12 +113,11 @@ describe('map background band', () => {
     expectTypeOf<MapLibreMap>().toExtend<Pick<MapBackgroundMap, BandMethods>>()
   })
 
-  it('installs the OpenFreeMap basemap beneath Canopi layers without setStyle and with one attribution control', async () => {
+  it('installs the OpenFreeMap basemap beneath Canopi layers with one attribution control', async () => {
     const { map, background } = mount()
     background.update(presentation())
     await settle()
     expect(ids(map)).toEqual(['basemap-background', 'ofm:water', 'canopi-scene'])
-    expect(map.setStyle).not.toHaveBeenCalled()
     expect(map.controls).toHaveLength(1)
     background.dispose()
     expect(map.controls).toHaveLength(0)
@@ -163,7 +161,6 @@ describe('map background band', () => {
     googleMapsApiKey.value = 'SECRET-KEY'
     await settle()
     expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(false)
-    expect(map.setStyle).not.toHaveBeenCalled()
     background.dispose()
   })
 

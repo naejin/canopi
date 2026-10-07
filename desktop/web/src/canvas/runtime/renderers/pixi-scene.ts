@@ -119,7 +119,6 @@ export function createDraftScenePainters(getSnapshot: () => SceneRendererSnapsho
         pixelsPerMetre: scale,
         speciesCache: snapshot.speciesCache,
         plantSpeciesSymbols: snapshot.scene.plantSpeciesSymbols,
-        localizedCommonNames: snapshot.localizedCommonNames,
       }, new Set())
       if (!entry) return false
       // Plant a row's look: a disc in the display colour, its 2 px border the same colour, so never under 2 px in radius.
@@ -135,7 +134,7 @@ export function createDraftScenePainters(getSnapshot: () => SceneRendererSnapsho
       // The note's own angle; the draft layer turns it with the map.
       text.rotation = noteTextRotation(annotation, 0)
       // The ghost marker has no halo.
-      traceAnnotationMarker(marker.context, markerPaths, { x: 0, y: 0 })
+      traceAnnotationMarker(marker.context, markerPaths)
       marker.stroke({ color: toPixiColor(getMapTextColor()), width: markerStrokePx })
       return { textOpacity, markerOpacity }
     },

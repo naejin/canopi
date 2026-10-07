@@ -31,12 +31,11 @@ export interface CanvasRuntimeDocumentMetadata {
 
 export type CanvasDesignObjectSelectionTarget = SceneDesignObjectTarget
 
-type CanvasDesignObjectSelectionBlockReason =
-  | 'grouped-member'
-  | 'hidden-layer'
-  | 'locked-layer'
-  | 'locked-design-object'
-  | 'missing-design-object'
+/**
+ * A structural block (a missing Design Object, a grouped member, a hidden or locked Layer) keeps the target out of every
+ * edit; a locked Design Object stays selected as locked.
+ */
+type CanvasDesignObjectSelectionBlockReason = 'structural' | 'locked-design-object'
 
 export interface CanvasDesignObjectSelectionBlockedTarget {
   readonly target: CanvasDesignObjectSelectionTarget

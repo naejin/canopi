@@ -17,7 +17,7 @@ import 'pixi.js/unsafe-eval'
 import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import { SPECIES_FOCUS_DIM_OPACITY, speciesFocusOpacity } from '../species-key'
 import { AlphaFilter, CanvasTextMetrics, Container, Graphics, GraphicsContext, Rectangle, type Text } from 'pixi.js'
-import { ANNOTATION_OUTLINE_PADDING_PX, getAnnotationFontEpoch, getAnnotationPresentation } from '../annotation-layout'
+import { annotationOutlineCorners, getAnnotationFontEpoch, getAnnotationPresentation } from '../annotation-layout'
 import { getCanvasDetailLayout, isMeasurementLabelVisible } from '../automatic-detail'
 import {
   createMeasurementGuidePresentation,
@@ -48,7 +48,7 @@ import {
   OVERLAY_CASING_EXTRA_PX,
   type CanvasInteractionVisualState,
 } from '../scene-visuals'
-import type { PlantNameLabel, SelectionLabel } from '../selection-labels'
+import type { PlantNameLabel } from '../selection-labels'
 import type { ViewTransform } from '../view/types'
 import { LabelAdmission, type AdmittedLabels } from './label-admission'
 import {
@@ -199,8 +199,12 @@ export function createBillboardLayer(options: BillboardLayerOptions): BillboardL
       const admitted = labels.admit(view.pixelsPerMetre, settled)!
       const restyle = admitted !== drawnLabels
       drawnLabels = admitted
-      syncPlantNameLabels(createText, plantNameLabelLayer, plantNameLabelById, snapshot, view, labelProjection, admitted.plantNameLabels, restyle)
-      syncSelectionLabels(createText, selectionLabelLayer, selectionLabelBySpecies, view, labelProjection, admitted.selectionLabels, restyle)
+      // The admitted names are empty while the Plants layer is hidden; its opacity fades them.
+      if (restyle) plantNameLabelLayer.alpha = getSceneLayerStyle(snapshot.scene, 'plants').opacity
+      syncNameLabels(createText, plantNameLabelLayer, plantNameLabelById, (label) => label.plantId, view, labelProjection,
+        admitted.plantNameLabels, restyle)
+      syncNameLabels(createText, selectionLabelLayer, selectionLabelBySpecies, (label) => label.canonicalName, view, labelProjection,
+        admitted.selectionLabels, restyle)
     },
     resize(width, height) {
       viewSize.width = width
@@ -208,7 +212,6 @@ export function createBillboardLayer(options: BillboardLayerOptions): BillboardL
       plantLayers.resize(width, height)
     },
     dispose() {
-      labels.dispose()
       snapshot = null
       drawnLabels = null
       for (const byId of [plants.graphicsById, plants.ringById, plants.badgeById, notes.markerById]) {
@@ -240,7 +243,6 @@ class SharedGraphicsContextCache {
   private current = new Map<string, GraphicsContext>()
   private recent = new Map<string, GraphicsContext>()
   private older = new Map<string, GraphicsContext>()
-  private disposed = false
 
   beginGeneration(): void {
     this.destroyContexts(this.older)
@@ -270,14 +272,9 @@ class SharedGraphicsContextCache {
   }
 
   dispose(): void {
-    if (this.disposed) return
-    this.disposed = true
     this.destroyContexts(this.current)
     this.destroyContexts(this.recent)
     this.destroyContexts(this.older)
-    this.current.clear()
-    this.recent.clear()
-    this.older.clear()
   }
 
   private destroyContexts(contexts: ReadonlyMap<string, GraphicsContext>): void {
@@ -825,9 +822,9 @@ function presentNote(notes: NoteGraphics, built: BuiltNotes, note: BuiltNote, pi
   if (presentation.markerOpacity > 0) {
     const { halo, ink } = built.markerInk
     bindShared(notes.shared, marker, `marker|${presentation.compact}|${halo}|${ink}`, (context) => {
-      traceAnnotationMarker(context, presentation.markerPaths, { x: 0, y: 0 })
+      traceAnnotationMarker(context, presentation.markerPaths)
       context.stroke({ color: halo, width: presentation.markerStrokePx + OVERLAY_CASING_EXTRA_PX, cap: 'round', join: 'round' })
-      traceAnnotationMarker(context, presentation.markerPaths, { x: 0, y: 0 })
+      traceAnnotationMarker(context, presentation.markerPaths)
       context.stroke({ color: ink, width: presentation.markerStrokePx })
     })
     marker.alpha = presentation.markerOpacity
@@ -838,19 +835,8 @@ function presentNote(notes: NoteGraphics, built: BuiltNotes, note: BuiltNote, pi
 
   const outlineGraphics = notes.outlineById.get(annotation.id)
   if (!outline || !outlineGraphics) return
-  // The text frame (or the marker's square) padded 4 px across and 2 px down, turned by its angle on the ground: also
-  // the shown note's click target (annotation-layout.ts).
-  const { frame } = presentation
-  const radians = (frame.rotationDeg * Math.PI) / 180
-  const cos = Math.cos(radians)
-  const sin = Math.sin(radians)
-  const { x: padX, y: padY } = ANNOTATION_OUTLINE_PADDING_PX
-  const corners = [
-    { x: -padX, y: -padY },
-    { x: frame.widthPx + padX, y: -padY },
-    { x: frame.widthPx + padX, y: frame.heightPx + padY },
-    { x: -padX, y: frame.heightPx + padY },
-  ].map(({ x, y }) => ({ x: frame.origin.x + x * cos - y * sin, y: frame.origin.y + x * sin + y * cos }))
+  // The text frame (or the marker's square) as outlined: also the shown note's click target (annotation-layout.ts).
+  const corners = annotationOutlineCorners(presentation.frame)
   if (!reuseGeometry(outlineGraphics, [corners, outline])) {
     outlineGraphics.clear()
     drawClosedPath(outlineGraphics, corners).stroke(outline.casing)
@@ -877,16 +863,10 @@ export function noteTextRotation(annotation: SceneAnnotationEntity, bearingDeg: 
   return (((annotation.rotationDeg ?? 0) - bearingDeg) * Math.PI) / 180
 }
 
-/** A note's marker paths, CSS px from `origin`. */
-export function traceAnnotationMarker(
-  context: GraphicsContext,
-  markerPaths: readonly (readonly ScenePoint[])[],
-  origin: ScenePoint,
-): void {
+/** A note's marker paths, CSS px from the note's screen point. */
+export function traceAnnotationMarker(context: GraphicsContext, markerPaths: readonly (readonly ScenePoint[])[]): void {
   for (const path of markerPaths) {
-    path.forEach((point, index) => {
-      const x = origin.x + point.x
-      const y = origin.y + point.y
+    path.forEach(({ x, y }, index) => {
       if (index === 0) context.moveTo(x, y)
       else context.lineTo(x, y)
     })
@@ -933,7 +913,6 @@ function buildMeasurementLabels(createText: () => Text, labels: MeasurementLabel
 }
 
 function placeMeasurementLabels(labels: MeasurementLabelGraphics, snapshot: SceneRendererSnapshot, view: ViewTransform): void {
-  if (labels.built.length === 0) return
   for (const { guide, text } of labels.built) {
     const pose = measurementGuideLabelPoseIn(guide, view)
     text.position.set(pose.point.x, pose.point.y)
@@ -942,22 +921,26 @@ function placeMeasurementLabels(labels: MeasurementLabelGraphics, snapshot: Scen
   }
 }
 
-/** The single selection's name: its text and style when admission ran again, its position on every frame. */
-function syncSelectionLabels(
+/** A name the layer draws below its anchor; `opacity` fades a plant's name, a selection's name is opaque. */
+type NameLabel = Omit<PlantNameLabel, 'plantId' | 'opacity'> & { readonly opacity?: number }
+
+/** Name labels: text, style and fade when admission ran again, positions on every frame. */
+function syncNameLabels<L extends NameLabel>(
   createText: () => Text,
   layer: Container,
-  labelBySpecies: Map<string, Text>,
+  textByKey: Map<string, Text>,
+  keyOf: (label: L) => string,
   view: ViewTransform,
   projection: AnchorProjection,
-  labels: readonly SelectionLabel[],
+  labels: readonly L[],
   restyle: boolean,
 ): void {
   if (restyle) {
     for (const label of labels) {
-      let text = labelBySpecies.get(label.canonicalName)
+      let text = textByKey.get(keyOf(label))
       if (!text) {
         text = createText()
-        labelBySpecies.set(label.canonicalName, text)
+        textByKey.set(keyOf(label), text)
         layer.addChild(text)
       }
       text.text = label.text
@@ -970,59 +953,13 @@ function syncSelectionLabels(
         stroke: labelHaloStroke(12),
       })
       text.anchor.set(0.5, 0)
-      text.visible = true
+      text.alpha = label.opacity ?? 1
     }
-    destroyEntriesNotIn(labelBySpecies, new Set(labels.map((label) => label.canonicalName)))
+    destroyEntriesNotIn(textByKey, new Set(labels.map(keyOf)))
   }
   const projected = projection.project(view, labels.map((label) => label.anchor))
   labels.forEach((label, index) => {
-    labelBySpecies.get(label.canonicalName)!
-      .position.set(projected[index * 2]! + label.offsetPx.x, projected[index * 2 + 1]! + label.offsetPx.y)
-  })
-}
-
-/** The admitted plant names: text, style and fade when admission ran again, positions on every frame. */
-function syncPlantNameLabels(
-  createText: () => Text,
-  layer: Container,
-  labelByPlantId: Map<string, Text>,
-  snapshot: SceneRendererSnapshot,
-  view: ViewTransform,
-  projection: AnchorProjection,
-  labels: readonly PlantNameLabel[],
-  restyle: boolean,
-): void {
-  const plantLayer = getSceneLayerStyle(snapshot.scene, 'plants')
-  if (restyle) {
-    layer.visible = plantLayer.visible
-    layer.alpha = plantLayer.opacity
-    const shown = plantLayer.visible ? labels : []
-    for (const label of shown) {
-      let text = labelByPlantId.get(label.plantId)
-      if (!text) {
-        text = createText()
-        labelByPlantId.set(label.plantId, text)
-        layer.addChild(text)
-      }
-      text.text = label.text
-      setTextStyle(text, {
-        fontFamily: CANVAS_CHROME_FONT_FAMILY,
-        fontSize: 12,
-        fontWeight: '600',
-        fontStyle: label.fontStyle,
-        fill: toPixiColor(getMapTextColor()),
-        stroke: labelHaloStroke(12),
-      })
-      text.anchor.set(0.5, 0)
-      text.alpha = label.opacity
-      text.visible = true
-    }
-    destroyEntriesNotIn(labelByPlantId, new Set(shown.map((label) => label.plantId)))
-  }
-  if (!plantLayer.visible) return
-  const projected = projection.project(view, labels.map((label) => label.anchor))
-  labels.forEach((label, index) => {
-    labelByPlantId.get(label.plantId)!
+    textByKey.get(keyOf(label))!
       .position.set(projected[index * 2]! + label.offsetPx.x, projected[index * 2 + 1]! + label.offsetPx.y)
   })
 }

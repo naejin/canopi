@@ -469,7 +469,7 @@ describe('canvas context menu entries', () => {
 
     const blocked = build(selection({
       editableTargets: [{ kind: 'group', id: 'group-1' }, { kind: 'plant', id: 'p' }],
-      blockedTargets: [{ target: { kind: 'plant', id: 'missing' }, reason: 'missing-design-object' }],
+      blockedTargets: [{ target: { kind: 'plant', id: 'missing' }, reason: 'structural' }],
     })).entries
     expect(item(blocked, 'group').disabled).toBe(true)
     expect(item(blocked, 'ungroup').disabled).toBe(true)

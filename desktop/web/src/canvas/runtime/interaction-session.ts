@@ -38,7 +38,7 @@ import { detectPlatform, modKeyIsCmd, type InputPlatform } from './input/platfor
 import type { AdapterEffect, RawInput, RecogniserConfig, RecogniserState, TargetClass } from './input/raw-input'
 import { initialRecogniserState, recognise } from './input/recognise'
 import { DEFAULT_THRESHOLDS } from './input/thresholds'
-import type { GestureOutcome, InputRouterDeps, PointerWorld, ToolHost, ToolHostDeps } from './interaction-ports'
+import type { GestureOutcome, PointerWorld, ToolHost, ToolHostDeps } from './interaction-ports'
 import type { Modifiers, ToolId } from './interaction-types'
 import { createCanvasKeyboardPort } from './keyboard-port'
 import type { PlantPresentationContext } from './plant-presentation'
@@ -106,7 +106,7 @@ export interface SceneInteractionSessionDeps {
   contextMenu?: CanvasRuntimeContextMenuAdapter
   setTool: (id: ToolId) => void
   /** A scene render; a camera frame repaints on its own (the runtime's onCameraFrame). */
-  render: (kind: 'scene') => void
+  render: () => void
   readSnapToGridEnabled: () => boolean
   /** Settings › Canvas › Pointing device (stored scrollWheel: 'zoom' is Mouse, 'pan' is Trackpad). Pinch and Ctrl wheel zoom either way. */
   readScrollWheel: () => CanvasScrollWheelSetting
@@ -193,7 +193,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private readonly _toolHost: ToolHost
   private readonly _menu: ReturnType<typeof createContextMenuPort>
   private readonly _port: ReturnType<typeof createCanvasKeyboardPort>
-  private readonly _navigation: InputRouterDeps['navigation'] & Pick<ViewNavigation, 'zoomIn' | 'zoomOut' | 'resetNorth' | 'rotateBy'>
   private readonly _router: ReturnType<typeof createInputRouter>
   private readonly _source: ReturnType<typeof createDomInputSource>
   private readonly _renderer: Pick<SceneRenderTarget, 'setDraft'>
@@ -243,8 +242,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       focusMap: () => container.focus({ preventScroll: true }),
     }
     this._focus = focus
-    // A camera move publishes a frame, which repaints the layer itself (the runtime's onCameraFrame).
-    this._navigation = navigation
 
     const rollback: Array<() => void> = []
     const own = <T>(resource: T, dispose: (resource: T) => void): T => {
@@ -295,7 +292,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         // The runtime's scene render asks the session to refresh (refreshMeasurements → sceneChanged): a redraw the host
         // requests from inside that refresh is the one already under way.
         invalidate: () => {
-          if (!this._refreshing) _deps.render('scene')
+          if (!this._refreshing) _deps.render()
         },
         chrome: {
           setHandles: (handles, active) => this._setHandles(handles, active),
@@ -333,12 +330,12 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       }
       this._stopHearingMode = own(this._frames.onViewFrame('tools', (frame) => this._modeHeard(frame.mode)), (stop) => stop())
       this._toolHost = own(createToolHost(hostDeps), (host) => host.dispose())
-      this._router = createInputRouter({ navigation: this._navigation, toolHost: this._toolHost })
+      this._router = createInputRouter({ navigation, toolHost: this._toolHost })
       this._port = createCanvasKeyboardPort({
         host: container,
         toolHost: this._toolHost,
         hasSelection: () => _deps.getSelection().length > 0,
-        navigation: this._navigation,
+        navigation,
         session: {
           pointerSessionLive: () => this._pointerSessionLive(),
           overview: () => this._mode === 'overview',
@@ -349,7 +346,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
           requestTool: (id) => this._switchTool(id),
           clearSelection: () => {
             _deps.clearSelection()
-            _deps.render('scene')
+            _deps.render()
             this._toolHost.sceneChanged()
           },
         },

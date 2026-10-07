@@ -1,30 +1,28 @@
 import type { SceneRenderTarget } from '../../canvas/runtime/renderers/scene-types'
 import type { DraftPresentation } from '../../canvas/runtime/tools/draft'
 
-export type RecordedRendererCall = { readonly method: 'setDraft'; readonly draft: DraftPresentation | null }
-
 /**
  * The render target's tool-facing entry, recorded in call order for tool and
- * ToolHost tests; it keeps each argument by reference and reads nothing from it.
+ * ToolHost tests; it keeps each draft by reference and reads nothing from it.
  */
 export interface RecordingRenderer extends Pick<SceneRenderTarget, 'setDraft'> {
-  readonly calls: readonly RecordedRendererCall[]
+  readonly drafts: readonly (DraftPresentation | null)[]
   /** The last draft set, or null when none was set since the start or the last `clear`. */
   lastDraft(): DraftPresentation | null
-  /** Forgets every recorded call. */
+  /** Forgets every recorded draft. */
   clear(): void
 }
 
 export function createRecordingRenderer(): RecordingRenderer {
-  const calls: RecordedRendererCall[] = []
+  const drafts: (DraftPresentation | null)[] = []
   return {
-    calls,
+    drafts,
     setDraft(draft) {
-      calls.push({ method: 'setDraft', draft })
+      drafts.push(draft)
     },
-    lastDraft: () => calls.at(-1)?.draft ?? null,
+    lastDraft: () => drafts.at(-1) ?? null,
     clear() {
-      calls.length = 0
+      drafts.length = 0
     },
   }
 }

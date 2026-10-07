@@ -51,9 +51,4 @@ export class LabelAdmission {
     this.admitted = { pixelsPerMetre, labels }
     return labels
   }
-
-  dispose(): void {
-    this.snapshot = null
-    this.admitted = null
-  }
 }

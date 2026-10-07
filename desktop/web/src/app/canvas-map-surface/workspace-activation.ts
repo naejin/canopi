@@ -151,13 +151,7 @@ export class WorkspaceActivationCoordinator {
 
   constructor(private readonly options: WorkspaceActivationOptions) {}
 
-  activate(snapshot: WorkspaceActivationSnapshot): Promise<WorkspaceActivationOutcome> {
-    return this.activateGeneration(snapshot)
-  }
-
-  private async activateGeneration(
-    snapshot: WorkspaceActivationSnapshot,
-  ): Promise<WorkspaceActivationOutcome> {
+  async activate(snapshot: WorkspaceActivationSnapshot): Promise<WorkspaceActivationOutcome> {
     if (this.disposed) return 'cancelled'
     const request = ++this.activationRequest
     this.pendingBackgroundPresentation = {
@@ -229,15 +223,8 @@ export class WorkspaceActivationCoordinator {
       if (!this.isCurrent(current)) return 'cancelled'
       if (current.failure) return current.failure
 
-      const finishContextAcquisition = this.beginSetup(current)
-      let context: WebGL2RenderingContext | null
-      try {
-        context = this.options.map.getWebGL2Context(map)
-      } catch (error) {
-        finishContextAcquisition()
-        throw error
-      }
-      finishContextAcquisition()
+      // A context getter cannot re-enter teardown, so it needs no setup fence.
+      const context = this.options.map.getWebGL2Context(map)
       if (!this.isCurrent(current)) return 'cancelled'
       if (!context) throw new Error('MapLibre did not expose a WebGL2 context for shared rendering.')
 
@@ -775,8 +762,7 @@ export class WorkspaceActivationCoordinator {
   ): void {
     if (!map) return
     try {
-      if (failure === undefined) this.options.map.releaseMap(map)
-      else this.options.map.releaseMap(map, failure)
+      this.options.map.releaseMap(map, failure)
     } catch (error) {
       errors.push(error)
     }

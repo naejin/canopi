@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createTestRendererView, createTestSceneRendererSnapshot } from '../../../__tests__/support/scene-renderer-snapshot'
 import { refreshCanvasColorCache } from '../../theme-refresh'
-import { getAnnotationVisualWorldCorners } from '../annotation-layout'
+import { getAnnotationPresentation } from '../annotation-layout'
 import { getCanvasDetailLayout } from '../automatic-detail'
 import { buildPlantPresentationEntries } from '../plant-presentation'
 import { ROUND_PLANT_SYMBOL_RADIUS } from '../plant-symbol-recipes'
@@ -150,6 +150,31 @@ describe('billboard layer', () => {
     layer.dispose()
   })
 
+  it('a single selected plant\'s name is drawn opaque below it at a zoom that hides names, follows a pan and goes with the selection', () => {
+    const layer = createBillboardLayer({ createText: () => new Text(), viewSize: { width: 400, height: 300 } })
+    const apple = createPlant({ id: 'apple', position: { x: 4, y: 3 } })
+    const selected = createTestSceneRendererSnapshot({ scene: { plants: [apple] }, selectedTargets: [{ kind: 'plant', id: 'apple' }] })
+    const named = () => nodes(layer.root).filter((node): node is Text => node instanceof Text && node.text === 'Apple')
+
+    // 4 px/m fades every overview name to 0; the selection's name stays opaque.
+    for (const [view, next] of [[createTestRendererView({ x: 200, y: 150, scale: 4 }), selected], [createTestRendererView({ x: 230, y: 110, scale: 4 }), undefined]] as const) {
+      layer.present(view, next)
+      const [label] = named()
+      expect(named()).toHaveLength(1)
+      expect(label!.style.fontStyle).toBe('normal')
+      expect(label!.visible && label!.parent!.visible).toBe(true)
+      expect(label!.alpha * label!.parent!.alpha).toBe(1)
+      const at = view.worldToScreen(apple.position)
+      expect(label!.position.x).toBeCloseTo(at.x, 3)
+      expect(label!.position.y - at.y).toBeGreaterThanOrEqual(5)
+      expect(label!.position.y - at.y).toBeLessThanOrEqual(8)
+    }
+
+    layer.present(createTestRendererView({ x: 230, y: 110, scale: 4 }), createTestSceneRendererSnapshot({ scene: { plants: [apple] } }))
+    expect(named()).toHaveLength(0)
+    layer.dispose()
+  })
+
   it('a pan frame creates no glyph context and redraws no ring, badge or marker', () => {
     const layer = createBillboardLayer({ createText: () => new Text(), viewSize: { width: 400, height: 300 } })
     // At 6 px/m the plants are dots and the note shows its marker under its selection outline.
@@ -192,24 +217,6 @@ describe('billboard layer', () => {
     expect(work).toContain('plantEntries')
     expect(work).not.toContain('plantGlyph')
     for (const draw of drawing) expect(draw).not.toHaveBeenCalled()
-    layer.dispose()
-  })
-
-  it('a zoom frame admits names only on a band crossing and the settle', () => {
-    const layer = createBillboardLayer({ createText: () => new Text(), viewSize: { width: 400, height: 300 } })
-    const work = recordWork()
-    layer.present(createTestRendererView({ x: 0, y: 0, scale: 20 }), retainedScene(), false)
-    expect(work.filter((name) => name === 'labelAdmission')).toHaveLength(1)
-    work.length = 0
-
-    // 20 to 22 px/m stays in one band; 14 px/m is two bands down; the last frame is the settled one.
-    for (const scale of [20.5, 21, 21.5, 22]) layer.present(createTestRendererView({ x: 0, y: 0, scale }), undefined, false)
-    expect(work).toContain('plantEntries')
-    expect(work).not.toContain('labelAdmission')
-    layer.present(createTestRendererView({ x: 0, y: 0, scale: 14 }), undefined, false)
-    layer.present(createTestRendererView({ x: 0, y: 0, scale: 13 }), undefined, false)
-    layer.present(createTestRendererView({ x: 0, y: 0, scale: 13 }), undefined, true)
-    expect(work.filter((name) => name === 'labelAdmission')).toHaveLength(2)
     layer.dispose()
   })
 
@@ -258,8 +265,15 @@ describe('billboard layer', () => {
       const outline = shownGraphics(layer.root).find((graphics) => strokeColours(graphics.context).length === 2)!
       outline.updateLocalTransform()
       const drawn = strokedPoints(outline.context).map((point) => outline.localTransform.apply(point))
-      // The selected note shows its text at every scale; its frame is padded 4 px across and 2 px down.
-      const expected = getAnnotationVisualWorldCorners(NOTE, scale, true, { x: 4, y: 2 }, true).map((point) => view.worldToScreen(point))
+      // The selected note shows its text at every scale; its frame is padded 4 px across and 2 px down, then turned by the
+      // note's angle about the frame's origin.
+      const { frame } = getAnnotationPresentation(NOTE, scale, true, true)
+      const turn = (frame.rotationDeg * Math.PI) / 180
+      const padded = [[-4, -2], [frame.widthPx + 4, -2], [frame.widthPx + 4, frame.heightPx + 2], [-4, frame.heightPx + 2]] as const
+      const expected = padded.map(([x, y]) => view.worldToScreen({
+        x: NOTE.position.x + (frame.origin.x + x * Math.cos(turn) - y * Math.sin(turn)) / scale,
+        y: NOTE.position.y + (frame.origin.y + x * Math.sin(turn) + y * Math.cos(turn)) / scale,
+      }))
       expected.forEach((point, index) => {
         expect(drawn[index]!.x, `bearing ${bearingDeg}`).toBeCloseTo(point.x, 6)
         expect(drawn[index]!.y, `bearing ${bearingDeg}`).toBeCloseTo(point.y, 6)

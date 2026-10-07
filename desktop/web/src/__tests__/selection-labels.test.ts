@@ -141,7 +141,7 @@ describe('selection labels', () => {
     const plants = [createPlant({ pinnedName: true })]
     const before = structuredClone(plants)
     const visible = [20, 14, 8, 14, 20].map((scale) =>
-      computePinnedPlantNameLabels(plants, createViewport({ scale }).scale, new Map()),
+      computePinnedPlantNameLabels(plants, createViewport({ scale }).scale, new Map(), new Set()),
     )
     expect(visible.map((labels) => labels[0]?.opacity ?? 0)).toEqual([1, 0.5, 0, 0.5, 1])
     expect(visible[2]).toEqual([])
@@ -150,13 +150,9 @@ describe('selection labels', () => {
 
   it('reveals only a singleton selected pinned name at overview scale', () => {
     const plants = [createPlant({ id: 'a', pinnedName: true }), createPlant({ id: 'b', pinnedName: true })]
-    const labels = computePinnedPlantNameLabels(plants, createViewport().scale, new Map(), {
-      selectionLabelPlantIds: new Set(['a']),
-    })
+    const labels = computePinnedPlantNameLabels(plants, createViewport().scale, new Map(), new Set(['a']))
     expect(labels.map(({ plantId, opacity }) => ({ plantId, opacity }))).toEqual([{ plantId: 'a', opacity: 1 }])
-    expect(computePinnedPlantNameLabels(plants, createViewport().scale, new Map(), {
-      selectionLabelPlantIds: new Set(['a', 'b']),
-    })).toEqual([])
+    expect(computePinnedPlantNameLabels(plants, createViewport().scale, new Map(), new Set(['a', 'b']))).toEqual([])
   })
 
   it('does not nudge overlapping pinned plant names', () => {
@@ -168,6 +164,7 @@ describe('selection labels', () => {
       plants,
       createViewport({ scale: 20 }).scale,
       new Map(),
+      new Set(),
     )
     expect(result).toHaveLength(2)
     expect(landing(result[1]!, createViewport({ scale: 20 }))).toEqual(landing(result[0]!, createViewport({ scale: 20 })))

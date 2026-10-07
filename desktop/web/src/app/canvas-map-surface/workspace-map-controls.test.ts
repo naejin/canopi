@@ -49,7 +49,6 @@ class FakeMap implements MapLibreMapInstance {
   readonly setGlyphs = vi.fn()
   readonly setSprite = vi.fn()
   readonly setGlobalStateProperty = vi.fn()
-  readonly setStyle = vi.fn()
   readonly controls = new Set<unknown>()
   readonly addControl = vi.fn((control: unknown, _position?: string) => { this.controls.add(control) })
   readonly removeControl = vi.fn((control: unknown) => { this.controls.delete(control) })
@@ -646,7 +645,6 @@ describe('WorkspaceMapControls', () => {
     expect(map.addSource).not.toHaveBeenCalled()
     expect(map.addLayer).not.toHaveBeenCalled()
     expect(styleFetch).not.toHaveBeenCalled()
-    expect(map.setStyle).not.toHaveBeenCalled()
     expect(JSON.stringify(map.options.style)).not.toContain('openfreemap')
     expect(JSON.stringify(map.options.style)).not.toContain('google.com')
   })
@@ -1416,7 +1414,7 @@ describe('WorkspaceMapControls', () => {
 })
 
 describe('WorkspaceMapControls OpenFreeMap basemap', () => {
-  it('installs the OpenFreeMap basemap without setStyle and below Canopi layers', async () => {
+  it('installs the OpenFreeMap basemap below Canopi layers', async () => {
     const { controls, maps } = createControls({ background: basemapOn({ style: 'bright', opacity: 0.5 }, 'fr') })
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
@@ -1426,7 +1424,6 @@ describe('WorkspaceMapControls OpenFreeMap basemap', () => {
 
     await vi.waitFor(() => expect(hasOpenFreeMapBasemap(map)).toBe(true))
 
-    expect(map.setStyle).not.toHaveBeenCalled()
     expect(styleFetch).toHaveBeenCalledWith(OPENFREEMAP_BASEMAPS.bright, expect.anything())
     expect(map.setGlyphs).toHaveBeenCalledWith(OPENFREEMAP_STYLE.glyphs)
     expect(map.setSprite).toHaveBeenCalledWith(OPENFREEMAP_STYLE.sprite)
@@ -1465,7 +1462,6 @@ describe('WorkspaceMapControls OpenFreeMap basemap', () => {
     expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeUndefined()
     expect(map.getLayer(MAPLIBRE_SATELLITE_LAYER_ID)).toBeUndefined()
     await vi.waitFor(() => expect(hasOpenFreeMapBasemap(map)).toBe(true))
-    expect(map.setStyle).not.toHaveBeenCalled()
   })
 
   it('notices a 503 basemap style with a fixed message and Retry, keeps the map, and Retry loads it', async () => {

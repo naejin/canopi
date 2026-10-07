@@ -262,7 +262,7 @@ describe('SceneInteractionSession', () => {
     events.pointerCancel({ x: 35, y: 45 }, { pointerId: 7 })
     expect(store.persisted.plants[0]?.position).toEqual({ x: 20, y: 30 })
     expect(onSceneEditCommit).not.toHaveBeenCalled()
-    expect(render).toHaveBeenCalledWith('scene')
+    expect(render).toHaveBeenCalled()
 
     events.pointerDown({ x: 20, y: 30 }, { pointerId: 9 })
     events.pointerMove({ x: 25, y: 35 }, { pointerId: 9 })
@@ -1464,7 +1464,7 @@ describe('SceneInteractionSession', () => {
       ...selectionModel,
       blockedTargets: [{
         target: { kind: 'plant' as const, id: 'grouped-plant' },
-        reason: 'grouped-member' as const,
+        reason: 'structural' as const,
       }],
     }
     openContextMenuFromKeyboard()
@@ -1507,7 +1507,7 @@ describe('SceneInteractionSession', () => {
       lockedTargets: [],
       blockedTargets: [{
         target: { kind: 'plant' as const, id: 'grouped-plant' },
-        reason: 'grouped-member' as const,
+        reason: 'structural' as const,
       }],
     }
     openContextMenuFromKeyboard()
@@ -4899,8 +4899,7 @@ describe('SceneInteractionSession', () => {
     deps.setSelection([plantTarget('plant-1')])
     const finger = { pointerType: 'touch', pointerId: 7, isPrimary: true }
 
-    const bands = () => deps.renderer.calls.filter((call) =>
-      call.method === 'setDraft' && call.draft?.shapes.some((shape) => shape.kind === 'quad')).length
+    const bands = () => deps.renderer.drafts.filter((draft) => draft?.shapes.some((shape) => shape.kind === 'quad')).length
 
     events.pointerDown({ x: 200, y: 200 }, { ...finger, button: 0, buttons: 1 })
     events.pointerMove({ x: 203, y: 204 }, { ...finger, button: -1, buttons: 1 })

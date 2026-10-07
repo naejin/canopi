@@ -2,9 +2,6 @@ import { signal, type ReadonlySignal } from '@preact/signals'
 import type { SceneRendererSnapshot, SceneRenderTarget } from '../renderers/scene-types'
 import type { DraftPresentation } from '../tools/draft'
 
-/** A scene change publishes a whole snapshot on the next frame; a camera frame only asks the target for a repaint. */
-type SceneRuntimeRenderKind = 'scene' | 'viewport'
-
 interface SceneRuntimePreparedRender {
   publish(): SceneRendererSnapshot
 }
@@ -31,9 +28,8 @@ export class SceneRuntimeRenderScheduler {
   private _snapshot: SceneRendererSnapshot | null = null
   private _draft: DraftPresentation | null = null
   private _renderEpoch = 0
+  /** The frame a scene invalidation waits for. */
   private _frame: number | null = null
-  /** A scene invalidation waits for its frame. */
-  private _sceneFrameQueued = false
   /** The epoch of the latest scene render, until it has drawn or failed; a newer epoch fences it. */
   private _sceneRenderEpoch: number | null = null
   /**
@@ -116,23 +112,21 @@ export class SceneRuntimeRenderScheduler {
     }
   }
 
-  invalidate(kind: SceneRuntimeRenderKind): void {
+  /** A camera frame: the layer reads it when MapLibre draws, so the target only repaints and no snapshot is published. */
+  requestRepaint(): void {
+    if (this._container) this._target?.requestRender()
+  }
+
+  /** A scene change: a whole snapshot is published on the next frame. */
+  invalidate(): void {
     if (!this._container) return
-    // The layer reads the camera frame when MapLibre draws it.
-    if (kind === 'viewport') {
-      this._target?.requestRender()
-      return
-    }
     // Fence an in-flight preparation immediately, even though drawing waits for a frame.
     this._renderEpoch += 1
-    this._sceneFrameQueued = true
-    this._publishScenePending()
-    if (this._frame !== null) return
-    this._frame = requestAnimationFrame(() => {
+    this._frame ??= requestAnimationFrame(() => {
       this._frame = null
-      this._sceneFrameQueued = false
-      this._runDetached(this.renderScene(), 'Scene Canvas render failed:')
+      void this.renderScene().catch((error) => { console.error('Scene Canvas render failed:', error) })
     })
+    this._publishScenePending()
   }
 
   async renderScene(): Promise<void> {
@@ -187,14 +181,9 @@ export class SceneRuntimeRenderScheduler {
     this._presented.value = true
   }
 
-  dispose(): void {
-    this.unmount()
-  }
-
   private _cancelFrame(): void {
     if (this._frame !== null) cancelAnimationFrame(this._frame)
     this._frame = null
-    this._sceneFrameQueued = false
   }
 
   /**
@@ -214,12 +203,6 @@ export class SceneRuntimeRenderScheduler {
 
   /** A scene invalidation waits for its frame, or the latest scene render has not drawn yet. */
   private _publishScenePending(): void {
-    this._scenePending.value = this._sceneFrameQueued || this._sceneRenderEpoch === this._renderEpoch
-  }
-
-  private _runDetached(operation: Promise<void>, failureMessage: string): void {
-    void operation.catch((error) => {
-      console.error(failureMessage, error)
-    })
+    this._scenePending.value = this._frame !== null || this._sceneRenderEpoch === this._renderEpoch
   }
 }

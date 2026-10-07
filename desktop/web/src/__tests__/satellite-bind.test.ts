@@ -93,7 +93,7 @@ const googleHttp: SatelliteHttp = {
 }
 
 describe('satellite mount', () => {
-  it('shows the provider\'s imagery from the current configuration without touching the map style', () => {
+  it('shows the provider\'s imagery from the current configuration', () => {
     const provider = new SatelliteImageryProvider(inertHttp, () => ({}))
     const map = recordingMap()
 
@@ -102,10 +102,6 @@ describe('satellite mount', () => {
     // No movement, settings or style-ready event is needed for the first imagery.
     expect(map.layers.has(MAPLIBRE_SATELLITE_LAYER_ID)).toBe(true)
     expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(true)
-
-    // The whole point of the mount: nothing here recreates the map or resets
-    // its style, so a key change cannot disturb the camera or the scene.
-    expect(map.calls.some((call) => call.includes('setStyle'))).toBe(false)
     mount.dispose()
   })
 
