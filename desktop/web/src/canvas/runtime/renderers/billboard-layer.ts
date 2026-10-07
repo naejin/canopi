@@ -829,9 +829,9 @@ function presentNote(notes: NoteGraphics, built: BuiltNotes, note: BuiltNote, pi
   if (presentation.markerOpacity > 0) {
     const { halo, ink } = built.markerInk
     bindShared(notes.shared, marker, `marker|${presentation.compact}|${halo}|${ink}`, (context) => {
-      traceAnnotationMarker(context, presentation.markerPaths, { x: 0, y: 0 })
+      traceAnnotationMarker(context, presentation.markerPaths)
       context.stroke({ color: halo, width: presentation.markerStrokePx + OVERLAY_CASING_EXTRA_PX, cap: 'round', join: 'round' })
-      traceAnnotationMarker(context, presentation.markerPaths, { x: 0, y: 0 })
+      traceAnnotationMarker(context, presentation.markerPaths)
       context.stroke({ color: ink, width: presentation.markerStrokePx })
     })
     marker.alpha = presentation.markerOpacity
@@ -870,16 +870,10 @@ export function noteTextRotation(annotation: SceneAnnotationEntity, bearingDeg: 
   return (((annotation.rotationDeg ?? 0) - bearingDeg) * Math.PI) / 180
 }
 
-/** A note's marker paths, CSS px from `origin`. */
-export function traceAnnotationMarker(
-  context: GraphicsContext,
-  markerPaths: readonly (readonly ScenePoint[])[],
-  origin: ScenePoint,
-): void {
+/** A note's marker paths, CSS px from the note's screen point. */
+export function traceAnnotationMarker(context: GraphicsContext, markerPaths: readonly (readonly ScenePoint[])[]): void {
   for (const path of markerPaths) {
-    path.forEach((point, index) => {
-      const x = origin.x + point.x
-      const y = origin.y + point.y
+    path.forEach(({ x, y }, index) => {
       if (index === 0) context.moveTo(x, y)
       else context.lineTo(x, y)
     })

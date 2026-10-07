@@ -135,7 +135,7 @@ export function createDraftScenePainters(getSnapshot: () => SceneRendererSnapsho
       // The note's own angle; the draft layer turns it with the map.
       text.rotation = noteTextRotation(annotation, 0)
       // The ghost marker has no halo.
-      traceAnnotationMarker(marker.context, markerPaths, { x: 0, y: 0 })
+      traceAnnotationMarker(marker.context, markerPaths)
       marker.stroke({ color: toPixiColor(getMapTextColor()), width: markerStrokePx })
       return { textOpacity, markerOpacity }
     },
