@@ -17,6 +17,7 @@ import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
 import {
   buildPlantPresentationEntries,
   hitTestPlant,
+  resolvePlantBaseColor,
   resolvePlantDisplayColor,
 } from '../canvas/runtime/plant-presentation'
 import {
@@ -163,7 +164,7 @@ describe('plant display rules', () => {
     expect(setCanvasPlantDisplay(normalizePlantDisplay({ ...display, strata: new Map(display.strata) }))).toBe(false)
     const after = buildPlantPresentationEntries(plants, context, new Set())
     expect(after.map((entry) => entry.color)).toEqual([STRATUM_DISPLAY_COLORS.emergent, NO_STRATUM_DISPLAY_COLOR])
-    expect(after.map((entry) => entry.baseColor)).toEqual(['#3E8E4E', '#3E8E4E'])
+    expect(plants.map((entry) => resolvePlantBaseColor(entry, new Map()))).toEqual(['#3E8E4E', '#3E8E4E'])
     expect(after[0]!.radiusScreenPx).toBeCloseTo(before[0]!.radiusScreenPx * 1.5)
     expect(hitsAt(scaledHitMetres * 0.999)).toBe(true)
     expect(hitsAt(scaledHitMetres * 1.001)).toBe(false)

@@ -120,8 +120,6 @@ const P3B_SIZE_ONLY: Readonly<Record<string, number>> = {
   'src/canvas/runtime/renderers/billboard-layer.ts': 2,
   // The drafts' stroke scale.
   'src/canvas/runtime/renderers/draft-layer.ts': 1,
-  // The zone re-tessellation threshold.
-  'src/canvas/runtime/renderers/world-layers.ts': 1,
   // A selection label's radius in pixels.
   'src/canvas/runtime/selection-labels.ts': 1,
   // A tolerance: whether a frame keeps the last frame's scale.

@@ -1,9 +1,5 @@
 import { normalizeHexColor } from '../plant-colors'
-import {
-  getPlantLOD,
-  getStratumColor,
-  type PlantLOD,
-} from '../plants'
+import { getStratumColor, isDotScale } from '../plants'
 import {
   resolvePlantSymbolForPlant,
   type PlantSymbolId,
@@ -37,30 +33,18 @@ type PlantFootprintContext = Pick<PlantPresentationContext, 'plants' | 'pixelsPe
 
 export interface PlantPresentationEntry {
   plant: ScenePlantEntity
+  /** Metres to the nearest other plant (Infinity alone); with the scale it sets the radius, so a zoom reuses it. */
+  spacing: number
   radiusWorld: number
   radiusScreenPx: number
+  /** The drawn radius: `radiusScreenPx` to the nearest 0.25 px, so glyphs of one size share their geometry. */
+  glyphRadiusPx: number
   color: string
-  baseColor: string
   symbol: PlantSymbolId
   stackPriority: number
-  lod: PlantLOD
+  /** Drawn as a plain disc: a far overview, or a symbol too small to read. */
+  dot: boolean
   selected: boolean
-}
-
-export interface PlantLayoutResult {
-  lod: PlantLOD
-  stackCounts: ReadonlyMap<string, number>
-}
-
-
-export interface PlantStackBadgeDecision {
-  anchorPlantId: string
-  memberPlantIds: ReadonlyArray<string>
-  count: number
-  text: string
-  /** The anchor plant's position (world metres); the badge's centre is its projection plus `badgeOffsetPx`. */
-  anchor: ScenePoint
-  badgeOffsetPx: ScenePoint
 }
 
 /** Screen size of the badge that shows `text` (the stack count). */
@@ -88,37 +72,25 @@ export function buildPlantPresentationEntries(
   context: PlantPresentationContext,
   selectedPlantIds: ReadonlySet<string>,
 ): PlantPresentationEntry[] {
-  const lod = getPlantLOD(context.pixelsPerMetre)
-  context = { ...context, plants: context.plants ?? plants }
+  const spacingFrom = context.plants ?? plants
   return plants.map((plant) => {
-    const { radiusWorld, radiusScreenPx } = resolvePlantRadiusPresentation(plant, context)
-    const baseColor = resolvePlantBaseColor(plant, context.speciesCache)
-    const color = resolveDisplayedPlantColor(baseColor, plant.canonicalName, getCanvasPlantDisplay())
-    const symbol = resolvePlantSymbolForPlant(plant, context.plantSpeciesSymbols ?? {})
+    const spacing = nearestPlantSpacing(spacingFrom, plant.position)
     const selected = selectedPlantIds.has(plant.id)
     return {
       plant,
-      radiusWorld,
-      radiusScreenPx,
-      color,
-      baseColor,
-      symbol,
+      spacing,
+      ...plantSizeAt(spacing, context.pixelsPerMetre),
+      color: resolveDisplayedPlantColor(resolvePlantBaseColor(plant, context.speciesCache), plant.canonicalName, getCanvasPlantDisplay()),
+      symbol: resolvePlantSymbolForPlant(plant, context.plantSpeciesSymbols ?? {}),
       stackPriority: getStackPriority(plant, selected),
-      lod: radiusScreenPx < 3.6 ? 'dot' : lod,
       selected,
     }
   })
 }
 
-export function layoutPlantPresentation(
-  entries: readonly PlantPresentationEntry[],
-  viewportScale: number,
-): PlantLayoutResult {
-  const lod = getPlantLOD(viewportScale)
-  const stackCounts = new Map(
-    resolveStackBadgeDecisions(entries).map((badge) => [badge.anchorPlantId, badge.count]),
-  )
-  return { lod, stackCounts }
+/** The entry at another scale: only its size and its dot switch follow the scale. */
+export function rescalePlantEntry(entry: PlantPresentationEntry, pixelsPerMetre: number): PlantPresentationEntry {
+  return { ...entry, ...plantSizeAt(entry.spacing, pixelsPerMetre) }
 }
 
 export function getPlantWorldBounds(
@@ -179,9 +151,11 @@ export function resolvePlantDisplayColor(
   return resolveDisplayedPlantColor(resolvePlantBaseColor(plant, speciesCache), plant.canonicalName, display)
 }
 
-export function resolveStackBadgeDecisions(
-  entries: readonly PlantPresentationEntry[],
-): PlantStackBadgeDecision[] {
+/**
+ * The stack badges: for each point that two or more plants share exactly, the count on the member drawn on top (the
+ * selected one, then one with its own colour, then the first by id). A count never depends on the scale.
+ */
+export function plantStackCounts(entries: readonly PlantPresentationEntry[]): ReadonlyMap<string, number> {
   const coincident = new Map<string, PlantPresentationEntry[]>()
   for (const entry of entries) {
     const { x, y } = entry.plant.position
@@ -190,25 +164,13 @@ export function resolveStackBadgeDecisions(
     if (members) members.push(entry)
     else coincident.set(key, [entry])
   }
-  const decisions: PlantStackBadgeDecision[] = []
+  const counts = new Map<string, number>()
   for (const members of coincident.values()) {
     if (members.length < 2) continue
     members.sort((left, right) => left.stackPriority - right.stackPriority || left.plant.id.localeCompare(right.plant.id))
-    const memberIds = members.map((entry) => entry.plant.id)
-    const anchor = members[0]
-    if (!anchor) continue
-
-    decisions.push({
-      anchorPlantId: anchor.plant.id,
-      memberPlantIds: [...memberIds].sort(),
-      count: memberIds.length,
-      text: String(memberIds.length),
-      anchor: { x: anchor.plant.position.x, y: anchor.plant.position.y },
-      badgeOffsetPx: getStackBadgeOffsetPx(anchor.radiusScreenPx),
-    })
+    counts.set(members[0]!.plant.id, members.length)
   }
-
-  return decisions
+  return counts
 }
 
 const SYMBOLIC_PLANT_MIN_SCREEN_PX = 2
@@ -216,19 +178,21 @@ const SYMBOLIC_PLANT_MAX_SCREEN_PX = 6.75
 const SYMBOLIC_PLANT_HALF_GROWTH_SCALE = 21
 
 function resolvePlantRadiusWorld(plant: ScenePlantEntity, context: PlantFootprintContext): number {
-  return resolvePlantRadiusPresentation(plant, context).radiusWorld
+  const spacing = context.plants ? nearestPlantSpacing(context.plants, plant.position) : Infinity
+  return plantSizeAt(spacing, context.pixelsPerMetre).radiusWorld
 }
 
-function resolvePlantRadiusPresentation(
-  plant: ScenePlantEntity,
-  context: PlantFootprintContext,
-): { radiusWorld: number; radiusScreenPx: number } {
-  const scale = Math.max(context.pixelsPerMetre, .001)
-  const spacing = context.plants ? nearestPlantSpacing(context.plants, plant.position) : Infinity
+/** The drawn size at a scale; the dot switch reads the drawn radius, so a glyph's shape and size change together. */
+function plantSizeAt(
+  spacing: number,
+  pixelsPerMetre: number,
+): Pick<PlantPresentationEntry, 'radiusWorld' | 'radiusScreenPx' | 'glyphRadiusPx' | 'dot'> {
+  const scale = Math.max(pixelsPerMetre, .001)
   // Display › Symbol size scales the footprint, so drawing, hit testing and bounds agree.
   const radiusScreenPx = Math.max(.65, Math.min(getSymbolicPlantRadiusScreenPx(scale), spacing * scale * .42)
     * getCanvasPlantDisplay().symbolScale)
-  return { radiusWorld: radiusScreenPx / scale, radiusScreenPx }
+  const glyphRadiusPx = Math.round(radiusScreenPx * 4) / 4
+  return { radiusWorld: radiusScreenPx / scale, radiusScreenPx, glyphRadiusPx, dot: isDotScale(pixelsPerMetre) || glyphRadiusPx < 3.6 }
 }
 
 function getSymbolicPlantRadiusScreenPx(viewportScale: number): number {

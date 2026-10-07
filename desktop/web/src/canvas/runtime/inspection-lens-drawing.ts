@@ -2,7 +2,7 @@ import { CANVAS_CHROME_FONT_FAMILY } from '../chrome-fonts'
 import {
   buildPlantPresentationEntries,
   getStackBadgeOffsetPx,
-  layoutPlantPresentation,
+  plantStackCounts,
   STACK_BADGE_FONT_SIZE_PX,
   getStackBadgeSizePx,
   type PlantPresentationEntry,
@@ -178,7 +178,7 @@ function drawPlants(
     speciesCache,
     plantSpeciesSymbols: scene.plantSpeciesSymbols,
   }, new Set())
-  const layout = layoutPlantPresentation(entries, scale)
+  const stackCounts = plantStackCounts(entries)
   // Plant glyphs are side-view pictograms: on a lens turned with the map they stay upright on screen (spec §4.8, §4.13).
   const uprightRad = (view.camera.bearingDeg * Math.PI) / 180
   const turned = uprightRad !== 0
@@ -221,7 +221,7 @@ function drawPlants(
   }
   // Stack badges stay per shape, above every symbol.
   for (const entry of entries) {
-    const stackCount = layout.stackCounts.get(entry.plant.id)
+    const stackCount = stackCounts.get(entry.plant.id)
     if (stackCount) drawStackBadge(ctx, entry, view.worldToScreen(entry.plant.position), stackCount, layer.opacity, dpr)
   }
 
@@ -234,17 +234,17 @@ function drawPlantSymbolGlyph(
   entry: PlantPresentationEntry,
   viewportScale: number,
 ): void {
-  const symbol = entry.lod === 'dot' ? 'round' : entry.symbol
+  const symbol = entry.dot ? 'round' : entry.symbol
   const { x, y } = entry.plant.position
   const r = entry.radiusWorld
   ctx.globalAlpha = 1
   ctx.fillStyle = entry.color
-  if (entry.lod === 'dot' || symbol === 'round') {
+  if (entry.dot || symbol === 'round') {
     ctx.beginPath()
-    ctx.arc(x, y, entry.lod === 'dot' ? r : r * ROUND_PLANT_SYMBOL_RADIUS, 0, Math.PI * 2)
+    ctx.arc(x, y, entry.dot ? r : r * ROUND_PLANT_SYMBOL_RADIUS, 0, Math.PI * 2)
     ctx.fill()
     const edgeWidth = getPlantSymbolEdgeWidth(entry.radiusScreenPx * 2)
-    if (entry.lod !== 'dot' && edgeWidth > 0) {
+    if (!entry.dot && edgeWidth > 0) {
       ctx.strokeStyle = getPlantSymbolEdgeColor(entry.color, lensPaper())
       ctx.lineWidth = edgeWidth / viewportScale
       ctx.stroke()

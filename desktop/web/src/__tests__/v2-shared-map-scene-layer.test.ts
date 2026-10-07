@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import { Ticker, WebGLRenderer, type WebGLOptions } from 'pixi.js'
+import { describe, expect, it, vi, type MockInstance } from 'vitest'
+import { Container, Text, Ticker, WebGLRenderer, type WebGLOptions } from 'pixi.js'
 import {
   createSharedMapSceneLayer,
   sharedPixiRendererInitOptions,
@@ -7,7 +7,11 @@ import {
   type SharedPixiRenderer,
 } from '../maplibre/shared-scene-layer'
 import { createSharedMapSceneRendererComposition } from '../maplibre/shared-scene-renderer'
+import { createPixiScenePresentation, type PixiScenePresentation } from '../canvas/runtime/renderers/pixi-scene'
+import type { ScenePlantEntity } from '../canvas/runtime/scene'
 import { SceneRuntimeRenderScheduler } from '../canvas/runtime/scene-runtime/render-scheduler'
+import { getCanvasTextOpacity } from '../canvas/runtime/text-visibility'
+import { SETTLE_MS } from '../canvas/runtime/view/frame-source'
 import type { DraftPresentation } from '../canvas/runtime/tools/draft'
 import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
 import { createTestView, type TestView } from './support/test-view'
@@ -37,6 +41,16 @@ function createMap(canvas: HTMLCanvasElement): SharedMapSceneMap & { project: Re
 /** The runtime's camera on the canvas's 200 × 100 CSS px at density 2, plane origin at (40, 30), 4 px/m. */
 function createFrames(): TestView {
   return createTestView({ screen: { width: 200, height: 100, devicePixelRatio: 2 }, viewport: { x: 40, y: 30, scale: 4 } })
+}
+
+const PINNED_PLANT: ScenePlantEntity = {
+  kind: 'plant', locked: false, id: 'apple', canonicalName: 'Malus domestica', commonName: 'Apple', color: null,
+  canopySpreadM: null, position: { x: 2, y: 1 }, rotationDeg: null, notes: null, plantedDate: null, quantity: 1, pinnedName: true,
+}
+
+/** Every node under `root`, depth first. */
+function nodes(root: Container): Container[] {
+  return root.children.flatMap((child) => [child, ...nodes(child)])
 }
 
 function createRenderer(init = vi.fn(async () => {})): SharedPixiRenderer {
@@ -174,12 +188,12 @@ describe('createSharedMapSceneLayer', () => {
 
     // The frame's own view, in CSS px whatever the canvas density (400 × 200 backing pixels here).
     adapter.layer.render(gl, {} as never)
-    expect(presentation.present).toHaveBeenCalledExactlyOnceWith(camera.view(), expect.anything())
+    expect(presentation.present).toHaveBeenCalledExactlyOnceWith(camera.view(), expect.anything(), true)
     // A pan publishes a frame; the layer takes it on its next render, and nothing else.
     camera.setViewport({ x: 52, y: 18, scale: 4 })
     adapter.layer.render(gl, {} as never)
     expect(presentation.present).toHaveBeenCalledTimes(2)
-    expect(presentation.present).toHaveBeenLastCalledWith(camera.view())
+    expect(presentation.present).toHaveBeenLastCalledWith(camera.view(), undefined, false)
     adapter.layer.render(gl, {} as never)
     expect(presentation.present).toHaveBeenCalledTimes(2)
 
@@ -390,8 +404,83 @@ describe('createSharedMapSceneLayer', () => {
     adapter.layer.render(gl, {} as never)
 
     expect(presentation.present).toHaveBeenCalledTimes(2)
-    expect(presentation.present).toHaveBeenLastCalledWith(camera.view(), edited)
+    expect(presentation.present).toHaveBeenLastCalledWith(camera.view(), edited, false)
     expect(adapter.diagnostics.sceneSyncCount).toBe(2)
+    await adapter.dispose({ mapWillBeRemoved: true })
+  })
+
+  it('a settled frame repaints once and admits names at its exact scale', async () => {
+    vi.useFakeTimers()
+    try {
+      const canvas = createCanvas()
+      const map = createMap(canvas)
+      const camera = createTestView({ screen: { width: 200, height: 100, devicePixelRatio: 2 }, viewport: { x: 40, y: 30, scale: 20 } })
+      let present: MockInstance<PixiScenePresentation['present']> | null = null
+      const stage = new Container()
+      // The real presentation on a real Pixi stage; only the WebGL renderer is a stand-in.
+      const adapter = createSharedMapSceneLayer({
+        id: 'v2-scene', frames: camera.frames, createRenderer: () => createRenderer(), createStage: () => stage,
+        createPresentation: (input) => {
+          const presentation = createPixiScenePresentation(input)
+          present = vi.spyOn(presentation, 'present')
+          return presentation
+        },
+      })
+      const gl = {} as WebGL2RenderingContext
+      await adapter.initialize(map, gl)
+      adapter.layer.onAdd!(map as never, gl)
+      adapter.setSnapshot(createTestSceneRendererSnapshot({ scene: { plants: [PINNED_PLANT] } }))
+      adapter.layer.render(gl, {} as never)
+      const name = () => nodes(stage).find((node): node is Text => node instanceof Text && node.text === 'Apple')
+      expect(name()?.alpha).toBe(1)
+
+      // A zoom: 14 px/m is two bands down and admits; 12 px/m is in its band and keeps that admission.
+      camera.setViewport({ x: 40, y: 30, scale: 14 })
+      adapter.layer.render(gl, {} as never)
+      camera.setViewport({ x: 40, y: 30, scale: 12 })
+      adapter.layer.render(gl, {} as never)
+      expect(present!).toHaveBeenLastCalledWith(camera.view(), undefined, false)
+      expect(name()?.alpha).toBeCloseTo(getCanvasTextOpacity(14), 9)
+      const repaints = vi.mocked(map.triggerRepaint).mock.calls.length
+
+      vi.advanceTimersByTime(SETTLE_MS)
+      expect(map.triggerRepaint).toHaveBeenCalledTimes(repaints + 1)
+      adapter.layer.render(gl, {} as never)
+      expect(present!).toHaveBeenLastCalledWith(camera.view(), undefined, true)
+      expect(name()?.alpha).toBeCloseTo(getCanvasTextOpacity(12), 9)
+      expect(getCanvasTextOpacity(12)).not.toBeCloseTo(getCanvasTextOpacity(14), 2)
+      // Rest: a later repaint presents nothing.
+      const presents = present!.mock.calls.length
+      adapter.layer.render(gl, {} as never)
+      expect(present!).toHaveBeenCalledTimes(presents)
+      await adapter.dispose({ mapWillBeRemoved: true })
+      // A settle after disposal asks for no frame.
+      camera.setViewport({ x: 40, y: 30, scale: 20 })
+      vi.advanceTimersByTime(SETTLE_MS)
+      expect(map.triggerRepaint).toHaveBeenCalledTimes(repaints + 1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('with no settled frame (the snapshot map), every frame counts as settled', async () => {
+    const canvas = createCanvas()
+    const map = createMap(canvas)
+    const camera = createFrames()
+    const presentation = { dispose: vi.fn(), resize: vi.fn(), present: vi.fn(), setDraft: vi.fn() }
+    const adapter = createSharedMapSceneLayer({
+      id: 'v2-scene', frames: { viewFrame: camera.frames.viewFrame }, createRenderer: () => createRenderer(),
+      createStage: () => ({ destroy: vi.fn() }) as never,
+      createPresentation: () => presentation,
+    })
+    const gl = {} as WebGL2RenderingContext
+    await adapter.initialize(map, gl)
+    adapter.layer.onAdd!(map as never, gl)
+    adapter.setSnapshot(createTestSceneRendererSnapshot())
+    adapter.layer.render(gl, {} as never)
+    camera.setViewport({ x: 40, y: 30, scale: 7 })
+    adapter.layer.render(gl, {} as never)
+    expect(presentation.present.mock.calls.map((call) => call[2])).toEqual([true, true])
     await adapter.dispose({ mapWillBeRemoved: true })
   })
 

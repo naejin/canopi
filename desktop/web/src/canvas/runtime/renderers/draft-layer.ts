@@ -27,7 +27,7 @@ import {
 import type { DraftFill, DraftPresentation, DraftShape, DraftStroke } from '../tools/draft'
 import type { GhostEntity } from '../tools/tool'
 import type { ScreenPoint, ViewTransform, WorldPoint } from '../view/types'
-import { pixiPaint, screenPxToWorldPx, writeWorldAffine } from './scene-paint'
+import { pixiPaint, screenPxToWorldPx, traceDashedPath, writeWorldAffine } from './scene-paint'
 
 /** Where the scene draws the active tool's draft; mounted by pixi-scene.ts. */
 export interface DraftLayer {
@@ -461,44 +461,4 @@ function tracePath(graphics: Graphics, points: readonly WorldPoint[], closed: bo
   graphics.moveTo(first.x, first.y)
   for (const point of rest) graphics.lineTo(point.x, point.y)
   if (closed) graphics.closePath()
-}
-
-
-/**
- * Traces the dashes of a path by hand (Pixi has no dashed stroke). The phase
- * carries across vertices, so a dash that spans a corner stays one sub-path
- * and takes the stroke's join.
- */
-function traceDashedPath(graphics: Graphics, points: readonly WorldPoint[], closed: boolean, pattern: readonly number[]): void {
-  const path = closed ? [...points, points[0]!] : points
-  let index = 0
-  let remaining = pattern[0]!
-  let drawing = true
-  let penDown = false
-  for (let segment = 1; segment < path.length; segment += 1) {
-    const from = path[segment - 1]!
-    const to = path[segment]!
-    const length = Math.hypot(to.x - from.x, to.y - from.y)
-    const end = length * (1 - 1e-12)
-    let travelled = 0
-    while (travelled < end) {
-      const step = Math.min(remaining, length - travelled)
-      if (drawing) {
-        if (!penDown) {
-          graphics.moveTo(from.x + ((to.x - from.x) * travelled) / length, from.y + ((to.y - from.y) * travelled) / length)
-          penDown = true
-        }
-        const reached = travelled + step
-        graphics.lineTo(from.x + ((to.x - from.x) * reached) / length, from.y + ((to.y - from.y) * reached) / length)
-      }
-      travelled += step
-      remaining -= step
-      if (remaining <= 0) {
-        index = (index + 1) % pattern.length
-        remaining = pattern[index]!
-        drawing = !drawing
-        penDown = false
-      }
-    }
-  }
 }

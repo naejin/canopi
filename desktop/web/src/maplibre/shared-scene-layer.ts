@@ -86,9 +86,11 @@ export interface SharedMapSceneLayerOptions {
   /**
    * The camera's frames: the runtime's host for the workspace map, the snapshot map's own driver. The layer reads the latest
    * frame in `render` and never derives a transform from the map (spec §1.5). It presents a view whenever the frame's view is a new
-   * object, never by revision: the snapshot map's driver keeps none, so all its frames carry revision 0.
+   * object, never by revision: the snapshot map's driver keeps none, so all its frames carry revision 0. Its settled frame,
+   * when it has one, repaints once and presents its view as settled, so names are admitted at the exact scale at rest;
+   * without one (the snapshot map) every frame is settled, so thumbnails are exact.
    */
-  readonly frames: Pick<ViewFrameSource, 'viewFrame'>
+  readonly frames: Pick<ViewFrameSource, 'viewFrame'> & Partial<Pick<ViewFrameSource, 'settledViewFrame'>>
   readonly onFailure?: (error: Error) => void
   readonly createRenderer?: () => SharedPixiRenderer
   readonly createStage?: () => Container
@@ -129,8 +131,9 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
   let presentation: PixiScenePresentation | null = null
   let pendingSnapshot: SceneRendererSnapshot | null = null
   let renderedSnapshot: SceneRendererSnapshot | null = null
-  /** The view last given to the presentation, compared by identity (see `frames`). */
+  /** The view last given to the presentation, compared by identity (see `frames`), and whether it was settled. */
   let presentedView: ViewTransform | null = null
+  let presentedSettled = false
   let draft: DraftPresentation | null = null
   let initializePromise: Promise<void> | null = null
   let disposePromise: Promise<void> | null = null
@@ -142,6 +145,9 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
   let rendererSize: { width: number; height: number; resolution: number } | null = null
   let sceneSyncCount = 0
   let failureReported = false
+
+  // The settled frame keeps the view of the last move, which the layer presented already: one repaint presents it as settled.
+  const stopSettleRepaints = options.frames.settledViewFrame?.subscribe(() => requestRepaint()) ?? (() => {})
 
   const diagnostics = (): SharedMapSceneDiagnostics => ({
     phase,
@@ -199,20 +205,21 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
       rendererSize = nextSize
       // The camera published this frame before MapLibre drew (its driver reads the map on 'move'); a resize publishes one too.
       const { view } = options.frames.viewFrame.peek()
+      const settled = !options.frames.settledViewFrame || options.frames.settledViewFrame.peek().view === view
       try {
         renderer.resetState()
         presentation.resize(rendererSize.width, rendererSize.height)
-        // One present per frame: a new view, a new snapshot, or both at once.
+        // One present per frame: a new view, the view settling, a new snapshot, or several at once.
         if (pendingSnapshot) {
           renderedSnapshot = pendingSnapshot
           pendingSnapshot = null
-          presentation.present(view, renderedSnapshot)
-          presentedView = view
+          presentation.present(view, renderedSnapshot, settled)
           sceneSyncCount += 1
-        } else if (view !== presentedView) {
-          presentation.present(view)
-          presentedView = view
+        } else if (view !== presentedView || (settled && !presentedSettled)) {
+          presentation.present(view, undefined, settled)
         }
+        presentedView = view
+        presentedSettled = settled
         renderer.render({ container: stage, clear: false })
       } catch (error) {
         fail(error instanceof Error ? error : 'Shared map scene rendering failed.')
@@ -353,6 +360,8 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
     pendingSnapshot = null
     renderedSnapshot = null
     presentedView = null
+    presentedSettled = false
+    stopSettleRepaints()
     draft = null
     map = null
     context = null

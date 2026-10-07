@@ -5,8 +5,9 @@ import { getAnnotationPresentation } from '../annotation-layout'
 import { buildPlantPresentationEntries } from '../plant-presentation'
 import { getMapTextColor, resolveZoneVisual } from '../scene-visuals'
 import type { DraftPresentation } from '../tools/draft'
+import { bandCentreScale, zoomBandOf } from '../view/frame-source'
 import type { ViewTransform } from '../view/types'
-import { createBillboardLayer, drawPlantGlyph, styleAnnotationText, traceAnnotationMarker } from './billboard-layer'
+import { createBillboardLayer, drawPlantGlyph, noteTextRotation, styleAnnotationText, traceAnnotationMarker } from './billboard-layer'
 import { createDraftLayer, type DraftScenePainters } from './draft-layer'
 import { cssColorAlpha, pixiPaint, screenPxToWorldPx, toPixiColor } from './scene-paint'
 import type { SceneRendererSnapshot } from './scene-types'
@@ -27,11 +28,11 @@ export interface PixiScenePresentation {
   dispose(): void
   resize(width: number, height: number): void
   /**
-   * One frame: the camera's view (the world roots' affine, the visible set, the billboards' anchors, label admission on a
-   * scale change) and, when data, selection, hover, style or labels changed, the new snapshot drawn under it. A pan
-   * brings no snapshot.
+   * One frame: the camera's view (the world roots' affine, the visible set, the billboards' anchors) and, when data,
+   * selection, hover, style or labels changed, the new snapshot drawn under it. A pan brings no snapshot. Names are
+   * admitted on a snapshot, a zoom-band change and a `settled` frame at a new scale; omitted, the frame is settled.
    */
-  present(view: ViewTransform, snapshot?: SceneRendererSnapshot): void
+  present(view: ViewTransform, snapshot?: SceneRendererSnapshot, settled?: boolean): void
   setDraft(draft: DraftPresentation | null): void
 }
 
@@ -74,10 +75,10 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
       billboards.resize(width, height)
       draftLayer.resize(width, height)
     },
-    present(view, next) {
+    present(view, next, settled) {
       if (next) snapshot = next
       world.present(view, next)
-      billboards.present(view, next)
+      billboards.present(view, next, settled)
       draftLayer.setView(view)
     },
     setDraft(draft) {
@@ -95,13 +96,14 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
 export function createDraftScenePainters(getSnapshot: () => SceneRendererSnapshot | null): DraftScenePainters {
   return {
     drawZoneGhost(graphics, zone, scale) {
-      // Today's ghost: the zone's fill at a fifth and its stroke, with round ends and no casing.
+      // Today's ghost: the zone's fill at a fifth and its stroke, with round ends and no casing; the stroke is traced at
+      // the band's centre scale, as the zone it places is.
       const visual = resolveZoneVisual(zone)
       if (!traceZonePath(graphics, zone)) return false
       if (zone.zoneType !== 'line') graphics.fill({ color: toPixiColor(visual.fill), alpha: 0.2 * cssColorAlpha(visual.fill) })
       graphics.stroke({
         ...pixiPaint(visual.stroke),
-        width: screenPxToWorldPx(ZONE_STROKE_PX, scale),
+        width: screenPxToWorldPx(ZONE_STROKE_PX, bandCentreScale(zoomBandOf(scale))),
         cap: 'round',
         join: 'round',
       })
@@ -129,10 +131,11 @@ export function createDraftScenePainters(getSnapshot: () => SceneRendererSnapsho
       if (annotation.annotationType !== 'text') return null
       const { textFrame, textOpacity, markerOpacity, markerPaths, markerStrokePx } =
         getAnnotationPresentation(annotation, scale)
+      styleAnnotationText(text, annotation, textFrame.lineHeightPx)
       // The note's own angle; the draft layer turns it with the map.
-      styleAnnotationText(text, annotation, textFrame.lineHeightPx, 0)
+      text.rotation = noteTextRotation(annotation, 0)
       // Today's ghost marker has no halo.
-      traceAnnotationMarker(marker, markerPaths, { x: 0, y: 0 })
+      traceAnnotationMarker(marker.context, markerPaths, { x: 0, y: 0 })
       marker.stroke({ color: toPixiColor(getMapTextColor()), width: markerStrokePx })
       return { textOpacity, markerOpacity }
     },
