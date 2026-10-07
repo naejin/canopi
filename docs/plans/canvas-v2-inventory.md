@@ -1,10 +1,10 @@
 # Canvas v2 inventory: what exists today and what happens to it
 
-Trimmed 2026-10-02 at the phase-0 close (full earlier text at commit 76bd08a659d916069a340fc06e670e54e32f54c7), at the phase-F close (text before it at `99bbe615`), at the phase-1 close (text before it at `da12600b`) and at the phase-2 close (text before it at `f2db5e1a`); the R rows rewritten by phase R's amendment (2026-10-07, design check DR7).
+Trimmed 2026-10-02 at the phase-0 close (full earlier text at commit 76bd08a659d916069a340fc06e670e54e32f54c7), at the phase-F close (text before it at `99bbe615`), at the phase-1 close (text before it at `da12600b`) and at the phase-2 close (text before it at `f2db5e1a`) and at the phase-R close (text before it at `bfbdf053`).
 
-Status: agreed (2026-09-29); scope amended 2026-10-01 (plan §1, "Decisions of 2026-10-01"); phase 0 and phase F done (2026-10-02); phase 1 done (2026-10-03) and phase 2 done (2026-10-06), their cleared rows deleted; input to docs/plans/canvas-v2-plan.md
+Status: agreed (2026-09-29); scope amended 2026-10-01 (plan §1, "Decisions of 2026-10-01"); phase 0 and phase F done (2026-10-02); phase 1 done (2026-10-03), phase 2 done (2026-10-06) and phase R done (2026-10-08), their cleared rows deleted; input to docs/plans/canvas-v2-plan.md
 
-This is the current-state inventory behind `docs/plans/canvas-v2-plan.md` and `docs/plans/canvas-v2-spec.md`. It covers every place that assumes a north-up or axis-aligned screen, and every copy of the world-to-screen transform. It also lists where input, tools, camera and rendering are entangled, every raw input listener, camera writer and focus or keyboard handler on the canvas path, every document statement of north-up or the old controls, and the stored data that touches bearing. Each row has a stable ID, so the plan, the beads and the reviewers can cite it (for example `INV-CAM-20`). Rows that phases 0, F, 1 and 2 cleared are deleted, and a kept row's phase column names only the work left; what phase 0 changed is in the plan's phase-0 summary, the phase-0 bead's receipt and git history at the commit above.
+This is the current-state inventory behind `docs/plans/canvas-v2-plan.md` and `docs/plans/canvas-v2-spec.md`. It covers every place that assumes a north-up or axis-aligned screen, and every copy of the world-to-screen transform. It also lists where input, tools, camera and rendering are entangled, every raw input listener, camera writer and focus or keyboard handler on the canvas path, every document statement of north-up or the old controls, and the stored data that touches bearing. Each row has a stable ID, so the plan, the beads and the reviewers can cite it (for example `INV-CAM-20`). Rows that phases 0, F, 1, 2 and R cleared are deleted, and a kept row's phase column names only the work left; what phase 0 changed is in the plan's phase-0 summary, the phase-0 bead's receipt and git history at the commit above.
 
 ## How to read it
 
@@ -28,10 +28,7 @@ This is the current-state inventory behind `docs/plans/canvas-v2-plan.md` and `d
 
 Every row re-implements `p·scale + t` or its inverse from a bearing-blind `{x, y, scale}`. All route through the one `ViewTransform` (ADR 0016); policy P3b forbids the arithmetic outside `view/**`, with a named allowlist (scene chrome, rulers) emptied in phase 1, a permanent size-only allowlist, and a permanent exemption for `app/canvas-pdf/**`, whose paper projection maps page to ground, not the view (ADR 0008; today 1 match, `layout.ts:243`).
 
-| ID | Where | What it computes | Fate | Phase |
-|---|---|---|---|---|
-| INV-XF-06 | `canvas/runtime/plant-presentation.ts` (entries), `renderers/billboard-layer.ts` | Entries rebuilt per frame with a radius from the exact scale | change; build() on a scene sync makes the entries, place() per frame projects all anchors, culls and sets the radius from cached spacing when the scale changed (A8) | R |
-| INV-XF-20 | `canvas/runtime/renderers/world-layers.ts`, `pixi-scene.ts` (zone ghost width) | Zone, guide and grid stroke widths and dashes traced at the exact scale; every zoom frame re-traces them | change; traced at the zoom band's centre scale from `view/frame-source.ts`'s one band function, the ghost through the same width helper (A6, A9; drift ≤ 12 %, convention) | R |
+No row is left: phase R cleared the last two (INV-XF-06, INV-XF-20).
 
 ## 3. Tools, hit testing and snapping under a bearing (INV-TOOL)
 
@@ -42,31 +39,22 @@ Every row re-implements `p·scale + t` or its inverse from a bearing-blind `{x, 
 | INV-TOOL-19 | `canvas/runtime/interaction/selection-rotation-handle.ts:283-292`; `canvas/runtime/scene-runtime/selection-rotation.ts:43-52`, `:125-130` | Handle angle is a world delta; Shift snaps the delta to 15°; pivot = world AABB centre | keep | — |
 | INV-TOOL-22 | `canvas/runtime/interaction/plant-placement-preview.ts:70`, `:86`; `plant-spacing-overlay.ts:151-157` | Labels offset screen-up or screen-down | keep (upright on purpose) | — |
 | INV-TOOL-26 | `canvas/contours.ts:158` | Hillshade `illumination-anchor: 'viewport'`: the light stays top-left as the map turns | keep (not decided by the design; a phase-1 convention, named at the phase-1 handoff (plan §8)) | — |
-| INV-TOOL-27 | `canvas/plants.ts` (`isDotScale`) | Plant LOD bands at 0.5 and 5 px/m | change; S40 keeps only the dot switch (`isDotScale`, below 0.5 px/m), evaluated on the rounded radius; glyph contexts are keyed by the radius rounded to 0.25 px (A7), not by LOD band | R |
 
 ## 4. Rendering, chrome and per-frame work (INV-REN)
 
 | ID | Where | Does today | Fate | Phase |
 |---|---|---|---|---|
-| INV-REN-04 | `canvas/runtime/renderers/billboard-layer.ts` (the present pass) | Every pan frame redraws rings, badges, note markers and outlines, rebuilds the entries and restyles note text and measurement labels | change; shared ring, badge and marker contexts keyed by state, rounded radius and resolved colours, placed per frame; the note outline drawn once in local px (A7, A8) | R |
-| INV-REN-05 | `canvas/runtime/renderers/billboard-layer.ts` (glyph context key), `plant-presentation.ts` | One glyph context per exact radius, so every zoom frame tessellates; contrast and spacing per plant per frame | change; radius rounded to 0.25 px in the key and the drawing, contexts warm once; spacing and contrast computed in build() (A7, A8; canopi-p32r) | R |
 | INV-REN-06 | `canvas/runtime/plant-symbol-recipes.ts:35`, `:397` | Plant glyphs are side-view pictograms on a ground line | keep upright (billboards) | — |
 | INV-REN-07 | `canvas/runtime/plant-presentation.ts:84-87` | Stack badge offset top-right on screen | keep | — |
-| INV-REN-11 | `canvas/runtime/scene-runtime.ts` (`_invalidate('viewport')`) | Every viewport invalidation synchronously calls `refreshMeasurements()`, so each camera frame with Select armed and a selection rebuilds the selection model and handles | change; the synchronous refresh goes, the tools phase's own frame subscription follows the view (A22, R4; runtime test "a pan refreshes no handles and builds no selection model; a zoom builds it once"); overlays stay on `left`/`top` (U44, Q1) | R |
-| INV-REN-12 | `canvas/runtime/scene-runtime.ts` (hover), `tools/tool-host.ts` (re-emit) | A hover change is a whole scene sync; under a resting pointer every camera frame re-runs the passive hover | change; no change set (P9, P12); a camera frame re-emits only the tool's hover and hides the tooltip, and the passive hover stays on its object until the next pointer move (Q3 D, R8); hover-only syncs stay whole (A18) | R |
-| INV-REN-16 | `canvas/runtime/automatic-detail.ts` | Detail layout memoised per Scene at the exact scale; plant-name admission on every frame, the hovered plant first | change; the exact-scale memo stays the one layout that drawing, hit testing, `selection.ts` and `scene-extent.ts` read (P13), keyed also by the note measure epoch (A1); plant names admitted on settle, band change and scene sync (A11), with no hover priority (Q4) | R |
 | INV-REN-19 | `maplibre/panel-target-overlays.ts:66-135` | Panel targets as MapLibre layers | keep (they rotate natively) | — |
 | INV-REN-21 | `maplibre/map-background.ts:215-220`; `maplibre/raster-display/adapter.ts:292-327`; `maplibre/satellite-bind.ts:366-374`; `app/canvas-map-surface/workspace-map-contributions.ts:379-380` | `getBounds()` for tiles, satellite metadata and LiDAR view bounds | keep (AABB of the rotated view; slight over-fetch) | — |
-| INV-REN-23 | `canvas/runtime/plant-display.ts:150-163` | Module-level `plantDisplay` global read by drawing, bounds and labels | keep; retained geometry invalidates on it | R |
 
 ## 5. Where input, tools, camera and rendering are entangled (INV-ENT)
 
 | ID | Where | Entanglement | Fate | Phase |
 |---|---|---|---|---|
-| INV-ENT-14 | `canvas/runtime/scene-runtime/selection.ts`, `chrome/handle-layer.ts` | The selection model is built per call, 2-4 times per selection change and on every pan frame | change; handles already move in `onViewFrame('overlays')` by `left`/`top` with no element created (kept, U44); left: the selection model memoised by reference with its dev build counter (A4, R4) | R |
-| INV-ENT-15 | `tools/select/move-drag.ts`; `canvas/runtime/scene-commands.ts` | A move-drag mutates the Scene per move; history by `JSON.stringify` | change; no `setSelectionPreview` (P9): the move-drag is measured on the orchard and recorded on canopi-f47t.9 in R; the history half stays open after R (canopi-f47t.9, after 2.0) | R |
+| INV-ENT-15 | `tools/select/move-drag.ts`; `canvas/runtime/scene-commands.ts` | A move-drag mutates the Scene per move; history by `JSON.stringify` | change; no `setSelectionPreview` since phase R (P9); the move-drag measured on the orchard and recorded on canopi-f47t.9; the per-move mutation and the history half wait for after 2.0 | canopi-f47t.9 (after 2.0) |
 | INV-ENT-17 | `canvas/runtime/scene-interaction.ts:1336-1339`; `canvas/runtime/scene-runtime.ts:72-74`, `:202`; `canvas/runtime/command-surface.ts:254-257`; `canvas/session-state.ts:4-18` | Tools switch the app's tool state; any string is a tool id | change; `ToolEffects.switchTool`; typed `ToolId` end to end with no "no tool armed" state (`canvas/session-state.ts` included; 0B-5's open item 7, with item 18, plan §4); arming through `app/keyboard/arming.ts` (F) | canopi-224j (left standing, plan §4 phase 0) |
-| INV-ENT-21 | `components/canvas/ZoomControls.tsx` | The zoom group reads only `zoomLimit` and `groundMetresPerPixel` (the property holds) | change; the render-count guard "an east-west pan at a constant zoom does not re-render the zoom group" (A17, R9) | R |
 
 ## 6. Raw input listeners on the canvas path (INV-LSN)
 
@@ -149,10 +137,11 @@ Phase 2 cleared the last row (INV-TEST-09); each later phase's plan section name
 
 ## 13. Retired rows
 
-Rows phases 0, F, 1 and 2 cleared are deleted (full text at the commits above). Three cleared rows still state a rule a later phase needs:
+Rows phases 0, F, 1, 2 and R cleared are deleted (full text at the commits above). Four cleared rows still state a rule a later step needs:
 
 | ID | Fate |
 |---|---|
 | INV-LSN-13 | the rotation handle's `click` stop and `keydown` swallow moved to `chrome/handle-layer.ts:8` as is; handling only its own keys is a later behaviour change, not scheduled |
 | INV-ENT-04 | overview (phase 2, U36): a left press pans in every tool, for every pointer, and nothing is selectable there; a Shift+middle-drag turns the view; a long press opens no menu, so phase 3's touch rules keep one-finger pan there |
+| INV-REN-16 | the exact-scale detail layout behind its per-Scene memo stays the one layout drawing, hit testing, `selection.ts` and `scene-extent.ts` read (P13); laying it out per zoom band waits for after 2.0 (A21, canopi-f47t.32) |
 | INV-KEY-18 | element keydown on runtime-owned controls and fields stays the P8 allowlist: `chrome/handle-layer.ts`, `chrome/text-entry-host.ts` |
