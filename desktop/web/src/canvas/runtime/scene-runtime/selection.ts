@@ -167,7 +167,6 @@ interface SelectionModelMemo {
   readonly persisted: ScenePersistedState
   readonly selectedTargets: SceneDesignObjectSelection
   readonly annotationViewportScale: number
-  readonly plantPixelsPerMetre: number
   readonly symbolScale: number
   readonly model: CanvasDesignObjectSelectionModel
 }
@@ -177,7 +176,8 @@ let selectionModelMemo: SelectionModelMemo | null = null
 /**
  * The selection's read model, memoised by reference: the store hands out the same Scene and selection until they change,
  * so the same Scene, selection, scale and symbol size return the model built last (frozen in dev builds). A pan builds
- * nothing; a zoom, an edit, a selection change or a symbol-size change builds it again.
+ * nothing; a zoom, an edit, a selection change or a symbol-size change builds it again. Every caller sizes plants at
+ * the annotation scale, so the plant context is not part of the key.
  */
 export function getDesignObjectSelectionModel(
   persisted: ScenePersistedState,
@@ -190,7 +190,6 @@ export function getDesignObjectSelectionModel(
     memo?.persisted === persisted
     && memo.selectedTargets === selectedTargets
     && memo.annotationViewportScale === options.annotationViewportScale
-    && memo.plantPixelsPerMetre === options.plantContext.pixelsPerMetre
     && memo.symbolScale === symbolScale
   ) return memo.model
   const model = freezeInDev(buildDesignObjectSelectionModel(persisted, selectedTargets, options))
@@ -198,7 +197,6 @@ export function getDesignObjectSelectionModel(
     persisted,
     selectedTargets,
     annotationViewportScale: options.annotationViewportScale,
-    plantPixelsPerMetre: options.plantContext.pixelsPerMetre,
     symbolScale,
     model,
   }
