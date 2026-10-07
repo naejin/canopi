@@ -456,6 +456,39 @@ describe('Canvas runtime surfaces', () => {
     }
   })
 
+  it('Undo restores a Lock, a Group and a layer toggle', () => {
+    const host = createRuntimeHost()
+    const { commands, documents, queries } = host.surfaces
+
+    try {
+      documents.loadDocument({
+        ...BASE_FILE,
+        plants: [createPlant('plant-1', 10, 20), createPlant('plant-2', 30, 40), createPlant('plant-3', 50, 60)],
+      })
+      commands.sceneEdits.selectAll()
+
+      commands.sceneEdits.lockSelected()
+      expect(queries.getSceneSnapshot().plants.every((plant) => plant.locked)).toBe(true)
+      commands.history.undo()
+      expect(queries.getSceneSnapshot().plants.some((plant) => plant.locked)).toBe(false)
+
+      commands.sceneEdits.selectAll()
+      commands.sceneEdits.groupSelected()
+      expect(queries.getSceneSnapshot().groups).toHaveLength(1)
+      commands.history.undo()
+      expect(queries.getSceneSnapshot().groups).toEqual([])
+
+      const plantsVisible = () => queries.getSceneSnapshot().layers.find((layer) => layer.name === 'plants')?.visible
+      expect(plantsVisible()).toBe(true)
+      expect(commands.layers.setSceneLayerVisibility('plants', false)).toBe(true)
+      expect(plantsVisible()).toBe(false)
+      commands.history.undo()
+      expect(plantsVisible()).toBe(true)
+    } finally {
+      host.destroy()
+    }
+  })
+
   it('serializes canvas state while preserving non-canvas document sections', () => {
     const host = createRuntimeHostWithAppComposition()
     const { commands, documents } = host.surfaces

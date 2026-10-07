@@ -22,38 +22,51 @@ describe('scene store', () => {
     expect(store.hasObjects).toBe(false)
   })
 
-  it('owns committed persisted drafts after the mutator returns', () => {
+  it('hands out the stored Scene without a copy per read, frozen in dev builds; a write throws', () => {
     const store = new SceneStore()
-    let mutateEscapedGuide = (): void => {}
-
+    let writeAfterCommit = (): void => {}
     store.updatePersisted((draft) => {
       const guide = { kind: 'measurement-guide' as const, id: 'guide-1', locked: false, start: { x: 0, y: 0 }, end: { x: 10, y: 0 } }
       draft.measurementGuides.push(guide)
-      mutateEscapedGuide = () => {
-        guide.end.x = 99
-      }
+      writeAfterCommit = () => { guide.end.x = 99 }
     })
+    store.setSelection([{ kind: 'measurement-guide', id: 'guide-1' }])
 
-    mutateEscapedGuide()
-
+    const scene = store.persisted
+    expect(store.persisted).toBe(scene)
+    expect(store.session).toBe(store.session)
+    expect(Object.isFrozen(scene)).toBe(true)
+    expect(Object.isFrozen(scene.measurementGuides[0]!.end)).toBe(true)
+    expect(() => { scene.measurementGuides[0]!.end.x = 99 }).toThrow(TypeError)
+    expect(() => { scene.layers.push(scene.layers[0]!) }).toThrow(TypeError)
+    expect(writeAfterCommit).toThrow(TypeError)
+    expect(() => { (store.session.selectedTargets[0] as { id: string }).id = 'escaped' }).toThrow(TypeError)
     expect(store.persisted.measurementGuides.map((guide) => guide.end)).toEqual([{ x: 10, y: 0 }])
+    expect(store.session.selectedTargets).toEqual([{ kind: 'measurement-guide', id: 'guide-1' }])
   })
 
-  it('owns committed session drafts after the mutator returns', () => {
+  it('gives a mutator its own copy, so the Scene read before the edit stays as it was', () => {
     const store = new SceneStore()
-    let mutateEscapedSelection = (): void => {}
-
-    store.updateSession((draft) => {
-      const selectedTargets = [{ kind: 'plant' as const, id: 'plant-1' }]
-      draft.selectedTargets = selectedTargets
-      mutateEscapedSelection = () => {
-        selectedTargets.push({ kind: 'plant', id: 'plant-2' })
-      }
+    const before = store.persisted
+    store.updatePersisted((draft) => {
+      const layer = draft.layers[0]!
+      layer.visible = !layer.visible
     })
+    expect(store.persisted).not.toBe(before)
+    expect(store.persisted.layers[0]!.visible).toBe(!before.layers[0]!.visible)
+  })
 
-    mutateEscapedSelection()
-
-    expect(store.session.selectedTargets).toEqual([{ kind: 'plant', id: 'plant-1' }])
+  it('a new species gets its code at commit', () => {
+    const store = new SceneStore()
+    store.updatePersisted((draft) => {
+      draft.plants.push({ kind: 'plant', id: 'p', locked: false, canonicalName: 'Malus domestica', commonName: null,
+        color: null, canopySpreadM: null, position: { x: 0, y: 0 }, rotationDeg: null, notes: null,
+        plantedDate: null, quantity: null })
+    })
+    const codes = store.persisted.plantSpeciesCodes
+    expect(codes).toEqual({ 'Malus domestica': 'MDO' })
+    expect(store.persisted.plantSpeciesCodes).toBe(codes)
+    expect(store.toCanopiFile().plant_species_codes).toEqual({ 'Malus domestica': 'MDO' })
   })
 
   it('owns typed selection targets and preserves first-seen typed order', () => {
@@ -68,10 +81,6 @@ describe('scene store', () => {
     ])
     plantTarget.id = 'mutated-input'
     zoneTarget.id = 'mutated-input'
-
-    const escapedSnapshot = store.session.selectedTargets
-    ;(escapedSnapshot[0] as { id: string }).id = 'mutated-snapshot'
-    ;(escapedSnapshot[1] as { id: string }).id = 'mutated-snapshot'
 
     expect(store.session.selectedTargets).toEqual([
       { kind: 'plant', id: 'shared-id' },
