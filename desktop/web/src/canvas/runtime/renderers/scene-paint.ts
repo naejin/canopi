@@ -1,8 +1,8 @@
 /**
  * Paint helpers the scene's layers share (world-layers.ts, billboard-layer.ts,
- * draft-layer.ts): CSS colours as Pixi paint, cased interaction strokes, text
- * styles, the reuse keys that keep retained geometry, and the one write of the
- * view's affine to a world root.
+ * draft-layer.ts): CSS colours as Pixi paint, cased interaction strokes,
+ * dashes, text styles, the reuse keys that keep retained geometry, and the one
+ * write of the view's affine to a world root.
  */
 
 // Production CSP rejects Pixi's generated functions; its shim avoids eval.
@@ -83,6 +83,45 @@ export function drawClosedPath(graphics: Graphics, points: readonly ScenePoint[]
     graphics.lineTo(point.x, point.y)
   }
   return graphics.closePath()
+}
+
+/**
+ * Traces the dashes of a path by hand (Pixi has no dashed stroke). The phase
+ * carries across vertices, so a dash that spans a corner stays one sub-path
+ * and takes the stroke's join.
+ */
+export function traceDashedPath(graphics: Graphics, points: readonly ScenePoint[], closed: boolean, pattern: readonly number[]): void {
+  const path = closed ? [...points, points[0]!] : points
+  let index = 0
+  let remaining = pattern[0]!
+  let drawing = true
+  let penDown = false
+  for (let segment = 1; segment < path.length; segment += 1) {
+    const from = path[segment - 1]!
+    const to = path[segment]!
+    const length = Math.hypot(to.x - from.x, to.y - from.y)
+    const end = length * (1 - 1e-12)
+    let travelled = 0
+    while (travelled < end) {
+      const step = Math.min(remaining, length - travelled)
+      if (drawing) {
+        if (!penDown) {
+          graphics.moveTo(from.x + ((to.x - from.x) * travelled) / length, from.y + ((to.y - from.y) * travelled) / length)
+          penDown = true
+        }
+        const reached = travelled + step
+        graphics.lineTo(from.x + ((to.x - from.x) * reached) / length, from.y + ((to.y - from.y) * reached) / length)
+      }
+      travelled += step
+      remaining -= step
+      if (remaining <= 0) {
+        index = (index + 1) % pattern.length
+        remaining = pattern[index]!
+        drawing = !drawing
+        penDown = false
+      }
+    }
+  }
 }
 
 /** Destroys every entry `keep` does not name; a Design switch behind a hidden layer must not retain the old objects. */

@@ -38,6 +38,7 @@ import {
   reuseGeometry,
   screenPxToWorldPx,
   toPixiColor,
+  traceDashedPath,
   writeWorldAffine,
 } from './scene-paint'
 import type { SceneEditingAids, SceneRendererHoverState, SceneRendererSnapshot } from './scene-types'
@@ -340,7 +341,7 @@ function drawMeasurementGuide(
   graphics.clear()
   const units = (px: number) => screenPxToWorldPx(px, pixelsPerMetre)
   const trace = () => {
-    drawDashedLine(graphics, guide.start, guide.end, units(MEASUREMENT_GUIDE_DASH_PX), units(MEASUREMENT_GUIDE_GAP_PX))
+    traceDashedPath(graphics, [guide.start, guide.end], false, [units(MEASUREMENT_GUIDE_DASH_PX), units(MEASUREMENT_GUIDE_GAP_PX)])
     drawTick(graphics, guide.start, presentation.normalWorld, units(MEASUREMENT_GUIDE_TICK_HALF_PX))
     drawTick(graphics, guide.end, presentation.normalWorld, units(MEASUREMENT_GUIDE_TICK_HALF_PX))
   }
@@ -349,24 +350,6 @@ function drawMeasurementGuide(
   trace()
   graphics.stroke(stroke.stroke)
   return true
-}
-
-function drawDashedLine(graphics: Graphics, start: ScenePoint, end: ScenePoint, dashLength: number, gapLength: number): void {
-  const dx = end.x - start.x
-  const dy = end.y - start.y
-  const length = Math.hypot(dx, dy)
-  if (length <= 0) return
-
-  const unit = { x: dx / length, y: dy / length }
-  let cursor = 0
-  while (cursor < length) {
-    const segmentEnd = Math.min(cursor + dashLength, length)
-    if (segmentEnd > cursor) {
-      graphics.moveTo(start.x + unit.x * cursor, start.y + unit.y * cursor)
-        .lineTo(start.x + unit.x * segmentEnd, start.y + unit.y * segmentEnd)
-    }
-    cursor += dashLength + gapLength
-  }
 }
 
 function drawTick(graphics: Graphics, point: ScenePoint, normal: ScenePoint, halfLength: number): void {
