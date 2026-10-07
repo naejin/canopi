@@ -6,7 +6,7 @@ import { buildPlantPresentationEntries } from '../plant-presentation'
 import { getMapTextColor, resolveZoneVisual } from '../scene-visuals'
 import type { DraftPresentation } from '../tools/draft'
 import type { ViewTransform } from '../view/types'
-import { createBillboardLayer, drawPlantGlyph, styleAnnotationText, traceAnnotationMarker } from './billboard-layer'
+import { createBillboardLayer, drawPlantGlyph, noteTextRotation, styleAnnotationText, traceAnnotationMarker } from './billboard-layer'
 import { createDraftLayer, type DraftScenePainters } from './draft-layer'
 import { cssColorAlpha, pixiPaint, screenPxToWorldPx, toPixiColor } from './scene-paint'
 import type { SceneRendererSnapshot } from './scene-types'
@@ -129,10 +129,11 @@ export function createDraftScenePainters(getSnapshot: () => SceneRendererSnapsho
       if (annotation.annotationType !== 'text') return null
       const { textFrame, textOpacity, markerOpacity, markerPaths, markerStrokePx } =
         getAnnotationPresentation(annotation, scale)
+      styleAnnotationText(text, annotation, textFrame.lineHeightPx)
       // The note's own angle; the draft layer turns it with the map.
-      styleAnnotationText(text, annotation, textFrame.lineHeightPx, 0)
+      text.rotation = noteTextRotation(annotation, 0)
       // Today's ghost marker has no halo.
-      traceAnnotationMarker(marker, markerPaths, { x: 0, y: 0 })
+      traceAnnotationMarker(marker.context, markerPaths, { x: 0, y: 0 })
       marker.stroke({ color: toPixiColor(getMapTextColor()), width: markerStrokePx })
       return { textOpacity, markerOpacity }
     },

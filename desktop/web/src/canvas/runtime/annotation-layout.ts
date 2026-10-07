@@ -50,6 +50,8 @@ export function getAnnotationPresentation(
   return {
     textOpacity,
     markerOpacity: (1 - textOpacity) * (compact ? 0.5 : 1),
+    /** The half-size marker of a note whose text the detail layout keeps hidden. */
+    compact,
     markerPaths: compact ? COMPACT_MARKER_PATHS : ANNOTATION_MARKER_PATHS,
     markerStrokePx: compact ? 1 : ANNOTATION_MARKER_STROKE_PX,
     markerOwnsGeometry,

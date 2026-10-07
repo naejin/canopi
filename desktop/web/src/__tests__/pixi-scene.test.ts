@@ -274,7 +274,7 @@ describe('createPixiScenePresentation', () => {
     expect(plant.fill).toHaveBeenLastCalledWith(expect.objectContaining({ color: 0xff0000 }))
     renderer.dispose()
   })
-  it('never leaves a plant symbol bound to a drawing context the cache has destroyed', async () => {
+  it('never leaves a plant symbol, ring, badge or note marker bound to a drawing context the cache has destroyed', async () => {
     // A story step zooms away from a plant, the cache retires its glyph two
     // generations later, and the step back must not render a dead context
     // ("null is not an object (evaluating 'context.instructions.length')").
@@ -284,10 +284,15 @@ describe('createPixiScenePresentation', () => {
     const container = document.createElement('div')
     Object.defineProperties(container, { clientWidth: { value: 400 }, clientHeight: { value: 300 } })
     const renderer = mountPresentation(container)
+    // A ringed plant, a stacked pair (a badge) and a note shown as its marker.
     const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [
-      createPlant({ symbol: 'shrub', position: { x: 2, y: 2 } }),
-    ] } })
-    renderer.present(view({ x: 0, y: 0, scale: 30 }), snapshot)
+      createPlant({ id: 'ringed', symbol: 'shrub', position: { x: 2, y: 2 } }),
+      createPlant({ id: 'stack-a', position: { x: 4, y: 2 } }),
+      createPlant({ id: 'stack-b', position: { x: 4, y: 2 } }),
+    ], annotations: [{ kind: 'annotation', id: 'note', annotationType: 'text', locked: false,
+      position: { x: 3, y: 3 }, text: 'Gate', fontSize: 14, rotationDeg: null }] },
+    selectedTargets: [{ kind: 'plant', id: 'ringed' }, { kind: 'annotation', id: 'note' }] })
+    renderer.present(view({ x: 0, y: 0, scale: 6 }), snapshot)
     const orphaned = () => pixi.__pixiMockState.graphicsContexts.filter((c) => c.destroyed && c.ownerCount > 0).length
     for (let generation = 0; generation < 4; generation += 1) {
       renderer.present(view({ x: 10000 + generation, y: 0, scale: 60 }), snapshot)
@@ -296,6 +301,13 @@ describe('createPixiScenePresentation', () => {
     expect(() => {
       renderer.present(view({ x: 0, y: 0, scale: 60 }), snapshot)
     }).not.toThrow()
+    expect(orphaned()).toBe(0)
+    // The note's marker gives way to its text on zoom and returns after the syncs retired its drawing.
+    for (let generation = 0; generation < 4; generation += 1) {
+      renderer.present(view({ x: 0, y: 0, scale: 60 }), snapshot)
+      expect(orphaned()).toBe(0)
+    }
+    renderer.present(view({ x: 0, y: 0, scale: 6 }))
     expect(orphaned()).toBe(0)
     renderer.dispose()
   })
@@ -368,6 +380,8 @@ describe('createPixiScenePresentation', () => {
     renderer.present(view({ x: 0, y: 0, scale: 30 }))
     renderer.present(view({ x: 0, y: 0, scale: 60 }))
     renderer.present(view({ x: 0, y: 0, scale: 90 }))
+    // A size nothing shows retires after two more scene syncs.
+    for (let sync = 0; sync < 3; sync += 1) renderer.present(view({ x: 0, y: 0, scale: 90 }), snapshot)
     const plantContexts = pixi.__pixiMockState.graphicsContexts
       .filter(context => context.bezierCurveTo.mock.calls.length > 0)
     expect(plantContexts.filter(context => context.destroy.mock.calls.length > 0)).not.toHaveLength(0)
@@ -404,7 +418,7 @@ describe('createPixiScenePresentation', () => {
       expect(context.destroy).toHaveBeenCalledOnce()
     }
   })
-  it('reuses A/B/A exact zoom contexts, evicts only the third-oldest generation, and preserves the visible context', async () => {
+  it('reuses each drawn size on zoom and retires a size two scene syncs after nothing shows it', async () => {
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
         graphics: Array<{ context: { destroy: ReturnType<typeof vi.fn> }; bezierCurveTo: ReturnType<typeof vi.fn> }>
@@ -419,22 +433,27 @@ describe('createPixiScenePresentation', () => {
     const contextA = plant.context
     renderer.present(view({ x: 0, y: 0, scale: 30 }))
     const contextB = plant.context
+    expect(contextB).not.toBe(contextA)
     renderer.present(view({ x: 0, y: 0, scale: 20 }))
     expect(plant.context).toBe(contextA)
-    expect(contextA.destroy).not.toHaveBeenCalled()
-    renderer.present(view({ x: 0, y: 0, scale: 40 }))
-    const contextC = plant.context
+    // Zoom frames retire nothing, however many sizes they draw.
     renderer.present(view({ x: 0, y: 0, scale: 60 }))
-    const contextD = plant.context
-    expect(contextB.destroy).toHaveBeenCalledOnce()
+    const contextC = plant.context
     expect(contextA.destroy).not.toHaveBeenCalled()
+    expect(contextB.destroy).not.toHaveBeenCalled()
+    // Each sync begins a generation; A and B, unseen since, go at the third.
+    renderer.present(view({ x: 0, y: 0, scale: 60 }), snapshot)
+    renderer.present(view({ x: 0, y: 0, scale: 60 }), snapshot)
+    expect(contextA.destroy).not.toHaveBeenCalled()
+    renderer.present(view({ x: 0, y: 0, scale: 60 }), snapshot)
+    expect(contextA.destroy).toHaveBeenCalledOnce()
+    expect(contextB.destroy).toHaveBeenCalledOnce()
     expect(contextC.destroy).not.toHaveBeenCalled()
-    expect(contextD.destroy).not.toHaveBeenCalled()
+    expect(plant.context).toBe(contextC)
     renderer.dispose()
     expect(contextA.destroy).toHaveBeenCalledOnce()
     expect(contextB.destroy).toHaveBeenCalledOnce()
     expect(contextC.destroy).toHaveBeenCalledOnce()
-    expect(contextD.destroy).toHaveBeenCalledOnce()
   })
   beforeEach(async () => {
     const pixi = await import('pixi.js') as unknown as {
@@ -569,7 +588,7 @@ describe('createPixiScenePresentation', () => {
 
   it('crossfades Annotation markers and text, and reveals only the direct selected note', async () => {
     const pixi = await import('pixi.js') as unknown as {
-      __pixiMockState: { texts: Array<{ text: string; alpha: number; visible: boolean; style: { options: { fontSize: number } } }>; graphics: Array<{ stroke: ReturnType<typeof vi.fn> }> }
+      __pixiMockState: { texts: Array<{ text: string; alpha: number; visible: boolean; style: { options: { fontSize: number } } }>; graphics: Array<{ visible: boolean; alpha: number; stroke: ReturnType<typeof vi.fn> }> }
     }
     const renderer = mountPresentation(document.createElement('div'), 2)
     const snapshot = createTestSceneRendererSnapshot({ scene: {
@@ -583,7 +602,9 @@ describe('createPixiScenePresentation', () => {
       expect(text.alpha).toBeCloseTo(opacity!, 9)
       expect(text.visible).toBe(opacity! > 0)
       expect(text.style.options.fontSize).toBe(16)
-      if (scale === 8) expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.stroke.mock.calls.some(([stroke]) => stroke.width === 1.5 && stroke.alpha === 1))).toBe(true)
+      // The marker shows at full strength where the text has faded out.
+      if (scale === 8) expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.visible && graphics.alpha === 1
+        && graphics.stroke.mock.calls.some(([stroke]) => stroke.width === 1.5))).toBe(true)
     }
     renderer.present(view({ x: 0, y: 0, scale: 4 }), { ...snapshot, revealedAnnotationId: 'note', selectedAnnotationIds: new Set(['note']) })
     expect(pixi.__pixiMockState.texts.find((entry) => entry.text === 'First\nSecond')).toMatchObject({ alpha: 1, visible: true })
@@ -716,26 +737,25 @@ describe('createPixiScenePresentation', () => {
   })
 
   it('rings highlighted plants at a readable size at any zoom, solid over a wider halo, without moving them', async () => {
+    type MockContext = { circle: ReturnType<typeof vi.fn>; stroke: ReturnType<typeof vi.fn> }
     const pixi = await import('pixi.js') as unknown as {
-      __pixiMockState: {
-        graphics: Array<{ circle: ReturnType<typeof vi.fn>; stroke: ReturnType<typeof vi.fn> }>
-      }
+      __pixiMockState: { graphics: Array<{ visible: boolean; context: MockContext }> }
     }
     const renderer = mountPresentation(document.createElement('div'))
     const plant = createPlant({ id: 'a', symbol: 'round', position: { x: 10, y: 10 } })
 
-    // The whole-Design zoom of a 70 m site: plants are dots of a pixel or two.
+    // The whole-Design zoom of a 70 m site: plants are dots of a pixel or two. Both rings share one drawing.
     for (const scale of [0.25, 4]) {
-      vi.clearAllMocks()
       const snapshot = createRendererSnapshot({ plants: [plant] })
       renderer.present(view({ x: 0, y: 0, scale }), { ...snapshot, highlightedPlantIds: new Set(['a']) })
-      const graphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.stroke.mock.calls.length > 1)!
-      const glyph = pixi.__pixiMockState.graphics.find((graphics) => graphics !== graphic && graphics.circle.mock.calls.length > 0)!
+      const shown = pixi.__pixiMockState.graphics.filter((graphics) => graphics.visible).map((graphics) => graphics.context)
+      const ring = shown.find((context) => context.stroke.mock.calls.length > 1)!
+      const glyph = shown.find((context) => context !== ring && context.circle.mock.calls.length > 0)!
       const glyphRadius = Math.max(...glyph.circle.mock.calls.map((call) => call[2] as number))
-      const ringRadius = Math.min(...graphic.circle.mock.calls.map((call) => call[2] as number))
+      const ringRadius = Math.min(...ring.circle.mock.calls.map((call) => call[2] as number))
       expect(ringRadius, `scale ${scale}`).toBeGreaterThanOrEqual(8)
       expect(ringRadius, `scale ${scale}`).toBeGreaterThan(glyphRadius + 2)
-      const [casing, stroke] = graphic.stroke.mock.calls.slice(-2).map((call) => call[0] as { width: number; alpha: number })
+      const [casing, stroke] = ring.stroke.mock.calls.slice(-2).map((call) => call[0] as { width: number; alpha: number })
       expect(stroke!.alpha).toBe(1)
       expect(stroke!.width).toBeGreaterThanOrEqual(2)
       expect(casing!.width).toBeGreaterThanOrEqual(stroke!.width + 2)

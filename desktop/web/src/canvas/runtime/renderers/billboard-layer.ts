@@ -4,8 +4,12 @@
  * px under an identity transform. Each sits at its world anchor projected
  * through `view.projectAnchors`, plus a CSS-px offset, so a pan moves them all
  * and a turned view keeps them upright; a note's text turns by its own angle
- * less the bearing. Plants are culled in screen space, as today. Labels are
- * admitted by `label-admission.ts` at today's cadence.
+ * less the bearing. A scene sync builds what the snapshot decides (entries,
+ * order, stack counts, rings, text and styles); every frame then places it
+ * (projection, the cull, positions, and sizes when the scale changed). Glyphs,
+ * rings, badges and note markers bind shared drawing contexts keyed by their
+ * look, glyph radii rounded to 0.25 px, so a pan or a warm zoom draws nothing.
+ * Labels are admitted by `label-admission.ts`.
  */
 
 // Production CSP rejects Pixi's generated functions; its shim avoids eval.
@@ -13,7 +17,7 @@ import 'pixi.js/unsafe-eval'
 import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import { SPECIES_FOCUS_DIM_OPACITY, speciesFocusOpacity } from '../species-key'
 import { AlphaFilter, Container, Graphics, GraphicsContext, Rectangle, type Text } from 'pixi.js'
-import { getAnnotationPresentation, getAnnotationVisualWorldCorners } from '../annotation-layout'
+import { getAnnotationPresentation } from '../annotation-layout'
 import { getCanvasDetailLayout, isMeasurementLabelVisible } from '../automatic-detail'
 import {
   createMeasurementGuidePresentation,
@@ -25,11 +29,12 @@ import {
   getStackBadgeOffsetPx,
   getStackBadgeSizePx,
   plantStackCounts,
+  rescalePlantEntry,
   STACK_BADGE_FONT_SIZE_PX,
   type PlantPresentationEntry,
 } from '../plant-presentation'
 import { getPlantSymbolArt, ROUND_PLANT_SYMBOL_RADIUS, tracePlantSymbolContours } from '../plant-symbol-recipes'
-import type { PlantSymbolId, SceneAnnotationEntity, ScenePlantEntity, ScenePoint } from '../scene'
+import type { PlantSymbolId, SceneAnnotationEntity, SceneMeasurementGuideEntity, ScenePoint } from '../scene'
 import {
   getCanvasInteractionStrokeVisual,
   getMapBackdropInk,
@@ -45,21 +50,25 @@ import {
 } from '../scene-visuals'
 import type { PlantNameLabel, SelectionLabel } from '../selection-labels'
 import type { ViewTransform } from '../view/types'
-import { LabelAdmission } from './label-admission'
+import { LabelAdmission, type AdmittedLabels } from './label-admission'
 import {
   casedStroke,
   destroyEntriesNotIn,
+  destroyEntry,
   drawClosedPath,
   hoverStateForTarget,
   interactionOutline,
   labelHaloStroke,
   resolveInteractionState,
+  reuseGeometry,
   setTextStyle,
   toPixiColor,
+  type CasedStroke,
 } from './scene-paint'
 import type { SceneRendererHoverState, SceneRendererSnapshot } from './scene-types'
 
-type PixiSceneWorkName = 'plantObjects' | 'plantCull' | 'plantEntries' | 'plantLayout' | 'plantDraw'
+type PixiSceneWorkName =
+  | 'plantObjects' | 'plantCull' | 'plantEntries' | 'plantLayout' | 'plantDraw' | 'plantGlyph' | 'labelAdmission'
 
 declare global {
   interface Window {
@@ -81,7 +90,7 @@ function measurePixiSceneWork<T>(name: PixiSceneWorkName, operation: () => T): T
 export interface BillboardLayer {
   /** Plants, rings, badges, notes and labels, in CSS px; stays untransformed. */
   readonly root: Container
-  /** One frame: every billboard placed under the view, from the new snapshot when data, selection, hover or style changed. */
+  /** One frame: every billboard placed under the view, after a build from the new snapshot when data, selection, hover or style changed. */
   present(view: ViewTransform, snapshot?: SceneRendererSnapshot): void
   resize(width: number, height: number): void
   dispose(): void
@@ -131,45 +140,42 @@ export function createBillboardLayer(options: BillboardLayerOptions): BillboardL
   root.addChild(plantNameLabelLayer)
   root.addChild(selectionLabelLayer)
 
-  const labels = new LabelAdmission()
+  const labels = new LabelAdmission((admit) => measurePixiSceneWork('labelAdmission', admit))
+  const shared: SharedContexts = {
+    // Passing one external empty context avoids the unused owned context that
+    // `new Graphics()` would otherwise allocate for every Graphics before its
+    // shared geometry is assigned; anything hidden binds it.
+    empty: new GraphicsContext(),
+    cache: new SharedGraphicsContextCache(),
+  }
   const plants: PlantGraphics = {
     layers: plantLayers,
     overlay: plantsOverlayLayer,
+    shared,
     graphicsById: new Map(),
     ringById: new Map(),
     badgeById: new Map(),
     badgeTextById: new Map(),
-    // Passing one external empty context avoids the unused owned context that
-    // `new Graphics()` would otherwise allocate for every Plant before its exact
-    // shared geometry is assigned.
-    emptyContext: new GraphicsContext(),
     visibleIds: new Set(),
-    contexts: new PlantGraphicsContextCache(),
-    stackCounts: new PlantStackCountsCache(),
     projection: new AnchorProjection(),
+    built: null,
   }
   const notes: NoteGraphics = {
     textLayer: annotationTextLayer,
     highlightLayer: annotationHighlightLayer,
+    shared,
     textById: new Map(),
-    highlightById: new Map(),
+    markerById: new Map(),
+    outlineById: new Map(),
+    built: null,
   }
-  const measurementLabelById = new Map<string, Text>()
+  const measurementLabels: MeasurementLabelGraphics = { layer: measurementGuideLabelLayer, labelById: new Map(), built: [] }
   const plantNameLabelById = new Map<string, Text>()
   const selectionLabelBySpecies = new Map<string, Text>()
   const labelProjection = new AnchorProjection()
   let snapshot: SceneRendererSnapshot | null = null
-
-  /** Places every billboard under the view; a new snapshot also removes what it no longer holds. */
-  function draw(view: ViewTransform, reconcileRemoved: boolean): void {
-    if (!snapshot) return
-    syncPlants(createText, plants, viewSize, snapshot, view, reconcileRemoved)
-    syncAnnotations(createText, notes, snapshot, view, reconcileRemoved)
-    syncMeasurementLabels(createText, measurementGuideLabelLayer, measurementLabelById, snapshot, view, reconcileRemoved)
-    const admitted = labels.admit(view.pixelsPerMetre)!
-    syncPlantNameLabels(createText, plantNameLabelLayer, plantNameLabelById, snapshot, view, labelProjection, admitted.plantNameLabels)
-    syncSelectionLabels(createText, selectionLabelLayer, selectionLabelBySpecies, view, labelProjection, admitted.selectionLabels)
-  }
+  /** The admission the name labels hold; a new one restyles them, the same one only moves them. */
+  let drawnLabels: AdmittedLabels | null = null
 
   return {
     root,
@@ -177,8 +183,20 @@ export function createBillboardLayer(options: BillboardLayerOptions): BillboardL
       if (next) {
         snapshot = next
         labels.setScene(next)
+        shared.cache.beginGeneration()
+        buildPlants(createText, plants, next, view.pixelsPerMetre)
+        buildNotes(createText, notes, next, view.pixelsPerMetre)
+        buildMeasurementLabels(createText, measurementLabels, next)
       }
-      draw(view, next !== undefined)
+      if (!snapshot) return
+      placePlants(plants, viewSize, view)
+      placeNotes(notes, view)
+      placeMeasurementLabels(measurementLabels, snapshot, view)
+      const admitted = labels.admit(view.pixelsPerMetre)!
+      const restyle = admitted !== drawnLabels
+      drawnLabels = admitted
+      syncPlantNameLabels(createText, plantNameLabelLayer, plantNameLabelById, snapshot, view, labelProjection, admitted.plantNameLabels, restyle)
+      syncSelectionLabels(createText, selectionLabelLayer, selectionLabelBySpecies, view, labelProjection, admitted.selectionLabels, restyle)
     },
     resize(width, height) {
       viewSize.width = width
@@ -188,23 +206,33 @@ export function createBillboardLayer(options: BillboardLayerOptions): BillboardL
     dispose() {
       labels.dispose()
       snapshot = null
-      for (const graphics of plants.graphicsById.values()) {
-        graphics.removeFromParent()
-        destroySharedPlantGraphics(graphics)
+      drawnLabels = null
+      for (const byId of [plants.graphicsById, plants.ringById, plants.badgeById, notes.markerById]) {
+        for (const graphics of byId.values()) {
+          graphics.removeFromParent()
+          destroySharedGraphics(graphics)
+        }
+        byId.clear()
       }
-      plants.graphicsById.clear()
-      for (const ring of plants.ringById.values()) ring.destroy()
-      plants.ringById.clear()
+      for (const outline of notes.outlineById.values()) outline.destroy()
+      notes.outlineById.clear()
       plantLayers.dispose()
       plants.visibleIds.clear()
-      plants.emptyContext.destroy()
-      plants.contexts.dispose()
+      plants.built = null
+      notes.built = null
+      shared.empty.destroy()
+      shared.cache.dispose()
     },
   }
 }
 
-/** Keeps exact current and two prior plant geometry generations while bounding zoom churn. */
-class PlantGraphicsContextCache {
+/**
+ * Drawing contexts shared by every glyph, ring, badge and note marker of one look. A generation begins on each scene
+ * sync, and every frame binds what it shows, so a context is destroyed only after two syncs in which nothing showed
+ * it; a Graphics that hides binds the empty context first (Pixi still validates hidden renderables, and a destroyed
+ * context has no instructions to read).
+ */
+class SharedGraphicsContextCache {
   private current = new Map<string, GraphicsContext>()
   private recent = new Map<string, GraphicsContext>()
   private older = new Map<string, GraphicsContext>()
@@ -253,41 +281,32 @@ class PlantGraphicsContextCache {
   }
 }
 
-interface CachedPlantStackCounts {
-  readonly plants: readonly ScenePlantEntity[]
-  readonly selectedPlantIds: ReadonlySet<string>
-  readonly stackCounts: ReadonlyMap<string, number>
+interface SharedContexts {
+  readonly empty: GraphicsContext
+  readonly cache: SharedGraphicsContextCache
 }
 
-class PlantStackCountsCache {
-  private readonly entries: CachedPlantStackCounts[] = []
-
-  get(
-    presentationEntries: readonly PlantPresentationEntry[],
-    selectedPlantIds: ReadonlySet<string>,
-  ): ReadonlyMap<string, number> {
-    const matchIndex = this.entries.findIndex((candidate) =>
-      samePlantSelection(candidate.selectedPlantIds, selectedPlantIds)
-      && candidate.plants.length === presentationEntries.length
-      && candidate.plants.every((plant, index) => plant === presentationEntries[index]?.plant))
-    if (matchIndex >= 0) {
-      const [match] = this.entries.splice(matchIndex, 1)
-      this.entries.unshift(match!)
-      return match!.stackCounts
-    }
-    const stackCounts = plantStackCounts(presentationEntries)
-    this.entries.unshift({
-      plants: presentationEntries.map((entry) => entry.plant),
-      selectedPlantIds: new Set(selectedPlantIds),
-      stackCounts,
-    })
-    if (this.entries.length > 2) this.entries.pop()
-    return stackCounts
-  }
+/** Binds `graphics` to the shared context for `key`, drawing it first when no context holds that look yet. */
+function bindShared(shared: SharedContexts, graphics: Graphics, key: string, draw: (context: GraphicsContext) => void): void {
+  const { context, created } = shared.cache.acquire(key)
+  graphics.context = context
+  if (created) draw(context)
 }
 
-function samePlantSelection(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
-  return left.size === right.size && [...left].every((plantId) => right.has(plantId))
+/** Hides a Graphics that binds shared contexts. */
+function hideShared(shared: SharedContexts, graphics: Graphics | undefined): void {
+  if (!graphics) return
+  graphics.visible = false
+  graphics.context = shared.empty
+}
+
+/** Pixi does not detach a destroyed Graphics from an externally owned context. */
+function destroySharedGraphics(graphics: Graphics): void {
+  // Rebinding uses Pixi's public context setter to detach both listeners from
+  // the shared cache entry. The temporary context is then destroyed with the
+  // Graphics, so neither side retains the other.
+  graphics.context = new GraphicsContext()
+  graphics.destroy({ context: true })
 }
 
 /**
@@ -361,214 +380,256 @@ function createPlantLayers(viewSize: { width: number; height: number }): PlantLa
 interface PlantGraphics {
   readonly layers: PlantLayers
   readonly overlay: Container
+  readonly shared: SharedContexts
   readonly graphicsById: Map<string, Graphics>
   readonly ringById: Map<string, Graphics>
   readonly badgeById: Map<string, Graphics>
   readonly badgeTextById: Map<string, Text>
-  readonly emptyContext: GraphicsContext
   readonly visibleIds: Set<string>
-  readonly contexts: PlantGraphicsContextCache
-  readonly stackCounts: PlantStackCountsCache
   readonly projection: AnchorProjection
+  /** What the last scene sync decided; null while the Plants layer is hidden. */
+  built: BuiltPlants | null
 }
 
-function syncPlants(
+interface BuiltPlants {
+  readonly positions: readonly ScenePoint[]
+  /** Every plant's entry, in scene order, at `scale`; a zoom frame rescales them from their spacing. */
+  entries: readonly PlantPresentationEntry[]
+  scale: number
+  readonly ringById: ReadonlyMap<string, PlantRing>
+  readonly stackCounts: ReadonlyMap<string, number>
+  readonly badgeColor: number
+}
+
+/** A ring's state and cased stroke; `look` keys its shared context with the radius. */
+interface PlantRing {
+  readonly outline: CasedStroke
+  readonly look: string
+}
+
+/** Builds the plants of a new snapshot: their Graphics, order, entries at `pixelsPerMetre`, stack counts and rings. */
+function buildPlants(
   createText: () => Text,
   plants: PlantGraphics,
-  viewSize: { width: number; height: number },
   snapshot: SceneRendererSnapshot,
-  view: ViewTransform,
-  reconcileRemoved: boolean,
+  pixelsPerMetre: number,
 ): void {
-  const { layers, overlay, graphicsById, ringById, badgeById, badgeTextById, emptyContext, visibleIds } = plants
+  const { layers, overlay, shared, graphicsById, ringById, badgeById, badgeTextById, visibleIds } = plants
+  const scenePlants = snapshot.scene.plants
+  const keep = new Set(scenePlants.map((plant) => plant.id))
+  destroyEntriesNotIn(graphicsById, keep, destroySharedGraphics)
+  destroyEntriesNotIn(ringById, keep, destroySharedGraphics)
+  destroyEntriesNotIn(badgeById, keep, destroySharedGraphics)
+  destroyEntriesNotIn(badgeTextById, keep)
   const layer = getSceneLayerStyle(snapshot.scene, 'plants')
   layers.root.visible = layer.visible
   layers.setLayerOpacity(layer.opacity)
   overlay.visible = layer.visible
   overlay.alpha = layer.opacity
   if (!layer.visible) {
-    if (reconcileRemoved) {
-      const keep = new Set(snapshot.scene.plants.map((plant) => plant.id))
-      destroyEntriesNotIn(graphicsById, keep, destroySharedPlantGraphics)
-      destroyEntriesNotIn(ringById, keep)
-      destroyEntriesNotIn(badgeById, keep)
-      destroyEntriesNotIn(badgeTextById, keep)
-    }
+    for (const plantId of visibleIds) hidePlant(plants, plantId)
+    visibleIds.clear()
+    plants.built = null
     return
   }
 
   // Keep display order stable even when a previously unseen Plant enters the view.
-  const nextIds = new Set<string>()
+  let anyDimmed = false
   measurePixiSceneWork('plantObjects', () => {
-    snapshot.scene.plants.forEach((plant, index) => {
-      nextIds.add(plant.id)
+    scenePlants.forEach((plant, index) => {
       let graphic = graphicsById.get(plant.id)
       if (!graphic) {
-        graphic = new Graphics(emptyContext)
+        graphic = new Graphics(shared.empty)
         graphic.visible = false
         graphicsById.set(plant.id, graphic)
-        layers.symbols.addChild(graphic)
       }
       graphic.zIndex = index
+      const dimmed = speciesFocusOpacity(snapshot.speciesFocus, plant.canonicalName) < 1
+      anyDimmed ||= dimmed
+      const target = dimmed ? layers.dimmed : layers.symbols
+      if (graphic.parent !== target) target.addChild(graphic)
     })
-    for (const ring of ringById.values()) ring.visible = false
-    for (const badge of badgeById.values()) badge.visible = false
-    for (const text of badgeTextById.values()) text.visible = false
   })
-  // Includes the largest symbolic footprint, interaction ring and stack badge.
-  const margin = 32
-  const projected = plants.projection.project(view, snapshot.scene.plants.map((plant) => plant.position))
-  const screenPointById = new Map<string, ScenePoint>()
-  const visiblePlants = measurePixiSceneWork('plantCull', () => snapshot.scene.plants.filter((plant, index) => {
-    const x = projected[index * 2]!
-    const y = projected[index * 2 + 1]!
-    screenPointById.set(plant.id, { x, y })
-    if (viewSize.width <= 0 || viewSize.height <= 0) return true
-    return x >= -margin && y >= -margin && x <= viewSize.width + margin && y <= viewSize.height + margin
-  }))
-  const pixelsPerMetre = view.pixelsPerMetre
-  const entries = measurePixiSceneWork('plantEntries', () => buildPlantPresentationEntries(visiblePlants, {
-    plants: snapshot.scene.plants,
+  layers.setDimmed(anyDimmed)
+  const entries = measurePixiSceneWork('plantEntries', () => buildPlantPresentationEntries(scenePlants, {
     pixelsPerMetre,
     speciesCache: snapshot.speciesCache,
     plantSpeciesSymbols: snapshot.scene.plantSpeciesSymbols,
-    localizedCommonNames: snapshot.localizedCommonNames,
   }, snapshot.selectedPlantIds))
-  const stackCounts = measurePixiSceneWork('plantLayout', () => plants.stackCounts.get(entries, snapshot.selectedPlantIds))
-  const nextVisiblePlantIds = new Set(visiblePlants.map((plant) => plant.id))
-  for (const plantId of visibleIds) {
-    if (nextVisiblePlantIds.has(plantId)) continue
-    const graphic = graphicsById.get(plantId)!
-    graphic.visible = false
-    // A hidden symbol must not keep a cache context alive or, worse, hold one
-    // the cache retires two generations later: Pixi still validates hidden
-    // renderables, and a destroyed context has no instructions to read.
-    graphic.context = emptyContext
-  }
-  plants.contexts.beginGeneration()
+  const stackCounts = measurePixiSceneWork('plantLayout', () => plantStackCounts(entries))
 
-  let anyDimmed = false
-  measurePixiSceneWork('plantDraw', () => { for (const entry of entries) {
-    const at = screenPointById.get(entry.plant.id)!
-    const graphic = graphicsById.get(entry.plant.id)!
-    const dimmed = speciesFocusOpacity(snapshot.speciesFocus, entry.plant.canonicalName) < 1
-    anyDimmed ||= dimmed
-    const target = dimmed ? layers.dimmed : layers.symbols
-    if (graphic.parent !== target) target.addChild(graphic)
-    const { context, created } = plants.contexts.acquire(plantGeometryKey(entry))
-    graphic.context = context
-    graphic.position.set(at.x, at.y)
-    if (created) drawPlantGlyph(context, entry)
-    if (!visibleIds.has(entry.plant.id)) graphic.visible = true
-
-    const interactionState = resolvePlantInteractionState(
+  const rings = new Map<string, PlantRing>()
+  const ringLooks = new Map<CanvasInteractionVisualState, PlantRing>()
+  for (const entry of entries) {
+    const id = entry.plant.id
+    const state = resolvePlantInteractionState(
       entry,
       snapshot.hoveredCanonicalName,
-      snapshot.highlightedPlantIds.has(entry.plant.id),
-      hoverStateForTarget(snapshot, 'plant', entry.plant.id),
+      snapshot.highlightedPlantIds.has(id),
+      hoverStateForTarget(snapshot, 'plant', id),
     )
-    if (interactionState) {
-      let ring = ringById.get(entry.plant.id)
+    if (state) {
+      let ring = ringLooks.get(state)
       if (!ring) {
-        ring = new Graphics()
-        ringById.set(entry.plant.id, ring)
-        layers.rings.addChild(ring)
+        const outline = interactionOutline(state)
+        ring = { outline, look: `${state}|${JSON.stringify(outline)}` }
+        ringLooks.set(state, ring)
       }
-      drawPlantRing(ring, entry, interactionState)
-      ring.position.set(at.x, at.y)
-      ring.visible = true
+      rings.set(id, ring)
+      if (!ringById.has(id)) {
+        const graphic = new Graphics(shared.empty)
+        graphic.visible = false
+        ringById.set(id, graphic)
+        layers.rings.addChild(graphic)
+      }
+    } else {
+      destroyEntry(ringById, id, destroySharedGraphics)
     }
 
-    const stackCount = stackCounts.get(entry.plant.id)
+    const stackCount = stackCounts.get(id)
     if (stackCount) {
-      const badge = badgeById.get(entry.plant.id) ?? new Graphics()
-      if (!badgeById.has(entry.plant.id)) {
-        badgeById.set(entry.plant.id, badge)
+      if (!badgeById.has(id)) {
+        const badge = new Graphics(shared.empty)
+        badge.visible = false
+        badgeById.set(id, badge)
         overlay.addChild(badge)
-      }
-      drawStackBadge(badge, entry, stackCount)
-      badge.position.set(at.x, at.y)
-      badge.visible = true
-
-      const badgeText = badgeTextById.get(entry.plant.id) ?? createText()
-      if (!badgeTextById.has(entry.plant.id)) {
-        badgeTextById.set(entry.plant.id, badgeText)
+        const badgeText = createText()
+        badgeText.visible = false
+        badgeText.anchor.set(0.5, 0.5)
+        badgeTextById.set(id, badgeText)
         overlay.addChild(badgeText)
       }
-      drawStackBadgeText(badgeText, entry, stackCount, at)
-      badgeText.visible = true
-    } else if (reconcileRemoved) {
-      const badge = badgeById.get(entry.plant.id)
-      if (badge) {
-        badge.removeFromParent()
-        badge.destroy()
-      }
-      badgeById.delete(entry.plant.id)
-      const badgeText = badgeTextById.get(entry.plant.id)
-      if (badgeText) {
-        badgeText.removeFromParent()
-        badgeText.destroy()
-      }
-      badgeTextById.delete(entry.plant.id)
+      const badgeText = badgeTextById.get(id)!
+      badgeText.text = String(stackCount)
+      setTextStyle(badgeText, {
+        fontFamily: CANVAS_CHROME_FONT_FAMILY,
+        fontSize: STACK_BADGE_FONT_SIZE_PX,
+        fill: toPixiColor(getStackBadgeTextColor()),
+      })
     } else {
-      const badge = badgeById.get(entry.plant.id)
-      if (badge) badge.visible = false
-      const badgeText = badgeTextById.get(entry.plant.id)
-      if (badgeText) badgeText.visible = false
+      destroyEntry(badgeById, id, destroySharedGraphics)
+      destroyEntry(badgeTextById, id)
     }
-  } })
+  }
 
-  layers.setDimmed(anyDimmed)
-  visibleIds.clear()
-  for (const plantId of nextVisiblePlantIds) visibleIds.add(plantId)
-
-  if (!reconcileRemoved) return
-  for (const [plantId, graphics] of graphicsById) {
-    if (nextIds.has(plantId)) continue
-    graphics.removeFromParent()
-    destroySharedPlantGraphics(graphics)
-    graphicsById.delete(plantId)
-  }
-  for (const [plantId, ring] of ringById) {
-    if (ring.visible) continue
-    ring.removeFromParent()
-    ring.destroy()
-    ringById.delete(plantId)
-  }
-  for (const [plantId, badge] of badgeById) {
-    if (nextIds.has(plantId)) continue
-    badge.removeFromParent()
-    badge.destroy()
-    badgeById.delete(plantId)
-  }
-  for (const [plantId, badgeText] of badgeTextById) {
-    if (nextIds.has(plantId)) continue
-    badgeText.removeFromParent()
-    badgeText.destroy()
-    badgeTextById.delete(plantId)
+  plants.built = {
+    positions: scenePlants.map((plant) => plant.position),
+    entries,
+    scale: pixelsPerMetre,
+    ringById: rings,
+    stackCounts,
+    badgeColor: toPixiColor(getStackBadgeBackgroundColor()),
   }
 }
 
-/** Pixi does not detach a destroyed Graphics from an externally owned context. */
-function destroySharedPlantGraphics(graphics: Graphics): void {
-  // Rebinding uses Pixi's public context setter to detach both listeners from
-  // the shared cache entry. The temporary context is then destroyed with the
-  // Graphics, so neither side retains the other.
-  graphics.context = new GraphicsContext()
-  graphics.destroy({ context: true })
+/** Places the built plants under the view: the cull, positions, and sizes when the scale changed. */
+function placePlants(plants: PlantGraphics, viewSize: { width: number; height: number }, view: ViewTransform): void {
+  const { built, visibleIds } = plants
+  if (!built) return
+  if (built.scale !== view.pixelsPerMetre) {
+    const scale = view.pixelsPerMetre
+    built.entries = measurePixiSceneWork('plantEntries', () => built.entries.map((entry) => rescalePlantEntry(entry, scale)))
+    built.scale = scale
+  }
+  // Includes the largest symbolic footprint, interaction ring and stack badge.
+  const margin = 32
+  const projected = plants.projection.project(view, built.positions)
+  const nextVisibleIds = measurePixiSceneWork('plantCull', () => {
+    const inView = new Set<string>()
+    built.entries.forEach((entry, index) => {
+      const x = projected[index * 2]!
+      const y = projected[index * 2 + 1]!
+      if (viewSize.width <= 0 || viewSize.height <= 0
+        || (x >= -margin && y >= -margin && x <= viewSize.width + margin && y <= viewSize.height + margin)) inView.add(entry.plant.id)
+    })
+    return inView
+  })
+  for (const plantId of visibleIds) {
+    if (!nextVisibleIds.has(plantId)) hidePlant(plants, plantId)
+  }
+  measurePixiSceneWork('plantDraw', () => {
+    built.entries.forEach((entry, index) => {
+      if (nextVisibleIds.has(entry.plant.id)) showPlant(plants, built, entry, projected[index * 2]!, projected[index * 2 + 1]!)
+    })
+  })
+  visibleIds.clear()
+  for (const plantId of nextVisibleIds) visibleIds.add(plantId)
+}
+
+/** Binds and places a plant's glyph, ring and badge; only a look no context holds yet is drawn. */
+function showPlant(plants: PlantGraphics, built: BuiltPlants, entry: PlantPresentationEntry, x: number, y: number): void {
+  const id = entry.plant.id
+  const { shared } = plants
+  const keys = plantContextKeys(entry, built)
+  const graphic = plants.graphicsById.get(id)!
+  bindShared(shared, graphic, keys.glyph, (context) => measurePixiSceneWork('plantGlyph', () => drawPlantGlyph(context, entry)))
+  graphic.position.set(x, y)
+  graphic.visible = true
+
+  const ring = built.ringById.get(id)
+  if (ring) {
+    const graphics = plants.ringById.get(id)!
+    bindShared(shared, graphics, keys.ring!, (context) => drawPlantRing(context, plantRingRadius(entry), ring.outline))
+    graphics.position.set(x, y)
+    graphics.visible = true
+  }
+
+  const stackCount = built.stackCounts.get(id)
+  if (stackCount) {
+    // The badge sits off the exact radius; its pill is shared by every badge of its count.
+    const offset = getStackBadgeOffsetPx(entry.radiusScreenPx)
+    const badge = plants.badgeById.get(id)!
+    bindShared(shared, badge, keys.badge!, (context) => drawStackBadge(context, String(stackCount), built.badgeColor))
+    badge.position.set(x + offset.x, y + offset.y)
+    badge.visible = true
+    const badgeText = plants.badgeTextById.get(id)!
+    badgeText.position.set(x + offset.x, y + offset.y)
+    badgeText.visible = true
+  }
+}
+
+function hidePlant(plants: PlantGraphics, plantId: string): void {
+  hideShared(plants.shared, plants.graphicsById.get(plantId))
+  hideShared(plants.shared, plants.ringById.get(plantId))
+  hideShared(plants.shared, plants.badgeById.get(plantId))
+  const badgeText = plants.badgeTextById.get(plantId)
+  if (badgeText) badgeText.visible = false
+}
+
+interface PlantContextKeys {
+  readonly glyph: string
+  readonly ring: string | null
+  readonly badge: string | null
+}
+
+/** Each entry's shared-context keys, made once per entry (a scene sync or a zoom frame), so a pan builds no key. */
+const plantContextKeysByEntry = new WeakMap<PlantPresentationEntry, PlantContextKeys>()
+
+function plantContextKeys(entry: PlantPresentationEntry, built: BuiltPlants): PlantContextKeys {
+  let keys = plantContextKeysByEntry.get(entry)
+  if (keys) return keys
+  const ring = built.ringById.get(entry.plant.id)
+  const stackCount = built.stackCounts.get(entry.plant.id)
+  keys = {
+    glyph: plantGeometryKey(entry),
+    ring: ring ? `ring|${plantRingRadius(entry)}|${ring.look}` : null,
+    badge: stackCount ? `badge|${stackCount}|${built.badgeColor}` : null,
+  }
+  plantContextKeysByEntry.set(entry, keys)
+  return keys
 }
 
 function plantGeometryKey(entry: PlantPresentationEntry): string {
   const renderedSymbol = resolveRenderedPlantSymbol(entry)
   const edgeColor = getPlantSymbolEdgeColor(entry.color)
-  const edgeWidth = getPlantSymbolEdgeWidth(entry.radiusScreenPx * 2)
-  return `${entry.radiusScreenPx}|${renderedSymbol}|${entry.dot}|${entry.color}|${edgeColor}|${edgeWidth}`
+  const edgeWidth = getPlantSymbolEdgeWidth(entry.glyphRadiusPx * 2)
+  return `glyph|${entry.glyphRadiusPx}|${renderedSymbol}|${entry.dot}|${entry.color}|${edgeColor}|${edgeWidth}`
 }
 
-/** The symbol alone at the local origin, opaque; its container applies any dimming or layer opacity once. */
+/** The symbol alone at the local origin, opaque, at its drawn radius; its container applies any dimming or layer opacity once. */
 export function drawPlantGlyph(graphics: GraphicsContext, entry: PlantPresentationEntry): void {
   const symbol = resolveRenderedPlantSymbol(entry)
-  const r = entry.radiusScreenPx
+  const r = entry.glyphRadiusPx
   const color = toPixiColor(entry.color)
   if (entry.dot || symbol === 'round') {
     graphics.circle(0, 0, entry.dot ? r : r * ROUND_PLANT_SYMBOL_RADIUS).fill({ color })
@@ -591,44 +652,26 @@ export function drawPlantGlyph(graphics: GraphicsContext, entry: PlantPresentati
   graphics.fill({ color: edge })
 }
 
+/** A selected plant is ringed at its drawn radius; any other ring stands off it and stays readable at dot sizes. */
+function plantRingRadius(entry: PlantPresentationEntry): number {
+  const r = entry.glyphRadiusPx
+  return entry.selected ? r : Math.max(r * 1.4, MIN_PLANT_RING_RADIUS_PX)
+}
+
 /** The ring at the local origin; plants draw in the CSS-pixel root, so ring widths need no scaling. */
-function drawPlantRing(ring: Graphics, entry: PlantPresentationEntry, state: CanvasInteractionVisualState): void {
-  const visual = interactionOutline(state)
-  const r = entry.radiusScreenPx
-  const radius = entry.selected ? r : Math.max(r * 1.4, MIN_PLANT_RING_RADIUS_PX)
-  ring.clear()
-  ring.circle(0, 0, radius).stroke(visual.casing)
-  ring.circle(0, 0, radius).stroke(visual.stroke)
+function drawPlantRing(context: GraphicsContext, radius: number, outline: CasedStroke): void {
+  context.circle(0, 0, radius).stroke(outline.casing)
+  context.circle(0, 0, radius).stroke(outline.stroke)
 }
 
 function resolveRenderedPlantSymbol(entry: PlantPresentationEntry): PlantSymbolId {
   return entry.dot ? 'round' : entry.symbol
 }
 
-/** The badge at its offset from the local origin, the plant's screen point. */
-function drawStackBadge(badge: Graphics, entry: PlantPresentationEntry, stackCount: number): void {
-  const offset = getStackBadgeOffsetPx(entry.radiusScreenPx)
-  const size = getStackBadgeSizePx(String(stackCount))
-  badge.clear()
-  badge.roundRect(
-    offset.x - size.width / 2,
-    offset.y - size.height / 2,
-    size.width,
-    size.height,
-    size.height / 2,
-  ).fill({ color: toPixiColor(getStackBadgeBackgroundColor()), alpha: 1 })
-}
-
-function drawStackBadgeText(badgeText: Text, entry: PlantPresentationEntry, stackCount: number, at: ScenePoint): void {
-  const offset = getStackBadgeOffsetPx(entry.radiusScreenPx)
-  badgeText.text = String(stackCount)
-  setTextStyle(badgeText, {
-    fontFamily: CANVAS_CHROME_FONT_FAMILY,
-    fontSize: STACK_BADGE_FONT_SIZE_PX,
-    fill: toPixiColor(getStackBadgeTextColor()),
-  })
-  badgeText.position.set(at.x + offset.x, at.y + offset.y)
-  badgeText.anchor.set(0.5, 0.5)
+/** The badge's pill centred on the local origin, sized for its count. */
+function drawStackBadge(context: GraphicsContext, text: string, color: number): void {
+  const size = getStackBadgeSizePx(text)
+  context.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, size.height / 2).fill({ color, alpha: 1 })
 }
 
 /**
@@ -650,110 +693,159 @@ function resolvePlantInteractionState(
 interface NoteGraphics {
   readonly textLayer: Container
   readonly highlightLayer: Container
+  readonly shared: SharedContexts
   readonly textById: Map<string, Text>
-  readonly highlightById: Map<string, Graphics>
+  /** Each note's marker, bound to the shared normal or compact marker. */
+  readonly markerById: Map<string, Graphics>
+  /** Each outlined note's frame, in CSS px about its anchor on the ground; a frame turns it by the bearing. */
+  readonly outlineById: Map<string, Graphics>
+  /** What the last scene sync decided; null while the Notes layer is hidden. */
+  built: BuiltNotes | null
 }
 
-function syncAnnotations(
-  createText: () => Text,
-  notes: NoteGraphics,
-  snapshot: SceneRendererSnapshot,
-  view: ViewTransform,
-  reconcileRemoved: boolean,
-): void {
-  const { textLayer, highlightLayer, textById, highlightById } = notes
+interface BuiltNotes {
+  readonly snapshot: SceneRendererSnapshot
+  readonly notes: readonly BuiltNote[]
+  readonly markerInk: { readonly halo: number; readonly ink: number }
+  /** The scale the notes were presented at; null until the first frame after the sync. */
+  scale: number | null
+}
+
+interface BuiltNote {
+  readonly annotation: SceneAnnotationEntity
+  readonly text: Text
+  /** Shows its text at every scale: the single selected note or the hovered one. */
+  readonly revealText: boolean
+  /** The selection or hover outline; null when the note has none. */
+  readonly outline: CasedStroke | null
+}
+
+function buildNotes(createText: () => Text, notes: NoteGraphics, snapshot: SceneRendererSnapshot, pixelsPerMetre: number): void {
+  const { textLayer, highlightLayer, shared, textById, markerById, outlineById } = notes
+  const keep = new Set(snapshot.scene.annotations.filter((annotation) => annotation.annotationType === 'text').map((annotation) => annotation.id))
+  destroyEntriesNotIn(textById, keep)
+  destroyEntriesNotIn(markerById, keep, destroySharedGraphics)
+  destroyEntriesNotIn(outlineById, keep)
   const layer = getSceneLayerStyle(snapshot.scene, 'annotations')
   textLayer.visible = layer.visible
   textLayer.alpha = layer.opacity
   highlightLayer.visible = layer.visible
   highlightLayer.alpha = layer.opacity
   if (!layer.visible) {
-    if (reconcileRemoved) {
-      const keep = new Set(snapshot.scene.annotations.map((annotation) => annotation.id))
-      destroyEntriesNotIn(textById, keep)
-      destroyEntriesNotIn(highlightById, keep)
-    }
+    for (const marker of markerById.values()) hideShared(shared, marker)
+    notes.built = null
     return
   }
 
-  const pixelsPerMetre = view.pixelsPerMetre
-  const detail = getCanvasDetailLayout(snapshot.scene, pixelsPerMetre)
-  const nextIds = new Set<string>()
+  const built: BuiltNote[] = []
   for (const annotation of snapshot.scene.annotations) {
     if (annotation.annotationType !== 'text') continue
-    nextIds.add(annotation.id)
-    const text = textById.get(annotation.id) ?? createText()
-    if (!textById.has(annotation.id)) {
+    let text = textById.get(annotation.id)
+    if (!text) {
+      text = createText()
       textById.set(annotation.id, text)
       textLayer.addChild(text)
     }
-    const revealText = annotation.id === snapshot.revealedAnnotationId
-      || (snapshot.hoverTarget?.kind === 'annotation' && snapshot.hoverTarget.id === annotation.id)
-    const textAllowed = detail.annotationIds.has(annotation.id)
-    const presentation = getAnnotationPresentation(annotation, pixelsPerMetre, revealText, textAllowed)
-    const origin = view.worldToScreen(annotation.position)
-    styleAnnotationText(text, annotation, presentation.textFrame.lineHeightPx, view.camera.bearingDeg)
-    text.position.set(origin.x, origin.y)
-    text.alpha = presentation.textOpacity
-    text.visible = presentation.textOpacity > 0
-
+    styleAnnotationText(text, annotation, getAnnotationPresentation(annotation, pixelsPerMetre).textFrame.lineHeightPx)
+    if (!markerById.has(annotation.id)) {
+      const marker = new Graphics(shared.empty)
+      marker.visible = false
+      markerById.set(annotation.id, marker)
+      highlightLayer.addChild(marker)
+    }
     const interactionState = resolveInteractionState(
       snapshot.selectedAnnotationIds.has(annotation.id),
       false,
       hoverStateForTarget(snapshot, 'annotation', annotation.id),
     )
-    const highlight = highlightById.get(annotation.id)
-    if (interactionState || presentation.markerOpacity > 0) {
-      const nextHighlight = highlight ?? new Graphics()
-      if (!highlightById.has(annotation.id)) {
-        highlightById.set(annotation.id, nextHighlight)
-        highlightLayer.addChild(nextHighlight)
-      }
-      nextHighlight.clear()
-      if (presentation.markerOpacity > 0) {
-        traceAnnotationMarker(nextHighlight, presentation.markerPaths, origin)
-        nextHighlight.stroke({ color: toPixiColor(getMapBackdropInk().halo),
-          width: presentation.markerStrokePx + OVERLAY_CASING_EXTRA_PX, alpha: presentation.markerOpacity, cap: 'round', join: 'round' })
-        traceAnnotationMarker(nextHighlight, presentation.markerPaths, origin)
-        nextHighlight.stroke({ color: toPixiColor(getMapTextColor()),
-          width: presentation.markerStrokePx, alpha: presentation.markerOpacity })
-      }
-      if (interactionState) {
-        const corners = getAnnotationVisualWorldCorners(annotation, pixelsPerMetre, revealText, { x: 4, y: 2 }, textAllowed)
-          .map((point) => view.worldToScreen(point))
-        const outline = casedStroke(getCanvasInteractionStrokeVisual(interactionState), 1)
-        drawClosedPath(nextHighlight, corners).stroke(outline.casing)
-        drawClosedPath(nextHighlight, corners).stroke(outline.stroke)
-      }
-      nextHighlight.visible = true
-    } else if (reconcileRemoved) {
-      if (highlight) {
-        highlight.removeFromParent()
-        highlight.destroy()
-      }
-      highlightById.delete(annotation.id)
-    } else if (highlight) {
-      highlight.visible = false
+    if (interactionState && !outlineById.has(annotation.id)) {
+      const outline = new Graphics()
+      outlineById.set(annotation.id, outline)
+      highlightLayer.addChild(outline)
+    } else if (!interactionState) {
+      destroyEntry(outlineById, annotation.id)
     }
+    built.push({
+      annotation,
+      text,
+      revealText: annotation.id === snapshot.revealedAnnotationId
+        || (snapshot.hoverTarget?.kind === 'annotation' && snapshot.hoverTarget.id === annotation.id),
+      outline: interactionState ? casedStroke(getCanvasInteractionStrokeVisual(interactionState), 1) : null,
+    })
   }
+  const ink = getMapBackdropInk()
+  notes.built = { snapshot, notes: built, markerInk: { halo: toPixiColor(ink.halo), ink: toPixiColor(getMapTextColor()) }, scale: null }
+}
 
-  if (!reconcileRemoved) return
-  for (const [annotationId, text] of textById) {
-    if (nextIds.has(annotationId)) continue
-    text.removeFromParent()
-    text.destroy()
-    textById.delete(annotationId)
+/** Places the notes: their anchors and angles every frame; text, marker and outline when the scale changed. */
+function placeNotes(notes: NoteGraphics, view: ViewTransform): void {
+  const { built } = notes
+  if (!built) return
+  const pixelsPerMetre = view.pixelsPerMetre
+  if (built.scale !== pixelsPerMetre) {
+    built.scale = pixelsPerMetre
+    const detail = getCanvasDetailLayout(built.snapshot.scene, pixelsPerMetre)
+    for (const note of built.notes) presentNote(notes, built, note, pixelsPerMetre, detail.annotationIds.has(note.annotation.id))
   }
-  for (const [annotationId, highlight] of highlightById) {
-    if (nextIds.has(annotationId)) continue
-    highlight.removeFromParent()
-    highlight.destroy()
-    highlightById.delete(annotationId)
+  const bearingRad = (view.camera.bearingDeg * Math.PI) / 180
+  for (const { annotation, text } of built.notes) {
+    const origin = view.worldToScreen(annotation.position)
+    text.position.set(origin.x, origin.y)
+    text.rotation = noteTextRotation(annotation, view.camera.bearingDeg)
+    notes.markerById.get(annotation.id)!.position.set(origin.x, origin.y)
+    const outline = notes.outlineById.get(annotation.id)
+    if (outline) {
+      outline.position.set(origin.x, origin.y)
+      outline.rotation = -bearingRad
+    }
   }
 }
 
-/** A note's text, style and on-screen angle (its own angle less the bearing); the caller places it at the note's screen point. */
-export function styleAnnotationText(text: Text, annotation: SceneAnnotationEntity, lineHeightPx: number, bearingDeg: number): void {
+/** A note's text opacity, its marker and its outline at a scale. */
+function presentNote(notes: NoteGraphics, built: BuiltNotes, note: BuiltNote, pixelsPerMetre: number, textAllowed: boolean): void {
+  const { annotation, text, revealText, outline } = note
+  const presentation = getAnnotationPresentation(annotation, pixelsPerMetre, revealText, textAllowed)
+  text.alpha = presentation.textOpacity
+  text.visible = presentation.textOpacity > 0
+
+  const marker = notes.markerById.get(annotation.id)!
+  if (presentation.markerOpacity > 0) {
+    const { halo, ink } = built.markerInk
+    bindShared(notes.shared, marker, `marker|${presentation.compact}|${halo}|${ink}`, (context) => {
+      traceAnnotationMarker(context, presentation.markerPaths, { x: 0, y: 0 })
+      context.stroke({ color: halo, width: presentation.markerStrokePx + OVERLAY_CASING_EXTRA_PX, cap: 'round', join: 'round' })
+      traceAnnotationMarker(context, presentation.markerPaths, { x: 0, y: 0 })
+      context.stroke({ color: ink, width: presentation.markerStrokePx })
+    })
+    marker.alpha = presentation.markerOpacity
+    marker.visible = true
+  } else {
+    hideShared(notes.shared, marker)
+  }
+
+  const outlineGraphics = notes.outlineById.get(annotation.id)
+  if (!outline || !outlineGraphics) return
+  // The text frame (or the marker's square) padded 4 px across and 2 px down, turned by its angle on the ground.
+  const { frame } = presentation
+  const radians = (frame.rotationDeg * Math.PI) / 180
+  const cos = Math.cos(radians)
+  const sin = Math.sin(radians)
+  const corners = [
+    { x: -4, y: -2 },
+    { x: frame.widthPx + 4, y: -2 },
+    { x: frame.widthPx + 4, y: frame.heightPx + 2 },
+    { x: -4, y: frame.heightPx + 2 },
+  ].map(({ x, y }) => ({ x: frame.origin.x + x * cos - y * sin, y: frame.origin.y + x * sin + y * cos }))
+  if (!reuseGeometry(outlineGraphics, [corners, outline])) {
+    outlineGraphics.clear()
+    drawClosedPath(outlineGraphics, corners).stroke(outline.casing)
+    drawClosedPath(outlineGraphics, corners).stroke(outline.stroke)
+  }
+  outlineGraphics.visible = true
+}
+
+/** A note's text and style; the caller places it at the note's screen point and turns it (`noteTextRotation`). */
+export function styleAnnotationText(text: Text, annotation: SceneAnnotationEntity, lineHeightPx: number): void {
   text.text = annotation.text
   setTextStyle(text, {
     fontFamily: CANVAS_CHROME_FONT_FAMILY,
@@ -762,13 +854,17 @@ export function styleAnnotationText(text: Text, annotation: SceneAnnotationEntit
     fill: getMapTextColor(),
     stroke: labelHaloStroke(annotation.fontSize),
   })
-  text.rotation = (((annotation.rotationDeg ?? 0) - bearingDeg) * Math.PI) / 180
   text.anchor.set(0, 0)
+}
+
+/** A note's text angle on screen: its own angle less the bearing, in radians. */
+export function noteTextRotation(annotation: SceneAnnotationEntity, bearingDeg: number): number {
+  return (((annotation.rotationDeg ?? 0) - bearingDeg) * Math.PI) / 180
 }
 
 /** A note's marker paths, CSS px from `origin`. */
 export function traceAnnotationMarker(
-  graphics: Graphics,
+  context: GraphicsContext,
   markerPaths: readonly (readonly ScenePoint[])[],
   origin: ScenePoint,
 ): void {
@@ -776,66 +872,61 @@ export function traceAnnotationMarker(
     path.forEach((point, index) => {
       const x = origin.x + point.x
       const y = origin.y + point.y
-      if (index === 0) graphics.moveTo(x, y)
-      else graphics.lineTo(x, y)
+      if (index === 0) context.moveTo(x, y)
+      else context.lineTo(x, y)
     })
   }
 }
 
-function syncMeasurementLabels(
-  createText: () => Text,
-  layer: Container,
-  labelById: Map<string, Text>,
-  snapshot: SceneRendererSnapshot,
-  view: ViewTransform,
-  reconcileRemoved: boolean,
-): void {
+interface MeasurementLabelGraphics {
+  readonly layer: Container
+  readonly labelById: Map<string, Text>
+  /** The guides with a label, from the last scene sync; empty while the layer is hidden. */
+  built: ReadonlyArray<{ readonly guide: SceneMeasurementGuideEntity; readonly text: Text }>
+}
+
+function buildMeasurementLabels(createText: () => Text, labels: MeasurementLabelGraphics, snapshot: SceneRendererSnapshot): void {
+  const { layer, labelById } = labels
   const style = getSceneLayerStyle(snapshot.scene, 'measurement-guides')
   layer.visible = style.visible
   layer.alpha = style.opacity
-  if (!style.visible) {
-    if (reconcileRemoved) destroyEntriesNotIn(labelById, new Set(snapshot.scene.measurementGuides.map((guide) => guide.id)))
-    return
-  }
-
-  const nextIds = new Set<string>()
-  for (const guide of snapshot.scene.measurementGuides) {
-    const presentation = createMeasurementGuidePresentation(guide)
-    if (!presentation) continue
-    nextIds.add(guide.id)
-    let text = labelById.get(guide.id)
-    if (!text) {
-      text = createText()
-      labelById.set(guide.id, text)
-      layer.addChild(text)
+  const built: Array<{ readonly guide: SceneMeasurementGuideEntity; readonly text: Text }> = []
+  if (style.visible) {
+    for (const guide of snapshot.scene.measurementGuides) {
+      const presentation = createMeasurementGuidePresentation(guide)
+      if (!presentation) continue
+      let text = labelById.get(guide.id)
+      if (!text) {
+        text = createText()
+        labelById.set(guide.id, text)
+        layer.addChild(text)
+      }
+      text.text = presentation.text
+      setTextStyle(text, {
+        fontFamily: CANVAS_CHROME_FONT_FAMILY,
+        fontSize: MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX,
+        // Map text follows the backdrop; the guide's own stroke carries the interaction state.
+        fill: toPixiColor(getMapTextColor()),
+        stroke: labelHaloStroke(MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX),
+      })
+      text.anchor.set(0.5, 0.5)
+      built.push({ guide, text })
     }
-    text.text = presentation.text
-    setTextStyle(text, {
-      fontFamily: CANVAS_CHROME_FONT_FAMILY,
-      fontSize: MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX,
-      // Map text follows the backdrop; the guide's own stroke carries the interaction state.
-      fill: toPixiColor(getMapTextColor()),
-      stroke: labelHaloStroke(MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX),
-    })
+  }
+  labels.built = built
+  destroyEntriesNotIn(labelById, new Set(built.map(({ guide }) => guide.id)))
+}
+
+function placeMeasurementLabels(labels: MeasurementLabelGraphics, snapshot: SceneRendererSnapshot, view: ViewTransform): void {
+  for (const { guide, text } of labels.built) {
     const pose = measurementGuideLabelPoseIn(guide, view)
     text.position.set(pose.point.x, pose.point.y)
     text.rotation = pose.rotationRad
-    text.anchor.set(0.5, 0.5)
     text.visible = isMeasurementLabelVisible(snapshot, view.pixelsPerMetre, guide.id)
-  }
-
-  for (const [guideId, text] of labelById) {
-    if (nextIds.has(guideId)) continue
-    if (reconcileRemoved) {
-      text.removeFromParent()
-      text.destroy()
-      labelById.delete(guideId)
-    } else {
-      text.visible = false
-    }
   }
 }
 
+/** The single selection's name: its text and style when admission ran again, its position on every frame. */
 function syncSelectionLabels(
   createText: () => Text,
   layer: Container,
@@ -843,38 +934,38 @@ function syncSelectionLabels(
   view: ViewTransform,
   projection: AnchorProjection,
   labels: readonly SelectionLabel[],
+  restyle: boolean,
 ): void {
-  const nextSpecies = new Set(labels.map((label) => label.canonicalName))
+  if (restyle) {
+    for (const label of labels) {
+      let text = labelBySpecies.get(label.canonicalName)
+      if (!text) {
+        text = createText()
+        labelBySpecies.set(label.canonicalName, text)
+        layer.addChild(text)
+      }
+      text.text = label.text
+      setTextStyle(text, {
+        fontFamily: CANVAS_CHROME_FONT_FAMILY,
+        fontSize: 12,
+        fontWeight: '600',
+        fontStyle: label.fontStyle,
+        fill: toPixiColor(getMapTextColor()),
+        stroke: labelHaloStroke(12),
+      })
+      text.anchor.set(0.5, 0)
+      text.visible = true
+    }
+    destroyEntriesNotIn(labelBySpecies, new Set(labels.map((label) => label.canonicalName)))
+  }
   const projected = projection.project(view, labels.map((label) => label.anchor))
   labels.forEach((label, index) => {
-    let text = labelBySpecies.get(label.canonicalName)
-    if (!text) {
-      text = createText()
-      labelBySpecies.set(label.canonicalName, text)
-      layer.addChild(text)
-    }
-    text.text = label.text
-    setTextStyle(text, {
-      fontFamily: CANVAS_CHROME_FONT_FAMILY,
-      fontSize: 12,
-      fontWeight: '600',
-      fontStyle: label.fontStyle,
-      fill: toPixiColor(getMapTextColor()),
-      stroke: labelHaloStroke(12),
-    })
-    text.position.set(projected[index * 2]! + label.offsetPx.x, projected[index * 2 + 1]! + label.offsetPx.y)
-    text.anchor.set(0.5, 0)
-    text.visible = true
+    labelBySpecies.get(label.canonicalName)!
+      .position.set(projected[index * 2]! + label.offsetPx.x, projected[index * 2 + 1]! + label.offsetPx.y)
   })
-
-  for (const [species, text] of labelBySpecies) {
-    if (nextSpecies.has(species)) continue
-    text.removeFromParent()
-    text.destroy()
-    labelBySpecies.delete(species)
-  }
 }
 
+/** The admitted plant names: text, style and fade when admission ran again, positions on every frame. */
 function syncPlantNameLabels(
   createText: () => Text,
   layer: Container,
@@ -883,15 +974,14 @@ function syncPlantNameLabels(
   view: ViewTransform,
   projection: AnchorProjection,
   labels: readonly PlantNameLabel[],
+  restyle: boolean,
 ): void {
   const plantLayer = getSceneLayerStyle(snapshot.scene, 'plants')
-  layer.visible = plantLayer.visible
-  layer.alpha = plantLayer.opacity
-  const nextPlantIds = new Set(labels.map((label) => label.plantId))
-
-  if (plantLayer.visible) {
-    const projected = projection.project(view, labels.map((label) => label.anchor))
-    labels.forEach((label, index) => {
+  if (restyle) {
+    layer.visible = plantLayer.visible
+    layer.alpha = plantLayer.opacity
+    const shown = plantLayer.visible ? labels : []
+    for (const label of shown) {
       let text = labelByPlantId.get(label.plantId)
       if (!text) {
         text = createText()
@@ -907,17 +997,16 @@ function syncPlantNameLabels(
         fill: toPixiColor(getMapTextColor()),
         stroke: labelHaloStroke(12),
       })
-      text.position.set(projected[index * 2]! + label.offsetPx.x, projected[index * 2 + 1]! + label.offsetPx.y)
       text.anchor.set(0.5, 0)
       text.alpha = label.opacity
       text.visible = true
-    })
+    }
+    destroyEntriesNotIn(labelByPlantId, new Set(shown.map((label) => label.plantId)))
   }
-
-  for (const [plantId, text] of labelByPlantId) {
-    if (plantLayer.visible && nextPlantIds.has(plantId)) continue
-    text.removeFromParent()
-    text.destroy()
-    labelByPlantId.delete(plantId)
-  }
+  if (!plantLayer.visible) return
+  const projected = projection.project(view, labels.map((label) => label.anchor))
+  labels.forEach((label, index) => {
+    labelByPlantId.get(label.plantId)!
+      .position.set(projected[index * 2]! + label.offsetPx.x, projected[index * 2 + 1]! + label.offsetPx.y)
+  })
 }

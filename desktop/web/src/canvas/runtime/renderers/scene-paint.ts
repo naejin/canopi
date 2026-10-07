@@ -138,6 +138,19 @@ export function destroyEntriesNotIn<T extends { removeFromParent(): void; destro
   }
 }
 
+/** Removes and destroys the entry for `id`, if there is one. */
+export function destroyEntry<T extends { removeFromParent(): void; destroy(): void }>(
+  byId: Map<string, T>,
+  id: string,
+  destroy: (entry: T) => void = (entry) => entry.destroy(),
+): void {
+  const entry = byId.get(id)
+  if (!entry) return
+  entry.removeFromParent()
+  destroy(entry)
+  byId.delete(id)
+}
+
 export function cssColorAlpha(color: string): number {
   const channels = color.match(/^rgba\(([^)]+)\)$/i)?.[1]?.split(',')
   if (channels?.length === 4) return Number.parseFloat(channels[3]!)

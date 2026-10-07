@@ -25,6 +25,9 @@ export class LabelAdmission {
   private snapshot: SceneRendererSnapshot | null = null
   private admitted: { readonly pixelsPerMetre: number; readonly labels: AdmittedLabels } | null = null
 
+  /** `measure` wraps each admission that runs (the renderer's `labelAdmission` work name). */
+  constructor(private readonly measure: <T>(admit: () => T) => T = (admit) => admit()) {}
+
   /** The labels last admitted; null before a scene and its first scale. */
   get current(): AdmittedLabels | null { return this.admitted?.labels ?? null }
 
@@ -37,7 +40,8 @@ export class LabelAdmission {
   admit(pixelsPerMetre: number): AdmittedLabels | null {
     if (!this.snapshot) return null
     if (this.admitted?.pixelsPerMetre !== pixelsPerMetre) {
-      this.admitted = { pixelsPerMetre, labels: admitLabels(this.snapshot, pixelsPerMetre) }
+      const snapshot = this.snapshot
+      this.admitted = { pixelsPerMetre, labels: this.measure(() => admitLabels(snapshot, pixelsPerMetre)) }
     }
     return this.admitted.labels
   }

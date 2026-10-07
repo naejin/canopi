@@ -33,8 +33,12 @@ type PlantFootprintContext = Pick<PlantPresentationContext, 'plants' | 'pixelsPe
 
 export interface PlantPresentationEntry {
   plant: ScenePlantEntity
+  /** Metres to the nearest other plant (Infinity alone); with the scale it sets the radius, so a zoom reuses it. */
+  spacing: number
   radiusWorld: number
   radiusScreenPx: number
+  /** The drawn radius: `radiusScreenPx` to the nearest 0.25 px, so glyphs of one size share their geometry. */
+  glyphRadiusPx: number
   color: string
   symbol: PlantSymbolId
   stackPriority: number
@@ -68,24 +72,25 @@ export function buildPlantPresentationEntries(
   context: PlantPresentationContext,
   selectedPlantIds: ReadonlySet<string>,
 ): PlantPresentationEntry[] {
-  const dotScale = isDotScale(context.pixelsPerMetre)
-  context = { ...context, plants: context.plants ?? plants }
+  const spacingFrom = context.plants ?? plants
   return plants.map((plant) => {
-    const { radiusWorld, radiusScreenPx } = resolvePlantRadiusPresentation(plant, context)
-    const color = resolveDisplayedPlantColor(resolvePlantBaseColor(plant, context.speciesCache), plant.canonicalName, getCanvasPlantDisplay())
-    const symbol = resolvePlantSymbolForPlant(plant, context.plantSpeciesSymbols ?? {})
+    const spacing = nearestPlantSpacing(spacingFrom, plant.position)
     const selected = selectedPlantIds.has(plant.id)
     return {
       plant,
-      radiusWorld,
-      radiusScreenPx,
-      color,
-      symbol,
+      spacing,
+      ...plantSizeAt(spacing, context.pixelsPerMetre),
+      color: resolveDisplayedPlantColor(resolvePlantBaseColor(plant, context.speciesCache), plant.canonicalName, getCanvasPlantDisplay()),
+      symbol: resolvePlantSymbolForPlant(plant, context.plantSpeciesSymbols ?? {}),
       stackPriority: getStackPriority(plant, selected),
-      dot: dotScale || radiusScreenPx < 3.6,
       selected,
     }
   })
+}
+
+/** The entry at another scale: only its size and its dot switch follow the scale. */
+export function rescalePlantEntry(entry: PlantPresentationEntry, pixelsPerMetre: number): PlantPresentationEntry {
+  return { ...entry, ...plantSizeAt(entry.spacing, pixelsPerMetre) }
 }
 
 export function getPlantWorldBounds(
@@ -173,19 +178,21 @@ const SYMBOLIC_PLANT_MAX_SCREEN_PX = 6.75
 const SYMBOLIC_PLANT_HALF_GROWTH_SCALE = 21
 
 function resolvePlantRadiusWorld(plant: ScenePlantEntity, context: PlantFootprintContext): number {
-  return resolvePlantRadiusPresentation(plant, context).radiusWorld
+  const spacing = context.plants ? nearestPlantSpacing(context.plants, plant.position) : Infinity
+  return plantSizeAt(spacing, context.pixelsPerMetre).radiusWorld
 }
 
-function resolvePlantRadiusPresentation(
-  plant: ScenePlantEntity,
-  context: PlantFootprintContext,
-): { radiusWorld: number; radiusScreenPx: number } {
-  const scale = Math.max(context.pixelsPerMetre, .001)
-  const spacing = context.plants ? nearestPlantSpacing(context.plants, plant.position) : Infinity
+/** The drawn size at a scale; the dot switch reads the drawn radius, so a glyph's shape and size change together. */
+function plantSizeAt(
+  spacing: number,
+  pixelsPerMetre: number,
+): Pick<PlantPresentationEntry, 'radiusWorld' | 'radiusScreenPx' | 'glyphRadiusPx' | 'dot'> {
+  const scale = Math.max(pixelsPerMetre, .001)
   // Display › Symbol size scales the footprint, so drawing, hit testing and bounds agree.
   const radiusScreenPx = Math.max(.65, Math.min(getSymbolicPlantRadiusScreenPx(scale), spacing * scale * .42)
     * getCanvasPlantDisplay().symbolScale)
-  return { radiusWorld: radiusScreenPx / scale, radiusScreenPx }
+  const glyphRadiusPx = Math.round(radiusScreenPx * 4) / 4
+  return { radiusWorld: radiusScreenPx / scale, radiusScreenPx, glyphRadiusPx, dot: isDotScale(pixelsPerMetre) || glyphRadiusPx < 3.6 }
 }
 
 function getSymbolicPlantRadiusScreenPx(viewportScale: number): number {
