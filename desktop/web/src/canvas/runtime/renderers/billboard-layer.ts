@@ -913,7 +913,6 @@ function buildMeasurementLabels(createText: () => Text, labels: MeasurementLabel
 }
 
 function placeMeasurementLabels(labels: MeasurementLabelGraphics, snapshot: SceneRendererSnapshot, view: ViewTransform): void {
-  if (labels.built.length === 0) return
   for (const { guide, text } of labels.built) {
     const pose = measurementGuideLabelPoseIn(guide, view)
     text.position.set(pose.point.x, pose.point.y)
