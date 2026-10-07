@@ -22,7 +22,6 @@ function createTestDocumentSurface(
     presented: signal(true),
     awaitPresentation: vi.fn(),
     invalidate: vi.fn(),
-    resize: vi.fn(),
     dispose: vi.fn(),
     ...renderingOverrides,
   } as Parameters<typeof createSceneCanvasDocumentSurface>[0]['rendering']
@@ -106,7 +105,6 @@ describe('Scene Canvas document surface lifecycle', () => {
         presented: signal(true),
         awaitPresentation: vi.fn(),
         invalidate: vi.fn(),
-        resize: vi.fn(),
         dispose: () => {
           calls.push('rendering')
         },

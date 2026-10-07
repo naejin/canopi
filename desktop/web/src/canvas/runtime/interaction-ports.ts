@@ -39,7 +39,7 @@ export interface GestureOutcome {
 }
 
 export interface DomInputSourceDeps {
-  readonly host: HTMLElement                                    // the map host; listeners attach here and on window (0B: from attach, as today; from F only during an owned session)
+  readonly host: HTMLElement                                    // the map host; listeners attach here and on window (0B: from attach; from F only during an owned session)
   readonly platform: InputPlatform
   /** `set` waits `delayMs`: the source measures a deadline from the last input's time, base-free (A1). */
   readonly timers: { set(delayMs: number, cb: () => void): number; clear(id: number): void }
@@ -56,7 +56,7 @@ export interface DomInputSource {
 }
 
 /**
- * An adapter over today's controller (`createCanvasContextMenu`, interaction/canvas-context-menu.ts), which builds the
+ * An adapter over the menu controller (`createCanvasContextMenu`, interaction/canvas-context-menu.ts), which builds the
  * app's CanvasContextMenuRequest (canvas/runtime/app-adapter.ts: anchor, world, retargeted selection, commands,
  * placePlantsAt, saveSelectionAsObjectStamp, returnFocus) and hands it to CanvasRuntimeAppAdapter.contextMenu.
  * The host fills the optional entries from its hit and tool state, and the controller carries them onto the request
@@ -89,9 +89,9 @@ export interface ToolHostDeps {
   readonly frames: ViewFrameSource                              // ToolView, re-emit on onViewFrame('tools'), plane changes
   readonly scene: ToolScene                                     // from createToolScene below
   readonly edits: SceneEditCoordinator
-  readonly admission: SceneCommandAdmission                     // presses, menus, drops and commands run when settled (today's quarantine)
+  readonly admission: SceneCommandAdmission                     // presses, menus, drops and commands run when settled (an unsettled one is quarantined)
   readonly settled: SettledSceneReader                          // dragover reads
-  /** History-free, dirty-free selection (today's deps.setSelection/clearSelection); backs ToolEffects.setSelection and the menu retarget. */
+  /** History-free, dirty-free selection (the runtime's setSelection and clearSelection); backs ToolEffects.setSelection and the menu retarget. */
   readonly setSelection: (targets: readonly SceneDesignObjectTarget[]) => void
   readonly renderer: Pick<SceneRenderTarget, 'setDraft'>
   /** Redraw request after a tool call that mutated an open transaction or changed its draft or handles. */
@@ -105,7 +105,7 @@ export interface ToolHostDeps {
     /** Submits an open entry that no longer holds focus (its blur commit was refused), which the map taking focus cannot
      *  blur again; an entry that holds focus is left to that blur. A press or a menu calls it before focusing the map. */
     submitUnfocusedTextEntry(): void
-    /** Today's hasActiveEditor(), read live wherever the host needs the entry's state (handles hidden while it is open, the
+    /** Whether the note's text entry is open, read live wherever the host needs the entry's state (handles hidden while it is open, the
      *  submit before the next press focuses the map); the host keeps no flag of its own. Esc in the entry stays the entry's
      *  own element handler. */
     isTextEntryOpen(): boolean
@@ -124,30 +124,29 @@ export interface ToolHostDeps {
   readonly translate: ToolContext['translate']
   /** "Turn view to this edge" (§4.16): the menu entry's action on a zone-edge hit. */
   readonly navigation: Pick<ViewNavigation, 'turnToEdge'>
-  /** Today's deps.nudge (the runtime's scene-edit commands); the host owns the series (nudge below). */
+  /** The runtime's scene-edit nudge commands; the host owns the series (nudge below). */
   readonly nudge: Pick<CanvasSceneEditCommandSurface, 'nudgeSelected' | 'endNudge'>
   readonly timers: { set(atMs: number, cb: () => void): number; clear(id: number): void; readonly clock: () => number }
   /** The pointer kind before any hover, press or tap (ToolContext.pointer): 'touch' on iOS and Android, so a selection
    *  made off the map before the first touch gets a finger's handles (interaction-session.ts, from InputPlatform.os). */
   readonly initialPointer: PointerKind
-  /** Hover restyle (a directly locked object shows the locked hover stroke): today's deps.setHoveredTarget. */
+  /** Hover restyle (a directly locked object shows the locked hover stroke): the runtime's hovered target. */
   readonly hover: (target: SceneDesignObjectTarget | null) => void
   /** The raster inspection probe (CanvasRuntimeAppAdapter.tryInspectAt, passed by scene-runtime.ts); true claims the press. */
   readonly inspect?: (world: WorldPoint) => boolean
   /**
    * Takes an admitted press's pointer capture (the recogniser's, which the session holds back until the host admits the
-   * press), before handles, the probe and the tool, as today's _pointerDownWhenSettled did; a refused press takes none.
+   * press), before handles, the probe and the tool; a refused press takes none.
    * False when the capture was lost while it was taken (a synchronous lostpointercapture ended the press): the host stops
    * the press before the tool hears it.
    */
   readonly capturePress: (pointerId: number) => boolean
-  /** Today's notifyTransientHistoryChange: the runtime's transientHistory revision (Edit › Undo during a draft). */
+  /** Bumps the runtime's transientHistory revision (Edit › Undo during a draft). */
   readonly transientHistoryChanged: () => void
   /**
    * A drop the host placed, once its Scene Edit committed, Select is armed and the map has focus: the session clears the
-   * saved stamp's drag source after a saved-stamp drop (today's clearSavedObjectStampDragSource; the panel's dragend
-   * clears it too) and focuses the map again on the next animation frame, after the browser's drag end, as today's drop
-   * did.
+   * saved stamp's drag source after a saved-stamp drop (clearSavedObjectStampDragSource; the panel's dragend clears it
+   * too) and focuses the map again on the next animation frame, after the browser's drag end.
    */
   readonly dropped: (kind: 'species' | 'saved-stamp') => void
 }
@@ -179,7 +178,7 @@ export interface ToolHost {
    * (from the source's raw input, not a gesture; the down's role, 'auxiliary' as 'middle'). Commits the nudge series for any
    * button. For an admitted primary or middle press outside the text entry ('owned-text'), with no live press from
    * another pointer id, it also closes the canvas menu and focuses the map (so an open text
-   * entry commits on its blur): today's _onPointerDown conditions.
+   * entry commits on its blur).
    */
   rawPress(button: 'primary' | 'secondary' | 'middle', target: TargetClass, pointerId?: number): void
   /**
@@ -191,7 +190,7 @@ export interface ToolHost {
   /** Scene or selection changed outside a tool call (select all, undo, menu commands, nudges): refresh handles and decorations. */
   sceneChanged(): void
   /** True while a note's text entry is open. The keyboard port's Space reads it: an open entry, focused or not, arms no
-   *  pan, as today's Text adapter kept its shared keys while the field was open. */
+   *  pan: the field keeps its shared keys while it is open. */
   textEntryOpen(): boolean
   /** The re-origin hold (§4.19): a live press, the active tool's transient or an open text entry. */
   holdsReorigin(): boolean
@@ -204,7 +203,7 @@ export interface ToolHost {
    * Arrow nudge, the one owner of the series: with a selection, the Select tool and site mode, turns the screen direction
    * into a world delta along screenAxesInWorld() (0.1 m, or 1 m when large), calls deps.nudge.nudgeSelected and (re)starts
    * the 800 ms idle timer that commits the series ('handled'). 'refused': the runtime refused the nudge, and the key is
-   * swallowed (today). 'pass': Select is not armed, the map is in overview or nothing is selected; the key goes on to the
+   * swallowed. 'pass': Select is not armed, the map is in overview or nothing is selected; the key goes on to the
    * keyboard port's arrow rule (§3.6: with nothing selected it pans; otherwise the key is not consumed).
    */
   nudge(direction: ScreenPoint, large: boolean): 'handled' | 'refused' | 'pass'
@@ -214,21 +213,21 @@ export interface ToolHost {
    * A pointer release that ended no press of the tool's, which the session reports after routing it: the end or cancel
    * (pointercancel, lost capture, Esc) of a pointer pan (middle, Space, overview or the Pan tool's), or an up with no
    * press of the map's (a right-click release, a release off the map, after a press the scene or the probe refused); not
-   * one while another pointer's press is live, in overview, or over the note editor or a handle (today's _onPointerUp
-   * exceptions). The host's own tap and drag-end of a press the tool never heard do the same. Today's window pointerup ran _cancelTransientInteraction for each: the series commits, the drop preview
-   * and the passive hover clear, the active tool's cancelTransient('navigate') runs (a tool that keeps its draft through a
+   * one while another pointer's press is live, in overview, or over the note editor or a handle. The host's own tap and
+   * drag-end of a press the tool never heard do the same. Each one ends the transient interaction: the series commits, the
+   * drop preview and the passive hover clear, the active tool's cancelTransient('navigate') runs (a tool that keeps its draft through a
    * pan keeps it here too) and the cursor returns to the tool's. A press of the tool's still live is left to its own
    * release.
    */
   released(): void
   /**
-   * Today's _cancelInterruptedInteraction, which the session calls on window blur after feeding the recogniser (which releases
+   * Ends an interrupted interaction; the session calls it on window blur after feeding the recogniser (which releases
    * Space and ends the live sessions): commits the nudge series, clears the passive hover and the tooltip, calls the active
    * tool's cancelTransient('navigate') (a tool that keeps its draft through a pan keeps it
    * here too) and resets the cursor to the tool's. A failure aborts whatever Scene Edit was still open.
    */
   interrupted(): void
-  /** Transient history (today's canUndo/…TransientHistory): sends the active tool the 'undo-transient' and 'redo-transient' commands and
+  /** Transient history (Edit › Undo and Redo during a draft): sends the active tool the 'undo-transient' and 'redo-transient' commands and
    *  reads its canUndoTransient?/canRedoTransient?. deps.transientHistoryChanged runs after every call into the tool and after a
    *  deferred onCommitted. */
   readonly transientHistory: {
@@ -239,8 +238,8 @@ export interface ToolHost {
   /** Every hover whose target is the map (`surface`), before the overview and hover-suppression filters; null on hover-end:
    *  the pointer left the map, or moved over owned chrome, the text entry or a handle (U6), so the lens drops its point
    *  there. A hover off the map publishes nothing (spec §1.4 "Hover", §2.2 "Hover"). A hover made with a button held is
-   *  published too: the interaction session's subscribePointerWorld drops it (its raw buttonMask, as today's lens skipped a
-   *  move with any button held). For the inspection lens, the status line and, later, hover readouts over analysis results: the screen point lets a readout query the map there without projecting (R1, P2). */
+   *  published too: the interaction session's subscribePointerWorld drops it (its raw buttonMask), so the lens skips a
+   *  move with any button held. For the inspection lens, the status line and, later, hover readouts over analysis results: the screen point lets a readout query the map there without projecting (R1, P2). */
   subscribePointerWorld(listener: (point: PointerWorld | null) => void): () => void
   dispose(): void
 }

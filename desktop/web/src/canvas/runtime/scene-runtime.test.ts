@@ -299,7 +299,7 @@ function panOn(runtime: SceneCanvasRuntime, deltaPx: { x: number; y: number }): 
   runtime.cameraHost.current().apply({ kind: 'pan-by', deltaPx })
 }
 
-/** The runtime camera's bearing-0 placement in today's terms. */
+/** The runtime camera's bearing-0 placement: the plane origin's screen point and the scale. */
 function placementOf(runtime: SceneCanvasRuntime): { x: number; y: number; scale: number } {
   const { x, y, scale } = planarCameraOf(frameOf(runtime).view)
   return { x, y, scale }
@@ -310,12 +310,12 @@ function lastDraft(renderer: RendererStub): DraftPresentation | null {
   return renderer.setDraft.mock.calls.at(-1)?.[0] ?? null
 }
 
-/** The chips of the last draft (today's zone measurement labels), in draw order. */
+/** The chips of the last draft (the zone measurement labels), in draw order. */
 function draftLabelTexts(renderer: RendererStub): string[] {
   return lastDraft(renderer)?.shapes.flatMap((shape) => (shape.kind === 'label' ? [shape.text] : [])) ?? []
 }
 
-/** The polygon draft's rubber band (today's SVG draft line), in plane metres; null without one. */
+/** The polygon draft's rubber band, in plane metres; null without one. */
 function draftBand(renderer: RendererStub): readonly { x: number; y: number }[] | null {
   const band = lastDraft(renderer)?.shapes.find((shape) => shape.kind === 'polyline')
   return band?.kind === 'polyline' ? band.points : null
@@ -665,6 +665,38 @@ describe('scene canvas runtime', () => {
       expect(Number(handle.dataset.canvasHandleScreenX)).toBeCloseTo(top.x, 6)
       expect(Number(handle.dataset.canvasHandleScreenY)).toBeCloseTo(top.y, 6)
       expect(Number.parseFloat(handle.style.top) + 28).toBeLessThanOrEqual(top.y)
+    } finally {
+      runtime.destroy()
+    }
+  })
+
+  it('a zoom during a rotate-handle drag moves the rotate handle and its readout to the new scale', async () => {
+    const runtime = stubbedRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const events = createSceneInteractionEventHarness(container)
+    try {
+      // Plant footprints are sized at the live scale, so a zoom moves the selection's top edge on the ground.
+      runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1', 'plant-2'))
+      setInteractionViewport(runtime, { x: 100, y: 120, scale: 4 })
+      runtime.commandSurface.tools.setTool('select')
+      runtime.commandSurface.sceneEdits.selectAll()
+      const handle = () => container.querySelector<HTMLElement>('[data-canvas-handle="rotate"]')!
+      const start = { x: Number.parseFloat(handle().style.left) + 14, y: Number.parseFloat(handle().style.top) + 14 }
+      events.pointerDown(start, { button: 0, target: handle() })
+      // Straight up, away from the pivot: a drag that has not turned the selection yet, so the handle and its readout show.
+      const pointer = { x: start.x, y: start.y - 20 }
+      events.pointerMove(pointer, { button: 0 })
+      expect(handle().querySelector('[data-canvas-handle-readout]')?.textContent).toBe('0°')
+
+      // A wheel zoom about the still pointer: the pointer keeps its ground point, so the turn does not change.
+      runtime.cameraHost.current().apply({ kind: 'zoom-around', anchorPx: pointer, factor: 4 })
+
+      const bounds = runtime.querySurface.getDesignObjectSelection().bounds!
+      const top = frameOf(runtime).view.worldToScreen({ x: (bounds.minX + bounds.maxX) / 2, y: bounds.minY })
+      expect(Number(handle().dataset.canvasHandleScreenX)).toBeCloseTo(top.x, 6)
+      expect(Number(handle().dataset.canvasHandleScreenY)).toBeCloseTo(top.y, 6)
+      expect(handle().querySelector('[data-canvas-handle-readout]')?.textContent).toBe('0°')
+      events.pointerUp(pointer, { button: 0 })
     } finally {
       runtime.destroy()
     }

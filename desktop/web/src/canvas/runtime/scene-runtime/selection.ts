@@ -164,7 +164,6 @@ export function singleEditableTarget<K extends CanvasDesignObjectSelectionTarget
 }
 
 interface SelectionModelMemo {
-  readonly persisted: ScenePersistedState
   readonly selectedTargets: SceneDesignObjectSelection
   readonly annotationViewportScale: number
   readonly symbolScale: number
@@ -172,13 +171,16 @@ interface SelectionModelMemo {
   readonly model: CanvasDesignObjectSelectionModel
 }
 
-let selectionModelMemo: SelectionModelMemo | null = null
+/** Each Scene's last model, so runtimes reading their own Scenes in turn (the workspace, the snapshot or print map) keep
+ *  theirs, and a closed Design's Scene is not kept alive. */
+const selectionModelMemos = new WeakMap<ScenePersistedState, SelectionModelMemo>()
 
 /**
  * The selection's read model, memoised by reference: the store hands out the same Scene and selection until they change,
- * so the same Scene, selection, scale, symbol size and note font epoch return the model built last (frozen in dev
- * builds). A pan builds nothing; a zoom, an edit, a selection change, a symbol-size change or a note font's load builds
- * it again. Every caller sizes plants at the annotation scale, so the plant context is not part of the key.
+ * so the same Scene, selection, scale, symbol size and note font epoch return the model built last for that Scene
+ * (frozen in dev builds). A pan builds nothing; a zoom, an edit, a selection change, a symbol-size change or a note
+ * font's load builds it again. Every caller sizes plants at the annotation scale, so the plant context is not part of
+ * the key.
  */
 export function getDesignObjectSelectionModel(
   persisted: ScenePersistedState,
@@ -187,23 +189,21 @@ export function getDesignObjectSelectionModel(
 ): CanvasDesignObjectSelectionModel {
   const symbolScale = getCanvasPlantDisplay().symbolScale
   const fontEpoch = getAnnotationFontEpoch()
-  const memo = selectionModelMemo
+  const memo = selectionModelMemos.get(persisted)
   if (
-    memo?.persisted === persisted
-    && memo.selectedTargets === selectedTargets
+    memo?.selectedTargets === selectedTargets
     && memo.annotationViewportScale === options.annotationViewportScale
     && memo.symbolScale === symbolScale
     && memo.fontEpoch === fontEpoch
   ) return memo.model
   const model = freezeInDev(buildDesignObjectSelectionModel(persisted, selectedTargets, options))
-  selectionModelMemo = {
-    persisted,
+  selectionModelMemos.set(persisted, {
     selectedTargets,
     annotationViewportScale: options.annotationViewportScale,
     symbolScale,
     fontEpoch,
     model,
-  }
+  })
   return model
 }
 

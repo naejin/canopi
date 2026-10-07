@@ -85,7 +85,7 @@ describe('SceneInteractionSession', () => {
     expect(wheel.defaultPrevented).toBe(true)
     expect(testView.viewport()).toEqual({ x: before.x - 24, y: before.y + 40, scale: before.scale })
     expect(store.persisted).toEqual(scene)
-    expect(render).toHaveBeenCalledWith('viewport')
+    expect(render, 'its camera frame repaints the layer, not the session').not.toHaveBeenCalled()
     session.dispose()
   })
 
@@ -179,7 +179,7 @@ describe('SceneInteractionSession', () => {
     expect(testView.frames.viewFrame.peek()).toBe(before)
   })
 
-  it('publishes wheel zoom once through the camera and uses the viewport render path', () => {
+  it('publishes wheel zoom once through the camera, whose frame is the only repaint', () => {
     const render = vi.fn()
     const deps = createInteractionDeps(container, store, testView, { render })
     const session = createTestSession(deps)
@@ -191,7 +191,7 @@ describe('SceneInteractionSession', () => {
     expect(wheel.defaultPrevented).toBe(true)
     expect(published).toHaveLength(1)
     stop()
-    expect(render).toHaveBeenCalledWith('viewport')
+    expect(render, 'its camera frame repaints the layer, not the session').not.toHaveBeenCalled()
     session.dispose()
   })
 
@@ -248,7 +248,7 @@ describe('SceneInteractionSession', () => {
       session.dispose()
     })
 
-    it('pans on a plain scroll through the camera and the viewport render path', () => {
+    it('pans on a plain scroll through the camera, whose frame is the only repaint', () => {
       const render = vi.fn()
       const deps: SceneInteractionSessionDeps = {
         ...createInteractionDeps(container, store, testView, { render }),
@@ -262,7 +262,7 @@ describe('SceneInteractionSession', () => {
 
       expect(testView.viewport()).toEqual({ x: before.x - 12, y: before.y - 30, scale: before.scale })
       expect(store.persisted).toEqual(scene)
-      expect(render).toHaveBeenCalledWith('viewport')
+      expect(render, 'its camera frame repaints the layer, not the session').not.toHaveBeenCalled()
       session.dispose()
     })
   })

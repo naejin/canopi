@@ -43,6 +43,7 @@ interface MapLibreSurfaceRequest<TMap extends MapLibreMapInstance> {
    * The workspace request hands the size to its camera driver; the World map, which has no driver, resizes its map.
    */
   onResize?(context: MapLibreSurfaceContext<TMap>, size: MapLibreSurfaceSize): void
+  /** The request's own failure owner; without one, the surface logs the failure (redacted). */
   onCreateError?(error: unknown): void
 }
 
@@ -144,9 +145,10 @@ export class MapLibreSurface<TMap extends MapLibreMapInstance = MapLibreMapInsta
       try {
         this.removeMap()
       } catch (removeError) {
-        this.logCleanupError('Failed to remove MapLibre map after create failure:', removeError)
+        this.logSafely('Failed to remove MapLibre map after create failure:', removeError)
       }
-      request.onCreateError?.(error)
+      if (request.onCreateError) request.onCreateError(error)
+      else this.logSafely('Failed to create MapLibre map:', error)
     }
   }
 
@@ -177,11 +179,11 @@ export class MapLibreSurface<TMap extends MapLibreMapInstance = MapLibreMapInsta
     return new ResizeObserver(callback)
   }
 
-  private logCleanupError(message: unknown, error: unknown): void {
+  private logSafely(message: unknown, error: unknown): void {
     try {
       this.logError(message, error)
     } catch {
-      // Preserve the MapLibre construction failure when diagnostics fail.
+      // A failing diagnostic never hides the failure it reports.
     }
   }
 }

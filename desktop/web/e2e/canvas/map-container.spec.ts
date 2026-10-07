@@ -1,6 +1,6 @@
 // The map container after a real map is destroyed (canvas v2 2.0 cleanup, A15). MapLibre adds its canvas
 // and control containers to the Design map element, and the map host removes what a creation added
-// when the map goes (maplibre/host.ts); a leftover would stack a second map under the new one. The
+// when the map goes (maplibre/surface.ts); a leftover would stack a second map under the new one. The
 // jsdom tests cover a failed constructor only; these run the real MapLibre teardown in the browser:
 // a Design switch, and a lost WebGL context followed by the user's Retry.
 // The last scenario checks the container's bottom band in real layout (canopi-23p2): the map notice is bottom chrome

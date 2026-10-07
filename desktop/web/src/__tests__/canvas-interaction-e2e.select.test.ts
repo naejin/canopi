@@ -4248,7 +4248,7 @@ describe('SceneInteractionSession', () => {
 
     expect(testView.viewport().x).toBeCloseTo(30, 6)
     expect(testView.viewport().y).toBeCloseTo(20, 6)
-    expect(render).toHaveBeenCalled()
+    expect(render, 'its camera frame repaints the layer, not the session').not.toHaveBeenCalled()
     session.dispose()
   })
 

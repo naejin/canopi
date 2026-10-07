@@ -11,8 +11,10 @@ export interface SharedMapSceneRendererComposition {
 
 /**
  * Builds the workspace map's custom layers, each connected to the runtime's one target slot (`connect`, the runtime's
- * `connectRenderTarget`) until its final disposal. Layer failures go to the layer's `onFailure` observer; the workspace
- * coordinator then unmounts the runtime's renderer.
+ * `connectRenderTarget`) from MapLibre's `onAdd` until its final disposal. Only an attached layer asks MapLibre for a frame,
+ * so the slot settles a scene render one frame after the layer's frame has drawn it, never before the layer is initialized
+ * (render-scheduler.ts). Layer failures go to the layer's `onFailure` observer; the workspace coordinator then unmounts
+ * the runtime's renderer.
  */
 export function createSharedMapSceneRendererComposition(
   connect: (target: SceneRenderTarget) => () => void,
@@ -20,16 +22,22 @@ export function createSharedMapSceneRendererComposition(
   return {
     createLayer(options) {
       const adapter = createSharedMapSceneLayer(options)
-      let disconnect: (() => void) | null = connect(adapter)
+      let disconnect: (() => void) | null = null
 
       return {
-        layer: adapter.layer,
+        layer: {
+          ...adapter.layer,
+          onAdd(map, gl) {
+            adapter.layer.onAdd?.(map, gl)
+            if (adapter.diagnostics.phase === 'attached') disconnect ??= connect(adapter)
+          },
+        },
         get diagnostics() { return adapter.diagnostics },
         initialize: (map, gl) => adapter.initialize(map, gl),
         setSnapshot: (snapshot) => adapter.setSnapshot(snapshot),
         requestRender: () => adapter.requestRender(),
-        async dispose(disposeOptions) {
-          await adapter.dispose(disposeOptions)
+        async dispose() {
+          await adapter.dispose()
           disconnect?.()
           disconnect = null
         },

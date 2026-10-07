@@ -63,13 +63,13 @@ const NOTHING: GestureOutcome = Object.freeze({})
 const QUARANTINE: GestureOutcome = Object.freeze({ quarantine: true })
 /** A press the scene refused: quarantined, and its recogniser session ends with no gesture. */
 const REFUSED_PRESS: GestureOutcome = Object.freeze({ quarantine: true, rejectSession: true })
-/** A press the inspection probe sampled: nothing else happens until the next press (today's _clearPointerGesture). */
+/** A press the inspection probe sampled: nothing else happens until the next press. */
 const CLAIMED_PRESS: GestureOutcome = Object.freeze({ rejectSession: true })
 const DROP_COPY: GestureOutcome = Object.freeze({ dropEffect: 'copy' })
 const DROP_NONE: GestureOutcome = Object.freeze({ dropEffect: 'none' })
-/** A dragover in overview or while the scene is busy: today's rejected dragover. */
+/** A dragover in overview or while the scene is busy: refused. */
 const REFUSED_DRAGOVER: GestureOutcome = Object.freeze({ quarantine: true, dropEffect: 'none' })
-/** A species drag's cue: today's band box from the pointer, this many CSS px right and down. */
+/** A species drag's cue: a band box from the pointer, this many CSS px right and down. */
 const DROP_CUE_PX = 12
 const NO_HANDLES: readonly ToolHandle[] = Object.freeze([])
 const NO_SNAP: SnapSettings = Object.freeze({ grid: false })
@@ -88,10 +88,10 @@ const NUDGE_SERIES_IDLE_MS = 800
 const SHIFT_CONSTRAINS: ReadonlySet<ToolId> = new Set<ToolId>([
   'polygon', 'plant-spacing', 'line', 'measurement-guide', 'rectangle', 'ellipse',
 ])
-/** The drawing tools whose draft chips replace the selected zone's (today both shared one overlay). */
+/** The drawing tools whose draft chips replace the selected zone's. */
 const ZONE_DRAFT_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>(['line', 'rectangle', 'ellipse', 'polygon'])
 
-/** A press the host routed, from press to release or cancel (today's _pointerGesture). */
+/** A press the host routed, from press to release or cancel. */
 interface LiveGesture {
   readonly id: number
   readonly kind: 'tool' | 'handle'
@@ -119,7 +119,7 @@ interface StillPointer {
 
 type CancelTransientReason = Parameters<CanvasTool['cancelTransient']>[0]
 
-/** Today's createCanvasContextMenu options, plus what open() rebuilds the menu's selection from. */
+/** The menu controller's (createCanvasContextMenu) options, plus what open() rebuilds the menu's selection from. */
 export type ContextMenuPortOptions = Parameters<typeof createCanvasContextMenu>[0] & {
   /** The ToolScene the host hits with: a hit on a locked layer or through a locked group gets the disabled menu. */
   readonly scene: ToolScene
@@ -128,9 +128,9 @@ export type ContextMenuPortOptions = Parameters<typeof createCanvasContextMenu>[
 }
 
 /**
- * ToolHostDeps.menu over today's controller. The host hits and retargets the selection first; open() then rebuilds
- * today's three menu states: the selection's menu from the keyboard, the empty-map menu, and a right-clicked object's menu,
- * disabled when the object is on a locked layer or locked through its group (today's _retargetContextMenuSelection). A
+ * ToolHostDeps.menu over the menu controller. The host hits and retargets the selection first; open() then rebuilds
+ * one of three menu states: the selection's menu from the keyboard, the empty-map menu, and a right-clicked object's menu,
+ * disabled when the object is on a locked layer or locked through its group (contextMenuTargetAt). A
  * pointer menu carries the host's "Turn view to this edge" onto the app's request. A menu opened during the host's
  * re-origin hold (U39) kept the selection: an object hit gets the kept selection's menu, or the empty map's with none.
  */
@@ -195,7 +195,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
    *  nothing. */
   let pressCommitsNote = false
   /** The tool's draft is hidden until the pointer next hovers or presses over the map: a panel drag passed over the map, whose
-   *  drop preview replaces it (today's one preview element, which a dragover took over and a pointermove gave back), or a
+   *  drop preview replaces it (a dragover takes the draft's place and a pointer move gives it back), or a
    *  re-origin with no pointer resting on the map moved the plane under the world points it was drawn at (spec §4.19). */
   let draftHidden = false
   /** What a drop would place, while a panel drag is over the map: a species' band cue or a saved stamp's ghosts. */
@@ -356,7 +356,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         if (!owns()) return
         deps.chrome.requestTextEntry(request, (text) => {
           const reply = callTool(() => submit(text))
-          // A closed entry shows Select's handles again at once (today's editor refreshed them after its commit), and ends
+          // A closed entry shows Select's handles again at once, and ends
           // its re-origin hold as a tool call does.
           if (reply === 'close' && deps.chrome.isTextEntryOpen()) {
             deps.chrome.closeTextEntry()
@@ -418,7 +418,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       abort() {
         tx.abort()
         openEdits.delete(tx)
-        // The scene is back as it was before the edit: redraw it, as today's tools rendered after an abort.
+        // The scene is back as it was before the edit: redraw it.
         if (open) invalidateNeeded = true
       },
       get changed() {
@@ -507,7 +507,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   /**
    * The selection decorations the host draws whatever tool is armed: the single selected zone's W/H, edge and area chips
-   * (today's (a4c86d39) zone tool drew them under every tool). They hide while the armed Line, Rectangle, Ellipse or Polygon
+   * (as before v2, at a4c86d39, the zone tool drew them under every tool). They hide while the armed Line, Rectangle, Ellipse or Polygon
    * draft carries measure labels.
    */
   function decorationShapes(): DraftShape[] {
@@ -544,9 +544,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   /**
-   * Select's handles show only while its affordances may (today's _canShowSelectAffordances): in site mode, with the
-   * text entry closed and no Scene Edit open. A handle's own press keeps them until its edit first changes the scene,
-   * as today's handle hid them at its drag's first update.
+   * Select's handles show only while its affordances may: in site mode, with the text entry closed and no Scene Edit
+   * open. A handle's own press keeps them until its edit first changes the scene: a handle drag hides them at its first
+   * update.
    */
   function shownHandles(): readonly ToolHandle[] {
     if (currentId !== 'select') return toolHandles
@@ -591,7 +591,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     deps.chrome.setTooltip(null)
   }
 
-  /** Today's _updateHover: the restyle (a directly locked object shows the locked hover stroke) and the plant tooltip. */
+  /** The passive hover: the restyle (a directly locked object shows the locked hover stroke) and the plant tooltip. */
   function passiveHover(world: WorldPoint, at: ScreenPoint): void {
     const visible = objectTarget(deps.scene.hitAt(world, { includeLocked: true }))
     deps.hover(visible)
@@ -612,11 +612,10 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   // ── Gestures ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
   function hover(g: Extract<Gesture, { kind: 'hover' }>): GestureOutcome {
-    // The lens hears only moves over the map: not over the canvas's own chrome, nor off the map (today's lens
-    // skips buttons, inputs, textareas, contenteditable and [data-preserve-overlays], and hears no move off the host).
+    // The lens hears only moves over the map: not over the canvas's own chrome (buttons, inputs, textareas,
+    // contenteditable and [data-preserve-overlays]), nor off the map.
     if (g.target.kind === 'surface') publishPointerAt(g.at)
-    // The pointer is back over the map after a panel drag: the tool's draft shows again, as today's next pointermove
-    // redrew it.
+    // The pointer is back over the map after a panel drag: the tool's draft shows again.
     showDraftAfterDrop()
     const tool = activeTool
     if (frame().mode === 'overview') {
@@ -652,14 +651,14 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   /**
-   * Every raw pointerdown on the map host, reported by the session before it routes the press (today's _onPointerDown):
+   * Every raw pointerdown on the map host, reported by the session before it routes the press:
    * any button commits the nudge series. An admitted press of any button outside the text entry, with no live press from
    * another pointer, also closes the menu and moves focus to the map, so an open text entry commits before the press
    * reaches the tool (focusMap) and a right-drag pan or a still right-click closes it; a click inside the entry keeps it
    * open. A right press closes an open menu, and its still release opens the next one, so a double right-click replaces
    * the menu (spec §3.1). While Text is armed a primary press that so commits
-   * the entry places nothing: no tool hears it, as today's Text field took that click (spec §3.2); under another tool the
-   * press goes on. A press on the live press's own pointer (its up was lost) counts, as today's. The host knows only its own
+   * the entry places nothing: no tool hears it, as the Text field takes that click (spec §3.2); under another tool the
+   * press goes on. A press on the live press's own pointer (its up was lost) counts. The host knows only its own
    * live press: a pan lives in the recogniser, which ignores a second pointer anyway.
    */
   function rawPress(button: 'primary' | 'secondary' | 'middle', target: TargetClass, pointerId?: number): void {
@@ -1099,13 +1098,17 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   /**
    * Re-emits the live drag or the resting pointer to the tool only; false when nothing is under a still pointer on the
    * map. The hover stays put while the map moves (U44, Q3 D): the ring, a note's revealed text or a guide's chip stays
-   * on its object until the next pointer move, so a pan frame does no hover sync, and the tooltip hides.
+   * on its object until the next pointer move, so a pan frame does no hover sync, and the tooltip hides, also under a
+   * press that has not dragged yet.
    */
   function reemit(tool: CanvasTool): boolean {
     if (frame().mode !== 'site') return false
     const gesture = live
     if (gesture) {
-      if (!gesture.dragging) return false
+      if (!gesture.dragging) {
+        deps.chrome.setTooltip(null)
+        return false
+      }
       deliverDrag(tool, gesture, 'drag-move', false)
     } else {
       const still = restingPointer()

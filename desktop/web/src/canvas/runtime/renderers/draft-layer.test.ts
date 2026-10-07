@@ -448,9 +448,15 @@ describe('draft layer', () => {
 
   it('a chip whose font has not loaded asks the browser for it once per font, then redraws the draft and asks for a frame', async () => {
     // Canvas text drawn while its web font loads keeps the fallback and is never redrawn by itself.
+    const face = { status: 'unloaded' as FontFaceLoadStatus }
     let finishLoad!: () => void
-    const load = vi.fn(() => new Promise<FontFace[]>((resolve) => { finishLoad = () => resolve([]) }))
-    const fonts = { check: vi.fn(() => false), load }
+    const load = vi.fn(() => new Promise<FontFace[]>((resolve) => {
+      finishLoad = () => {
+        face.status = 'loaded'
+        resolve([face as FontFace])
+      }
+    }))
+    const fonts = { load, forEach: (callback: (each: FontFace) => void) => callback(face as FontFace) }
     Object.defineProperty(document, 'fonts', { configurable: true, value: fonts })
     try {
       const requestRepaint = vi.fn()
@@ -474,7 +480,6 @@ describe('draft layer', () => {
         [`400 ${size}px ${CANVAS_CHROME_MONO_FONT_FAMILY}`],
       ])
       const before = layer.billboardDraftRoot.children[0]
-      fonts.check.mockReturnValue(true)
       finishLoad()
       await Promise.resolve()
       await Promise.resolve()
@@ -486,6 +491,42 @@ describe('draft layer', () => {
       loaded.setView(at({ x: 0, y: 0 }, 1))
       loaded.setDraft({ shapes: [chip('4 m', 'measure')] })
       expect(load, 'a loaded font is not asked for').toHaveBeenCalledTimes(2)
+    } finally {
+      Reflect.deleteProperty(document, 'fonts')
+    }
+  })
+
+  it('a chip font WebKit reports as failed while it loads under font-display: swap is still asked for and redrawn once', async () => {
+    // WebKit reports a face still loading under font-display: swap as 'error', so fonts.check() is true: only load() waits.
+    const face = { status: 'error' as FontFaceLoadStatus }
+    let finishLoad!: () => void
+    const load = vi.fn(() => new Promise<FontFace[]>((resolve) => {
+      finishLoad = () => {
+        face.status = 'loaded'
+        resolve([face as FontFace])
+      }
+    }))
+    const fonts = { check: vi.fn(() => true), load, forEach: (callback: (each: FontFace) => void) => callback(face as FontFace) }
+    Object.defineProperty(document, 'fonts', { configurable: true, value: fonts })
+    try {
+      const requestRepaint = vi.fn()
+      const layer = createDraftLayer({
+        createText: () => new MeasuredText(),
+        viewSize: { width: 400, height: 300 },
+        painters: createDraftScenePainters(() => createTestSceneRendererSnapshot()),
+        requestRepaint,
+      })
+      layers.push(layer)
+      layer.setView(at({ x: 0, y: 0 }, 1))
+      layer.setDraft({ shapes: [{ kind: 'label', anchor: { x: 0, y: 0 }, offsetPx: { x: 0, y: 0 }, text: '112 m²', tone: 'measure' }] })
+
+      expect(load).toHaveBeenCalledOnce()
+      const before = layer.billboardDraftRoot.children[0]
+      finishLoad()
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(requestRepaint).toHaveBeenCalledOnce()
+      expect(layer.billboardDraftRoot.children[0], 'the live draft is drawn again').not.toBe(before)
     } finally {
       Reflect.deleteProperty(document, 'fonts')
     }

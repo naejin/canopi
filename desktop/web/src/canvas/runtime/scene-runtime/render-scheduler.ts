@@ -36,6 +36,11 @@ export class SceneRuntimeRenderScheduler {
   private _sceneFrameQueued = false
   /** The epoch of the latest scene render, until it has drawn or failed; a newer epoch fences it. */
   private _sceneRenderEpoch: number | null = null
+  /**
+   * The scene render that published `_snapshot` into the empty slot while an opened Design waited for its first draw: it
+   * settles once a target draws it.
+   */
+  private _undrawnEpoch: number | null = null
   /** Scene renders up to this epoch were started before the latest awaitPresentation; only a later one presents. */
   private _presentAfterEpoch = 0
   private readonly _scenePending = signal(false)
@@ -75,6 +80,16 @@ export class SceneRuntimeRenderScheduler {
     this._presented.value = false
   }
 
+  /**
+   * No Design shows (Close Design's start screen): no layer will connect to draw one, so the open is presented, a render
+   * waiting for a layer settles now, and later ones settle on their frame until a Design opens again.
+   */
+  releasePresentation(): void {
+    if (this._undrawnEpoch !== null) this._settleSceneRender(this._undrawnEpoch)
+    this._undrawnEpoch = null
+    this._presented.value = true
+  }
+
   /** Mounts on the map container; the target slot draws from now on. */
   mount(container: HTMLElement): void {
     if (this._container) throw new Error('The Scene Canvas renderer is already mounted. Unmount it before mounting again.')
@@ -83,13 +98,16 @@ export class SceneRuntimeRenderScheduler {
   }
 
   /**
-   * Fills the slot: the target gets the latest snapshot and draft at once, then every later one. Returns the disconnect,
-   * which is ignored once another target has connected.
+   * Fills the slot: the target gets the latest snapshot and draft at once, then every later one; a scene render that
+   * published into the empty slot settles once this target draws it. Returns the disconnect, which is ignored once another
+   * target has connected.
    */
   connect(target: SceneRenderTarget): () => void {
     this._target = target
     if (this._snapshot) target.setSnapshot(this._snapshot)
     if (this._draft) target.setDraft(this._draft)
+    if (this._undrawnEpoch !== null) this._settleWhenDrawn(this._undrawnEpoch)
+    this._undrawnEpoch = null
     return () => {
       if (this._target === target) this._target = null
     }
@@ -129,14 +147,15 @@ export class SceneRuntimeRenderScheduler {
       const snapshot = prepared.publish()
       if (renderEpoch !== this._renderEpoch) return
       this._snapshot = snapshot
+      // With the slot empty while an opened Design waits for its first draw (a Design switch before its layer connects),
+      // nothing draws the snapshot: the render stays pending until a target connects and draws it.
+      this._undrawnEpoch = this._target || this._presented.value ? null : renderEpoch
       this._target?.setSnapshot(snapshot)
     } catch (error) {
       this._settleSceneRender(renderEpoch)
       throw error
     }
-    // The target asked MapLibre for a repaint, which draws the snapshot in the next
-    // animation frame; a frame callback requested after it runs once that drawing is done.
-    requestAnimationFrame(() => this._settleSceneRender(renderEpoch))
+    if (this._undrawnEpoch === null) this._settleWhenDrawn(renderEpoch)
   }
 
   /**
@@ -149,11 +168,6 @@ export class SceneRuntimeRenderScheduler {
     this._target?.setDraft(draft)
   }
 
-  /** MapLibre owns the drawing surface size; a resize is a camera-only update. */
-  resize(_width: number, _height: number): void {
-    this.invalidate('viewport')
-  }
-
   /**
    * Stops drawing and fences pending work. The runtime keeps its Scene, and the slot keeps its target; nothing draws
    * until the runtime mounts again.
@@ -162,6 +176,7 @@ export class SceneRuntimeRenderScheduler {
     this._cancelFrame()
     this._container = null
     this._snapshot = null
+    this._undrawnEpoch = null
     this._draft = null
     this._renderEpoch += 1
     this._publishScenePending()
@@ -177,6 +192,14 @@ export class SceneRuntimeRenderScheduler {
     if (this._frame !== null) cancelAnimationFrame(this._frame)
     this._frame = null
     this._sceneFrameQueued = false
+  }
+
+  /**
+   * The target asked MapLibre for a repaint, which draws the snapshot in the next animation frame; a frame callback
+   * requested after it runs once that drawing is done.
+   */
+  private _settleWhenDrawn(renderEpoch: number): void {
+    requestAnimationFrame(() => this._settleSceneRender(renderEpoch))
   }
 
   private _settleSceneRender(renderEpoch: number): void {

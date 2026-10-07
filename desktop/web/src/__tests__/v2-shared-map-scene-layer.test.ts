@@ -110,7 +110,7 @@ describe('createSharedMapSceneLayer', () => {
     expect(renderer.init).toHaveBeenCalledWith(expect.objectContaining({ canvas, context: gl, skipExtensionImports: true, eventMode: 'none' }))
     expect(setTargetElement).toHaveBeenCalledWith(null)
     expect(Ticker.system.started).toBe(false)
-    await adapter.dispose({ mapWillBeRemoved: true })
+    await adapter.dispose()
   })
 
   it('draws only in MapLibre render after an explicit initialization and repaint request', async () => {
@@ -168,7 +168,7 @@ describe('createSharedMapSceneLayer', () => {
 
     // 400×200 backing pixels for a 200×100 CSS canvas is a density of 2.
     expect(createText!().resolution).toBe(4)
-    await adapter.dispose({ mapWillBeRemoved: true })
+    await adapter.dispose()
   })
 
   it('the layer never derives a transform', async () => {
@@ -199,7 +199,7 @@ describe('createSharedMapSceneLayer', () => {
 
     expect(map.project).not.toHaveBeenCalled()
     expect(map.getPitch).not.toHaveBeenCalled()
-    await adapter.dispose({ mapWillBeRemoved: true })
+    await adapter.dispose()
   })
 
   it('resynchronizes presentation after a MapLibre-owned resize even when the camera is unchanged', async () => {
@@ -231,39 +231,7 @@ describe('createSharedMapSceneLayer', () => {
     expect(presentation.present.mock.calls[1]![0].screen).toMatchObject({ width: 300, height: 150 })
     expect(renderer.render).toHaveBeenCalledTimes(2)
     expect(adapter.diagnostics.sceneSyncCount).toBe(1)
-    const disposal = adapter.dispose()
-    adapter.layer.render(gl, {} as never)
-    await disposal
-  })
-
-  it('survives style reload detach and reattach without duplicate initialization', async () => {
-    const canvas = createCanvas()
-    const map = createMap(canvas)
-    const renderer = createRenderer()
-    const remove = vi.spyOn(canvas, 'remove')
-    const adapter = createSharedMapSceneLayer({
-      id: 'v2-scene', frames: createFrames().frames, createRenderer: () => renderer,
-      createStage: () => ({ destroy: vi.fn() }) as never,
-      createPresentation: () => ({ dispose() {}, resize() {}, present() {}, setDraft() {} }),
-    })
-    const gl = {} as WebGL2RenderingContext
-
-    await adapter.initialize(map, gl)
-    adapter.layer.onAdd!(map as never, gl)
-    adapter.layer.onRemove!(map as never, gl)
-    adapter.layer.onAdd!(map as never, gl)
-    await adapter.initialize(map, gl)
-    const disposal = adapter.dispose()
-    expect(renderer.destroy).not.toHaveBeenCalled()
-    adapter.layer.render(gl, {} as never)
-    await disposal
     await adapter.dispose()
-
-    expect(renderer.init).toHaveBeenCalledOnce()
-    expect(renderer.destroy).toHaveBeenCalledOnce()
-    expect(renderer.context.extensions.loseContext).toBeUndefined()
-    expect(remove).not.toHaveBeenCalled()
-    expect(adapter.diagnostics.phase).toBe('disposed')
   })
 
   it('disposes an initialization that completes after its final owner has gone away', async () => {
@@ -276,12 +244,35 @@ describe('createSharedMapSceneLayer', () => {
     })
     const canvas = createCanvas()
     const initialize = adapter.initialize(createMap(canvas), {} as WebGL2RenderingContext)
-    const disposal = adapter.dispose({ mapWillBeRemoved: true })
+    const disposal = adapter.dispose()
     resolveInit!()
     await initialize
     await disposal
 
     expect(renderer.destroy).toHaveBeenCalledOnce()
+    expect(adapter.diagnostics.phase).toBe('disposed')
+  })
+
+  // ADR 0004: nothing reloads the style, so the owner disposes the layer only right before MapLibre removes the map.
+  it('dispose() on an attached layer destroys the renderer at once, without waiting for a frame', async () => {
+    const canvas = createCanvas()
+    const map = createMap(canvas)
+    const renderer = createRenderer()
+    const adapter = createSharedMapSceneLayer({
+      id: 'v2-scene', frames: createFrames().frames, createRenderer: () => renderer,
+      createStage: () => ({ destroy: vi.fn() }) as never,
+      createPresentation: () => ({ dispose() {}, resize() {}, present() {}, setDraft() {} }),
+    })
+    const gl = {} as WebGL2RenderingContext
+    await adapter.initialize(map, gl)
+    adapter.layer.onAdd!(map as never, gl)
+
+    const disposal = adapter.dispose().then(() => 'disposed')
+    const settled = await Promise.race([disposal, new Promise((resolve) => setTimeout(() => resolve('waiting for a frame'), 0))])
+
+    expect(settled).toBe('disposed')
+    expect(renderer.destroy).toHaveBeenCalledOnce()
+    expect(renderer.context.extensions.loseContext).toBeUndefined()
     expect(adapter.diagnostics.phase).toBe('disposed')
   })
 
@@ -310,25 +301,7 @@ describe('createSharedMapSceneLayer', () => {
     expect(canvas.width).toBe(600)
     expect(canvas.height).toBe(300)
     expect(presentation.resize).toHaveBeenCalledWith(300, 150)
-    const disposal = adapter.dispose()
-    adapter.layer.render(gl, {} as never)
-    await disposal
-  })
-
-  it('requires a detached owner to declare immediate MapLibre removal', async () => {
-    const canvas = createCanvas()
-    const renderer = createRenderer()
-    const adapter = createSharedMapSceneLayer({
-      id: 'v2-scene', frames: createFrames().frames, createRenderer: () => renderer,
-      createStage: () => ({ destroy: vi.fn() }) as never,
-      createPresentation: () => ({ dispose() {}, resize() {}, present() {}, setDraft() {} }),
-    })
-    await adapter.initialize(createMap(canvas), {} as WebGL2RenderingContext)
-
-    await expect(adapter.dispose()).rejects.toThrow(/MapLibre removal/)
-    expect(renderer.destroy).not.toHaveBeenCalled()
-    await adapter.dispose({ mapWillBeRemoved: true })
-    expect(renderer.destroy).toHaveBeenCalledOnce()
+    await adapter.dispose()
   })
 
   it('reports a terminal render failure once to the lifecycle owner', async () => {
@@ -358,7 +331,7 @@ describe('createSharedMapSceneLayer', () => {
       message: 'presentation failed',
     }))
     expect(adapter.diagnostics.phase).toBe('failed')
-    await adapter.dispose({ mapWillBeRemoved: true })
+    await adapter.dispose()
   })
 
   it('a repaint the presentation asks for outside a render repaints the map (a draft chip\'s font arrived)', async () => {
@@ -406,7 +379,7 @@ describe('createSharedMapSceneLayer', () => {
     expect(presentation.present).toHaveBeenCalledTimes(2)
     expect(presentation.present).toHaveBeenLastCalledWith(camera.view(), edited, false)
     expect(adapter.diagnostics.sceneSyncCount).toBe(2)
-    await adapter.dispose({ mapWillBeRemoved: true })
+    await adapter.dispose()
   })
 
   it('a settled frame repaints once and admits names at its exact scale', async () => {
@@ -453,7 +426,7 @@ describe('createSharedMapSceneLayer', () => {
       const presents = present!.mock.calls.length
       adapter.layer.render(gl, {} as never)
       expect(present!).toHaveBeenCalledTimes(presents)
-      await adapter.dispose({ mapWillBeRemoved: true })
+      await adapter.dispose()
       // A settle after disposal asks for no frame.
       camera.setViewport({ x: 40, y: 30, scale: 20 })
       vi.advanceTimersByTime(SETTLE_MS)
@@ -481,7 +454,7 @@ describe('createSharedMapSceneLayer', () => {
     camera.setViewport({ x: 40, y: 30, scale: 7 })
     adapter.layer.render(gl, {} as never)
     expect(presentation.present.mock.calls.map((call) => call[2])).toEqual([true, true])
-    await adapter.dispose({ mapWillBeRemoved: true })
+    await adapter.dispose()
   })
 
   it('a tool draft set on the mounted runtime\'s slot reaches the Pixi draft layer', async () => {
@@ -504,12 +477,13 @@ describe('createSharedMapSceneLayer', () => {
       shapes: [{ kind: 'polyline', points: [{ x: 0, y: 0 }, { x: 4, y: 3 }], style: { token: 'draft', widthPx: 2 } }],
     }
 
-    // Set while the layer is still initializing: the presentation takes it when it exists.
+    // Set before MapLibre attaches the layer: the slot hands it over when the layer connects, on attaching.
     scheduler.setDraft(draft)
     await layer.initialize(map, gl)
+    expect(presentation.setDraft).not.toHaveBeenCalled()
+    layer.layer.onAdd!(map as never, gl)
     expect(presentation.setDraft).toHaveBeenCalledExactlyOnceWith(draft)
 
-    layer.layer.onAdd!(map as never, gl)
     const repaints = vi.mocked(map.triggerRepaint).mock.calls.length
     scheduler.setDraft(null)
     expect(presentation.setDraft).toHaveBeenLastCalledWith(null)
@@ -519,6 +493,6 @@ describe('createSharedMapSceneLayer', () => {
     scheduler.unmount()
     scheduler.setDraft(draft)
     expect(presentation.setDraft).toHaveBeenCalledTimes(2)
-    await layer.dispose({ mapWillBeRemoved: true })
+    await layer.dispose()
   })
 })

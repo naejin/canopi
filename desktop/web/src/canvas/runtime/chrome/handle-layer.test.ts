@@ -192,7 +192,7 @@ describe('the handle layer', () => {
     expect(added).not.toHaveBeenCalled()
   })
 
-  it('keeps today\'s key swallow and click stop on the rotate handle', () => {
+  it('swallows keys and stops clicks on the rotate handle', () => {
     mount().setHandles([ROTATE], null)
     const rotate = handle('rotate')!
     const heard = vi.fn()

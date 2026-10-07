@@ -705,7 +705,7 @@ describe('WorkspaceActivationCoordinator', () => {
 
     await expect(coordinator.activate()).resolves.toBe('map-unavailable')
 
-    expect(composed.dispose).toHaveBeenCalledWith({ mapWillBeRemoved: true })
+    expect(composed.dispose).toHaveBeenCalledOnce()
     expect(map.remove).toHaveBeenCalledOnce()
     expect(runtime.init).not.toHaveBeenCalled()
   })

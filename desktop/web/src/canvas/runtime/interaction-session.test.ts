@@ -422,14 +422,14 @@ describe('the interaction session', () => {
     expect(sources).toHaveLength(1)
   })
 
-  it('the keyboard port\'s zoom and view keys move the camera through today\'s navigation', () => {
+  it('the keyboard port\'s zoom and view keys move the camera through the view\'s navigation', () => {
     const render = vi.fn()
     const { session } = createSession({ render })
     const scale = testView.viewport().scale
 
     expect(session.keyboard.command({ kind: 'zoom-step', direction: 1 })).toBe(true)
     expect(testView.viewport().scale).toBeGreaterThan(scale)
-    expect(render).toHaveBeenCalledWith('viewport')
+    expect(render, 'the camera frame repaints the layer, not the session').not.toHaveBeenCalled()
     session.keyboard.command({ kind: 'zoom-step', direction: -1 })
     expect(testView.viewport().scale).toBeCloseTo(scale, 9)
     // The view keys answer here; navigation.test.ts holds the 15° turn and the turn back to north they start.
@@ -637,9 +637,15 @@ describe('the interaction session', () => {
   it('a wheel whose zoom or pan fails under a registered tool is still default-prevented, as today', () => {
     useStubTools(stubTool('rectangle'))
     let broken = false
+    const fail = <T extends unknown[]>(move: (...args: T) => void) => (...args: T) => {
+      if (broken) throw new Error('camera move failed')
+      move(...args)
+    }
     const { session } = createSession({
-      render: (kind) => {
-        if (broken && kind === 'viewport') throw new Error('render failed')
+      viewNavigation: {
+        ...testView.navigation,
+        panByPx: fail(testView.navigation.panByPx),
+        zoomAroundPx: fail(testView.navigation.zoomAroundPx),
       },
     })
     session.setTool('rectangle')

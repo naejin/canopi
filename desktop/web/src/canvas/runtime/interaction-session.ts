@@ -105,7 +105,8 @@ export interface SceneInteractionSessionDeps {
   /** Renders the right-click menu; absent in a detached runtime. */
   contextMenu?: CanvasRuntimeContextMenuAdapter
   setTool: (id: ToolId) => void
-  render: (kind: 'scene' | 'viewport') => void
+  /** A scene render; a camera frame repaints on its own (the runtime's onCameraFrame). */
+  render: (kind: 'scene') => void
   readSnapToGridEnabled: () => boolean
   /** Settings › Canvas › Pointing device (stored scrollWheel: 'zoom' is Mouse, 'pan' is Trackpad). Pinch and Ctrl wheel zoom either way. */
   readScrollWheel: () => CanvasScrollWheelSetting
@@ -242,15 +243,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       focusMap: () => container.focus({ preventScroll: true }),
     }
     this._focus = focus
-    this._navigation = {
-      panByPx: (delta) => this._afterCameraMove(() => navigation.panByPx(delta)),
-      zoomAroundPx: (anchor, factor) => this._afterCameraMove(() => navigation.zoomAroundPx(anchor, factor)),
-      beginRotation: (pivot) => navigation.beginRotation(pivot),
-      zoomIn: () => this._afterCameraMove(() => navigation.zoomIn()),
-      zoomOut: () => this._afterCameraMove(() => navigation.zoomOut()),
-      resetNorth: () => navigation.resetNorth(),
-      rotateBy: (direction) => navigation.rotateBy(direction),
-    }
+    // A camera move publishes a frame, which repaints the layer itself (the runtime's onCameraFrame).
+    this._navigation = navigation
 
     const rollback: Array<() => void> = []
     const own = <T>(resource: T, dispose: (resource: T) => void): T => {
@@ -782,14 +776,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     // The host sets its first tool's cursor while it is being built; the session's setTool applies it right after.
     if (!this._toolHost) return
     this._deps.container.style.cursor = this._navigationCursor ?? this._toolCursor ?? 'default'
-  }
-
-  /** A pan or zoom through the view's navigation: the viewport render and today's refresh when it published a new frame. */
-  private _afterCameraMove(move: () => void): void {
-    const before = this._deps.frames.viewFrame.peek()
-    move()
-    if (this._deps.frames.viewFrame.peek() === before) return
-    this._deps.render('viewport')
   }
 
   // ── The host's chrome, and drafts and handles while a story is presented ─────────────────────────────────────────

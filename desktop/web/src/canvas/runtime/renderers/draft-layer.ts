@@ -301,14 +301,19 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
   /**
    * Canvas text drawn while its web font is still loading keeps the fallback font, and nothing in the DOM asks for a
    * chip's font (the mono chips' IBM Plex Mono may be used nowhere else). So the layer asks the browser for it, once per
-   * font, and redraws the live draft and asks for a frame when it has loaded.
+   * font while a face has not loaded, and when a face that had not loaded then has loaded, redraws the live draft and
+   * asks for a frame. `fonts.check()` cannot tell: WebKit reports a face still loading under font-display: swap as
+   * failed, so check() is true, and only `load()` waits for the face to arrive (as the notes' measure does).
    */
   function requestFont(font: string): void {
-    if (requestedFonts.has(font)) return
-    requestedFonts.add(font)
     const fonts = globalThis.document?.fonts
-    if (!fonts || fonts.check(font)) return
-    fonts.load(font).then(() => {
+    if (!fonts || requestedFonts.has(font)) return
+    const unloaded = new Set<FontFace>()
+    fonts.forEach((face) => { if (face.status !== 'loaded') unloaded.add(face) })
+    if (unloaded.size === 0) return
+    requestedFonts.add(font)
+    fonts.load(font).then((faces) => {
+      if (!faces.some((face) => unloaded.has(face) && face.status === 'loaded')) return
       if (!draft || !view) return
       trace(draft, view)
       options.requestRepaint?.()

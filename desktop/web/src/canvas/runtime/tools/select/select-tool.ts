@@ -247,6 +247,9 @@ export function createSelectTool(): CanvasTool {
         const shapes = guide ? guideLengthShapes(guide, (a, b) => c.view.screenDistance(a, b)) : []
         c.effects.setDraft(shapes.length > 0 ? { shapes } : null)
       }
+      // The host re-emits a live handle drag on a camera frame: a zoom under a still pointer turns nothing, so no scene
+      // change rebuilds the handles, and this follows the new scale.
+      followView()
       return
     }
     try {

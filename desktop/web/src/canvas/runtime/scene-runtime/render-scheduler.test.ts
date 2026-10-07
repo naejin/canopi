@@ -123,9 +123,8 @@ describe('SceneRuntimeRenderScheduler', () => {
     const scheduler = mountedScheduler(target)
 
     scheduler.invalidate('viewport')
-    scheduler.resize(400, 300)
 
-    expect(target.requestRender).toHaveBeenCalledTimes(2)
+    expect(target.requestRender).toHaveBeenCalledOnce()
     expect(target.setSnapshot).not.toHaveBeenCalled()
     expect(request, 'no frame of its own').not.toHaveBeenCalled()
     expect(scheduler.scenePending.value).toBe(false)
@@ -312,6 +311,61 @@ describe('SceneRuntimeRenderScheduler', () => {
       expect(scheduler.scenePending.value, 'MapLibre draws the newer snapshot in its next frame').toBe(true)
       runFrame()
       expect(scheduler.scenePending.value).toBe(false)
+      scheduler.dispose()
+    })
+
+    it('a scene render with an empty slot stays unpresented until a target connects and draws it', async () => {
+      const { scheduler, runFrame, prepare, frames } = await createControlledScheduler()
+      // A Design switch: the old layer has disconnected and the new one has not connected yet.
+      scheduler.connect(createTarget())()
+      scheduler.awaitPresentation()
+
+      scheduler.invalidate('scene')
+      runFrame()
+      prepare(0)
+      await Promise.resolve()
+      await Promise.resolve()
+      while (frames.size > 0) runFrame()
+      expect(scheduler.scenePending.value, 'nothing has drawn the scene').toBe(true)
+      expect(scheduler.presented.value).toBe(false)
+
+      const layer = createTarget()
+      scheduler.connect(layer)
+      expect(layer.setSnapshot).toHaveBeenCalledOnce()
+      expect(scheduler.presented.value, 'MapLibre draws the snapshot in its next frame').toBe(false)
+      runFrame()
+      expect(scheduler.scenePending.value).toBe(false)
+      expect(scheduler.presented.value).toBe(true)
+      scheduler.dispose()
+    })
+
+    it('a Design closing settles the render waiting for an empty slot, and later renders into it settle on their frame', async () => {
+      const { scheduler, runFrame, prepare, frames } = await createControlledScheduler()
+      // Close Design during a switch: the old layer disconnected, the new one never connects.
+      scheduler.connect(createTarget())()
+      scheduler.awaitPresentation()
+      scheduler.invalidate('scene')
+      runFrame()
+      prepare(0)
+      await Promise.resolve()
+      await Promise.resolve()
+      while (frames.size > 0) runFrame()
+      expect(scheduler.scenePending.value, 'the render waits for a layer').toBe(true)
+
+      scheduler.releasePresentation()
+      expect(scheduler.scenePending.value, 'no layer will draw it').toBe(false)
+      expect(scheduler.presented.value).toBe(true)
+
+      // A theme change on the start screen.
+      scheduler.invalidate('scene')
+      runFrame()
+      prepare(1)
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(scheduler.scenePending.value).toBe(true)
+      runFrame()
+      expect(scheduler.scenePending.value).toBe(false)
+      expect(scheduler.presented.value).toBe(true)
       scheduler.dispose()
     })
 
