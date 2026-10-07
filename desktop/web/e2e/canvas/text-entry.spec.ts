@@ -160,6 +160,8 @@ async function noteEdges(page: Page) {
 }
 
 const HAZELNUT = 'Hazelnut hedge, prune in February'
+/** 'Reservoir': one word, since a space is in the Latin face's range. */
+const RESERVOIR = 'Водохранилище'
 
 test('a committed note\'s selection outline ends within 6 px of its last glyph', async ({ page }) => {
   await openBaseFixture(page, 'Select')
@@ -190,6 +192,32 @@ test('a note drawn before its web font arrives is measured and drawn again once 
   release()
   await expect.poll(frameMiddle, 'the frame follows the loaded font').not.toBe(fallbackMiddle)
   // Pixi keeps a text's raster while its text and style stay the same: the glyphs are drawn again in the loaded font.
+  const { pastLastGlyph } = await noteEdges(page)
+  expect(pastLastGlyph, 'the outline ends at the last glyph drawn').toBeGreaterThanOrEqual(0)
+  expect(pastLastGlyph).toBeLessThanOrEqual(6)
+})
+
+test('a Cyrillic note measured while a Latin note waits for the same font is measured again once its face arrives', async ({ page }) => {
+  // The interface font's faces cover character ranges (src/styles/fonts.css). Its Latin face is held back, so the
+  // opened Design's Latin notes wait for the font, while a Cyrillic note is committed and measured in a fallback; then
+  // the Cyrillic face arrives, the Latin one still held back.
+  const held = new Map<string, () => void>()
+  for (const subset of ['latin', 'cyrillic']) {
+    const arrived = new Promise<void>((resolve) => { held.set(subset, resolve) })
+    await page.route(`**/source-sans-3-${subset}-400-normal*.woff2`, async (route: Route) => {
+      await arrived
+      await route.continue()
+    })
+  }
+  await openBaseFixture(page, 'Select', 'domcontentloaded')
+  await commitNote(page, RESERVOIR)
+  const rotateHandle = page.locator('[data-canvas-handle="rotate"]')
+  const frameMiddle = async () => Number(await rotateHandle.getAttribute('data-canvas-handle-screen-x'))
+  const fallbackMiddle = await frameMiddle()
+
+  held.get('cyrillic')!()
+  await expect.poll(frameMiddle, 'the frame follows the Cyrillic face').not.toBe(fallbackMiddle)
+  held.get('latin')!()
   const { pastLastGlyph } = await noteEdges(page)
   expect(pastLastGlyph, 'the outline ends at the last glyph drawn').toBeGreaterThanOrEqual(0)
   expect(pastLastGlyph).toBeLessThanOrEqual(6)

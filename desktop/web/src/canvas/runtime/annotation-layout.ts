@@ -123,7 +123,7 @@ type MeasureContext = Pick<CanvasRenderingContext2D, 'font' | 'measureText'>
 /** The 2D context notes are measured with; null where there is none, and undefined until the first note asks. */
 let measureContext: MeasureContext | null | undefined
 const textMetricsByKey = new Map<string, AnnotationTextMetrics>()
-const requestedFonts = new Set<string>()
+const requestedFontTexts = new Set<string>()
 const fontLoadListeners = new Set<() => void>()
 let fontEpoch = 0
 
@@ -191,25 +191,28 @@ function getMeasureContext(): MeasureContext | null {
 
 /**
  * A note measured while its web font is still loading is measured in the fallback font. So the measure asks the
- * browser for the font, one request at a time per font, as the draft layer does (no listener), and when a face that
- * had not loaded then has loaded, forgets every width and tells the listeners (the runtime redraws the scene).
- * `fonts.check()` cannot tell: WebKit reports a face still loading under font-display: swap as failed, so check() is
- * true, and only `load()` waits for the face to arrive.
+ * browser for the font and the note's text, one request at a time for each (no listener), and when a face that had not
+ * loaded then has loaded, forgets every width and tells the listeners (the runtime redraws the scene).
+ * The request names the text because a font's faces cover character ranges (fonts.css): a Latin note's load brings
+ * back only the Latin face, while a Cyrillic note in the same font waits for the Cyrillic one. `fonts.check()` cannot
+ * tell: WebKit reports a face still loading under font-display: swap as failed, so check() is true, and only `load()`
+ * waits for the face to arrive.
  */
 function requestFont(font: string, text: string): void {
   const fonts = globalThis.document?.fonts
-  if (!fonts || requestedFonts.has(font)) return
+  const request = `${font}\n${text}`
+  if (!fonts || requestedFontTexts.has(request)) return
   const unloaded = new Set<FontFace>()
   fonts.forEach((face) => { if (face.status !== 'loaded') unloaded.add(face) })
   if (unloaded.size === 0) return
-  requestedFonts.add(font)
+  requestedFontTexts.add(request)
   fonts.load(font, text).then((faces) => {
-    requestedFonts.delete(font)
+    requestedFontTexts.delete(request)
     if (!faces.some((face) => unloaded.has(face) && face.status === 'loaded')) return
     fontEpoch += 1
     textMetricsByKey.clear()
     for (const listener of [...fontLoadListeners]) listener()
-  }, () => { requestedFonts.delete(font) })
+  }, () => { requestedFontTexts.delete(request) })
 }
 
 export function getAnnotationWorldBounds(

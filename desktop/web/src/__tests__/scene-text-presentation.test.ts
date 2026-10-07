@@ -26,20 +26,31 @@ import { createTestRendererView, createTestSceneRendererSnapshot } from './suppo
 import { createZoomCalibrationScene } from './support/zoom-calibration-scenes'
 
 // jsdom has no 2D canvas and no font loading API, so this file measures through stubs: a context whose glyphs are half
-// an em wide and rise 0.7 em once the web font's face has loaded, 0.56 em wide and 0.75 em high before, and a font set
-// of that one face whose load the test finishes. Its check() reads the face as the engines do: false while Chromium
-// reports it 'loading', true once it has loaded and while WebKit reports a face still loading under font-display: swap
-// as failed ('error'). Pixi measures its texts with the same context.
+// an em wide once their web-font face has loaded, 0.56 em wide before, and rise 0.7 em once the Latin face has loaded,
+// 0.75 em before; and a font set of a Latin face and a Cyrillic face, each covering its script's characters as
+// fonts.css's unicode ranges do, whose load resolves with the faces the text needs once they have loaded, and which the
+// test finishes. A face the engine reports 'loading' (Chromium) or, under font-display: swap, as failed ('error',
+// WebKit) has not loaded. Pixi measures its texts with the same context.
 const face = { status: 'loaded' as FontFaceLoadStatus }
-let finishLoad: (() => void) | null = null
+const cyrillicFace = { status: 'loaded' as FontFaceLoadStatus }
+const faceOf = (glyph: string) => /\p{Script=Cyrillic}/u.test(glyph) ? cyrillicFace : face
+const faceArrivals = new Map<typeof face, (() => void)[]>()
+/** Ends the load of `which`. */
+function finishLoad(which = face) {
+  which.status = 'loaded'
+  for (const arrive of faceArrivals.get(which) ?? []) arrive()
+  faceArrivals.delete(which)
+}
 Object.defineProperty(document, 'fonts', {
   configurable: true,
   value: {
-    check: () => face.status !== 'loading',
-    forEach: (visit: (each: typeof face) => void) => visit(face),
-    load: () => face.status === 'loaded' ? Promise.resolve([face]) : new Promise<unknown[]>((resolve) => {
-      finishLoad = () => { face.status = 'loaded'; resolve([face]) }
-    }),
+    forEach: (visit: (each: typeof face) => void) => [face, cyrillicFace].forEach((each) => visit(each)),
+    load: (_font: string, text: string) => {
+      const needed = [...new Set(Array.from(text, faceOf))]
+      return Promise.all(needed.map((each) => each.status === 'loaded' ? undefined : new Promise<void>((resolve) => {
+        faceArrivals.set(each, [...faceArrivals.get(each) ?? [], resolve])
+      }))).then(() => needed)
+    },
   },
 })
 vi.stubGlobal('OffscreenCanvas', class {
@@ -48,7 +59,8 @@ vi.stubGlobal('OffscreenCanvas', class {
       font: '',
       measureText(this: { font: string }, text: string) {
         const fontSize = Number(/([\d.]+)px/.exec(this.font)![1])
-        const width = Array.from(text).length * fontSize * (face.status === 'loaded' ? 0.5 : 0.56)
+        const width = Array.from(text)
+          .reduce((sum, glyph) => sum + fontSize * (faceOf(glyph).status === 'loaded' ? 0.5 : 0.56), 0)
         return { width, actualBoundingBoxLeft: 0, actualBoundingBoxRight: width - 1,
           actualBoundingBoxAscent: fontSize * (face.status === 'loaded' ? 0.7 : 0.75), actualBoundingBoxDescent: fontSize * 0.2 }
       },
@@ -169,7 +181,7 @@ describe('scene text presentation', () => {
         // 4 glyphs of the fallback font, 0.56 em each.
         expect(widthsRead(scene)).toEqual({ frame: 35.84, detail: 35.84, selection: 35.84, hull: 35.84 })
 
-        finishLoad!()
+        finishLoad()
         await vi.waitFor(() => expect(loads).toHaveBeenCalledTimes(1))
 
         expect(widthsRead(scene)).toEqual({ frame: 32, detail: 32, selection: 32, hull: 32 })
@@ -179,6 +191,27 @@ describe('scene text presentation', () => {
       }
     })
   }
+
+  it('a font load re-measures the notes whose face was loading, measured after a same-font note whose face had loaded', async () => {
+    // The notes ask for the same font and different faces: the Latin note's load brings back only its loaded face.
+    const notes = ['Reed', 'Пруд', 'Вода'].map((text, index) => ({ ...noteScene(text).annotations[0]!, id: `note-${index}` }))
+    const widths = () => notes.map((note) => getAnnotationPresentation(note, SCALE, true).textFrame.widthPx)
+    const loads = vi.fn()
+    const stopListening = onAnnotationFontLoad(loads)
+    try {
+      cyrillicFace.status = 'loading'
+      // One scene sync: 0.5 em a glyph in the loaded Latin face, 0.56 em in the Cyrillic fallback.
+      expect(widths()).toEqual([32, 35.84, 35.84])
+
+      finishLoad(cyrillicFace)
+      await vi.waitFor(() => expect(loads).toHaveBeenCalled())
+
+      expect(widths()).toEqual([32, 32, 32])
+    } finally {
+      stopListening()
+      cyrillicFace.status = 'loaded'
+    }
+  })
 
   it('a note measured in a font that has loaded is not measured again', async () => {
     const loads = vi.fn()
@@ -210,7 +243,7 @@ describe('scene text presentation', () => {
       layer.present(view, snapshot())
       expect(noteText(), 'a scene sync keeps the drawn text').toBe(drawnInFallback)
 
-      finishLoad!()
+      finishLoad()
       await vi.waitFor(() => expect(loads).toHaveBeenCalledTimes(1))
       // The runtime syncs the scene on the load (scene-runtime.ts).
       layer.present(view, snapshot())
@@ -248,7 +281,7 @@ describe('scene text presentation', () => {
       const frameWidth = () => getAnnotationPresentation(note, SCALE, true).textFrame.widthPx
       expect(rasterLayout()).toEqual({ widthPx: frameWidth(), ascentPx: 12 })
 
-      finishLoad!()
+      finishLoad()
       await vi.waitFor(() => expect(loads).toHaveBeenCalledTimes(1))
       layer.present(view, snapshot())
       expect(frameWidth()).toBe(23 * 16 * 0.5)
