@@ -342,6 +342,20 @@ describe('MapLibre surface', () => {
     expect(container.classList).not.toContain('maplibregl-map')
   })
 
+  it('a create failure with no onCreateError is logged once through the surface\'s redacted logError', async () => {
+    // The World map's request passes no onCreateError: its failure still reaches the log, with the key redacted.
+    const logError = vi.fn()
+    const surface = createSurface({ logError })
+    const createError = new Error('WebGL unavailable')
+
+    surface.attach(container)
+    surface.requestMap({ createMap: () => { throw createError } })
+    await flushPromises()
+
+    expect(logError).toHaveBeenCalledExactlyOnceWith('Failed to create MapLibre map:', createError)
+    expect(surface.map).toBeNull()
+  })
+
   it('removes a map whose synchronous creation went stale', async () => {
     const surface = createSurface()
 
