@@ -4,6 +4,7 @@ import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import { contains, outlineSegments, type Segment } from '../app/canvas-pdf/field-geometry'
 import { pageFrame } from '../app/canvas-pdf/page-frame'
+import { zoneTop } from '../app/canvas-pdf/zone-labels'
 import type { PdfInput, PdfLabels, PdfPage, PdfSetup } from '../app/canvas-pdf/types'
 import type { PrintPoint, PrintZone } from '../canvas/print'
 import { englishPdfLabels } from '../../scripts/pdf-validation/fixtures'
@@ -74,9 +75,24 @@ it('prints each guide\'s M code beside its own guide in a turned chain of eight 
   const page = plan.pages.find(p => p.kind === 'detail')!
   const guides = measurements.map(g => ({ a: onPage(page, 60)(g.start), b: onPage(page, 60)(g.end) }))
   const references = new Map([...measurements].sort((a, b) => a.start.y - b.start.y).map((g, i) => [`M${i + 1}`, measurements.indexOf(g)]))
-  for (const { code, centre } of codes(page, /^M\d+$/).filter(c => contains(page.frame, c.centre))) {
+  const printed = codes(page, /^M\d+$/).filter(c => contains(page.frame, c.centre))
+  expect(printed.length).toBeGreaterThan(0)
+  for (const { code, centre } of printed) {
     const own = toSegment(centre, guides[references.get(code)!]!)
     expect(own / MM, `${code} from its guide`).toBeLessThanOrEqual(6)
     guides.forEach((guide, i) => { if (i !== references.get(code)) expect(own, `${code} nearer guide ${i}`).toBeLessThan(toSegment(centre, guide)) })
   }
+})
+
+it('tops a zone at its highest outline point inside the ground, or the middle of a level top edge', () => {
+  const ground = { x: 0, y: 0, width: 10, height: 10 }
+  const diamond: PrintZone = { name: null, path: 'M5 1 L8 4 L5 7 L2 4 Z', fill: null, bounds: { x: 2, y: 1, width: 6, height: 6 },
+    geometry: { kind: 'polygon', points: [{ x: 5, y: 1 }, { x: 8, y: 4 }, { x: 5, y: 7 }, { x: 2, y: 4 }] } }
+  expect(zoneTop(diamond, ground)).toEqual({ x: 5, y: 1 })
+  expect(zoneTop(row(2), ground)).toEqual({ x: 5, y: 2 })
+  // Cropped by the page, the top is where the zone enters the ground, never off it.
+  expect(zoneTop(diamond, { x: 0, y: 3, width: 4, height: 5 })).toEqual({ x: 3, y: 3 })
+  expect(zoneTop(row(20), ground)).toBeNull()
+  const field: PrintZone = { ...row(-5), path: 'M-5 -5 L15 -5 L15 15 L-5 15 Z', geometry: { kind: 'rect', points: [{ x: -5, y: -5 }, { x: 15, y: -5 }, { x: 15, y: 15 }, { x: -5, y: 15 }] } }
+  expect(zoneTop(field, ground)).toEqual({ x: 5, y: 0 })
 })

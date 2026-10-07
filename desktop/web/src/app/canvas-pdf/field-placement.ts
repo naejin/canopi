@@ -111,5 +111,23 @@ export class FieldSpace {
     }
     return best
   }
+  /**
+   * A box beside segment `s` (the `fieldDimensions` frame): offset along its normal, positioned along it, its centre at
+   * most `reach` mm from the segment; null when no spot is clear, so the caller keeps the code in the key.
+   */
+  beside(measured: FieldMeasure, s: Segment, reach = 6): Bounds | null {
+    const length = distance(s.a, s.b)
+    if (length < 1e-8) return null
+    const u = { x: (s.b.x - s.a.x) / length, y: (s.b.y - s.a.y) / length }, n = { x: -u.y, y: u.x }
+    const across = (Math.abs(n.x) * measured.width + Math.abs(n.y) * measured.height) / 2
+    for (const gap of [.8, 1.5, 2.5]) for (const side of [-1, 1]) for (const t of [.5, .4, .6, .3, .7, .2, .8, .1, .9, 0, 1]) {
+      if (across + gap > reach) continue
+      const offset = side * (across + gap)
+      const centre = { x: s.a.x + u.x * t * length + n.x * offset, y: s.a.y + u.y * t * length + n.y * offset }
+      const bounds = { x: centre.x - measured.width / 2, y: centre.y - measured.height / 2, width: measured.width, height: measured.height }
+      if (this.clear(bounds)) return bounds
+    }
+    return null
+  }
   admit(label: FieldLabel): void { this.labels.push(label); this.reserve(label.bounds); this.addSegments(label.route, true) }
 }

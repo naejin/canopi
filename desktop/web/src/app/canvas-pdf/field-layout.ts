@@ -11,7 +11,7 @@ import { fieldDimensions } from './field-dimensions'
 import { appearanceKey, assignFieldIdentity, drawEnclosure, enclosureRadius, fieldIdentity } from './field-identity'
 import { directAnnotation } from './field-annotations'
 import type { ZoneMeasurements } from './zone-measurements'
-import { zoneLabels } from './zone-labels'
+import { zoneLabels, zoneTop } from './zone-labels'
 import { protectZoneInk } from './zone-ink'
 
 export interface FieldReferences {
@@ -174,10 +174,12 @@ function layoutField(input: PdfInput, frame: PrintBounds, ground: PrintBounds, s
       space.admit(label)
       return
     }
+    guideInkOnPage.set(guide.id, projected)
     notes.push({ id: guide.id, reference: references.measurements.get(guide.id)!, text: value, position, kind: 'distance',
       continuation: references.measurementHomes?.get(guide.id) === page.id ? undefined : references.measurementHomes?.get(guide.id) })
   }
   const pageReferences: PdfPageReference[] = []
+  const guideInkOnPage = new Map<string, Segment>()
   const processedNotes = new Set<string>()
   const locations = new Map<string, PrintPlant[]>()
   for (const p of canvas.plants) {
@@ -243,10 +245,10 @@ function layoutField(input: PdfInput, frame: PrintBounds, ground: PrintBounds, s
       d.segments.forEach(s => line(s, '#656058', .16, opacity('zones')))
       d.ticks.forEach(s => line(s, INK, .25, opacity('zones'))); labelText(d.label, opacity('zones'))
     }
-    if (!page.summary?.length && dimensions.length + reused.size < zone.dimensions.length) {
+    const top = zoneTop(zone.zone, ground)
+    if (top && !page.summary?.length && dimensions.length + reused.size < zone.dimensions.length) {
       const number = new Intl.NumberFormat(input.locale, { maximumFractionDigits: 2 })
-      notes.push({ id: `zone:${zone.reference}`, reference: zone.reference, kind: 'zone', position: {
-        x: Math.max(ground.x, zone.zone.bounds.x), y: Math.max(ground.y, zone.zone.bounds.y) },
+      notes.push({ id: `zone:${zone.reference}`, reference: zone.reference, kind: 'zone', position: top,
       text: `${zone.diameter ? 'Ø ' : ''}${zone.lengths.map(n => number.format(n)).join(' / ')}${zone.widths.length ? ` × ${zone.widths.map(n => number.format(n)).join('–')}` : ''} m` })
     }
   }
@@ -269,7 +271,11 @@ function layoutField(input: PdfInput, frame: PrintBounds, ground: PrintBounds, s
       const isDistance = note.kind === 'annotation' && /^\(?\s*\d+(?:[,.]\d+)?\s*(?:cm|m)\s*\)?$/u.test(note.text.trim())
       const value = note.reference + (isDistance ? ` · ${note.text}` : '')
       const reservedValue = value + (note.continuation ? '      000' : '')
-      const label = note.location ? null : space.place(space.measure(reservedValue, isDistance ? 9.5 : 8), [anchor], [note.id, ...note.plantIds ?? []], `${page.id}:note:${note.reference}`, { color: OCHRE, boxed: !isDistance, note: true, ...stripOptions(anchor) })
+      const measured = space.measure(reservedValue, isDistance ? 9.5 : 8), guide = guideInkOnPage.get(note.id)
+      // A guide's code sits beside its own guide or stays in the key (Q16); a far box would name the next guide.
+      const beside = guide && !note.location ? space.beside(measured, guide) : null
+      const label = note.location ? null : guide ? beside && { ...measured, bounds: beside, route: [], ids: [note.id], target: `${page.id}:note:${note.reference}`, color: OCHRE, boxed: true }
+        : space.place(measured, [anchor], [note.id, ...note.plantIds ?? []], `${page.id}:note:${note.reference}`, { color: OCHRE, boxed: !isDistance, note: true, ...stripOptions(anchor) })
       if (label) {
         if (note.continuation) {
           label.lines = [text.line(value, label.size)]
