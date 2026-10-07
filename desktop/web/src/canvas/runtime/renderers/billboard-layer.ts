@@ -243,7 +243,6 @@ class SharedGraphicsContextCache {
   private current = new Map<string, GraphicsContext>()
   private recent = new Map<string, GraphicsContext>()
   private older = new Map<string, GraphicsContext>()
-  private disposed = false
 
   beginGeneration(): void {
     this.destroyContexts(this.older)
@@ -273,14 +272,9 @@ class SharedGraphicsContextCache {
   }
 
   dispose(): void {
-    if (this.disposed) return
-    this.disposed = true
     this.destroyContexts(this.current)
     this.destroyContexts(this.recent)
     this.destroyContexts(this.older)
-    this.current.clear()
-    this.recent.clear()
-    this.older.clear()
   }
 
   private destroyContexts(contexts: ReadonlyMap<string, GraphicsContext>): void {
