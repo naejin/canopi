@@ -231,7 +231,8 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
   ): void {
     if (!(style.widthPx > 0)) return
     const visual = getDraftVisual(style.token)
-    const dash = dashPattern(style.dash, units)
+    // A dash list is an even-length list of positive (dash, gap) CSS px lengths, frozen by the tool that draws it.
+    const dash = style.dash ? style.dash.map(units) : null
     const ends = closed ? CLOSED_ENDS : OPEN_ENDS
     traceOutline(dash)
     graphics.stroke({ ...pixiPaint(visual.casing), width: units(style.widthPx + OVERLAY_CASING_EXTRA_PX), ...ends })
@@ -346,7 +347,7 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
   /** The ghost's entities are already where a click would put them; the layer only places them. */
   function drawGhost(entity: GhostEntity, opacity: number, scale: number): void {
     if (entity.kind === 'plant') {
-      drawPlantGhosts([entity.plant], entity.mark ?? 'symbol', opacity, scale, entity.sizeFrom)
+      drawPlantGhosts([entity.plant], entity.mark, opacity, scale, entity.sizeFrom)
       return
     }
     const { template } = entity
@@ -462,17 +463,6 @@ function tracePath(graphics: Graphics, points: readonly WorldPoint[], closed: bo
   if (closed) graphics.closePath()
 }
 
-/**
- * A dash list in the units the stroke is traced in, repeated once when its
- * length is odd (as in SVG); null draws solid (no list, a negative or
- * non-finite entry, or nothing but zeros).
- */
-function dashPattern(dash: readonly number[] | undefined, units: (px: number) => number): number[] | null {
-  if (!dash || dash.length === 0) return null
-  if (dash.some((length) => !Number.isFinite(length) || length < 0)) return null
-  if (!dash.some((length) => length > 0)) return null
-  return (dash.length % 2 === 1 ? [...dash, ...dash] : dash).map(units)
-}
 
 /**
  * Traces the dashes of a path by hand (Pixi has no dashed stroke). The phase

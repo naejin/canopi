@@ -175,7 +175,7 @@ function everyShape(): DraftPresentation {
       },
       { kind: 'circle-px', center: { x: 2, y: 2 }, radiusPx: 1.75, style: { token: 'draft', widthPx: 3.5 } },
       { kind: 'label', anchor: { x: 3, y: 1 }, offsetPx: { x: 0, y: 10 }, text: '12 m', tone: 'measure' },
-      { kind: 'ghost', entity: { kind: 'plant', plant: createPlant() }, opacity: 0.85 },
+      { kind: 'ghost', entity: { kind: 'plant', plant: createPlant(), mark: 'symbol' }, opacity: 0.85 },
       objectsGhost(0.62),
     ],
   }
@@ -322,7 +322,7 @@ describe('draft layer', () => {
   it('a plant ghost and an objects ghost draw at the shape\'s opacity', () => {
     const layer = mountLayer()
     layer.setDraft({ shapes: [
-      { kind: 'ghost', entity: { kind: 'plant', plant: createPlant() }, opacity: 0.85 },
+      { kind: 'ghost', entity: { kind: 'plant', plant: createPlant(), mark: 'symbol' }, opacity: 0.85 },
       objectsGhost(0.62),
     ] })
     layer.setView(at({ x: 0, y: 0 }, 14))
@@ -618,7 +618,7 @@ describe('draft layer', () => {
     const layer = mountLayer()
     layer.setDraft({ shapes: [
       { kind: 'circle-px', center: { x: 1, y: 1 }, radiusPx: 4, style: { token: 'draft', widthPx: 1, dash: [2, 2] } },
-      { kind: 'ghost', entity: { kind: 'plant', plant: createPlant({ position: { x: 2, y: 2 } }) }, opacity: 0.5 },
+      { kind: 'ghost', entity: { kind: 'plant', plant: createPlant({ position: { x: 2, y: 2 } }), mark: 'symbol' }, opacity: 0.5 },
     ] })
     layer.setView(at({ x: 0, y: 0 }, 10))
     const [marker, plantGhost] = layer.billboardDraftRoot.children
@@ -638,21 +638,19 @@ describe('draft layer', () => {
     expect(global(layer.billboardDraftRoot.children[0]!)).toEqual({ x: 27, y: 29 })
   })
 
-  it('draws a fill-only polygon and a solid stroke for an unusable dash', () => {
+  it('draws a fill-only polygon, nothing for a one-point polyline, and a dashed quad', () => {
     const layer = mountLayer()
     layer.setDraft({ shapes: [
       { kind: 'polygon', points: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 4 }], style: { token: 'draft', widthPx: 0 }, fill: { token: 'draft-fill' } },
-      { kind: 'polyline', points: [{ x: 0, y: 0 }, { x: 4, y: 0 }], style: { token: 'draft', widthPx: 2, dash: [0, 0] } },
       { kind: 'polyline', points: [{ x: 0, y: 0 }], style: { token: 'draft', widthPx: 2 } },
-      { kind: 'quad', corners: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }], style: { token: 'draft', widthPx: 1, dash: [3] }, fill: { token: 'draft-fill' } },
+      { kind: 'quad', corners: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }], style: { token: 'draft', widthPx: 1, dash: [3, 3] }, fill: { token: 'draft-fill' } },
     ] })
     layer.setView(at({ x: 0, y: 0 }, 1))
-    const [fillOnly, undashed, single, dashedQuad] = layer.worldDraftRoot.children as Graphics[]
+    const [fillOnly, single, dashedQuad] = layer.worldDraftRoot.children as Graphics[]
     expect(paints(fillOnly!, 'stroke')).toEqual([])
     expect(paints(fillOnly!, 'fill')).toHaveLength(1)
-    expect(subPathLengths(paintInstructions(undashed!, 'stroke')[1]!)).toEqual([4])
     expect(single!.context.instructions).toEqual([])
-    // An odd dash list repeats, as in SVG: [3] is 3 on, 3 off around the closed quad, with butt ends and mitred corners.
+    // [3, 3] is 3 on, 3 off around the closed quad, with butt ends and mitred corners.
     const quadStroke = paintInstructions(dashedQuad!, 'stroke')[1]!
     expect(subPathLengths(quadStroke)).toEqual([3])
     expect(quadStroke.data.style).toMatchObject({ cap: 'butt', join: 'miter' })
@@ -661,12 +659,12 @@ describe('draft layer', () => {
 
   it('draws no plant ghost before the scene has a snapshot, and keeps a ghost filter the size of the view', () => {
     const blind = mountLayer(null)
-    blind.setDraft({ shapes: [{ kind: 'ghost', entity: { kind: 'plant', plant: createPlant() }, opacity: 0.5 }] })
+    blind.setDraft({ shapes: [{ kind: 'ghost', entity: { kind: 'plant', plant: createPlant(), mark: 'symbol' }, opacity: 0.5 }] })
     blind.setView(at({ x: 0, y: 0 }, 10))
     expect(blind.billboardDraftRoot.children).toEqual([])
 
     const layer = mountLayer()
-    layer.setDraft({ shapes: [{ kind: 'ghost', entity: { kind: 'plant', plant: createPlant() }, opacity: 0.5 }] })
+    layer.setDraft({ shapes: [{ kind: 'ghost', entity: { kind: 'plant', plant: createPlant(), mark: 'symbol' }, opacity: 0.5 }] })
     layer.setView(at({ x: 0, y: 0 }, 10))
     const ghost = layer.billboardDraftRoot.children[0]!
     expect(ghost.filterArea).toMatchObject({ x: 0, y: 0, width: 400, height: 300 })
