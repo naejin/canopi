@@ -762,8 +762,7 @@ export class WorkspaceActivationCoordinator {
   ): void {
     if (!map) return
     try {
-      if (failure === undefined) this.options.map.releaseMap(map)
-      else this.options.map.releaseMap(map, failure)
+      this.options.map.releaseMap(map, failure)
     } catch (error) {
       errors.push(error)
     }
