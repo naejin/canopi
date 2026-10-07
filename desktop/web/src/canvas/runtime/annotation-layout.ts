@@ -191,16 +191,21 @@ function getMeasureContext(): MeasureContext | null {
 
 /**
  * A note measured while its web font is still loading is measured in the fallback font. So the measure asks the
- * browser for the font, one request at a time per font, as the draft layer does (no listener), and on its load
- * forgets every width and tells the listeners (the runtime redraws the scene).
+ * browser for the font, one request at a time per font, as the draft layer does (no listener), and when a face that
+ * had not loaded then has loaded, forgets every width and tells the listeners (the runtime redraws the scene).
+ * `fonts.check()` cannot tell: WebKit reports a face still loading under font-display: swap as failed, so check() is
+ * true, and only `load()` waits for the face to arrive.
  */
 function requestFont(font: string, text: string): void {
   const fonts = globalThis.document?.fonts
-  if (!fonts || requestedFonts.has(font) || fonts.check(font, text)) return
+  if (!fonts || requestedFonts.has(font)) return
+  const unloaded = new Set<FontFace>()
+  fonts.forEach((face) => { if (face.status !== 'loaded') unloaded.add(face) })
+  if (unloaded.size === 0) return
   requestedFonts.add(font)
   fonts.load(font, text).then((faces) => {
     requestedFonts.delete(font)
-    if (faces.length === 0) return
+    if (!faces.some((face) => unloaded.has(face) && face.status === 'loaded')) return
     fontEpoch += 1
     textMetricsByKey.clear()
     for (const listener of [...fontLoadListeners]) listener()

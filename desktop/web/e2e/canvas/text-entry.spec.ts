@@ -169,11 +169,9 @@ test('a committed note\'s selection outline ends within 6 px of its last glyph',
   expect(pastLastGlyph).toBeLessThanOrEqual(6)
 })
 
-test('a note drawn before its web font arrives is measured and drawn again once the font has loaded', async ({ page, browserName }) => {
-  // Playwright 1.63's WebKit reports a face whose request is held as failed (FontFace.status 'error', so fonts.check()
-  // is true) until the response arrives, so the page cannot tell that the font is still coming. Whether WebKit does the
-  // same on a slow network is untested.
-  test.skip(browserName === 'webkit', 'a held font request reads as a failed font in Playwright\'s WebKit')
+test('a note drawn before its web font arrives is measured and drawn again once the font has loaded', async ({ page }) => {
+  // WebKit reports a face still loading under font-display: swap as failed (FontFace.status 'error', so fonts.check()
+  // is true) until it arrives; the note is measured again all the same.
   // The interface font's Latin face is held back until the note has been drawn in a fallback font. A screenshot waits
   // for fonts, so until then the frame is read from the rotate handle, which sits above the middle of the note's frame.
   let release = (): void => {}

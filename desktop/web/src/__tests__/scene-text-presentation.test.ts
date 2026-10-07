@@ -26,15 +26,19 @@ import { createTestRendererView, createTestSceneRendererSnapshot } from './suppo
 import { createZoomCalibrationScene } from './support/zoom-calibration-scenes'
 
 // jsdom has no 2D canvas and no font loading API, so this file measures through stubs: a context whose glyphs are half
-// an em wide and rise 0.7 em once the web font has loaded, 0.56 em wide and 0.75 em high before, and a font set whose
-// loads the test resolves. Pixi measures its texts with the same context.
-const fontSet = { loaded: true, finishLoad: null as (() => void) | null }
+// an em wide and rise 0.7 em once the web font's face has loaded, 0.56 em wide and 0.75 em high before, and a font set
+// of that one face whose load the test finishes. Its check() reads the face as the engines do: false while Chromium
+// reports it 'loading', true once it has loaded and while WebKit reports a face still loading under font-display: swap
+// as failed ('error'). Pixi measures its texts with the same context.
+const face = { status: 'loaded' as FontFaceLoadStatus }
+let finishLoad: (() => void) | null = null
 Object.defineProperty(document, 'fonts', {
   configurable: true,
   value: {
-    check: () => fontSet.loaded,
-    load: () => new Promise<unknown[]>((resolve) => {
-      fontSet.finishLoad = () => { fontSet.loaded = true; resolve([{}]) }
+    check: () => face.status !== 'loading',
+    forEach: (visit: (each: typeof face) => void) => visit(face),
+    load: () => face.status === 'loaded' ? Promise.resolve([face]) : new Promise<unknown[]>((resolve) => {
+      finishLoad = () => { face.status = 'loaded'; resolve([face]) }
     }),
   },
 })
@@ -44,9 +48,9 @@ vi.stubGlobal('OffscreenCanvas', class {
       font: '',
       measureText(this: { font: string }, text: string) {
         const fontSize = Number(/([\d.]+)px/.exec(this.font)![1])
-        const width = Array.from(text).length * fontSize * (fontSet.loaded ? 0.5 : 0.56)
+        const width = Array.from(text).length * fontSize * (face.status === 'loaded' ? 0.5 : 0.56)
         return { width, actualBoundingBoxLeft: 0, actualBoundingBoxRight: width - 1,
-          actualBoundingBoxAscent: fontSize * (fontSet.loaded ? 0.7 : 0.75), actualBoundingBoxDescent: fontSize * 0.2 }
+          actualBoundingBoxAscent: fontSize * (face.status === 'loaded' ? 0.7 : 0.75), actualBoundingBoxDescent: fontSize * 0.2 }
       },
     }
   }
@@ -152,22 +156,39 @@ describe('scene text presentation', () => {
     expect(at(284, 10), 'a click 20 px right of the text').toBe(false)
   })
 
-  it('a font load re-measures the note and every memo follows', async () => {
-    const scene = noteScene('Pond')
+  for (const { engine, status, text } of [
+    { engine: 'Chromium', status: 'loading', text: 'Pond' },
+    { engine: 'WebKit', status: 'error', text: 'Mere' },
+  ] satisfies { engine: string, status: FontFaceLoadStatus, text: string }[]) {
+    it(`a font load re-measures the note and every memo follows, as ${engine} reports the loading face`, async () => {
+      const scene = noteScene(text)
+      const loads = vi.fn()
+      const stopListening = onAnnotationFontLoad(loads)
+      try {
+        face.status = status
+        // 4 glyphs of the fallback font, 0.56 em each.
+        expect(widthsRead(scene)).toEqual({ frame: 35.84, detail: 35.84, selection: 35.84, hull: 35.84 })
+
+        finishLoad!()
+        await vi.waitFor(() => expect(loads).toHaveBeenCalledTimes(1))
+
+        expect(widthsRead(scene)).toEqual({ frame: 32, detail: 32, selection: 32, hull: 32 })
+      } finally {
+        stopListening()
+        face.status = 'loaded'
+      }
+    })
+  }
+
+  it('a note measured in a font that has loaded is not measured again', async () => {
     const loads = vi.fn()
     const stopListening = onAnnotationFontLoad(loads)
     try {
-      fontSet.loaded = false
-      // 4 glyphs of the fallback font, 0.56 em each.
-      expect(widthsRead(scene)).toEqual({ frame: 35.84, detail: 35.84, selection: 35.84, hull: 35.84 })
-
-      fontSet.finishLoad!()
-      await vi.waitFor(() => expect(loads).toHaveBeenCalledTimes(1))
-
-      expect(widthsRead(scene)).toEqual({ frame: 32, detail: 32, selection: 32, hull: 32 })
+      expect(widthsRead(noteScene('Medlar'))).toEqual({ frame: 48, detail: 48, selection: 48, hull: 48 })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(loads).not.toHaveBeenCalled()
     } finally {
       stopListening()
-      fontSet.loaded = true
     }
   })
 
@@ -183,13 +204,13 @@ describe('scene text presentation', () => {
     const loads = vi.fn()
     const stopListening = onAnnotationFontLoad(loads)
     try {
-      fontSet.loaded = false
+      face.status = 'loading'
       layer.present(view, snapshot())
       const drawnInFallback = noteText()
       layer.present(view, snapshot())
       expect(noteText(), 'a scene sync keeps the drawn text').toBe(drawnInFallback)
 
-      fontSet.finishLoad!()
+      finishLoad!()
       await vi.waitFor(() => expect(loads).toHaveBeenCalledTimes(1))
       // The runtime syncs the scene on the load (scene-runtime.ts).
       layer.present(view, snapshot())
@@ -198,7 +219,7 @@ describe('scene text presentation', () => {
       expect(noteText()).not.toBe(drawnInFallback)
     } finally {
       stopListening()
-      fontSet.loaded = true
+      face.status = 'loaded'
       layer.dispose()
     }
   })
@@ -222,19 +243,19 @@ describe('scene text presentation', () => {
     const loads = vi.fn()
     const stopListening = onAnnotationFontLoad(loads)
     try {
-      fontSet.loaded = false
+      face.status = 'loading'
       layer.present(view, snapshot())
       const frameWidth = () => getAnnotationPresentation(note, SCALE, true).textFrame.widthPx
       expect(rasterLayout()).toEqual({ widthPx: frameWidth(), ascentPx: 12 })
 
-      fontSet.finishLoad!()
+      finishLoad!()
       await vi.waitFor(() => expect(loads).toHaveBeenCalledTimes(1))
       layer.present(view, snapshot())
       expect(frameWidth()).toBe(23 * 16 * 0.5)
       expect(rasterLayout()).toEqual({ widthPx: frameWidth(), ascentPx: 16 * 0.7 })
     } finally {
       stopListening()
-      fontSet.loaded = true
+      face.status = 'loaded'
       layer.dispose()
     }
   })
