@@ -184,7 +184,7 @@ function createComposition(options: {
       await options.initialize?.()
       phase = 'initialized'
     }),
-    setSnapshot: vi.fn(), requestRender: vi.fn(), dispose,
+    setSnapshot: vi.fn(), dispose,
   }
   const composition = {
     createLayer: vi.fn(() => layer),

@@ -113,8 +113,6 @@ export interface SharedMapSceneLayer {
   initialize(map: SharedMapSceneMap, gl: WebGL2RenderingContext): Promise<void>
   /** Stores a scene update and asks MapLibre for the only eligible frame. */
   setSnapshot(snapshot: SceneRendererSnapshot): void
-  /** Requests a camera-only MapLibre frame without rebuilding scene content. */
-  requestRender(): void
   /**
    * Final owner teardown, right before MapLibre removes the map (nothing reloads its style, ADR 0004): it destroys the
    * renderer at once, after a pending initialization settles, without waiting for a frame.
