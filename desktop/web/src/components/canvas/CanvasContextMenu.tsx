@@ -27,9 +27,11 @@ export function CanvasContextMenu() {
 }
 
 function OpenCanvasContextMenu({ request }: { readonly request: CanvasContextMenuRequest }) {
-  // Right-click retargets the selection first, so the chip's summary is the request's selection.
+  // Right-click retargets the selection first, so the chip's summary is the request's selection. A request with no
+  // targets (an object on a locked layer) names nothing: the app's selection is not what the menu acts on.
   const selectionSummary = useMapSelectionSummary()
-  const summary = request.selection ? selectionSummary : null
+  const targets = request.selection ? request.selection.editableTargets.length + request.selection.lockedTargets.length : 0
+  const summary = targets ? selectionSummary : null
   const heading = summary ? mapSelectionHeading(summary, locale.value) : null
   const entries = buildCanvasContextMenuEntries(request, {
     translate: t,
