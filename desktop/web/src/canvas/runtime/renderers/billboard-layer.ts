@@ -82,8 +82,8 @@ function measurePixiSceneWork<T>(name: PixiSceneWorkName, operation: () => T): T
 export interface BillboardLayer {
   /** Plants, rings, badges, notes and labels, in CSS px; stays untransformed. */
   readonly root: Container
-  syncScene(snapshot: SceneRendererSnapshot): void
-  setView(view: ViewTransform): void
+  /** One frame: every billboard placed under the view, from the new snapshot when data, selection, hover or style changed. */
+  present(view: ViewTransform, snapshot?: SceneRendererSnapshot): void
   resize(width: number, height: number): void
   dispose(): void
 }
@@ -160,31 +160,26 @@ export function createBillboardLayer(options: BillboardLayerOptions): BillboardL
   const selectionLabelBySpecies = new Map<string, Text>()
   const labelProjection = new AnchorProjection()
   let snapshot: SceneRendererSnapshot | null = null
-  let view: ViewTransform | null = null
-  let sceneSynced = false
 
-  function present(reconcileRemoved: boolean): void {
-    if (!snapshot || !view) return
+  /** Places every billboard under the view; a new snapshot also removes what it no longer holds. */
+  function draw(view: ViewTransform, reconcileRemoved: boolean): void {
+    if (!snapshot) return
     syncPlants(createText, plants, viewSize, snapshot, view, reconcileRemoved)
     syncAnnotations(createText, notes, snapshot, view, reconcileRemoved)
     syncMeasurementLabels(createText, measurementGuideLabelLayer, measurementLabelById, snapshot, view, reconcileRemoved)
     const admitted = labels.admit(view.pixelsPerMetre)!
     syncPlantNameLabels(createText, plantNameLabelLayer, plantNameLabelById, snapshot, view, labelProjection, admitted.plantNameLabels)
     syncSelectionLabels(createText, selectionLabelLayer, selectionLabelBySpecies, view, labelProjection, admitted.selectionLabels)
-    sceneSynced = true
   }
 
   return {
     root,
-    syncScene(next) {
-      snapshot = next
-      sceneSynced = false
-      labels.setScene(next)
-      present(true)
-    },
-    setView(next) {
-      view = next
-      present(!sceneSynced)
+    present(view, next) {
+      if (next) {
+        snapshot = next
+        labels.setScene(next)
+      }
+      draw(view, next !== undefined)
     },
     resize(width, height) {
       viewSize.width = width
@@ -194,7 +189,6 @@ export function createBillboardLayer(options: BillboardLayerOptions): BillboardL
     dispose() {
       labels.dispose()
       snapshot = null
-      view = null
       for (const graphics of plants.graphicsById.values()) {
         graphics.removeFromParent()
         destroySharedPlantGraphics(graphics)

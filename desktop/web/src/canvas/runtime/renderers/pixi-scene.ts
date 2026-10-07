@@ -17,19 +17,21 @@ const DOT_GHOST_MIN_RADIUS_PX = 2
 
 /**
  * Retained botanical presentation. The MapLibre custom layer owns the stage,
- * the shared WebGL context and frame submission; this graph syncs scene
- * content into it with `syncScene` and follows the camera with `setView`,
- * and draws the active tool's draft over it (`draft-layer.ts`). The stage
- * holds, in this order (spec §1.5): the world root (`world-layers.ts`), the
+ * the shared WebGL context and frame submission; it presents each frame here
+ * once, with the camera's view and any new scene snapshot, and this graph
+ * draws the active tool's draft over it (`draft-layer.ts`). The stage holds,
+ * in this order (spec §1.5): the world root (`world-layers.ts`), the
  * billboard root (`billboard-layer.ts`), then the two draft roots.
  */
 export interface PixiScenePresentation {
   dispose(): void
   resize(width: number, height: number): void
-  /** Data, selection, hover, style or labels changed; drawn under the latest view. Never called for a pan. */
-  syncScene(snapshot: SceneRendererSnapshot): void
-  /** The camera moved: the world roots' affine, the visible set, the billboards' anchors, label admission on a scale change. */
-  setView(view: ViewTransform): void
+  /**
+   * One frame: the camera's view (the world roots' affine, the visible set, the billboards' anchors, label admission on a
+   * scale change) and, when data, selection, hover, style or labels changed, the new snapshot drawn under it. A pan
+   * brings no snapshot.
+   */
+  present(view: ViewTransform, snapshot?: SceneRendererSnapshot): void
   setDraft(draft: DraftPresentation | null): void
 }
 
@@ -72,14 +74,10 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
       billboards.resize(width, height)
       draftLayer.resize(width, height)
     },
-    syncScene(next) {
-      snapshot = next
-      world.syncScene(next)
-      billboards.syncScene(next)
-    },
-    setView(view) {
-      world.setView(view)
-      billboards.setView(view)
+    present(view, next) {
+      if (next) snapshot = next
+      world.present(view, next)
+      billboards.present(view, next)
       draftLayer.setView(view)
     },
     setDraft(draft) {

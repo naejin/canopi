@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createDetachedCanvasRuntimeAppAdapter } from '../../canvas/runtime/app-adapter'
 import { createDetachedSceneRuntimePanelTargetAdapter } from '../../canvas/runtime/scene-runtime/panel-target-adapter'
-import { createSharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
+import { createSharedMapSceneRendererComposition, type SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
 import type { MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
 import { WorkspaceMapControls } from './workspace-map-controls'
 import { createWorkspaceRuntimeComposition } from './workspace-runtime-composition'
@@ -25,8 +25,7 @@ describe('shared workspace without WebGL2', () => {
   it('shows the map-unavailable state, mounts no renderer and offers no Retry', async () => {
     const container = document.createElement('div')
     const states: MapLibreCanvasSurfaceState[] = []
-    const rendererComposition = createSharedMapSceneRendererComposition()
-    const initializeRenderer = vi.spyOn(rendererComposition.renderer, 'initialize')
+    const createLayer = vi.fn<SharedMapSceneRendererComposition['createLayer']>()
     const onFailure = vi.fn()
     const canCreateWebGL2Context = vi.fn(() => false)
     const composition = createWorkspaceRuntimeComposition({
@@ -38,7 +37,11 @@ describe('shared workspace without WebGL2', () => {
       onFailure,
       readSnapshot: () => workspaceSnapshot(),
     }, {
-      createRendererComposition: () => rendererComposition,
+      createRendererComposition: (connect) => {
+        const rendererComposition = createSharedMapSceneRendererComposition(connect)
+        createLayer.mockImplementation((options) => rendererComposition.createLayer(options))
+        return { createLayer }
+      },
       createControls: (options) => new WorkspaceMapControls({
         ...options,
         canCreateWebGL2Context,
@@ -56,7 +59,7 @@ describe('shared workspace without WebGL2', () => {
     await Promise.resolve()
     expect(canCreateWebGL2Context).toHaveBeenCalledOnce()
     expect(states.at(-1)).toMatchObject({ status: 'error', retryable: false })
-    expect(initializeRenderer).not.toHaveBeenCalled()
+    expect(createLayer, 'no scene layer, so nothing draws').not.toHaveBeenCalled()
     expect(container.querySelector('canvas')).toBeNull()
     expect(container.childElementCount).toBe(0)
     expect(onFailure).not.toHaveBeenCalled()

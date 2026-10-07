@@ -1,26 +1,15 @@
 import { signal, type ReadonlySignal } from '@preact/signals'
-import type {
-  SceneChangeSet,
-  SceneRenderer,
-  SceneRendererDefinition,
-  SceneRendererSnapshot,
-} from '../renderers/scene-types'
+import type { SceneRendererSnapshot, SceneRenderTarget } from '../renderers/scene-types'
 import type { DraftPresentation } from '../tools/draft'
-import type { ViewTransform } from '../view/types'
 
-export type SceneRuntimeRenderKind = 'scene' | 'viewport'
+/** A scene change publishes a whole snapshot on the next frame; a camera frame only asks the target for a repaint. */
+type SceneRuntimeRenderKind = 'scene' | 'viewport'
 
 interface SceneRuntimePreparedRender {
   publish(): SceneRendererSnapshot
 }
 
-/** Every scene render publishes a whole snapshot; the change set says so until phase R narrows it. */
-const WHOLE_SCENE: SceneChangeSet = Object.freeze({ scene: true, selection: true, hover: [], style: true, labels: true })
-
 interface SceneRuntimeRenderSchedulerOptions {
-  getRenderer(): SceneRendererDefinition | null
-  /** The live frame's view, handed to the renderer on every camera frame. */
-  getView(): ViewTransform
   prepareSceneRender(): Promise<SceneRuntimePreparedRender>
   /**
    * Runs first in every scene render: a waiting open fit places the camera (document-surface.ts), so the render draws the
@@ -29,43 +18,32 @@ interface SceneRuntimeRenderSchedulerOptions {
   placeOpenedDesign(): void
 }
 
-/** Unmount or disposal won the race against a pending renderer mount. */
-export class SceneRendererMountCancelledError extends Error {
-  override readonly name = 'SceneRendererMountCancelledError'
-
-  constructor() {
-    super('The Scene Canvas renderer mount was cancelled because the renderer was unmounted.')
-  }
-}
-
 /**
- * Sole lifecycle owner of the one mounted scene renderer (ADR 0004). It mounts
- * the renderer once, coalesces scene and camera invalidations into frames, and
- * unmounts it on disposal or when the map becomes unavailable. There is no
- * renderer selection and no fallback.
+ * Owns the runtime's one target slot (ADR 0019): the map-owned shared scene layer connects to it and gets the latest
+ * snapshot and draft, so a layer a Design switch or a Retry rebuilt draws the Scene with no pan. While mounted it coalesces
+ * scene invalidations into frames that publish a whole snapshot; the layer reads the camera itself, so a camera frame
+ * only asks it for a repaint. There is no renderer definition, selection or fallback (ADR 0004).
  */
 export class SceneRuntimeRenderScheduler {
   private _container: HTMLElement | null = null
-  private _renderer: SceneRenderer | null = null
-  private _mounting = false
-  private _mountEpoch = 0
+  private _target: SceneRenderTarget | null = null
+  /** What a connecting target draws: the latest published snapshot and draft while mounted, else null. */
+  private _snapshot: SceneRendererSnapshot | null = null
+  private _draft: DraftPresentation | null = null
   private _renderEpoch = 0
   private _frame: number | null = null
-  private _pendingKind: 'scene' | 'viewport' | null = null
+  /** A scene invalidation waits for its frame. */
+  private _sceneFrameQueued = false
   /** The epoch of the latest scene render, until it has drawn or failed; a newer epoch fences it. */
   private _sceneRenderEpoch: number | null = null
-  private readonly _scenePending = signal(false)
   /** Scene renders up to this epoch were started before the latest awaitPresentation; only a later one presents. */
   private _presentAfterEpoch = 0
+  private readonly _scenePending = signal(false)
   private readonly _presented = signal(true)
-  /** The runtime has no renderer, or unmount released it and no mount has begun since, so nothing here will draw an opened
-   *  Design. A renderer that is never mounted (no WebGL2, the map failed first) is not covered: presented stays false, and
-   *  the map error shows the Design (app/canvas-map-surface/design-reveal.ts). */
-  private _unmounted: boolean
+  /** Unmount released the slot and no mount has begun since, so nothing here will draw an opened Design. */
+  private _unmounted = false
 
-  constructor(private readonly _options: SceneRuntimeRenderSchedulerOptions) {
-    this._unmounted = _options.getRenderer() === null
-  }
+  constructor(private readonly _options: SceneRuntimeRenderSchedulerOptions) {}
 
   get container(): HTMLElement | null {
     return this._container
@@ -97,48 +75,47 @@ export class SceneRuntimeRenderScheduler {
     this._presented.value = false
   }
 
-  async initialize(container: HTMLElement): Promise<void> {
-    const definition = this._options.getRenderer()
-    if (!definition) throw new Error('The Scene Canvas runtime has no renderer to mount.')
-    if (this._mounting || this._renderer) {
-      throw new Error('The Scene Canvas renderer is already mounted. Unmount it before mounting again.')
-    }
-    this._mounting = true
-    this._unmounted = false
-    const mountEpoch = ++this._mountEpoch
-    let renderer: SceneRenderer
-    try {
-      renderer = await definition.initialize({ container })
-    } finally {
-      if (mountEpoch === this._mountEpoch) this._mounting = false
-    }
-    if (mountEpoch !== this._mountEpoch) {
-      await disposeRenderer(renderer)
-      throw new SceneRendererMountCancelledError()
-    }
-    this._renderer = renderer
+  /** Mounts on the map container; the target slot draws from now on. */
+  mount(container: HTMLElement): void {
+    if (this._container) throw new Error('The Scene Canvas renderer is already mounted. Unmount it before mounting again.')
     this._container = container
+    this._unmounted = false
+  }
+
+  /**
+   * Fills the slot: the target gets the latest snapshot and draft at once, then every later one. Returns the disconnect,
+   * which is ignored once another target has connected.
+   */
+  connect(target: SceneRenderTarget): () => void {
+    this._target = target
+    if (this._snapshot) target.setSnapshot(this._snapshot)
+    if (this._draft) target.setDraft(this._draft)
+    return () => {
+      if (this._target === target) this._target = null
+    }
   }
 
   invalidate(kind: SceneRuntimeRenderKind): void {
-    if (!this._renderer) return
+    if (!this._container) return
+    // The layer reads the camera frame when MapLibre draws it.
+    if (kind === 'viewport') {
+      this._target?.requestRender()
+      return
+    }
     // Fence an in-flight preparation immediately, even though drawing waits for a frame.
-    if (kind === 'scene') this._renderEpoch += 1
-    if (this._pendingKind !== 'scene') this._pendingKind = kind
+    this._renderEpoch += 1
+    this._sceneFrameQueued = true
     this._publishScenePending()
     if (this._frame !== null) return
     this._frame = requestAnimationFrame(() => {
-      const pending = this._pendingKind
       this._frame = null
-      this._pendingKind = null
-      if (pending === 'scene') this._runDetached(this.renderScene(), 'Scene Canvas render failed:')
-      else if (pending === 'viewport') this._runDetached(this.renderViewport(), 'Scene Canvas viewport update failed:')
+      this._sceneFrameQueued = false
+      this._runDetached(this.renderScene(), 'Scene Canvas render failed:')
     })
   }
 
   async renderScene(): Promise<void> {
-    const renderer = this._renderer
-    if (!renderer) return
+    if (!this._container) return
 
     // Before the frame is cancelled and the epoch taken: a scene invalidation the placement raises folds into this render.
     this._options.placeOpenedDesign()
@@ -148,64 +125,58 @@ export class SceneRuntimeRenderScheduler {
     this._publishScenePending()
     try {
       const prepared = await this._options.prepareSceneRender()
-      if (renderEpoch !== this._renderEpoch || renderer !== this._renderer) return
+      if (renderEpoch !== this._renderEpoch) return
       const snapshot = prepared.publish()
-      if (renderEpoch !== this._renderEpoch || renderer !== this._renderer) return
-      renderer.syncScene(snapshot, WHOLE_SCENE)
+      if (renderEpoch !== this._renderEpoch) return
+      this._snapshot = snapshot
+      this._target?.setSnapshot(snapshot)
     } catch (error) {
       this._settleSceneRender(renderEpoch)
       throw error
     }
-    // The renderer asked MapLibre for a repaint, which draws the snapshot in the next
+    // The target asked MapLibre for a repaint, which draws the snapshot in the next
     // animation frame; a frame callback requested after it runs once that drawing is done.
     requestAnimationFrame(() => this._settleSceneRender(renderEpoch))
   }
 
-  async renderViewport(): Promise<void> {
-    const renderer = this._renderer
-    if (!renderer) return
-    renderer.setView(this._options.getView())
-  }
-
   /**
-   * The ToolHost's renderer sink: a tool draft goes straight to the mounted renderer, which draws it on the map's next
-   * frame without a scene render. With nothing mounted there is nothing to draw on.
+   * The ToolHost's draft sink: a tool draft goes straight to the target, which draws it on the map's next frame without a
+   * scene render. Unmounted, there is nothing to draw on.
    */
   setDraft(draft: DraftPresentation | null): void {
-    this._renderer?.setDraft(draft)
+    if (!this._container) return
+    this._draft = draft
+    this._target?.setDraft(draft)
   }
 
   /** MapLibre owns the drawing surface size; a resize is a camera-only update. */
   resize(_width: number, _height: number): void {
-    this._runDetached(this.renderViewport(), 'Scene Canvas resize failed:')
+    this.invalidate('viewport')
   }
 
   /**
-   * Releases the mounted renderer and fences pending work. The runtime keeps
-   * its Scene; nothing draws until a renderer is mounted again.
+   * Stops drawing and fences pending work. The runtime keeps its Scene, and the slot keeps its target; nothing draws
+   * until the runtime mounts again.
    */
-  async unmount(): Promise<void> {
+  unmount(): void {
     this._cancelFrame()
     this._container = null
+    this._snapshot = null
+    this._draft = null
     this._renderEpoch += 1
-    this._mountEpoch += 1
-    this._mounting = false
-    const renderer = this._renderer
-    this._renderer = null
     this._publishScenePending()
     this._unmounted = true
     this._presented.value = true
-    if (renderer) await disposeRenderer(renderer)
   }
 
   dispose(): void {
-    void this.unmount()
+    this.unmount()
   }
 
   private _cancelFrame(): void {
     if (this._frame !== null) cancelAnimationFrame(this._frame)
     this._frame = null
-    this._pendingKind = null
+    this._sceneFrameQueued = false
   }
 
   private _settleSceneRender(renderEpoch: number): void {
@@ -217,20 +188,12 @@ export class SceneRuntimeRenderScheduler {
 
   /** A scene invalidation waits for its frame, or the latest scene render has not drawn yet. */
   private _publishScenePending(): void {
-    this._scenePending.value = this._pendingKind === 'scene' || this._sceneRenderEpoch === this._renderEpoch
+    this._scenePending.value = this._sceneFrameQueued || this._sceneRenderEpoch === this._renderEpoch
   }
 
   private _runDetached(operation: Promise<void>, failureMessage: string): void {
     void operation.catch((error) => {
       console.error(failureMessage, error)
     })
-  }
-}
-
-async function disposeRenderer(renderer: SceneRenderer): Promise<void> {
-  try {
-    await renderer.dispose()
-  } catch (error) {
-    console.error('Scene Canvas renderer disposal failed:', error)
   }
 }

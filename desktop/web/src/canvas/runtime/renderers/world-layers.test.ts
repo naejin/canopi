@@ -74,8 +74,7 @@ function visibleBox(view: ViewTransform) {
 describe('world layers', () => {
   it('a pan re-tessellates no zone', () => {
     const layers = createWorldLayers()
-    layers.syncScene(bedAndGuide())
-    layers.setView(createTestRendererView({ x: 0, y: 0, scale: 30 }))
+    layers.present(createTestRendererView({ x: 0, y: 0, scale: 30 }), bedAndGuide())
     const traced = layers.root.children.flatMap((layer) => layer.children) as Graphics[]
     expect(traced).toHaveLength(2)
     const instructions = traced.map((graphics) => graphics.context.instructions.length)
@@ -83,7 +82,7 @@ describe('world layers', () => {
 
     // A pan writes the world root's affine, one write, and traces nothing.
     const panned = createTestRendererView({ x: 10, y: 20, scale: 30 })
-    layers.setView(panned)
+    layers.present(panned)
     expect(clear).not.toHaveBeenCalled()
     expect(traced.map((graphics) => graphics.context.instructions.length)).toEqual(instructions)
     layers.root.updateLocalTransform()
@@ -91,23 +90,14 @@ describe('world layers', () => {
     expect([a, b, c, d, tx, ty]).toEqual([...panned.planar.affine])
 
     // A zoom traces the CSS-px strokes again at the new scale.
-    layers.setView(createTestRendererView({ x: 10, y: 20, scale: 60 }))
+    layers.present(createTestRendererView({ x: 10, y: 20, scale: 60 }))
     expect(clear).toHaveBeenCalledTimes(2)
-  })
-
-  it('a scene that arrives before the first view draws at that view', () => {
-    const layers = createWorldLayers()
-    layers.syncScene(bedAndGuide())
-    expect(layers.root.children.flatMap((layer) => layer.children)).toEqual([])
-    layers.setView(createTestRendererView({ x: 0, y: 0, scale: 30 }))
-    expect(layers.root.children.flatMap((layer) => layer.children)).toHaveLength(2)
   })
 
   it('the grid lines are the snap lattice', () => {
     const layers = createWorldLayers()
     const view = createTestRendererView({ x: 12, y: 34, scale: 8 })
-    layers.syncScene(withAids({ grid: gridAid() }))
-    layers.setView(view)
+    layers.present(view, withAids({ grid: gridAid() }))
 
     const interval = gridInterval(view.pixelsPerMetre).interval
     const [minor] = strokedSegments(aid(layers, 'grid'))
@@ -131,8 +121,7 @@ describe('world layers', () => {
   it('the grid turns with the world root', () => {
     const layers = createWorldLayers()
     const view = createTestRendererView({ x: 120, y: 80, scale: 8 }, { bearingDeg: 30 })
-    layers.syncScene(withAids({ grid: gridAid() }))
-    layers.setView(view)
+    layers.present(view, withAids({ grid: gridAid() }))
 
     // One affine for the zones and the grid: lines on world axes, turned on screen by the view.
     layers.root.updateLocalTransform()
@@ -152,38 +141,35 @@ describe('world layers', () => {
 
   it('a pan inside the margin traces nothing; leaving it retraces only the grid', () => {
     const layers = createWorldLayers()
-    layers.syncScene(withAids({ grid: gridAid() }, bedAndGuide()))
-    layers.setView(createTestRendererView({ x: 0, y: 0, scale: 30 }))
+    layers.present(createTestRendererView({ x: 0, y: 0, scale: 30 }), withAids({ grid: gridAid() }, bedAndGuide()))
     const clear = vi.spyOn(Graphics.prototype, 'clear')
 
     // A 40 px pan stays inside the traced margin.
-    layers.setView(createTestRendererView({ x: 40, y: -40, scale: 30 }))
+    layers.present(createTestRendererView({ x: 40, y: -40, scale: 30 }))
     expect(clear).not.toHaveBeenCalled()
 
     // A screen-wide pan leaves it: the grid retraces, the zones keep their geometry.
-    layers.setView(createTestRendererView({ x: -1200, y: 900, scale: 30 }))
+    layers.present(createTestRendererView({ x: -1200, y: 900, scale: 30 }))
     expect(clear.mock.contexts).toEqual([aid(layers, 'grid')])
 
     // A scene sync with the same aids traces nothing either.
     clear.mockClear()
-    layers.syncScene(withAids({ grid: gridAid() }, bedAndGuide()))
+    layers.present(createTestRendererView({ x: -1200, y: 900, scale: 30 }), withAids({ grid: gridAid() }, bedAndGuide()))
     expect(clear).not.toHaveBeenCalled()
   })
 
   it('draws no grid without editing aids, as in a thumbnail', () => {
     const layers = createWorldLayers()
-    layers.syncScene(withAids({ grid: gridAid() }))
-    layers.setView(createTestRendererView({ x: 0, y: 0, scale: 30 }))
+    layers.present(createTestRendererView({ x: 0, y: 0, scale: 30 }), withAids({ grid: gridAid() }))
     expect(strokedSegments(aid(layers, 'grid'))).not.toEqual([])
 
-    layers.syncScene(createTestSceneRendererSnapshot())
+    layers.present(createTestRendererView({ x: 0, y: 0, scale: 30 }), createTestSceneRendererSnapshot())
     expect(layers.root.getChildByLabel('grid', true)).toBeNull()
   })
 
   it('draws the grid under the zones', () => {
     const layers = createWorldLayers()
-    layers.syncScene(withAids({ grid: gridAid() }, bedAndGuide()))
-    layers.setView(createTestRendererView({ x: 0, y: 0, scale: 30 }))
+    layers.present(createTestRendererView({ x: 0, y: 0, scale: 30 }), withAids({ grid: gridAid() }, bedAndGuide()))
     const aidsLayer = aid(layers, 'grid').parent!
     expect(layers.root.children[0]).toBe(aidsLayer)
     expect(aidsLayer.children).toEqual([aid(layers, 'grid')])

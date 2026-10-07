@@ -54,8 +54,8 @@ const GRID_LINE_PX = 1
 export interface WorldLayers {
   /** The editing aids, zones, then measurement guides; its transform is the view's affine. */
   readonly root: Container
-  syncScene(snapshot: SceneRendererSnapshot): void
-  setView(view: ViewTransform): void
+  /** One frame: the view's affine, and the strokes traced again for a new snapshot or a new scale. */
+  present(view: ViewTransform, snapshot?: SceneRendererSnapshot): void
 }
 
 export function createWorldLayers(): WorldLayers {
@@ -70,7 +70,6 @@ export function createWorldLayers(): WorldLayers {
   const measurementGuideGraphicsById = new Map<string, Graphics>()
   const editingAids = createEditingAidsLayer(editingAidsLayer)
   let snapshot: SceneRendererSnapshot | null = null
-  let view: ViewTransform | null = null
   /** The latest view's scale; null before the first view. */
   let viewPixelsPerMetre: number | null = null
   /** The scale the strokes were traced at; null until a scene and a view have both arrived. */
@@ -85,19 +84,13 @@ export function createWorldLayers(): WorldLayers {
 
   return {
     root,
-    syncScene(next) {
-      snapshot = next
-      trace(true)
-      editingAids.sync(next.editingAids ?? null, view)
-    },
-    setView(next) {
-      view = next
-      writeWorldAffine(root, next)
-      viewPixelsPerMetre = next.pixelsPerMetre
-      editingAids.sync(snapshot?.editingAids ?? null, next)
-      if (viewPixelsPerMetre === tracedPixelsPerMetre) return
-      // The first view after a scene that arrived without one reconciles it.
-      trace(tracedPixelsPerMetre === null)
+    present(view, next) {
+      writeWorldAffine(root, view)
+      viewPixelsPerMetre = view.pixelsPerMetre
+      if (next) snapshot = next
+      editingAids.sync(snapshot?.editingAids ?? null, view)
+      if (next) trace(true)
+      else if (viewPixelsPerMetre !== tracedPixelsPerMetre) trace(false)
     },
   }
 }
@@ -123,7 +116,7 @@ function createEditingAidsLayer(layer: Container) {
   }
 
   return {
-    sync(aids: SceneEditingAids | null, view: ViewTransform | null): void {
+    sync(aids: SceneEditingAids | null, view: ViewTransform): void {
       if (!aids) {
         grid?.removeFromParent()
         grid?.destroy()
@@ -131,7 +124,6 @@ function createEditingAidsLayer(layer: Container) {
         traced = null
         return
       }
-      if (!view) return
       if (!grid) {
         grid = new Graphics({ label: 'grid' })
         layer.addChild(grid)

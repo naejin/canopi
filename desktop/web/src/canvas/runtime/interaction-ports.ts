@@ -9,7 +9,7 @@ import type { AdapterEffect, RawInput, TargetClass } from './input/raw-input'
 import type { PointerKind, ToolHandleId, ToolId } from './interaction-types'
 import type { PlantPresentationContext } from './plant-presentation'
 import type { SpeciesCacheEntry } from './presentation-data'
-import type { SceneRenderer } from './renderers/scene-types'
+import type { SceneRenderTarget } from './renderers/scene-types'
 import type { CanvasDesignObjectSelectionModel, CanvasSceneEditCommandSurface } from './runtime'
 import type { SceneDesignObjectSelection, SceneDesignObjectTarget } from './scene/design-object-targets'
 import type { SceneStateReader } from './scene/store'
@@ -93,7 +93,7 @@ export interface ToolHostDeps {
   readonly settled: SettledSceneReader                          // dragover reads
   /** History-free, dirty-free selection (today's deps.setSelection/clearSelection); backs ToolEffects.setSelection and the menu retarget. */
   readonly setSelection: (targets: readonly SceneDesignObjectTarget[]) => void
-  readonly renderer: Pick<SceneRenderer, 'setDraft'>
+  readonly renderer: Pick<SceneRenderTarget, 'setDraft'>
   /** Redraw request after a tool call that mutated an open transaction or changed its draft or handles. */
   readonly invalidate: () => void
   readonly chrome: {

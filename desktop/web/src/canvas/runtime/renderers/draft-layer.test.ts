@@ -703,7 +703,7 @@ describe('draft layer', () => {
   it('the world drafts share the world root\'s affine and both draft roots sit above the billboards', () => {
     const stage = new Container()
     const presentation = createPixiScenePresentation({ stage, createText: () => new MeasuredText(), viewSize: { width: 400, height: 300 } })
-    presentation.syncScene(createTestSceneRendererSnapshot({ scene: { plants: [createPlant()] } }))
+    const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [createPlant()] } })
     presentation.setDraft({ shapes: [
       { kind: 'polyline', points: [{ x: 1, y: 2 }, { x: 3, y: 2 }], style: { token: 'draft', widthPx: 2 } },
       { kind: 'circle-px', center: { x: 2, y: 2 }, radiusPx: 1.75, style: { token: 'draft', widthPx: 3.5 } },
@@ -713,7 +713,7 @@ describe('draft layer', () => {
     expect(more).toEqual([])
     for (const bearingDeg of [0, 45]) {
       const view = createTestRendererView({ x: 100, y: 50, scale: 10 }, { bearingDeg })
-      presentation.setView(view)
+      presentation.present(view, snapshot)
       for (const root of [worldRoot!, worldDraftRoot!]) {
         root.updateLocalTransform()
         const { a, b, c, d, tx, ty } = root.localTransform

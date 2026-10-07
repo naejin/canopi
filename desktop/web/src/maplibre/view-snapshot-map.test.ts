@@ -371,7 +371,7 @@ describe('view snapshot map', () => {
         super.triggerRepaint()
       }
     }
-    const setView = vi.fn((_view: ViewTransform) => undefined)
+    const present = vi.fn((_view: ViewTransform) => undefined)
     const owner = createOwner({
       loadMapLibre: async () => ({ Map: RenderingMap as unknown as new (options: MapLibreMapConstructorOptions) => unknown }),
       createSceneLayer: (options) => createSharedMapSceneLayer({
@@ -385,18 +385,18 @@ describe('view snapshot map', () => {
           context: { extensions: {} },
         }),
         createStage: () => ({ destroy: () => undefined }) as never,
-        createPresentation: () => ({ dispose: () => undefined, resize: () => undefined, syncScene: () => undefined, setView, setDraft: () => undefined }),
+        createPresentation: () => ({ dispose: () => undefined, resize: () => undefined, present, setDraft: () => undefined }),
       }),
     })
 
     await owner.capture(request())
-    expect(setView).toHaveBeenCalled()
-    expect(setView.mock.lastCall![0].camera.bearingDeg).toBeCloseTo(0, 9)
+    expect(present).toHaveBeenCalled()
+    expect(present.mock.lastCall![0].camera.bearingDeg).toBeCloseTo(0, 9)
 
     const elsewhere = { lon: ORIGIN.lon + 0.001, lat: ORIGIN.lat + 0.001 }
     await owner.capture(request({ camera: { ...elsewhere, zoom: 19, bearing: 30 } }))
     expect(FakeMap.instances).toHaveLength(1)
-    const presented = setView.mock.lastCall![0]
+    const presented = present.mock.lastCall![0]
     expect(presented.camera.bearingDeg).toBeCloseTo(30, 9)
     expect(presented.camera.zoom).toBeCloseTo(19, 9)
     expect(presented.camera.center.lon).toBeCloseTo(elsewhere.lon, 9)

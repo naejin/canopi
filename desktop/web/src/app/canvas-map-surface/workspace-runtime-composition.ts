@@ -39,6 +39,7 @@ import type { WorkspaceMapContributionAdapter, WorkspaceMapContributionSnapshot 
 import type { MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
 import { DEFAULT_NEW_DESIGN_VIEW, geographicViewOfCamera, type GeographicView } from '../../canvas/session-plane'
 import type { CameraDriverHost } from '../../canvas/runtime/view/camera-driver'
+import type { SceneRenderTarget } from '../../canvas/runtime/renderers/scene-types'
 
 export type WorkspaceRuntimeStartOutcome = WorkspaceActivationOutcome | 'no-design'
 
@@ -87,6 +88,8 @@ export interface WorkspaceRuntimeCompositionOptions {
 }
 
 interface WorkspaceCompositionRuntime extends WorkspaceActivationRuntime {
+  /** The runtime's one target slot, which each map's shared scene layer fills. */
+  connectRenderTarget(target: SceneRenderTarget): () => void
   /** The runtime's one camera: the activation attaches each map to it, and the map container's resizes reach its live driver. */
   readonly cameraHost: CameraDriverHost
   readonly commandSurface: CanvasCommandSurface
@@ -105,7 +108,9 @@ interface WorkspaceCompositionLifecycle extends WorkspaceGenerationLifecycle {
 
 /** Constructor-only test seam. Production callers use the default cohesive assembly. */
 interface WorkspaceRuntimeCompositionDependencies {
-  readonly createRendererComposition: () => SharedMapSceneRendererComposition
+  readonly createRendererComposition: (
+    connect: (target: SceneRenderTarget) => () => void,
+  ) => SharedMapSceneRendererComposition
   readonly createRuntime: (options: SceneCanvasRuntimeOptions) => WorkspaceCompositionRuntime
   readonly createControls: (options: ConstructorParameters<typeof WorkspaceMapControls>[0]) => WorkspaceActivationMapControls
   readonly createWorkspace: (options: WorkspaceActivationOptions) => WorkspaceCompositionLifecycle
@@ -126,12 +131,11 @@ export function createWorkspaceRuntimeComposition(
   dependencyOverrides: Partial<WorkspaceRuntimeCompositionDependencies> = {},
 ): WorkspaceRuntimeComposition {
   const dependencies = { ...DEFAULT_DEPENDENCIES, ...dependencyOverrides }
-  const rendererComposition = dependencies.createRendererComposition()
   const runtime = dependencies.createRuntime({
     appAdapter: options.appAdapter,
     targetPresentation: options.targetPresentation,
-    renderer: rendererComposition.renderer,
   })
+  const rendererComposition = dependencies.createRendererComposition((target) => runtime.connectRenderTarget(target))
   // The one writer of `retryable`: a map error offers Retry only while the workspace could rebuild the map.
   // The controls' own state is kept, so Retry appears once the workspace allows it (a failure settled).
   let mapState: MapLibreCanvasSurfaceState | null = null

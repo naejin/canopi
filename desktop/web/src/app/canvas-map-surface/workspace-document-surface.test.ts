@@ -120,7 +120,6 @@ describe('createWorkspaceDocumentSurface', () => {
       },
       camera,
       composition: {
-        renderer: {} as never,
         createLayer: vi.fn(),
       },
       map: {

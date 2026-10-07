@@ -10,9 +10,8 @@ import type { SpeciesCacheEntry } from './species-cache'
 it('the species key shows an opened plant\'s stratum colour once the catalog loads', async () => {
   // A saved plant carries no stratum: the key takes its colour from the species catalog, as the canvas does.
   const speciesCache = new Map<string, SpeciesCacheEntry>()
-  const renderer = { id: 'maplibre-pixi' as const, syncScene: vi.fn(), setView: vi.fn(), setDraft: vi.fn(), dispose: vi.fn() }
+  const renderer = { setSnapshot: vi.fn(), setDraft: vi.fn(), requestRender: vi.fn() }
   const runtime = new SceneCanvasRuntime({
-    renderer: { id: 'test', initialize: () => renderer },
     appAdapter: {
       ...createDetachedCanvasRuntimeAppAdapter(),
       presentationData: {
@@ -28,6 +27,7 @@ it('the species key shows an opened plant\'s stratum colour once the catalog loa
       },
     },
   })
+  runtime.connectRenderTarget(renderer)
   runtime.documentSurface.loadDocument({
     version: CURRENT_CANOPI_FILE_VERSION, name: 'Opened', description: null, plant_species_colors: {},
     layers: [{ name: 'plants', visible: true, locked: false, opacity: 1 }],
@@ -49,7 +49,7 @@ it('the species key shows an opened plant\'s stratum colour once the catalog loa
   Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
 
   await runtime.init(host)
-  await vi.waitFor(() => expect(renderer.syncScene).toHaveBeenCalled())
+  await vi.waitFor(() => expect(renderer.setSnapshot).toHaveBeenCalled())
 
   expect(keyColor()).toBe(getStratumColor('emergent'))
   runtime.destroy()

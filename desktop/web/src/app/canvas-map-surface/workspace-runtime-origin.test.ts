@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createDetachedCanvasRuntimeAppAdapter } from '../../canvas/runtime/app-adapter'
-import { MAPLIBRE_SCENE_RENDERER_ID } from '../../canvas/runtime/renderers/maplibre-scene'
 import { createDetachedSceneRuntimePanelTargetAdapter } from '../../canvas/runtime/scene-runtime/panel-target-adapter'
 import { createSessionPlane, DEFAULT_NEW_DESIGN_VIEW } from '../../canvas/session-plane'
 import type { SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
@@ -27,6 +26,7 @@ describe('workspace runtime composition origin effect', () => {
       unmountRenderer: vi.fn(async () => {}),
       remountRenderer: vi.fn(async () => {}),
       destroy: vi.fn(),
+      connectRenderTarget: vi.fn(() => () => {}),
     }
     const workspace = {
       requestGenerationDisconnect: vi.fn(async () => {}),
@@ -57,10 +57,7 @@ describe('workspace runtime composition origin effect', () => {
         locale: 'en',
       }),
     }, {
-      createRendererComposition: () => ({
-        renderer: { id: MAPLIBRE_SCENE_RENDERER_ID, initialize: vi.fn() },
-        createLayer: vi.fn(),
-      }) as unknown as SharedMapSceneRendererComposition,
+      createRendererComposition: () => ({ createLayer: vi.fn() }) as unknown as SharedMapSceneRendererComposition,
       createRuntime: () => runtime,
       createControls: () => ({
         createMap: vi.fn(),

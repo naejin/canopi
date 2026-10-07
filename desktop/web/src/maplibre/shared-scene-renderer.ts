@@ -1,8 +1,4 @@
-import {
-  MapLibreSceneRendererBridge,
-  type MapLibreSceneRenderTargetConnection,
-} from '../canvas/runtime/renderers/maplibre-scene'
-import type { SceneRendererDefinition } from '../canvas/runtime/renderers/scene-types'
+import type { SceneRenderTarget } from '../canvas/runtime/renderers/scene-types'
 import {
   createSharedMapSceneLayer,
   type SharedMapSceneLayer,
@@ -10,23 +6,21 @@ import {
 } from './shared-scene-layer'
 
 export interface SharedMapSceneRendererComposition {
-  readonly renderer: SceneRendererDefinition
   createLayer(options: SharedMapSceneLayerOptions): SharedMapSceneLayer
 }
 
 /**
- * Builds the Scene Runtime renderer and its map-owned custom layers as one
- * composition. Layer failures go to the layer's `onFailure` observer; the
- * workspace coordinator then unmounts the renderer.
+ * Builds the workspace map's custom layers, each connected to the runtime's one target slot (`connect`, the runtime's
+ * `connectRenderTarget`) until its final disposal. Layer failures go to the layer's `onFailure` observer; the workspace
+ * coordinator then unmounts the runtime's renderer.
  */
-export function createSharedMapSceneRendererComposition(): SharedMapSceneRendererComposition {
-  const bridge = new MapLibreSceneRendererBridge()
-
+export function createSharedMapSceneRendererComposition(
+  connect: (target: SceneRenderTarget) => () => void,
+): SharedMapSceneRendererComposition {
   return {
-    renderer: bridge.createRenderer(),
     createLayer(options) {
       const adapter = createSharedMapSceneLayer(options)
-      let connection: MapLibreSceneRenderTargetConnection | null = bridge.connect(adapter)
+      let disconnect: (() => void) | null = connect(adapter)
 
       return {
         layer: adapter.layer,
@@ -36,8 +30,8 @@ export function createSharedMapSceneRendererComposition(): SharedMapSceneRendere
         requestRender: () => adapter.requestRender(),
         async dispose(disposeOptions) {
           await adapter.dispose(disposeOptions)
-          connection?.disconnect()
-          connection = null
+          disconnect?.()
+          disconnect = null
         },
       }
     },

@@ -17,9 +17,8 @@ describe('pinned plant name legend through the runtime', () => {
   // plant-names revision DisplayLegend reads, so the legend matches the canvas.
   it('shows an opened plant in the colour the canvas paints it once the species catalog loads', async () => {
     const speciesCache = new Map<string, SpeciesCacheEntry>()
-    const renderer = { id: 'maplibre-pixi' as const, syncScene: vi.fn(), setView: vi.fn(), setDraft: vi.fn(), dispose: vi.fn() }
+    const renderer = { setSnapshot: vi.fn(), setDraft: vi.fn(), requestRender: vi.fn() }
     const runtime = new SceneCanvasRuntime({
-      renderer: { id: 'test', initialize: () => renderer },
       appAdapter: {
         ...createDetachedCanvasRuntimeAppAdapter(),
         presentationData: {
@@ -41,6 +40,7 @@ describe('pinned plant name legend through the runtime', () => {
         },
       },
     })
+    runtime.connectRenderTarget(renderer)
     runtime.documentSurface.loadDocument(openedDesignWithPinnedPlant())
     const legendColor = () => buildPinnedPlantNameLegendEntries(runtime.querySurface, DEFAULT_PLANT_DISPLAY)[0]?.color
     // Before the first frame no catalog entry has loaded.
@@ -51,9 +51,9 @@ describe('pinned plant name legend through the runtime', () => {
     Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
 
     await runtime.init(host)
-    await vi.waitFor(() => expect(renderer.syncScene).toHaveBeenCalled())
+    await vi.waitFor(() => expect(renderer.setSnapshot).toHaveBeenCalled())
 
-    const drawn = renderer.syncScene.mock.calls.at(-1)![0] as SceneRendererSnapshot
+    const drawn = renderer.setSnapshot.mock.calls.at(-1)![0] as SceneRendererSnapshot
     const canvasColor = resolvePlantDisplayColor(drawn.scene.plants[0]!, drawn.speciesCache, DEFAULT_PLANT_DISPLAY)
     expect(canvasColor).toBe(getStratumColor('high'))
     expect(legendColor()).toBe(canvasColor)

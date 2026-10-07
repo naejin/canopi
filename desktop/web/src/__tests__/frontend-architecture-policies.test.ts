@@ -1508,6 +1508,12 @@ const SYMBOL_OWNERSHIP_POLICIES = [
       'reportRendererFailure',
       'failActiveLayer',
       'failActiveBackend',
+      // The renderer seam is one target slot on the render scheduler (ADR 0019, U33 P12 and P9).
+      'SceneRendererDefinition',
+      'SceneChangeSet',
+      'MapLibreSceneRendererBridge',
+      'setSelectionPreview',
+      'SceneRendererMountCancelledError',
     ],
   },
   {

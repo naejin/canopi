@@ -224,7 +224,6 @@ describe('opening a Design at the view it was saved with', () => {
     const file = savedOrchard()
     const host = createLiveTestCanvasRuntimeHost({
       screen: { width: 1200, height: 800 },
-      renderer: { id: 'test', initialize: () => ({ id: 'maplibre-pixi', syncScene: () => {}, setView: () => {}, setDraft: () => {}, dispose: () => {} }) },
     })
     hosts.push(host)
     host.surfaces.documents.loadDocument(file)

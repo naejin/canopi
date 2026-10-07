@@ -21,7 +21,7 @@ export interface GalleryWorkspaceRuntimeOptions extends WorkspaceRuntimeMountOpt
 }
 
 /**
- * The production shared workspace (MapLibre + maplibre-pixi) with memory
+ * The production shared workspace (MapLibre and its Pixi scene layer) with memory
  * presentation data. The gallery must run offline and render the same pixels
  * on every load, so the background band stays hidden and the map shows only
  * its local empty style; LiDAR and terrain contributions are empty.
