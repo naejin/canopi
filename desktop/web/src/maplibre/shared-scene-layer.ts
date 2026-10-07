@@ -142,7 +142,6 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
   let presentedSettled = false
   let initializePromise: Promise<void> | null = null
   let disposePromise: Promise<void> | null = null
-  let rendererDestroyed = false
   let rendererSize: { width: number; height: number; resolution: number } | null = null
   let sceneSyncCount = 0
   let failureReported = false
@@ -310,24 +309,21 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
     presentation = null
     stage?.destroy({ children: true })
     stage = null
-    if (renderer && !rendererDestroyed) {
+    if (renderer) {
       // Pixi's GlContextSystem.destroy() always calls loseContext(). This is
       // Pixi's own extension registry, so suppress that one teardown action
       // before releasing resources from the MapLibre-owned shared context.
       renderer.context.extensions.loseContext = undefined
       renderer.destroy({ removeView: false })
-      rendererDestroyed = true
     }
   }
 
   function finishDispose(): void {
-    if (phase === 'disposed') return
     phase = 'disposed'
     renderer = null
     pendingSnapshot = null
     renderedSnapshot = null
     presentedView = null
-    presentedSettled = false
     stopSettleRepaints()
     map = null
     context = null
