@@ -7,6 +7,7 @@ import { LabelCollisionIndex } from '../canvas/label-collision'
 import { Container, Text } from 'pixi.js'
 import { createPixiScenePresentation } from '../canvas/runtime/renderers/pixi-scene'
 import { CANVAS_CHROME_FONT_FAMILY } from '../canvas/chrome-fonts'
+import { bandCentreScale, zoomBandOf } from '../canvas/runtime/view/frame-source'
 import './support/camera-tolerance'
 
 vi.mock('pixi.js', () => {
@@ -835,10 +836,11 @@ describe('createPixiScenePresentation', () => {
       graphics.moveTo.mock.calls.some(([x, y]) => x === 40 && y === 10)
       && graphics.lineTo.mock.calls.some(([x, y]) => x === 10 && y === 40),
     )
-    // A light 1.5 px guide over a 3.5 px dark casing, in world units at scale 2.
+    // A light 1.5 px guide over a 3.5 px dark casing, in world units at the centre of scale 2's band.
+    const band = bandCentreScale(zoomBandOf(2))
     expect(guideGraphic?.stroke.mock.calls).toHaveLength(2)
-    expect(guideGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ color: 0x14100a, width: 1.75, alpha: .6 })
-    expect(guideGraphic?.stroke.mock.calls[1]?.[0]).toMatchObject({ color: 0xfff3d6, width: 0.75, alpha: 1 })
+    expect(guideGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ color: 0x14100a, width: 3.5 / band, alpha: .6 })
+    expect(guideGraphic?.stroke.mock.calls[1]?.[0]).toMatchObject({ color: 0xfff3d6, width: 1.5 / band, alpha: 1 })
     const label = pixi.__pixiMockState.texts.find((text) => text.text === '42 m')
     const expectedLabelPoint = {
       x: 50 - MEASUREMENT_GUIDE_LABEL_OFFSET_PX * Math.SQRT1_2,
@@ -1186,14 +1188,16 @@ describe('createPixiScenePresentation', () => {
 
     const zoneGraphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.rect.mock.calls.length > 0)
     const plantGraphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.circle.mock.calls.length > 0)
-    // Selected: 2.5 CSS px over a 5.5 CSS px casing, divided by camera scale 4.
-    expect(zoneGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 1.375 })
-    expect(zoneGraphic?.stroke.mock.calls[1]?.[0]).toMatchObject({ width: 0.625 })
+    // Selected: 2.5 CSS px over a 5.5 CSS px casing, divided by the centre scale of camera scale 4's band.
+    const atFour = bandCentreScale(zoomBandOf(4))
+    const atTwo = bandCentreScale(zoomBandOf(2))
+    expect(zoneGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 5.5 / atFour })
+    expect(zoneGraphic?.stroke.mock.calls[1]?.[0]).toMatchObject({ width: 2.5 / atFour })
     expect(plantGraphic?.stroke).not.toHaveBeenCalled()
 
     renderer.present(view({ x: 0, y: 0, scale: 2 }))
 
-    expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 1.25 })
+    expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 2.5 / atTwo })
     expect(plantGraphic?.stroke).not.toHaveBeenCalled()
 
     renderer.present(view({ x: 0, y: 0, scale: 4 }), createTestSceneRendererSnapshot({
@@ -1204,7 +1208,7 @@ describe('createPixiScenePresentation', () => {
       ],
     }))
 
-    expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 0.625 })
+    expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 2.5 / atFour })
     // The plant's ring is its own graphic above the symbol, in CSS pixels.
     const plantRing = pixi.__pixiMockState.graphics.find((graphics) => graphics !== zoneGraphic && graphics.stroke.mock.calls.length > 0)
     expect(plantGraphic?.stroke).not.toHaveBeenCalled()
@@ -1212,7 +1216,7 @@ describe('createPixiScenePresentation', () => {
 
     renderer.present(view({ x: 0, y: 0, scale: 2 }))
 
-    expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 1.25 })
+    expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 2.5 / atTwo })
     expect(plantRing?.stroke.mock.calls.slice(-2).map(([stroke]) => stroke.width)).toEqual([5.5, 2.5])
     renderer.dispose()
   })

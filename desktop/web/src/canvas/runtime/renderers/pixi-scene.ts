@@ -5,6 +5,7 @@ import { getAnnotationPresentation } from '../annotation-layout'
 import { buildPlantPresentationEntries } from '../plant-presentation'
 import { getMapTextColor, resolveZoneVisual } from '../scene-visuals'
 import type { DraftPresentation } from '../tools/draft'
+import { bandCentreScale, zoomBandOf } from '../view/frame-source'
 import type { ViewTransform } from '../view/types'
 import { createBillboardLayer, drawPlantGlyph, noteTextRotation, styleAnnotationText, traceAnnotationMarker } from './billboard-layer'
 import { createDraftLayer, type DraftScenePainters } from './draft-layer'
@@ -95,13 +96,14 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
 export function createDraftScenePainters(getSnapshot: () => SceneRendererSnapshot | null): DraftScenePainters {
   return {
     drawZoneGhost(graphics, zone, scale) {
-      // Today's ghost: the zone's fill at a fifth and its stroke, with round ends and no casing.
+      // Today's ghost: the zone's fill at a fifth and its stroke, with round ends and no casing; the stroke is traced at
+      // the band's centre scale, as the zone it places is.
       const visual = resolveZoneVisual(zone)
       if (!traceZonePath(graphics, zone)) return false
       if (zone.zoneType !== 'line') graphics.fill({ color: toPixiColor(visual.fill), alpha: 0.2 * cssColorAlpha(visual.fill) })
       graphics.stroke({
         ...pixiPaint(visual.stroke),
-        width: screenPxToWorldPx(ZONE_STROKE_PX, scale),
+        width: screenPxToWorldPx(ZONE_STROKE_PX, bandCentreScale(zoomBandOf(scale))),
         cap: 'round',
         join: 'round',
       })

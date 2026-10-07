@@ -15,6 +15,7 @@ import type { DraftPresentation, DraftShape } from '../tools/draft'
 import { createDraftLayer, type DraftLayer } from './draft-layer'
 import { createDraftScenePainters, createPixiScenePresentation } from './pixi-scene'
 import type { SceneRendererSnapshot } from './scene-types'
+import { createWorldLayers } from './world-layers'
 
 /** jsdom has no canvas to measure glyphs, so chip text has a fixed size. */
 class MeasuredText extends Text {
@@ -339,7 +340,11 @@ describe('draft layer', () => {
     // The scene's zone look: its fill at a fifth, the zone stroke, no casing.
     const zoneFill = getCanvasColor('zone-fill')
     expect(paints(zoneGhost, 'fill')).toEqual([expect.objectContaining({ color: pixiColor(zoneFill), alpha: 0.2 * cssAlpha(zoneFill) })])
-    expect(paints(zoneGhost, 'stroke')).toEqual([expect.objectContaining({ color: pixiColor(getCanvasColor('zone-stroke')), width: 2 / 14 })])
+    // Its stroke is the zone's own at this scale (traced at the band's centre), so the ghost and the result match.
+    const world = createWorldLayers()
+    world.present(at({ x: 0, y: 0 }, 14), createTestSceneRendererSnapshot({ scene: { zones: [createZone()] } }))
+    const zoneStroke = paints(world.root.children[1]!.children[0] as Graphics, 'stroke').at(-1)!
+    expect(paints(zoneGhost, 'stroke')).toEqual([expect.objectContaining({ color: pixiColor(getCanvasColor('zone-stroke')), width: zoneStroke.width })])
 
     const { textOpacity, markerOpacity } = getAnnotationPresentation(createNote(), 14)
     expect(textOpacity).toBeGreaterThan(0)

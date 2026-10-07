@@ -2,10 +2,12 @@
  * The scene's world root (spec §1.5): the workspace's editing aid (the grid),
  * then zones and measurement guides, in world metres
  * under the view's affine. A frame writes the affine and nothing else; the
- * strokes, which are CSS px wide at every scale, are traced again only when
- * the scale changes (policy P12's behavioural half, `world-layers.test.ts`).
+ * strokes and dashes, sized in CSS px, are traced at the zoom band's centre
+ * scale (within 12 % of their size anywhere in the band) and again only when
+ * the band changes (policy P12's behavioural half, `world-layers.test.ts`).
  * The grid is endless lines, traced over a box around the visible quad with a
- * margin, and again only when the view leaves that box.
+ * margin, and again only when the view leaves that box, the band changes or
+ * the snap interval steps.
  */
 
 // Production CSP rejects Pixi's generated functions; its shim avoids eval.
@@ -25,6 +27,7 @@ import {
   getSceneLayerStyle,
   resolveZoneVisual,
 } from '../scene-visuals'
+import { bandCentreScale, zoomBandOf } from '../view/frame-source'
 import type { SceneBounds, ViewTransform } from '../view/types'
 import { getEllipticalZonePolygon, getRectangularZoneCorners } from '../zone-geometry'
 import {
@@ -72,27 +75,28 @@ export function createWorldLayers(): WorldLayers {
   const measurementGuideGraphicsById = new Map<string, Graphics>()
   const editingAids = createEditingAidsLayer(editingAidsLayer)
   let snapshot: SceneRendererSnapshot | null = null
-  /** The latest view's scale; null before the first view. */
-  let viewPixelsPerMetre: number | null = null
-  /** The scale the strokes were traced at; null until a scene and a view have both arrived. */
-  let tracedPixelsPerMetre: number | null = null
+  /** The latest view's zoom band; null before the first view. */
+  let viewBand: number | null = null
+  /** The band the strokes were traced in; null until a scene and a view have both arrived. */
+  let tracedBand: number | null = null
 
   function trace(reconcileRemoved: boolean): void {
-    if (!snapshot || viewPixelsPerMetre === null) return
-    syncZones(zonesLayer, zoneGraphicsById, snapshot, viewPixelsPerMetre, reconcileRemoved)
-    syncMeasurementGuides(measurementGuideLayer, measurementGuideGraphicsById, snapshot, viewPixelsPerMetre, reconcileRemoved)
-    tracedPixelsPerMetre = viewPixelsPerMetre
+    if (!snapshot || viewBand === null) return
+    const strokeScale = bandCentreScale(viewBand)
+    syncZones(zonesLayer, zoneGraphicsById, snapshot, strokeScale, reconcileRemoved)
+    syncMeasurementGuides(measurementGuideLayer, measurementGuideGraphicsById, snapshot, strokeScale, reconcileRemoved)
+    tracedBand = viewBand
   }
 
   return {
     root,
     present(view, next) {
       writeWorldAffine(root, view)
-      viewPixelsPerMetre = view.pixelsPerMetre
+      viewBand = zoomBandOf(view.pixelsPerMetre)
       if (next) snapshot = next
       editingAids.sync(snapshot?.editingAids ?? null, view)
       if (next) trace(true)
-      else if (viewPixelsPerMetre !== tracedPixelsPerMetre) trace(false)
+      else if (viewBand !== tracedBand) trace(false)
     },
   }
 }
@@ -104,17 +108,19 @@ export function createWorldLayers(): WorldLayers {
  */
 function createEditingAidsLayer(layer: Container) {
   let grid: Graphics | null = null
-  /** The traced box and the scale it was traced at. */
-  let traced: { readonly box: SceneBounds; readonly pixelsPerMetre: number } | null = null
+  /** The traced box, the snap interval's step and the band its lines were traced in. */
+  let traced: GridTrace | null = null
 
-  function tracedBoxFor(view: ViewTransform): SceneBounds {
+  function traceFor(view: ViewTransform): GridTrace {
     const visible = boundsOf(view.visibleWorldQuad())
-    if (traced && traced.pixelsPerMetre === view.pixelsPerMetre && containsBounds(traced.box, visible)) return traced.box
+    const { index } = gridInterval(view.pixelsPerMetre)
+    const band = zoomBandOf(view.pixelsPerMetre)
+    if (traced && traced.index === index && traced.band === band && containsBounds(traced.box, visible)) return traced
     const marginX = (visible.maxX - visible.minX) * EDITING_AIDS_MARGIN
     const marginY = (visible.maxY - visible.minY) * EDITING_AIDS_MARGIN
     const box = { minX: visible.minX - marginX, minY: visible.minY - marginY, maxX: visible.maxX + marginX, maxY: visible.maxY + marginY }
-    traced = { box, pixelsPerMetre: view.pixelsPerMetre }
-    return box
+    traced = { box, index, band }
+    return traced
   }
 
   return {
@@ -130,9 +136,16 @@ function createEditingAidsLayer(layer: Container) {
         grid = new Graphics({ label: 'grid' })
         layer.addChild(grid)
       }
-      drawGrid(grid, aids.grid, tracedBoxFor(view), view.pixelsPerMetre)
+      drawGrid(grid, aids.grid, traceFor(view))
     },
   }
+}
+
+interface GridTrace {
+  readonly box: SceneBounds
+  /** The snap interval's step in `NICE_DISTANCES`, at the view's exact scale. */
+  readonly index: number
+  readonly band: number
 }
 
 function boundsOf(points: readonly ScenePoint[]): SceneBounds {
@@ -145,13 +158,13 @@ function containsBounds(outer: SceneBounds, inner: SceneBounds): boolean {
   return inner.minX >= outer.minX && inner.minY >= outer.minY && inner.maxX <= outer.maxX && inner.maxY <= outer.maxY
 }
 
-function drawGrid(graphics: Graphics, grid: SceneEditingAids['grid'], box: SceneBounds, pixelsPerMetre: number): void {
-  if (reuseGeometry(graphics, [grid, box, pixelsPerMetre])) return
+function drawGrid(graphics: Graphics, grid: SceneEditingAids['grid'], { box, index, band }: GridTrace): void {
+  if (reuseGeometry(graphics, [grid, box, index, band])) return
   graphics.clear()
-  const { interval, index } = gridInterval(pixelsPerMetre)
+  const interval = NICE_DISTANCES[index]!
   if (Math.max(box.maxX - box.minX, box.maxY - box.minY) > interval * GRID_MAX_LINES) return
   const majorInterval = NICE_DISTANCES[Math.min(index + GRID_MAJOR_STEP, NICE_DISTANCES.length - 1)]!
-  const width = screenPxToWorldPx(GRID_LINE_PX, pixelsPerMetre)
+  const width = screenPxToWorldPx(GRID_LINE_PX, bandCentreScale(band))
   traceLattice(graphics, box, interval)
   graphics.stroke({ ...pixiPaint(grid.ink), width })
   if (majorInterval <= interval) return
@@ -169,11 +182,12 @@ function traceLattice(graphics: Graphics, box: SceneBounds, step: number): void 
   }
 }
 
+/** `strokeScale`: the band's centre scale, which sizes every stroke traced in this band. */
 function syncZones(
   layer: Container,
   graphicsById: Map<string, Graphics>,
   snapshot: SceneRendererSnapshot,
-  pixelsPerMetre: number,
+  strokeScale: number,
   reconcileRemoved: boolean,
 ): void {
   const style = getSceneLayerStyle(snapshot.scene, 'zones')
@@ -198,7 +212,7 @@ function syncZones(
       snapshot.selectedZoneIds.has(zone.id),
       snapshot.highlightedZoneIds.has(zone.id),
       hoverStateForTarget(snapshot, 'zone', zone.id),
-      pixelsPerMetre,
+      strokeScale,
     )
     graphics.visible = true
   }
@@ -218,14 +232,14 @@ function drawZone(
   selected: boolean,
   highlighted: boolean,
   hoverState: SceneRendererHoverState | null,
-  pixelsPerMetre: number,
+  strokeScale: number,
 ): void {
   const visual = resolveZoneVisual(zone)
   const fillColor = toPixiColor(visual.fill)
   const fillAlpha = 0.2 * cssColorAlpha(visual.fill)
   const interactionState = resolveInteractionState(selected, highlighted, hoverState)
   const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
-  const stroke = resolveCasedStroke(interactionVisual, { color: visual.stroke, casing: visual.casing }, ZONE_STROKE_PX, pixelsPerMetre)
+  const stroke = resolveCasedStroke(interactionVisual, { color: visual.stroke, casing: visual.casing }, ZONE_STROKE_PX, strokeScale)
 
   if (reuseGeometry(graphics, [zone.zoneType, zone.points, zone.rotationDeg, fillColor, fillAlpha, stroke])) return
   graphics.clear()
@@ -283,7 +297,7 @@ function syncMeasurementGuides(
   layer: Container,
   graphicsById: Map<string, Graphics>,
   snapshot: SceneRendererSnapshot,
-  pixelsPerMetre: number,
+  strokeScale: number,
   reconcileRemoved: boolean,
 ): void {
   const style = getSceneLayerStyle(snapshot.scene, 'measurement-guides')
@@ -296,7 +310,7 @@ function syncMeasurementGuides(
 
   const nextIds = new Set<string>()
   for (const guide of snapshot.scene.measurementGuides) {
-    if (!drawMeasurementGuide(graphicsById, layer, guide, snapshot, pixelsPerMetre)) continue
+    if (!drawMeasurementGuide(graphicsById, layer, guide, snapshot, strokeScale)) continue
     nextIds.add(guide.id)
   }
 
@@ -318,7 +332,7 @@ function drawMeasurementGuide(
   layer: Container,
   guide: SceneMeasurementGuideEntity,
   snapshot: SceneRendererSnapshot,
-  pixelsPerMetre: number,
+  strokeScale: number,
 ): boolean {
   const presentation = createMeasurementGuidePresentation(guide)
   if (!presentation) return false
@@ -336,10 +350,10 @@ function drawMeasurementGuide(
     hoverStateForTarget(snapshot, 'measurement-guide', guide.id),
   )
   const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
-  const stroke = resolveCasedStroke(interactionVisual, getGuideLineVisual(), MEASUREMENT_GUIDE_STROKE_PX, pixelsPerMetre)
-  if (reuseGeometry(graphics, [guide.start, guide.end, stroke, pixelsPerMetre])) return true
+  const stroke = resolveCasedStroke(interactionVisual, getGuideLineVisual(), MEASUREMENT_GUIDE_STROKE_PX, strokeScale)
+  if (reuseGeometry(graphics, [guide.start, guide.end, stroke, strokeScale])) return true
   graphics.clear()
-  const units = (px: number) => screenPxToWorldPx(px, pixelsPerMetre)
+  const units = (px: number) => screenPxToWorldPx(px, strokeScale)
   const trace = () => {
     traceDashedPath(graphics, [guide.start, guide.end], false, [units(MEASUREMENT_GUIDE_DASH_PX), units(MEASUREMENT_GUIDE_GAP_PX)])
     drawTick(graphics, guide.start, presentation.normalWorld, units(MEASUREMENT_GUIDE_TICK_HALF_PX))

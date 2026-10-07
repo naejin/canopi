@@ -7,6 +7,7 @@ import { createTestRendererView, createTestSceneRendererSnapshot } from '../../.
 import { gridInterval } from '../../grid'
 import { getMapBackdropInk } from '../scene-visuals'
 import { snapWorldPoint } from '../tools/snapping'
+import { bandCentreScale, zoomBandOf } from '../view/frame-source'
 import type { ViewTransform, WorldPoint } from '../view/types'
 import type { SceneEditingAids } from './scene-types'
 import { createWorldLayers } from './world-layers'
@@ -57,6 +58,13 @@ function strokedSegments(graphics: Graphics): Array<Array<readonly [WorldPoint, 
     })
 }
 
+/** Each stroke's width in a Graphics, in drawing order. */
+function strokeWidths(graphics: Graphics): number[] {
+  return graphics.context.instructions
+    .filter((instruction) => instruction.action === 'stroke')
+    .map((instruction) => (instruction.data as { style: { width: number } }).style.width)
+}
+
 /** A world point on screen through the root's transform, as the GPU draws it. */
 function onScreen(root: Container, point: WorldPoint): WorldPoint {
   root.updateLocalTransform()
@@ -92,6 +100,30 @@ describe('world layers', () => {
     // A zoom traces the CSS-px strokes again at the new scale.
     layers.present(createTestRendererView({ x: 10, y: 20, scale: 60 }))
     expect(clear).toHaveBeenCalledTimes(2)
+  })
+
+  it('a zoom inside a band re-traces no zone, guide or grid; a band edge traces them at the band\'s centre scale', () => {
+    const layers = createWorldLayers()
+    // 30 and 33 px/m share a band (1.25^15 to 1.25^16) and a grid interval (1 m).
+    layers.present(createTestRendererView({ x: 0, y: 0, scale: 30 }), withAids({ grid: gridAid() }, bedAndGuide()))
+    const clear = vi.spyOn(Graphics.prototype, 'clear')
+    layers.present(createTestRendererView({ x: 0, y: 0, scale: 33 }))
+    expect(clear).not.toHaveBeenCalled()
+
+    layers.present(createTestRendererView({ x: 0, y: 0, scale: 60 }))
+    expect(clear).toHaveBeenCalledTimes(3)
+    const centre = bandCentreScale(zoomBandOf(60))
+    const [zone, guide] = layers.root.children.slice(1).flatMap((layer) => layer.children) as Graphics[]
+    // The 2 px zone over its 4 px casing, the 1.5 px guide over its 3.5 px casing, the 1 px grid: traced at the band's
+    // centre, so on screen within 12 % of their CSS px.
+    for (const [graphics, widthsPx] of [[zone!, [4, 2]], [guide!, [3.5, 1.5]], [aid(layers, 'grid'), [1, 1]]] as const) {
+      const widths = strokeWidths(graphics)
+      expect(widths).toHaveLength(widthsPx.length)
+      widths.forEach((width, index) => {
+        expect(width).toBeCloseTo(widthsPx[index]! / centre, 9)
+        expect(Math.abs(width * 60 - widthsPx[index]!) / widthsPx[index]!).toBeLessThanOrEqual(0.12)
+      })
+    }
   })
 
   it('the grid lines are the snap lattice', () => {

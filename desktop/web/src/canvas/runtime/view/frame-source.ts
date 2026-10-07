@@ -164,6 +164,16 @@ export function createDriverFrameSource(initial: ViewFrame): DriverFramePublishe
   }
 }
 
+/** The zoom band of a scale: one band per factor of 1.25 in px/m. */
+export function zoomBandOf(pixelsPerMetre: number): number {
+  return Math.floor(Math.log(pixelsPerMetre) / Math.log(ZOOM_BAND_FACTOR))
+}
+
+/** A band's geometric centre: what is drawn at it shows within 12 % (+11.8 %, -10.6 %) of its size anywhere in the band. */
+export function bandCentreScale(band: number): number {
+  return ZOOM_BAND_FACTOR ** (band + 0.5)
+}
+
 /**
  * The app-facing view of a frame source. Each signal changes only when its own value does.
  */
@@ -171,7 +181,7 @@ export function createViewReadSurface(frames: ViewFrameSource): ViewReadSurface 
   const view = () => frames.viewFrame.value.view
   return {
     mode: computed(() => frames.viewFrame.value.mode),
-    zoomBand: computed(() => Math.floor(Math.log(view().pixelsPerMetre) / Math.log(ZOOM_BAND_FACTOR))),
+    zoomBand: computed(() => zoomBandOf(view().pixelsPerMetre)),
     bearingDeg: computed(() => normaliseBearing(Math.round(view().camera.bearingDeg * 10) / 10)),
     northUp: computed(() => view().northUp),
     groundMetresPerPixel: computed(() => threeSignificantFigures(view().metresPerPixelAt())),
