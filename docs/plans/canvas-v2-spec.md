@@ -1081,6 +1081,8 @@ export interface ToolContext {
   readonly settings: ToolSettingsPort
   /** The host's grid snapping of any world point (the move-drag snaps the dragged object's reference point, not the pointer). */
   snap(point: WorldPoint): WorldPoint
+  /** The pointer kind that last hovered, pressed or tapped the map, whichever tool heard it (Select's handle size, Q1). */
+  pointer(): PointerKind
   readonly translate: (key: string, options?: Readonly<Record<string, unknown>>) => string
 }
 
