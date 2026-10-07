@@ -32,14 +32,9 @@ export function projectScenePlantLabels(
 ): { readonly pinnedPlantNameLabels: PlantNameLabel[]; readonly selectionLabels: SelectionLabel[] } {
   const { scene, localizedCommonNames, selectionLabelPlantIds } = snapshot
   return {
-    pinnedPlantNameLabels: computePinnedPlantNameLabels(scene.plants, pixelsPerMetre, localizedCommonNames,
-      { selectionLabelPlantIds }),
+    pinnedPlantNameLabels: computePinnedPlantNameLabels(scene.plants, pixelsPerMetre, localizedCommonNames, selectionLabelPlantIds),
     selectionLabels: computeSelectionLabels(scene.plants, selectionLabelPlantIds, pixelsPerMetre, localizedCommonNames),
   }
-}
-
-export interface SelectionLabelOptions {
-  selectionLabelPlantIds?: ReadonlySet<string>
 }
 
 const PLANT_LABEL_GAP_PX = 2
@@ -71,13 +66,11 @@ export function computePinnedPlantNameLabels(
   plants: readonly ScenePlantEntity[],
   pixelsPerMetre: number,
   localizedCommonNames: ReadonlyMap<string, string | null>,
-  options: SelectionLabelOptions = {},
+  selectionLabelPlantIds: ReadonlySet<string>,
 ): PlantNameLabel[] {
   const labels: PlantNameLabel[] = []
   const overviewOpacity = getCanvasTextOpacity(pixelsPerMetre)
-  const revealedId = options.selectionLabelPlantIds?.size === 1
-    ? options.selectionLabelPlantIds.values().next().value
-    : null
+  const revealedId = selectionLabelPlantIds.size === 1 ? selectionLabelPlantIds.values().next().value : null
   for (const plant of plants) {
     if (!plant.pinnedName) continue
     const opacity = plant.id === revealedId ? 1 : overviewOpacity

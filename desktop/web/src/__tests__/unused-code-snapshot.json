@@ -139,7 +139,6 @@
     "src/canvas/runtime/scene-visuals.ts#SceneLayerStyle",
     "src/canvas/runtime/scene-visuals.ts#SceneZoneVisual",
     "src/canvas/runtime/scene/codec.ts#SceneHydration",
-    "src/canvas/runtime/selection-labels.ts#SelectionLabelOptions",
     "src/canvas/runtime/species-key.ts#SpeciesAppearance",
     "src/canvas/runtime/tools/select/reshape.ts#ZoneControlPointKind",
     "src/canvas/runtime/tools/tool.ts#SelectionReadModel",
