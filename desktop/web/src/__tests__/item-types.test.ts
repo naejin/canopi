@@ -18,26 +18,26 @@ describe('library item types', () => {
     locale.value = 'en'
   })
 
-  it('colours elevation with terrain over the display range', () => {
+  it('colours elevation with schwarzwald over the display range, keeping blue for water', () => {
     for (const quantity of ['GroundElevation', 'SurfaceElevation'] as const) {
       expect(itemTypeStyle(raster(quantity), { units: 'm', displayRange: [104, 132] }))
-        .toEqual({ colormap: 'terrain', reversed: false, rescale: [104, 132], units: 'm' })
+        .toEqual({ colormap: 'schwarzwald', reversed: false, rescale: [104, 132], units: 'm' })
     }
   })
 
-  it('colours heights and other values with viridis, widening a flat range', () => {
+  it('colours heights with greens and other values with viridis, widening a flat range', () => {
     expect(itemTypeStyle(raster('AboveGroundHeight'), { units: 'm', displayRange: [3, 3] }))
-      .toEqual({ colormap: 'viridis', reversed: false, rescale: [3, 4], units: 'm' })
+      .toEqual({ colormap: 'greens', reversed: false, rescale: [3, 4], units: 'm' })
     expect(itemTypeStyle(raster('OtherContinuous'), { units: 'kg', displayRange: null }))
       .toEqual({ colormap: 'viridis', reversed: false, rescale: [0, 1], units: 'kg' })
   })
 
-  it('colours slope over a fixed 60° domain in its own unit, never percent as degrees', () => {
+  it('colours slope with ylorrd over a fixed 30° domain in its own unit, never percent as degrees', () => {
     expect(itemTypeStyle(raster('Slope'), { units: '°', displayRange: [0, 12] }))
-      .toEqual({ colormap: 'magma', reversed: true, rescale: [0, 60], units: '°' })
+      .toEqual({ colormap: 'ylorrd', reversed: false, rescale: [0, 30], units: '°' })
     expect(itemTypeStyle(raster('Slope'), { units: '%', displayRange: [0, 12] }))
-      .toEqual({ colormap: 'magma', reversed: true, rescale: [0, SLOPE_PERCENT_MAX], units: '%' })
-    expect(SLOPE_PERCENT_MAX).toBe(173.2)
+      .toEqual({ colormap: 'ylorrd', reversed: false, rescale: [0, SLOPE_PERCENT_MAX], units: '%' })
+    expect(SLOPE_PERCENT_MAX).toBe(57.7)
   })
 
   it('imports only measured quantities; slope is derived only', () => {

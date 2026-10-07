@@ -3,14 +3,15 @@ import { unitSuffix } from './item-types'
 /**
  * Legend ramps for the upstream renderer's built-in colormaps.
  *
- * Stops sample the matplotlib ramps `cog-tiler-wasm@0.4.0` compiles in, so a
- * legend shows the colours the map draws. A legend never measures anything:
- * numeric values come from native inspection.
+ * Stops are `colorize()` of the pinned `cog-tiler-wasm@0.4.0` at i/8, so a
+ * legend shows the colours the map draws (held by display-legend.test.ts). A
+ * legend never measures anything: numeric values come from native inspection.
  */
 const RAMPS: Readonly<Record<string, readonly string[]>> = {
-  terrain: ['#333399', '#0294fa', '#01cc66', '#80e680', '#fefe98', '#bfa982', '#80605c', '#d9cfcd', '#ffffff'],
-  viridis: ['#440154', '#472d7b', '#3b528b', '#2c728e', '#21918c', '#28ae80', '#5ec962', '#addc30', '#fde725'],
-  magma: ['#000004', '#1c1044', '#4f127b', '#812581', '#b5367a', '#e55064', '#fb8761', '#fec287', '#fcfdbf'],
+  schwarzwald: ['#aeefd5', '#f7fcb2', '#17992f', '#a4a627', '#c44f02', '#741504', '#723b19', '#a7a19d', '#e9e7e9'],
+  greens: ['#f7fcf5', '#e3f4de', '#c5e7be', '#9fd79b', '#72c378', '#42aa5d', '#218b44', '#026c2c', '#00441b'],
+  ylorrd: ['#ffffcc', '#ffeba1', '#fed775', '#fdb24d', '#fc8b3b', '#fa4e2a', '#e11b1d', '#bc0126', '#800026'],
+  viridis: ['#440154', '#462c79', '#3a5189', '#2c718d', '#20908c', '#29ad7f', '#5cc862', '#aadb32', '#fde724'],
 }
 
 export function legendGradient(colormap: string, reversed: boolean): string {

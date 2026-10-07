@@ -253,7 +253,7 @@ describe('Layers site data', () => {
 
     await act(async () => { selectSiteRow('s') })
     expect(container.textContent).toContain('Ground has changed since this was calculated.')
-    expect(container.querySelector('[aria-label="Legend"]')?.textContent).toContain('60.0°')
+    expect(container.querySelector('[aria-label="Legend"]')?.textContent).toContain('30.0°')
   })
 
   it('shows a refresh in progress instead of offering another', () => {
