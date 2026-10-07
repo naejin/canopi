@@ -600,10 +600,13 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   /** The tool's hover, then the passive hover unless the tool handled it. */
   function deliverHover(tool: CanvasTool, at: ScreenPoint, mods: Modifiers, pointer: PointerKind): void {
-    const point = pointAt(at, mods, pointer)
-    const reply = callTool(() => tool.gesture({ kind: 'hover', point, hit: hitAt(point.world) }))
-    if (reply === 'handled') clearPassiveHover()
+    if (toolHover(tool, at, mods, pointer) === 'handled') clearPassiveHover()
     else passiveHoverAt(at)
+  }
+
+  function toolHover(tool: CanvasTool, at: ScreenPoint, mods: Modifiers, pointer: PointerKind): ToolReply {
+    const point = pointAt(at, mods, pointer)
+    return callTool(() => tool.gesture({ kind: 'hover', point, hit: hitAt(point.world) }))
   }
 
   // ── Gestures ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -794,8 +797,11 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     return QUARANTINE
   }
 
-  /** The drag at its last screen point, converted through the current frame; its start is the press's world point. */
-  function deliverDrag(tool: CanvasTool, gesture: LiveGesture, kind: 'drag-start' | 'drag-move' | 'drag-end'): void {
+  /**
+   * The drag at its last screen point, converted through the current frame; its start is the press's world point. A
+   * camera frame's re-emit runs no passive hover (`reemit`).
+   */
+  function deliverDrag(tool: CanvasTool, gesture: LiveGesture, kind: 'drag-start' | 'drag-move' | 'drag-end', passive = true): void {
     const point = pointAt(gesture.lastScreen, gesture.lastMods, gesture.pointer, gesture.handle)
     if (kind === 'drag-end') live = null
     const start = gesture.start
@@ -807,7 +813,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       // A move the tool passes is none of its press's (Plant a row's missed press, a stamp with nothing held, a polygon
       // press that added no corner): it is a hover with the button down, as today's press that cleared its gesture left
       // the next moves to _updateHover. A tool that keeps its press answers 'handled' (ToolReply).
-      if (kind !== 'drag-end' && reply === 'pass') passiveHoverAt(gesture.lastScreen)
+      if (passive && kind !== 'drag-end' && reply === 'pass') passiveHoverAt(gesture.lastScreen)
     }
   }
 
@@ -1090,18 +1096,23 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (!reemit(tool) && tool.viewChanged) callTool(() => tool.viewChanged!())
   }
 
-  /** Re-emits the live drag or the resting pointer; false when nothing is under a still pointer on the map. */
+  /**
+   * Re-emits the live drag or the resting pointer to the tool only; false when nothing is under a still pointer on the
+   * map. The hover stays put while the map moves (U44, Q3 D): the ring, a note's revealed text or a guide's chip stays
+   * on its object until the next pointer move, so a pan frame does no hover sync, and the tooltip hides.
+   */
   function reemit(tool: CanvasTool): boolean {
     if (frame().mode !== 'site') return false
     const gesture = live
     if (gesture) {
       if (!gesture.dragging) return false
-      deliverDrag(tool, gesture, 'drag-move')
-      return true
+      deliverDrag(tool, gesture, 'drag-move', false)
+    } else {
+      const still = restingPointer()
+      if (!still) return false
+      toolHover(tool, still.screen, still.mods, still.pointer)
     }
-    const still = restingPointer()
-    if (!still) return false
-    deliverHover(tool, still.screen, still.mods, still.pointer)
+    deps.chrome.setTooltip(null)
     return true
   }
 

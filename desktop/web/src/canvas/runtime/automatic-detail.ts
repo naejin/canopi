@@ -41,9 +41,7 @@ export function getCanvasPlantNameLabels(
     occupied.add(nameBounds(label.text, label.anchor.x * scale + label.offsetPx.x, label.anchor.y * scale + label.offsetPx.y))
   }
   const pinned = new Map(projected.pinnedPlantNameLabels.map((label) => [label.plantId, label]))
-  const hoveredId = snapshot.hoverTarget?.kind === 'plant' ? snapshot.hoverTarget.id : null
-  const plants = [...scene.plants].sort((a, b) =>
-    Number(b.id === hoveredId) - Number(a.id === hoveredId) || Number(pinned.has(b.id)) - Number(pinned.has(a.id)) || a.id.localeCompare(b.id))
+  const plants = [...scene.plants].sort((a, b) => Number(pinned.has(b.id)) - Number(pinned.has(a.id)) || a.id.localeCompare(b.id))
   const result: PlantNameLabel[] = []
   const context = { plants: scene.plants, pixelsPerMetre: scale }
   for (const plant of plants) {
