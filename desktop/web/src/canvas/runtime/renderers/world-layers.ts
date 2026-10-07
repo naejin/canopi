@@ -103,8 +103,8 @@ export function createWorldLayers(): WorldLayers {
 
 /**
  * The grid (spec §1.5, §4.6): world east-west and north-south lines that turn with the map, the lattice snapping uses
- * (`gridInterval` at the view's scale). It is traced over the visible box with a margin, again when the view leaves it or
- * the scale changes; the ink is part of the reuse key.
+ * (`gridInterval` at the view's scale). It is traced over the visible box with a margin, again when the view leaves it,
+ * the band changes or the snap interval steps; the ink is part of the reuse key.
  */
 function createEditingAidsLayer(layer: Container) {
   let grid: Graphics | null = null

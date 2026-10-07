@@ -180,9 +180,9 @@ function measureLinesWidth(lines: readonly string[], fontSize: number): number {
 function getMeasureContext(): MeasureContext | null {
   if (measureContext !== undefined) return measureContext
   try {
-    measureContext = typeof OffscreenCanvas === 'function'
-      ? new OffscreenCanvas(1, 1).getContext('2d')
-      : globalThis.document?.fonts ? document.createElement('canvas').getContext('2d') : null
+    measureContext = !globalThis.document?.fonts ? null
+      : typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(1, 1).getContext('2d')
+        : document.createElement('canvas').getContext('2d')
   } catch {
     measureContext = null
   }

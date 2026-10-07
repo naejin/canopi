@@ -27,7 +27,7 @@ interface SceneRuntimeRenderSchedulerOptions {
 export class SceneRuntimeRenderScheduler {
   private _container: HTMLElement | null = null
   private _target: SceneRenderTarget | null = null
-  /** What a connecting target draws: the latest published snapshot and draft while mounted, else null. */
+  /** What a connecting target draws: the open Design's latest published snapshot and draft while mounted, else null. */
   private _snapshot: SceneRendererSnapshot | null = null
   private _draft: DraftPresentation | null = null
   private _renderEpoch = 0
@@ -72,9 +72,12 @@ export class SceneRuntimeRenderScheduler {
 
   /**
    * A Design was opened: it is presented by the first scene render started from now on (the mount's, if none is mounted yet),
-   * or at once when nothing will draw it.
+   * or at once when nothing will draw it. The previous Design's snapshot and draft are dropped, so a layer connecting before
+   * the opened Design publishes draws nothing rather than the previous Design at the new camera.
    */
   awaitPresentation(): void {
+    this._snapshot = null
+    this._draft = null
     if (this._unmounted) return
     this._presentAfterEpoch = this._renderEpoch
     this._presented.value = false

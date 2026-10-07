@@ -2,7 +2,7 @@
  * The active tool's draft in the Pixi scene (ADR 0019, spec §1.5), mounted as
  * the last two stage children so it draws over plants, notes and labels.
  * `worldDraftRoot` holds the world shapes and a ghost's zones under the view's
- * affine, written in the same `setView` as the scene's world root;
+ * affine, written in the same scene `present` as the scene's world root;
  * `billboardDraftRoot` holds the upright parts in CSS px (a `circle-px`, a
  * label's chip, a ghost's plants and note text), each at its world anchor
  * projected through `view.projectAnchors`. Stroke widths, casings and dashes
