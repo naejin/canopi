@@ -7,6 +7,7 @@ import { LabelCollisionIndex } from '../canvas/label-collision'
 import { Container, Text } from 'pixi.js'
 import { createPixiScenePresentation } from '../canvas/runtime/renderers/pixi-scene'
 import { CANVAS_CHROME_FONT_FAMILY } from '../canvas/chrome-fonts'
+import { getCanvasTextOpacity } from '../canvas/runtime/text-visibility'
 import { bandCentreScale, zoomBandOf } from '../canvas/runtime/view/frame-source'
 import './support/camera-tolerance'
 
@@ -201,7 +202,7 @@ function view(viewport: { x: number; y: number; scale: number }): ViewTransform 
 }
 
 describe('createPixiScenePresentation', () => {
-  it('translates admitted names during pan without rebuilding collision layout', async () => {
+  it('a pan or a zoom inside the band keeps the admitted names, and a band crossing admits them again', async () => {
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: { texts: Array<{ text: string; position: { set: ReturnType<typeof vi.fn> } }> }
     }
@@ -223,9 +224,15 @@ describe('createPixiScenePresentation', () => {
       const [pannedX, pannedY] = text.position.set.mock.calls.at(-1)!
       expect(pannedX).toBeCloseTo(x + 10, 3)
       expect(pannedY).toBeCloseTo(y + 20, 3)
-      renderer.present(view({ x: 10, y: 20, scale: 110 }))
-      expect(add).toHaveBeenCalled()
+      // 100 and 105 px/m share a band (1.25^20 to 1.25^21); 110 px/m is the next one.
+      const work: string[] = []
+      window.__CANOPI_PIXI_SCENE_WORK__ = (name) => { work.push(name) }
+      renderer.present(view({ x: 10, y: 20, scale: 105 }), undefined, false)
+      expect(work).not.toContain('labelAdmission')
+      renderer.present(view({ x: 10, y: 20, scale: 110 }), undefined, false)
+      expect(work).toContain('labelAdmission')
     } finally {
+      delete window.__CANOPI_PIXI_SCENE_WORK__
       add.mockRestore()
       renderer.dispose()
     }
@@ -568,15 +575,19 @@ describe('createPixiScenePresentation', () => {
     }
   })
 
-  it('refreshes pinned-name fading on zoom reversal while retaining readable font size', async () => {
+  it('a pinned name fades in band steps through a zoom and its reversal, exact on the settled frame (Q5), at a readable size', async () => {
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: { texts: Array<{ text: string; alpha: number; style: { options: { fontSize: number } }; destroy: ReturnType<typeof vi.fn> }> }
     }
     const host = document.createElement('div')
     const renderer = mountPresentation(host, 2)
     renderer.present(view({ x: 0, y: 0, scale: 20 }), createRendererSnapshot({ plants: [createPlant({ pinnedName: true })] }))
-    for (const [scale, opacity] of [[20, 1], [14, 0.5], [8, 0], [14, 0.5], [20, 1]]) {
-      renderer.present(view({ x: 0, y: 0, scale: scale! }))
+    // Each scale is in its own band, 12 px/m in 14's band: the fade holds there until the settled frame.
+    for (const [scale, opacity, settled] of [
+      [20, 1, false], [14, 0.5, false], [12, 0.5, false], [12, getCanvasTextOpacity(12), true],
+      [8, 0, false], [14, 0.5, false], [20, 1, false],
+    ] as const) {
+      renderer.present(view({ x: 0, y: 0, scale }), undefined, settled)
       const labels = pixi.__pixiMockState.texts.filter((text) => text.text === 'Apple' && !text.destroy.mock.calls.length)
       expect(labels).toHaveLength(opacity === 0 ? 0 : 1)
       if (opacity) {

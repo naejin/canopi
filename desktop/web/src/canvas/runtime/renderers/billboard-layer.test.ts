@@ -188,6 +188,24 @@ describe('billboard layer', () => {
     layer.dispose()
   })
 
+  it('a zoom frame admits names only on a band crossing and the settle', () => {
+    const layer = createBillboardLayer({ createText: () => new Text(), viewSize: { width: 400, height: 300 } })
+    const work = recordWork()
+    layer.present(createTestRendererView({ x: 0, y: 0, scale: 20 }), retainedScene(), false)
+    expect(work.filter((name) => name === 'labelAdmission')).toHaveLength(1)
+    work.length = 0
+
+    // 20 to 22 px/m stays in one band; 14 px/m is two bands down; the last frame is the settled one.
+    for (const scale of [20.5, 21, 21.5, 22]) layer.present(createTestRendererView({ x: 0, y: 0, scale }), undefined, false)
+    expect(work).toContain('plantEntries')
+    expect(work).not.toContain('labelAdmission')
+    layer.present(createTestRendererView({ x: 0, y: 0, scale: 14 }), undefined, false)
+    layer.present(createTestRendererView({ x: 0, y: 0, scale: 13 }), undefined, false)
+    layer.present(createTestRendererView({ x: 0, y: 0, scale: 13 }), undefined, true)
+    expect(work.filter((name) => name === 'labelAdmission')).toHaveLength(2)
+    layer.dispose()
+  })
+
   it('each plant is drawn within 0.125 px of its exact radius, the badge at the exact radius', () => {
     const layer = createBillboardLayer({ createText: () => new Text(), viewSize: { width: 400, height: 300 } })
     const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [

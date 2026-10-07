@@ -28,11 +28,11 @@ export interface PixiScenePresentation {
   dispose(): void
   resize(width: number, height: number): void
   /**
-   * One frame: the camera's view (the world roots' affine, the visible set, the billboards' anchors, label admission on a
-   * scale change) and, when data, selection, hover, style or labels changed, the new snapshot drawn under it. A pan
-   * brings no snapshot.
+   * One frame: the camera's view (the world roots' affine, the visible set, the billboards' anchors) and, when data,
+   * selection, hover, style or labels changed, the new snapshot drawn under it. A pan brings no snapshot. Names are
+   * admitted on a snapshot, a zoom-band change and a `settled` frame at a new scale; omitted, the frame is settled.
    */
-  present(view: ViewTransform, snapshot?: SceneRendererSnapshot): void
+  present(view: ViewTransform, snapshot?: SceneRendererSnapshot, settled?: boolean): void
   setDraft(draft: DraftPresentation | null): void
 }
 
@@ -75,10 +75,10 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
       billboards.resize(width, height)
       draftLayer.resize(width, height)
     },
-    present(view, next) {
+    present(view, next, settled) {
       if (next) snapshot = next
       world.present(view, next)
-      billboards.present(view, next)
+      billboards.present(view, next, settled)
       draftLayer.setView(view)
     },
     setDraft(draft) {

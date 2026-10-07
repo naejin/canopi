@@ -9,7 +9,7 @@
  * (projection, the cull, positions, and sizes when the scale changed). Glyphs,
  * rings, badges and note markers bind shared drawing contexts keyed by their
  * look, glyph radii rounded to 0.25 px, so a pan or a warm zoom draws nothing.
- * Labels are admitted by `label-admission.ts`.
+ * Labels are admitted by `label-admission.ts`, mid-zoom only on a band change.
  */
 
 // Production CSP rejects Pixi's generated functions; its shim avoids eval.
@@ -90,8 +90,11 @@ function measurePixiSceneWork<T>(name: PixiSceneWorkName, operation: () => T): T
 export interface BillboardLayer {
   /** Plants, rings, badges, notes and labels, in CSS px; stays untransformed. */
   readonly root: Container
-  /** One frame: every billboard placed under the view, after a build from the new snapshot when data, selection, hover or style changed. */
-  present(view: ViewTransform, snapshot?: SceneRendererSnapshot): void
+  /**
+   * One frame: every billboard placed under the view, after a build from the new snapshot when data, selection, hover or
+   * style changed. `settled` is false on a frame of a camera still moving: names are then admitted only on a band change.
+   */
+  present(view: ViewTransform, snapshot?: SceneRendererSnapshot, settled?: boolean): void
   resize(width: number, height: number): void
   dispose(): void
 }
@@ -179,7 +182,7 @@ export function createBillboardLayer(options: BillboardLayerOptions): BillboardL
 
   return {
     root,
-    present(view, next) {
+    present(view, next, settled = true) {
       if (next) {
         snapshot = next
         labels.setScene(next)
@@ -192,7 +195,7 @@ export function createBillboardLayer(options: BillboardLayerOptions): BillboardL
       placePlants(plants, viewSize, view)
       placeNotes(notes, view)
       placeMeasurementLabels(measurementLabels, snapshot, view)
-      const admitted = labels.admit(view.pixelsPerMetre)!
+      const admitted = labels.admit(view.pixelsPerMetre, settled)!
       const restyle = admitted !== drawnLabels
       drawnLabels = admitted
       syncPlantNameLabels(createText, plantNameLabelLayer, plantNameLabelById, snapshot, view, labelProjection, admitted.plantNameLabels, restyle)
