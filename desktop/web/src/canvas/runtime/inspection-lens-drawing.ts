@@ -2,7 +2,7 @@ import { CANVAS_CHROME_FONT_FAMILY } from '../chrome-fonts'
 import {
   buildPlantPresentationEntries,
   getStackBadgeOffsetPx,
-  layoutPlantPresentation,
+  plantStackCounts,
   STACK_BADGE_FONT_SIZE_PX,
   getStackBadgeSizePx,
   type PlantPresentationEntry,
@@ -178,7 +178,7 @@ function drawPlants(
     speciesCache,
     plantSpeciesSymbols: scene.plantSpeciesSymbols,
   }, new Set())
-  const layout = layoutPlantPresentation(entries, scale)
+  const stackCounts = plantStackCounts(entries)
   // Plant glyphs are side-view pictograms: on a lens turned with the map they stay upright on screen (spec §4.8, §4.13).
   const uprightRad = (view.camera.bearingDeg * Math.PI) / 180
   const turned = uprightRad !== 0
@@ -221,7 +221,7 @@ function drawPlants(
   }
   // Stack badges stay per shape, above every symbol.
   for (const entry of entries) {
-    const stackCount = layout.stackCounts.get(entry.plant.id)
+    const stackCount = stackCounts.get(entry.plant.id)
     if (stackCount) drawStackBadge(ctx, entry, view.worldToScreen(entry.plant.position), stackCount, layer.opacity, dpr)
   }
 

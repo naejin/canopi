@@ -24,7 +24,7 @@ import {
   buildPlantPresentationEntries,
   getStackBadgeOffsetPx,
   getStackBadgeSizePx,
-  layoutPlantPresentation,
+  plantStackCounts,
   STACK_BADGE_FONT_SIZE_PX,
   type PlantPresentationEntry,
 } from '../plant-presentation'
@@ -265,7 +265,6 @@ class PlantStackCountsCache {
   get(
     presentationEntries: readonly PlantPresentationEntry[],
     selectedPlantIds: ReadonlySet<string>,
-    pixelsPerMetre: number,
   ): ReadonlyMap<string, number> {
     const matchIndex = this.entries.findIndex((candidate) =>
       samePlantSelection(candidate.selectedPlantIds, selectedPlantIds)
@@ -276,7 +275,7 @@ class PlantStackCountsCache {
       this.entries.unshift(match!)
       return match!.stackCounts
     }
-    const stackCounts = layoutPlantPresentation(presentationEntries, pixelsPerMetre).stackCounts
+    const stackCounts = plantStackCounts(presentationEntries)
     this.entries.unshift({
       plants: presentationEntries.map((entry) => entry.plant),
       selectedPlantIds: new Set(selectedPlantIds),
@@ -435,9 +434,7 @@ function syncPlants(
     plantSpeciesSymbols: snapshot.scene.plantSpeciesSymbols,
     localizedCommonNames: snapshot.localizedCommonNames,
   }, snapshot.selectedPlantIds))
-  const stackCounts = measurePixiSceneWork('plantLayout', () => plants.stackCounts.get(
-    entries, snapshot.selectedPlantIds, pixelsPerMetre,
-  ))
+  const stackCounts = measurePixiSceneWork('plantLayout', () => plants.stackCounts.get(entries, snapshot.selectedPlantIds))
   const nextVisiblePlantIds = new Set(visiblePlants.map((plant) => plant.id))
   for (const plantId of visibleIds) {
     if (nextVisiblePlantIds.has(plantId)) continue

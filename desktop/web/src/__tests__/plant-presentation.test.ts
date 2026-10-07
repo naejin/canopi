@@ -5,25 +5,20 @@ import {
   getStackBadgeSizePx,
   STACK_BADGE_FONT_SIZE_PX,
   hitTestPlant,
-  layoutPlantPresentation,
-  resolveStackBadgeDecisions,
+  plantStackCounts,
+  resolvePlantBaseColor,
   type PlantPresentationContext,
 } from '../canvas/runtime/plant-presentation'
-import { createTestRendererView } from './support/scene-renderer-snapshot'
 import { getStratumColor } from '../canvas/plants'
 
-/** The renderer's composition: entries, then layout and stack badges from them. */
+/** The renderer's composition: entries, then the stack counts from them. */
 function buildPlantPresentationSnapshot(
   plants: readonly ScenePlantEntity[],
   context: PlantPresentationContext,
   selectedPlantIds: ReadonlySet<string>,
 ) {
   const entries = buildPlantPresentationEntries(plants, context, selectedPlantIds)
-  return {
-    entries,
-    layout: layoutPlantPresentation(entries, context.pixelsPerMetre),
-    stackBadges: resolveStackBadgeDecisions(entries),
-  }
+  return { entries, stackCounts: plantStackCounts(entries) }
 }
 
 function createPlant(overrides: Partial<ScenePlantEntity> = {}): ScenePlantEntity {
@@ -54,7 +49,7 @@ describe('plant presentation service', () => {
     const presentation = buildPlantPresentationSnapshot(plants, {
       pixelsPerMetre: scale, speciesCache: new Map(),
     }, new Set())
-    expect(presentation.stackBadges).toHaveLength(0)
+    expect(presentation.stackCounts.size).toBe(0)
     expect(presentation.entries).toHaveLength(2200)
     for (const entry of presentation.entries) {
       expect(entry.radiusScreenPx * 2).toBeLessThan(.14 * scale)
@@ -109,17 +104,12 @@ describe('plant presentation service', () => {
       speciesCache,
     }, new Set())[0]!
 
-    expect(presentation.baseColor).toBe('#C44230')
     expect(presentation.color).toBe('#C44230')
   })
 
   it('a plant without its own colour takes its stratum colour from the species cache', () => {
-    const presentation = buildPlantPresentationEntries([createPlant()], {
-      pixelsPerMetre: 8,
-      speciesCache: new Map([['Malus domestica', { stratum: 'emergent' }]]),
-    }, new Set())[0]!
-
-    expect(presentation.baseColor).toBe(getStratumColor('emergent'))
+    expect(resolvePlantBaseColor(createPlant(), new Map([['Malus domestica', { stratum: 'emergent' }]])))
+      .toBe(getStratumColor('emergent'))
   })
 
   it('resolves Plant Symbols without changing the Visual Footprint', () => {
@@ -191,32 +181,7 @@ describe('plant presentation service', () => {
       speciesCache: new Map(),
     }, new Set(['selected']))
 
-    const badges = snapshot.stackBadges
-
-    expect(badges).toHaveLength(1)
-    expect(badges[0]).toMatchObject({
-      anchorPlantId: 'selected',
-      memberPlantIds: ['colored', 'default', 'selected'],
-      count: 3,
-      text: '3',
-    })
-  })
-
-  it('anchors stack badge centers from the current Placed Plant Visual Footprint', () => {
-    const snapshot = buildPlantPresentationSnapshot([
-      createPlant({ id: 'plant-a', position: { x: 0, y: 0 } }),
-      createPlant({ id: 'plant-b', position: { x: 0, y: 0 } }),
-    ], {
-      pixelsPerMetre: 1,
-      speciesCache: new Map(),
-    }, new Set())
-
-    expect(snapshot.stackBadges).toHaveLength(1)
-    // The badge's centre in the frame: its anchor's projection plus its offset.
-    const badge = snapshot.stackBadges[0]!
-    const anchor = createTestRendererView({ x: 0, y: 0, scale: 1 }).worldToScreen(badge.anchor)
-    expect(anchor.x + badge.badgeOffsetPx.x).toBeCloseTo(4.22, 2)
-    expect(anchor.y + badge.badgeOffsetPx.y).toBeCloseTo(-4.22, 2)
+    expect(Object.fromEntries(snapshot.stackCounts)).toEqual({ selected: 3 })
   })
 
   it('does not create stack badges for ordinary Visual Footprint overlap', () => {
@@ -228,31 +193,7 @@ describe('plant presentation service', () => {
       speciesCache: new Map(),
     }, new Set())
 
-    expect(snapshot.stackBadges).toEqual([])
-  })
-
-  it('returns entries without label fields', () => {
-    const entry = buildPlantPresentationEntries([createPlant()], {
-      pixelsPerMetre: 8,
-      speciesCache: new Map(),
-    }, new Set())[0]!
-
-    expect(entry).toHaveProperty('radiusWorld')
-    expect(entry).toHaveProperty('color')
-    expect(entry).not.toHaveProperty('screenPoint')
-    expect(entry).not.toHaveProperty('labelText')
-    expect(entry).not.toHaveProperty('labelScreenPoint')
-  })
-
-  it('returns layout with only lod and stackCounts', () => {
-    const snapshot = buildPlantPresentationSnapshot([createPlant()], {
-      pixelsPerMetre: 8,
-      speciesCache: new Map(),
-    }, new Set())
-
-    expect(snapshot.layout).toHaveProperty('lod')
-    expect(snapshot.layout).toHaveProperty('stackCounts')
-    expect(snapshot.layout).not.toHaveProperty('visibleLabelIds')
+    expect(snapshot.stackCounts.size).toBe(0)
   })
 })
 

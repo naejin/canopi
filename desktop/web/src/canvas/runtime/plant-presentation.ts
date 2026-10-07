@@ -40,27 +40,10 @@ export interface PlantPresentationEntry {
   radiusWorld: number
   radiusScreenPx: number
   color: string
-  baseColor: string
   symbol: PlantSymbolId
   stackPriority: number
   lod: PlantLOD
   selected: boolean
-}
-
-export interface PlantLayoutResult {
-  lod: PlantLOD
-  stackCounts: ReadonlyMap<string, number>
-}
-
-
-export interface PlantStackBadgeDecision {
-  anchorPlantId: string
-  memberPlantIds: ReadonlyArray<string>
-  count: number
-  text: string
-  /** The anchor plant's position (world metres); the badge's centre is its projection plus `badgeOffsetPx`. */
-  anchor: ScenePoint
-  badgeOffsetPx: ScenePoint
 }
 
 /** Screen size of the badge that shows `text` (the stack count). */
@@ -92,8 +75,7 @@ export function buildPlantPresentationEntries(
   context = { ...context, plants: context.plants ?? plants }
   return plants.map((plant) => {
     const { radiusWorld, radiusScreenPx } = resolvePlantRadiusPresentation(plant, context)
-    const baseColor = resolvePlantBaseColor(plant, context.speciesCache)
-    const color = resolveDisplayedPlantColor(baseColor, plant.canonicalName, getCanvasPlantDisplay())
+    const color = resolveDisplayedPlantColor(resolvePlantBaseColor(plant, context.speciesCache), plant.canonicalName, getCanvasPlantDisplay())
     const symbol = resolvePlantSymbolForPlant(plant, context.plantSpeciesSymbols ?? {})
     const selected = selectedPlantIds.has(plant.id)
     return {
@@ -101,24 +83,12 @@ export function buildPlantPresentationEntries(
       radiusWorld,
       radiusScreenPx,
       color,
-      baseColor,
       symbol,
       stackPriority: getStackPriority(plant, selected),
       lod: radiusScreenPx < 3.6 ? 'dot' : lod,
       selected,
     }
   })
-}
-
-export function layoutPlantPresentation(
-  entries: readonly PlantPresentationEntry[],
-  viewportScale: number,
-): PlantLayoutResult {
-  const lod = getPlantLOD(viewportScale)
-  const stackCounts = new Map(
-    resolveStackBadgeDecisions(entries).map((badge) => [badge.anchorPlantId, badge.count]),
-  )
-  return { lod, stackCounts }
 }
 
 export function getPlantWorldBounds(
@@ -179,9 +149,11 @@ export function resolvePlantDisplayColor(
   return resolveDisplayedPlantColor(resolvePlantBaseColor(plant, speciesCache), plant.canonicalName, display)
 }
 
-export function resolveStackBadgeDecisions(
-  entries: readonly PlantPresentationEntry[],
-): PlantStackBadgeDecision[] {
+/**
+ * The stack badges: for each point that two or more plants share exactly, the count on the member drawn on top (the
+ * selected one, then one with its own colour, then the first by id). A count never depends on the scale.
+ */
+export function plantStackCounts(entries: readonly PlantPresentationEntry[]): ReadonlyMap<string, number> {
   const coincident = new Map<string, PlantPresentationEntry[]>()
   for (const entry of entries) {
     const { x, y } = entry.plant.position
@@ -190,25 +162,13 @@ export function resolveStackBadgeDecisions(
     if (members) members.push(entry)
     else coincident.set(key, [entry])
   }
-  const decisions: PlantStackBadgeDecision[] = []
+  const counts = new Map<string, number>()
   for (const members of coincident.values()) {
     if (members.length < 2) continue
     members.sort((left, right) => left.stackPriority - right.stackPriority || left.plant.id.localeCompare(right.plant.id))
-    const memberIds = members.map((entry) => entry.plant.id)
-    const anchor = members[0]
-    if (!anchor) continue
-
-    decisions.push({
-      anchorPlantId: anchor.plant.id,
-      memberPlantIds: [...memberIds].sort(),
-      count: memberIds.length,
-      text: String(memberIds.length),
-      anchor: { x: anchor.plant.position.x, y: anchor.plant.position.y },
-      badgeOffsetPx: getStackBadgeOffsetPx(anchor.radiusScreenPx),
-    })
+    counts.set(members[0]!.plant.id, members.length)
   }
-
-  return decisions
+  return counts
 }
 
 const SYMBOLIC_PLANT_MIN_SCREEN_PX = 2
