@@ -575,9 +575,9 @@
         "quantityLabel": "Was die Werte messen",
         "chooseQuantity": "Messgröße wählen",
         "quantity": {
-          "GroundElevation": "Geländehöhe",
-          "SurfaceElevation": "Oberflächenhöhe",
-          "AboveGroundHeight": "Höhe über Grund",
+          "GroundElevation": "Geländehöhe (DGM)",
+          "SurfaceElevation": "Oberflächenhöhe (DOM)",
+          "AboveGroundHeight": "Höhe über Grund (nDOM)",
           "OtherContinuous": "Andere Werte",
           "Slope": "Hangneigung"
         },

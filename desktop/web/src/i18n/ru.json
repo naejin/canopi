@@ -575,9 +575,9 @@
         "quantityLabel": "Что измеряют значения",
         "chooseQuantity": "Выберите величину",
         "quantity": {
-          "GroundElevation": "Высота рельефа",
-          "SurfaceElevation": "Высота поверхности",
-          "AboveGroundHeight": "Высота над землёй",
+          "GroundElevation": "Высота рельефа (ЦМР)",
+          "SurfaceElevation": "Высота поверхности (ЦМП)",
+          "AboveGroundHeight": "Высота над землёй (CHM)",
           "OtherContinuous": "Другие значения",
           "Slope": "Уклон"
         },

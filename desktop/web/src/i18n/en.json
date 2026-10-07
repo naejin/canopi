@@ -575,9 +575,9 @@
         "quantityLabel": "What the values measure",
         "chooseQuantity": "Choose a measurement",
         "quantity": {
-          "GroundElevation": "Ground elevation",
-          "SurfaceElevation": "Surface elevation",
-          "AboveGroundHeight": "Height above ground",
+          "GroundElevation": "Ground elevation (DTM)",
+          "SurfaceElevation": "Surface elevation (DSM)",
+          "AboveGroundHeight": "Height above ground (CHM)",
           "OtherContinuous": "Other values",
           "Slope": "Slope"
         },

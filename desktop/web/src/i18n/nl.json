@@ -575,9 +575,9 @@
         "quantityLabel": "Wat de waarden meten",
         "chooseQuantity": "Kies een meting",
         "quantity": {
-          "GroundElevation": "Maaiveldhoogte",
-          "SurfaceElevation": "Oppervlaktehoogte",
-          "AboveGroundHeight": "Hoogte boven maaiveld",
+          "GroundElevation": "Maaiveldhoogte (DTM)",
+          "SurfaceElevation": "Oppervlaktehoogte (DSM)",
+          "AboveGroundHeight": "Hoogte boven maaiveld (CHM)",
           "OtherContinuous": "Andere waarden",
           "Slope": "Helling"
         },

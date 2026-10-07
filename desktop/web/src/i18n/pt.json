@@ -575,9 +575,9 @@
         "quantityLabel": "O que os valores medem",
         "chooseQuantity": "Escolha uma medida",
         "quantity": {
-          "GroundElevation": "Elevação do terreno",
-          "SurfaceElevation": "Elevação da superfície",
-          "AboveGroundHeight": "Altura acima do solo",
+          "GroundElevation": "Elevação do terreno (MDT)",
+          "SurfaceElevation": "Elevação da superfície (MDS)",
+          "AboveGroundHeight": "Altura acima do solo (CHM)",
           "OtherContinuous": "Outros valores",
           "Slope": "Declividade"
         },

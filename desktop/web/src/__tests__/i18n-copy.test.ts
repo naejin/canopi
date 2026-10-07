@@ -161,3 +161,38 @@ describe('keyboard shortcut sheet', () => {
     }
   })
 })
+
+describe('LiDAR raster type labels', () => {
+  // The one shared type label carries the language's own acronym (canvas v2 plan, 2.0 polish batch, A9 and A10):
+  // zh and ja attach it full-width, ko attaches it with no space, the others after a space.
+  const RASTER_TYPE_LABELS: Record<string, readonly [string, string, string]> = {
+    en: ['Ground elevation (DTM)', 'Surface elevation (DSM)', 'Height above ground (CHM)'],
+    de: ['Geländehöhe (DGM)', 'Oberflächenhöhe (DOM)', 'Höhe über Grund (nDOM)'],
+    es: ['Elevación del terreno (MDT)', 'Elevación de superficie (MDS)', 'Altura sobre el suelo (MDA)'],
+    fr: ['Altitude du sol (MNT)', 'Altitude de surface (MNS)', 'Hauteur au-dessus du sol (MNH)'],
+    it: ['Quota del terreno (DTM)', 'Quota della superficie (DSM)', 'Altezza dal suolo (CHM)'],
+    ja: ['地表標高（DTM）', '表面標高（DSM）', '地上高（DCHM）'],
+    ko: ['지면 고도(DTM)', '표면 고도(DSM)', '지상 높이(CHM)'],
+    nl: ['Maaiveldhoogte (DTM)', 'Oppervlaktehoogte (DSM)', 'Hoogte boven maaiveld (CHM)'],
+    pt: ['Elevação do terreno (MDT)', 'Elevação da superfície (MDS)', 'Altura acima do solo (CHM)'],
+    ru: ['Высота рельефа (ЦМР)', 'Высота поверхности (ЦМП)', 'Высота над землёй (CHM)'],
+    zh: ['地面高程（DTM）', '表面高程（DSM）', '离地高度（CHM）'],
+  }
+  const QUANTITIES = ['GroundElevation', 'SurfaceElevation', 'AboveGroundHeight'] as const
+
+  it('names ground, surface and height models with the acronym in every locale', () => {
+    expect(Object.keys(RASTER_TYPE_LABELS).sort()).toEqual(Object.keys(flat).sort())
+    for (const [code, entries] of Object.entries(flat)) {
+      const labels = QUANTITIES.map(quantity => entries.get(`canvas.lidar.library.quantity.${quantity}`))
+      expect(labels, code).toEqual(RASTER_TYPE_LABELS[code])
+    }
+  })
+
+  it('gives slope and other values no acronym', () => {
+    for (const [code, entries] of Object.entries(flat)) {
+      for (const quantity of ['Slope', 'OtherContinuous']) {
+        expect(entries.get(`canvas.lidar.library.quantity.${quantity}`), code).not.toMatch(/[(（]/)
+      }
+    }
+  })
+})

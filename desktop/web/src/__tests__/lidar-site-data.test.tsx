@@ -192,7 +192,7 @@ describe('Layers site data', () => {
     expect(rowNames()).toEqual([['Canopy', '0'], ['Ground', '0'], ['Ground · Slope', '1']])
     const slope = button('Ground · Slope').closest('li')!
     expect(slope.textContent).toContain('from Ground · degrees')
-    expect(button(/^Ground/).closest('li')!.textContent).toContain('Ground elevation · 100.0 – 200.0 m')
+    expect(button(/^Ground/).closest('li')!.textContent).toContain('Ground elevation (DTM) · 100.0 – 200.0 m')
   })
 
   it('shows the active row settings and edits only this Design', async () => {

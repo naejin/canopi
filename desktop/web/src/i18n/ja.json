@@ -575,9 +575,9 @@
         "quantityLabel": "値が表すもの",
         "chooseQuantity": "計測値を選択",
         "quantity": {
-          "GroundElevation": "地表標高",
-          "SurfaceElevation": "表面標高",
-          "AboveGroundHeight": "地上高",
+          "GroundElevation": "地表標高（DTM）",
+          "SurfaceElevation": "表面標高（DSM）",
+          "AboveGroundHeight": "地上高（DCHM）",
           "OtherContinuous": "その他の値",
           "Slope": "傾斜"
         },

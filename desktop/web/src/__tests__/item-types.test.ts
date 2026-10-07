@@ -47,9 +47,9 @@ describe('library item types', () => {
 
   it('labels every quantity through its own key', () => {
     expect(itemTypeLabel(raster('Slope'))).toBe('Slope')
-    expect(itemTypeLabel(raster('AboveGroundHeight'))).toBe('Height above ground')
+    expect(itemTypeLabel(raster('AboveGroundHeight'))).toBe('Height above ground (CHM)')
     locale.value = 'fr'
-    expect(itemTypeLabel(raster('GroundElevation'))).toBe('Altitude du sol')
+    expect(itemTypeLabel(raster('GroundElevation'))).toBe('Altitude du sol (MNT)')
   })
 
   it('writes legend units after the value: degrees and percent attached, others spaced', () => {
