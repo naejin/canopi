@@ -316,7 +316,7 @@ describe('SceneRuntimeRenderScheduler', () => {
 
     it('a scene render with an empty slot stays unpresented until a target connects and draws it', async () => {
       const { scheduler, runFrame, prepare, frames } = await createControlledScheduler()
-      // A Design switch or a Retry: the old layer has disconnected and the new one has not connected yet.
+      // A Design switch: the old layer has disconnected and the new one has not connected yet.
       scheduler.connect(createTarget())()
       scheduler.awaitPresentation()
 
@@ -333,6 +333,36 @@ describe('SceneRuntimeRenderScheduler', () => {
       scheduler.connect(layer)
       expect(layer.setSnapshot).toHaveBeenCalledOnce()
       expect(scheduler.presented.value, 'MapLibre draws the snapshot in its next frame').toBe(false)
+      runFrame()
+      expect(scheduler.scenePending.value).toBe(false)
+      expect(scheduler.presented.value).toBe(true)
+      scheduler.dispose()
+    })
+
+    it('a Design closing settles the render waiting for an empty slot, and later renders into it settle on their frame', async () => {
+      const { scheduler, runFrame, prepare, frames } = await createControlledScheduler()
+      // Close Design during a switch: the old layer disconnected, the new one never connects.
+      scheduler.connect(createTarget())()
+      scheduler.awaitPresentation()
+      scheduler.invalidate('scene')
+      runFrame()
+      prepare(0)
+      await Promise.resolve()
+      await Promise.resolve()
+      while (frames.size > 0) runFrame()
+      expect(scheduler.scenePending.value, 'the render waits for a layer').toBe(true)
+
+      scheduler.releasePresentation()
+      expect(scheduler.scenePending.value, 'no layer will draw it').toBe(false)
+      expect(scheduler.presented.value).toBe(true)
+
+      // A theme change on the start screen.
+      scheduler.invalidate('scene')
+      runFrame()
+      prepare(1)
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(scheduler.scenePending.value).toBe(true)
       runFrame()
       expect(scheduler.scenePending.value).toBe(false)
       expect(scheduler.presented.value).toBe(true)

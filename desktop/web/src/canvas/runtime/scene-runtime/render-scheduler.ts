@@ -36,7 +36,10 @@ export class SceneRuntimeRenderScheduler {
   private _sceneFrameQueued = false
   /** The epoch of the latest scene render, until it has drawn or failed; a newer epoch fences it. */
   private _sceneRenderEpoch: number | null = null
-  /** The scene render that published `_snapshot` while the slot was empty: it settles once a target draws it. */
+  /**
+   * The scene render that published `_snapshot` into the empty slot while an opened Design waited for its first draw: it
+   * settles once a target draws it.
+   */
   private _undrawnEpoch: number | null = null
   /** Scene renders up to this epoch were started before the latest awaitPresentation; only a later one presents. */
   private _presentAfterEpoch = 0
@@ -75,6 +78,16 @@ export class SceneRuntimeRenderScheduler {
     if (this._unmounted) return
     this._presentAfterEpoch = this._renderEpoch
     this._presented.value = false
+  }
+
+  /**
+   * No Design shows (Close Design's start screen): no layer will connect to draw one, so the open is presented, a render
+   * waiting for a layer settles now, and later ones settle on their frame until a Design opens again.
+   */
+  releasePresentation(): void {
+    if (this._undrawnEpoch !== null) this._settleSceneRender(this._undrawnEpoch)
+    this._undrawnEpoch = null
+    this._presented.value = true
   }
 
   /** Mounts on the map container; the target slot draws from now on. */
@@ -134,9 +147,9 @@ export class SceneRuntimeRenderScheduler {
       const snapshot = prepared.publish()
       if (renderEpoch !== this._renderEpoch) return
       this._snapshot = snapshot
-      // With the slot empty (a Design switch or a Retry before its layer connects) nothing draws the snapshot: the render
-      // stays pending until a target connects and draws it.
-      this._undrawnEpoch = this._target ? null : renderEpoch
+      // With the slot empty while an opened Design waits for its first draw (a Design switch before its layer connects),
+      // nothing draws the snapshot: the render stays pending until a target connects and draws it.
+      this._undrawnEpoch = this._target || this._presented.value ? null : renderEpoch
       this._target?.setSnapshot(snapshot)
     } catch (error) {
       this._settleSceneRender(renderEpoch)

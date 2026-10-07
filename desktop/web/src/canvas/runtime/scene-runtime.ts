@@ -60,6 +60,8 @@ export class SceneCanvasRuntime {
       incrementSceneRevision: () => this._incrementSceneRevision(),
       setChromeShown: (shown) => {
         this._chromeShown = shown
+        // Hidden chrome is the start screen: no Design shows, so no map will draw one.
+        if (!shown) this._rendering.releasePresentation()
         this._syncEditingAids()
       },
       setHoveredTarget: (target, options) => this._setHoveredTarget(target, options),

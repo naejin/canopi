@@ -70,6 +70,10 @@ function createPixiRenderer(): SharedPixiRenderer {
   }
 }
 
+function nextFrame(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()))
+}
+
 function createTarget() {
   return {
     setSnapshot: vi.fn<(snapshot: SceneRendererSnapshot) => void>(),
@@ -151,6 +155,34 @@ describe('SceneCanvasRuntime and the shared map scene layer', () => {
     expect(map.triggerRepaint).toHaveBeenCalledOnce()
 
     await layer.dispose()
+    runtime.destroy()
+  })
+
+  it('closing the Design leaves the start screen idle: no layer is awaited, so the map is not busy', async () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(orchard())
+    const container = createContainer()
+    const composition = createSharedMapSceneRendererComposition((target) => runtime.connectRenderTarget(target))
+    const map = createMap()
+    const gl = {} as WebGL2RenderingContext
+    const layer = composition.createLayer({
+      id: 'canopi-shared-scene',
+      frames: runtime.cameraHost.frames,
+      createRenderer: createPixiRenderer,
+      createPresentation: (input) => createPixiScenePresentation({ ...input, createText: () => new MeasuredText() }),
+    })
+    await layer.initialize(map, gl)
+    layer.layer.onAdd!(map as never, gl)
+    await runtime.init(container)
+    await vi.waitFor(() => expect(container.hasAttribute('aria-busy')).toBe(false))
+
+    // Close Design: the workspace disposes the layer and builds no map; the runtime gets an empty Scene and hides its chrome.
+    await layer.dispose()
+    runtime.documentSurface.loadDocument({ ...orchard(), plants: [] })
+    runtime.documentSurface.hideCanvasChrome()
+    await nextFrame()
+    await vi.waitFor(() => expect(container.hasAttribute('aria-busy'), 'the start screen is not busy').toBe(false))
+    expect(runtime.documentSurface.presented.value).toBe(true)
     runtime.destroy()
   })
 
