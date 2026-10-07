@@ -318,9 +318,9 @@ export class SceneCanvasRuntime {
 
   private _invalidate(kind: RuntimeInvalidationKind = 'scene'): void {
     this._rendering.invalidate(kind)
-    if (kind === 'scene' || kind === 'viewport') {
-      this._interaction?.refreshMeasurements()
-    }
+    // A viewport change reaches the tools on their own frame listener (ToolHost's onFrame), which Select's followView
+    // answers without rebuilding on a pan; only a scene change refreshes them here.
+    if (kind === 'scene') this._interaction?.refreshMeasurements()
   }
 
   private _setSelection(targets: Iterable<SceneDesignObjectTarget>): void {

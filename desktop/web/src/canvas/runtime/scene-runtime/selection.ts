@@ -11,7 +11,7 @@ import type {
   CanvasDesignObjectSelectionTarget,
 } from '../runtime'
 import type { ScenePersistedState } from '../scene'
-import { isDirectSceneDesignObjectLocked, isSceneDesignObjectLocked } from '../scene'
+import { freezeInDev, isDirectSceneDesignObjectLocked, isSceneDesignObjectLocked } from '../scene'
 import {
   getSceneGroupedMemberKeys,
   resolveSceneObjectGroupMembers,
@@ -22,8 +22,16 @@ import {
   sceneTargetLayerNames,
   type SceneDesignObjectSelection,
 } from '../scene'
+import { getCanvasPlantDisplay } from '../plant-display'
 import { getZoneWorldBounds } from '../zone-geometry'
 import { getSameSpeciesReferenceCanonicalName } from './species-selection'
+
+declare global {
+  interface Window {
+    /** Dev builds count each selection model build here when a test or a live check sets it to a number. */
+    __CANOPI_SELECTION_MODEL_BUILDS__?: number
+  }
+}
 
 export type SceneSelectionTarget = CanvasDesignObjectSelectionTarget
 
@@ -155,11 +163,55 @@ export function singleEditableTarget<K extends CanvasDesignObjectSelectionTarget
   return target?.kind === kind ? target as Extract<CanvasDesignObjectSelectionTarget, { kind: K }> : null
 }
 
+interface SelectionModelMemo {
+  readonly persisted: ScenePersistedState
+  readonly selectedTargets: SceneDesignObjectSelection
+  readonly annotationViewportScale: number
+  readonly plantPixelsPerMetre: number
+  readonly symbolScale: number
+  readonly model: CanvasDesignObjectSelectionModel
+}
+
+let selectionModelMemo: SelectionModelMemo | null = null
+
+/**
+ * The selection's read model, memoised by reference: the store hands out the same Scene and selection until they change,
+ * so the same Scene, selection, scale and symbol size return the model built last (frozen in dev builds). A pan builds
+ * nothing; a zoom, an edit, a selection change or a symbol-size change builds it again.
+ */
 export function getDesignObjectSelectionModel(
   persisted: ScenePersistedState,
   selectedTargets: SceneDesignObjectSelection,
   options: SceneSelectionReadModelOptions,
 ): CanvasDesignObjectSelectionModel {
+  const symbolScale = getCanvasPlantDisplay().symbolScale
+  const memo = selectionModelMemo
+  if (
+    memo?.persisted === persisted
+    && memo.selectedTargets === selectedTargets
+    && memo.annotationViewportScale === options.annotationViewportScale
+    && memo.plantPixelsPerMetre === options.plantContext.pixelsPerMetre
+    && memo.symbolScale === symbolScale
+  ) return memo.model
+  const model = freezeInDev(buildDesignObjectSelectionModel(persisted, selectedTargets, options))
+  selectionModelMemo = {
+    persisted,
+    selectedTargets,
+    annotationViewportScale: options.annotationViewportScale,
+    plantPixelsPerMetre: options.plantContext.pixelsPerMetre,
+    symbolScale,
+    model,
+  }
+  return model
+}
+
+function buildDesignObjectSelectionModel(
+  persisted: ScenePersistedState,
+  selectedTargets: SceneDesignObjectSelection,
+  options: SceneSelectionReadModelOptions,
+): CanvasDesignObjectSelectionModel {
+  const builds = import.meta.env.DEV ? globalThis.window?.__CANOPI_SELECTION_MODEL_BUILDS__ : undefined
+  if (typeof builds === 'number') window.__CANOPI_SELECTION_MODEL_BUILDS__ = builds + 1
   const topLevelTargets = getSelectedTopLevelTargets(persisted, selectedTargets)
   const blockedTargets = getBlockedSelectionTargets(persisted, selectedTargets)
   const blockedKeys = new Set(blockedTargets.map((blocked) => sceneTargetKey(blocked.target)))

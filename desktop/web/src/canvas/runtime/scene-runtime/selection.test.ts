@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+
+import { DEFAULT_PLANT_DISPLAY, getCanvasPlantDisplay, setCanvasPlantDisplay } from '../plant-display'
 
 import {
   createDefaultScenePersistedState,
@@ -84,11 +86,11 @@ function makeScene(): ScenePersistedState {
   }
 }
 
-function readModel(scene: ScenePersistedState, selectedTargets: readonly SceneDesignObjectTarget[]) {
+function readModel(scene: ScenePersistedState, selectedTargets: readonly SceneDesignObjectTarget[], scale = 1) {
   return getDesignObjectSelectionModel(scene, selectedTargets, {
-    annotationViewportScale: 1,
+    annotationViewportScale: scale,
     plantContext: {
-      pixelsPerMetre: 1,
+      pixelsPerMetre: scale,
       speciesCache: new Map(),
       localizedCommonNames: new Map(),
     },
@@ -96,6 +98,32 @@ function readModel(scene: ScenePersistedState, selectedTargets: readonly SceneDe
 }
 
 describe('scene design object selection model', () => {
+  afterEach(() => {
+    delete window.__CANOPI_SELECTION_MODEL_BUILDS__
+    setCanvasPlantDisplay(DEFAULT_PLANT_DISPLAY)
+  })
+
+  it('the same Scene, selection and scale build the model once; a zoom, an edit or a symbol-size change builds it again', () => {
+    const scene = makeScene()
+    const selection: SceneDesignObjectTarget[] = [{ kind: 'plant', id: 'plant-2' }, { kind: 'annotation', id: 'annotation-1' }]
+    window.__CANOPI_SELECTION_MODEL_BUILDS__ = 0
+
+    const model = readModel(scene, selection, 4)
+    expect(readModel(scene, selection, 4)).toBe(model)
+    expect(window.__CANOPI_SELECTION_MODEL_BUILDS__).toBe(1)
+    expect(Object.isFrozen(model.lockedTargets)).toBe(true)
+
+    const zoomed = readModel(scene, selection, 8)
+    expect(zoomed.bounds).not.toEqual(model.bounds)
+    const editedScene = { ...scene, plants: [...scene.plants] }
+    const edited = readModel(editedScene, selection, 8)
+    expect(edited).not.toBe(zoomed)
+    setCanvasPlantDisplay({ ...getCanvasPlantDisplay(), symbolScale: 2 })
+    const resized = readModel(editedScene, selection, 8)
+    expect(window.__CANOPI_SELECTION_MODEL_BUILDS__).toBe(4)
+    expect(resized).not.toBe(edited)
+  })
+
   it('projects large typed selections with a linear entity scan', () => {
     const scene = makeScene()
     const plantCount = 100

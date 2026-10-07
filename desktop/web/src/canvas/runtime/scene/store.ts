@@ -34,8 +34,8 @@ function sceneHasObjects(scene: ScenePersistedState): boolean {
     || scene.zones.some((zone) => zone.points.length > 0)
 }
 
-/** Deep-freezes a state the store now holds, in dev builds only, so a write into a handed-out Scene throws. */
-function freezeInDev<T extends object>(state: T): T {
+/** Deep-freezes a state the store now holds (or a read model of it), in dev builds only, so a write into it throws. */
+export function freezeInDev<T extends object>(state: T): T {
   if (import.meta.env.DEV) deepFreeze(state)
   return state
 }

@@ -153,7 +153,8 @@ export interface ToolHostDeps {
 }
 
 /** What createToolScene reads (tools/tool-host.ts re-exports the factory). Hit tests need the scale and the plant presentation
- *  for screen-sized plants and notes; the hovered note comes from store.session.hoveredTarget, as today. Nothing is cached in 0B. */
+ *  for screen-sized plants and notes; the hovered note comes from store.session.hoveredTarget. The selection model is memoised
+ *  by reference (scene-runtime/selection.ts). */
 export interface ToolSceneSource {
   readonly store: SceneStateReader                              // the runtime's scene store
   readonly selection: () => SceneDesignObjectSelection

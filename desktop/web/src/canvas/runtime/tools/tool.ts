@@ -164,7 +164,7 @@ export interface ToolScene {
   plantPresentation(plant: ScenePlantEntity): { readonly commonName: string; readonly color: string; readonly radiusPx: number }
   isLayerOpenForCreation(layer: SceneLayerKind): boolean
   selection(): SceneDesignObjectSelection
-  selectionModel(): SelectionReadModel         // read per call, not cached (as today)
+  selectionModel(): SelectionReadModel         // memoised by reference: the same Scene, selection and scale return the same model
 }
 
 /** The only way a tool changes anything. */
