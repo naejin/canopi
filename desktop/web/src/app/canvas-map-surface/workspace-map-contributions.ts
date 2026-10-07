@@ -75,13 +75,10 @@ export class WorkspaceMapContributions {
     this.drain()
   }
 
-  restoreStyle(): void {
-    if (!this.live()) return
+  /** The map's first `style.load` admitted it, so contributions may install; a later one never reaches here (ADR 0004). */
+  admitStyle(): void {
+    if (!this.live() || this.styleReady) return
     this.styleReady = true
-    this.revision += 1
-    this.terrainGeneration += 1
-    this.terrain = null
-    this.terrainUnavailable = false
     this.dirty = true
     this.drain()
   }

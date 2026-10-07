@@ -66,8 +66,8 @@ export interface WorkspaceActivationMapControls {
   setAttributionCompact(compact: boolean): void
   /** The user's Retry for a Basemap that couldn't load: downloads it again on the live map. */
   retryBasemap(): void
-  /** Restores same-map style contributions after initial style admission. */
-  installStyleRestorer(map: WorkspaceActivationMap, restore: () => void): () => void
+  /** Puts the shared scene layer in its band, above the basemap and LiDAR; called once, after the layer is added. */
+  reconcileLayerStack(map: WorkspaceActivationMap): void
   /** Map/context failures that happen outside the custom layer. */
   watchFailure(
     map: WorkspaceActivationMap,
@@ -103,7 +103,6 @@ interface ActivationGeneration {
   presentation: MapBackgroundPresentation
   map: WorkspaceActivationMap | null
   layer: SharedMapSceneLayer | null
-  disposeStyleRestorer: (() => void) | null
   unwatchFailure: (() => void) | null
   unsubscribeCameraFailure: (() => void) | null
   cameraAttached: boolean
@@ -182,7 +181,6 @@ export class WorkspaceActivationCoordinator {
       presentation: this.pendingPresentationFor(request, snapshot.map),
       map: null,
       layer: null,
-      disposeStyleRestorer: null,
       unwatchFailure: null,
       unsubscribeCameraFailure: null,
       cameraAttached: false,
@@ -264,22 +262,16 @@ export class WorkspaceActivationCoordinator {
       if (!this.isCurrent(current)) return 'cancelled'
       if (current.failure) return current.failure
 
-      const finishStyleRestorer = this.beginSetup(current)
-      let disposeStyleRestorer: () => void
-      try {
-        disposeStyleRestorer = this.options.map.installStyleRestorer(
-          map,
-          () => this.restoreSharedSceneLayer(current, map, layer),
-        )
-      } catch (error) {
-        finishStyleRestorer()
-        throw error
-      }
-      current.disposeStyleRestorer = disposeStyleRestorer
-      finishStyleRestorer()
+      // MapLibre admitted the map on its first style.load and never reloads it (ADR 0004), so the layer is added once.
+      this.addSharedSceneLayer(current, map, layer)
       if (!this.isCurrent(current)) return 'cancelled'
       if (current.failure) return current.failure
-      this.restoreSharedSceneLayer(current, map, layer)
+      const finishLayerStack = this.beginSetup(current)
+      try {
+        this.options.map.reconcileLayerStack(map)
+      } finally {
+        finishLayerStack()
+      }
       if (!this.isCurrent(current)) return 'cancelled'
       if (current.failure) return current.failure
 
@@ -729,13 +721,6 @@ export class WorkspaceActivationCoordinator {
     current.unwatchFailure = null
     const unsubscribeCameraFailure = current.unsubscribeCameraFailure
     current.unsubscribeCameraFailure = null
-    const disposeStyleRestorer = current.disposeStyleRestorer
-    current.disposeStyleRestorer = null
-    try {
-      disposeStyleRestorer?.()
-    } catch (error) {
-      errors.push(error)
-    }
     try {
       unwatchFailure?.()
     } catch (error) {
@@ -805,17 +790,12 @@ export class WorkspaceActivationCoordinator {
     })
   }
 
-  private restoreSharedSceneLayer(
+  private addSharedSceneLayer(
     current: ActivationGeneration,
     map: WorkspaceActivationMap,
     layer: SharedMapSceneLayer,
   ): void {
-    if (!this.isCurrent(current) || current.layer !== layer || current.map !== map) return
-    const existingLayer = map.getLayer(MAPLIBRE_SHARED_SCENE_LAYER_ID)
-    if (!this.isCurrent(current)) return
-    if (existingLayer == null) {
-      map.addLayer(layer.layer as unknown as Record<string, unknown>)
-    }
+    map.addLayer(layer.layer as unknown as Record<string, unknown>)
     if (!this.isCurrent(current)) return
     if (layer.diagnostics.phase !== 'attached') {
       throw new Error('MapLibre did not attach the initialized shared scene layer.')

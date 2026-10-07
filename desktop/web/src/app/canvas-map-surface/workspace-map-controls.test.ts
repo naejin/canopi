@@ -94,11 +94,6 @@ class FakeMap implements MapLibreMapInstance {
   emit(type: string, event?: unknown): void {
     for (const listener of this.listeners.get(type) ?? []) listener(event)
   }
-  clearStyle(): void {
-    this.sources.clear()
-    this.layers.clear()
-    this.layerOrder.length = 0
-  }
 }
 
 class FakeAttributionControl {
@@ -260,6 +255,10 @@ function targetContribution(sessionIdentity: object): WorkspaceMapContributionSn
     terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
     overlays: { runtime: { getSceneSnapshot: () => scene }, location: { lat: 48, lon: 2 }, hoveredTargets: [{ kind: 'zone', zone_id: 'plot' }], selectedTargets: [] },
   }
+}
+
+function lidarLayer(id: string): WorkspaceMapContributionSnapshot['lidar'][number] {
+  return { id, name: id, opacity: 1, assets: [], bounds: [1, 2, 3, 4], rescale: [0, 10], colormap: 'terrain', reversed: false }
 }
 
 beforeEach(() => {
@@ -447,9 +446,7 @@ describe('WorkspaceMapControls', () => {
     expect(logError).toHaveBeenCalledWith('Skipped a map overlay that failed to sync:', error)
   })
 
-  it.each([
-    ['live', 'addSource'], ['live', 'addLayer'], ['reload', 'addSource'], ['reload', 'addLayer'],
-  ] as const)('keeps the map admitted and editable when a Target overlay %s %s throws', async (phase, method) => {
+  it.each(['addSource', 'addLayer'] as const)('keeps the map admitted and editable when a live Target overlay %s throws', async (method) => {
     const states = vi.fn()
     const { controls, maps } = createControls({ contributions: { onStateChange: states }, logError: vi.fn() })
     const acquisition = controls.createMap(new AbortController().signal)
@@ -458,9 +455,6 @@ describe('WorkspaceMapControls', () => {
     const admitted = await acquisition
     const failure = vi.fn()
     controls.watchFailure(admitted, failure)
-    const restorer = vi.fn()
-    controls.installStyleRestorer(admitted, restorer)
-    if (phase === 'reload') controls.updateMapContributions(targetContribution(controls.sessionIdentity))
     const error = new Error('target contribution failed')
     if (method === 'addSource') {
       const add = map.addSource.getMockImplementation()!
@@ -475,18 +469,13 @@ describe('WorkspaceMapControls', () => {
         add(layer, before)
       })
     }
-    if (phase === 'reload') {
-      map.clearStyle()
-      map.emit('style.load')
-      expect(restorer).toHaveBeenCalledOnce()
-    } else controls.updateMapContributions(targetContribution(controls.sessionIdentity))
+    controls.updateMapContributions(targetContribution(controls.sessionIdentity))
     expect(failure).not.toHaveBeenCalled()
     expect(map.remove).not.toHaveBeenCalled()
     expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'ready', layerSkipped: true })
-    // The background band and later style reloads keep working.
-    map.clearStyle()
-    map.emit('style.load')
-    expect(map.getLayer(MAPLIBRE_SATELLITE_LAYER_ID)).toBeTruthy()
+    // The background band keeps working.
+    controls.updateBackgroundPresentation(satelliteOn(0.7))
+    expect(map.setPaintProperty).toHaveBeenLastCalledWith(MAPLIBRE_SATELLITE_LAYER_ID, 'raster-opacity', 0.7)
     expect(failure).not.toHaveBeenCalled()
   })
 
@@ -612,7 +601,7 @@ describe('WorkspaceMapControls', () => {
     expect(map.remove).toHaveBeenCalledOnce()
   })
 
-  it('rebuilds contribution layers after style reload on one map and clears them before removal', async () => {
+  it('clears contribution layers and listeners before removing the map once', async () => {
     const states = vi.fn()
     const { controls, maps, observers } = createControls({
       contributions: { onStateChange: states },
@@ -628,15 +617,8 @@ describe('WorkspaceMapControls', () => {
     const map = await waitForMap(maps)
     map.emit('style.load')
     const admitted = await acquisition
-    const scene = { id: MAPLIBRE_SHARED_SCENE_LAYER_ID, type: 'custom' }
-    map.addLayer(scene)
-    controls.installStyleRestorer(admitted, () => map.addLayer(scene))
     controls.updateMapContributions({ ...input })
     expect(maps).toHaveLength(1)
-    map.clearStyle()
-    map.emit('style.load')
-    expect(map.getLayersOrder()).toEqual([MAPLIBRE_SATELLITE_LAYER_ID, MAPLIBRE_SHARED_SCENE_LAYER_ID])
-    expect(map.setPaintProperty).toHaveBeenLastCalledWith(MAPLIBRE_SATELLITE_LAYER_ID, 'raster-opacity', 0.4)
     map.remove.mockImplementation(() => {
       expect([...map.listeners.values()].every((listeners) => listeners.size === 0)).toBe(true)
       expect(states.mock.lastCall?.[0].status).toBe('idle')
@@ -864,7 +846,7 @@ describe('WorkspaceMapControls', () => {
     ])
   })
 
-  it('binds map construction and later style restoration to each attempt snapshot', async () => {
+  it('binds map construction and background to each attempt snapshot', async () => {
     const { controls, maps } = createControls()
     const snapshotA: WorkspaceMapSnapshot = {
       initialCenter: { lat: 10, lon: 20 },
@@ -879,26 +861,18 @@ describe('WorkspaceMapControls', () => {
     const mapA = maps[0]!
     mapA.emit('style.load')
     await first
-    controls.installStyleRestorer(mapA as never, vi.fn())
+    const mapAPaintBeforeRelease = mapA.setPaintProperty.mock.calls.length
 
     const second = controls.createMap(new AbortController().signal, snapshotB)
     await vi.waitFor(() => expect(maps).toHaveLength(2))
     const mapB = maps[1]!
     mapB.emit('style.load')
     await second
-    controls.installStyleRestorer(mapB as never, vi.fn())
-    const mapAPaintBeforeReload = mapA.setPaintProperty.mock.calls.length
-    const mapBPaintBeforeReload = mapB.setPaintProperty.mock.calls.length
-
-    mapA.clearStyle()
-    mapA.emit('style.load')
-    mapB.clearStyle()
-    mapB.emit('style.load')
 
     expect(mapA.options.center).toEqual([20, 10])
     expect(mapA.options.bearing).toBe(0)
-    // The released first attempt ignores its later style reload.
-    expect(mapA.setPaintProperty).toHaveBeenCalledTimes(mapAPaintBeforeReload)
+    // The released first attempt was left untouched by the second.
+    expect(mapA.setPaintProperty).toHaveBeenCalledTimes(mapAPaintBeforeRelease)
     expect(mapA.setPaintProperty).toHaveBeenLastCalledWith(
       MAPLIBRE_SATELLITE_LAYER_ID,
       'raster-opacity',
@@ -907,7 +881,6 @@ describe('WorkspaceMapControls', () => {
     expect(mapA.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeUndefined()
     expect(mapB.options.center).toEqual([70, -40])
     expect(mapB.options.bearing).toBe(0)
-    expect(mapB.setPaintProperty.mock.calls.length).toBeGreaterThan(mapBPaintBeforeReload)
     expect(mapB.setPaintProperty).toHaveBeenLastCalledWith(
       MAPLIBRE_SATELLITE_LAYER_ID,
       'raster-opacity',
@@ -916,7 +889,7 @@ describe('WorkspaceMapControls', () => {
     expect(mapB.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeDefined()
   })
 
-  it('keeps the creation snapshot\'s background through admission and a later style reload', async () => {
+  it('keeps the creation snapshot\'s background through admission', async () => {
     const { controls, maps } = createControls()
     const snapshot: WorkspaceMapSnapshot = {
       initialCenter: { lat: 11, lon: 22 },
@@ -927,7 +900,6 @@ describe('WorkspaceMapControls', () => {
 
     map.emit('style.load')
     await acquisition
-    controls.installStyleRestorer(map as never, vi.fn())
 
     expect(map.options.center).toEqual([22, 11])
     expect(map.options.bearing).toBe(0)
@@ -940,183 +912,76 @@ describe('WorkspaceMapControls', () => {
       'raster-opacity',
       0.25,
     )
-
-    map.clearStyle()
-    map.emit('style.load')
-
-    expect(map.addSource).toHaveBeenCalledTimes(2)
-    expect(map.addSource).toHaveBeenLastCalledWith(
-      MAPLIBRE_SATELLITE_SOURCE_ID,
-      expect.objectContaining({ tiles: [GOOGLE_KEYLESS_TILES] }),
-    )
-    expect(map.setPaintProperty).toHaveBeenLastCalledWith(
-      MAPLIBRE_SATELLITE_LAYER_ID,
-      'raster-opacity',
-      0.25,
-    )
     expect(styleFetch).not.toHaveBeenCalled()
   })
 
-  it('orders a preserved shared scene through moveLayer without recreating it', async () => {
+  it('keeps the shared scene above the basemap and LiDAR when activation reconciles the layer stack', async () => {
     const { controls, maps } = createControls()
     const acquisition = controls.createMap(new AbortController().signal)
+    const contribution = targetContribution(controls.sessionIdentity)
+    controls.updateMapContributions({
+      ...contribution,
+      lidar: [lidarLayer('lidar-a'), lidarLayer('lidar-b')],
+      overlays: { ...contribution.overlays, hoveredTargets: [] },
+    })
     const map = await waitForMap(maps)
     map.emit('style.load')
-    await acquisition
+    const admitted = await acquisition
+    // The scene was appended on top, and two LiDAR layers arrived above the Satellite imagery in reverse.
+    map.addLayer({ id: 'lidar-b' })
+    map.addLayer({ id: 'lidar-a' })
     map.addLayer({ id: MAPLIBRE_SHARED_SCENE_LAYER_ID })
     map.layerOrder.splice(0, map.layerOrder.length,
       MAPLIBRE_SHARED_SCENE_LAYER_ID,
+      'lidar-b',
       MAPLIBRE_SATELLITE_LAYER_ID,
-      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+      'lidar-a',
     )
     map.addLayer.mockClear()
     map.addSource.mockClear()
-    map.setPaintProperty.mockClear()
 
-    controls.installStyleRestorer(map as never, vi.fn())
+    controls.reconcileLayerStack(admitted)
 
-    expect(map.getLayersOrder).toHaveBeenCalled()
-    expect(map.moveLayer).toHaveBeenCalled()
     expect(map.layerOrder).toEqual([
-      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
       MAPLIBRE_SATELLITE_LAYER_ID,
+      'lidar-a',
+      'lidar-b',
       MAPLIBRE_SHARED_SCENE_LAYER_ID,
     ])
     expect(map.addLayer).not.toHaveBeenCalled()
     expect(map.addSource).not.toHaveBeenCalled()
-    expect(map.setPaintProperty).not.toHaveBeenCalled()
   })
 
-  it('reports an initial semantic-order failure through the shared fallback watcher', async () => {
-    const { controls, maps } = createControls()
+  it('admits the map on its first style.load and ignores a later one, logging it once', async () => {
+    const logError = vi.fn()
+    const { controls, maps } = createControls({ logError })
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
     map.emit('style.load')
     await acquisition
     map.addLayer({ id: MAPLIBRE_SHARED_SCENE_LAYER_ID })
-    map.layerOrder.splice(0, map.layerOrder.length,
-      MAPLIBRE_SHARED_SCENE_LAYER_ID,
-      MAPLIBRE_SATELLITE_LAYER_ID,
-      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
-    )
-    const failure = new Error('semantic move rejected')
-    const reportFailure = vi.fn()
-    controls.watchFailure(map as never, reportFailure)
-    map.moveLayer.mockImplementation(() => { throw failure })
+    const order = map.getLayersOrder()
+    const mutators = [map.addSource, map.addLayer, map.removeLayer, map.removeSource, map.moveLayer, map.setPaintProperty]
+    const callsBefore = mutators.map((mutator) => mutator.mock.calls.length)
+    logError.mockClear()
 
-    controls.installStyleRestorer(map as never, vi.fn())
-
-    expect(reportFailure).toHaveBeenCalledWith(failure)
-  })
-
-  it('uses initial style.load only for admission, then restores the basemap before its restorer', async () => {
-    const { controls, maps } = createControls()
-    const acquisition = controls.createMap(new AbortController().signal)
-    const map = await waitForMap(maps)
     map.emit('style.load')
-    await acquisition
-    const restorer = vi.fn()
-    controls.installStyleRestorer(map as never, restorer)
-    expect(restorer).not.toHaveBeenCalled()
-
-    const paintBeforeReload = map.setPaintProperty.mock.calls.length
-    map.clearStyle()
-    map.emit('style.load')
-
-    expect(map.addSource).toHaveBeenCalledTimes(2)
-    expect(map.setPaintProperty.mock.calls.length).toBeGreaterThan(paintBeforeReload)
-    expect(map.setPaintProperty).toHaveBeenLastCalledWith(MAPLIBRE_SATELLITE_LAYER_ID, 'raster-opacity', 0.4)
-    expect(restorer).toHaveBeenCalledOnce()
-    expect(map.addSource.mock.invocationCallOrder[1]).toBeLessThan(restorer.mock.invocationCallOrder[0]!)
-    expect(map.setPaintProperty.mock.invocationCallOrder.at(-1)).toBeLessThan(restorer.mock.invocationCallOrder[0]!)
-  })
-
-  it('inserts a restored basemap below a custom scene layer preserved by a diff reload', async () => {
-    const { controls, maps } = createControls()
-    const acquisition = controls.createMap(new AbortController().signal)
-    const map = await waitForMap(maps)
-    map.emit('style.load')
-    await acquisition
-    map.addLayer({ id: MAPLIBRE_SHARED_SCENE_LAYER_ID })
-    const restorer = vi.fn()
-    controls.installStyleRestorer(map as never, restorer)
-
-    map.removeLayer(MAPLIBRE_SATELLITE_LAYER_ID)
-    map.removeSource(MAPLIBRE_SATELLITE_SOURCE_ID)
-    map.emit('style.load')
-
-    expect(map.layerOrder).toEqual([
-      MAPLIBRE_SATELLITE_LAYER_ID,
-      MAPLIBRE_SHARED_SCENE_LAYER_ID,
-    ])
-    expect(map.addLayer).toHaveBeenLastCalledWith(
-      expect.objectContaining({ id: MAPLIBRE_SATELLITE_LAYER_ID }),
-      MAPLIBRE_SHARED_SCENE_LAYER_ID,
-    )
-    expect(restorer).toHaveBeenCalledOnce()
-  })
-
-  it('queues a style reload emitted synchronously during restoration', async () => {
-    const { controls, maps } = createControls()
-    const acquisition = controls.createMap(new AbortController().signal)
-    const map = await waitForMap(maps)
-    map.emit('style.load')
-    await acquisition
-    let reloadDuringRestoration = true
-    const restorer = vi.fn(() => {
-      if (!reloadDuringRestoration) return
-      reloadDuringRestoration = false
-      map.clearStyle()
-      map.emit('style.load')
-    })
-    controls.installStyleRestorer(map as never, restorer)
-
-    map.clearStyle()
     map.emit('style.load')
     await Promise.resolve()
 
-    expect(restorer).toHaveBeenCalledTimes(2)
-    expect(map.addSource).toHaveBeenCalledTimes(3)
-    expect(map.addLayer).toHaveBeenCalledTimes(3)
-    expect(map.getLayer(MAPLIBRE_SATELLITE_LAYER_ID)).toBeDefined()
+    expect(mutators.map((mutator) => mutator.mock.calls.length)).toEqual(callsBefore)
+    expect(map.getLayersOrder()).toEqual(order)
+    expect(maps).toHaveLength(1)
+    expect(map.remove).not.toHaveBeenCalled()
+    expect(logError).toHaveBeenCalledExactlyOnceWith('MapLibre loaded a later style; Canopi never reloads it, so it is ignored.')
   })
 
-  it('replays the latest presentation requested reentrantly by a style restorer', async () => {
+  it('serializes a presentation requested reentrantly by a live Satellite withdrawal', async () => {
     const { controls, maps } = createControls()
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
     map.emit('style.load')
     await acquisition
-    let updateDuringRestore = true
-    controls.installStyleRestorer(map as never, () => {
-      if (!updateDuringRestore) return
-      updateDuringRestore = false
-      controls.updateBackgroundPresentation(satelliteOn(0.9))
-    })
-
-    map.clearStyle()
-    map.emit('style.load')
-    await Promise.resolve()
-
-    expect(map.addSource).toHaveBeenLastCalledWith(
-      MAPLIBRE_SATELLITE_SOURCE_ID,
-      expect.objectContaining({ tiles: [GOOGLE_KEYLESS_TILES] }),
-    )
-    expect(map.setPaintProperty).toHaveBeenLastCalledWith(
-      MAPLIBRE_SATELLITE_LAYER_ID,
-      'raster-opacity',
-      0.9,
-    )
-  })
-
-  it('serializes reentrant presentation and style signals from a live Satellite withdrawal', async () => {
-    const { controls, maps } = createControls()
-    const acquisition = controls.createMap(new AbortController().signal)
-    const map = await waitForMap(maps)
-    map.emit('style.load')
-    await acquisition
-    const restorer = vi.fn()
-    controls.installStyleRestorer(map as never, restorer)
     const sourceMutationDepths: number[] = []
     let removalDepth = 0
     let reentered = false
@@ -1128,7 +993,6 @@ describe('WorkspaceMapControls', () => {
       reentered = true
       removalDepth += 1
       controls.updateBackgroundPresentation(satelliteOn(0.9))
-      map.emit('style.load')
       removalDepth -= 1
     })
     map.addSource.mockImplementation((id: string, source: unknown) => {
@@ -1150,91 +1014,6 @@ describe('WorkspaceMapControls', () => {
       'raster-opacity',
       0.9,
     )
-    expect(restorer).toHaveBeenCalledOnce()
-  })
-
-  it('does not restore a remote background for hidden presentation', async () => {
-    const { controls, maps } = createControls({ background: hidden() })
-    const acquisition = controls.createMap(new AbortController().signal)
-    const map = await waitForMap(maps)
-    map.emit('style.load')
-    await acquisition
-    const restorer = vi.fn()
-    controls.installStyleRestorer(map as never, restorer)
-
-    map.clearStyle()
-    map.emit('style.load')
-
-    expect(map.addSource).not.toHaveBeenCalled()
-    expect(restorer).toHaveBeenCalledOnce()
-  })
-
-  it('replays one coalesced style reload that arrived before registration', async () => {
-    const { controls, maps } = createControls()
-    const acquisition = controls.createMap(new AbortController().signal)
-    const map = await waitForMap(maps)
-    map.emit('style.load')
-    await acquisition
-    map.clearStyle()
-    map.emit('style.load')
-    map.emit('style.load')
-    const restorer = vi.fn()
-
-    controls.installStyleRestorer(map as never, restorer)
-
-    expect(restorer).toHaveBeenCalledOnce()
-    expect(map.addSource).toHaveBeenCalledTimes(2)
-  })
-
-  it('stops style reconstruction as soon as its registration is disposed', async () => {
-    const { controls, maps } = createControls()
-    const acquisition = controls.createMap(new AbortController().signal)
-    const map = await waitForMap(maps)
-    map.emit('style.load')
-    await acquisition
-    const restorer = vi.fn()
-    const dispose = controls.installStyleRestorer(map as never, restorer)
-
-    dispose()
-    map.clearStyle()
-    map.emit('style.load')
-
-    expect(map.addSource).toHaveBeenCalledOnce()
-    expect(restorer).not.toHaveBeenCalled()
-  })
-
-  it('reports a post-admission restoration failure through the existing watcher', async () => {
-    const { controls, maps } = createControls()
-    const acquisition = controls.createMap(new AbortController().signal)
-    const map = await waitForMap(maps)
-    map.emit('style.load')
-    await acquisition
-    const reportFailure = vi.fn()
-    controls.watchFailure(map as never, reportFailure)
-    controls.installStyleRestorer(map as never, vi.fn())
-    const failure = new Error('restored source rejected')
-    map.clearStyle()
-    map.addSource.mockImplementation(() => { throw failure })
-
-    map.emit('style.load')
-    await vi.waitFor(() => expect(reportFailure).toHaveBeenCalledWith(failure))
-  })
-
-  it('reports a restored basemap paint failure through the existing watcher', async () => {
-    const { controls, maps } = createControls()
-    const acquisition = controls.createMap(new AbortController().signal)
-    const map = await waitForMap(maps)
-    map.emit('style.load')
-    await acquisition
-    const reportFailure = vi.fn()
-    controls.watchFailure(map as never, reportFailure)
-    controls.installStyleRestorer(map as never, vi.fn())
-    const failure = new Error('restored opacity rejected')
-    map.clearStyle()
-    map.setPaintProperty.mockImplementation(() => { throw failure })
-
-    map.emit('style.load')
-    await vi.waitFor(() => expect(reportFailure).toHaveBeenCalledWith(failure))
   })
 
   it('reports one live presentation mutation failure through the existing watcher', async () => {
@@ -1245,34 +1024,16 @@ describe('WorkspaceMapControls', () => {
     await acquisition
     const reportFailure = vi.fn()
     controls.watchFailure(map as never, reportFailure)
-    controls.installStyleRestorer(map as never, vi.fn())
     const failure = new Error('opacity rejected')
     map.setPaintProperty.mockImplementation(() => { throw failure })
     map.setPaintProperty.mockClear()
 
     controls.updateBackgroundPresentation(satelliteOn(0.6))
     controls.updateBackgroundPresentation(satelliteOn(0.7))
-    map.emit('style.load')
 
     expect(reportFailure).toHaveBeenCalledTimes(1)
     expect(reportFailure).toHaveBeenCalledWith(failure)
     expect(map.setPaintProperty).toHaveBeenCalledOnce()
-  })
-
-  it('reports a scene restorer failure through the existing watcher', async () => {
-    const { controls, maps } = createControls()
-    const acquisition = controls.createMap(new AbortController().signal)
-    const map = await waitForMap(maps)
-    map.emit('style.load')
-    await acquisition
-    const reportFailure = vi.fn()
-    controls.watchFailure(map as never, reportFailure)
-    const failure = new Error('scene layer rejected')
-    controls.installStyleRestorer(map as never, () => { throw failure })
-
-    map.clearStyle()
-    map.emit('style.load')
-    await vi.waitFor(() => expect(reportFailure).toHaveBeenCalledWith(failure))
   })
 
   it('treats a synchronous source event as passive after the local style is admitted', async () => {
@@ -1698,25 +1459,6 @@ describe('WorkspaceMapControls OpenFreeMap basemap', () => {
     expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeUndefined()
     expect(map.getLayer(MAPLIBRE_SATELLITE_LAYER_ID)).toBeUndefined()
     await vi.waitFor(() => expect(hasOpenFreeMapBasemap(map)).toBe(true))
-    expect(map.setStyle).not.toHaveBeenCalled()
-  })
-
-  it('reinstalls the basemap after a same-map style reload', async () => {
-    const { controls, maps } = createControls({ background: basemapOn() })
-    const acquisition = controls.createMap(new AbortController().signal)
-    const map = await waitForMap(maps)
-    map.emit('style.load')
-    const admitted = await acquisition
-    await vi.waitFor(() => expect(hasOpenFreeMapBasemap(map)).toBe(true))
-    const restorer = vi.fn()
-    controls.installStyleRestorer(admitted, restorer)
-
-    map.clearStyle()
-    map.emit('style.load')
-
-    expect(restorer).toHaveBeenCalledOnce()
-    await vi.waitFor(() => expect(hasOpenFreeMapBasemap(map)).toBe(true))
-    expect(maps).toHaveLength(1)
     expect(map.setStyle).not.toHaveBeenCalled()
   })
 

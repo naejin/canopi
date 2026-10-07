@@ -100,8 +100,6 @@ export interface MapBackgroundHandle {
    * names no layer: the Basemap shows it couldn't load, and the map is not failed.
    */
   claimMapError(event: unknown): boolean
-  /** Re-applies after a same-map style reload emptied the stack. */
-  restore(): void
   /**
    * Whether the latest presentation is on the map: the requested Basemap style
    * installed, or the Satellite layer added. Tile loading is not part of it.
@@ -216,11 +214,6 @@ export function mountMapBackground(options: MapBackgroundOptions): MapBackground
     },
     claimMapError(event) {
       return !disposed && vector.claimResourceError(event)
-    },
-    restore() {
-      if (disposed) return
-      vector.restore()
-      if (satellite) satellite.update(readViewport(map))
     },
     isApplied() {
       if (disposed || !presentation || !readiness.isReady()) return false

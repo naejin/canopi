@@ -26,4 +26,4 @@ Canopi v1 drew the scene with PixiJS as a MapLibre custom layer (`maplibre-pixi`
 - One drawing path to optimise and test; the 2,200-plant scene is the performance reference.
 - Devices without WebGL2 cannot edit Designs; they see the unavailable state instead of a degraded canvas.
 - A lost context costs one press of Retry, not a restart of Canopi; offline field work shows the basemap notice until the basemap is hidden.
-- Style reload and context restore recreate graphics resources from scene authority.
+- A map's style loads once: the map is admitted on its first `style.load`, a later one is ignored, and nothing calls `setStyle()`; Basemap, Satellite, terrain and LiDAR install as sources and layers. A lost context fails the map, and Retry's new map recreates graphics resources from scene authority.

@@ -80,8 +80,7 @@ const OPACITY_PAINT_PROPERTIES: Readonly<Record<string, readonly string[]>> = {
 
 /**
  * The row opacity and the label language live in the map's global state, which the installed layers read: a change
- * is one state write, not a rewrite of every layer. A style reload empties the state with the layers, and the
- * reinstall writes it again.
+ * is one state write, not a rewrite of every layer.
  */
 const OPACITY_STATE = 'canopi:basemap-opacity'
 const LOCALE_STATE = 'canopi:basemap-locale'
@@ -247,14 +246,6 @@ export class VectorBasemap {
     if (this.disposed || !this.resourceFailed) return
     this.resourceFailed = false
     this.uninstall()
-  }
-
-  /** Reinstalls after a same-map style reload dropped the layers. */
-  restore(): void {
-    const installed = this.installed
-    if (!installed || this.layersPresent(installed)) return
-    this.installed = null
-    if (this.desired) this.update(this.desired)
   }
 
   dispose(): void {
