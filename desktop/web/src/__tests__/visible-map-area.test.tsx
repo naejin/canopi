@@ -57,6 +57,29 @@ function element(box: Box): HTMLDivElement {
   return node
 }
 
+/** An inspection handle whose lens shows a `frame` preview; its commands are spies. */
+function lensView(frame: { readonly width: number; readonly height: number }): CanvasInspectionHandle {
+  return {
+    state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true, frame, plants: [] }),
+    sourceQuad: signal(null),
+    inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panByScreen: vi.fn(), zoomBy: vi.fn(),
+    highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
+  }
+}
+
+/** Measures the lens panel at `left` (read at each measure when a getter), `width` wide or `expandedWidth` once expanded,
+ *  420 px tall; every other element keeps its registered box. */
+function mockLensRect(lens: { left: number | (() => number); top?: number; width: number; expandedWidth?: number }): void {
+  const { left, top = 72, width, expandedWidth = width } = lens
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    if (this.tagName === 'SECTION' && this.hasAttribute('data-expanded')) {
+      const shownLeft = typeof left === 'function' ? left() : left
+      return rect({ left: shownLeft, top, width: this.dataset.expanded === 'true' ? expandedWidth : width, height: 420 })
+    }
+    return rect(boxes.get(this) ?? { left: 0, top: 0, width: 0, height: 0 })
+  })
+}
+
 const WINDOW: Box = { left: 0, top: 0, width: 1280, height: 800 }
 const TITLE_BAR: Box = { left: 12, top: 10, width: 1256, height: 50 }
 const TOOL_RAIL: Box = { left: 12, top: 72, width: 224, height: 480 }
@@ -157,22 +180,12 @@ describe('visible map area', () => {
   })
 
   it('the open inspection lens covers the map\'s left edge, so Home and Fit frame the Design right of it', async () => {
-    const view: CanvasInspectionHandle = {
-      state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true, frame: { width: 430, height: 390 }, plants: [] }),
-      sourceQuad: signal(null),
-      inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panByScreen: vi.fn(), zoomBy: vi.fn(),
-      highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
-    }
+    const view = lensView({ width: 430, height: 390 })
     const surfaces = createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ attachInspectionTo: () => view }) })
     const setFramingInsets = vi.spyOn(surfaces.commands.viewport, 'setFramingInsets')
     setCurrentCanvasSession(surfaces)
     // The lens panel stands at the tool card's left, under the title bar: 390 px wide, 620 px expanded.
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      if (this.tagName === 'SECTION' && this.hasAttribute('data-expanded')) {
-        return rect({ left: 248, top: 72, width: this.dataset.expanded === 'true' ? 620 : 390, height: 420 })
-      }
-      return rect(boxes.get(this) ?? { left: 0, top: 0, width: 0, height: 0 })
-    })
+    mockLensRect({ left: 248, width: 390, expandedWidth: 620 })
     const area = element(WINDOW)
     const releaseArea = registerMapArea(area)
     const host = element(WINDOW)
@@ -200,18 +213,10 @@ describe('visible map area', () => {
   })
 
   it('on a phone the open inspection lens leaves the map area whole, so the selection chip and credits stay on screen', async () => {
-    const view: CanvasInspectionHandle = {
-      state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true, frame: { width: 284, height: 284 }, plants: [] }),
-      sourceQuad: signal(null),
-      inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panByScreen: vi.fn(), zoomBy: vi.fn(),
-      highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
-    }
+    const view = lensView({ width: 284, height: 284 })
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ attachInspectionTo: () => view }) }))
     // A 360 px phone held upright: the panel runs from 68 px to 352 px, nearly the map's whole width.
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      if (this.tagName === 'SECTION' && this.hasAttribute('data-expanded')) return rect({ left: 68, top: 60, width: 284, height: 420 })
-      return rect(boxes.get(this) ?? { left: 0, top: 0, width: 0, height: 0 })
-    })
+    mockLensRect({ left: 68, top: 60, width: 284 })
     const area = element({ left: 0, top: 0, width: 360, height: 740 })
     const releaseArea = registerMapArea(area)
     const container = document.createElement('div')
@@ -237,19 +242,9 @@ describe('visible map area', () => {
     // Desktop's default window with the dock open: the expanded lens at 248..868 meets the dock at 824.
     { name: 'a 1280 px window beside the open dock', window: WINDOW, right: DOCK, expand: true },
   ])('in $name the open lens, which would leave under 360 px of map, leaves Fit, Home and the chips to the rails', async ({ window: map, right, expand }) => {
-    const view: CanvasInspectionHandle = {
-      state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true, frame: { width: 390, height: 350 }, plants: [] }),
-      sourceQuad: signal(null),
-      inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panByScreen: vi.fn(), zoomBy: vi.fn(),
-      highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
-    }
+    const view = lensView({ width: 390, height: 350 })
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ attachInspectionTo: () => view }) }))
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      if (this.tagName === 'SECTION' && this.hasAttribute('data-expanded')) {
-        return rect({ left: 248, top: 72, width: this.dataset.expanded === 'true' ? 620 : 390, height: 420 })
-      }
-      return rect(boxes.get(this) ?? { left: 0, top: 0, width: 0, height: 0 })
-    })
+    mockLensRect({ left: 248, width: 390, expandedWidth: 620 })
     const area = element(map)
     const releaseArea = registerMapArea(area)
     const releaseRail = registerMapOccluder(element(TOOL_RAIL), 'left')
@@ -280,21 +275,13 @@ describe('visible map area', () => {
     // Icons to names: the lens moves from 76..466 to 248..638, so it stops covering and the selection chip keeps its room.
     { name: 'icons to names', from: 'icons', to: 'named', before: 466, after: 236 },
   ] as const)('in a 900 px window the open lens measures its room again when the tool rail switches $name', async ({ from, to, before, after }) => {
-    const view: CanvasInspectionHandle = {
-      state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true, frame: { width: 390, height: 350 }, plants: [] }),
-      sourceQuad: signal(null),
-      inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panByScreen: vi.fn(), zoomBy: vi.fn(),
-      highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
-    }
+    const view = lensView({ width: 390, height: 350 })
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ attachInspectionTo: () => view }) }))
     // The lens stands at the tool card's left: 76 px beside the icon rail, 248 px beside the named rail.
     const rails = { icons: { left: 12, width: 52 }, named: { left: 12, width: 224 } }
     const lensLeft = { icons: 76, named: 248 }
     let shown: 'icons' | 'named' = from
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      if (this.tagName === 'SECTION' && this.hasAttribute('data-expanded')) return rect({ left: lensLeft[shown], top: 72, width: 390, height: 420 })
-      return rect(boxes.get(this) ?? { left: 0, top: 0, width: 0, height: 0 })
-    })
+    mockLensRect({ left: () => lensLeft[shown], width: 390 })
     const map = { left: 0, top: 0, width: 900, height: 800 }
     const area = element(map)
     const releaseArea = registerMapArea(area)

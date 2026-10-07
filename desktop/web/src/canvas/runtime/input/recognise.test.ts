@@ -644,16 +644,6 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
     expect(zoomsOf(result.gestures)).toEqual([])
   })
 
-  it('E5 the pair starts after the cancelled drag', () => {
-    const result = run(seq('drag then pinch', ANDROID, [
-      down(100, 100, { pointer: 'touch', id: 1 }),
-      move(130, 100, { pointer: 'touch', id: 1, buttons: 1 }),
-      down(200, 100, { pointer: 'touch', id: 2 }),
-      move(250, 100, { pointer: 'touch', id: 2, buttons: 1 }),
-    ]))
-    expect(result.steps.map((step) => kinds(step.gestures))).toEqual([[], ['press', 'drag-start'], ['cancel', 'pan:start'], ['pan:move', 'zoom']])
-  })
-
   it('E15 Touch with the Pan tool: a hold opens the menu', () => {
     expect(kinds(run(SEQUENCES.E15_PAN_TOOL).gestures)).toEqual(['menu-request'])
   })

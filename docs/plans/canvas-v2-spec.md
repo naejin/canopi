@@ -1081,7 +1081,7 @@ export interface ToolContext {
   readonly settings: ToolSettingsPort
   /** The host's grid snapping of any world point (the move-drag snaps the dragged object's reference point, not the pointer). */
   snap(point: WorldPoint): WorldPoint
-  /** The pointer kind that last hovered, pressed or tapped the map, whichever tool heard it, or 'touch' after a long press
+  /** The pointer kind that last hovered or pressed the map, whichever tool heard it, or 'touch' after a long press
    *  (set before its menu retargets the selection); until then 'touch' on iOS and Android, else 'mouse'
    *  (ToolHostDeps.initialPointer, from InputPlatform.os). Select's handle size, Q1. */
   pointer(): PointerKind

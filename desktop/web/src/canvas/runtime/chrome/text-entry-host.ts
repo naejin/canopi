@@ -24,7 +24,7 @@ export interface TextEntryHostOptions {
   readonly focus: Pick<CanvasFocusPort, 'focusMap'>
   /** Whether the input being handled is a finger's: its entry takes focus at once, inside the tap's user activation, or
    *  iOS shows no keyboard (A15). */
-  readonly openedByTouch?: () => boolean
+  readonly openedByTouch: () => boolean
 }
 
 export interface TextEntryHost {
@@ -115,7 +115,7 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
       textarea.select()
     }
     // A mouse or pen press opens the entry inside its pointerdown, whose own focus handling runs after: the next frame.
-    if (options.openedByTouch?.()) takeFocus()
+    if (options.openedByTouch()) takeFocus()
     else requestAnimationFrame(takeFocus)
   }
 

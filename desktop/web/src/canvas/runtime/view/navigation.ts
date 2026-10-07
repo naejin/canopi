@@ -238,7 +238,7 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
       return {
         update(totalDeltaDeg, { step, anchorPx }) {
           if (!live() || !Number.isFinite(totalDeltaDeg)) return
-          if (anchorPx && Number.isFinite(anchorPx.x) && Number.isFinite(anchorPx.y)) anchor = anchorPx
+          if (anchorPx) anchor = anchorPx
           const raw = start.bearingDeg + totalDeltaDeg
           apply({
             kind: 'rotate-around',

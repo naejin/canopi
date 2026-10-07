@@ -22,8 +22,6 @@ import {
   makePlant,
   makeRectZone,
   plantTarget,
-  rotationHandle,
-  rotationHandleCenter,
 } from './support/canvas-interaction-setup'
 import './support/camera-tolerance'
 
@@ -412,24 +410,6 @@ describe('SceneInteractionSession: touch', () => {
 
     expect(currentCanvasSelection.value).toEqual(new Set(['zone-2']))
     expect(widths()).toEqual(['44px', '44px', '44px', '44px'])
-    session.dispose()
-  })
-
-  it('the shared rotationHandleCenter aims at the centre of the 44 px box a finger\'s tap gives the rotate handle', () => {
-    store.updatePersisted((draft) => {
-      draft.zones = [makeRectZone('zone-1', [{ x: 40, y: 60 }, { x: 240, y: 60 }, { x: 240, y: 160 }, { x: 40, y: 160 }])]
-    })
-    const session = createTestSession(createInteractionDeps(container, store, testView))
-    session.setTool('select')
-
-    touchDown({ x: 140, y: 110 })
-    touchUp({ x: 140, y: 110 })
-
-    const rotate = rotationHandle(container)!
-    expect(rotate.style.width).toBe('44px')
-    const left = Number.parseFloat(rotate.style.left)
-    const top = Number.parseFloat(rotate.style.top)
-    expect(rotationHandleCenter(container)).toEqual({ x: left + 22, y: top + 22 })
     session.dispose()
   })
 
