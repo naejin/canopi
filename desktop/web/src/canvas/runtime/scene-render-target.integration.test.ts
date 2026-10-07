@@ -73,6 +73,16 @@ function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()))
 }
 
+/** The shared scene layer's id, camera frames and a Pixi presentation that measures text without a canvas. */
+function layerOptions(runtime: SceneCanvasRuntime) {
+  return {
+    id: 'canopi-shared-scene',
+    frames: runtime.cameraHost.frames,
+    createPresentation: (input: Parameters<typeof createPixiScenePresentation>[0]) =>
+      createPixiScenePresentation({ ...input, createText: () => new MeasuredText() }),
+  }
+}
+
 describe('SceneCanvasRuntime and the shared map scene layer', () => {
   it('a map layer connected after the runtime drew presents the Scene in its first frame, and a pan only repaints', async () => {
     const runtime = new SceneCanvasRuntime()
@@ -87,13 +97,7 @@ describe('SceneCanvasRuntime and the shared map scene layer', () => {
     const pixi = createPixiRenderer()
     const map = createMap()
     const gl = {} as WebGL2RenderingContext
-    const layer = composition.createLayer({
-      id: 'canopi-shared-scene',
-      frames: runtime.cameraHost.frames,
-      createRenderer: () => pixi,
-      createStage: () => stage,
-      createPresentation: (input) => createPixiScenePresentation({ ...input, createText: () => new MeasuredText() }),
-    })
+    const layer = composition.createLayer({ ...layerOptions(runtime), createRenderer: () => pixi, createStage: () => stage })
     await layer.initialize(map, gl)
     layer.layer.onAdd!(map as never, gl)
     layer.layer.render(gl, {} as never)
@@ -125,12 +129,7 @@ describe('SceneCanvasRuntime and the shared map scene layer', () => {
     const composition = createSharedMapSceneRendererComposition((target) => runtime.connectRenderTarget(target))
     const map = createMap()
     const gl = {} as WebGL2RenderingContext
-    const layer = composition.createLayer({
-      id: 'canopi-shared-scene',
-      frames: runtime.cameraHost.frames,
-      createRenderer: createPixiRenderer,
-      createPresentation: (input) => createPixiScenePresentation({ ...input, createText: () => new MeasuredText() }),
-    })
+    const layer = composition.createLayer({ ...layerOptions(runtime), createRenderer: createPixiRenderer })
     await layer.initialize(map, gl)
     layer.layer.onAdd!(map as never, gl)
     layer.layer.render(gl, {} as never)
@@ -155,14 +154,8 @@ describe('SceneCanvasRuntime and the shared map scene layer', () => {
     const container = createContainer()
     const composition = createSharedMapSceneRendererComposition((target) => runtime.connectRenderTarget(target))
     const gl = {} as WebGL2RenderingContext
-    const layerOptions = {
-      id: 'canopi-shared-scene',
-      frames: runtime.cameraHost.frames,
-      createPresentation: (input: Parameters<typeof createPixiScenePresentation>[0]) =>
-        createPixiScenePresentation({ ...input, createText: () => new MeasuredText() }),
-    }
     const oldMap = createMap()
-    const old = composition.createLayer({ ...layerOptions, createRenderer: createPixiRenderer })
+    const old = composition.createLayer({ ...layerOptions(runtime), createRenderer: createPixiRenderer })
     await old.initialize(oldMap, gl)
     old.layer.onAdd!(oldMap as never, gl)
     await runtime.init(container)
@@ -181,7 +174,7 @@ describe('SceneCanvasRuntime and the shared map scene layer', () => {
     const map = createMap()
     // MapLibre draws its custom layers in the animation frame a repaint request asks for.
     map.triggerRepaint.mockImplementation(() => { requestAnimationFrame(() => layer.layer.render(gl, {} as never)) })
-    const layer = composition.createLayer({ ...layerOptions, createRenderer: () => pixi })
+    const layer = composition.createLayer({ ...layerOptions(runtime), createRenderer: () => pixi })
     const drawsWhenPresented: number[] = []
     const stopWatching = runtime.documentSurface.presented.subscribe((presented) => {
       if (presented) drawsWhenPresented.push(layer.diagnostics.sceneSyncCount)
@@ -213,12 +206,7 @@ describe('SceneCanvasRuntime and the shared map scene layer', () => {
     const oldMap = createMap()
     // Pixi's teardown throws, as on a lost or never-initialized WebGL context.
     const pixi = { ...createPixiRenderer(), destroy: vi.fn(() => { throw new Error('context lost') }) }
-    const old = composition.createLayer({
-      id: 'canopi-shared-scene',
-      frames: runtime.cameraHost.frames,
-      createRenderer: () => pixi,
-      createPresentation: (input) => createPixiScenePresentation({ ...input, createText: () => new MeasuredText() }),
-    })
+    const old = composition.createLayer({ ...layerOptions(runtime), createRenderer: () => pixi })
     await old.initialize(oldMap, gl)
     old.layer.onAdd!(oldMap as never, gl)
     await runtime.init(container)
@@ -240,12 +228,7 @@ describe('SceneCanvasRuntime and the shared map scene layer', () => {
     const composition = createSharedMapSceneRendererComposition((target) => runtime.connectRenderTarget(target))
     const map = createMap()
     const gl = {} as WebGL2RenderingContext
-    const layer = composition.createLayer({
-      id: 'canopi-shared-scene',
-      frames: runtime.cameraHost.frames,
-      createRenderer: createPixiRenderer,
-      createPresentation: (input) => createPixiScenePresentation({ ...input, createText: () => new MeasuredText() }),
-    })
+    const layer = composition.createLayer({ ...layerOptions(runtime), createRenderer: createPixiRenderer })
     await layer.initialize(map, gl)
     layer.layer.onAdd!(map as never, gl)
     await runtime.init(container)
