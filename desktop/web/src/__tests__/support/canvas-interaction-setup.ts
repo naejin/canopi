@@ -260,9 +260,7 @@ export function createInteractionDeps(
     setSelection,
     incrementSceneRevision: () => {},
     syncCanvasSignalsFromScene: () => {},
-    invalidate: (kind) => {
-      if (kind === 'scene') render(kind)
-    },
+    invalidate: () => render(),
   })
   const commandAdmission = overrides.commandAdmission
     ?? ('runWhenSettled' in sceneEdits
@@ -413,7 +411,7 @@ export function createAbortFailingSceneEdits(
         return {
           mutate: (edit) => transaction.mutate(edit),
           setSelection: (ids) => transaction.setSelection(ids),
-          commit: (options) => transaction.commit(options),
+          commit: () => transaction.commit(),
           get changed() {
             return transaction.changed
           },

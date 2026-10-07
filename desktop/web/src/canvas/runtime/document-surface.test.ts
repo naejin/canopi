@@ -14,7 +14,7 @@ function createTestDocumentSurface(
   documents: Parameters<typeof createSceneCanvasDocumentSurface>[0]['documents'],
   renderingOverrides: Partial<
     Parameters<typeof createSceneCanvasDocumentSurface>[0]['rendering']
-  > & { invalidate?: (kind: 'scene' | 'viewport') => void } = {},
+  > & { invalidate?: () => void } = {},
   camera: TestView = createTestView(),
 ): CanvasDocumentSurface {
   const rendering = {

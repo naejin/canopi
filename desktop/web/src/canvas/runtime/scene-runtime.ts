@@ -37,8 +37,6 @@ import { runCanvasRuntimeCleanups, throwCanvasRuntimeCleanupErrors } from './cle
 import type { CameraDriverHost } from './view/camera-driver'
 import type { SceneRenderTarget } from './renderers/scene-types'
 
-type RuntimeInvalidationKind = 'scene' | 'viewport'
-
 export type SceneCanvasRuntimeOptions = SceneRuntimeConstructionOptions
 
 export class SceneCanvasRuntime {
@@ -56,7 +54,7 @@ export class SceneCanvasRuntime {
       prepareForDocumentReplacement: () => this._prepareForDocumentReplacement(),
       syncHoveredCanvasTargets: (target) => this._syncHoveredCanvasTargets(target),
       syncCanvasSignalsFromScene: () => this._syncCanvasSignalsFromScene(),
-      invalidate: (kind) => this._invalidate(kind),
+      invalidate: () => this._invalidate(),
       incrementSceneRevision: () => this._incrementSceneRevision(),
       setChromeShown: (shown) => {
         this._chromeShown = shown
@@ -220,7 +218,7 @@ export class SceneCanvasRuntime {
         : undefined,
       contextMenu: this._appAdapter.contextMenu,
       setTool: (id) => this._commandSurface.tools.setTool(id),
-      render: (kind) => this._invalidate(kind),
+      render: () => this._invalidate(),
       readSnapToGridEnabled: () => this._appAdapter.settings.readSnapToGridEnabled(),
       readScrollWheel: () => this._appAdapter.settings.readScrollWheel(),
       readPlantSpacingIntervalMeters: () => this._appAdapter.settings.readPlantSpacingIntervalMeters(),
@@ -319,11 +317,11 @@ export class SceneCanvasRuntime {
     this._documentSurface.destroy()
   }
 
-  private _invalidate(kind: RuntimeInvalidationKind = 'scene'): void {
-    this._rendering.invalidate(kind)
-    // A viewport change reaches the tools on their own frame listener (ToolHost's onFrame), which Select's followView
+  private _invalidate(): void {
+    this._rendering.invalidate()
+    // A camera frame reaches the tools on their own frame listener (ToolHost's onFrame), which Select's followView
     // answers without rebuilding on a pan; only a scene change refreshes them here.
-    if (kind === 'scene') this._interaction?.refreshMeasurements()
+    this._interaction?.refreshMeasurements()
   }
 
   private _setSelection(targets: Iterable<SceneDesignObjectTarget>): void {
@@ -372,7 +370,7 @@ export class SceneCanvasRuntime {
     }
     this._sceneSession.setHoveredTarget(target)
     this._syncHoveredCanvasTargets(target)
-    if (invalidate) this._invalidate('scene')
+    if (invalidate) this._invalidate()
   }
 
   private _syncCanvasSignalsFromScene(): void {
@@ -389,12 +387,12 @@ export class SceneCanvasRuntime {
           refreshCanvasColorCache(container)
         }
         this._construction.inspection.refresh()
-        this._invalidate('scene')
+        this._invalidate()
       },
       onLocale: () => {
         this._interaction?.refreshTranslations()
         this._construction.inspection.refresh()
-        this._invalidate('scene')
+        this._invalidate()
       },
       onChromeOverlay: () => {
         this._syncEditingAids()
@@ -402,33 +400,33 @@ export class SceneCanvasRuntime {
       onMapBackdrop: (backdrop) => {
         if (!setCanvasMapBackdrop(backdrop)) return
         this._syncEditingAids()
-        this._invalidate('scene')
+        this._invalidate()
       },
       onPlantDisplay: (display) => {
         if (!setCanvasPlantDisplay(display)) return
         this._construction.inspection.refresh()
-        this._invalidate('scene')
+        this._invalidate()
       },
       plantDisplay: this._appAdapter.plantDisplay,
       onPanelTargetHover: () => {
-        this._invalidate('scene')
+        this._invalidate()
       },
       frames: this._construction.frames,
       onCameraFrame: () => {
         const mode = this._construction.frames.viewFrame.peek().mode
         if (mode !== this._cameraMode) {
           this._cameraMode = mode
-          this._invalidate('scene')
+          this._invalidate()
           return
         }
-        this._invalidate('viewport')
+        this._rendering.requestRepaint()
       },
       settings: this._appAdapter.settings,
       subscribePanelOriginTargetChanges: (onChange) =>
         this._panelTargetAdapter.subscribePanelOriginTargetChanges(onChange),
     }))
     // Notes measured in a fallback font while the web font loaded: their frames, hit areas and the detail layout follow.
-    this._disposeEffects.push(onAnnotationFontLoad(() => this._invalidate('scene')))
+    this._disposeEffects.push(onAnnotationFontLoad(() => this._invalidate()))
   }
 
   private _incrementSceneRevision(): void {
@@ -451,7 +449,7 @@ export class SceneCanvasRuntime {
   private _syncEditingAids(): void {
     const ink = this._chromeShown && this._appAdapter.settings.readChromeOverlay().gridVisible ? getMapBackdropInk() : null
     const editingAids = ink ? { grid: { ink: ink.grid, majorInk: ink.gridMajor } } : null
-    if (this._presentation.setEditingAids(editingAids)) this._invalidate('scene')
+    if (this._presentation.setEditingAids(editingAids)) this._invalidate()
   }
 
   private _resolveHighlightedTargets(scene: ScenePersistedState): { plantIds: readonly string[]; zoneIds: readonly string[] } {

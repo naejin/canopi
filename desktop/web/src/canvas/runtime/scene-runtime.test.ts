@@ -911,7 +911,7 @@ describe('scene canvas runtime', () => {
       return {
         mutate: (edit) => transaction.mutate(edit),
         setSelection: (targets) => transaction.setSelection(targets),
-        commit: (options) => transaction.commit(options),
+        commit: () => transaction.commit(),
         get changed() {
           return transaction.changed
         },
@@ -1001,7 +1001,7 @@ describe('scene canvas runtime', () => {
       return {
         mutate: (edit) => transaction.mutate(edit),
         setSelection: (targets) => transaction.setSelection(targets),
-        commit: (options) => transaction.commit(options),
+        commit: () => transaction.commit(),
         get changed() {
           return transaction.changed
         },
@@ -1970,7 +1970,7 @@ describe('scene canvas runtime', () => {
     resolveRefresh({ changed: true, plantNamesRevision: 0, failure: null })
 
     await expect(pending).resolves.toBe(true)
-    expect(invalidate.mock.calls.slice(invalidationsBeforeRefresh)).toEqual([['scene']])
+    expect(invalidate.mock.calls.slice(invalidationsBeforeRefresh)).toEqual([[]])
     invalidate.mockRestore()
     runtime.destroy()
   })
@@ -2373,7 +2373,7 @@ describe('scene canvas runtime', () => {
     )).resolves.toBe(true)
 
     expect(runtime.querySurface.revision.plantNames.value).toBe(plantNamesRevision + 1)
-    expect(invalidate).toHaveBeenCalledWith('scene')
+    expect(invalidate).toHaveBeenCalled()
     runtime.destroy()
   })
 
@@ -3639,12 +3639,12 @@ describe('scene canvas runtime', () => {
     invalidate.mockClear()
     runtime.commandSurface.sceneEdits.selectAll()
     expect(invalidate).toHaveBeenCalledTimes(1)
-    expect(invalidate).toHaveBeenLastCalledWith('scene')
+    expect(invalidate).toHaveBeenLastCalledWith()
 
     invalidate.mockClear()
     runtime.commandSurface.sceneEdits.lockSelected()
     expect(invalidate).toHaveBeenCalledTimes(1)
-    expect(invalidate).toHaveBeenLastCalledWith('scene')
+    expect(invalidate).toHaveBeenLastCalledWith()
 
     invalidate.mockClear()
     runtime.commandSurface.sceneEdits.unlockSelected()

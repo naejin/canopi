@@ -22,18 +22,15 @@ import {
   type SceneCommandSnapshot,
 } from '../scene-commands'
 
-export type SceneEditInvalidationKind = 'scene' | 'viewport'
-
 export interface SceneEditTransaction {
   mutate(edit: (draft: ScenePersistedState) => void): void
   setSelection(targets: Iterable<SceneDesignObjectTarget>): void
-  commit(options?: { invalidate?: SceneEditInvalidationKind }): boolean
+  commit(): boolean
   abort(): void
   readonly changed: boolean
 }
 
 export interface SceneEditRunOptions {
-  readonly invalidate?: SceneEditInvalidationKind
   readonly onCommitted?: () => void
 }
 
@@ -116,7 +113,7 @@ interface SceneRuntimeEditCoordinatorOptions {
   setSelection(targets: Iterable<SceneDesignObjectTarget>): void
   incrementSceneRevision(): void
   syncCanvasSignalsFromScene(): void
-  invalidate(kind: SceneEditInvalidationKind): void
+  invalidate(): void
 }
 
 /**
@@ -184,7 +181,7 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
     } catch (error) {
       tx.fail(error)
     }
-    return tx.commit({ invalidate: options.invalidate })
+    return tx.commit()
   }
 
   begin(
@@ -245,7 +242,7 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       }))
       this._sceneStore.commitReorigin(reprojector)
       this._incrementSceneRevision()
-      this._invalidate('scene')
+      this._invalidate()
     })
   }
 
@@ -440,7 +437,7 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       ...selection ? [() => this._setSelection(selection)] : [],
       this._syncCanvasSignalsFromScene,
       this._incrementSceneRevision,
-      () => this._invalidate('scene'),
+      () => this._invalidate(),
     ]))
     this._release(replay)
     throwCanvasRuntimeCleanupErrors(errors, `Scene history ${direction} failed to publish`)
@@ -486,7 +483,7 @@ interface SceneHydrationSettlementOptions {
   readonly noteStoreHydrated: () => void
   readonly syncDocumentSignals: () => void
   readonly syncCanvasSignalsFromScene: () => void
-  readonly invalidate: (kind: SceneEditInvalidationKind) => void
+  readonly invalidate: () => void
   readonly incrementSceneRevision: () => void
   readonly finalizeReplacement?: () => void
   readonly release: (hydration: SceneHydrationSettlement) => void
@@ -516,7 +513,7 @@ class SceneHydrationSettlement implements SceneAuthorityOperation {
       options.history.clear()
       options.syncDocumentSignals()
       options.syncCanvasSignalsFromScene()
-      options.invalidate('scene')
+      options.invalidate()
       options.incrementSceneRevision()
       options.finalizeReplacement?.()
     } catch (error) {
@@ -539,7 +536,7 @@ interface SceneRuntimeEditTransactionOptions {
   recordHistory(command: SceneCommand, accepted: () => void): void
   syncCanvasSignalsFromScene(): void
   incrementSceneRevision(): void
-  invalidate(kind: SceneEditInvalidationKind): void
+  invalidate(): void
   onCommitted(): void
   restore(snapshot: SceneCommandSnapshot): void
   release(transaction: SceneRuntimeEditTransaction): void
@@ -598,7 +595,7 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
     this._options.setSelection(targets)
   }
 
-  commit(options: { invalidate?: SceneEditInvalidationKind } = {}): boolean {
+  commit(): boolean {
     if (!this._open) return this._committedChanged
     this._open = false
     const command = this._createCommand()
@@ -613,7 +610,7 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
       errors.push(error)
       if (!this._historyAccepted) this._undo(errors)
     }
-    return this._publish(options.invalidate ?? 'scene', errors)
+    return this._publish(errors)
   }
 
   abort(): void {
@@ -631,12 +628,12 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
     throw error
   }
 
-  private _publish(invalidate: SceneEditInvalidationKind, errors: unknown[]): boolean {
+  private _publish(errors: unknown[]): boolean {
     this._committedChanged = true
     errors.push(...collectCanvasRuntimeErrors([
       this._options.syncCanvasSignalsFromScene,
       this._options.incrementSceneRevision,
-      () => this._options.invalidate(invalidate),
+      this._options.invalidate,
       this._options.onCommitted,
     ]))
     this._options.release(this)

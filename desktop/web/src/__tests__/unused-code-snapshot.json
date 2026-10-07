@@ -364,7 +364,6 @@
     "src/canvas/runtime/renderers/draft-layer.ts#DraftLayer",
     "src/canvas/runtime/runtime.ts#CanvasPersistenceAcknowledgement",
     "src/canvas/runtime/scene-runtime/presentation.ts#ScenePresentationRefreshResult",
-    "src/canvas/runtime/scene-runtime/transactions.ts#SceneEditInvalidationKind",
     "src/canvas/runtime/tools/registry.ts#ToolFactory",
     "src/canvas/runtime/tools/tool-host.ts#ContextMenuPortOptions",
     "src/canvas/runtime/view/driver-host.ts#CameraDriverHostController",

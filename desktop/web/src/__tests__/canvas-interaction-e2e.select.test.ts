@@ -262,7 +262,7 @@ describe('SceneInteractionSession', () => {
     events.pointerCancel({ x: 35, y: 45 }, { pointerId: 7 })
     expect(store.persisted.plants[0]?.position).toEqual({ x: 20, y: 30 })
     expect(onSceneEditCommit).not.toHaveBeenCalled()
-    expect(render).toHaveBeenCalledWith('scene')
+    expect(render).toHaveBeenCalled()
 
     events.pointerDown({ x: 20, y: 30 }, { pointerId: 9 })
     events.pointerMove({ x: 25, y: 35 }, { pointerId: 9 })

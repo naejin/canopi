@@ -106,7 +106,7 @@ export interface SceneInteractionSessionDeps {
   contextMenu?: CanvasRuntimeContextMenuAdapter
   setTool: (id: ToolId) => void
   /** A scene render; a camera frame repaints on its own (the runtime's onCameraFrame). */
-  render: (kind: 'scene') => void
+  render: () => void
   readSnapToGridEnabled: () => boolean
   /** Settings › Canvas › Pointing device (stored scrollWheel: 'zoom' is Mouse, 'pan' is Trackpad). Pinch and Ctrl wheel zoom either way. */
   readScrollWheel: () => CanvasScrollWheelSetting
@@ -295,7 +295,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         // The runtime's scene render asks the session to refresh (refreshMeasurements → sceneChanged): a redraw the host
         // requests from inside that refresh is the one already under way.
         invalidate: () => {
-          if (!this._refreshing) _deps.render('scene')
+          if (!this._refreshing) _deps.render()
         },
         chrome: {
           setHandles: (handles, active) => this._setHandles(handles, active),
@@ -349,7 +349,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
           requestTool: (id) => this._switchTool(id),
           clearSelection: () => {
             _deps.clearSelection()
-            _deps.render('scene')
+            _deps.render()
             this._toolHost.sceneChanged()
           },
         },

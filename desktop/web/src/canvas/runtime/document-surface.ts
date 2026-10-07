@@ -95,7 +95,7 @@ class SceneCanvasDocumentRole implements SceneCanvasDocumentSurface {
       return
     }
     this._openPending = true
-    this.options.rendering.invalidate('scene')
+    this.options.rendering.invalidate()
   }
 
   applyPendingOpen(): void {

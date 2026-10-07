@@ -2,9 +2,6 @@ import { signal, type ReadonlySignal } from '@preact/signals'
 import type { SceneRendererSnapshot, SceneRenderTarget } from '../renderers/scene-types'
 import type { DraftPresentation } from '../tools/draft'
 
-/** A scene change publishes a whole snapshot on the next frame; a camera frame only asks the target for a repaint. */
-type SceneRuntimeRenderKind = 'scene' | 'viewport'
-
 interface SceneRuntimePreparedRender {
   publish(): SceneRendererSnapshot
 }
@@ -116,13 +113,14 @@ export class SceneRuntimeRenderScheduler {
     }
   }
 
-  invalidate(kind: SceneRuntimeRenderKind): void {
+  /** A camera frame: the layer reads it when MapLibre draws, so the target only repaints and no snapshot is published. */
+  requestRepaint(): void {
+    if (this._container) this._target?.requestRender()
+  }
+
+  /** A scene change: a whole snapshot is published on the next frame. */
+  invalidate(): void {
     if (!this._container) return
-    // The layer reads the camera frame when MapLibre draws it.
-    if (kind === 'viewport') {
-      this._target?.requestRender()
-      return
-    }
     // Fence an in-flight preparation immediately, even though drawing waits for a frame.
     this._renderEpoch += 1
     this._sceneFrameQueued = true

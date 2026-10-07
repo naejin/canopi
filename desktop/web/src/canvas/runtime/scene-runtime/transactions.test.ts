@@ -15,7 +15,6 @@ import { SceneStore, type SceneDesignObjectTarget } from '../scene'
 import {
   SceneEditBusyError,
   SceneRuntimeEditCoordinator,
-  type SceneEditInvalidationKind,
   type SceneEditTransaction,
 } from './transactions'
 
@@ -85,7 +84,7 @@ function movedFirstPlant(x: number, y: number) {
 function createHarness() {
   const sceneStore = new SceneStore().hydrate(makeFile())
   const history = new SceneHistory()
-  const invalidations: SceneEditInvalidationKind[] = []
+  const invalidations: string[] = []
   let sceneRevision = 0
   const setSelection = (targets: Iterable<SceneDesignObjectTarget>) => {
     const next = [...targets]
@@ -100,8 +99,8 @@ function createHarness() {
       sceneRevision += 1
     },
     syncCanvasSignalsFromScene: () => {},
-    invalidate: (kind) => {
-      invalidations.push(kind)
+    invalidate: () => {
+      invalidations.push('scene')
     },
   })
 
@@ -202,11 +201,11 @@ describe('scene edit transactions', () => {
       draft.plants[1]!.position = { x: 35, y: 35 }
     })
 
-    expect(tx.commit({ invalidate: 'viewport' })).toBe(true)
+    expect(tx.commit()).toBe(true)
     expect(sceneStore.persisted.plants[1]?.position).toEqual({ x: 35, y: 35 })
     expect(readSceneRevision()).toBe(1)
     expect(history.canUndo.value).toBe(true)
-    expect(invalidations).toEqual(['viewport'])
+    expect(invalidations).toEqual(['scene'])
   })
 })
 
@@ -216,7 +215,7 @@ function createAdmissionHarness(options: {
   readonly setSelection?: (targets: Iterable<SceneDesignObjectTarget>) => void
   readonly incrementSceneRevision?: () => void
   readonly syncCanvasSignalsFromScene?: () => void
-  readonly invalidate?: (kind: SceneEditInvalidationKind) => void
+  readonly invalidate?: () => void
 } = {}): {
   readonly coordinator: SceneRuntimeEditCoordinator
   readonly store: SceneStore
@@ -724,7 +723,7 @@ describe('A Scene operation runs its steps once', () => {
   })
 
   it('an edit whose publication throws after history accepts keeps the edit, rethrows, releases, and the next command runs', () => {
-    const invalidate = vi.fn<(kind: SceneEditInvalidationKind) => void>()
+    const invalidate = vi.fn<() => void>()
       .mockImplementationOnce(() => { throw new Error('invalidation failed') })
     const revisions = vi.fn()
     const { coordinator, store } = createAdmissionHarness({ invalidate, incrementSceneRevision: revisions })
@@ -742,7 +741,7 @@ describe('A Scene operation runs its steps once', () => {
   })
 
   it('an undo whose publication throws keeps the step, rethrows, releases, and the next command runs', () => {
-    const invalidate = vi.fn<(kind: SceneEditInvalidationKind) => void>()
+    const invalidate = vi.fn<() => void>()
     const { coordinator, store } = createAdmissionHarness({ invalidate })
     expect(coordinator.run('move', moveFirstPlant)).toBe(true)
     invalidate.mockImplementationOnce(() => { throw new Error('undo invalidation failed') })
@@ -801,7 +800,7 @@ describe('A Scene operation runs its steps once', () => {
   })
 
   it('a hydration that throws keeps the Scene closed until a replace takes over', () => {
-    const invalidate = vi.fn<(kind: SceneEditInvalidationKind) => void>()
+    const invalidate = vi.fn<() => void>()
       .mockImplementationOnce(() => { throw new Error('hydration invalidation failed') })
     const { coordinator, store } = createAdmissionHarness({ invalidate })
 

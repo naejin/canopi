@@ -46,8 +46,6 @@ import {
   type SettledSceneReader,
 } from './scene-runtime/transactions'
 
-type CommandInvalidationKind = 'scene'
-
 const DESIGN_OBJECTS_NOT_IMPORTED: CanvasDesignObjectImportReceipt = Object.freeze({
   committed: false,
   createdCount: 0,
@@ -117,7 +115,7 @@ interface SceneCanvasCommandSurfaceOptions {
   readonly readInteractionTool: () => ToolId | null
   /** The active interaction session's Plant a row spacing field. */
   readonly plantRowSpacing: CanvasPlantRowSpacingField
-  readonly invalidate: (kind: CommandInvalidationKind) => void
+  readonly invalidate: () => void
   readonly isRuntimeActive: () => boolean
   readonly isSpatialEditingEnabled: () => boolean
 }
@@ -210,7 +208,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       setSceneLayerOpacity: (name, opacity) => this.setSceneLayerOpacity(name, opacity),
       setSceneLayerLocked: (name, locked) => this.setSceneLayerState(name, { locked }),
       presentLayers: (names) => {
-        if (this.options.presentation.presentLayers(names)) this.options.invalidate('scene')
+        if (this.options.presentation.presentLayers(names)) this.options.invalidate()
       },
     }
     this.plantPresentation = {
@@ -269,7 +267,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     }
     const total = series.total
     series.edit.mutate((draft) => applySceneDragDeltaToDraft(draft, series.state, total))
-    this.options.invalidate('scene')
+    this.options.invalidate()
     return true
   }
 
@@ -279,7 +277,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     this.nudge = null
     if (options.abort || (series.total.x === 0 && series.total.y === 0)) series.edit.abort()
     else series.edit.commit()
-    this.options.invalidate('scene')
+    this.options.invalidate()
   }
 
   private saveSelectionAsObjectStamp(): void {
@@ -404,10 +402,10 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     }
     const plantNamesPublished = this.options.presentation.publishRefresh(result)
     if (result.failure) {
-      if (result.changed || plantNamesPublished) this.options.invalidate('scene')
+      if (result.changed || plantNamesPublished) this.options.invalidate()
       throw result.failure.error
     }
-    if (result.changed || plantNamesPublished) this.options.invalidate('scene')
+    if (result.changed || plantNamesPublished) this.options.invalidate()
     return result.changed || plantNamesPublished
   }
 }
