@@ -45,7 +45,7 @@ export function getCanvasPlantNameLabels(
   const plants = [...scene.plants].sort((a, b) =>
     Number(b.id === hoveredId) - Number(a.id === hoveredId) || Number(pinned.has(b.id)) - Number(pinned.has(a.id)) || a.id.localeCompare(b.id))
   const result: PlantNameLabel[] = []
-  const context = { plants: scene.plants, pixelsPerMetre: scale, speciesCache: snapshot.speciesCache }
+  const context = { plants: scene.plants, pixelsPerMetre: scale }
   for (const plant of plants) {
     if (snapshot.speciesFocus.canonicalName && plant.canonicalName !== snapshot.speciesFocus.canonicalName) continue
     const existing = pinned.get(plant.id)
@@ -101,7 +101,7 @@ export function getCanvasDetailLayout(scene: ScenePersistedState, scale: number)
   function reserve(rect: LabelBounds) { occupied.add(rect); bounds.push(rect) }
   const annotationIds = new Set<string>()
   const measurementIds = new Set<string>()
-  const context = { plants: scene.plants, pixelsPerMetre: scale, speciesCache: new Map() }
+  const context = { plants: scene.plants, pixelsPerMetre: scale }
   // Plane pixels: admission never depends on where the plane sits on screen.
   const planePixels = { worldToScreen: (point: { readonly x: number; readonly y: number }) => ({ x: point.x * scale, y: point.y * scale }) }
   if (isLayerVisible(scene, 'plants')) for (const plant of scene.plants) {

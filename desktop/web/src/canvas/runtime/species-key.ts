@@ -8,9 +8,6 @@ import { normalizeHexColor } from '../plant-colors'
 import { getStratumColor } from '../plants'
 import type { SpeciesCacheEntry } from './species-cache'
 
-/** No catalog entries: colours come from the plant and the Design alone. */
-export const EMPTY_SPECIES_CACHE: ReadonlyMap<string, SpeciesCacheEntry> = new Map()
-
 /** A species' symbol and colour on the map. */
 export interface SpeciesAppearance {
   readonly symbol: PlantSymbolId

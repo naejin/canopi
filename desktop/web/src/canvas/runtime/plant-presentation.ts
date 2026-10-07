@@ -32,6 +32,9 @@ export interface PlantPresentationContext {
   localizedCommonNames?: ReadonlyMap<string, string | null>
 }
 
+/** What a plant's footprint (its bounds, hit radius and drawn radius) reads: the scale and the plants that set its spacing. */
+type PlantFootprintContext = Pick<PlantPresentationContext, 'plants' | 'pixelsPerMetre'>
+
 export interface PlantPresentationEntry {
   plant: ScenePlantEntity
   radiusWorld: number
@@ -120,7 +123,7 @@ export function layoutPlantPresentation(
 
 export function getPlantWorldBounds(
   plant: ScenePlantEntity,
-  context: PlantPresentationContext,
+  context: PlantFootprintContext,
 ): PlantWorldBounds {
   const radiusWorld = resolvePlantRadiusWorld(plant, context)
   return {
@@ -132,14 +135,14 @@ export function getPlantWorldBounds(
 }
 
 /** The drawn radius plus the interaction padding, in CSS px. */
-function plantHitRadiusPx(plant: ScenePlantEntity, context: PlantPresentationContext): number {
+function plantHitRadiusPx(plant: ScenePlantEntity, context: PlantFootprintContext): number {
   return resolvePlantRadiusWorld(plant, context) * context.pixelsPerMetre + 4
 }
 
 export function hitTestPlant(
   plant: ScenePlantEntity,
   point: ScenePoint,
-  context: PlantPresentationContext,
+  context: PlantFootprintContext,
 ): boolean {
   const radiusWorld = plantHitRadiusPx(plant, context) / Math.max(context.pixelsPerMetre, 0.001)
   const dx = point.x - plant.position.x
@@ -212,13 +215,13 @@ const SYMBOLIC_PLANT_MIN_SCREEN_PX = 2
 const SYMBOLIC_PLANT_MAX_SCREEN_PX = 6.75
 const SYMBOLIC_PLANT_HALF_GROWTH_SCALE = 21
 
-function resolvePlantRadiusWorld(plant: ScenePlantEntity, context: PlantPresentationContext): number {
+function resolvePlantRadiusWorld(plant: ScenePlantEntity, context: PlantFootprintContext): number {
   return resolvePlantRadiusPresentation(plant, context).radiusWorld
 }
 
 function resolvePlantRadiusPresentation(
   plant: ScenePlantEntity,
-  context: PlantPresentationContext,
+  context: PlantFootprintContext,
 ): { radiusWorld: number; radiusScreenPx: number } {
   const scale = Math.max(context.pixelsPerMetre, .001)
   const spacing = context.plants ? nearestPlantSpacing(context.plants, plant.position) : Infinity
