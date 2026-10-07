@@ -2,9 +2,12 @@
 // its text, or its placeholder while empty, and as tall as its lines. jsdom has no layout, so this runs in the browser,
 // in both engines: two typed lines stay inside the box with the start of the text in view, for a new note and for a
 // note edited in place while it is turned 30° on screen, and an empty field shows its whole placeholder in Russian and
-// Japanese. No baselines: nothing here is compared with a recorded screenshot.
+// Japanese. The committed note is drawn at the width the browser measures (canvas/runtime/annotation-layout.ts): its
+// selection outline ends at its last letter, and follows the web font once a late font file arrives. No baselines:
+// nothing here is compared with a recorded screenshot.
 import { fileURLToPath } from 'node:url'
-import type { Page } from '@playwright/test'
+import type { Page, Route } from '@playwright/test'
+import { expectCanvasDrawn } from '../support/canvas'
 import { expect, test } from '../support/offline'
 
 const FIXTURE = fileURLToPath(new URL('../fixtures/canvas-base.canopi', import.meta.url))
@@ -16,8 +19,9 @@ function designMap(page: Page) {
   return page.getByRole('application')
 }
 
-async function openBaseFixture(page: Page, selectTool: string): Promise<void> {
-  await page.goto('')
+/** Opens the fixture; a page whose font file is held back waits for its DOM only, since the load event waits for fonts. */
+async function openBaseFixture(page: Page, selectTool: string, waitUntil: 'load' | 'domcontentloaded' = 'load'): Promise<void> {
+  await page.goto('', { waitUntil })
   const [chooser] = await Promise.all([
     page.waitForEvent('filechooser'),
     page.getByRole('button', { name: /\.canopi/ }).first().click(),
@@ -105,6 +109,88 @@ test('a note edited in place while turned 30° on screen keeps its two lines ins
   await page.keyboard.press('Shift+Enter')
   await page.keyboard.type('lower orchard and the pond')
   await expectTwoLinesInView(page)
+})
+
+/** Commits a one-line note at the neutral point and arms Select, which leaves the new note selected. */
+async function commitNote(page: Page, text: string): Promise<void> {
+  await openNewNote(page, 'Text note')
+  await page.keyboard.type(text)
+  await page.keyboard.press('Enter')
+  await expect(entry(page)).toHaveCount(0)
+  await tool(page, 'Select').click()
+  await expectCanvasDrawn(page)
+}
+
+/** The strip of screen the note at the neutral point sits in: its one line, below the rotate handle. */
+const NOTE_STRIP = { x: NEUTRAL.x - 40, y: NEUTRAL.y - 6, width: 520, height: 30 }
+
+/**
+ * The selected note's outline (the selection's ochre, #9C5A16) and its last glyph (the map text's dark ink, #27231D) in
+ * the note strip, as screen x, read from a screenshot's pixels: the outline and the text are drawn in the map's canvas.
+ * Only a glyph's core is that dark and grey; the grid's lines, the glyphs' antialiased edges and plants are not.
+ */
+async function noteEdges(page: Page) {
+  const png = await page.screenshot({ clip: NOTE_STRIP })
+  const edges = await page.evaluate(async (data) => {
+    const bytes = Uint8Array.from(atob(data), (character) => character.charCodeAt(0))
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }))
+    const canvas = document.createElement('canvas')
+    canvas.width = bitmap.width
+    canvas.height = bitmap.height
+    const context = canvas.getContext('2d')!
+    context.drawImage(bitmap, 0, 0)
+    const { data: pixels, width, height } = context.getImageData(0, 0, canvas.width, canvas.height)
+    let outlineRight = -Infinity, lastGlyph = -Infinity
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const at = (y * width + x) * 4
+        const [r, g, b] = [pixels[at]!, pixels[at + 1]!, pixels[at + 2]!]
+        if (Math.abs(r - 0x9c) < 32 && Math.abs(g - 0x5a) < 32 && Math.abs(b - 0x16) < 32) {
+          outlineRight = Math.max(outlineRight, x)
+        } else if (Math.max(r, g, b) < 0x50 && Math.max(r, g, b) - Math.min(r, g, b) < 0x18) {
+          lastGlyph = Math.max(lastGlyph, x)
+        }
+      }
+    }
+    return { outlineRight, lastGlyph }
+  }, png.toString('base64'))
+  expect(Number.isFinite(edges.outlineRight) && Number.isFinite(edges.lastGlyph), 'the strip shows the outline and the text').toBe(true)
+  /** How far the outline runs past the last glyph, in CSS px. */
+  return { pastLastGlyph: edges.outlineRight - edges.lastGlyph }
+}
+
+const HAZELNUT = 'Hazelnut hedge, prune in February'
+
+test('a committed note\'s selection outline ends within 6 px of its last glyph', async ({ page }) => {
+  await openBaseFixture(page, 'Select')
+  await commitNote(page, HAZELNUT)
+  const { pastLastGlyph } = await noteEdges(page)
+  expect(pastLastGlyph).toBeGreaterThanOrEqual(0)
+  expect(pastLastGlyph).toBeLessThanOrEqual(6)
+})
+
+test('a note measured before its web font arrives is measured again once the font has loaded', async ({ page, browserName }) => {
+  // Playwright 1.63's WebKit reports a face whose request is held as failed (FontFace.status 'error', so fonts.check()
+  // is true) until the response arrives, so the page cannot tell that the font is still coming. Whether WebKit does the
+  // same on a slow network is untested.
+  test.skip(browserName === 'webkit', 'a held font request reads as a failed font in Playwright\'s WebKit')
+  // The interface font's Latin face is held back until the note has been drawn in a fallback font. A screenshot waits
+  // for fonts, so until then the frame is read from the rotate handle, which sits above the middle of the note's frame.
+  let release = (): void => {}
+  const held = new Promise<void>((resolve) => { release = resolve })
+  await page.route('**/source-sans-3-latin-400-normal*.woff2', async (route: Route) => {
+    await held
+    await route.continue()
+  })
+  await openBaseFixture(page, 'Select', 'domcontentloaded')
+  await commitNote(page, HAZELNUT)
+  const rotateHandle = page.locator('[data-canvas-handle="rotate"]')
+  const frameMiddle = async () => Number(await rotateHandle.getAttribute('data-canvas-handle-screen-x'))
+  const fallbackMiddle = await frameMiddle()
+
+  // Whether the frame widens or narrows depends on the fallback the host has (Noto Sans and DejaVu Sans are wider).
+  release()
+  await expect.poll(frameMiddle, 'the frame follows the loaded font').not.toBe(fallbackMiddle)
 })
 
 for (const { locale, selectTool, textTool, placeholder } of [

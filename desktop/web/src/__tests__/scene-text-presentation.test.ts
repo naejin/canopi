@@ -1,9 +1,78 @@
-import { describe, expect, it } from 'vitest'
-import { getAnnotationPresentation, getAnnotationVisualWorldBounds } from '../canvas/runtime/annotation-layout'
-import { SceneStore, type SceneDesignObjectSelection } from '../canvas/runtime/scene'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  getAnnotationPresentation,
+  getAnnotationVisualWorldBounds,
+  isPointInAnnotationPresentation,
+  onAnnotationFontLoad,
+} from '../canvas/runtime/annotation-layout'
+import { getCanvasDetailLayout } from '../canvas/runtime/automatic-detail'
+import {
+  createDefaultScenePersistedState,
+  SceneStore,
+  type SceneAnnotationEntity,
+  type SceneDesignObjectSelection,
+  type ScenePersistedState,
+} from '../canvas/runtime/scene'
 import { SceneRuntimePresentationController } from '../canvas/runtime/scene-runtime/presentation'
+import { getDesignObjectSelectionModel } from '../canvas/runtime/scene-runtime/selection'
 import { projectScenePlantLabels } from '../canvas/runtime/selection-labels'
+import { selectionScreenHull } from '../canvas/runtime/tools/select/selection-hull'
+import type { ToolScene } from '../canvas/runtime/tools/tool'
 import { createZoomCalibrationScene } from './support/zoom-calibration-scenes'
+
+// jsdom has no 2D canvas and no font loading API, so this file measures through stubs: a context whose glyphs are half
+// an em wide once the web font has loaded and 0.56 em before, and a font set whose loads the test resolves.
+const fontSet = { loaded: true, finishLoad: null as (() => void) | null }
+Object.defineProperty(document, 'fonts', {
+  configurable: true,
+  value: {
+    check: () => fontSet.loaded,
+    load: () => new Promise<unknown[]>((resolve) => {
+      fontSet.finishLoad = () => { fontSet.loaded = true; resolve([{}]) }
+    }),
+  },
+})
+vi.stubGlobal('OffscreenCanvas', class {
+  getContext() {
+    return {
+      font: '',
+      measureText(this: { font: string }, text: string) {
+        const width = Array.from(text).length * Number.parseFloat(this.font) * (fontSet.loaded ? 0.5 : 0.56)
+        return { width, actualBoundingBoxLeft: 0, actualBoundingBoxRight: width - 1 }
+      },
+    }
+  }
+})
+
+const SCALE = 20
+
+function noteScene(text: string): ScenePersistedState {
+  const note: SceneAnnotationEntity = { kind: 'annotation', id: 'note', annotationType: 'text', position: { x: 3, y: 4 },
+    text, fontSize: 16, rotationDeg: 0, locked: false }
+  return { ...createDefaultScenePersistedState(), annotations: [note] }
+}
+
+/** The note's frame width in CSS px as each reader sees it at SCALE, to a thousandth of a pixel. */
+function widthsRead(scene: ScenePersistedState) {
+  const note = scene.annotations[0]!
+  const selection: SceneDesignObjectSelection = [{ kind: 'annotation', id: note.id }]
+  const model = getDesignObjectSelectionModel(scene, selection, {
+    annotationViewportScale: SCALE,
+    revealedAnnotationId: note.id,
+    plantContext: { pixelsPerMetre: SCALE, speciesCache: new Map(), localizedCommonNames: new Map() },
+  })
+  const hull = selectionScreenHull({ persisted: scene, selection: () => selection } as unknown as ToolScene, model, {
+    metresPerPixelAt: () => 1 / SCALE,
+    screenAxesInWorld: () => ({ right: { x: 1, y: 0 }, down: { x: 0, y: 1 } }),
+  })!
+  const px = (value: number) => Math.round(value * 1000) / 1000
+  return {
+    frame: px(getAnnotationPresentation(note, SCALE, true).textFrame.widthPx),
+    detail: px(getCanvasDetailLayout(scene, SCALE).bounds[0]!.width - 4),
+    selection: px((model.bounds!.maxX - model.bounds!.minX) * SCALE),
+    hull: px((hull[1].x - hull[0].x) * SCALE),
+  }
+}
 
 describe('scene text presentation', () => {
   it('keeps marker geometry upright and switches to authored rotated text at half opacity', () => {
@@ -56,5 +125,38 @@ describe('scene text presentation', () => {
       .toEqual([['plant-1'], [], [], ['plant-2'], []])
     expect(labels.map(({ selectionLabels }) => selectionLabels.length)).toEqual([0, 0, 0, 0, 1])
     expect(store.persisted).toEqual(before)
+  })
+
+  it('a note\'s frame, click target, detail bounds and hull read its measured width', () => {
+    const scene = noteScene('Hazelnut hedge, prune in February')
+    const note = scene.annotations[0]!
+    // 33 glyphs at 16 px, half an em each: the measured 264 px, not the 316.8 px of the 0.6 em estimate.
+    expect(widthsRead(scene)).toEqual({ frame: 264, detail: 264, selection: 264, hull: 264 })
+
+    // The click target is the drawn outline: the text plus 4 px each side, 2 px above and below (Q7).
+    const at = (x: number, y: number) => isPointInAnnotationPresentation(
+      note, { x: note.position.x + x / SCALE, y: note.position.y + y / SCALE }, SCALE)
+    expect([at(-3.5, 10), at(267.5, 10), at(100, -1.5), at(100, 21.5)]).toEqual([true, true, true, true])
+    expect([at(-4.5, 10), at(268.5, 10), at(100, -2.5), at(100, 22.5)]).toEqual([false, false, false, false])
+    expect(at(284, 10), 'a click 20 px right of the text').toBe(false)
+  })
+
+  it('a font load re-measures the note and every memo follows', async () => {
+    const scene = noteScene('Pond')
+    const loads = vi.fn()
+    const stopListening = onAnnotationFontLoad(loads)
+    try {
+      fontSet.loaded = false
+      // 4 glyphs of the fallback font, 0.56 em each.
+      expect(widthsRead(scene)).toEqual({ frame: 35.84, detail: 35.84, selection: 35.84, hull: 35.84 })
+
+      fontSet.finishLoad!()
+      await vi.waitFor(() => expect(loads).toHaveBeenCalledTimes(1))
+
+      expect(widthsRead(scene)).toEqual({ frame: 32, detail: 32, selection: 32, hull: 32 })
+    } finally {
+      stopListening()
+      fontSet.loaded = true
+    }
   })
 })

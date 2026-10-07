@@ -1,3 +1,4 @@
+import { CANVAS_CHROME_FONT_FAMILY } from '../chrome-fonts'
 import { getCanvasTextOpacity } from './text-visibility'
 import type { SceneAnnotationEntity, SceneDesignObjectSelection, ScenePoint } from './scene'
 
@@ -22,6 +23,8 @@ export interface AnnotationScreenFrame {
   rotationDeg: number
 }
 
+/** The drawn outline's margin about a note's text frame, CSS px; a shown note's click target is that outline (Q7). */
+export const ANNOTATION_OUTLINE_PADDING_PX = { x: 4, y: 2 } as const
 const ANNOTATION_MARKER_SIZE_PX = 8
 const ANNOTATION_MARKER_STROKE_PX = 1.5
 const ANNOTATION_MARKER_PATHS: readonly (readonly ScenePoint[])[] = [
@@ -102,7 +105,7 @@ export function isPointInAnnotationPresentation(
   textAllowed = true,
 ): boolean {
   if (revealText || (textAllowed && getCanvasTextOpacity(viewportScale) >= 0.5)) {
-    return isPointInAnnotationText(annotation, point, viewportScale)
+    return isPointInAnnotationOutline(annotation, point, viewportScale)
   }
   // Pointer allowance follows the visible marker, including crowded notes.
   const { frame } = getAnnotationPresentation(annotation, viewportScale, false, textAllowed)
@@ -115,15 +118,93 @@ const CHARACTER_WIDTH_FACTOR = 0.6
 const LINE_HEIGHT_FACTOR = 1.25
 const HIT_EPSILON = 0.000001
 
+type MeasureContext = Pick<CanvasRenderingContext2D, 'font' | 'measureText'>
+
+/** The 2D context notes are measured with; null where there is none, and undefined until the first note asks. */
+let measureContext: MeasureContext | null | undefined
+const textMetricsByKey = new Map<string, AnnotationTextMetrics>()
+const requestedFonts = new Set<string>()
+const fontLoadListeners = new Set<() => void>()
+let fontEpoch = 0
+
+/** Counts the web-font loads that re-measured the notes; memos of anything sized by a note keep it in their key. */
+export function getAnnotationFontEpoch(): number {
+  return fontEpoch
+}
+
+/** Calls `listener` after a web font a note asked for has loaded and the notes measure anew; returns the unsubscribe. */
+export function onAnnotationFontLoad(listener: () => void): () => void {
+  fontLoadListeners.add(listener)
+  return () => { fontLoadListeners.delete(listener) }
+}
+
+/**
+ * A note's text box: each line measured by the browser in the font the renderer draws it in, as Pixi's
+ * CanvasTextMetrics measures it, without the halo Pixi adds to its texture (the glyphs start half a halo in, so the
+ * outline's 4 px margin ends about 2 px past the last glyph). Memoised by size and text. Policy P5c keeps Pixi out of
+ * this module's importers (the tools), hence the 2D context of its own.
+ */
 function getAnnotationTextMetrics(annotation: Pick<SceneAnnotationEntity, 'text' | 'fontSize'>): AnnotationTextMetrics {
+  const key = `${annotation.fontSize}|${annotation.text}`
+  const known = textMetricsByKey.get(key)
+  if (known) return known
   const lines = annotation.text.split('\n')
-  const maxLineLength = Math.max(...lines.map((line) => line.length), 1)
   const lineHeightPx = annotation.fontSize * LINE_HEIGHT_FACTOR
-  return {
-    widthPx: maxLineLength * annotation.fontSize * CHARACTER_WIDTH_FACTOR,
+  const metrics = {
+    widthPx: measureLinesWidth(lines, annotation.fontSize),
     heightPx: Math.max(lines.length * lineHeightPx, annotation.fontSize),
     lineHeightPx,
   }
+  if (textMetricsByKey.size >= 512) textMetricsByKey.clear()
+  textMetricsByKey.set(key, metrics)
+  return metrics
+}
+
+function measureLinesWidth(lines: readonly string[], fontSize: number): number {
+  const context = getMeasureContext()
+  // No 2D context (jsdom): 0.6 em per character.
+  if (!context) return Math.max(...lines.map((line) => line.length), 1) * fontSize * CHARACTER_WIDTH_FACTOR
+  const font = `${fontSize}px ${CANVAS_CHROME_FONT_FAMILY}`
+  context.font = font
+  requestFont(font, lines.join(''))
+  return Math.max(...lines.map((line) => {
+    const measured = context.measureText(line)
+    return Math.max(measured.width, measured.actualBoundingBoxLeft + measured.actualBoundingBoxRight)
+  }))
+}
+
+/**
+ * Probed once. A page without the font loading API cannot say when the web font arrives, so it keeps the estimate
+ * rather than a width measured in a fallback font for good.
+ */
+function getMeasureContext(): MeasureContext | null {
+  if (measureContext !== undefined) return measureContext
+  try {
+    measureContext = typeof OffscreenCanvas === 'function'
+      ? new OffscreenCanvas(1, 1).getContext('2d')
+      : globalThis.document?.fonts ? document.createElement('canvas').getContext('2d') : null
+  } catch {
+    measureContext = null
+  }
+  return measureContext
+}
+
+/**
+ * A note measured while its web font is still loading is measured in the fallback font. So the measure asks the
+ * browser for the font, one request at a time per font, as the draft layer does (no listener), and on its load
+ * forgets every width and tells the listeners (the runtime redraws the scene).
+ */
+function requestFont(font: string, text: string): void {
+  const fonts = globalThis.document?.fonts
+  if (!fonts || requestedFonts.has(font) || fonts.check(font, text)) return
+  requestedFonts.add(font)
+  fonts.load(font, text).then((faces) => {
+    requestedFonts.delete(font)
+    if (faces.length === 0) return
+    fontEpoch += 1
+    textMetricsByKey.clear()
+    for (const listener of [...fontLoadListeners]) listener()
+  }, () => { requestedFonts.delete(font) })
 }
 
 export function getAnnotationWorldBounds(
@@ -161,7 +242,7 @@ function getAnnotationWorldCorners(annotation: SceneAnnotationEntity, viewportSc
   })
 }
 
-function isPointInAnnotationText(
+function isPointInAnnotationOutline(
   annotation: SceneAnnotationEntity,
   point: ScenePoint,
   viewportScale: number,
@@ -169,11 +250,13 @@ function isPointInAnnotationText(
   const safeScale = Math.max(viewportScale, 0.001)
   const metrics = getAnnotationTextMetrics(annotation)
   const local = inverseRotatePoint(point, annotation.position, annotation.rotationDeg ?? 0)
+  const padX = ANNOTATION_OUTLINE_PADDING_PX.x / safeScale
+  const padY = ANNOTATION_OUTLINE_PADDING_PX.y / safeScale
   return (
-    local.x >= -HIT_EPSILON &&
-    local.x <= metrics.widthPx / safeScale + HIT_EPSILON &&
-    local.y >= -HIT_EPSILON &&
-    local.y <= metrics.heightPx / safeScale + HIT_EPSILON
+    local.x >= -padX - HIT_EPSILON &&
+    local.x <= metrics.widthPx / safeScale + padX + HIT_EPSILON &&
+    local.y >= -padY - HIT_EPSILON &&
+    local.y <= metrics.heightPx / safeScale + padY + HIT_EPSILON
   )
 }
 
