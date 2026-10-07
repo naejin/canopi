@@ -46,7 +46,7 @@ Read this file, then the one pattern file for the surface you touch:
 ## Plants
 
 - Symbols: 29 single-colour glyphs from the shared recipes (`canvas/runtime/plant-symbol-recipes.ts`) in three families (plant form, what it gives, what it does) plus four abstract marks; the picker shows them by family, five to a row.
-- Colour by species (default), stratum or one colour; any species takes any colour. Stratum colours are Okabe-Ito hues (Emergent blue, High bluish green, Mid orange, Low reddish purple) plus a grey for "No stratum yet"; the stratum is the Design's (Consortium), never the catalog's. Display never changes a stored colour. Plant forms are not strata.
+- Colour by species (default), stratum or one colour; any species takes any colour. Stratum colours are Okabe-Ito hues (Emergent gold, High bluish green, Mid blue, Low reddish purple) plus a grey for "No stratum yet"; the stratum is the Design's (Consortium), never the catalog's. Display never changes a stored colour. Plant forms are not strata.
 - One species row: glyph 22 · common name (600) over italic scientific name (`lang="la"`) · mono code (44 px, right-aligned) · count (40 px, tabular) · actions. Never a code instead of a name; no name in the interface language shows the English name marked "(en)".
 - Every plant list uses the shared finder: search (Ctrl F) over names in every language, scientific names, synonyms and codes, tolerant of accents, capitals and small typos; quick filters (Selected on map, Stratum and Form, then list-specific ones); a live count.
 
