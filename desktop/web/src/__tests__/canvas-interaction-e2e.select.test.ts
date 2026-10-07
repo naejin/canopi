@@ -1464,7 +1464,7 @@ describe('SceneInteractionSession', () => {
       ...selectionModel,
       blockedTargets: [{
         target: { kind: 'plant' as const, id: 'grouped-plant' },
-        reason: 'grouped-member' as const,
+        reason: 'structural' as const,
       }],
     }
     openContextMenuFromKeyboard()
@@ -1507,7 +1507,7 @@ describe('SceneInteractionSession', () => {
       lockedTargets: [],
       blockedTargets: [{
         target: { kind: 'plant' as const, id: 'grouped-plant' },
-        reason: 'grouped-member' as const,
+        reason: 'structural' as const,
       }],
     }
     openContextMenuFromKeyboard()

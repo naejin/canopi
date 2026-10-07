@@ -361,23 +361,15 @@ function getBlockedSelectionTargets(
   const groupedMemberKeys = getSceneGroupedMemberKeys(persisted)
 
   for (const target of selectedTargets) {
-    if (!sceneContainsTarget(persisted, target)) {
-      pushBlocked(blockedTargets, seen, { target, reason: 'missing-design-object' })
-      continue
-    }
-
     const member = sceneObjectGroupMemberFromTarget(target)
-    if (member && groupedMemberKeys.has(sceneObjectGroupMemberKey(member))) {
-      pushBlocked(blockedTargets, seen, { target, reason: 'grouped-member' })
-      continue
-    }
-
-    const layerBlock = getTargetLayerBlock(persisted, target)
-    if (layerBlock) {
-      pushBlocked(blockedTargets, seen, { target, reason: layerBlock })
-      continue
-    }
-    if (isSceneDesignObjectLocked(persisted, target)) {
+    // A structural block wins over the Design Object's own lock: a locked Object on a locked Layer is not selected locked.
+    if (
+      !sceneContainsTarget(persisted, target)
+      || (member && groupedMemberKeys.has(sceneObjectGroupMemberKey(member)))
+      || isOnHiddenOrLockedLayer(persisted, target)
+    ) {
+      pushBlocked(blockedTargets, seen, { target, reason: 'structural' })
+    } else if (isSceneDesignObjectLocked(persisted, target)) {
       pushBlocked(blockedTargets, seen, { target, reason: 'locked-design-object' })
     }
   }
@@ -396,13 +388,8 @@ function pushBlocked(
   blockedTargets.push(blocked)
 }
 
-function getTargetLayerBlock(
-  persisted: ScenePersistedState,
-  target: SceneSelectionTarget,
-): 'hidden-layer' | 'locked-layer' | null {
-  const layers = sceneTargetLayerNames(persisted, target)
+function isOnHiddenOrLockedLayer(persisted: ScenePersistedState, target: SceneSelectionTarget): boolean {
+  return sceneTargetLayerNames(persisted, target)
     .map((layerName) => persisted.layers.find((layer) => layer.name === layerName))
-  if (layers.some((layer) => layer?.visible === false)) return 'hidden-layer'
-  if (layers.some((layer) => layer?.locked === true)) return 'locked-layer'
-  return null
+    .some((layer) => layer?.visible === false || layer?.locked === true)
 }

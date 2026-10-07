@@ -2461,7 +2461,7 @@ describe('scene canvas runtime', () => {
       lockedTargets: [],
       blockedTargets: [{
         target: { kind: 'zone', id: 'zone-1' },
-        reason: 'locked-layer',
+        reason: 'structural',
       }],
       bounds: null,
       sameSpeciesReferenceCanonicalName: null,

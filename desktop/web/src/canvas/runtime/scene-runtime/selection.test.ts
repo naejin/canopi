@@ -181,11 +181,11 @@ describe('scene design object selection model', () => {
     expect(model.blockedTargets).toEqual([
       {
         target: { kind: 'annotation', id: 'missing-shared' },
-        reason: 'missing-design-object',
+        reason: 'structural',
       },
       {
         target: { kind: 'zone', id: 'missing-shared' },
-        reason: 'missing-design-object',
+        reason: 'structural',
       },
     ])
   })
@@ -199,7 +199,7 @@ describe('scene design object selection model', () => {
     expect(model.editableTargets).toEqual([{ kind: 'group', id: 'group-1' }])
     expect(model.blockedTargets).toContainEqual({
       target: { kind: 'plant', id: 'plant-1' },
-      reason: 'grouped-member',
+      reason: 'structural',
     })
   })
 
@@ -279,7 +279,7 @@ describe('scene design object selection model', () => {
     expect(model.editableTargets).toEqual([])
     expect(model.blockedTargets).toEqual([{
       target: { kind: 'zone', id: 'zone-1' },
-      reason: 'hidden-layer',
+      reason: 'structural',
     }])
     expect(model.bounds).toBeNull()
   })
@@ -335,7 +335,7 @@ describe('scene design object selection model', () => {
     expect(groupModel.editableTargets).toEqual([])
     expect(groupModel.blockedTargets).toEqual([{
       target: { kind: 'group', id: 'group-1' },
-      reason: 'hidden-layer',
+      reason: 'structural',
     }])
     expect(groupModel.bounds).toBeNull()
 
@@ -343,7 +343,7 @@ describe('scene design object selection model', () => {
     expect(visibleMemberModel.editableTargets).toEqual([])
     expect(visibleMemberModel.blockedTargets).toEqual([{
       target: { kind: 'plant', id: 'plant-1' },
-      reason: 'grouped-member',
+      reason: 'structural',
     }])
   })
 
@@ -359,7 +359,7 @@ describe('scene design object selection model', () => {
     expect(model.lockedTargets).toEqual([])
     expect(model.blockedTargets).toEqual([{
       target: { kind: 'group', id: 'group-1' },
-      reason: 'locked-layer',
+      reason: 'structural',
     }])
   })
 })
