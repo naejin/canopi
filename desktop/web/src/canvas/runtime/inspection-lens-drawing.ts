@@ -234,17 +234,17 @@ function drawPlantSymbolGlyph(
   entry: PlantPresentationEntry,
   viewportScale: number,
 ): void {
-  const symbol = entry.lod === 'dot' ? 'round' : entry.symbol
+  const symbol = entry.dot ? 'round' : entry.symbol
   const { x, y } = entry.plant.position
   const r = entry.radiusWorld
   ctx.globalAlpha = 1
   ctx.fillStyle = entry.color
-  if (entry.lod === 'dot' || symbol === 'round') {
+  if (entry.dot || symbol === 'round') {
     ctx.beginPath()
-    ctx.arc(x, y, entry.lod === 'dot' ? r : r * ROUND_PLANT_SYMBOL_RADIUS, 0, Math.PI * 2)
+    ctx.arc(x, y, entry.dot ? r : r * ROUND_PLANT_SYMBOL_RADIUS, 0, Math.PI * 2)
     ctx.fill()
     const edgeWidth = getPlantSymbolEdgeWidth(entry.radiusScreenPx * 2)
-    if (entry.lod !== 'dot' && edgeWidth > 0) {
+    if (!entry.dot && edgeWidth > 0) {
       ctx.strokeStyle = getPlantSymbolEdgeColor(entry.color, lensPaper())
       ctx.lineWidth = edgeWidth / viewportScale
       ctx.stroke()

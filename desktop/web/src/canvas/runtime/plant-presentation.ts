@@ -1,9 +1,5 @@
 import { normalizeHexColor } from '../plant-colors'
-import {
-  getPlantLOD,
-  getStratumColor,
-  type PlantLOD,
-} from '../plants'
+import { getStratumColor, isDotScale } from '../plants'
 import {
   resolvePlantSymbolForPlant,
   type PlantSymbolId,
@@ -42,7 +38,8 @@ export interface PlantPresentationEntry {
   color: string
   symbol: PlantSymbolId
   stackPriority: number
-  lod: PlantLOD
+  /** Drawn as a plain disc: a far overview, or a symbol too small to read. */
+  dot: boolean
   selected: boolean
 }
 
@@ -71,7 +68,7 @@ export function buildPlantPresentationEntries(
   context: PlantPresentationContext,
   selectedPlantIds: ReadonlySet<string>,
 ): PlantPresentationEntry[] {
-  const lod = getPlantLOD(context.pixelsPerMetre)
+  const dotScale = isDotScale(context.pixelsPerMetre)
   context = { ...context, plants: context.plants ?? plants }
   return plants.map((plant) => {
     const { radiusWorld, radiusScreenPx } = resolvePlantRadiusPresentation(plant, context)
@@ -85,7 +82,7 @@ export function buildPlantPresentationEntries(
       color,
       symbol,
       stackPriority: getStackPriority(plant, selected),
-      lod: radiusScreenPx < 3.6 ? 'dot' : lod,
+      dot: dotScale || radiusScreenPx < 3.6,
       selected,
     }
   })

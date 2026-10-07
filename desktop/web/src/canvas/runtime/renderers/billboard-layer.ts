@@ -562,7 +562,7 @@ function plantGeometryKey(entry: PlantPresentationEntry): string {
   const renderedSymbol = resolveRenderedPlantSymbol(entry)
   const edgeColor = getPlantSymbolEdgeColor(entry.color)
   const edgeWidth = getPlantSymbolEdgeWidth(entry.radiusScreenPx * 2)
-  return `${entry.radiusScreenPx}|${renderedSymbol}|${entry.lod}|${entry.color}|${edgeColor}|${edgeWidth}`
+  return `${entry.radiusScreenPx}|${renderedSymbol}|${entry.dot}|${entry.color}|${edgeColor}|${edgeWidth}`
 }
 
 /** The symbol alone at the local origin, opaque; its container applies any dimming or layer opacity once. */
@@ -570,10 +570,10 @@ export function drawPlantGlyph(graphics: GraphicsContext, entry: PlantPresentati
   const symbol = resolveRenderedPlantSymbol(entry)
   const r = entry.radiusScreenPx
   const color = toPixiColor(entry.color)
-  if (entry.lod === 'dot' || symbol === 'round') {
-    graphics.circle(0, 0, entry.lod === 'dot' ? r : r * ROUND_PLANT_SYMBOL_RADIUS).fill({ color })
+  if (entry.dot || symbol === 'round') {
+    graphics.circle(0, 0, entry.dot ? r : r * ROUND_PLANT_SYMBOL_RADIUS).fill({ color })
     const width = getPlantSymbolEdgeWidth(r * 2)
-    if (entry.lod !== 'dot' && width > 0) graphics.stroke({ color: toPixiColor(getPlantSymbolEdgeColor(entry.color)), width })
+    if (!entry.dot && width > 0) graphics.stroke({ color: toPixiColor(getPlantSymbolEdgeColor(entry.color)), width })
     return
   }
   const edge = toPixiColor(getPlantSymbolEdgeColor(entry.color))
@@ -602,7 +602,7 @@ function drawPlantRing(ring: Graphics, entry: PlantPresentationEntry, state: Can
 }
 
 function resolveRenderedPlantSymbol(entry: PlantPresentationEntry): PlantSymbolId {
-  return entry.lod === 'dot' ? 'round' : entry.symbol
+  return entry.dot ? 'round' : entry.symbol
 }
 
 /** The badge at its offset from the local origin, the plant's screen point. */
