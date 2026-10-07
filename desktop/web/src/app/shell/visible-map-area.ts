@@ -127,14 +127,15 @@ export function measureRailRoom(rail: DOMRect | null, below: Iterable<DOMRect>):
 }
 
 /**
- * Whether the labelled tool rail, whose right edge would sit
- * `labelledRailEdgePx` from the map's left edge, would leave less than
- * `MIN_VISIBLE_MAP_WIDTH_PX` of map before the right chrome. Reads only the
- * right edge of the frame, so the rail's own width cannot feed back into it.
+ * Whether left chrome (the labelled tool rail, the open inspection lens) whose
+ * right edge would sit `leftChromeEdgePx` from the map's left edge would leave
+ * less than `MIN_VISIBLE_MAP_WIDTH_PX` of map before the right chrome. Reads
+ * only the right edge of the frame, so that chrome's own cover of the left
+ * edge cannot feed back into it.
  */
-export function toolRailCrowdsMap(frame: VisibleMapFrame, labelledRailEdgePx: number): boolean {
+export function leftChromeCrowdsMap(frame: VisibleMapFrame, leftChromeEdgePx: number): boolean {
   if (frame.width <= 0) return false
-  return frame.width - frame.right - labelledRailEdgePx < MIN_VISIBLE_MAP_WIDTH_PX
+  return frame.width - frame.right - leftChromeEdgePx < MIN_VISIBLE_MAP_WIDTH_PX
 }
 
 function inferSide(map: DOMRect, rect: DOMRect): MapOccluderSide {
