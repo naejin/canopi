@@ -118,7 +118,7 @@ describe('SceneCanvasRuntime and the shared map scene layer', () => {
     const view = runtime.cameraHost.frames.viewFrame.peek().view
     expect(worldRoot!.localTransform.tx).toBeCloseTo(view.planar.affine[4], 6)
 
-    await layer.dispose({ mapWillBeRemoved: true })
+    await layer.dispose()
     runtime.destroy()
   })
 

@@ -153,7 +153,6 @@ class FakeMap {
 interface FakeLayer extends SharedMapSceneLayer {
   readonly options: SharedMapSceneLayerOptions
   readonly snapshots: unknown[]
-  readonly disposals: unknown[]
 }
 
 let layers: FakeLayer[] = []
@@ -162,11 +161,9 @@ let backgrounds: (MapBackgroundHandle & { presentations: MapBackgroundPresentati
 function createFakeLayer(options: SharedMapSceneLayerOptions): FakeLayer {
   let sceneSyncCount = 0
   const snapshots: unknown[] = []
-  const disposals: unknown[] = []
   const layer: FakeLayer = {
     options,
     snapshots,
-    disposals,
     layer: { id: options.id, type: 'custom', render: () => undefined },
     get diagnostics() { return { sceneSyncCount } as SharedMapSceneLayer['diagnostics'] },
     initialize: vi.fn(async () => undefined),
@@ -175,7 +172,7 @@ function createFakeLayer(options: SharedMapSceneLayerOptions): FakeLayer {
       sceneSyncCount += 1
     },
     requestRender: () => undefined,
-    dispose: vi.fn(async (disposeOptions?: unknown) => { disposals.push(disposeOptions) }),
+    dispose: vi.fn(async () => undefined),
   }
   layers.push(layer)
   return layer
@@ -524,7 +521,7 @@ describe('view snapshot map', () => {
 
     expect(map.removed).toBe(true)
     expect(container.isConnected).toBe(false)
-    expect(layers[0]!.disposals).toEqual([{ mapWillBeRemoved: true }])
+    expect(layers[0]!.dispose).toHaveBeenCalledOnce()
     expect(backgrounds[0]!.disposed).toBe(true)
     expect(map.listenerCount('error')).toBe(0)
 

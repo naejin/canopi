@@ -749,7 +749,7 @@ export class WorkspaceActivationCoordinator {
       // Calling dispose is intentionally synchronous: Design replacement must
       // fence the layer before Scene authority changes, even though graphics
       // cleanup and map release settle later.
-      layerDisposal = Promise.resolve(layer?.dispose({ mapWillBeRemoved: true }))
+      layerDisposal = Promise.resolve(layer?.dispose())
     } catch (error) {
       errors.push(error)
       layerDisposal = Promise.resolve()

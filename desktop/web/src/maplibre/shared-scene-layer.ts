@@ -76,7 +76,7 @@ function detachPixiFromHost(renderer: SharedPixiRenderer): void {
 }
 
 interface SharedMapSceneDiagnostics {
-  readonly phase: 'new' | 'initializing' | 'initialized' | 'attached' | 'detached' | 'disposing' | 'disposed' | 'failed'
+  readonly phase: 'new' | 'initializing' | 'initialized' | 'attached' | 'disposing' | 'disposed' | 'failed'
   /** Scene snapshots presented so far: the snapshot map waits for one after its capture's scene. */
   readonly sceneSyncCount: number
 }
@@ -111,8 +111,11 @@ export interface SharedMapSceneLayer {
   setSnapshot(snapshot: SceneRendererSnapshot): void
   /** Requests a camera-only MapLibre frame without rebuilding scene content. */
   requestRender(): void
-  /** Final owner teardown. Style reload removal only detaches the layer. */
-  dispose(options?: { readonly mapWillBeRemoved?: boolean }): Promise<void>
+  /**
+   * Final owner teardown, right before MapLibre removes the map (nothing reloads its style, ADR 0004): it destroys the
+   * renderer at once, after a pending initialization settles, without waiting for a frame.
+   */
+  dispose(): Promise<void>
 }
 
 type Phase = SharedMapSceneDiagnostics['phase']
@@ -137,11 +140,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
   let draft: DraftPresentation | null = null
   let initializePromise: Promise<void> | null = null
   let disposePromise: Promise<void> | null = null
-  let resolveDispose: (() => void) | null = null
-  let rejectDispose: ((error: Error) => void) | null = null
-  let disposeRequested = false
   let rendererDestroyed = false
-  let attached = false
   let rendererSize: { width: number; height: number; resolution: number } | null = null
   let sceneSyncCount = 0
   let failureReported = false
@@ -171,31 +170,15 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
     type: 'custom' as const,
     renderingMode: '2d' as const,
     onAdd(nextMap: unknown, gl: WebGL2RenderingContext) {
-      if (phase === 'disposed') return
+      if (disposePromise) return
       if (nextMap !== map || gl !== context || !renderer || !presentation) {
         fail('MapLibre attached a layer that was not initialized for this map context.')
         return
       }
-      attached = true
-      phase = disposeRequested ? 'disposing' : 'attached'
-      if (disposeRequested) requestRepaint()
-    },
-    onRemove(nextMap: unknown, gl: WebGL2RenderingContext) {
-      if (phase === 'disposed') return
-      if (nextMap !== map || gl !== context) {
-        fail('MapLibre removed a layer from an unexpected map context.')
-        return
-      }
-      attached = false
-      phase = disposeRequested ? 'disposing' : 'detached'
+      phase = 'attached'
     },
     render(gl: WebGL2RenderingContext, _input: CustomRenderMethodInput) {
       if (gl !== context || !renderer) return
-      if (disposeRequested) {
-        destroyOwnedResources()
-        finishDispose()
-        return
-      }
       if (phase !== 'attached' || !map || !stage || !presentation || (!pendingSnapshot && !renderedSnapshot)) return
       const nextSize = syncMapLibreOwnedSize(canvas, renderer, rendererSize)
       if (!nextSize) {
@@ -261,7 +244,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
           throw new Error('Pixi initialization changed MapLibre canvas backing dimensions.')
         }
         rendererSize = size
-        if (disposeRequested) return
+        if (disposePromise) return
         stage = (options.createStage ?? (() => new Container()))()
         presentation = (options.createPresentation ?? createPixiScenePresentation)(
           {
@@ -295,36 +278,12 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
       presentation?.setDraft(nextDraft)
       requestRepaint()
     },
-    dispose(disposeOptions = {}) {
+    dispose() {
       if (disposePromise) return disposePromise
-      disposeRequested = true
       phase = 'disposing'
-      disposePromise = new Promise<void>((resolve, reject) => {
-        resolveDispose = resolve
-        rejectDispose = reject
-      })
-      void (initializePromise ?? Promise.resolve())
+      disposePromise = (initializePromise ?? Promise.resolve())
         .catch(() => undefined)
         .then(() => {
-          if (rendererDestroyed) {
-            finishDispose()
-            return
-          }
-          if (attached && !disposeOptions.mapWillBeRemoved) {
-            requestRepaint()
-            return
-          }
-          if (!disposeOptions.mapWillBeRemoved && map) {
-            const error = new Error('Detached shared rendering must be reattached for disposal, or disposed immediately before MapLibre removal.')
-            const reject = rejectDispose
-            disposeRequested = false
-            phase = 'detached'
-            disposePromise = null
-            resolveDispose = null
-            rejectDispose = null
-            reject?.(error)
-            return
-          }
           destroyOwnedResources()
           finishDispose()
         })
@@ -355,7 +314,6 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
   function finishDispose(): void {
     if (phase === 'disposed') return
     phase = 'disposed'
-    attached = false
     renderer = null
     pendingSnapshot = null
     renderedSnapshot = null
@@ -367,9 +325,6 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
     context = null
     canvas = null
     rendererSize = null
-    resolveDispose?.()
-    resolveDispose = null
-    rejectDispose = null
   }
 }
 

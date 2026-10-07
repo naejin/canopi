@@ -527,7 +527,7 @@ async function teardownInstance(instance: SnapshotInstance, timeoutMs: number): 
   try {
     // A scene layer whose initialization hung never finishes disposing; the map goes anyway.
     if (instance.sceneLayer) {
-      await bounded(instance.sceneLayer.dispose({ mapWillBeRemoved: true }), timeoutMs, 'The snapshot scene did not dispose in time.')
+      await bounded(instance.sceneLayer.dispose(), timeoutMs, 'The snapshot scene did not dispose in time.')
     }
   } catch (error) {
     errors.push(error)

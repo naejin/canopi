@@ -28,8 +28,8 @@ export function createSharedMapSceneRendererComposition(
         initialize: (map, gl) => adapter.initialize(map, gl),
         setSnapshot: (snapshot) => adapter.setSnapshot(snapshot),
         requestRender: () => adapter.requestRender(),
-        async dispose(disposeOptions) {
-          await adapter.dispose(disposeOptions)
+        async dispose() {
+          await adapter.dispose()
           disconnect?.()
           disconnect = null
         },
