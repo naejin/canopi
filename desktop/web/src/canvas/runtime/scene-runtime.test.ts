@@ -1057,6 +1057,8 @@ describe('scene canvas runtime', () => {
     const events = createSceneInteractionEventHarness(container)
     runtime.documentSurface.loadDocument(fileWithOnlyAnnotation('Old document'))
     setInteractionViewport(runtime)
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
     events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 2 })
     const oldTextarea = container.querySelector<HTMLTextAreaElement>('textarea')!
     oldTextarea.value = 'Stale draft'
