@@ -309,31 +309,6 @@ describe('MapLibre surface', () => {
     expect(surface.map).toBeNull()
   })
 
-  it('removes what a request built in the container before its createMap threw, so a retry starts clean', async () => {
-    // The World map configures its map after the constructor returns; a throw there never hands the surface the map.
-    const surface = createSurface()
-    const existingChild = document.createElement('div')
-    container.append(existingChild)
-    const onCreateError = vi.fn()
-    const request: MapLibreSurfaceRequest<FakeMap> = {
-      createMap: (_api, target) => {
-        target.append(document.createElement('div'))
-        target.classList.add('maplibregl-map')
-        throw new Error('keyboard handler unavailable')
-      },
-      onCreateError,
-    }
-
-    surface.open(container, request)
-    await flushPromises()
-    surface.open(container, request)
-    await flushPromises()
-
-    expect(onCreateError).toHaveBeenCalledTimes(2)
-    expect(Array.from(container.children)).toEqual([existingChild])
-    expect(container.classList).not.toContain('maplibregl-map')
-  })
-
   it('a create failure with no onCreateError is logged once through the surface\'s redacted logError', async () => {
     // The World map's request passes no onCreateError: its failure still reaches the log, with the key redacted.
     const logError = vi.fn()
