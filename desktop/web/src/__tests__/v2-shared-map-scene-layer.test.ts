@@ -436,6 +436,33 @@ describe('createSharedMapSceneLayer', () => {
     }
   })
 
+  it('a disposal whose teardown throws still releases the map: a later settle asks it for no frame', async () => {
+    vi.useFakeTimers()
+    try {
+      const map = createMap(createCanvas())
+      const camera = createFrames()
+      // Pixi's teardown throws, as on a lost or never-initialized WebGL context.
+      const renderer = { ...createRenderer(), destroy: vi.fn(() => { throw new Error('context lost') }) }
+      const adapter = createSharedMapSceneLayer({
+        id: 'v2-scene', frames: camera.frames, createRenderer: () => renderer,
+        createStage: () => ({ destroy: vi.fn() }) as never,
+        createPresentation: () => ({ dispose: vi.fn(), resize: vi.fn(), present: vi.fn(), setDraft: vi.fn() }),
+      })
+      const gl = {} as WebGL2RenderingContext
+      await adapter.initialize(map, gl)
+      adapter.layer.onAdd!(map as never, gl)
+
+      await expect(adapter.dispose()).rejects.toThrow('context lost')
+      expect(adapter.diagnostics.phase).toBe('disposed')
+      const repaints = vi.mocked(map.triggerRepaint).mock.calls.length
+      camera.setViewport({ x: 40, y: 30, scale: 7 })
+      vi.advanceTimersByTime(SETTLE_MS)
+      expect(map.triggerRepaint).toHaveBeenCalledTimes(repaints)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('with no settled frame (the snapshot map), every frame counts as settled', async () => {
     const canvas = createCanvas()
     const map = createMap(canvas)

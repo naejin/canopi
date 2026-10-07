@@ -280,8 +280,12 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
       disposePromise = (initializePromise ?? Promise.resolve())
         .catch(() => undefined)
         .then(() => {
-          destroyOwnedResources()
-          finishDispose()
+          // A teardown that throws (a lost context) still releases the map and the settle subscription.
+          try {
+            destroyOwnedResources()
+          } finally {
+            finishDispose()
+          }
         })
       return disposePromise
     },
