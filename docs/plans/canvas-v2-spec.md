@@ -699,7 +699,7 @@ export interface ToolHostDeps {
   readonly settled: SettledSceneReader                          // dragover reads
   /** History-free, dirty-free selection (today's deps.setSelection/clearSelection); backs ToolEffects.setSelection and the menu retarget. */
   readonly setSelection: (targets: readonly SceneDesignObjectTarget[]) => void
-  readonly renderer: Pick<SceneRenderer, 'setDraft' | 'setSelectionPreview'>
+  readonly renderer: Pick<SceneRenderTarget, 'setDraft'>   // the scheduler's target slot (§1.5)
   /** Redraw request after a tool call that mutated an open transaction or changed its draft or handles. */
   readonly invalidate: () => void
   readonly chrome: {
@@ -714,8 +714,7 @@ export interface ToolHostDeps {
      *  re-origin hold); the host keeps no flag of its own. Esc in the entry stays the
      *  entry's own element handler, which calls the request's onCancel once the entry is gone. */
     isTextEntryOpen(): boolean
-    setTooltip(t: { readonly at: ScreenPoint; readonly lines: readonly string[] } | null): void   // chrome/hover-tooltip.ts; this shape from phase R
-    // R2: the tooltip takes lines of text, a plant under the pointer winning over a layer readout, so analysis readouts reuse it
+    setTooltip(t: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null): void   // chrome/hover-tooltip.ts; plant-only in 2.0 (U33, P22)
   }
   readonly menu: ContextMenuPort                                // opened only by the host (menuAt)
   readonly focus: CanvasFocusPort                               // ToolEffects.requestFocus
@@ -753,7 +752,7 @@ export function createToolScene(source: ToolSceneSource): ToolScene
  *  today's three menu states (openAtPointer with and without a selection, openFromKeyboard). */
 export function createContextMenuPort(/* today's createCanvasContextMenu options, the ToolScene and a selection-model reader */): ContextMenuPort
 /** What createToolScene reads (tools/tool-host.ts re-exports the factory). Hit tests need the scale and the plant presentation
- *  for screen-sized plants and notes; the hovered note comes from store.session.hoveredTarget. Nothing is cached. */
+ *  for screen-sized plants and notes; the hovered note comes from store.session.hoveredTarget. The detail layout is memoised per Scene reference (U33, P13). */
 export interface ToolSceneSource {
   readonly store: SceneStateReader                              // the runtime's scene store
   readonly selection: () => SceneDesignObjectSelection
@@ -908,7 +907,7 @@ export type Gesture =
 // canvas/runtime/tools/tool.ts  (the tool contract; with interaction-types.ts, where tool implementations get their shared types)
 // Every import below is `import type`, each from the module that defines the type, never from a barrel (scene/index.ts):
 //   ../interaction-types.ts: ToolId, PointerKind, CancelReason, ToolHandleId (§1.2a)
-//   ./draft.ts: DraftPresentation, SelectionPreview, ToolHandle
+//   ./draft.ts: DraftPresentation, ToolHandle
 //   ../view/types.ts: WorldPoint, WorldVector, WorldQuad
 //   ../scene/types.ts: ScenePersistedState, ScenePlantEntity, SceneLayerEntity
 //   ../scene/design-object-targets.ts: SceneDesignObjectTarget, SceneDesignObjectSelection
@@ -1058,7 +1057,6 @@ export interface ToolEffects {
   /** History-free, dirty-free selection: click, band, clearing (today's session setSelection; a transaction's setSelection records an undo step). */
   setSelection(targets: readonly SceneDesignObjectTarget[]): void
   setDraft(draft: DraftPresentation | null): void           // world-space; drawn by the renderer
-  setSelectionPreview(preview: SelectionPreview | null): void   // phase R (move-drags), with its first caller
   setHandles(handles: readonly ToolHandle[]): void          // DOM handle layer; hit by the source
   setGuidance(guidance: Partial<CanvasToolGuidance> | null): void
   requestTool(id: ToolId): void
@@ -1157,9 +1155,6 @@ export type DraftFill = { readonly token: 'draft-fill' | 'selection-fill' | 'war
 // Draft tokens resolve to canvas colours in canvas/runtime/scene-visuals.ts (getDraftVisual, beside the overlay visuals).
 export interface DraftPresentation { readonly shapes: readonly DraftShape[] }
 
-/** Move/rotate preview of the selection while dragging: a renderer transform until commit. */
-export interface SelectionPreview { readonly translate: WorldVector; readonly rotateDeg: number; readonly pivot: WorldPoint }
-
 export interface ToolHandle {
   readonly id: ToolHandleId              // unique across objects: 'rotate', 'vertex:<zone id>:<index>', 'rect-corner:<id>:ne', 'guide-end:<id>:a', 'edge-mid:<zone id>:<index>'
   readonly anchor: WorldPoint
@@ -1197,7 +1192,7 @@ The `ToolHost` (`tools/tool-host.ts`, interface in `interaction-ports.ts`) is th
 - **Overview.** No primary press reaches the host in overview: the recogniser pans it (§2.2), so nothing is selectable there, since the overview draws no zones or notes (U36); `menuAt` stays refused.
 - **Hover.** Every `hover` whose target is the map (`surface`) is published to `subscribePointerWorld` first, in overview too; `hover-end` publishes `null`. The interaction session's `subscribePointerWorld` drops the point of a move whose raw `buttonMask` has any bit set. A hover over owned chrome or anything off the map publishes nothing. A finger never hovers: its `tap` publishes its point (the resolved press, the down point) unless pressed on a handle, and its drag or pair publishes nothing (A16). Outside overview the tool then gets it: `'pass'` runs the passive hover (restyle, tooltip); `'handled'` clears and skips it. On `hover-end` the tool decides what to keep (Place plants hides its preview; the stamps keep their ghost; every other tool keeps its draft). A `drag-start`/`drag-move` the tool answers `'pass'` runs the passive hover too; one it answers `'handled'` runs no hover over its moves (Select's move and band, Text, Place plants, the zone drags).
 - **Drops.** One shared drop handler serves every tool: a species drop places with `tools/plant-stamp.ts`'s code, a saved stamp with `tools/saved-object-stamp.ts`'s; dragover answers `dropEffect` from the payload kind and the open layers. Dragover shows a drop preview merged with the decorations (a species payload: a small `quad`; a saved stamp: its `'objects'` ghosts at the snapped point), cleared on dragleave, drop, a refused dragover, overview, a cancellation or a document replacement. Any dragover hides the active tool's own draft; the next hover or press over the map shows it again. A drop places at the snapped point inside `deps.admission`; once its edit commits, the host requests Select, focuses the map and calls `ToolHostDeps.dropped(kind)`.
-- **Re-emit** of the live drag, or of the resting pointer, on every `onViewFrame('tools')`, so a draft, ghost or preview stays on the ground under a still pointer (plan §4, phase 0, exception 1). A pointer-source pan hands its `at` to `notePointer`, which moves the resting pointer and emits nothing (the next frame re-emits under it); wheel and key pans leave it where it is. With the pointer off the map the host calls the tool's `viewChanged?()` instead.
+- **Re-emit** of the live drag, or of the tool's hover under the resting pointer, on every `onViewFrame('tools')`, so a draft, ghost or preview stays on the ground under a still pointer (plan §4, phase 0, exception 1). The passive hover is not re-run on a camera frame: the tooltip hides, and the hover ring, a note's revealed text or a guide's chip stays on its object until the next pointer move (U44, Q3). A pointer-source pan hands its `at` to `notePointer`, which moves the resting pointer and emits nothing (the next frame re-emits under it); wheel and key pans leave it where it is. With the pointer off the map the host calls the tool's `viewChanged?()` instead.
 - **Re-origin hold** (phase 2, P8). `holdsReorigin()` is true while a press is live, the active tool has a transient or the text entry is open; re-origin waits and runs on the last frame when the hold clears (§4.19). On a plane change the host hides tool ghosts only when no pointer rests on the map, until the next hover; under a still pointer the re-emitted hover shows them again in the new plane. No tool hook re-projects anything.
 - **Drafts and decorations.** The host owns the selection decorations whatever tool is armed: the selected zone's W/H, edge and area chips (`tools/measure-labels.ts`), and the rotation handle and handles while Select is armed and the text entry is closed (`tools/select/reshape.ts`, `tools/select/guide-ends.ts`). These chips hide while an armed Line, Rectangle, Ellipse or Polygon draft carries its own measure labels. While Select shows a polygon's midpoint dots, the chip of each edge that shows its dot is drawn beside the dot, outside the edge (U38): the label carries `beside` (the edge's outward normal on screen, away from the polygon's interior, and a 6 px gap), and the Renderer moves the chip along that normal until its nearest side is 6 px beyond the anchor, so it clears the dot whatever its text; edges without a dot, the W/H and area chips, drafts and every other zone's labels are drawn on their anchor as before. Rebuilt on every `onViewFrame('tools')` and on `sceneChanged()`, merged with the active tool's draft before `renderer.setDraft`. The host calls `deps.invalidate()` after any tool call that mutated an open transaction or changed its draft or handles: a tool call path that forgets this leaves a stale render.
 - **Arrow nudge** and its series (`nudge`, `hasNudgeSeries`, `endNudgeSeries`; `'handled'`, `'refused'` or `'pass'`, and on `'pass'` the keyboard port applies the arrow's rule; `focus-out` commits the series).
@@ -1213,7 +1208,7 @@ Every tool, drop and piece of chrome runs on the host and `chrome/*.ts`; tools d
 
 ### 1.5 Renderer (`canvas/runtime/renderers/scene-types.ts`)
 
-`SceneRendererDefinition.initialize` returns a `SceneRenderer`; `SceneRendererSnapshot` carries no camera.
+The render scheduler owns one target slot (U33, P12): `connect(target)` returns `disconnect`; a target connected while the runtime is mounted gets the latest snapshot and draft, and a stale disconnect is ignored. No renderer definition, renderer ids, async mount or generation counters. `SceneRendererSnapshot` carries no camera. Member names are the R1 brief's.
 
 The grid is an editing aid, not scene data: the same Pixi presentation draws saved-view and story thumbnails, the overview and the lens, which must not show it. It travels in its own optional field, set only on the workspace renderer (phase 1). Ruler guides and `scene.guides` are gone (U33):
 
@@ -1229,39 +1224,27 @@ export interface SceneRendererSnapshot {
 The presentation controller gains `setEditingAids(aids)`, the pattern of `presentLayers`; `SceneCanvasRuntime` keeps `_chromeShown` and computes `editingAids = shown && gridVisible ? { grid: ink } : null`, recomputed by `onChromeOverlay` and `onMapBackdrop`, then `invalidate('scene')`. There is no `'chrome'` render kind, chrome coordinator or per-frame `renderChrome` (phase 2's cut stage). `world-layers.ts` traces the grid over a padded box around `visibleWorldQuad()` and retraces only it when the view leaves that box or the scale changes (zones keep the scale-only rule); the grid uses `snapping.ts`'s `gridInterval`, and its ink is part of the reuse key.
 
 ```ts
-export interface SceneChangeSet {
-  readonly scene: boolean                                   // document revision
-  readonly selection: boolean
-  readonly hover: readonly SceneDesignObjectTarget[]        // old and new hover target only: a two-node restyle
-  readonly style: boolean                                   // theme, backdrop, plant display settings
-  readonly labels: boolean                                  // label admission recomputed (each scale change; from phase R, settle or band change)
-}
-
-export interface SceneRenderer {
-  readonly id: 'maplibre-pixi'
-  /** Data, selection, hover, style or label admission changed. Never called for a pan. No camera in the snapshot. */
-  syncScene(snapshot: SceneRendererSnapshot, changes: SceneChangeSet): void
-  /** The only per-frame entry: world-root matrix, visible set, billboard anchors, zoom-band re-key. */
-  setView(view: ViewTransform): void
+export interface SceneRenderTarget {
+  /** Data, selection, hover or style changed. Never sent for a pan. No camera in the snapshot. */
+  setSnapshot(snapshot: SceneRendererSnapshot): void
   setDraft(draft: DraftPresentation | null): void
-  setSelectionPreview(preview: SelectionPreview | null): void   // phase R
-  dispose(): void | PromiseLike<void>
+  requestRender(): void
 }
 ```
 
-The contract split: data goes through `syncScene`, the camera through `setView`, and nothing else; presentation entries are world-space. The stage has two content roots and, stacked in the order of the table, two draft roots on top: drafts draw over plants, notes and labels:
+The contract split: data goes through the target's snapshot; the camera is read by the shared layer in its own `render`, which presents the frame (world-root matrix, cull, billboard anchors) once per frame; nothing else. Presentation entries are world-space. The stage has two content roots and, stacked in the order of the table, two draft roots on top: drafts draw over plants, notes and labels:
 
 | Root | Transform | Content |
 |---|---|---|
-| `worldRoot` | `view.planar.affine`, one write per frame | grid (from phase 1, `editingAids`, under every billboard), zones, measurement guides, selection preview |
+| `worldRoot` | `view.planar.affine`, one write per frame | grid (from phase 1, `editingAids`, under every billboard), zones, measurement guides |
 | `billboardRoot` | identity (CSS px) | plants, rings, badges, notes (text at `rotationDeg − bearing`), labels; positions from `view.projectAnchors` |
-| `worldDraftRoot` (`draft-layer.ts`) | the same `view.planar.affine`, written in the same `setView` | world drafts (polylines, polygons, quads, ellipses) and the zone shapes of an `objects` ghost |
+| `worldDraftRoot` (`draft-layer.ts`) | the same `view.planar.affine`, written in the same frame | world drafts (polylines, polygons, quads, ellipses) and the zone shapes of an `objects` ghost |
 | `billboardDraftRoot` (`draft-layer.ts`) | identity (CSS px) | pixel-sized drafts (`circle-px`, `label`) and the plants and note text of a ghost (a plant is a billboard); positions from `view.projectAnchors` |
-| DOM overlay host (`canvas/runtime/chrome/`) | placed in `onViewFrame('overlays')`, no element created per frame (`left`/`top` until phase R, then `translate` only) | handle layer, text-entry host, hover tooltip |
+| DOM overlay host (`canvas/runtime/chrome/`) | placed by `left`/`top` in `onViewFrame('overlays')`, no element created per frame (U33, P23; U44); the tooltip beside the pointer | handle layer, text-entry host, hover tooltip |
 
-`SelectionPreview` spans both roots: `world-layers.ts` applies it to the selected world shapes (zones, guides) as a transform of their retained geometry, and `billboard-layer.ts` applies it to the anchors of selected plants and notes before `projectAnchors` (and adds `rotateDeg` to a selected note's text angle), so a move-drag moves everything selected without `syncScene` (test `renderers/billboard-layer.test.ts`: "a selection preview moves selected plants and notes without syncScene", phase R).
+A move-drag mutates the Scene per move (U33, P9); there is no selection preview and no change set.
 
-Culling stays in screen space. From phase R, label admission is computed on `settledViewFrame` and on zoom-band change, with no admission cache (audit 1.6); mid-zoom, the labels admitted for the previous band move with their plants until the band changes or the view settles (convention, plan §8). Until then `renderers/label-admission.ts` keeps today's cadence: a pan translates the admitted labels and any scale change admits again. The labels count (`app/plant-display/coverage.ts`) re-reads on `ViewReadSurface.settledRevision` and `zoomBand` (a by-eye convention, plan §1). The layer (`maplibre/shared-scene-layer.ts`) reads `viewFrame.peek()` in `render` and calls `setView` only when `revision` changed; it never derives a transform.
+Culling stays in screen space. From phase R, plant names and codes are admitted on `settledViewFrame`, on a zoom-band change (the one band function of `view/frame-source.ts`) and on a scene sync; mid-zoom, the labels admitted for the previous band move with their plants until the band changes or the view settles (convention, plan §8). The note and measurement detail layout stays at the exact scale behind a per-Scene reference memo (U33, P13). The labels count (`app/plant-display/coverage.ts`) re-reads on `ViewReadSurface.settledRevision` and `zoomBand` (a by-eye convention, plan §1). The layer (`maplibre/shared-scene-layer.ts`) reads `viewFrame.peek()` in `render`, presents only when `revision` changed, and repaints once on a settled frame; it never derives a transform.
 
 ### 1.6 Keyboard and focus (`app/keyboard/`, neutral)
 
@@ -1547,7 +1530,7 @@ Stored data: `.canopi` gains the optional top-level `map_view`, the view a save 
 
 Phase 0 built the modules of `canvas/runtime/{view,input,tools,renderers,chrome}/`, `interaction-types.ts`, `interaction-ports.ts`, `keyboard-port.ts`, `scene-extent.ts`, `scene-runtime/drag-state.ts`, `maplibre/camera-driver.ts` and the test supports (`test-view.ts`, `tool-harness.ts`, `recording-renderer.ts`, `canvas-interaction-setup.ts`); F built `app/keyboard/**` and `input/selection-drag-guard.ts`; phase 1 built `app/canvas-pdf/page-frame.ts` (§1.7), `components/canvas/Compass.tsx` (§4.2) and moved the grid into `renderers/world-layers.ts`; the tree under `desktop/web/src/` is their reference. `view/` imports only what policy P4 (plan §5) allows. Phase 2 adds no module: P2's secondary session lives in `recognise.ts` and its one `contextmenu` listener in `dom-input-source.ts` (no copied GeoLibre tracker, U33).
 
-Phase R retains billboard geometry per zoom band in `renderers/billboard-layer.ts` and admits labels on settle in `renderers/label-admission.ts`.
+Phase R retains billboard contexts (glyph radius rounded to 0.25 px) in `renderers/billboard-layer.ts`, world strokes per zoom band in `renderers/world-layers.ts`, and admits names on settle, a band change and a scene sync in `renderers/label-admission.ts`.
 
 ### 1.9 Module layout: deleted, in the phase that replaces them
 
@@ -2216,7 +2199,7 @@ When pitch ships (this paragraph is the recipe; the main agent notes it on canop
 - An angle per Print Area (user, 2026-10-01: one angle for the whole PDF layout) and an edge highlight for "Turn view to this edge" (user, 2026-10-01).
 - A new stored enum for Pointing device, a stored PDF setup, or any `.canopi` change beyond the saved-view ground size and the deleted `SavedView.extent` (§4.10), or any user-DB, LiDAR catalogue or plant-catalog change.
 - Performance gates and optimisation beyond making canopi-p32r and canopi-wx8w fixable (phase R), and the select-all and delete-all slowness (its own bead).
-- Instanced billboard or screen-constant line shaders (they fit behind `setView` later).
+- Instanced billboard or screen-constant line shaders (they fit behind the layer's frame read later).
 
 ## 8. Stored data
 

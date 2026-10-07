@@ -10,7 +10,7 @@ Canopi v1 drew the scene with PixiJS as a MapLibre custom layer (`maplibre-pixi`
 
 ## Decision
 
-- The only interactive renderer is the PixiJS scene inside a MapLibre custom layer (`canvas/runtime/renderers/maplibre-scene.ts`, id `maplibre-pixi`).
+- The only interactive renderer is the PixiJS scene inside a MapLibre custom layer (`maplibre/shared-scene-layer.ts`).
 - The Canvas2D renderer, the standalone Pixi canvas backend, renderer fallback selection and camera code that only aligned a metre canvas with the map are deleted.
 - If WebGL2 or MapLibre cannot start, the workspace shows an explicit "map unavailable" state. A later map, layer or camera failure unmounts the renderer and the editing session; the Design stays loaded and can still be saved.
 - A user Retry rebuilds the map: a new map and context, with the renderer and editing session mounted again over the loaded Scene, which keeps its view, selection and undo. It can be pressed any number of times; nothing restarts on its own. There is no Retry without WebGL2, or once a failed renderer initialization has destroyed the runtime.

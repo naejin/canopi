@@ -25,7 +25,7 @@ Canvas v2 ([plan](../plans/canvas-v2-plan.md), [spec](../plans/canvas-v2-spec.md
 - Only `activeGoogleMapsApiKey` reaches the satellite provider, only while `satellite_source` is `google_key`, only through the map's `transformRequest`. The key never enters published state, a Design, an export, a snapshot, a log or page markup. (`__tests__/settings-sections.test.tsx`, `satellite-bind.test.ts`, `map-background.test.ts`, `settings-projection.test.ts`)
 - Background changes never call `setStyle()` or recreate map, camera, layer or runtime; `maplibre/map-background.ts` owns Basemap, Satellite and attribution; `app/map-layers/bands.ts` is the one layer order. (`__tests__/map-background.test.ts`, `app/map-layers/bands.test.ts`)
 - MapLibre owns context, framebuffer, frame scheduling and resize. The custom layer draws only in its callback (`clear: false`); it never clears the context, starts a ticker or resizes. (`__tests__/v2-shared-map-scene-layer.test.ts`)
-- Invalidations stay typed (scene, viewport); a view change never routes through a scene render or, once retained, rebuilds scene geometry ([ADR 0019](../adr/0019-rendering-and-the-view-transform.md)). (`canvas/runtime/scene-runtime/render-scheduler.test.ts`)
+- A view change never routes through a scene render or, once retained, rebuilds scene geometry; the custom layer reads the camera frame in its own `render` ([ADR 0019](../adr/0019-rendering-and-the-view-transform.md)). (`canvas/runtime/scene-runtime/render-scheduler.test.ts`)
 - Design object identity is the typed pair `{ kind, id }`; ids repeat across kinds (`scene-runtime-boundaries.test.ts`); `currentCanvasSelection` is a notification, never authority (advice).
 - Abort restores only persisted scene state and transaction-owned selection; nothing retries; an accepted commit is never recorded twice. `captureForPersistence()` is the only save seam, busy in replay, hydration, replacement or a failed open. (`canvas/runtime/scene-runtime/transactions.test.ts`, `__tests__/scene-persistence-authority.test.ts`)
 - Overview (below 0.1 CSS px/m, `canvas/workspace-camera-policy.ts`) is presentation: the Design is one pin and mutation commands are unavailable, selection or not. (`__tests__/canvas-overview.test.tsx`, `canvas/runtime/scene-runtime.test.ts`)
@@ -62,7 +62,7 @@ Canvas v2 ([plan](../plans/canvas-v2-plan.md), [spec](../plans/canvas-v2-spec.md
 | Camera, plane | `canvas/session-plane.ts`, `projection.ts`, `workspace-camera-policy.ts`, `canvas/runtime/view/` | `__tests__/session-plane`, `workspace-camera-*`, `view/*` |
 | Views, stories, snapshots | `app/saved-views/`, `app/story-presentation/`, `maplibre/view-snapshot-map.ts` | `__tests__/saved-view*`, `story-presentation` |
 | Runtime roles, authority | `canvas/runtime/runtime.ts`, `*-surface.ts`, `scene/`, `scene-runtime/` | `__tests__/canvas-runtime-surfaces`, `scene-runtime.test.ts` |
-| Renderer | `canvas/runtime/renderers/`, `maplibre/shared-scene-layer.ts` | `__tests__/pixi-scene`, `maplibre-scene-renderer` |
+| Renderer | `canvas/runtime/renderers/`, `maplibre/shared-scene-layer.ts` | `__tests__/pixi-scene`, `v2-shared-map-scene-layer` |
 | Presentation | `canvas/runtime/scene-visuals.ts`, `plant-*.ts`, `automatic-detail.ts` | `__tests__/plant-*`, `automatic-detail` |
 | Interaction, geometry, lens | `canvas/runtime/interaction-session.ts`, `tools/`, `interaction/`, `zone-geometry.ts`, `inspection-lens*.ts` | `__tests__/canvas-interaction-e2e.*`, `hit-testing`, `inspection-*` |
 

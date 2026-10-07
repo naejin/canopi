@@ -14,7 +14,7 @@ Canopi is a desktop (Tauri) and Web app for designing agroecological sites on a 
 
 - Backend: Rust workspace (Tauri v2, rusqlite, specta). `desktop/src/` holds IPC commands, services and DB access; `common-types/` the cross-language contracts; `bindings-gen/` the TypeScript transport generator.
 - Frontend: Preact, `@preact/signals`, TypeScript, Vite, CSS Modules, i18next core with 11 UI languages, in `desktop/web/src/`.
-- Map and scene: MapLibre GL JS owns the WebGL2 context and holds the camera state, which only one camera driver changes ([ADR 0016](adr/0016-one-view-transform.md)); PixiJS draws the scene inside one MapLibre custom layer (`maplibre-pixi`), the only scene renderer; LiDAR COG display draws through `maplibre-gl-raster` ([ADR 0004](adr/0004-one-renderer.md)). If WebGL2 or MapLibre fails, the workspace shows an explicit "map unavailable" state and the Design stays loaded; a user Retry rebuilds the map, nothing restarts on its own, and there is no fallback.
+- Map and scene: MapLibre GL JS owns the WebGL2 context and holds the camera state, which only one camera driver changes ([ADR 0016](adr/0016-one-view-transform.md)); PixiJS draws the scene inside one MapLibre custom layer, the only scene renderer; LiDAR COG display draws through `maplibre-gl-raster` ([ADR 0004](adr/0004-one-renderer.md)). If WebGL2 or MapLibre fails, the workspace shows an explicit "map unavailable" state and the Design stays loaded; a user Retry rebuilds the map, nothing restarts on its own, and there is no fallback.
 
 ## Authorities
 
