@@ -98,7 +98,7 @@ function below(anchor: ScenePoint, offsetYPx: number): AnchoredLabel {
   return { anchor: { x: anchor.x, y: anchor.y }, offsetPx: { x: 0, y: offsetYPx } }
 }
 
-/** The gap below a plant's footprint, at `pixelsPerMetre`, clamped to today's 5–8 px. */
+/** The gap below a plant's footprint, at `pixelsPerMetre`, clamped to 5–8 px. */
 function plantLabelOffsetPx(
   plant: ScenePlantEntity,
   plants: readonly ScenePlantEntity[],

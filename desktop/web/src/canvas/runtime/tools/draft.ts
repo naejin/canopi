@@ -18,7 +18,7 @@ export type DraftShape =
 /** A chip drawn beside its point rather than on it: moved along the unit screen `normalPx` until its nearest side is
  *  `gapPx` past anchor + offset, whatever the chip's size (an edge chip beside its midpoint dot, U38). */
 interface LabelBeside { readonly normalPx: ScreenPoint; readonly gapPx: number }
-/** widthPx and dash (dash, gap, … lengths) are CSS px at every scale; the casing is widthPx + OVERLAY_CASING_EXTRA_PX. The renderer converts them
+/** widthPx and dash (dash, gap, … lengths: an even-length list of positive numbers) are CSS px at every scale; the casing is widthPx + OVERLAY_CASING_EXTRA_PX. The renderer converts them
  *  to world units at the scale it draws with and re-traces when that scale changes (plan 0D1 "Transform until 0D2"). */
 export type DraftStroke = { readonly token: 'draft' | 'selection'; readonly widthPx: number; readonly dash?: readonly number[] }
 export type DraftFill = { readonly token: 'draft-fill' | 'selection-fill' }

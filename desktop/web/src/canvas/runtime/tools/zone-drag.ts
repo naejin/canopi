@@ -27,9 +27,9 @@ import { measureLabelShapes } from './measure-labels'
 import type { CanvasTool, SceneLayerKind, ToolContext, ToolGesture, ToolPoint, ToolReply, ToolView } from './tool'
 import { appendEllipseZoneToDraft, appendLineZoneToDraft, appendRectangleZoneToDraft } from './tool-actions'
 
-/** Today's draft line: 2 px in the guide-line colour, on the overlay casing. */
+/** The draft line: 2 px in the guide-line colour, on the overlay casing. */
 export const DRAFT_STROKE: DraftStroke = Object.freeze({ token: 'draft', widthPx: 2 })
-/** Today's zone draft fill (--canvas-zone-fill). */
+/** The zone draft fill (--canvas-zone-fill). */
 export const ZONE_DRAFT_FILL: DraftFill = Object.freeze({ token: 'draft-fill' })
 
 export type ZoneDragKind = 'line' | 'rectangle' | 'ellipse'
@@ -286,7 +286,7 @@ function zoneTarget(id: string | null): SceneDesignObjectTarget | null {
   return id ? { kind: 'zone', id } : null
 }
 
-/** Today's minimum: a rectangle or an ellipse narrower than half a metre either way is dropped. */
+/** The minimum: a rectangle or an ellipse narrower than half a metre either way is dropped. */
 function isTooSmall(rect: { readonly width: number; readonly height: number }): boolean {
   return rect.width < 0.5 || rect.height < 0.5
 }

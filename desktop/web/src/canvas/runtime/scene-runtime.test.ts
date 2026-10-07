@@ -299,7 +299,7 @@ function panOn(runtime: SceneCanvasRuntime, deltaPx: { x: number; y: number }): 
   runtime.cameraHost.current().apply({ kind: 'pan-by', deltaPx })
 }
 
-/** The runtime camera's bearing-0 placement in today's terms. */
+/** The runtime camera's bearing-0 placement: the plane origin's screen point and the scale. */
 function placementOf(runtime: SceneCanvasRuntime): { x: number; y: number; scale: number } {
   const { x, y, scale } = planarCameraOf(frameOf(runtime).view)
   return { x, y, scale }
@@ -310,12 +310,12 @@ function lastDraft(renderer: RendererStub): DraftPresentation | null {
   return renderer.setDraft.mock.calls.at(-1)?.[0] ?? null
 }
 
-/** The chips of the last draft (today's zone measurement labels), in draw order. */
+/** The chips of the last draft (the zone measurement labels), in draw order. */
 function draftLabelTexts(renderer: RendererStub): string[] {
   return lastDraft(renderer)?.shapes.flatMap((shape) => (shape.kind === 'label' ? [shape.text] : [])) ?? []
 }
 
-/** The polygon draft's rubber band (today's SVG draft line), in plane metres; null without one. */
+/** The polygon draft's rubber band, in plane metres; null without one. */
 function draftBand(renderer: RendererStub): readonly { x: number; y: number }[] | null {
   const band = lastDraft(renderer)?.shapes.find((shape) => shape.kind === 'polyline')
   return band?.kind === 'polyline' ? band.points : null

@@ -13,7 +13,7 @@ import { cssColorAlpha, pixiPaint, screenPxToWorldPx, toPixiColor } from './scen
 import type { SceneRendererSnapshot } from './scene-types'
 import { createWorldLayers, traceZonePath, ZONE_STROKE_PX } from './world-layers'
 
-/** Plant a row's disc: today's 2 px border-box border keeps it at least 4 px across (today's (a4c86d39) plant-spacing-overlay.ts). */
+/** Plant a row's disc is at least 4 px across, as its 2 px border-box border kept it before v2 (plant-spacing-overlay.ts at a4c86d39). */
 const DOT_GHOST_MIN_RADIUS_PX = 2
 
 /**
@@ -96,7 +96,7 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
 export function createDraftScenePainters(getSnapshot: () => SceneRendererSnapshot | null): DraftScenePainters {
   return {
     drawZoneGhost(graphics, zone, scale) {
-      // Today's ghost: the zone's fill at a fifth and its stroke, with round ends and no casing; the stroke is traced at
+      // The ghost: the zone's fill at a fifth and its stroke, with round ends and no casing; the stroke is traced at
       // the band's centre scale, as the zone it places is.
       const visual = resolveZoneVisual(zone)
       if (!traceZonePath(graphics, zone)) return false
@@ -134,7 +134,7 @@ export function createDraftScenePainters(getSnapshot: () => SceneRendererSnapsho
       styleAnnotationText(text, annotation, textFrame.lineHeightPx)
       // The note's own angle; the draft layer turns it with the map.
       text.rotation = noteTextRotation(annotation, 0)
-      // Today's ghost marker has no halo.
+      // The ghost marker has no halo.
       traceAnnotationMarker(marker.context, markerPaths, { x: 0, y: 0 })
       marker.stroke({ color: toPixiColor(getMapTextColor()), width: markerStrokePx })
       return { textOpacity, markerOpacity }
