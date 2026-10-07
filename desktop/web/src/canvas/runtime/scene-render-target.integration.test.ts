@@ -158,6 +158,61 @@ describe('SceneCanvasRuntime and the shared map scene layer', () => {
     runtime.destroy()
   })
 
+  it('a Design switch presents the new Design once its new layer has drawn it, not when the layer is created', async () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(orchard())
+    const container = createContainer()
+    const composition = createSharedMapSceneRendererComposition((target) => runtime.connectRenderTarget(target))
+    const gl = {} as WebGL2RenderingContext
+    const layerOptions = {
+      id: 'canopi-shared-scene',
+      frames: runtime.cameraHost.frames,
+      createPresentation: (input: Parameters<typeof createPixiScenePresentation>[0]) =>
+        createPixiScenePresentation({ ...input, createText: () => new MeasuredText() }),
+    }
+    const oldMap = createMap()
+    const old = composition.createLayer({ ...layerOptions, createRenderer: createPixiRenderer })
+    await old.initialize(oldMap, gl)
+    old.layer.onAdd!(oldMap as never, gl)
+    await runtime.init(container)
+    await vi.waitFor(() => expect(runtime.documentSurface.presented.value).toBe(true))
+
+    // The switch disposes the old layer; the new Design's render waits for the new map's layer.
+    await old.dispose()
+    runtime.documentSurface.loadDocument(orchard())
+    await nextFrame()
+    await nextFrame()
+    expect(runtime.documentSurface.presented.value).toBe(false)
+
+    // The new map's style loaded: the activation creates the layer, then Pixi starts while the browser keeps drawing frames.
+    let finishPixiInit!: () => void
+    const pixi = { ...createPixiRenderer(), init: vi.fn(() => new Promise<void>((resolve) => { finishPixiInit = resolve })) }
+    const map = createMap()
+    // MapLibre draws its custom layers in the animation frame a repaint request asks for.
+    map.triggerRepaint.mockImplementation(() => { requestAnimationFrame(() => layer.layer.render(gl, {} as never)) })
+    const layer = composition.createLayer({ ...layerOptions, createRenderer: () => pixi })
+    const drawsWhenPresented: number[] = []
+    const stopWatching = runtime.documentSurface.presented.subscribe((presented) => {
+      if (presented) drawsWhenPresented.push(layer.diagnostics.sceneSyncCount)
+    })
+    const initialized = layer.initialize(map, gl)
+    await nextFrame()
+    await nextFrame()
+    expect(runtime.documentSurface.presented.value, 'the layer has not drawn').toBe(false)
+    expect(container.getAttribute('aria-busy')).toBe('true')
+
+    finishPixiInit()
+    await initialized
+    // map.addLayer.
+    layer.layer.onAdd!(map as never, gl)
+    await vi.waitFor(() => expect(runtime.documentSurface.presented.value).toBe(true))
+    expect(drawsWhenPresented, 'presented after the layer drew the Scene').toEqual([1])
+    expect(container.hasAttribute('aria-busy')).toBe(false)
+    stopWatching()
+    await layer.dispose()
+    runtime.destroy()
+  })
+
   it('closing the Design leaves the start screen idle: no layer is awaited, so the map is not busy', async () => {
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(orchard())

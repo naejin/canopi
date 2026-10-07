@@ -477,12 +477,13 @@ describe('createSharedMapSceneLayer', () => {
       shapes: [{ kind: 'polyline', points: [{ x: 0, y: 0 }, { x: 4, y: 3 }], style: { token: 'draft', widthPx: 2 } }],
     }
 
-    // Set while the layer is still initializing: the presentation takes it when it exists.
+    // Set before MapLibre attaches the layer: the slot hands it over when the layer connects, on attaching.
     scheduler.setDraft(draft)
     await layer.initialize(map, gl)
+    expect(presentation.setDraft).not.toHaveBeenCalled()
+    layer.layer.onAdd!(map as never, gl)
     expect(presentation.setDraft).toHaveBeenCalledExactlyOnceWith(draft)
 
-    layer.layer.onAdd!(map as never, gl)
     const repaints = vi.mocked(map.triggerRepaint).mock.calls.length
     scheduler.setDraft(null)
     expect(presentation.setDraft).toHaveBeenLastCalledWith(null)
