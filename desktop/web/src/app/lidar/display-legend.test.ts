@@ -4,7 +4,8 @@
  * `cog-tiler-wasm`, its WebAssembly started in Node. An unknown colormap name
  * falls back to grey without an error, so every name the item types (or the
  * typeless fallback) return must be one the wasm compiles in, and every legend
- * ramp must show the colours `colorize()` paints at its nine stops.
+ * ramp must show the colours `colorize()` paints at its stops and between them,
+ * where the CSS gradient blends in a straight line.
  */
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -35,17 +36,31 @@ function hexChannels(hex: string): [number, number, number] {
   return [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16)) as [number, number, number]
 }
 
-/** The wasm's colour at i/8 for i = 0..8, as RGB triples. */
-function wasmStops(colormap: string): [number, number, number][] {
-  const pixels = Float64Array.from({ length: 9 }, (_, i) => i / 8)
-  const rgba = colorize(pixels, 9, 1, 0, 1, colormap, null, false, 'linear', 1, false, 1)
-  return Array.from({ length: 9 }, (_, i) => [rgba[i * 4]!, rgba[i * 4 + 1]!, rgba[i * 4 + 2]!])
+/** The wasm's colour at each position in 0..1, as RGB triples. */
+function wasmColours(colormap: string, positions: readonly number[]): [number, number, number][] {
+  const rgba = colorize(Float64Array.from(positions), positions.length, 1, 0, 1, colormap, null, false, 'linear', 1, false, 1)
+  return positions.map((_, i) => [rgba[i * 4]!, rgba[i * 4 + 1]!, rgba[i * 4 + 2]!])
 }
 
 /** The legend's stops for a colormap, read back from the gradient it renders. */
 function legendStops(colormap: string): [number, number, number][] {
   return (legendGradient(colormap, false).match(/#[0-9a-f]{6}/gi) ?? []).map(hexChannels)
 }
+
+/** The legend's colour at a position: the straight-line blend of its evenly spaced stops. */
+function legendColour(stops: readonly [number, number, number][], position: number): [number, number, number] {
+  const scaled = position * (stops.length - 1)
+  const below = Math.min(stops.length - 2, Math.floor(scaled))
+  const share = scaled - below
+  return stops[below]!.map((channel, c) => channel * (1 - share) + stops[below + 1]![c]! * share) as [number, number, number]
+}
+
+function worstGap(legend: readonly [number, number, number][], wasm: readonly [number, number, number][]): number {
+  return Math.max(...legend.flatMap((rgb, i) => rgb.map((channel, c) => Math.abs(channel - wasm[i]![c]!))))
+}
+
+/** 1025 positions, so every stop of a 9-, 17-, 33- or 65-stop ramp is among them. */
+const FINE = Array.from({ length: 1025 }, (_, k) => k / 1024)
 
 beforeAll(() => {
   initSync({ module: readFileSync(wasmPath) })
@@ -57,11 +72,19 @@ describe('LiDAR legend ramps against the real renderer', () => {
     expect(returnedColormaps().filter((name) => !known.has(name))).toEqual([])
   })
 
-  it.each(returnedColormaps())('shows the colours colorize() paints for %s at i/8 within ±2', (colormap) => {
+  it.each(returnedColormaps())('shows the colours colorize() paints for %s at its stops within ±2', (colormap) => {
     const legend = legendStops(colormap)
-    const wasm = wasmStops(colormap)
-    expect(legend).toHaveLength(9)
-    const worst = Math.max(...legend.flatMap((rgb, i) => rgb.map((channel, c) => Math.abs(channel - wasm[i]![c]!))))
-    expect(worst, `${colormap} legend ${JSON.stringify(legend)} vs wasm ${JSON.stringify(wasm)}`).toBeLessThanOrEqual(2)
+    expect(legend.length).toBeGreaterThanOrEqual(2)
+    const wasm = wasmColours(colormap, legend.map((_, i) => i / (legend.length - 1)))
+    expect(worstGap(legend, wasm), `${colormap} legend ${JSON.stringify(legend)} vs wasm ${JSON.stringify(wasm)}`).toBeLessThanOrEqual(2)
+  })
+
+  it.each(returnedColormaps())('blends to within ±8 of colorize() between the stops of %s', (colormap) => {
+    const stops = legendStops(colormap)
+    const legend = FINE.map((position) => legendColour(stops, position))
+    const wasm = wasmColours(colormap, FINE)
+    const gaps = legend.map((rgb, k) => worstGap([rgb], [wasm[k]!]))
+    const at = gaps.indexOf(Math.max(...gaps))
+    expect(gaps[at], `${colormap} at ${FINE[at]}: legend ${legend[at]!.map(Math.round)} vs wasm ${wasm[at]}`).toBeLessThanOrEqual(8)
   })
 })
