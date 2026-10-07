@@ -989,6 +989,62 @@ describe('createDomInputSource', () => {
       dispose()
     })
 
+    it('the click that trails a finger\'s lift from the map is swallowed wherever it lands, once; a new press, a keyboard click and a tap on chrome keep theirs', () => {
+      vi.useFakeTimers()
+      const { dispose } = attachRecogniser()
+      // Chrome that appears under the finger at the lift (a tap that finishes a zone brings up its chip there).
+      const chrome = document.createElement('button')
+      document.body.append(chrome)
+      const clicks = vi.fn()
+      chrome.addEventListener('click', clicks)
+      const click = (detail: number): MouseEvent => {
+        const event = new MouseEvent('click', { bubbles: true, cancelable: true, detail })
+        chrome.dispatchEvent(event)
+        return event
+      }
+
+      touch('pointerdown', host, BASE)
+      touch('pointerup', host, BASE + 80)
+      // A keyboard or assistive click (detail 0) is not the tap's.
+      click(0)
+      expect(clicks).toHaveBeenCalledTimes(1)
+      const ghost = click(1)
+      expect(ghost.defaultPrevented).toBe(true)
+      expect(clicks).toHaveBeenCalledTimes(1)
+      click(1)
+      expect(clicks).toHaveBeenCalledTimes(2)
+
+      // A long press's lift, after its menu opened.
+      touch('pointerdown', host, BASE + 1000)
+      vi.advanceTimersByTime(600)
+      touch('pointerup', host, BASE + 1700)
+      click(1)
+      expect(clicks).toHaveBeenCalledTimes(2)
+
+      // A new press owns the click that follows it.
+      touch('pointerdown', host, BASE + 3000)
+      touch('pointerup', host, BASE + 3080)
+      events.pointerDown({ x: 10, y: 10 }, { target: chrome, pointerType: 'mouse' })
+      click(1)
+      expect(clicks).toHaveBeenCalledTimes(3)
+
+      // A click that never came leaves nothing armed.
+      touch('pointerdown', host, BASE + 5000)
+      touch('pointerup', host, BASE + 5080)
+      vi.advanceTimersByTime(1000)
+      click(1)
+      expect(clicks).toHaveBeenCalledTimes(4)
+
+      // A finger's tap on the map's own chrome is that chrome's click.
+      const zoom = document.createElement('button')
+      host.append(zoom)
+      touch('pointerdown', zoom, BASE + 7000)
+      touch('pointerup', zoom, BASE + 7080)
+      click(1)
+      expect(clicks).toHaveBeenCalledTimes(5)
+      dispose()
+    })
+
     it('a touch press\'s contextmenu is prevented', () => {
       const { dispose } = attachRecogniser()
       touch('pointerdown', host, BASE)

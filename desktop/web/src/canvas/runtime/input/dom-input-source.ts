@@ -6,7 +6,9 @@
 // (keys are the key router's, app/keyboard). A press it delivers on the map owns that pointer until its release, its
 // cancel or a window blur: only then does it listen on window, and only to that pointer, so presses, moves and releases
 // that start elsewhere in the app reach the page untouched. While attached, the host takes `touch-action: none` and no
-// WebKit callout, so a finger is the canvas's (A13). It turns each event into host-relative, classified fields
+// WebKit callout, so a finger is the canvas's (A13). A finger lifted from the map (a tap, a drag's or a pinch's end, a long
+// press's lift) swallows the one click the browser then makes from it, wherever it lands, so chrome that came up under the
+// finger (the finished zone's chip) never takes it (MapLibre's DOM.suppressClick). It turns each event into host-relative, classified fields
 // for `normalise`, hands the raw input to the sink, and applies the effects the sink sends back to the event being
 // handled: prevent-default, stop-propagation, pointer capture, the drop effect. The native contextmenu reaches no sink:
 // the listener only prevents it where a canvas press made it, or over the map (spec §2.2 "Native menu", U34), and the
@@ -57,13 +59,17 @@ const BUTTON_SECONDARY = 2
 const BUTTONS_SECONDARY_BIT = 2
 /** WebKit's long-press callout (the link and image sheet); not in CSSStyleDeclaration's typed properties. */
 const TOUCH_CALLOUT = '-webkit-touch-callout'
+/** How long a finger's lift from the map waits for the click the browser makes from it; a new press ends the wait first. */
+const TRAILING_CLICK_MS = 500
 
 type HostRect = Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>
 
-/** A canvas press the source owns: whether it normalised as secondary, and whether a move over the canvas has since
- *  reported the right or barrel button held (a real chord, U37). */
+/** A canvas press the source owns: whether it normalised as secondary, whether a move over the canvas has since
+ *  reported the right or barrel button held (a real chord, U37), and whether it is a finger on the map's surface or a
+ *  handle, whose lift swallows the click that trails it. */
 interface CanvasPress {
   readonly secondary: boolean
+  readonly finger: boolean
   chorded: boolean
 }
 
@@ -118,6 +124,36 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   /** Installs the window pointer listeners (set while attached); returns their removal. */
   let listenOnWindow: (() => () => void) | null = null
   let removeWindowListeners: (() => void) | null = null
+  /** Ends the wait for the click that trails a finger's lift (suppressTrailingClick), while one is armed. */
+  let endTrailingClick: (() => void) | null = null
+
+  /**
+   * Swallows the next pointer click anywhere in the page, in the capture phase on window, unless a new press or
+   * TRAILING_CLICK_MS comes first: the one the browser makes from a finger lifted from the map, which would land on
+   * whatever came up under the finger. A keyboard or assistive click (detail 0) passes. After MapLibre's
+   * DOM.suppressClick (maplibre-gl-js src/util/dom.ts, BSD-3-Clause), which removes its one-shot listener at the next
+   * timeout; a finger's click trails its lift by more than a tick, so this one waits for a press or its deadline.
+   */
+  function suppressTrailingClick(): void {
+    endTrailingClick?.()
+    const onClick = (event: MouseEvent): void => {
+      if (event.detail === 0) return
+      event.preventDefault()
+      event.stopPropagation()
+      end()
+    }
+    const end = (): void => {
+      if (endTrailingClick !== end) return
+      endTrailingClick = null
+      deps.timers.clear(timer)
+      window.removeEventListener('click', onClick as EventListener, { capture: true })
+      window.removeEventListener('pointerdown', end, { capture: true })
+    }
+    endTrailingClick = end
+    const timer = deps.timers.set(TRAILING_CLICK_MS, end)
+    window.addEventListener('click', onClick as EventListener, { capture: true })
+    window.addEventListener('pointerdown', end, { capture: true })
+  }
 
   function own(pointerId: number): void {
     owned.add(pointerId)
@@ -178,7 +214,12 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     // Owned first: a sink that fails on the press may still have opened its session, whose release must reach it.
     own(event.pointerId)
     if (isCanvasPressTarget(event.target, host)) {
-      canvasPresses.set(event.pointerId, { secondary: input?.kind === 'down' && input.role === 'secondary', chorded: false })
+      const target = input?.kind === 'down' ? input.target.kind : null
+      canvasPresses.set(event.pointerId, {
+        secondary: input?.kind === 'down' && input.role === 'secondary',
+        finger: event.pointerType === 'touch' && (target === 'surface' || target === 'handle'),
+        chorded: false,
+      })
     }
     deliver(event, rect, input, 'quarantine')
   }
@@ -198,6 +239,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   const onPointerUp = (event: PointerEvent): void => {
     if (!owned.has(event.pointerId)) return
     const rect = sessionRect(event.pointerId)
+    if (canvasPresses.get(event.pointerId)?.finger) suppressTrailingClick()
     try {
       deliver(event, rect, pointerInput(event, 'pointerup', rect))
     } finally {
@@ -344,6 +386,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
         sink = null
         listenOnWindow = null
         clearTickTimer()
+        endTrailingClick?.()
         disown('all')
         const pending = removals.splice(0)
         runCanvasRuntimeCleanups([
