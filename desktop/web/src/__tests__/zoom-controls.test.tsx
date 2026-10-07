@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals'
-import { render } from 'preact'
+import { options, render, type VNode } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '../app/settings/state'
@@ -122,6 +122,39 @@ describe('ZoomControls', () => {
         camera.setViewport({ x: 0, y: 0, scale: 10 })
       })
       expect(ratio().textContent).toBe('1:380')
+      camera.dispose()
+    }
+  })
+
+  it('an east-west pan at a constant zoom does not re-render the zoom group', async () => {
+    // A17: groundMetresPerPixel reads the camera centre's latitude, so a north-south pan may re-render the group; an east-west one
+    // keeps the ratio, the scale bar and the button tooltips still.
+    const camera = createTestView({ plane: createSessionPlane({ lon: 2.35, lat: 48.85 }), screen: { width: 1000, height: 800 } })
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: { ...createTestCanvasQuerySurface(), view: createViewReadSurface(camera.frames) },
+    }))
+    let renders = 0
+    const previous = options.diffed
+    options.diffed = (vnode: VNode) => {
+      if (typeof vnode.type === 'function') renders++
+      previous?.(vnode)
+    }
+    try {
+      await mount()
+      const label = ratio().textContent
+      const lon = camera.view().camera.center.lon
+      renders = 0
+      for (const deltaX of [40, 120, -300, 75]) {
+        await act(async () => { camera.navigation.panByPx({ x: deltaX, y: 0 }) })
+      }
+      expect(camera.view().camera.center.lon).not.toBeCloseTo(lon, 6)
+      expect(renders).toBe(0)
+      expect(ratio().textContent).toBe(label)
+      // The count is live: a zoom re-renders the group.
+      await act(async () => { camera.navigation.zoomAroundPx({ x: 500, y: 400 }, 2) })
+      expect(renders).toBeGreaterThan(0)
+    } finally {
+      options.diffed = previous
       camera.dispose()
     }
   })

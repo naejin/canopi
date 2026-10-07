@@ -1,4 +1,4 @@
-import { getAnnotationWorldBounds } from './annotation-layout'
+import { getAnnotationFontEpoch, getAnnotationWorldBounds } from './annotation-layout'
 import { LabelCollisionIndex, type LabelBounds } from '../label-collision'
 import { getPlantWorldBounds } from './plant-presentation'
 import { nearestPlantSpacing } from '../plant-spacing'
@@ -41,9 +41,7 @@ export function getCanvasPlantNameLabels(
     occupied.add(nameBounds(label.text, label.anchor.x * scale + label.offsetPx.x, label.anchor.y * scale + label.offsetPx.y))
   }
   const pinned = new Map(projected.pinnedPlantNameLabels.map((label) => [label.plantId, label]))
-  const hoveredId = snapshot.hoverTarget?.kind === 'plant' ? snapshot.hoverTarget.id : null
-  const plants = [...scene.plants].sort((a, b) =>
-    Number(b.id === hoveredId) - Number(a.id === hoveredId) || Number(pinned.has(b.id)) - Number(pinned.has(a.id)) || a.id.localeCompare(b.id))
+  const plants = [...scene.plants].sort((a, b) => Number(pinned.has(b.id)) - Number(pinned.has(a.id)) || a.id.localeCompare(b.id))
   const result: PlantNameLabel[] = []
   const context = { plants: scene.plants, pixelsPerMetre: scale }
   for (const plant of plants) {
@@ -88,12 +86,12 @@ export function isMeasurementLabelVisible(snapshot: SceneRendererSnapshot, pixel
 }
 
 // Pan does not affect admission. Keep the main view and an inspection view warm.
-// Symbol size changes plant bounds, so it is part of the key.
+// Symbol size changes plant bounds and a loaded web font changes note bounds, so both are part of the key.
 const layouts = new WeakMap<ScenePersistedState, Map<string, CanvasDetailLayout>>()
 
 export function getCanvasDetailLayout(scene: ScenePersistedState, scale: number): CanvasDetailLayout {
   let cache = layouts.get(scene)
-  const key = `${scale}|${getCanvasPlantDisplay().symbolScale}`
+  const key = `${scale}|${getCanvasPlantDisplay().symbolScale}|${getAnnotationFontEpoch()}`
   const previous = cache?.get(key)
   if (previous) return previous
   const occupied = new LabelCollisionIndex()

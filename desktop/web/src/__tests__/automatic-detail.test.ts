@@ -87,6 +87,18 @@ describe('Automatic Detail', () => {
     expect(getCanvasPlantNameLabels(snapshot, 100)).toEqual(labels)
   })
 
+  it('a hover keeps the admitted names (Q4)', () => {
+    const snapshot = createTestSceneRendererSnapshot({
+      scene: { plants: [plant('a', 0, 0), plant('b', .4, 0), plant('c', .8, 0)] },
+    })
+    const admitted = getCanvasPlantNameLabels(snapshot, 100)
+    const unnamed = ['a', 'b', 'c'].find((id) => !admitted.some((label) => label.plantId === id))!
+    expect(unnamed).toBeDefined()
+
+    const hovered = { ...snapshot, hoverTarget: { kind: 'plant' as const, id: unnamed, state: 'hover' as const } }
+    expect(getCanvasPlantNameLabels(hovered, 100)).toEqual(admitted)
+  })
+
   it('prioritizes an authored pin in a crowded label area and never reveals a hidden plant layer', () => {
     const snapshot = createTestSceneRendererSnapshot({
       scene: { plants: [plant('a', 0, 0), plant('b', 0, 0), { ...plant('z', 0, 0), pinnedName: true }] },

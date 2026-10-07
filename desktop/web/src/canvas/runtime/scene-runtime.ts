@@ -1,6 +1,7 @@
 import { batch, effect, type ReadonlySignal } from '@preact/signals'
 import { setCanvasSelection, setCanvasToolGuidance } from '../session-state'
 import { refreshCanvasColorCache } from '../theme-refresh'
+import { onAnnotationFontLoad } from './annotation-layout'
 import { getMapBackdropInk, setCanvasMapBackdrop } from './scene-visuals'
 import { DEFAULT_PLANT_DISPLAY, setCanvasPlantDisplay } from './plant-display'
 import {
@@ -424,6 +425,8 @@ export class SceneCanvasRuntime {
       subscribePanelOriginTargetChanges: (onChange) =>
         this._panelTargetAdapter.subscribePanelOriginTargetChanges(onChange),
     }))
+    // Notes measured in a fallback font while the web font loaded: their frames, hit areas and the detail layout follow.
+    this._disposeEffects.push(onAnnotationFontLoad(() => this._invalidate('scene')))
   }
 
   private _incrementSceneRevision(): void {

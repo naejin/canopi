@@ -279,6 +279,23 @@ describe('scene hit testing', () => {
       .toEqual([])
   })
 
+  it('hits a shown note anywhere inside its drawn outline: the text plus 4 px each side and 2 px above and below', () => {
+    const scene = createScene()
+    scene.plants = []
+    // At 1 px/m under jsdom's 0.6 em estimate: a 24 px by 12.5 px text box from (10, 20).
+    scene.annotations = [{ kind: 'annotation', id: 'note', locked: false, annotationType: 'text',
+      position: { x: 10, y: 20 }, text: 'ABCD', fontSize: 10, rotationDeg: 0 }]
+    const selected = [{ kind: 'annotation' as const, id: 'note' }]
+    const hit = (x: number, y: number) => hitTestTopLevel(scene, { x, y }, 1, new Map(), getPlantContext, selected)
+
+    for (const inside of [{ x: 6.5, y: 26 }, { x: 37.5, y: 26 }, { x: 20, y: 18.5 }, { x: 20, y: 34 }]) {
+      expect(hit(inside.x, inside.y), `(${inside.x}, ${inside.y})`).toEqual({ kind: 'annotation', id: 'note' })
+    }
+    for (const outside of [{ x: 5.5, y: 26 }, { x: 38.5, y: 26 }, { x: 20, y: 17.5 }, { x: 20, y: 35 }]) {
+      expect(hit(outside.x, outside.y), `(${outside.x}, ${outside.y})`).toBeNull()
+    }
+  })
+
   it('band-selects revealed rotated text annotations by their oriented geometry instead of empty AABB corners', () => {
     const scene = createScene()
     scene.plants = []

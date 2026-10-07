@@ -325,24 +325,48 @@ describe('ToolHost', () => {
       expect(rectangle.calls).not.toContain('viewChanged')
     })
 
-    it('a hover is re-emitted on a camera frame, so a placement preview stays under a still pointer', () => {
+    it('a camera frame under a resting pointer re-emits only the tool\'s hover and hides the tooltip; the hover stays on its object until the next pointer move; the ghost still follows (Q3 D)', () => {
       const stamp = stubTool('plant-stamp')
       useStubTools(stamp)
       const h = harness({ tool: 'plant-stamp', scene: { plants: [appleAt({ x: 50, y: 50 })] } })
-      const pointer = { x: 100, y: 100 }
+      const pointer = { x: 50, y: 50 }
 
       h.hover(pointer)
-      expect(h.record.hovers.at(-1)).toBeNull()
-      // Zooming in about the corner brings the apple under the still pointer.
+      expect(h.record.hovers).toEqual([P1])
+      expect(h.chrome.tooltip).toEqual({ target: P1, at: pointer })
+      // A pan and a zoom carry the apple away from the still pointer: the tool hears its hover at the pointer each frame,
+      // so its ghost stays under it, while the apple keeps its ring and the tooltip hides.
+      h.view.navigation.panByPx({ x: 120, y: 0 })
       h.wheelZoom({ x: 0, y: 0 }, 2)
 
-      expect(stamp.count('hover')).toBe(2)
+      expect(stamp.count('hover')).toBe(3)
       expect(stamp.last('hover')!.point.world).toEqual(h.world(pointer))
-      expect(h.record.hovers.at(-1)).toEqual(P1)
-      expect(h.chrome.tooltip).toEqual({ target: P1, at: pointer })
+      expect(h.record.hovers).toEqual([P1])
+      expect(h.chrome.tooltip).toBeNull()
       // A re-emit is not a pointer move: the inspection lens keeps its point.
       expect(h.record.pointerWorld).toHaveLength(1)
       expect(stamp.calls).not.toContain('viewChanged')
+
+      // The next pointer move hovers what is under it now.
+      h.hover(pointer)
+      expect(h.record.hovers.at(-1)).toBeNull()
+    })
+
+    it('a camera frame during a drag the tool passes on leaves the passive hover where it is', () => {
+      const stamp = stubTool('plant-stamp')
+      useStubTools(stamp)
+      const h = harness({ tool: 'plant-stamp', scene: { plants: [appleAt({ x: 50, y: 50 })] } })
+
+      h.press({ x: 40, y: 50 })
+      h.move({ x: 50, y: 50 })
+      expect(h.record.hovers.at(-1)).toEqual(P1)
+      const hovers = h.record.hovers.length
+      const moves = stamp.count('drag-move')
+      h.wheelZoom({ x: 0, y: 0 }, 2)
+
+      expect(stamp.count('drag-move')).toBe(moves + 1)
+      expect(h.record.hovers).toHaveLength(hovers)
+      expect(h.chrome.tooltip).toBeNull()
     })
 
     it('a click or a drag leaves a still pointer that the next camera frame re-emits; a touch tap does not', () => {

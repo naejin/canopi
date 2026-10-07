@@ -659,6 +659,32 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('a wheel under a resting pointer hides the Plant Hover Tooltip and keeps the hover on its plant until the next move (Q3 D)', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }, { commonName: 'Apple' })]
+    })
+    const setHoveredTarget = vi.fn()
+    const session = createTestSession(createInteractionDeps(container, store, testView, { setHoveredTarget }))
+    session.setTool('select')
+
+    events.pointerMove({ x: 20, y: 30 })
+    const tooltip = plantHoverTooltip(container)
+    expect(tooltip.style.display).toBe('block')
+    expect(setHoveredTarget).toHaveBeenLastCalledWith(plantTarget('plant-1'))
+    setHoveredTarget.mockClear()
+    const viewport = testView.viewport()
+
+    events.wheel({ x: 20, y: 30 }, { deltaY: -120 })
+
+    expect(testView.viewport()).not.toEqual(viewport)
+    expect(tooltip.style.display).toBe('none')
+    expect(setHoveredTarget).not.toHaveBeenCalled()
+
+    events.pointerMove({ x: 300, y: 250 })
+    expect(setHoveredTarget).toHaveBeenLastCalledWith(null)
+    session.dispose()
+  })
+
   it('restores selection overlays after a no-op Design Object drag without history', () => {
     store.updatePersisted((draft) => {
       draft.zones = [makeRectZone('zone-1', [
