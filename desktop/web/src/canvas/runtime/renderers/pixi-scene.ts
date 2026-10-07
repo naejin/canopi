@@ -119,7 +119,6 @@ export function createDraftScenePainters(getSnapshot: () => SceneRendererSnapsho
         pixelsPerMetre: scale,
         speciesCache: snapshot.speciesCache,
         plantSpeciesSymbols: snapshot.scene.plantSpeciesSymbols,
-        localizedCommonNames: snapshot.localizedCommonNames,
       }, new Set())
       if (!entry) return false
       // Plant a row's look: a disc in the display colour, its 2 px border the same colour, so never under 2 px in radius.
