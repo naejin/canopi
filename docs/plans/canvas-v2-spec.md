@@ -1736,7 +1736,7 @@ From phase 3 (U41; recogniser rules in §2.2 "Touch", "Long press" and "Pair"). 
 | Pair cancel (Esc, blur, `pointercancel`) | the view stays where it is; a bearing within 7° of north snaps | same | same |
 | One finger lifted from two | nothing resumes until every finger is up | same | same |
 | Third finger | ignored | same | same |
-| Handles | after a touch press or hover, 44 px targets (`hitRadiusPx` 22) until a mouse or pen presses or hovers; the rotate handle keeps its 28 px look in a transparent 44 px box; a shape under about 44 px on screen can be reshaped but not moved by a finger (zoom in) | — | — |
+| Handles | after a touch press, tap or long press, and on iOS and Android before any press, 44 px targets (`hitRadiusPx` 22) until a mouse or pen presses or hovers; the rotate handle keeps its 28 px look in a transparent 44 px box; a shape under about 44 px on screen can be reshaped but not moved by a finger (zoom in) | — | — |
 | Touch on the text entry (`owned-text`: the note editor, a child of the map host) | no canvas session: a tap moves the caret, a long press selects text with the native callout, a drag scrolls or selects inside the entry; no canvas menu. The entry focuses synchronously when it opens from a touch, so iOS shows the keyboard (A15) | same | — |
 
 Host CSS, unconditional while attached (A13): `touch-action: none; -webkit-touch-callout: none` on the map host, and `-webkit-touch-callout: default` on the text-entry host (the callout is inherited; `touch-action` is not); `overscroll-behavior: none` on `html` (`styles/global.css`), which stops a drag on the Web top bar or strip from pulling to refresh and also turns off the Web desktop browser's two-finger history swipe.
