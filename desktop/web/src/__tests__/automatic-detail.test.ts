@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getCanvasDetailLayout, getCanvasPlantNameLabels } from '../canvas/runtime/automatic-detail'
 import { getAnnotationPresentation, isPointInAnnotationPresentation } from '../canvas/runtime/annotation-layout'
-import type { ScenePlantEntity } from '../canvas/runtime/scene'
+import { SceneStore, type ScenePlantEntity } from '../canvas/runtime/scene'
 import { createTestRendererView, createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
 
 function plant(id: string, x: number, y: number): ScenePlantEntity {
@@ -19,6 +19,19 @@ describe('Automatic Detail', () => {
         text: 'Planting note', fontSize: 16, rotationDeg: 0, locked: false }],
     } })
     expect(getCanvasDetailLayout(scene, 20).annotationIds.has('note')).toBe(true)
+  })
+
+  it('editing a note\'s text recomputes the detail layout', () => {
+    const note = (id: string, x: number, text: string) => ({ kind: 'annotation' as const, id, annotationType: 'text',
+      position: { x, y: 0 }, text, fontSize: 16, rotationDeg: 0, locked: false })
+    const store = new SceneStore()
+    store.updatePersisted((draft) => { draft.annotations = [note('a', 0, 'Hi'), note('b', 10, 'Pond')] })
+    const layout = getCanvasDetailLayout(store.persisted, 20)
+    expect([...layout.annotationIds].sort()).toEqual(['a', 'b'])
+    expect(getCanvasDetailLayout(store.persisted, 20)).toBe(layout)
+
+    store.updatePersisted((draft) => { draft.annotations[0]!.text = 'Hi, this note now runs across the pond note' })
+    expect([...getCanvasDetailLayout(store.persisted, 20).annotationIds]).toEqual(['b'])
   })
 
   it('keeps a crowded note discoverable with a compact marker and matching pointer allowance', () => {

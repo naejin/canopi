@@ -26,7 +26,7 @@ import {
   includesSceneDesignObjectTarget,
   type SceneDesignObjectTarget,
 } from '../scene/design-object-targets'
-import { resolveSceneObjectGroupMembers, sceneObjectGroupMemberLayerName } from '../scene/group-members'
+import { isSceneTargetLayerLocked } from '../scene/group-members'
 import { isDirectSceneDesignObjectLocked, isSceneDesignObjectLocked } from '../scene/locks'
 import type { ScenePersistedState } from '../scene/types'
 import { EMPTY_SELECTION_MODEL } from '../scene-runtime/selection'
@@ -1528,25 +1528,6 @@ function contextMenuTargetAt(
 }
 
 function isContextMenuTargetStructurallyBlocked(scene: ScenePersistedState, target: SceneDesignObjectTarget): boolean {
-  if (isTargetLayerLocked(scene, target)) return true
+  if (isSceneTargetLayerLocked(scene, target)) return true
   return isSceneDesignObjectLocked(scene, target) && !isDirectSceneDesignObjectLocked(scene, target)
-}
-
-function isTargetLayerLocked(scene: ScenePersistedState, target: SceneDesignObjectTarget): boolean {
-  const layerNames = target.kind === 'plant'
-    ? ['plants']
-    : target.kind === 'zone'
-      ? ['zones']
-      : target.kind === 'annotation'
-        ? ['annotations']
-        : target.kind === 'measurement-guide'
-          ? ['measurement-guides']
-          : groupLayerNames(scene, target.id)
-  return layerNames.some((layerName) => scene.layers.find((layer) => layer.name === layerName)?.locked === true)
-}
-
-function groupLayerNames(scene: ScenePersistedState, groupId: string): string[] {
-  const group = scene.groups.find((entry) => entry.id === groupId)
-  if (!group) return []
-  return [...new Set(resolveSceneObjectGroupMembers(scene, group).map(sceneObjectGroupMemberLayerName))]
 }

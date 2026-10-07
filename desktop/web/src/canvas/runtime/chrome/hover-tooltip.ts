@@ -1,8 +1,8 @@
 // canvas/runtime/chrome/hover-tooltip.ts
 //
 // Owns the plant tooltip of the ToolHost's passive hover (ToolHostDeps.chrome.setTooltip, spec §1.4): the plant's common and
-// scientific names beside the pointer, kept inside the map, with today's look. The element joins the map at its first show,
-// so a map whose tools never show it carries none.
+// scientific names beside the pointer, kept inside the map, with the look it had before v2 (at a4c86d39). The element
+// joins the map at its first show, so a map whose tools never show it carries none.
 
 import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 

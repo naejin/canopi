@@ -6,9 +6,8 @@ import { contrastRatio } from '../canvas/plant-colors'
 import { getCanvasColor, refreshCanvasColorCache, CANVAS_COLOR_CSS_VARS } from '../canvas/theme-refresh'
 import {
   CANVAS_MAP_BACKDROP_COLORS,
-  getAnnotationTextColor,
   getLabelHalo,
-  getPlantLabelColor,
+  getMapTextColor,
   getPlantSymbolEdgeColor,
   getStackBadgeBackgroundColor,
   getStackBadgeTextColor,
@@ -55,10 +54,9 @@ describe('canvas label ink follows the map backdrop, not the UI theme', () => {
         setCanvasMapBackdrop(backdrop)
         const background = CANVAS_MAP_BACKDROP_COLORS[backdrop]
 
-        for (const ink of [getAnnotationTextColor(), getPlantLabelColor()]) {
-          expect(contrastRatio(ink, background), `ink ${ink} on ${background}`).toBeGreaterThanOrEqual(4.5)
-          expect(contrastRatio(ink, getLabelHalo(12).color), 'halo under the ink').toBeGreaterThanOrEqual(4.5)
-        }
+        const ink = getMapTextColor()
+        expect(contrastRatio(ink, background), `ink ${ink} on ${background}`).toBeGreaterThanOrEqual(4.5)
+        expect(contrastRatio(ink, getLabelHalo(12).color), 'halo under the ink').toBeGreaterThanOrEqual(4.5)
         expect(contrastRatio(getStackBadgeBackgroundColor(), background)).toBeGreaterThanOrEqual(4.5)
         expect(contrastRatio(getStackBadgeTextColor(), getStackBadgeBackgroundColor())).toBeGreaterThanOrEqual(4.5)
 
@@ -73,16 +71,16 @@ describe('canvas label ink follows the map backdrop, not the UI theme', () => {
     for (const backdrop of BACKDROPS) {
       setCanvasMapBackdrop(backdrop)
       applyUiTheme('light')
-      const light = [getAnnotationTextColor(), getPlantLabelColor(), getLabelHalo(12).color, getStackBadgeBackgroundColor()]
+      const light = [getMapTextColor(), getLabelHalo(12).color, getStackBadgeBackgroundColor()]
       applyUiTheme('dark')
-      const dark = [getAnnotationTextColor(), getPlantLabelColor(), getLabelHalo(12).color, getStackBadgeBackgroundColor()]
+      const dark = [getMapTextColor(), getLabelHalo(12).color, getStackBadgeBackgroundColor()]
       expect(dark, backdrop).toEqual(light)
     }
   })
 
   it('keeps cream text on a dark halo over satellite imagery', () => {
     setCanvasMapBackdrop('satellite')
-    expect(getPlantLabelColor()).toBe('#FFF3D6')
+    expect(getMapTextColor()).toBe('#FFF3D6')
     expect(getLabelHalo(12).color).toBe('#14100A')
   })
 

@@ -15,8 +15,7 @@ import type {
   ScenePlantEntity,
   SceneStateReader,
 } from '../scene'
-import { isSceneDesignObjectLocked } from '../scene'
-import { resolveSceneObjectGroupMembers, sceneObjectGroupMemberLayerName } from '../scene'
+import { isSceneDesignObjectLocked, isSceneTargetLayerLocked, sceneContainsTarget } from '../scene'
 import { projectSceneSelectionEntityIds } from './selection'
 
 interface SceneRuntimePresentationControllerOptions {
@@ -277,48 +276,11 @@ function getRendererHoverTarget(
   scene: ScenePersistedState,
   target: SceneDesignObjectTarget | null,
 ): SceneRendererHoverTarget | null {
-  if (!target || !containsHoverTarget(scene, target)) return null
-  const layerLocked = isHoverTargetLayerLocked(scene, target)
-  const state = layerLocked
+  if (!target || !sceneContainsTarget(scene, target)) return null
+  const state = isSceneTargetLayerLocked(scene, target)
     ? 'locked-layer'
     : isSceneDesignObjectLocked(scene, target)
       ? 'locked-design-object'
       : 'hover'
   return { ...target, state }
-}
-
-function containsHoverTarget(
-  scene: ScenePersistedState,
-  target: SceneDesignObjectTarget,
-): boolean {
-  if (target.kind === 'group') return scene.groups.some((group) => group.id === target.id)
-  if (target.kind === 'plant') return scene.plants.some((plant) => plant.id === target.id)
-  if (target.kind === 'zone') return scene.zones.some((zone) => zone.id === target.id)
-  if (target.kind === 'annotation') {
-    return scene.annotations.some((annotation) => annotation.id === target.id)
-  }
-  return scene.measurementGuides.some((guide) => guide.id === target.id)
-}
-
-function isHoverTargetLayerLocked(
-  scene: ScenePersistedState,
-  target: Omit<SceneRendererHoverTarget, 'state'>,
-): boolean {
-  return getHoverTargetLayers(scene, target)
-    .some((layerName) => scene.layers.find((entry) => entry.name === layerName)?.locked === true)
-}
-
-function getHoverTargetLayers(
-  scene: ScenePersistedState,
-  target: Omit<SceneRendererHoverTarget, 'state'>,
-): string[] {
-  if (target.kind === 'group') {
-    const group = scene.groups.find((entry) => entry.id === target.id)
-    if (!group) return []
-    return [...new Set(resolveSceneObjectGroupMembers(scene, group).map(sceneObjectGroupMemberLayerName))]
-  }
-  if (target.kind === 'zone') return ['zones']
-  if (target.kind === 'annotation') return ['annotations']
-  if (target.kind === 'measurement-guide') return ['measurement-guides']
-  return ['plants']
 }

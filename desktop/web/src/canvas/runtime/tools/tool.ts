@@ -85,7 +85,7 @@ export type SceneLayerKind = SceneLayerEntity['name']
  * and a stamp tool draws the template a press would add (stamp-rotation.ts stampTemplateAt: the held turn about the
  * stamp's anchor, then the move to the pointer). The tool card reads the held turn from guidance, not from the ghost.
  * A plant ghost is the plant's mark only: the Place plants mature-width ring, its label and the nearest-plant guide are ellipse, label and polyline shapes.
- * mark 'symbol' (default) draws the plant's symbol; 'dot' draws Plant a row's look: a filled disc in the plant's display colour with a 2 px
+ * mark 'symbol' draws the plant's symbol; 'dot' draws Plant a row's look: a filled disc in the plant's display colour with a 2 px
  * border of the same colour, radius half the plant's world AABB (today's (a4c86d39) plant-spacing-overlay.ts:158-181; Plant a row emits
  * its row ghosts with 'dot' at opacity 0.35). Colours come from the scene's plant presentation, never a raw colour in the draft. `sizeFrom`
  * is the point whose plant presentation gives a 'dot' its radius: Plant a row passes its source plant's position, so every disc in the row
@@ -94,7 +94,7 @@ export type SceneLayerKind = SceneLayerEntity['name']
  * ghost at 0.68 (the draft layer multiplies by each note's own marker and text opacity).
  */
 export type GhostEntity =
-  | { readonly kind: 'plant'; readonly plant: ScenePlantEntity; readonly mark?: 'symbol' | 'dot'; readonly sizeFrom?: WorldPoint }
+  | { readonly kind: 'plant'; readonly plant: ScenePlantEntity; readonly mark: 'symbol' | 'dot'; readonly sizeFrom?: WorldPoint }
   | { readonly kind: 'objects'; readonly template: SceneArrangementTemplate }  // stamp pick, saved stamp
 /** A note's text entry; the host owns the textarea. The tool card's spacing field is not one (it sends spacing commands). */
 export interface TextEntryRequest {
@@ -164,7 +164,7 @@ export interface ToolScene {
   plantPresentation(plant: ScenePlantEntity): { readonly commonName: string; readonly color: string; readonly radiusPx: number }
   isLayerOpenForCreation(layer: SceneLayerKind): boolean
   selection(): SceneDesignObjectSelection
-  selectionModel(): SelectionReadModel         // read per call, not cached (as today)
+  selectionModel(): SelectionReadModel         // memoised by reference: the same Scene, selection and scale return the same model
 }
 
 /** The only way a tool changes anything. */

@@ -10,7 +10,6 @@ import {
 } from '../runtime'
 import type { SceneHistory } from '../scene-history'
 import {
-  cloneScenePersistedState,
   type SceneDesignObjectTarget,
   type ScenePersistedState,
   type SceneStore,
@@ -71,7 +70,7 @@ export interface SceneHistoryCommands {
 type ScenePersistenceAcknowledgement = 'applied' | 'stale'
 
 export interface ScenePersistenceCapture {
-  readonly scene: ScenePersistedState
+  readonly scene: Readonly<ScenePersistedState>
   readonly plane: SessionPlane
   isCurrent(): boolean
   acknowledgeSaved(): ScenePersistenceAcknowledgement
@@ -275,7 +274,7 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       && this._history.isCheckpointCurrent(checkpoint)
 
     return Object.freeze({
-      scene: cloneScenePersistedState(scene),
+      scene,
       plane: this._sceneStore.sessionPlane,
       isCurrent: captureIsCurrent,
       acknowledgeSaved: (): ScenePersistenceAcknowledgement => {
@@ -585,8 +584,8 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
     return this._historyAccepted
   }
 
-  captureCommittedPersistedState(): ScenePersistedState {
-    return cloneScenePersistedState(this._before.persisted)
+  captureCommittedPersistedState(): Readonly<ScenePersistedState> {
+    return this._before.persisted
   }
 
   mutate(edit: (draft: ScenePersistedState) => void): void {

@@ -79,12 +79,12 @@ describe('scene query snapshot reuse', () => {
     expect(after.maxX - after.minX).not.toBe(before.maxX - before.minX)
   })
 
-  it('keeps selection, scene, and print results isolated from authoritative state', () => {
+  it('hands out a Scene snapshot frozen in dev builds and selection and print results no caller can change', () => {
     const { query } = setup()
+    expect(() => { query.getSceneSnapshot().plants[0]!.position.x = 999 }).toThrow(TypeError)
     const selection = query.getDesignObjectSelection()
     Reflect.set(selection.editableTargets[0]!, 'id', 'escaped')
     Reflect.set(selection.bounds!, 'minX', 999)
-    query.getSceneSnapshot().plants[0]!.position.x = 999
     Reflect.set(query.capturePrintSnapshot()!.plants[0]!.position, 'x', 999)
     expect(query.getDesignObjectSelection().editableTargets).toEqual([{ kind: 'plant', id: '0' }])
     expect(query.getDesignObjectSelection().bounds!.minX).toBeLessThan(0)
@@ -125,7 +125,7 @@ describe('scene query snapshot reuse', () => {
     expect(read).not.toHaveBeenCalled()
   })
 
-  it('reads one defensive snapshot for selection and its plant presentation', () => {
+  it('reads the Scene once for selection and its plant presentation', () => {
     const { store, query } = setup()
     const read = vi.spyOn(store, 'persisted', 'get')
     expect(query.getDesignObjectSelection().editableTargets).toEqual([{ kind: 'plant', id: '0' }])

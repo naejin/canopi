@@ -653,7 +653,7 @@ describe('scene canvas runtime', () => {
       runtime.commandSurface.tools.setTool('select')
       runtime.commandSurface.sceneEdits.selectAll()
 
-      // Zoom about the screen centre, away from the plants: they move on screen, and the handle with them (INV-REN-11).
+      // Zoom about the screen centre, away from the plants: they move on screen, and the handle with them.
       for (let step = 0; step < 3; step += 1) runtime.commandSurface.viewport.zoomIn()
 
       const bounds = runtime.querySurface.getDesignObjectSelection().bounds!
@@ -666,6 +666,32 @@ describe('scene canvas runtime', () => {
       expect(Number(handle.dataset.canvasHandleScreenY)).toBeCloseTo(top.y, 6)
       expect(Number.parseFloat(handle.style.top) + 28).toBeLessThanOrEqual(top.y)
     } finally {
+      runtime.destroy()
+    }
+  })
+
+  it('with Select armed and a selection, a pan refreshes no handles and builds no selection model; a zoom builds it once', async () => {
+    const runtime = stubbedRuntime()
+    await initRuntimeWithStubbedRenderer(runtime)
+    try {
+      runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1', 'plant-2'))
+      setInteractionViewport(runtime, { x: 100, y: 120, scale: 4 })
+      runtime.commandSurface.tools.setTool('select')
+      runtime.commandSurface.sceneEdits.selectAll()
+      // Select's handle refresh reads the selection model first; the host drops handles equal to the last ones.
+      const selectionReads = vi.spyOn(runtime.querySurface, 'getDesignObjectSelection')
+      window.__CANOPI_SELECTION_MODEL_BUILDS__ = 0
+
+      for (let step = 0; step < 10; step += 1) panOn(runtime, { x: 7, y: -3 })
+
+      expect(selectionReads).not.toHaveBeenCalled()
+      expect(window.__CANOPI_SELECTION_MODEL_BUILDS__).toBe(0)
+
+      runtime.commandSurface.viewport.zoomIn()
+
+      expect(window.__CANOPI_SELECTION_MODEL_BUILDS__).toBe(1)
+    } finally {
+      delete window.__CANOPI_SELECTION_MODEL_BUILDS__
       runtime.destroy()
     }
   })
@@ -2404,7 +2430,6 @@ describe('scene canvas runtime', () => {
       blockedTargets: [{
         target: { kind: 'zone', id: 'zone-1' },
         reason: 'locked-layer',
-        layerName: 'zones',
       }],
       bounds: null,
       sameSpeciesReferenceCanonicalName: null,

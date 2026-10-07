@@ -8,7 +8,7 @@
 // active one (U37); a polygon edge's midpoint dot is fainter
 // (opacity 0.5, a 1 px ring: GeoLibre's edge marker), drawn under the corners and left out of the tab order. The rotate handle is a 28 px button
 // in a hit box of its own size or larger (44 px after a touch, Q4), kept inside the visible map area, with its key swallow
-// and click stop (INV-LSN-13). A handle's readout shows as a chip
+// and click stop (handle-layer.test.ts). A handle's readout shows as a chip
 // under it, and the active handle (the one dragged, or Select's selected corner) is marked and its mark drawn hollow. Presses on a handle are
 // the DOM input source's, which reads data-canvas-handle (input/dom-input-source.ts); the layer listens only on
 // its own elements (P6).
@@ -242,7 +242,7 @@ function drawRotate(handle: ToolHandle): DrawnHandle {
   return { handle, element, readout, mark: null }
 }
 
-/** Today's rotation readout chip ('+15°'), under its handle. */
+/** The rotate handle's readout chip ('+15°'), under its handle. */
 function createReadout(): HTMLElement {
   const readout = document.createElement('span')
   readout.dataset.canvasHandleReadout = 'true'
@@ -272,7 +272,7 @@ function createReadout(): HTMLElement {
   return readout
 }
 
-/** Centred on the anchor's screen point plus its offset; the rotate button stays inside the visible map area, as today. */
+/** Centred on the anchor's screen point plus its offset; the rotate button stays inside the visible map area. */
 function place({ handle, element }: DrawnHandle, frame: ViewFrame): void {
   const anchor = frame.view.worldToScreen(handle.anchor)
   const centre = { x: anchor.x + (handle.offsetPx?.x ?? 0), y: anchor.y + (handle.offsetPx?.y ?? 0) }

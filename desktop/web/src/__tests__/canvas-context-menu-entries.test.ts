@@ -278,7 +278,6 @@ describe('canvas context menu entries', () => {
       blockedTargets: [{
         target: { kind: 'plant', id: 'locked-apple' },
         reason: 'locked-design-object',
-        layerName: 'plants',
       }],
       plantNamePinning: { plantIds: [], allPinned: false },
     })
@@ -412,7 +411,7 @@ describe('canvas context menu entries', () => {
 
     const locked = build(selection({
       lockedTargets: [{ kind: 'zone', id: 'zone-1' }],
-      blockedTargets: [{ target: { kind: 'zone', id: 'zone-1' }, reason: 'locked-design-object', layerName: 'zones' }],
+      blockedTargets: [{ target: { kind: 'zone', id: 'zone-1' }, reason: 'locked-design-object' }],
     })).entries
     expect(item(locked, 'rename-zone').disabled).toBe(true)
     item(locked, 'rename-zone').run()
@@ -438,7 +437,7 @@ describe('canvas context menu entries', () => {
     const withLocked = build(selection({
       editableTargets: [{ kind: 'zone', id: 'zone-1' }],
       lockedTargets: [{ kind: 'plant', id: 'locked-apple' }],
-      blockedTargets: [{ target: { kind: 'plant', id: 'locked-apple' }, reason: 'locked-design-object', layerName: 'plants' }],
+      blockedTargets: [{ target: { kind: 'plant', id: 'locked-apple' }, reason: 'locked-design-object' }],
     })).entries
     item(withLocked, 'rotate').run()
     expect(item(withLocked, 'rotate').disabled).toBe(true)
@@ -470,7 +469,7 @@ describe('canvas context menu entries', () => {
 
     const blocked = build(selection({
       editableTargets: [{ kind: 'group', id: 'group-1' }, { kind: 'plant', id: 'p' }],
-      blockedTargets: [{ target: { kind: 'plant', id: 'missing' }, reason: 'missing-design-object', layerName: null }],
+      blockedTargets: [{ target: { kind: 'plant', id: 'missing' }, reason: 'missing-design-object' }],
     })).entries
     expect(item(blocked, 'group').disabled).toBe(true)
     expect(item(blocked, 'ungroup').disabled).toBe(true)

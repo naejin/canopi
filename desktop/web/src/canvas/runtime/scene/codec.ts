@@ -116,7 +116,7 @@ export function cloneScenePersistedState(state: ScenePersistedState): ScenePersi
     ...state,
     plantSpeciesColors: { ...state.plantSpeciesColors },
     plantSpeciesSymbols: { ...state.plantSpeciesSymbols },
-    plantSpeciesCodes: allocateSpeciesCodes(state.plantSpeciesCodes, state.plants.map((plant) => plant.canonicalName)),
+    plantSpeciesCodes: { ...state.plantSpeciesCodes },
     layers: state.layers.map(cloneLayerEntity),
     plants: state.plants.map(clonePlantEntity),
     zones: state.zones.map(cloneZoneEntity),

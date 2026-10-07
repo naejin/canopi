@@ -57,12 +57,12 @@ export function resolveCasedStroke(
 export function casedStroke(visual: CanvasInteractionStrokeVisual, pixelsPerMetre: number): CasedStroke {
   return {
     casing: {
-      color: toPixiColor(visual.casingColor, 0),
+      color: toPixiColor(visual.casingColor),
       width: screenPxToWorldPx(visual.casingWidthPx, pixelsPerMetre),
       alpha: visual.alpha * cssColorAlpha(visual.casingColor),
     },
     stroke: {
-      color: toPixiColor(visual.color, 0),
+      color: toPixiColor(visual.color),
       width: screenPxToWorldPx(visual.widthPx, pixelsPerMetre),
       alpha: visual.alpha * cssColorAlpha(visual.color),
     },
@@ -105,13 +105,13 @@ export function cssColorAlpha(color: string): number {
   return parseHexColor(color)?.alpha ?? 1
 }
 
-export function toPixiColor(color: string | null | undefined, fallback: string | number): number {
-  const value = typeof fallback === 'number'
-    ? fallback
-    : Number.parseInt(String(fallback).replace('#', ''), 16)
+/** A CSS colour as Pixi paint: the colour and its own alpha. */
+export function pixiPaint(color: string): { readonly color: number; readonly alpha: number } {
+  return { color: toPixiColor(color), alpha: cssColorAlpha(color) }
+}
 
-  if (!color) return value
-
+/** A CSS `rgb()`, `rgba()` or hex colour as a Pixi colour number; 0 for anything else. */
+export function toPixiColor(color: string): number {
   const rgba = color.match(/rgba?\(([^)]+)\)/i)
   if (rgba) {
     const channels = rgba[1]!
@@ -124,12 +124,11 @@ export function toPixiColor(color: string | null | undefined, fallback: string |
     }
   }
 
-  const hex = parseHexColor(color)
-  return hex ? hex.rgb : value
+  return parseHexColor(color)?.rgb ?? 0
 }
 
 // `#RGB`, `#RGBA`, `#RRGGBB` and `#RRGGBBAA`; anything else (named colours,
-// hsl()) is not a colour this renderer knows and keeps the fallback.
+// hsl()) is not a colour this renderer knows.
 function parseHexColor(color: string): { rgb: number; alpha: number } | null {
   const match = color.trim().match(/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i)
   if (!match) return null
@@ -171,7 +170,7 @@ const textStyleKeys = new WeakMap<Text, string>()
 /** The halo under map text, so it reads on the backdrop and on busy imagery. */
 export function labelHaloStroke(fontSizePx: number): { color: number; width: number; join: 'round' } {
   const halo = getLabelHalo(fontSizePx)
-  return { color: toPixiColor(halo.color, 0), width: halo.widthPx, join: 'round' }
+  return { color: toPixiColor(halo.color), width: halo.widthPx, join: 'round' }
 }
 
 export function setTextStyle(text: Text, options: TextStyleOptions): void {
