@@ -1159,7 +1159,7 @@ export interface SelectionPreview { readonly translate: WorldVector; readonly ro
 export interface ToolHandle {
   readonly id: ToolHandleId              // unique across objects: 'rotate', 'vertex:<zone id>:<index>', 'rect-corner:<id>:ne', 'guide-end:<id>:a', 'edge-mid:<zone id>:<index>'
   readonly anchor: WorldPoint
-  readonly offsetPx?: ScreenPoint        // rotate handle: centred 28 px above the selection's projected hull
+  readonly offsetPx?: ScreenPoint        // rotate handle: centred 28 px above the selection's projected hull; 48 px while the selected polygon shows midpoint dots, so it clears a dotted edge's chip (U38, canopi-f47t.29)
   readonly hitRadiusPx: number           // 10 for mouse and pen; 22 after a touch (44 px target, ADR 0010): the kind that last pressed or hovered (U41)
   readonly glyph: 'vertex' | 'corner' | 'rotate' | 'midpoint'
   readonly label: string                 // aria-label, always translated: the rotate handle, "Zone control point N", "Measurement guide endpoint N" (C8)
@@ -1945,7 +1945,7 @@ Notes are map objects: stored `rotationDeg` is clockwise from true north (null r
 
 ### 4.9 Hit testing and band select
 
-Hits are world-space and unaffected by bearing; pixel tolerances convert through `metresPerPixelAt`. The band is drawn as a screen rectangle and hits everything in its world quad (the band's corners through `screenAxesInWorld`, `tools/select/band.ts`, → `hitInQuad`); the draft is a `quad` shape. `hitInQuad` is a polygon test against shapes and a circle test for plants, never the quad's world box; `hitAt` with `toleranceScreenPx` returns the nearest polygon, rectangle (from its turned corners) or line edge; both skip hidden layers. Selection handles, and the keyboard menu's anchor, use the selection hull: the screen box of the shapes the selection draws, as a world quad (`tools/select/selection-hull.ts`, INV-XF-22), never the box of its world bounds; the rotate handle is centred 28 px above the projected hull on screen. The note hit box is the rotated text box, north-relative, the same model as print and GeoJSON.
+Hits are world-space and unaffected by bearing; pixel tolerances convert through `metresPerPixelAt`. The band is drawn as a screen rectangle and hits everything in its world quad (the band's corners through `screenAxesInWorld`, `tools/select/band.ts`, → `hitInQuad`); the draft is a `quad` shape. `hitInQuad` is a polygon test against shapes and a circle test for plants, never the quad's world box; `hitAt` with `toleranceScreenPx` returns the nearest polygon, rectangle (from its turned corners) or line edge; both skip hidden layers. Selection handles, and the keyboard menu's anchor, use the selection hull: the screen box of the shapes the selection draws, as a world quad (`tools/select/selection-hull.ts`, INV-XF-22), never the box of its world bounds; the rotate handle is centred 28 px above the projected hull on screen; 48 px while the selected polygon shows midpoint dots, so it clears a dotted edge's chip (U38, canopi-f47t.29). The note hit box is the rotated text box, north-relative, the same model as print and GeoJSON.
 
 ### 4.10 Saved views and stories
 
