@@ -150,6 +150,31 @@ describe('billboard layer', () => {
     layer.dispose()
   })
 
+  it('a single selected plant\'s name is drawn opaque below it at a zoom that hides names, follows a pan and goes with the selection', () => {
+    const layer = createBillboardLayer({ createText: () => new Text(), viewSize: { width: 400, height: 300 } })
+    const apple = createPlant({ id: 'apple', position: { x: 4, y: 3 } })
+    const selected = createTestSceneRendererSnapshot({ scene: { plants: [apple] }, selectedTargets: [{ kind: 'plant', id: 'apple' }] })
+    const named = () => nodes(layer.root).filter((node): node is Text => node instanceof Text && node.text === 'Apple')
+
+    // 4 px/m fades every overview name to 0; the selection's name stays opaque.
+    for (const [view, next] of [[createTestRendererView({ x: 200, y: 150, scale: 4 }), selected], [createTestRendererView({ x: 230, y: 110, scale: 4 }), undefined]] as const) {
+      layer.present(view, next)
+      const [label] = named()
+      expect(named()).toHaveLength(1)
+      expect(label!.style.fontStyle).toBe('normal')
+      expect(label!.visible && label!.parent!.visible).toBe(true)
+      expect(label!.alpha * label!.parent!.alpha).toBe(1)
+      const at = view.worldToScreen(apple.position)
+      expect(label!.position.x).toBeCloseTo(at.x, 3)
+      expect(label!.position.y - at.y).toBeGreaterThanOrEqual(5)
+      expect(label!.position.y - at.y).toBeLessThanOrEqual(8)
+    }
+
+    layer.present(createTestRendererView({ x: 230, y: 110, scale: 4 }), createTestSceneRendererSnapshot({ scene: { plants: [apple] } }))
+    expect(named()).toHaveLength(0)
+    layer.dispose()
+  })
+
   it('a pan frame creates no glyph context and redraws no ring, badge or marker', () => {
     const layer = createBillboardLayer({ createText: () => new Text(), viewSize: { width: 400, height: 300 } })
     // At 6 px/m the plants are dots and the note shows its marker under its selection outline.
