@@ -459,6 +459,21 @@ test.describe('Chromium touch', () => {
     await expect(page.getByRole('dialog', { name: 'Rename zone' }), 'the lift opens no dialog').toHaveCount(0)
   })
 
+  test('Q1: Select keeps a finger\'s 44 px handles after a finger switches tools and back', async ({ page }) => {
+    await openBaseFixture(page, TABLET)
+    const fingers = await Fingers.of(page)
+    await fingers.tap(RECT_EDGE)
+    await expect(selectionChip(page)).toHaveText(RECT_ZONE_CHIP)
+
+    await tool(page, 'Measure').tap()
+    await expect(tool(page, 'Measure')).toHaveAttribute('aria-pressed', 'true')
+    await tool(page, 'Select').tap()
+    await expect(tool(page, 'Select')).toHaveAttribute('aria-pressed', 'true')
+
+    await expect.poll(async () => (await zoneCorners(page)).map((handle) => Math.round(handle.width)), 'the new Select sizes them for the finger')
+      .toEqual([44, 44, 44, 44])
+  })
+
 })
 
 test.describe('WebKit touch', () => {

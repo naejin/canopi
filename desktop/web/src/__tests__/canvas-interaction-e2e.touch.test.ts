@@ -292,6 +292,32 @@ describe('SceneInteractionSession: touch', () => {
     session.dispose()
   })
 
+  it('a new Select keeps a finger\'s 44 px handles: a tool switch and back, then a selection made off the map (Q1)', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [
+        makeRectZone('zone-1', [{ x: 40, y: 60 }, { x: 240, y: 60 }, { x: 240, y: 160 }, { x: 40, y: 160 }]),
+        makeRectZone('zone-2', [{ x: 300, y: 60 }, { x: 400, y: 60 }, { x: 400, y: 160 }, { x: 300, y: 160 }]),
+      ]
+    })
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('select')
+    const widths = () => [...container.querySelectorAll<HTMLElement>('[data-canvas-handle^="rect-corner:"]')].map((element) => element.style.width)
+
+    touchDown({ x: 140, y: 110 })
+    touchUp({ x: 140, y: 110 })
+    expect(widths()).toEqual(['44px', '44px', '44px', '44px'])
+
+    session.setTool('measurement-guide')
+    session.setTool('select')
+    expect(widths()).toEqual(['44px', '44px', '44px', '44px'])
+
+    // A panel selects the other zone: the host hears no press.
+    currentCanvasSelection.value = new Set(['zone-2'])
+    session.refreshMeasurements()
+    expect(widths()).toEqual(['44px', '44px', '44px', '44px'])
+    session.dispose()
+  })
+
   it('the shared rotationHandleCenter aims at the centre of the 44 px box a finger\'s tap gives the rotate handle', () => {
     store.updatePersisted((draft) => {
       draft.zones = [makeRectZone('zone-1', [{ x: 40, y: 60 }, { x: 240, y: 60 }, { x: 240, y: 160 }, { x: 40, y: 160 }])]
