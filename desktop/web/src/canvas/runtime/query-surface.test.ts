@@ -22,8 +22,8 @@ afterEach(() => {
 })
 
 async function mountedRuntime(): Promise<{ runtime: SceneCanvasRuntime, container: HTMLDivElement, events: SceneInteractionEventHarness }> {
-  const renderer = { id: 'maplibre-pixi' as const, syncScene: vi.fn(), setView: vi.fn(), setDraft: vi.fn(), dispose: vi.fn() }
-  const runtime = new SceneCanvasRuntime({ renderer: { id: 'test', initialize: () => renderer } })
+  const runtime = new SceneCanvasRuntime()
+  runtime.connectRenderTarget({ setSnapshot: vi.fn(), setDraft: vi.fn(), requestRender: vi.fn() })
   const container = document.createElement('div')
   document.body.appendChild(container)
   Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })

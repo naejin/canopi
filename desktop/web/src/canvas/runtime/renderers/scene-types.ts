@@ -1,7 +1,6 @@
 import type { SpeciesFocus } from '../species-key'
-import type { SceneDesignObjectTarget, ScenePersistedState } from '../scene'
+import type { ScenePersistedState } from '../scene'
 import type { DraftPresentation } from '../tools/draft'
-import type { ViewTransform } from '../view/types'
 import type { SpeciesCacheEntry } from '../species-cache'
 import type { PlantLabelMode } from '../plant-display'
 
@@ -46,34 +45,15 @@ export interface SceneRendererSnapshot {
   readonly editingAids?: SceneEditingAids
 }
 
-interface SceneRendererContext {
-  readonly container: HTMLElement
-}
-
-/** The one scene renderer the runtime mounts (ADR 0004): there is no selection or fallback. */
-export interface SceneRendererDefinition {
-  readonly id: string
-  initialize(context: SceneRendererContext): SceneRenderer | PromiseLike<SceneRenderer>
-}
-
-export interface SceneChangeSet {
-  readonly scene: boolean                                   // document revision
-  readonly selection: boolean
-  readonly hover: readonly SceneDesignObjectTarget[]        // old and new hover target only: a two-node restyle
-  readonly style: boolean                                   // theme, backdrop, plant display settings
-  readonly labels: boolean                                  // label admission recomputed (each scale change; from phase R, settle or band change)
-}
-
 /**
- * The mounted scene renderer (spec §1.5). MapLibre owns the drawing surface, its size and its frame loop, so the renderer
- * receives retained scene data through `syncScene` and the camera through `setView`, and nothing else.
+ * The one scene render target (ADR 0019): the map-owned shared scene layer, which the render scheduler's one slot holds
+ * (`SceneRuntimeRenderScheduler.connect`). MapLibre owns the drawing surface, its size and its frame loop; the layer reads
+ * the camera frame in its own `render`, so nothing hands it a view.
  */
-export interface SceneRenderer {
-  readonly id: 'maplibre-pixi'
-  /** Data, selection, hover, style or label admission changed. Never called for a pan. No camera in the snapshot. */
-  syncScene(snapshot: SceneRendererSnapshot, changes: SceneChangeSet): void
-  /** The only per-frame entry: world-root matrix, visible set, billboard anchors, zoom-band re-key. */
-  setView(view: ViewTransform): void
+export interface SceneRenderTarget {
+  /** Data, selection, hover or style changed. Never sent for a pan. No camera in the snapshot. */
+  setSnapshot(snapshot: SceneRendererSnapshot): void
   setDraft(draft: DraftPresentation | null): void
-  dispose(): void | PromiseLike<void>
+  /** A camera frame: MapLibre draws the scene under the frame's view. */
+  requestRender(): void
 }

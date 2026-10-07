@@ -7,7 +7,7 @@ import 'pixi.js/filters'
 import { Container, Text, Ticker, WebGLRenderer, type WebGLOptions } from 'pixi.js'
 import type { CustomLayerInterface, CustomRenderMethodInput } from 'maplibre-gl'
 import { createPixiScenePresentation, type PixiScenePresentation } from '../canvas/runtime/renderers/pixi-scene'
-import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
+import type { SceneRendererSnapshot, SceneRenderTarget } from '../canvas/runtime/renderers/scene-types'
 import type { DraftPresentation } from '../canvas/runtime/tools/draft'
 import type { ViewFrameSource, ViewTransform } from '../canvas/runtime/view/types'
 
@@ -113,17 +113,13 @@ export interface SharedMapSceneLayer {
   dispose(options?: { readonly mapWillBeRemoved?: boolean }): Promise<void>
 }
 
-/**
- * What the MapLibre scene bridge forwards to the layer for the Pixi draft layer (0B): the ToolHost's draft. The layer
- * keeps the latest until its presentation exists, and drops it on dispose.
- */
-export interface SharedMapSceneDraftSink {
-  setDraft(draft: DraftPresentation | null): void
-}
-
 type Phase = SharedMapSceneDiagnostics['phase']
 
-export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): SharedMapSceneLayer & SharedMapSceneDraftSink {
+/**
+ * The layer is also the runtime's scene render target (its one slot, `SceneCanvasRuntime.connectRenderTarget`): it keeps
+ * the latest snapshot and draft until its presentation exists, and drops them on dispose.
+ */
+export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): SharedMapSceneLayer & SceneRenderTarget {
   let phase: Phase = 'new'
   let map: SharedMapSceneMap | null = null
   let context: WebGL2RenderingContext | null = null
@@ -206,15 +202,16 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
       try {
         renderer.resetState()
         presentation.resize(rendererSize.width, rendererSize.height)
-        if (view !== presentedView) {
-          presentation.setView(view)
-          presentedView = view
-        }
+        // One present per frame: a new view, a new snapshot, or both at once.
         if (pendingSnapshot) {
           renderedSnapshot = pendingSnapshot
           pendingSnapshot = null
-          presentation.syncScene(renderedSnapshot)
+          presentation.present(view, renderedSnapshot)
+          presentedView = view
           sceneSyncCount += 1
+        } else if (view !== presentedView) {
+          presentation.present(view)
+          presentedView = view
         }
         renderer.render({ container: stage, clear: false })
       } catch (error) {

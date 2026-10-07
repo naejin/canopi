@@ -195,7 +195,6 @@ function createComposition(options: {
     setSnapshot: vi.fn(), requestRender: vi.fn(), dispose,
   }
   const composition = {
-    renderer: {} as never,
     createLayer: vi.fn(() => layer),
   } satisfies SharedMapSceneRendererComposition
   return { composition, layer, dispose }
@@ -473,7 +472,6 @@ describe('WorkspaceActivationCoordinator', () => {
     const first = createComposition({ dispose: () => firstDisposal.promise })
     const second = createComposition()
     const composition: SharedMapSceneRendererComposition = {
-      renderer: {} as never,
       createLayer: vi.fn()
         .mockReturnValueOnce(first.layer)
         .mockReturnValue(second.layer),
@@ -664,7 +662,6 @@ describe('WorkspaceActivationCoordinator', () => {
     const first = createComposition({ dispose: async () => { events.push('layer-dispose') } })
     const second = createComposition()
     const composition: SharedMapSceneRendererComposition = {
-      renderer: {} as never,
       createLayer: vi.fn()
         .mockReturnValueOnce(first.layer)
         .mockReturnValueOnce(second.layer),
@@ -727,7 +724,6 @@ describe('WorkspaceActivationCoordinator', () => {
     const first = createComposition()
     const second = createComposition()
     const composition: SharedMapSceneRendererComposition = {
-      renderer: {} as never,
       createLayer: vi.fn()
         .mockReturnValueOnce(first.layer)
         .mockReturnValueOnce(second.layer),
@@ -751,7 +747,6 @@ describe('WorkspaceActivationCoordinator', () => {
     const first = createComposition()
     const second = createComposition()
     const composition: SharedMapSceneRendererComposition = {
-      renderer: {} as never,
       createLayer: vi.fn()
         .mockReturnValueOnce(first.layer)
         .mockReturnValueOnce(second.layer),
@@ -1228,7 +1223,6 @@ describe('WorkspaceActivationCoordinator', () => {
     const first = createComposition({ dispose: () => layerDisposal.promise })
     const successor = createComposition()
     const composition: SharedMapSceneRendererComposition = {
-      renderer: {} as never,
       createLayer: vi.fn().mockReturnValueOnce(first.layer).mockReturnValueOnce(successor.layer),
     }
     const maps = [new FakeMap(), new FakeMap()]
@@ -1539,7 +1533,6 @@ describe('WorkspaceActivationCoordinator', () => {
     const first = createComposition({ dispose: () => firstDisposal.promise })
     const newest = createComposition()
     const composition: SharedMapSceneRendererComposition = {
-      renderer: {} as never,
       createLayer: vi.fn()
         .mockReturnValueOnce(first.layer)
         .mockReturnValue(newest.layer),
@@ -1646,7 +1639,6 @@ describe('WorkspaceActivationCoordinator', () => {
     const first = createComposition()
     const recovered = createComposition()
     const composition: SharedMapSceneRendererComposition = {
-      renderer: {} as never,
       createLayer: vi.fn()
         .mockReturnValueOnce(first.layer)
         .mockReturnValueOnce(recovered.layer),
@@ -1940,8 +1932,8 @@ describe('WorkspaceActivationCoordinator', () => {
 
   it('uses a real SceneCanvasRuntime and shared composition without adding a runtime canvas', async () => {
     const map = new FakeMap()
-    const composition = createSharedMapSceneRendererComposition()
-    const runtime = new SceneCanvasRuntime({ renderer: composition.renderer })
+    const runtime = new SceneCanvasRuntime()
+    const composition = createSharedMapSceneRendererComposition((target) => runtime.connectRenderTarget(target))
     runtime.documentSurface.resize(400, 300)
     const camera = runtime.cameraHost
     const container = document.createElement('div')
@@ -1955,7 +1947,7 @@ describe('WorkspaceActivationCoordinator', () => {
       composition: withLayerFactories(composition, {
         createRenderer: () => renderer,
         createStage: () => ({ destroy: vi.fn() }) as never,
-        createPresentation: () => ({ dispose() {}, resize() {}, setView() {}, setDraft() {}, syncScene() {} }),
+        createPresentation: () => ({ dispose() {}, resize() {}, present() {}, setDraft() {} }),
       }),
       map: {
         createMap: async () => map as unknown as WorkspaceActivationMap,
@@ -2008,7 +2000,7 @@ function withLayerFactories(
   composition: SharedMapSceneRendererComposition,
   factories: Pick<SharedMapSceneLayerOptions, 'createRenderer' | 'createStage' | 'createPresentation'>,
 ): SharedMapSceneRendererComposition {
-  return { renderer: composition.renderer, createLayer: (options) => composition.createLayer({ ...options, ...factories }) }
+  return { createLayer: (options) => composition.createLayer({ ...options, ...factories }) }
 }
 
 function realComposition(options: {
@@ -2049,7 +2041,7 @@ function realComposition(options: {
       composition: withLayerFactories(workspaceOptions.composition, {
         createRenderer: () => pixi,
         createStage: () => ({ destroy: vi.fn() }) as never,
-        createPresentation: () => ({ dispose() {}, resize() {}, setView() {}, setDraft() {}, syncScene() {} }),
+        createPresentation: () => ({ dispose() {}, resize() {}, present() {}, setDraft() {} }),
       }),
     }),
     createControls: (controlOptions) => ({

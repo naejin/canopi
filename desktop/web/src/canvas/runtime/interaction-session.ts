@@ -42,7 +42,7 @@ import type { GestureOutcome, InputRouterDeps, PointerWorld, ToolHost, ToolHostD
 import type { Modifiers, ToolId } from './interaction-types'
 import { createCanvasKeyboardPort } from './keyboard-port'
 import type { PlantPresentationContext } from './plant-presentation'
-import type { SceneRenderer } from './renderers/scene-types'
+import type { SceneRenderTarget } from './renderers/scene-types'
 import type {
   CanvasDesignObjectSelectionModel,
   CanvasKeyboardPort,
@@ -124,7 +124,7 @@ export interface SceneInteractionSessionDeps {
   /** The view's navigation: pans, zooms, turns and north. */
   readonly viewNavigation: ViewNavigation
   /** The mounted renderer's draft sink (scene-runtime.ts, over the render scheduler). */
-  readonly renderer: Pick<SceneRenderer, 'setDraft'>
+  readonly renderer: Pick<SceneRenderTarget, 'setDraft'>
   /** The app's focus port (CanvasRuntimeAppAdapter.focus); absent, the session focuses the map host itself, as today. */
   readonly focus?: CanvasFocusPort
   /** Injected for tests; otherwise the session detects it from the browser, as the editions' key routers detect theirs. */
@@ -195,7 +195,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private readonly _navigation: InputRouterDeps['navigation'] & Pick<ViewNavigation, 'zoomIn' | 'zoomOut' | 'resetNorth' | 'rotateBy'>
   private readonly _router: ReturnType<typeof createInputRouter>
   private readonly _source: ReturnType<typeof createDomInputSource>
-  private readonly _renderer: Pick<SceneRenderer, 'setDraft'>
+  private readonly _renderer: Pick<SceneRenderTarget, 'setDraft'>
   private readonly _detachSource: () => void
   private readonly _stopWatchingSources: () => void
   private readonly _storyObserver: MutationObserver | null

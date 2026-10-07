@@ -27,18 +27,18 @@ describe('billboard layer', () => {
       createPlant({ id: 'apple', position: { x: 4, y: 3 }, pinnedName: true }),
       createPlant({ id: 'pear', canonicalName: 'Pyrus communis', commonName: 'Pear', position: { x: 6, y: 2 } }),
     ]
-    layer.syncScene(createTestSceneRendererSnapshot({
+    const snapshot = createTestSceneRendererSnapshot({
       scene: {
         plants,
         annotations: [{ kind: 'annotation', id: 'note', annotationType: 'text', locked: false,
           position: { x: 5, y: 5 }, text: 'Pond edge', fontSize: 16, rotationDeg: 30 }],
       },
       selectedTargets: [{ kind: 'plant', id: 'pear' }],
-    }))
+    })
 
     for (const bearingDeg of [0, 30, 45, 60, 200]) {
       const view = createTestRendererView({ x: 200, y: 150, scale: 20 }, { bearingDeg })
-      layer.setView(view)
+      layer.present(view, bearingDeg === 0 ? snapshot : undefined)
       // The root carries no transform: billboards are CSS px, placed one by one.
       layer.root.updateLocalTransform()
       expect(layer.root.localTransform.a).toBe(1)

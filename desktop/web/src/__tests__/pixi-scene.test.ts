@@ -207,8 +207,7 @@ describe('createPixiScenePresentation', () => {
     const renderer = mountPresentation(document.createElement('div'))
     const add = vi.spyOn(LabelCollisionIndex.prototype, 'add')
     try {
-      renderer.setView(view({ x: 0, y: 0, scale: 100 }))
-      renderer.syncScene(createTestSceneRendererSnapshot({ scene: { plants: [createPlant({ position: { x: 1, y: 1 } })] } }))
+      renderer.present(view({ x: 0, y: 0, scale: 100 }), createTestSceneRendererSnapshot({ scene: { plants: [createPlant({ position: { x: 1, y: 1 } })] } }))
       const text = pixi.__pixiMockState.texts.find(t => t.text === 'Apple')!
       expect(text).toBeDefined()
       const [x, y] = text.position.set.mock.calls.at(-1)!
@@ -216,14 +215,14 @@ describe('createPixiScenePresentation', () => {
       // A pan writes the world root's matrix and projects the anchors again; admission is kept.
       const panned = view({ x: 10, y: 20, scale: 100 })
       const projectAnchors = vi.fn(panned.projectAnchors)
-      renderer.setView({ ...panned, projectAnchors })
+      renderer.present({ ...panned, projectAnchors })
       expect(add).not.toHaveBeenCalled()
       expect(projectAnchors).toHaveBeenCalled()
       expect(renderer.stage.children[0]!.matrix).toEqual([100, 0, 0, 100, 10, 20])
       const [pannedX, pannedY] = text.position.set.mock.calls.at(-1)!
       expect(pannedX).toBeCloseTo(x + 10, 3)
       expect(pannedY).toBeCloseTo(y + 20, 3)
-      renderer.setView(view({ x: 10, y: 20, scale: 110 }))
+      renderer.present(view({ x: 10, y: 20, scale: 110 }))
       expect(add).toHaveBeenCalled()
     } finally {
       add.mockRestore()
@@ -235,18 +234,17 @@ describe('createPixiScenePresentation', () => {
       __pixiMockState: { graphics: Array<{ clear: ReturnType<typeof vi.fn> }> }
     }
     const renderer = mountPresentation(document.createElement('div'))
-    renderer.setView(view({ x: 0, y: 0, scale: 30 }))
-    renderer.syncScene(createTestSceneRendererSnapshot({ scene: {
+    renderer.present(view({ x: 0, y: 0, scale: 30 }), createTestSceneRendererSnapshot({ scene: {
       zones: [{ kind: 'zone', id: 'bed', name: 'bed', zoneType: 'rect', locked: false, rotationDeg: 0, fillColor: '#eeeeee', notes: null,
         points: [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 2 }, { x: 0, y: 2 }] }],
       measurementGuides: [{ kind: 'measurement-guide', id: 'guide', locked: false, start: { x: 0, y: 0 }, end: { x: 2, y: 0 } }],
     } }))
     const graphics = pixi.__pixiMockState.graphics
     graphics.forEach(g => g.clear.mockClear())
-    renderer.setView(view({ x: 10, y: 20, scale: 30 }))
+    renderer.present(view({ x: 10, y: 20, scale: 30 }))
     graphics.forEach(g => expect(g.clear).not.toHaveBeenCalled())
     expect(renderer.stage.children[0]!.matrix).toEqual([30, 0, 0, 30, 10, 20])
-    renderer.setView(view({ x: 10, y: 20, scale: 60 }))
+    renderer.present(view({ x: 10, y: 20, scale: 60 }))
     graphics.forEach(g => expect(g.clear).toHaveBeenCalledOnce())
     expect(renderer.stage.children[0]!.matrix).toEqual([60, 0, 0, 60, 10, 20])
     renderer.dispose()
@@ -261,17 +259,16 @@ describe('createPixiScenePresentation', () => {
     const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [
       createPlant({ symbol: 'shrub', position: { x: 2, y: 2 } }),
     ] } })
-    renderer.setView(view({ x: 0, y: 0, scale: 30 }))
-    renderer.syncScene(snapshot)
+    renderer.present(view({ x: 0, y: 0, scale: 30 }), snapshot)
     const plant = pixi.__pixiMockState.graphics[0]!
     plant.clear.mockClear()
-    renderer.setView(view({ x: 10000, y: 0, scale: 60 }))
+    renderer.present(view({ x: 10000, y: 0, scale: 60 }))
     expect(plant.visible).toBe(false)
     expect(plant.clear).not.toHaveBeenCalled()
-    renderer.syncScene({ ...snapshot,
+    renderer.present(view({ x: 10000, y: 0, scale: 60 }), { ...snapshot,
       scene: { ...snapshot.scene, plants: snapshot.scene.plants.map(p => ({ ...p, color: '#ff0000' })) },
     })
-    renderer.setView(view({ x: 0, y: 0, scale: 60 }))
+    renderer.present(view({ x: 0, y: 0, scale: 60 }))
     expect(plant.visible).toBe(true)
     expect(plant.clear).not.toHaveBeenCalled()
     expect(plant.fill).toHaveBeenLastCalledWith(expect.objectContaining({ color: 0xff0000 }))
@@ -290,17 +287,14 @@ describe('createPixiScenePresentation', () => {
     const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [
       createPlant({ symbol: 'shrub', position: { x: 2, y: 2 } }),
     ] } })
-    renderer.setView(view({ x: 0, y: 0, scale: 30 }))
-    renderer.syncScene(snapshot)
+    renderer.present(view({ x: 0, y: 0, scale: 30 }), snapshot)
     const orphaned = () => pixi.__pixiMockState.graphicsContexts.filter((c) => c.destroyed && c.ownerCount > 0).length
     for (let generation = 0; generation < 4; generation += 1) {
-      renderer.setView(view({ x: 10000 + generation, y: 0, scale: 60 }))
-      renderer.syncScene(snapshot)
+      renderer.present(view({ x: 10000 + generation, y: 0, scale: 60 }), snapshot)
       expect(orphaned()).toBe(0)
     }
     expect(() => {
-      renderer.setView(view({ x: 0, y: 0, scale: 60 }))
-      renderer.syncScene(snapshot)
+      renderer.present(view({ x: 0, y: 0, scale: 60 }), snapshot)
     }).not.toThrow()
     expect(orphaned()).toBe(0)
     renderer.dispose()
@@ -315,13 +309,12 @@ describe('createPixiScenePresentation', () => {
       kind: 'annotation', id: 'note', annotationType: 'text', locked: false,
       position: { x: 1, y: 1 }, text: 'Orchard', fontSize: 16, rotationDeg: 0,
     }] } })
-    renderer.setView(view({ x: 0, y: 0, scale: 30 }))
-    renderer.syncScene(snapshot)
+    renderer.present(view({ x: 0, y: 0, scale: 30 }), snapshot)
     const text = pixi.__pixiMockState.texts[0]!
     const style = text.style
-    renderer.setView(view({ x: 10, y: 20, scale: 30 }))
+    renderer.present(view({ x: 10, y: 20, scale: 30 }))
     expect(text.style).toBe(style)
-    renderer.syncScene({ ...snapshot, scene: { ...snapshot.scene,
+    renderer.present(view({ x: 10, y: 20, scale: 30 }), { ...snapshot, scene: { ...snapshot.scene,
       annotations: snapshot.scene.annotations.map(a => ({ ...a, fontSize: 20 })),
     } })
     expect(text.style).not.toBe(style)
@@ -344,8 +337,7 @@ describe('createPixiScenePresentation', () => {
       createPlant({ id: 'a', symbol: 'shrub', position: { x: 1, y: 1 } }),
       createPlant({ id: 'b', symbol: 'shrub', position: { x: 5, y: 1 } }),
     ] } })
-    renderer.setView(view({ x: 0, y: 0, scale: 30 }))
-    renderer.syncScene(snapshot)
+    renderer.present(view({ x: 0, y: 0, scale: 30 }), snapshot)
     const [firstPlant, secondPlant] = pixi.__pixiMockState.graphics
     expect(firstPlant).toBeDefined()
     expect(secondPlant).toBeDefined()
@@ -355,27 +347,27 @@ describe('createPixiScenePresentation', () => {
     expect((sharedContext as { ownerCount: number }).ownerCount).toBe(2)
     firstPlant!.clear.mockClear()
     secondPlant!.clear.mockClear()
-    renderer.setView(view({ x: 10, y: 20, scale: 30 }))
+    renderer.present(view({ x: 10, y: 20, scale: 30 }))
     expect(firstPlant!.clear).not.toHaveBeenCalled()
     expect(secondPlant!.clear).not.toHaveBeenCalled()
     expect(firstPlant!.position.set).toHaveBeenLastCalledWith(40, 50)
     expect(firstPlant!.context).toBe(sharedContext)
-    renderer.syncScene({ ...snapshot, selectedPlantIds: new Set(['b']) })
+    renderer.present(view({ x: 10, y: 20, scale: 30 }), { ...snapshot, selectedPlantIds: new Set(['b']) })
     // Selection rings the plant in its own graphic; the symbol geometry stays shared.
     expect(firstPlant!.context).toBe(sharedContext)
     expect(secondPlant!.context).toBe(sharedContext)
     expect(pixi.__pixiMockState.graphics).toHaveLength(3)
-    renderer.setView(view({ x: 0, y: 0, scale: 60 }))
+    renderer.present(view({ x: 0, y: 0, scale: 60 }))
     expect(firstPlant!.context).not.toBe(sharedContext)
     const zoomContext = firstPlant!.context
-    renderer.syncScene({ ...snapshot, scene: { ...snapshot.scene, plants: snapshot.scene.plants.map(p => ({ ...p, color: '#ff0000' })) } })
+    renderer.present(view({ x: 0, y: 0, scale: 60 }), { ...snapshot, scene: { ...snapshot.scene, plants: snapshot.scene.plants.map(p => ({ ...p, color: '#ff0000' })) } })
     expect(firstPlant!.context).toBe(secondPlant!.context)
     expect(firstPlant!.context).not.toBe(zoomContext)
     expect(firstPlant!.clear).not.toHaveBeenCalled()
     expect(secondPlant!.clear).not.toHaveBeenCalled()
-    renderer.setView(view({ x: 0, y: 0, scale: 30 }))
-    renderer.setView(view({ x: 0, y: 0, scale: 60 }))
-    renderer.setView(view({ x: 0, y: 0, scale: 90 }))
+    renderer.present(view({ x: 0, y: 0, scale: 30 }))
+    renderer.present(view({ x: 0, y: 0, scale: 60 }))
+    renderer.present(view({ x: 0, y: 0, scale: 90 }))
     const plantContexts = pixi.__pixiMockState.graphicsContexts
       .filter(context => context.bezierCurveTo.mock.calls.length > 0)
     expect(plantContexts.filter(context => context.destroy.mock.calls.length > 0)).not.toHaveLength(0)
@@ -394,14 +386,13 @@ describe('createPixiScenePresentation', () => {
       createPlant({ id: 'a', position: { x: 1, y: 1 } }),
       createPlant({ id: 'b', position: { x: 5, y: 1 } }),
     ] } })
-    renderer.setView(view({ x: 0, y: 0, scale: 30 }))
-    renderer.syncScene(snapshot)
+    renderer.present(view({ x: 0, y: 0, scale: 30 }), snapshot)
     const [firstPlant, secondPlant] = pixi.__pixiMockState.graphics
     const sharedContext = firstPlant!.context
     expect(secondPlant!.context).toBe(sharedContext)
     expect(sharedContext.ownerCount).toBe(2)
 
-    renderer.syncScene({ ...snapshot, scene: { ...snapshot.scene, plants: [snapshot.scene.plants[1]!] } })
+    renderer.present(view({ x: 0, y: 0, scale: 30 }), { ...snapshot, scene: { ...snapshot.scene, plants: [snapshot.scene.plants[1]!] } })
     expect(firstPlant!.destroy).toHaveBeenCalledOnce()
     expect(sharedContext.ownerCount).toBe(1)
 
@@ -423,18 +414,17 @@ describe('createPixiScenePresentation', () => {
     const snapshot = createTestSceneRendererSnapshot({ scene: {
       plants: [createPlant({ symbol: 'shrub', position: { x: 2, y: 2 } })],
     } })
-    renderer.setView(view({ x: 0, y: 0, scale: 20 }))
-    renderer.syncScene(snapshot)
+    renderer.present(view({ x: 0, y: 0, scale: 20 }), snapshot)
     const plant = pixi.__pixiMockState.graphics[0]!
     const contextA = plant.context
-    renderer.setView(view({ x: 0, y: 0, scale: 30 }))
+    renderer.present(view({ x: 0, y: 0, scale: 30 }))
     const contextB = plant.context
-    renderer.setView(view({ x: 0, y: 0, scale: 20 }))
+    renderer.present(view({ x: 0, y: 0, scale: 20 }))
     expect(plant.context).toBe(contextA)
     expect(contextA.destroy).not.toHaveBeenCalled()
-    renderer.setView(view({ x: 0, y: 0, scale: 40 }))
+    renderer.present(view({ x: 0, y: 0, scale: 40 }))
     const contextC = plant.context
-    renderer.setView(view({ x: 0, y: 0, scale: 60 }))
+    renderer.present(view({ x: 0, y: 0, scale: 60 }))
     const contextD = plant.context
     expect(contextB.destroy).toHaveBeenCalledOnce()
     expect(contextA.destroy).not.toHaveBeenCalled()
@@ -472,8 +462,7 @@ describe('createPixiScenePresentation', () => {
       createPlant({ id: 'apple', position: { x: 0, y: 0 } }),
       createPlant({ id: 'mint', canonicalName: 'Mentha spicata', position: { x: 3, y: 0 } }),
     ] }, selectedTargets: [{ kind: 'plant', id: 'mint' }], speciesFocus: { canonicalName: 'Malus domestica' } })
-    renderer.setView(view({ x: 0, y: 0, scale: 1 }))
-    renderer.syncScene(snapshot)
+    renderer.present(view({ x: 0, y: 0, scale: 1 }), snapshot)
     const [apple, mint] = pixi.__pixiMockState.graphics
     const ring = pixi.__pixiMockState.graphics.find((graphic) => graphic.stroke.mock.calls.length > 0)!
     const layerAlpha = (graphic: typeof apple) => graphic!.parent?.filters?.map((filter) => filter.alpha) ?? []
@@ -485,9 +474,9 @@ describe('createPixiScenePresentation', () => {
     // The dimmed plant's selection ring is drawn outside the dimmed composite, at full strength.
     expect(layerAlpha(ring)).toEqual([])
     expect(ring.stroke.mock.calls.at(-1)?.[0].alpha).toBe(1)
-    renderer.setView(view({ x: 10, y: 20, scale: 2 }))
+    renderer.present(view({ x: 10, y: 20, scale: 2 }))
     expect(layerAlpha(mint)).toEqual([0.16])
-    renderer.syncScene({ ...snapshot, speciesFocus: { canonicalName: null } })
+    renderer.present(view({ x: 10, y: 20, scale: 2 }), { ...snapshot, speciesFocus: { canonicalName: null } })
     expect(fillAlphas()).toEqual([1, 1])
     expect(layerAlpha(apple)).toEqual([])
     expect(layerAlpha(mint)).toEqual([])
@@ -508,8 +497,7 @@ describe('createPixiScenePresentation', () => {
       plants: [createPlant({ id: 'a', symbol: 'shrub', position: { x: 2, y: 2 } })],
       layers: [{ kind: 'layer', name: 'plants', visible: true, locked: false, opacity: 0.4 }],
     } })
-    renderer.setView(view({ x: 0, y: 0, scale: 30 }))
-    renderer.syncScene(snapshot)
+    renderer.present(view({ x: 0, y: 0, scale: 30 }), snapshot)
     const fills = pixi.__pixiMockState.graphics.flatMap((graphics) => graphics.fill.mock.calls.map(([fill]) => fill.alpha ?? 1))
     expect(fills.length).toBeGreaterThan(0)
     expect(new Set(fills)).toEqual(new Set([1]))
@@ -519,7 +507,7 @@ describe('createPixiScenePresentation', () => {
     expect(filtered[0]!.filterArea).toMatchObject({ width: 400, height: 300 })
     renderer.resize(640, 480)
     expect(filtered[0]!.filterArea).toMatchObject({ width: 640, height: 480 })
-    renderer.syncScene({ ...snapshot, scene: { ...snapshot.scene, layers: [] } })
+    renderer.present(view({ x: 0, y: 0, scale: 30 }), { ...snapshot, scene: { ...snapshot.scene, layers: [] } })
     expect(pixi.__pixiMockState.containers.filter((container) => container.filters?.length)).toEqual([])
     renderer.dispose()
   })
@@ -530,9 +518,8 @@ describe('createPixiScenePresentation', () => {
     }
     const renderer = mountPresentation(document.createElement('div'), dpr)
     try {
-      renderer.setView(view({ x: 0.35, y: 0.45, scale: 20 }))
       // Two plants on one spot (a stack badge), one with a pinned name and one selected (its own name).
-      renderer.syncScene(createTestSceneRendererSnapshot({
+      renderer.present(view({ x: 0.35, y: 0.45, scale: 20 }), createTestSceneRendererSnapshot({
         scene: {
           plants: [
             createPlant({ id: 'a', commonName: 'Pinned name', pinnedName: true }),
@@ -549,7 +536,7 @@ describe('createPixiScenePresentation', () => {
       expect(texts.map(text => text.text)).toEqual(expect.arrayContaining(['2', 'Érable 日本語', 'Pinned name', 'Selected name']))
       expect(texts).toHaveLength(5)
       for (const scale of [0.1, 8, 14, 20, 63.75, 1000, 20]) {
-        renderer.setView(view({ x: 0.35, y: 0.45, scale }))
+        renderer.present(view({ x: 0.35, y: 0.45, scale }))
         for (const text of texts) {
           expect(text.style.options.fontFamily).toBe(CANVAS_CHROME_FONT_FAMILY)
           expect(text.scale.set).not.toHaveBeenCalled()
@@ -567,9 +554,9 @@ describe('createPixiScenePresentation', () => {
     }
     const host = document.createElement('div')
     const renderer = mountPresentation(host, 2)
-    renderer.syncScene(createRendererSnapshot({ plants: [createPlant({ pinnedName: true })] }))
+    renderer.present(view({ x: 0, y: 0, scale: 20 }), createRendererSnapshot({ plants: [createPlant({ pinnedName: true })] }))
     for (const [scale, opacity] of [[20, 1], [14, 0.5], [8, 0], [14, 0.5], [20, 1]]) {
-      renderer.setView(view({ x: 0, y: 0, scale: scale! }))
+      renderer.present(view({ x: 0, y: 0, scale: scale! }))
       const labels = pixi.__pixiMockState.texts.filter((text) => text.text === 'Apple' && !text.destroy.mock.calls.length)
       expect(labels).toHaveLength(opacity === 0 ? 0 : 1)
       if (opacity) {
@@ -589,18 +576,16 @@ describe('createPixiScenePresentation', () => {
       annotations: [{ kind: 'annotation', id: 'note', annotationType: 'text', locked: false,
         position: { x: 10, y: 20 }, text: 'First\nSecond', fontSize: 16, rotationDeg: 45 }],
     } })
-    renderer.setView(view({ x: 0, y: 0, scale: 20 }))
-    renderer.syncScene(snapshot)
+    renderer.present(view({ x: 0, y: 0, scale: 20 }), snapshot)
     for (const [scale, opacity] of [[20, 1], [14, 0.5], [8, 0], [14, 0.5], [20, 1]]) {
-      renderer.setView(view({ x: 0, y: 0, scale: scale! }))
+      renderer.present(view({ x: 0, y: 0, scale: scale! }))
       const text = pixi.__pixiMockState.texts.find((entry) => entry.text === 'First\nSecond')!
       expect(text.alpha).toBeCloseTo(opacity!, 9)
       expect(text.visible).toBe(opacity! > 0)
       expect(text.style.options.fontSize).toBe(16)
       if (scale === 8) expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.stroke.mock.calls.some(([stroke]) => stroke.width === 1.5 && stroke.alpha === 1))).toBe(true)
     }
-    renderer.setView(view({ x: 0, y: 0, scale: 4 }))
-    renderer.syncScene({ ...snapshot, revealedAnnotationId: 'note', selectedAnnotationIds: new Set(['note']) })
+    renderer.present(view({ x: 0, y: 0, scale: 4 }), { ...snapshot, revealedAnnotationId: 'note', selectedAnnotationIds: new Set(['note']) })
     expect(pixi.__pixiMockState.texts.find((entry) => entry.text === 'First\nSecond')).toMatchObject({ alpha: 1, visible: true })
     renderer.dispose()
   })
@@ -613,8 +598,7 @@ describe('createPixiScenePresentation', () => {
       }
     }
     const renderer = mountPresentation(document.createElement('div'), 1.5)
-    renderer.setView(view({ x: -9900, y: -9900, scale: 1000 }))
-    renderer.syncScene(createRendererSnapshot({
+    renderer.present(view({ x: -9900, y: -9900, scale: 1000 }), createRendererSnapshot({
       plants: [createPlant({ id: 'a', symbol: 'round' }), createPlant({ id: 'b', symbol: 'round' })],
     }))
     const glyph = pixi.__pixiMockState.graphics.find(graphics => graphics.circle.mock.calls.some(([x, y, radius]) => x === 0 && y === 0 && radius > 4.8 && radius < 5.6))!
@@ -633,8 +617,7 @@ describe('createPixiScenePresentation', () => {
       __pixiMockState: { graphics: Array<{ fill: ReturnType<typeof vi.fn> }>; containers: Array<{ alpha: number }> }
     }
     const renderer = mountPresentation(document.createElement('div'))
-    renderer.setView(view({ x: 0, y: 0, scale: 1 }))
-    renderer.syncScene(createTestSceneRendererSnapshot({ scene: {
+    renderer.present(view({ x: 0, y: 0, scale: 1 }), createTestSceneRendererSnapshot({ scene: {
       zones: [{ kind: 'zone', id: 'bed', name: 'bed', zoneType: 'rect', locked: false, rotationDeg: 0,
         points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }], fillColor: 'rgba(45, 95, 63, 0.1)', notes: null }],
       layers: [{ kind: 'layer', name: 'zones', visible: true, locked: false, opacity: 0.5 }],
@@ -654,8 +637,7 @@ describe('createPixiScenePresentation', () => {
       kind: 'zone' as const, id, name: id, zoneType: 'rect' as const, locked: false, rotationDeg: 0,
       points: [{ x, y: 0 }, { x: x + 10, y: 0 }, { x: x + 10, y: 10 }, { x, y: 10 }], fillColor, notes: null,
     })
-    renderer.setView(view({ x: 0, y: 0, scale: 1 }))
-    renderer.syncScene(createTestSceneRendererSnapshot({ scene: {
+    renderer.present(view({ x: 0, y: 0, scale: 1 }), createTestSceneRendererSnapshot({ scene: {
       zones: [zone('short', '#0a0', 0), zone('long-alpha', '#00aa0080', 20)],
       layers: [{ kind: 'layer', name: 'zones', visible: true, locked: false, opacity: 1 }],
     } }))
@@ -672,8 +654,7 @@ describe('createPixiScenePresentation', () => {
     }
     const renderer = mountPresentation(document.createElement('div'))
     const visible = (name: string, visible: boolean) => ({ kind: 'layer' as const, name, visible, locked: false, opacity: 1 })
-    renderer.setView(view({ x: 0, y: 0, scale: 1 }))
-    renderer.syncScene(createTestSceneRendererSnapshot({ scene: {
+    renderer.present(view({ x: 0, y: 0, scale: 1 }), createTestSceneRendererSnapshot({ scene: {
       plants: [createPlant({ id: 'old-plant' })],
       zones: [{ kind: 'zone', id: 'old-zone', name: 'old', zoneType: 'rect', locked: false, rotationDeg: 0,
         points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }], fillColor: null, notes: null }],
@@ -685,7 +666,7 @@ describe('createPixiScenePresentation', () => {
     expect(before.graphics.length + before.texts.length).toBeGreaterThan(3)
 
     // The next Design has none of these objects and keeps every layer hidden.
-    renderer.syncScene(createTestSceneRendererSnapshot({ scene: {
+    renderer.present(view({ x: 0, y: 0, scale: 1 }), createTestSceneRendererSnapshot({ scene: {
       layers: ['plants', 'zones', 'annotations', 'measurement-guides'].map((name) => visible(name, false)),
     } }))
 
@@ -720,15 +701,13 @@ describe('createPixiScenePresentation', () => {
       plantSpeciesSymbols: { 'Pyrus communis': 'conifer' },
     })
 
-    renderer.setView(view({ x: 0, y: 0, scale: 20 }))
-    renderer.syncScene(snapshot)
+    renderer.present(view({ x: 0, y: 0, scale: 20 }), snapshot)
 
     expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.bezierCurveTo.mock.calls.length > 0)).toBe(true)
     expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.lineTo.mock.calls.length > 0)).toBe(true)
 
     vi.clearAllMocks()
-    renderer.setView(view({ x: 0, y: 0, scale: 0.25 }))
-    renderer.syncScene(snapshot)
+    renderer.present(view({ x: 0, y: 0, scale: 0.25 }), snapshot)
 
     expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.circle.mock.calls.length > 0)).toBe(true)
     expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.bezierCurveTo.mock.calls.length > 0)).toBe(false)
@@ -749,8 +728,7 @@ describe('createPixiScenePresentation', () => {
     for (const scale of [0.25, 4]) {
       vi.clearAllMocks()
       const snapshot = createRendererSnapshot({ plants: [plant] })
-      renderer.setView(view({ x: 0, y: 0, scale }))
-      renderer.syncScene({ ...snapshot, highlightedPlantIds: new Set(['a']) })
+      renderer.present(view({ x: 0, y: 0, scale }), { ...snapshot, highlightedPlantIds: new Set(['a']) })
       const graphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.stroke.mock.calls.length > 1)!
       const glyph = pixi.__pixiMockState.graphics.find((graphics) => graphics !== graphic && graphics.circle.mock.calls.length > 0)!
       const glyphRadius = Math.max(...glyph.circle.mock.calls.map((call) => call[2] as number))
@@ -784,8 +762,7 @@ describe('createPixiScenePresentation', () => {
 
     const renderer = mountPresentation(host)
 
-    renderer.setView(view({ x: 0, y: 0, scale: 20 }))
-    renderer.syncScene(createRendererSnapshot({
+    renderer.present(view({ x: 0, y: 0, scale: 20 }), createRendererSnapshot({
       plants: [
         createPlant({ id: 'shrub', symbol: 'shrub', position: { x: 10, y: 10 } }),
         createPlant({ id: 'groundcover', symbol: 'groundcover', position: { x: 30, y: 10 } }),
@@ -832,8 +809,7 @@ describe('createPixiScenePresentation', () => {
       layers: [{ kind: 'layer', name: 'measurement-guides', visible: true, locked: false, opacity: 1 }],
     })
 
-    renderer.setView(view({ x: 0, y: 0, scale: 2 }))
-    renderer.syncScene(snapshot)
+    renderer.present(view({ x: 0, y: 0, scale: 2 }), snapshot)
 
     const guideGraphic = pixi.__pixiMockState.graphics.find((graphics) =>
       graphics.moveTo.mock.calls.some(([x, y]) => x === 40 && y === 10)
@@ -855,11 +831,11 @@ describe('createPixiScenePresentation', () => {
 
     // Selecting the guide changes its stroke, never the label's ink, which follows the map backdrop.
     const backdropInk = (label?.style as { options: { fill: number } }).options.fill
-    renderer.syncScene({ ...snapshot, selectedMeasurementGuideIds: new Set(['guide-1']) })
+    renderer.present(view({ x: 0, y: 0, scale: 2 }), { ...snapshot, selectedMeasurementGuideIds: new Set(['guide-1']) })
     expect((label?.style as { options: { fill: number } }).options.fill).toBe(backdropInk)
 
     vi.clearAllMocks()
-    renderer.syncScene({
+    renderer.present(view({ x: 0, y: 0, scale: 2 }), {
       ...snapshot,
       scene: {
         ...snapshot.scene,
@@ -918,15 +894,14 @@ describe('createPixiScenePresentation', () => {
       selectedTargets: [{ kind: 'annotation', id: 'annotation-1' }],
     })
 
-    renderer.setView(view({ x: 0, y: 0, scale: 1 }))
-    renderer.syncScene(snapshot)
+    renderer.present(view({ x: 0, y: 0, scale: 1 }), snapshot)
 
     const graphicsAfterSceneRender = pixi.__pixiMockState.graphics.length
     const textsAfterSceneRender = pixi.__pixiMockState.texts.length
     const removeChildrenCallsAfterSceneRender = pixi.__pixiMockState.containers
       .reduce((count, container) => count + container.removeChildren.mock.calls.length, 0)
 
-    renderer.setView(view({ x: 15, y: 25, scale: 1.5 }))
+    renderer.present(view({ x: 15, y: 25, scale: 1.5 }))
 
     expect(pixi.__pixiMockState.graphics).toHaveLength(graphicsAfterSceneRender)
     expect(pixi.__pixiMockState.texts).toHaveLength(textsAfterSceneRender)
@@ -971,8 +946,7 @@ describe('createPixiScenePresentation', () => {
       },
     })
 
-    renderer.setView(view({ x: 10, y: 20, scale: 2 }))
-    renderer.syncScene(snapshot)
+    renderer.present(view({ x: 10, y: 20, scale: 2 }), snapshot)
 
     const annotationText = pixi.__pixiMockState.texts.find((text) => text.text === 'Hello')
     expect(annotationText?.position.set).toHaveBeenCalledWith(60, 90)
@@ -1011,8 +985,7 @@ describe('createPixiScenePresentation', () => {
       },
     })
 
-    renderer.setView(view({ x: 0, y: 0, scale: 1 }))
-    renderer.syncScene(snapshot)
+    renderer.present(view({ x: 0, y: 0, scale: 1 }), snapshot)
 
     const ellipseGraphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.ellipse.mock.calls.length > 0)
     expect(ellipseGraphic?.ellipse).toHaveBeenCalledWith(50, 60, 30, 20)
@@ -1056,8 +1029,7 @@ describe('createPixiScenePresentation', () => {
       },
     })
 
-    renderer.setView(view({ x: 0, y: 0, scale: 1 }))
-    renderer.syncScene(snapshot)
+    renderer.present(view({ x: 0, y: 0, scale: 1 }), snapshot)
 
     const zoneGraphic = pixi.__pixiMockState.graphics.find((graphics) =>
       graphics.rect.mock.calls.length > 0 || graphics.moveTo.mock.calls.length > 0,
@@ -1123,8 +1095,7 @@ describe('createPixiScenePresentation', () => {
       highlightedZoneIds: new Set<string>(['rotated-rect', 'rotated-ellipse']),
     })
 
-    renderer.setView(view({ x: 0, y: 0, scale: 1 }))
-    renderer.syncScene(snapshot)
+    renderer.present(view({ x: 0, y: 0, scale: 1 }), snapshot)
 
     const rotatedZoneStrokes = pixi.__pixiMockState.graphics
       .filter((graphics) => graphics.moveTo.mock.calls.length > 0)
@@ -1191,8 +1162,7 @@ describe('createPixiScenePresentation', () => {
       selectedTargets: [{ kind: 'zone', id: 'shared-id' }],
     })
 
-    renderer.setView(view({ x: 0, y: 0, scale: 4 }))
-    renderer.syncScene(snapshot)
+    renderer.present(view({ x: 0, y: 0, scale: 4 }), snapshot)
 
     const zoneGraphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.rect.mock.calls.length > 0)
     const plantGraphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.circle.mock.calls.length > 0)
@@ -1201,13 +1171,12 @@ describe('createPixiScenePresentation', () => {
     expect(zoneGraphic?.stroke.mock.calls[1]?.[0]).toMatchObject({ width: 0.625 })
     expect(plantGraphic?.stroke).not.toHaveBeenCalled()
 
-    renderer.setView(view({ x: 0, y: 0, scale: 2 }))
+    renderer.present(view({ x: 0, y: 0, scale: 2 }))
 
     expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 1.25 })
     expect(plantGraphic?.stroke).not.toHaveBeenCalled()
 
-    renderer.setView(view({ x: 0, y: 0, scale: 4 }))
-    renderer.syncScene(createTestSceneRendererSnapshot({
+    renderer.present(view({ x: 0, y: 0, scale: 4 }), createTestSceneRendererSnapshot({
       scene: snapshot.scene,
       selectedTargets: [
         { kind: 'zone', id: 'shared-id' },
@@ -1221,7 +1190,7 @@ describe('createPixiScenePresentation', () => {
     expect(plantGraphic?.stroke).not.toHaveBeenCalled()
     expect(plantRing?.stroke.mock.calls.slice(-2).map(([stroke]) => stroke.width)).toEqual([5.5, 2.5])
 
-    renderer.setView(view({ x: 0, y: 0, scale: 2 }))
+    renderer.present(view({ x: 0, y: 0, scale: 2 }))
 
     expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 1.25 })
     expect(plantRing?.stroke.mock.calls.slice(-2).map(([stroke]) => stroke.width)).toEqual([5.5, 2.5])
@@ -1283,8 +1252,7 @@ describe('createPixiScenePresentation', () => {
       highlightedZoneIds: new Set<string>(['hover-zone']),
     })
 
-    renderer.setView(view({ x: 0, y: 0, scale: 1 }))
-    renderer.syncScene(snapshot)
+    renderer.present(view({ x: 0, y: 0, scale: 1 }), snapshot)
 
     const selectedGraphic = pixi.__pixiMockState.graphics
       .find((graphics) => graphics.rect.mock.calls[0]?.[0] === 0)
@@ -1322,8 +1290,7 @@ describe('createPixiScenePresentation', () => {
     expect(children).toHaveLength(4)
     const [draftWorld, draftScreen] = children.slice(-2) as [MockNode, MockNode]
 
-    renderer.setView(view({ x: 5, y: 6, scale: 10 }))
-    renderer.syncScene(createRendererSnapshot())
+    renderer.present(view({ x: 5, y: 6, scale: 10 }), createRendererSnapshot())
     expect(draftWorld.matrix).toEqual([10, 0, 0, 10, 5, 6])
     renderer.setDraft({ shapes: [{ kind: 'polyline', points: [{ x: 1, y: 2 }, { x: 3, y: 2 }], style: { token: 'draft', widthPx: 2 } }] })
     const [line] = draftWorld.children
@@ -1334,7 +1301,7 @@ describe('createPixiScenePresentation', () => {
     expect(line!.stroke.mock.calls.map(([style]) => style.width)).toEqual([0.4, 0.2])
     expect(draftScreen.children).toEqual([])
 
-    renderer.setView(view({ x: 15, y: 16, scale: 10 }))
+    renderer.present(view({ x: 15, y: 16, scale: 10 }))
     expect(draftWorld.matrix).toEqual([10, 0, 0, 10, 15, 16])
     expect(draftWorld.children).toEqual([line])
 

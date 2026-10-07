@@ -3,13 +3,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { mapAttributionFolded } from '../shell/visible-map-area'
 import { createDetachedCanvasRuntimeAppAdapter } from '../../canvas/runtime/app-adapter'
 import { CanvasRuntimeCleanupError } from '../../canvas/runtime/cleanup'
-import { MAPLIBRE_SCENE_RENDERER_ID } from '../../canvas/runtime/renderers/maplibre-scene'
 import { createDetachedSceneRuntimePanelTargetAdapter } from '../../canvas/runtime/scene-runtime/panel-target-adapter'
 import type { SceneCanvasRuntimeOptions } from '../../canvas/runtime/scene-runtime'
 import type { CanvasDocumentSurface } from '../../canvas/runtime/runtime'
 import type { WorkspaceMapContributionSnapshot, WorkspaceMapContributionAdapter } from './workspace-map-contribution-adapter'
 import type { MapBackgroundPresentation } from '../../maplibre/map-background'
 import type { SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
+import type { SceneRenderTarget } from '../../canvas/runtime/renderers/scene-types'
 import {
   createTestCanvasDocumentSurface,
   createTestCanvasRuntimeSurfaces,
@@ -32,7 +32,7 @@ import {
 } from './workspace-runtime-composition'
 
 describe('createWorkspaceRuntimeComposition', () => {
-  it('assembles one camera and the one MapLibre renderer before awaiting existing-Design readiness', async () => {
+  it('assembles one camera and connects the map\'s scene layers to the runtime\'s target slot before awaiting existing-Design readiness', async () => {
     const activation = deferred<WorkspaceActivationOutcome>()
     const snapshot = workspaceSnapshot()
     const fixture = compositionFixture({
@@ -43,10 +43,11 @@ describe('createWorkspaceRuntimeComposition', () => {
     const start = fixture.composition.start()
 
     expect(fixture.createRuntime).toHaveBeenCalledOnce()
-    const runtimeOptions = fixture.createRuntime.mock.calls[0]![0]
-    // Renderer selection has one outcome: the composition's MapLibre renderer.
-    expect(runtimeOptions.renderer).toBe(fixture.rendererComposition.renderer)
-    expect(runtimeOptions.renderer?.id).toBe(MAPLIBRE_SCENE_RENDERER_ID)
+    // Every layer the composition creates fills the runtime's one slot (ADR 0019).
+    const [connect] = fixture.createRendererComposition.mock.calls[0]!
+    const target = { setSnapshot: vi.fn(), setDraft: vi.fn(), requestRender: vi.fn() }
+    expect(connect(target)).toBe(fixture.disconnect)
+    expect(fixture.runtime.connectRenderTarget).toHaveBeenCalledExactlyOnceWith(target)
     const workspaceOptions = fixture.createWorkspace.mock.calls[0]![0]
     expect(workspaceOptions.runtime).toBe(fixture.runtime)
     // The one camera is the runtime's.
@@ -322,6 +323,7 @@ function compositionFixture(options: CompositionFixtureOptions) {
     documents,
     queries: { ...queries, view: createViewReadSurface(view.frames) },
   })
+  const disconnect = vi.fn()
   const runtime = {
     cameraHost: view.host,
     commandSurface: surfaces.commands,
@@ -331,14 +333,12 @@ function compositionFixture(options: CompositionFixtureOptions) {
     unmountRenderer: vi.fn(async () => {}),
     remountRenderer: vi.fn(async () => {}),
     destroy: vi.fn(),
+    connectRenderTarget: vi.fn((_target: SceneRenderTarget) => disconnect),
   }
   const rendererComposition = {
-    renderer: {
-      id: MAPLIBRE_SCENE_RENDERER_ID,
-      initialize: vi.fn(),
-    },
     createLayer: vi.fn(),
   } as unknown as SharedMapSceneRendererComposition
+  const createRendererComposition = vi.fn((_connect: (target: SceneRenderTarget) => () => void) => rendererComposition)
   const controls = {
     createMap: vi.fn(),
     releaseMap: vi.fn(),
@@ -366,7 +366,7 @@ function compositionFixture(options: CompositionFixtureOptions) {
   const createRuntime = vi.fn((_options: SceneCanvasRuntimeOptions) => runtime)
   const createWorkspace = vi.fn((_input: WorkspaceActivationOptions) => workspace)
   const dependencies = {
-    createRendererComposition: () => rendererComposition,
+    createRendererComposition,
     createRuntime,
     createControls: () => controls,
     createWorkspace,
@@ -386,8 +386,10 @@ function compositionFixture(options: CompositionFixtureOptions) {
   return {
     composition,
     controls,
+    createRendererComposition,
     createRuntime,
     createWorkspace,
+    disconnect,
     documents: documents as CanvasDocumentSurface & {
       zoomToFit: ReturnType<typeof vi.fn>
     },

@@ -12,7 +12,6 @@ import {
   syncCanvasSignalsFromScene,
 } from './scene-runtime/scene-sync'
 import { installSceneRuntimeEffects } from './scene-runtime/effects'
-import { SceneRendererMountCancelledError, type SceneRuntimeRenderKind } from './scene-runtime/render-scheduler'
 import {
   normalizeSceneDesignObjectTargets,
   sceneDesignObjectTargetsEqual,
@@ -35,6 +34,7 @@ import type { SceneCanvasQuerySurface } from './query-surface'
 import { targets, speciesTarget } from '../../target'
 import { runCanvasRuntimeCleanups, throwCanvasRuntimeCleanupErrors } from './cleanup'
 import type { CameraDriverHost } from './view/camera-driver'
+import type { SceneRenderTarget } from './renderers/scene-types'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport'
 
@@ -43,8 +43,6 @@ export type SceneCanvasRuntimeOptions = SceneRuntimeConstructionOptions
 export class SceneCanvasRuntime {
   private readonly _construction: SceneRuntimeConstruction
   private _interaction: SceneInteractionSession | null = null
-  /** Counts unmountRenderer calls, so a remount that an unmount overtook stops before editing mounts. */
-  private _rendererUnmounts = 0
   private _cameraMode: 'site' | 'overview'
   /** The Design's canvas chrome shows (document surface): the grid draws only while it does. */
   private _chromeShown = false
@@ -159,7 +157,7 @@ export class SceneCanvasRuntime {
     try {
       refreshCanvasColorCache(container)
       this._disposeEffects.push(markBusyWhileScenePending(container, this._rendering.scenePending))
-      await this._rendering.initialize(container)
+      this._rendering.mount(container)
       // The first frame is the fit (plan §1, exception 3): the Design's for one loaded before init, else the new-Design overview.
       // One batch, so the screen size and the fit reach the runtime's effects as one frame. An attached map keeps its own screen.
       batch(() => {
@@ -245,6 +243,14 @@ export class SceneCanvasRuntime {
     await this._rendering.renderScene()
   }
 
+  /**
+   * Internal workspace-lifecycle control: the workspace map's shared scene layer fills the runtime's one target slot
+   * (ADR 0019). It draws the latest snapshot and draft at once, so a layer a Design switch or a Retry rebuilt needs no pan.
+   */
+  connectRenderTarget(target: SceneRenderTarget): () => void {
+    return this._rendering.connect(target)
+  }
+
   /** The runtime's one camera: the workspace activation attaches each map to it; destroy disposes it. */
   get cameraHost(): CameraDriverHost {
     return this._construction.cameraHost
@@ -274,7 +280,6 @@ export class SceneCanvasRuntime {
    * Design can still be saved.
    */
   async unmountRenderer(): Promise<void> {
-    this._rendererUnmounts += 1
     const interaction = this._interaction
     this._interaction = null
     this._querySurface.bindPointerWorld(null)
@@ -282,22 +287,19 @@ export class SceneCanvasRuntime {
       interaction?.dispose()
     } finally {
       this._notifyTransientHistoryChanged()
-      await this._rendering.unmount()
+      this._rendering.unmount()
     }
   }
 
   /**
    * Internal workspace-lifecycle control: a user Retry built a new map after unmountRenderer. The
    * renderer and the interaction session mount again over the loaded Scene, which keeps its camera,
-   * selection and undo history. A failed remount leaves nothing mounted, and so does an unmount (a map failure)
-   * that lands once the renderer mounted but before editing did: the remount rejects as cancelled.
+   * selection and undo history. A failed remount leaves nothing mounted.
    */
   async remountRenderer(container: HTMLElement): Promise<void> {
-    const unmounts = this._rendererUnmounts
     try {
       refreshCanvasColorCache(container)
-      await this._rendering.initialize(container)
-      if (unmounts !== this._rendererUnmounts) throw new SceneRendererMountCancelledError()
+      this._rendering.mount(container)
       await this._mountInteraction(container)
     } catch (error) {
       const errors: unknown[] = [error]
@@ -315,7 +317,7 @@ export class SceneCanvasRuntime {
   }
 
   private _invalidate(kind: RuntimeInvalidationKind = 'scene'): void {
-    this._rendering.invalidate(kind as SceneRuntimeRenderKind)
+    this._rendering.invalidate(kind)
     if (kind === 'scene' || kind === 'viewport') {
       this._interaction?.refreshMeasurements()
     }

@@ -8,7 +8,6 @@ import { createSceneCanvasCommandSurface } from '../command-surface'
 import { createSceneCanvasDocumentSurface, type SceneCanvasDocumentSurface } from '../document-surface'
 import { createSceneCanvasQuerySurface, type SceneCanvasQuerySurface } from '../query-surface'
 import { SceneCanvasInspectionOwner } from '../inspection-lens'
-import type { SceneRendererDefinition } from '../renderers/scene-types'
 import type { ToolId } from '../interaction-types'
 import type {
   CanvasCommandSurface,
@@ -58,8 +57,6 @@ const NEW_DESIGN_OVERVIEW_MAX_ZOOM = 5
 export interface SceneRuntimeConstructionOptions {
   appAdapter?: CanvasRuntimeAppAdapter
   targetPresentation?: SceneRuntimePanelTargetAdapter
-  /** The one scene renderer (ADR 0004). A runtime without one keeps its Scene but cannot mount. */
-  renderer?: SceneRendererDefinition
 }
 
 export interface SceneRuntimeConstructionCallbacks {
@@ -150,7 +147,6 @@ export function createSceneRuntimeConstruction(
     scene: sceneRevision,
     plantNames: plantNamesQueryRevision,
   }
-  const renderer: SceneRendererDefinition | null = options.renderer ?? null
   const history = new SceneHistory({
     reportCleanState: (clean) => appAdapter.cleanState.setCanvasClean(clean),
   })
@@ -211,8 +207,6 @@ export function createSceneRuntimeConstruction(
     })
   }))
   const rendering = new SceneRuntimeRenderScheduler({
-    getRenderer: () => renderer,
-    getView: () => cameraHost.frames.viewFrame.peek().view,
     prepareSceneRender: async () => {
       if (cameraHost.frames.viewFrame.peek().mode === 'overview') {
         return {

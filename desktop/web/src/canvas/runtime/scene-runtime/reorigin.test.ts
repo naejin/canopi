@@ -156,11 +156,9 @@ function savedScene(runtime: SceneCanvasRuntime, file: CanopiFile) {
 
 /** A runtime mounted over a renderer stub, with its interaction session live on a 400 × 300 map. */
 async function createMountedRuntime() {
-  const renderer = { id: 'test', syncScene: vi.fn(), setView: vi.fn(), setDraft: vi.fn(), dispose: vi.fn() }
-  const runtime = new SceneCanvasRuntime({
-    appAdapter: createDetachedCanvasRuntimeAppAdapter(),
-    renderer: { id: 'test', initialize: () => renderer as never },
-  })
+  const renderer = { setSnapshot: vi.fn(), setDraft: vi.fn(), requestRender: vi.fn() }
+  const runtime = new SceneCanvasRuntime({ appAdapter: createDetachedCanvasRuntimeAppAdapter() })
+  runtime.connectRenderTarget(renderer)
   const container = document.createElement('div')
   Object.defineProperty(container, 'clientWidth', { configurable: true, value: SCREEN.width })
   Object.defineProperty(container, 'clientHeight', { configurable: true, value: SCREEN.height })

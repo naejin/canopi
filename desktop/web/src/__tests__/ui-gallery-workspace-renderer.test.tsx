@@ -2,22 +2,20 @@ import { signal } from '@preact/signals'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MAPLIBRE_SCENE_RENDERER_ID } from '../canvas/runtime/renderers/maplibre-scene'
 import { setCurrentCanvasSession } from '../canvas/session'
-import type { SharedMapSceneRendererComposition } from '../maplibre/shared-scene-renderer'
+import type { SceneRenderTarget } from '../canvas/runtime/renderers/scene-types'
 import { GalleryCanvasSurface } from '../../ui-gallery/GalleryCanvasSurface'
 import { designFixture } from '../../ui-gallery/fixtures'
 
-const rendererCompositions = vi.hoisted(() => [] as SharedMapSceneRendererComposition[])
+const rendererConnects = vi.hoisted(() => [] as Array<(target: SceneRenderTarget) => () => void>)
 
 vi.mock('../maplibre/shared-scene-renderer', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../maplibre/shared-scene-renderer')>()
   return {
     ...actual,
-    createSharedMapSceneRendererComposition: () => {
-      const composition = actual.createSharedMapSceneRendererComposition()
-      rendererCompositions.push(composition)
-      return composition
+    createSharedMapSceneRendererComposition: (connect: (target: SceneRenderTarget) => () => void) => {
+      rendererConnects.push(connect)
+      return actual.createSharedMapSceneRendererComposition(connect)
     },
   }
 })
@@ -37,7 +35,7 @@ describe('UI gallery workspace renderer', () => {
   let container: HTMLDivElement
 
   beforeEach(() => {
-    rendererCompositions.length = 0
+    rendererConnects.length = 0
     container = document.createElement('div')
     document.body.appendChild(container)
     vi.stubGlobal('ResizeObserver', InertResizeObserver)
@@ -55,8 +53,7 @@ describe('UI gallery workspace renderer', () => {
     vi.restoreAllMocks()
   })
 
-  it('builds the gallery canvas on the production maplibre-pixi renderer', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  it('builds the gallery canvas on the production shared map scene layer', async () => {
     const onReadyChange = vi.fn()
 
     await act(async () => {
@@ -73,14 +70,11 @@ describe('UI gallery workspace renderer', () => {
     })
 
     // jsdom has no WebGL2, so the shared workspace resolves map-unavailable
-    // and keeps the Design loaded; the gallery must still have composed the
-    // runtime with the one map renderer rather than a renderer-less runtime.
+    // and keeps the Design loaded; the gallery still composed the production
+    // scene layers, connected to its runtime's one target slot.
     await vi.waitFor(() => expect(onReadyChange).toHaveBeenLastCalledWith(true))
 
-    expect(rendererCompositions).toHaveLength(1)
-    expect(rendererCompositions[0]?.renderer.id).toBe(MAPLIBRE_SCENE_RENDERER_ID)
-    expect(consoleError.mock.calls.flat().map(String).join('\n'))
-      .not.toContain('no renderer to mount')
+    expect(rendererConnects).toHaveLength(1)
   })
 })
 
