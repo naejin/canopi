@@ -47,6 +47,7 @@ import {
 
 /** A double-click this close to the selected polygon's edge adds a corner there: the outline's own hit tolerance. */
 const EDGE_DOUBLE_CLICK_PX = 6
+type ZoneEdgeHit = Extract<HitTarget, { kind: 'zone-edge' }>
 
 /** What the press started, from the press to its release or cancel. */
 type SelectGesture =
@@ -137,8 +138,9 @@ export function createSelectTool(): CanvasTool {
     const c = ctx()
     selectedCorner = null
     const previousEdge = lastPressEdge
-    lastPressEdge = edgeKeyAt(point)
-    if (clickCount >= 2 && lastPressEdge !== null && lastPressEdge === previousEdge && addCornerOnEdge(point)) {
+    const edge = zoneEdgeAt(point)
+    lastPressEdge = edge && `${edge.zoneId}:${edge.edgeIndex}`
+    if (clickCount >= 2 && edge && lastPressEdge === previousEdge && addCornerOnEdge(point, edge)) {
       lastPressHit = null
       lastPressEdge = null
       gesture = { kind: 'done' }
@@ -171,20 +173,19 @@ export function createSelectTool(): CanvasTool {
     refreshHandles()
   }
 
-  /** The zone edge within EDGE_DOUBLE_CLICK_PX of the press, as `zoneId:edgeIndex`, or null. */
-  function edgeKeyAt(point: ToolPoint): string | null {
+  /** The zone edge within EDGE_DOUBLE_CLICK_PX of the press, or null. */
+  function zoneEdgeAt(point: ToolPoint): ZoneEdgeHit | null {
     const edge = ctx().scene.hitAt(point.world, { toleranceScreenPx: EDGE_DOUBLE_CLICK_PX })
-    return edge?.kind === 'zone-edge' ? `${edge.zoneId}:${edge.edgeIndex}` : null
+    return edge?.kind === 'zone-edge' ? edge : null
   }
 
   /** A double-click on an edge of the selected polygon, whose first press was on the same edge (U42), adds a corner there
    *  (reusing hitZoneEdge's edge). */
-  function addCornerOnEdge(point: ToolPoint): boolean {
+  function addCornerOnEdge(point: ToolPoint, edge: ZoneEdgeHit): boolean {
     const c = ctx()
     if (point.modifiers.additive || point.modifiers.subtractive) return false
-    const edge = c.scene.hitAt(point.world, { toleranceScreenPx: EDGE_DOUBLE_CLICK_PX })
     const zone = reshapableZone(c.scene.persisted, c.scene.selectionModel())
-    if (edge?.kind !== 'zone-edge' || zone?.zoneType !== 'polygon' || edge.zoneId !== zone.id) return false
+    if (zone?.zoneType !== 'polygon' || edge.zoneId !== zone.id) return false
     addPolygonCorner(c, zone.id, edge.edgeIndex, point.world)
     return true
   }
