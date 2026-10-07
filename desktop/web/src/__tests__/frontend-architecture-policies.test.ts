@@ -243,8 +243,8 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'MapLibre Host stays infrastructure-only',
-    from: ['src/maplibre/host.ts'],
+    name: 'MapLibre Surface stays infrastructure-only',
+    from: ['src/maplibre/surface.ts'],
     targets: [
       'src/app.tsx',
       'src/app/**',
@@ -357,7 +357,7 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'World Map requests MapLibre through the Surface Adapter',
+    name: 'World Map requests MapLibre through the MapLibre Surface',
     from: ['src/components/world-map/WorldMapSurface.tsx'],
     targets: ['maplibre-gl'],
   },
@@ -847,9 +847,9 @@ const REQUIRED_IMPORT_POLICIES = [
   },
   {
     kind: 'require-imports',
-    name: 'World Map uses the MapLibre Surface Adapter',
+    name: 'World Map uses the MapLibre Surface',
     from: ['src/components/world-map/WorldMapSurface.tsx'],
-    targets: ['src/maplibre/surface-adapter.ts'],
+    targets: ['src/maplibre/surface.ts'],
   },
   {
     kind: 'require-imports',
@@ -1860,7 +1860,7 @@ const SYMBOL_OWNERSHIP_POLICIES = [
   },
   {
     kind: 'forbid-calls',
-    name: 'World Map delegates resize observation to the MapLibre Host',
+    name: 'World Map delegates resize observation to the MapLibre Surface',
     from: ['src/components/world-map/WorldMapSurface.tsx'],
     targets: ['ResizeObserver'],
     callKinds: ['new'],

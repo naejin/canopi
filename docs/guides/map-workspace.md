@@ -54,7 +54,7 @@ Canvas v2 ([plan](../plans/canvas-v2-plan.md), [spec](../plans/canvas-v2-spec.md
 
 | Area | Module | Tests |
 |---|---|---|
-| Host, loader, map | `maplibre/host.ts`, `loader.ts`, `workspace-map.ts` | `__tests__/maplibre-*` |
+| Map surface | `maplibre/surface.ts`, `loader.ts`, `workspace-map.ts` | `__tests__/maplibre-*` |
 | Composition, admission | `app/canvas-map-surface/` | `workspace-*.test.ts` |
 | Background, satellite | `maplibre/map-background.ts`, `satellite-*.ts`, `basemap-tile-auth.ts` | `__tests__/map-background`, `satellite-*` |
 | Map layers, terrain | `app/map-layers/`, `maplibre/terrain*.ts` | `__tests__/map-layers-store`, `maplibre-terrain` |

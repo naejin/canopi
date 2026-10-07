@@ -1,10 +1,6 @@
 import { createMapLibreEmptyStyle } from './config'
 import { logMapError } from './redact-credentials'
-import type {
-  MapLibreApi,
-  MapLibreHostViewState,
-  MapLibreMapInstance,
-} from './host'
+import type { MapLibreApi, MapLibreMapInstance } from './loader'
 
 export interface WorldMapLibreMap extends MapLibreMapInstance {
   addControl(control: unknown, position?: string): void
@@ -15,7 +11,6 @@ export interface WorldMapLibreMap extends MapLibreMapInstance {
     duration?: number
     essential?: boolean
   }): void
-  getCenter(): { lng: number; lat: number }
   getZoom(): number
   readonly keyboard: { disableRotation(): void }
   readonly touchZoomRotate: { disableRotation(): void }
@@ -43,23 +38,20 @@ interface WorldMapLibreApi extends MapLibreApi {
   LngLatBounds?: new () => WorldMapBounds
 }
 
-export interface WorldMapLibreOptions {
-  readonly center: [number, number]
-  readonly zoom: number
-  /** The request seam that authenticates official provider tiles. */
-  readonly transformRequest: (url: string) => { url: string }
-}
-
+/**
+ * A new World map starts at this whole-world view; the selected template's fly-to and the templates' bounds move it.
+ * `transformRequest` is the request seam that authenticates official provider tiles.
+ */
 export function createWorldMapLibreMap(
   maplibre: MapLibreApi,
   container: HTMLElement,
-  options: WorldMapLibreOptions,
+  transformRequest: (url: string) => { url: string },
 ): WorldMapLibreMap {
   const map = new maplibre.Map({
     container,
     style: createMapLibreEmptyStyle(),
-    center: options.center,
-    zoom: options.zoom,
+    center: [0, 14],
+    zoom: 1.15,
     // Attribution is owned by the map background's single control.
     attributionControl: false,
     interactive: true,
@@ -69,7 +61,7 @@ export function createWorldMapLibreMap(
     touchPitch: false,
     // Shift+drag pans like any drag instead of drawing MapLibre's zoom box (spec §4.17).
     boxZoom: false,
-    transformRequest: options.transformRequest,
+    transformRequest,
   }) as unknown as WorldMapLibreMap
 
   // MapLibre prints an error event nobody listens to on the console, and a
@@ -115,12 +107,4 @@ export function createWorldMapBounds(maplibre: MapLibreApi): WorldMapBounds {
   const LngLatBounds = (maplibre as WorldMapLibreApi).LngLatBounds
   if (!LngLatBounds) throw new Error('MapLibre LngLatBounds constructor unavailable')
   return new LngLatBounds()
-}
-
-export function readWorldMapViewState(map: WorldMapLibreMap): MapLibreHostViewState {
-  const center = map.getCenter()
-  return {
-    center: [center.lng, center.lat],
-    zoom: map.getZoom(),
-  }
 }

@@ -75,7 +75,3 @@ export function loadMapLibreModule(): Promise<MapLibreApi> {
   }
   return mapLibreModulePromise
 }
-
-export async function loadMapLibre() {
-  return loadMapLibreModule()
-}

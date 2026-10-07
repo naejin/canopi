@@ -1,7 +1,7 @@
 import { createDefaultScenePersistedState } from '../../canvas/runtime/scene'
 import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createMapLibreSurfaceAdapter } from '../../maplibre/surface-adapter'
+import { MapLibreSurface } from '../../maplibre/surface'
 import type {
   MapLibreApi,
   MapLibreMapConstructorOptions,
@@ -197,7 +197,7 @@ function createControls(options: {
     maps,
     options.webgl2 === undefined ? {} as WebGL2RenderingContext : options.webgl2,
   )
-  const surface = createMapLibreSurfaceAdapter<FakeMap>({
+  const surface = new MapLibreSurface<FakeMap>({
     loadMapLibre: options.load ?? (async () => api),
     createResizeObserver: (callback) => {
       const observer = { observe: vi.fn(), disconnect: vi.fn(), callback }
@@ -1075,7 +1075,7 @@ describe('WorkspaceMapControls', () => {
     expect(map.remove).toHaveBeenCalledOnce()
   })
 
-  it('rejects before admission for context loss and releases through the surface adapter', async () => {
+  it('rejects before admission for context loss and releases through the surface', async () => {
     const { controls, maps } = createControls()
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
@@ -1093,7 +1093,7 @@ describe('WorkspaceMapControls', () => {
 
   it('routes a MapLibre constructor failure to the acquisition rejection', async () => {
     const error = new Error('map construction failed')
-    const surface = createMapLibreSurfaceAdapter({
+    const surface = new MapLibreSurface({
       loadMapLibre: async () => ({
         Map: class {
           constructor() { throw error }
@@ -1156,7 +1156,7 @@ describe('WorkspaceMapControls', () => {
   it('does not ask a browser without the WebGL2 interface to create a context', async () => {
     const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
     const loadMapLibre = vi.fn<() => Promise<MapLibreApi>>()
-    const surface = createMapLibreSurfaceAdapter({ loadMapLibre })
+    const surface = new MapLibreSurface({ loadMapLibre })
     vi.stubGlobal('WebGL2RenderingContext', undefined)
     try {
       const controls = new WorkspaceMapControls({

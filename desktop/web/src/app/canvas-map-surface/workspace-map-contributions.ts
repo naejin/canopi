@@ -1,5 +1,5 @@
 import { logMapError } from '../../maplibre/redact-credentials'
-import type { MapLibreSurfaceContext } from '../../maplibre/surface-adapter'
+import type { MapLibreSurfaceContext } from '../../maplibre/surface'
 import type { MapLibreMapInstance } from '../../maplibre/loader'
 import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,

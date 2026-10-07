@@ -467,6 +467,22 @@ describe('WorldMapSurface', () => {
     expect(maps[0]!.resize).toHaveBeenCalled()
   })
 
+  it('selecting a template flies to it, from the fixed world view the map always starts at', async () => {
+    const first = template('forest', 2.35, 48.85)
+    const second = template('orchard', 13.4, 52.52)
+
+    // A template selected before the map exists: the new map starts at the world view and flies to it.
+    await renderWorldMap(container, { templates: [first, second], selectedId: 'forest', onSelect: vi.fn() })
+    await vi.waitFor(() => expect(maps).toHaveLength(1))
+    await vi.waitFor(() => expect(maps[0]!.flyTo).toHaveBeenCalled())
+    expect(maps[0]!.options).toMatchObject({ center: [0, 14], zoom: 1.15 })
+    expect(maps[0]!.flyTo).toHaveBeenLastCalledWith(expect.objectContaining({ center: [2.35, 48.85], zoom: 4.5 }))
+
+    await renderWorldMap(container, { templates: [first, second], selectedId: 'orchard', onSelect: vi.fn() })
+    expect(maps[0]!.flyTo).toHaveBeenLastCalledWith(expect.objectContaining({ center: [13.4, 52.52], zoom: 4.5 }))
+    expect(maps).toHaveLength(1)
+  })
+
   it('Shift+arrow keys do not turn or tilt the World map', async () => {
     await renderWorldMap(container, { templates: [], selectedId: null, onSelect: vi.fn() })
     await vi.waitFor(() => expect(maps).toHaveLength(1))

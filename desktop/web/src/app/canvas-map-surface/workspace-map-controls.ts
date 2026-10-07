@@ -1,7 +1,6 @@
 import { WorkspaceMapContributions, type WorkspaceMapContributionsOptions } from './workspace-map-contributions'
 import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
-import type { MapLibreSurfaceAdapter } from '../../maplibre/surface-adapter'
-import { createMapLibreSurfaceAdapter } from '../../maplibre/surface-adapter'
+import { MapLibreSurface, type MapLibreSurfaceLifetime } from '../../maplibre/surface'
 import {
   MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
   MAPLIBRE_SATELLITE_LAYER_ID,
@@ -17,13 +16,11 @@ import {
 import { OPENFREEMAP_LAYER_PREFIX, OPENFREEMAP_SOURCE_PREFIX } from '../../maplibre/openfreemap-basemap'
 import { mapErrorResourceId } from '../../maplibre/map-error-owner'
 import { describeMapErrorEvent, logMapError, redactCredentials, redactError } from '../../maplibre/redact-credentials'
-import type { MapLibreSurfaceLifetime } from '../../maplibre/surface-adapter'
 import { UNAVAILABLE_MAPLIBRE_CANVAS_SURFACE_STATE } from '../../maplibre/canvas-surface-state'
 import {
   createWorkspaceMapLibreMap,
   type WorkspaceMapSnapshot,
 } from '../../maplibre/workspace-map'
-import type { MapLibreMapInstance } from '../../maplibre/loader'
 import type { ViewScreen } from '../../canvas/runtime/view/types'
 import {
   createMapLayerStackDescriptors,
@@ -63,28 +60,28 @@ interface WorkspaceMapAttempt {
 export interface WorkspaceActivationMapControlsOptions {
   readonly contributions: Omit<WorkspaceMapContributionsOptions, 'onFailure'>
   readonly container: HTMLElement
-  readonly surface?: MapLibreSurfaceAdapter<MapLibreMapInstance>
+  readonly surface?: MapLibreSurface
   readonly logError?: (message?: unknown, ...optionalParams: unknown[]) => void
   readonly canCreateWebGL2Context?: () => boolean
   /**
    * The workspace request's resize owner (spec §1.1 "Resize"): the map container's new size goes to the camera, whose driver
-   * resizes the map (CameraDriver.setScreen). The MapLibre host never resizes the map itself.
+   * resizes the map (CameraDriver.setScreen). The MapLibre surface never resizes the map itself.
    */
   readonly setScreen: (screen: ViewScreen) => void
 }
 
 /**
- * Bridges the coordinator's awaited map admission to the Surface Adapter.
- * The adapter remains the only owner allowed to remove the MapLibre map.
+ * Bridges the coordinator's awaited map admission to the MapLibre surface,
+ * the only owner allowed to remove the map.
  */
 export class WorkspaceMapControls implements WorkspaceActivationMapControls {
-  private readonly surface: MapLibreSurfaceAdapter<MapLibreMapInstance>
+  private readonly surface: MapLibreSurface
   private readonly logError: (message?: unknown, ...optionalParams: unknown[]) => void
   private attempt: WorkspaceMapAttempt | null = null
   private attributionCompact: boolean | null = null
 
   constructor(private readonly options: WorkspaceActivationMapControlsOptions) {
-    this.surface = options.surface ?? createMapLibreSurfaceAdapter()
+    this.surface = options.surface ?? new MapLibreSurface()
     this.logError = options.logError ?? logMapError
   }
 
@@ -143,7 +140,6 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
       }
 
       this.surface.requestMap({
-        key: 'shared-workspace',
         createMap: (maplibre, container) => createWorkspaceMapLibreMap(
           maplibre,
           container,
@@ -383,8 +379,8 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     attempt.lifetime = null
     attempt.signal.removeEventListener('abort', attempt.abort)
     if (this.attempt === attempt) this.attempt = null
-    // Host/Surface Adapter performs listener cleanup, observer disconnect, and
-    // final map removal. No app-layer code calls map.remove().
+    // The surface releases the map's listeners, disconnects its observer and
+    // removes it. No app-layer code calls map.remove().
     try {
       attempt.contributions.dispose(attempt.pendingFailure ?? undefined)
     } finally {
