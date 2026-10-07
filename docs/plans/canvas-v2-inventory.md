@@ -42,7 +42,7 @@ Every row re-implements `p·scale + t` or its inverse from a bearing-blind `{x, 
 | INV-TOOL-19 | `canvas/runtime/interaction/selection-rotation-handle.ts:283-292`; `canvas/runtime/scene-runtime/selection-rotation.ts:43-52`, `:125-130` | Handle angle is a world delta; Shift snaps the delta to 15°; pivot = world AABB centre | keep | — |
 | INV-TOOL-22 | `canvas/runtime/interaction/plant-placement-preview.ts:70`, `:86`; `plant-spacing-overlay.ts:151-157` | Labels offset screen-up or screen-down | keep (upright on purpose) | — |
 | INV-TOOL-26 | `canvas/contours.ts:158` | Hillshade `illumination-anchor: 'viewport'`: the light stays top-left as the map turns | keep (not decided by the design; a phase-1 convention, named at the phase-1 handoff (plan §8)) | — |
-| INV-TOOL-27 | `canvas/plants.ts` (`PlantLOD`) | Plant LOD bands at 0.5 and 5 px/m | change; S40 keeps only the dot switch (`isDotScale`, below 0.5 px/m), evaluated on the rounded radius; glyph contexts are keyed by the radius rounded to 0.25 px (A7), not by LOD band | R |
+| INV-TOOL-27 | `canvas/plants.ts` (`isDotScale`) | Plant LOD bands at 0.5 and 5 px/m | change; S40 keeps only the dot switch (`isDotScale`, below 0.5 px/m), evaluated on the rounded radius; glyph contexts are keyed by the radius rounded to 0.25 px (A7), not by LOD band | R |
 
 ## 4. Rendering, chrome and per-frame work (INV-REN)
 

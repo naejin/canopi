@@ -1,6 +1,6 @@
 # One renderer: PixiJS inside MapLibre
 
-Status: Accepted (2026-09-25, Canopi v2)
+Status: Accepted (2026-09-25, Canopi v2); amended 2026-10-07 (U33 P11: a map's style loads once)
 
 Amended by [ADR 0016](0016-one-view-transform.md), [ADR 0017](0017-input-pipeline-and-gestures.md) and [ADR 0019](0019-rendering-and-the-view-transform.md) (2026-09-29): camera changes go through one driver, navigation stays live during a tool's gesture, and the renderer receives one view transform. Amended 2026-10-03 (canopi-0p2n; user decisions U14 and U22): a map failure offers a user Retry, and a basemap that couldn't load shows a notice.
 
