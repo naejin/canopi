@@ -317,6 +317,14 @@ describe('polygon corners (spec §3.2, U33: every corner route)', () => {
     expect(corners(h)).toEqual(SQUARE)
   })
 
+  it('a double tap whose first press was in the fill adds no corner (U42)', () => {
+    const h = polygonHarness()
+
+    h.click({ x: 130, y: 180 })
+    h.click({ x: 130, y: 201 }, { clickCount: 2 })
+    expect(corners(h)).toEqual(SQUARE)
+  })
+
   it('Alt+click on a corner removes it, keeping at least 3', () => {
     const h = polygonHarness()
 

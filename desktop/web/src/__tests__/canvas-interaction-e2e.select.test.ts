@@ -1858,6 +1858,8 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('select')
 
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
     events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 2 })
     const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
     expect(textarea.value).toBe('Old note')
@@ -1883,6 +1885,8 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('select')
 
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
     events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 2 })
     const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
     textarea.value = 'Deferred inline note'
@@ -1912,6 +1916,8 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('select')
     container.tabIndex = 0
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
     events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 2 })
     events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 2 })
     await nextAnimationFrame()
@@ -2088,6 +2094,8 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('select')
 
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
     events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 2 })
     const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
     textarea.value = 'Discard me'
@@ -2108,6 +2116,8 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('select')
 
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
     events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 2 })
     const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
     textarea.dispatchEvent(new FocusEvent('blur'))
@@ -2128,6 +2138,8 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('select')
 
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
     events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 2 })
     const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
     textarea.value = 'After click-away'
@@ -2150,6 +2162,8 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('select')
 
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
     events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 2 })
     const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
     textarea.value = 'Blocked edit'
@@ -2176,6 +2190,8 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('select')
 
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
     events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 2 })
     const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
     textarea.value = 'Locked layer edit'
@@ -2201,6 +2217,8 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('select')
 
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
     events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 2 })
     const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
     textarea.value = 'Hidden layer edit'
@@ -2298,6 +2316,8 @@ describe('SceneInteractionSession', () => {
         layer.name === 'annotations' ? { ...layer, locked: true } : layer
       ))
     })
+    events.pointerDown({ x: 82, y: 34 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 82, y: 34 }, { button: 0, detail: 1 })
     events.pointerDown({ x: 82, y: 34 }, { button: 0, detail: 2 })
     expect(container.querySelector('textarea')).toBeNull()
 
@@ -2306,6 +2326,8 @@ describe('SceneInteractionSession', () => {
         layer.name === 'annotations' ? { ...layer, locked: false, visible: false } : layer
       ))
     })
+    events.pointerDown({ x: 142, y: 34 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 142, y: 34 }, { button: 0, detail: 1 })
     events.pointerDown({ x: 142, y: 34 }, { button: 0, detail: 2 })
     expect(container.querySelector('textarea')).toBeNull()
 
@@ -2314,6 +2336,8 @@ describe('SceneInteractionSession', () => {
         layer.name === 'annotations' ? { ...layer, visible: true } : layer
       ))
     })
+    events.pointerDown({ x: 202, y: 34 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 202, y: 34 }, { button: 0, detail: 1 })
     events.pointerDown({ x: 202, y: 34 }, { button: 0, detail: 2 })
     expect(container.querySelector('textarea')).toBeNull()
     session.dispose()
@@ -2328,6 +2352,8 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('select')
 
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
     events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 2 })
     const firstTextarea = container.querySelector<HTMLTextAreaElement>('textarea')!
     firstTextarea.value = 'Discard on tool change'
@@ -2337,6 +2363,8 @@ describe('SceneInteractionSession', () => {
     expect(onSceneEditCommit).not.toHaveBeenCalled()
 
     session.setTool('select')
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
     events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 2 })
     const secondTextarea = container.querySelector<HTMLTextAreaElement>('textarea')!
     secondTextarea.value = 'Discard on dispose'
@@ -2355,6 +2383,8 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('select')
 
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
     events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 2 })
     expect(container.querySelector('textarea')).not.toBeNull()
 

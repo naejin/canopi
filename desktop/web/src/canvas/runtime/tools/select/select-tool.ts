@@ -77,9 +77,11 @@ export function createSelectTool(): CanvasTool {
   /** The selected corner: the polygon corner last pressed without moving, or the one after a removed corner, shown as the
    *  active handle; Delete removes it. */
   let selectedCorner: ToolHandleId | null = null
-  /** The object the last press hit, or null (empty ground, a handle): a double-click selects a plant's species only when
-   *  it hits the same plant (U42). */
+  /** The object the last press hit, or null (empty ground, a handle): a double-click selects a plant's species or edits a
+   *  note only when it hits the same object (U42). */
   let lastPressHit: SceneDesignObjectTarget | null = null
+  /** The zone edge the last press was on (`zoneId:edgeIndex`), or null: a double-click adds a corner only on the same edge. */
+  let lastPressEdge: string | null = null
 
   function ctx(): ToolContext {
     if (!context) throw new Error('The Select tool is not active.')
@@ -134,8 +136,11 @@ export function createSelectTool(): CanvasTool {
   function press(point: ToolPoint, hit: HitTarget | null, clickCount: number): void {
     const c = ctx()
     selectedCorner = null
-    if (clickCount >= 2 && addCornerOnEdge(point)) {
+    const previousEdge = lastPressEdge
+    lastPressEdge = edgeKeyAt(point)
+    if (clickCount >= 2 && lastPressEdge !== null && lastPressEdge === previousEdge && addCornerOnEdge(point)) {
       lastPressHit = null
+      lastPressEdge = null
       gesture = { kind: 'done' }
       refreshHandles()
       return
@@ -166,7 +171,14 @@ export function createSelectTool(): CanvasTool {
     refreshHandles()
   }
 
-  /** A double-click on an edge of the selected polygon adds a corner there (reusing hitZoneEdge's edge). */
+  /** The zone edge within EDGE_DOUBLE_CLICK_PX of the press, as `zoneId:edgeIndex`, or null. */
+  function edgeKeyAt(point: ToolPoint): string | null {
+    const edge = ctx().scene.hitAt(point.world, { toleranceScreenPx: EDGE_DOUBLE_CLICK_PX })
+    return edge?.kind === 'zone-edge' ? `${edge.zoneId}:${edge.edgeIndex}` : null
+  }
+
+  /** A double-click on an edge of the selected polygon, whose first press was on the same edge (U42), adds a corner there
+   *  (reusing hitZoneEdge's edge). */
   function addCornerOnEdge(point: ToolPoint): boolean {
     const c = ctx()
     if (point.modifiers.additive || point.modifiers.subtractive) return false
@@ -218,6 +230,7 @@ export function createSelectTool(): CanvasTool {
     const c = ctx()
     if (g.phase === 'start') {
       lastPressHit = null
+      lastPressEdge = null
       startHandleDrag(g)
       refreshHandles()
       return
@@ -402,6 +415,7 @@ export function createSelectTool(): CanvasTool {
       guideEndPoints = new Map()
       selectedCorner = null
       lastPressHit = null
+      lastPressEdge = null
     },
   }
 }
