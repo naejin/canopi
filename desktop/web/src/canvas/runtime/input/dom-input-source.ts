@@ -112,7 +112,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   let tickTimer: number | null = null
   /** The `t` of the last input delivered (an event's timeStamp, a tick's deadline): a deadline is scheduled from it, so the
    *  timer needs no clock on the events' base (A1; a browser's timeStamp is not Date.now()). */
-  let lastT: number | null = null
+  let lastT = 0
   /** Pointers pressed on the map, until their release or cancel: the window listeners follow only these. */
   const owned = new Set<number>()
   /** The owned pointers whose press was a canvas press (not the note editor's, a field's or a menu's): their native menus
@@ -487,7 +487,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
             clearTickTimer()
             if (effect.atMs !== undefined) {
               const atMs = effect.atMs
-              tickTimer = deps.timers.set(Math.max(0, atMs - (lastT ?? atMs)), () => {
+              tickTimer = deps.timers.set(atMs - lastT, () => {
                 tickTimer = null
                 lastT = atMs
                 sink?.({ kind: 'tick', t: atMs })
