@@ -213,6 +213,35 @@ describe('SceneCanvasRuntime and the shared map scene layer', () => {
     runtime.destroy()
   })
 
+  it('a layer whose disposal fails leaves the slot: the new Design waits for a live layer to draw it', async () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(orchard())
+    const container = createContainer()
+    const composition = createSharedMapSceneRendererComposition((target) => runtime.connectRenderTarget(target))
+    const gl = {} as WebGL2RenderingContext
+    const oldMap = createMap()
+    // Pixi's teardown throws, as on a lost or never-initialized WebGL context.
+    const pixi = { ...createPixiRenderer(), destroy: vi.fn(() => { throw new Error('context lost') }) }
+    const old = composition.createLayer({
+      id: 'canopi-shared-scene',
+      frames: runtime.cameraHost.frames,
+      createRenderer: () => pixi,
+      createPresentation: (input) => createPixiScenePresentation({ ...input, createText: () => new MeasuredText() }),
+    })
+    await old.initialize(oldMap, gl)
+    old.layer.onAdd!(oldMap as never, gl)
+    await runtime.init(container)
+    await vi.waitFor(() => expect(runtime.documentSurface.presented.value).toBe(true))
+
+    await expect(old.dispose()).rejects.toThrow('context lost')
+    runtime.documentSurface.loadDocument(orchard())
+    await nextFrame()
+    await nextFrame()
+    await nextFrame()
+    expect(runtime.documentSurface.presented.value, 'no live layer has drawn the new Design').toBe(false)
+    runtime.destroy()
+  })
+
   it('closing the Design leaves the start screen idle: no layer is awaited, so the map is not busy', async () => {
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(orchard())
