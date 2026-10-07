@@ -31,7 +31,7 @@ interface SceneCanvasDocumentSurfaceOptions {
   readonly viewNavigation: Pick<ViewNavigation, 'openAt' | 'clearTemporaryFocus'>
   readonly rendering: Pick<
     SceneRuntimeRenderScheduler,
-    'container' | 'invalidate' | 'dispose' | 'presented' | 'awaitPresentation'
+    'container' | 'invalidate' | 'unmount' | 'presented' | 'awaitPresentation'
   >
   /** Shows (true) or hides the Design's canvas chrome: the grid draws only while it shows. */
   readonly setChromeShown: (shown: boolean) => void
@@ -207,7 +207,7 @@ class SceneCanvasDocumentRole implements SceneCanvasDocumentSurface {
       () => this.options.disposeInteraction(),
       () => this.options.disposeEffects(),
       () => this.options.disposeCamera(),
-      () => this.options.rendering.dispose(),
+      () => this.options.rendering.unmount(),
     ], 'Scene Canvas document surface disposal failed')
   }
 }

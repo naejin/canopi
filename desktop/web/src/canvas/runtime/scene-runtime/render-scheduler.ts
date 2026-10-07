@@ -124,7 +124,7 @@ export class SceneRuntimeRenderScheduler {
     this._renderEpoch += 1
     this._frame ??= requestAnimationFrame(() => {
       this._frame = null
-      this._runDetached(this.renderScene(), 'Scene Canvas render failed:')
+      void this.renderScene().catch((error) => { console.error('Scene Canvas render failed:', error) })
     })
     this._publishScenePending()
   }
@@ -181,10 +181,6 @@ export class SceneRuntimeRenderScheduler {
     this._presented.value = true
   }
 
-  dispose(): void {
-    this.unmount()
-  }
-
   private _cancelFrame(): void {
     if (this._frame !== null) cancelAnimationFrame(this._frame)
     this._frame = null
@@ -208,11 +204,5 @@ export class SceneRuntimeRenderScheduler {
   /** A scene invalidation waits for its frame, or the latest scene render has not drawn yet. */
   private _publishScenePending(): void {
     this._scenePending.value = this._frame !== null || this._sceneRenderEpoch === this._renderEpoch
-  }
-
-  private _runDetached(operation: Promise<void>, failureMessage: string): void {
-    void operation.catch((error) => {
-      console.error(failureMessage, error)
-    })
   }
 }
