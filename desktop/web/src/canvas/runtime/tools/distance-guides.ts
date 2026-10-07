@@ -12,7 +12,7 @@ import type { DraftShape, DraftStroke } from './draft'
 import type { ToolScene } from './tool'
 
 const DISTANCE_GUIDE_STROKE: DraftStroke = Object.freeze({ token: 'draft', widthPx: 1.5, dash: Object.freeze([4, 4]) })
-/** Today's move-drag shows this many guides. */
+/** A move-drag shows this many guides. */
 const DRAG_DISTANCE_GUIDES = 2
 
 /** The guide from `start` to `end` with its chip at the middle, or at `label.anchor` moved by `label.offsetPx`. */

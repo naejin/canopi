@@ -8,10 +8,10 @@
 // or locked by then, writes nothing and closes it; while the scene refuses the edit the entry stays open with its text.
 // Esc in the entry discards it (onCancel). The tool card shows a gesture while the entry is open. The click that
 // commits an open note places nothing (spec §3.2): the host keeps a press that finds a new note's entry open from every
-// tool (tool-host.ts, rawPress). The entry survives the host's cancellations, as today's field did; entering overview
+// tool (tool-host.ts, rawPress). The entry survives the host's cancellations; entering overview
 // commits it, or discards a refused one through cancelTextEntry so the tool resets (U34, B5); a tool change closes it,
-// and so does a document replacement, which today's field survived to commit into the new document
-// (a recorded tiny deviation).
+// and so does a document replacement (before v2, at a4c86d39, the field survived it to commit into the new
+// document; a recorded tiny deviation).
 
 import { appendTextAnnotationToDraft } from './tool-actions'
 import type { CanvasTool, ToolContext, ToolReply } from './tool'
@@ -83,7 +83,7 @@ export function createTextNoteTool(): CanvasTool {
       c.effects.setGuidance({ gesture: false })
     },
     gesture(g): ToolReply {
-      // Today's press kept its pointer gesture: no passive hover over the held moves.
+      // A press keeps its pointer gesture: no passive hover over the held moves.
       if (g.kind === 'drag-start' || g.kind === 'drag-move') return 'handled'
       // The host keeps the click that commits an open note from the tool; one that reaches it anyway places nothing.
       if (g.kind !== 'press' || anchor) return 'pass'
@@ -93,7 +93,7 @@ export function createTextNoteTool(): CanvasTool {
     command: () => 'pass',
     hasTransient: () => false,
     cancelTransient() {
-      // Today's Text field outlived every cancellation; the host closes it itself on a tool change or replacement.
+      // The text entry outlives every cancellation; the host closes it itself on a tool change or replacement.
     },
     deactivate() {
       if (anchor) context?.effects.closeTextEntry()

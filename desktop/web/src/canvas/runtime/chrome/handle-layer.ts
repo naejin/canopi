@@ -242,7 +242,7 @@ function drawRotate(handle: ToolHandle): DrawnHandle {
   return { handle, element, readout, mark: null }
 }
 
-/** Today's rotation readout chip ('+15°'), under its handle. */
+/** The rotate handle's readout chip ('+15°'), under its handle. */
 function createReadout(): HTMLElement {
   const readout = document.createElement('span')
   readout.dataset.canvasHandleReadout = 'true'
@@ -272,7 +272,7 @@ function createReadout(): HTMLElement {
   return readout
 }
 
-/** Centred on the anchor's screen point plus its offset; the rotate button stays inside the visible map area, as today. */
+/** Centred on the anchor's screen point plus its offset; the rotate button stays inside the visible map area. */
 function place({ handle, element }: DrawnHandle, frame: ViewFrame): void {
   const anchor = frame.view.worldToScreen(handle.anchor)
   const centre = { x: anchor.x + (handle.offsetPx?.x ?? 0), y: anchor.y + (handle.offsetPx?.y ?? 0) }
