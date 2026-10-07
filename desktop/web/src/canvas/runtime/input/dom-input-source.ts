@@ -143,7 +143,6 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
       end()
     }
     const end = (): void => {
-      if (endTrailingClick !== end) return
       endTrailingClick = null
       deps.timers.clear(timer)
       window.removeEventListener('click', onClick as EventListener, { capture: true })
