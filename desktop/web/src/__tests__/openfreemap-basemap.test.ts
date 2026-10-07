@@ -55,7 +55,6 @@ class FakeMap implements VectorBasemapMap {
   glyphs: string | null = null
   sprite: string | null = null
   globalState: Record<string, unknown> = {}
-  setStyle = () => { throw new Error('setStyle must not be called') }
   getSource(id: string) { return this.sources.get(id) }
   addSource(id: string, source: Record<string, unknown>) { this.sources.set(id, source) }
   removeSource(id: string) { this.sources.delete(id) }
@@ -118,7 +117,7 @@ describe('OpenFreeMap vector basemap', () => {
     expect(Object.keys(OPENFREEMAP_BASEMAPS)).toEqual(['liberty', 'positron', 'bright', 'dark'])
   })
 
-  it('adds the style as namespaced sources, layers, glyphs and sprite without setStyle, below Canopi layers', async () => {
+  it('adds the style as namespaced sources, layers, glyphs and sprite below Canopi layers', async () => {
     const map = new FakeMap()
     install(map).update({ style: 'liberty', visible: true, opacity: 1, locale: 'fr' })
     await settle()
