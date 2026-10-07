@@ -198,7 +198,6 @@ function createCoordinator(input: {
   composition?: SharedMapSceneRendererComposition
   runtime?: ReturnType<typeof createRuntime>
   context?: WebGL2RenderingContext | null
-  getWebGL2Context?: WorkspaceActivationMapControls['getWebGL2Context']
   unwatchFailure?: () => void
   watchFailure?: WorkspaceActivationMapControls['watchFailure']
   reconcileLayerStack?: WorkspaceActivationMapControls['reconcileLayerStack']
@@ -212,8 +211,7 @@ function createCoordinator(input: {
   const mapControls: WorkspaceActivationMapControls = {
     createMap: input.createMap ?? (async () => map as unknown as WorkspaceActivationMap),
     releaseMap: vi.fn((candidate) => (candidate as unknown as FakeMap).remove()),
-    getWebGL2Context: input.getWebGL2Context
-      ?? (() => input.context === undefined ? map.context : input.context),
+    getWebGL2Context: () => input.context === undefined ? map.context : input.context,
     updateMapContributions: vi.fn(),
     updateBackgroundPresentation: vi.fn(),
     retryBasemap: vi.fn(),
@@ -1000,7 +998,6 @@ describe('WorkspaceActivationCoordinator', () => {
   })
 
   it.each([
-    'WebGL2 context acquisition',
     'layer creation',
     'failure watcher installation',
     'layer stack reconciliation',
@@ -1027,12 +1024,6 @@ describe('WorkspaceActivationCoordinator', () => {
       : layer.composition
     const { camera, map, runtime, coordinator: created } = createCoordinator({
       composition,
-      getWebGL2Context: boundary === 'WebGL2 context acquisition'
-        ? vi.fn(() => {
-          coordinator.requestGenerationDisconnect()
-          return new FakeMap().context
-        })
-        : undefined,
       watchFailure: boundary === 'failure watcher installation'
         ? vi.fn(() => {
           coordinator.requestGenerationDisconnect()
@@ -1061,7 +1052,7 @@ describe('WorkspaceActivationCoordinator', () => {
     await expect(coordinator.activate()).resolves.toBe('cancelled')
     await vi.waitFor(() => expect(map.remove).toHaveBeenCalledOnce())
 
-    if (boundary === 'failure watcher installation' || boundary === 'WebGL2 context acquisition') {
+    if (boundary === 'failure watcher installation') {
       expect(layer.dispose).not.toHaveBeenCalled()
     } else {
       expect(layer.dispose).toHaveBeenCalledOnce()
