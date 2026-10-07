@@ -6,11 +6,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestRendererView, createTestSceneRendererSnapshot } from '../../../__tests__/support/scene-renderer-snapshot'
 import { refreshCanvasColorCache } from '../../theme-refresh'
 import { getAnnotationVisualWorldCorners } from '../annotation-layout'
+import { getCanvasDetailLayout } from '../automatic-detail'
 import { buildPlantPresentationEntries } from '../plant-presentation'
 import { ROUND_PLANT_SYMBOL_RADIUS } from '../plant-symbol-recipes'
 import type { SceneAnnotationEntity, ScenePlantEntity, ScenePoint } from '../scene'
 import { setCanvasMapBackdrop } from '../scene-visuals'
 import { createBillboardLayer } from './billboard-layer'
+
+// A pass-through spy: the layer's detail-layout passes stay real and countable.
+vi.mock('../automatic-detail', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../automatic-detail')>()
+  return { ...actual, getCanvasDetailLayout: vi.fn(actual.getCanvasDetailLayout) }
+})
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -203,6 +210,18 @@ describe('billboard layer', () => {
     layer.present(createTestRendererView({ x: 0, y: 0, scale: 13 }), undefined, false)
     layer.present(createTestRendererView({ x: 0, y: 0, scale: 13 }), undefined, true)
     expect(work.filter((name) => name === 'labelAdmission')).toHaveLength(2)
+    layer.dispose()
+  })
+
+  it('a zoom frame with no notes and no measurement labels runs no detail layout', () => {
+    const layer = createBillboardLayer({ createText: () => new Text(), viewSize: { width: 400, height: 300 } })
+    const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [createPlant()] } })
+    layer.present(createTestRendererView({ x: 0, y: 0, scale: 20 }), snapshot)
+    vi.mocked(getCanvasDetailLayout).mockClear()
+
+    for (const scale of [21, 22, 30]) layer.present(createTestRendererView({ x: 0, y: 0, scale }), undefined, false)
+
+    expect(getCanvasDetailLayout).not.toHaveBeenCalled()
     layer.dispose()
   })
 

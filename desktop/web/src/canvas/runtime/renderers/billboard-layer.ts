@@ -793,7 +793,7 @@ function buildNotes(createText: () => Text, notes: NoteGraphics, snapshot: Scene
 /** Places the notes: their anchors and angles every frame; text, marker and outline when the scale changed. */
 function placeNotes(notes: NoteGraphics, view: ViewTransform): void {
   const { built } = notes
-  if (!built) return
+  if (!built || built.notes.length === 0) return
   const pixelsPerMetre = view.pixelsPerMetre
   if (built.scale !== pixelsPerMetre) {
     built.scale = pixelsPerMetre
@@ -933,6 +933,7 @@ function buildMeasurementLabels(createText: () => Text, labels: MeasurementLabel
 }
 
 function placeMeasurementLabels(labels: MeasurementLabelGraphics, snapshot: SceneRendererSnapshot, view: ViewTransform): void {
+  if (labels.built.length === 0) return
   for (const { guide, text } of labels.built) {
     const pose = measurementGuideLabelPoseIn(guide, view)
     text.position.set(pose.point.x, pose.point.y)
