@@ -115,6 +115,38 @@ describe('SceneRuntimeRenderScheduler', () => {
     scheduler.dispose()
   })
 
+  it('a layer connecting during a Design switch gets nothing of the previous Design, only the opened one once it publishes', async () => {
+    const previous = createTestSceneRendererSnapshot()
+    const opened = createTestSceneRendererSnapshot({ speciesFocus: { canonicalName: 'Malus domestica' } })
+    const species = deferred<void>()
+    const snapshots = [previous, opened]
+    const scheduler = createScheduler({
+      prepareSceneRender: async () => {
+        const snapshot = snapshots.shift()!
+        if (snapshot === opened) await species.promise
+        return { publish: () => snapshot }
+      },
+    })
+    const disconnectOld = scheduler.connect(createTarget())
+    scheduler.mount(document.createElement('div'))
+    await scheduler.renderScene()
+    scheduler.setDraft(DRAFT)
+
+    // Open Design B: the old map's layer disconnects; B's render waits for its species data.
+    disconnectOld()
+    scheduler.awaitPresentation()
+    const rendering = scheduler.renderScene()
+    const layer = createTarget()
+    scheduler.connect(layer)
+    expect(layer.setSnapshot, 'Design A is not drawn at B\'s camera').not.toHaveBeenCalled()
+    expect(layer.setDraft).not.toHaveBeenCalled()
+
+    species.resolve()
+    await rendering
+    expect(layer.setSnapshot).toHaveBeenCalledExactlyOnceWith(opened)
+    scheduler.dispose()
+  })
+
   it('a camera frame asks the target for a repaint at once and publishes no snapshot: the layer reads the frame itself', () => {
     const request = vi.fn(() => 1)
     vi.stubGlobal('requestAnimationFrame', request)
