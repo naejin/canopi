@@ -22,11 +22,7 @@ interface Layout {
   readonly apple: Point
 }
 
-/**
- * Corners of a new polygon at 1024x768, on empty ground clear of the selection chip that the finished zone brings up at
- * the bottom centre. A finishing tap over that chip lands its click on the chip's Rename (reported at the phase-3
- * Input→D1 merge for a bead); these scenarios test the shape, not that defect.
- */
+/** Corners of a new polygon at 1024x768, on empty ground clear of the selection chip the finished zone brings up. */
 const POLYGON = [{ x: 860, y: 560 }, { x: 940, y: 560 }, { x: 940, y: 620 }] as const
 /** A point on the rectangle zone's left edge at 1024x768. */
 const RECT_EDGE = { x: 311, y: 285 }
@@ -438,6 +434,31 @@ test.describe('Chromium touch', () => {
     await expect(field, 'the tap opens the note field focused').toBeFocused()
     expect(await field.evaluate((element) => getComputedStyle(element).fontSize), 'iOS does not zoom a 16 px field').toBe('16px')
   })
+
+  test('a double tap that finishes a polygon where the selection chip appears opens no Rename zone dialog', async ({ page }) => {
+    await openBaseFixture(page, TABLET)
+    const fingers = await Fingers.of(page)
+    await fingers.tap(TABLET.ground)
+    await page.keyboard.press('z')
+    await expect(tool(page, 'Polygon zone')).toHaveAttribute('aria-pressed', 'true')
+
+    // The finishing tap lands at the bottom centre, where the finished zone's chip shows Rename.
+    await fingers.tap({ x: 520, y: 560 })
+    await page.waitForTimeout(600)
+    await fingers.tap({ x: 720, y: 560 })
+    await page.waitForTimeout(600)
+    await fingers.tap({ x: 620, y: 690 })
+    await fingers.tap({ x: 620, y: 700 })
+
+    await expect(selectionChip(page), 'the double tap finished the shape').toHaveText(/^Polygon zone/)
+    const rename = page.getByRole('group', { name: 'Selection' }).getByRole('button', { name: 'Rename…' })
+    const box = await rename.boundingBox()
+    if (!box) throw new Error('the finished zone\'s chip shows no Rename')
+    expect(box.x <= 620 && 620 <= box.x + box.width && box.y <= 700 && 700 <= box.y + box.height, 'Rename is under the finger').toBe(true)
+    await page.waitForTimeout(300)
+    await expect(page.getByRole('dialog', { name: 'Rename zone' }), 'the lift opens no dialog').toHaveCount(0)
+  })
+
 })
 
 test.describe('WebKit touch', () => {
