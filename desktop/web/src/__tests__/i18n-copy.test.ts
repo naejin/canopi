@@ -94,7 +94,7 @@ describe('placeholder lengths', () => {
  */
 const PROPER_NOUNS = new Set([
   'Canopi', 'Google', 'OpenStreetMap', 'IGN', 'Esri', 'Maps', 'API', 'GeoLibre', 'Grime', 'Raunkiaer', 'Ellenberg', 'Köppen',
-  'Design', 'Designs', 'Layers', 'Select', 'Satellite', 'Start', 'Web', 'Desktop', 'Edition', 'English', 'Latin',
+  'Design', 'Designs', 'Layers', 'Select', 'Pan', 'Satellite', 'Start', 'Web', 'Desktop', 'Edition', 'English', 'Latin',
   'Ctrl', 'Shift', 'Alt', 'Esc', 'Tab', 'Enter', 'Space', 'Delete', 'Backspace', 'Home', 'End', 'Plus', 'Minus',
 ])
 /** Panel and frame names that a sentence refers to by name. */
