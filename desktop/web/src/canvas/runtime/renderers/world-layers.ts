@@ -80,11 +80,11 @@ export function createWorldLayers(): WorldLayers {
   /** The band the strokes were traced in; null until a scene and a view have both arrived. */
   let tracedBand: number | null = null
 
-  function trace(reconcileRemoved: boolean): void {
+  function trace(): void {
     if (!snapshot || viewBand === null) return
     const strokeScale = bandCentreScale(viewBand)
-    syncZones(zonesLayer, zoneGraphicsById, snapshot, strokeScale, reconcileRemoved)
-    syncMeasurementGuides(measurementGuideLayer, measurementGuideGraphicsById, snapshot, strokeScale, reconcileRemoved)
+    syncZones(zonesLayer, zoneGraphicsById, snapshot, strokeScale)
+    syncMeasurementGuides(measurementGuideLayer, measurementGuideGraphicsById, snapshot, strokeScale)
     tracedBand = viewBand
   }
 
@@ -95,8 +95,7 @@ export function createWorldLayers(): WorldLayers {
       viewBand = zoomBandOf(view.pixelsPerMetre)
       if (next) snapshot = next
       editingAids.sync(snapshot?.editingAids ?? null, view)
-      if (next) trace(true)
-      else if (viewBand !== tracedBand) trace(false)
+      if (next || viewBand !== tracedBand) trace()
     },
   }
 }
@@ -183,18 +182,12 @@ function traceLattice(graphics: Graphics, box: SceneBounds, step: number): void 
 }
 
 /** `strokeScale`: the band's centre scale, which sizes every stroke traced in this band. */
-function syncZones(
-  layer: Container,
-  graphicsById: Map<string, Graphics>,
-  snapshot: SceneRendererSnapshot,
-  strokeScale: number,
-  reconcileRemoved: boolean,
-): void {
+function syncZones(layer: Container, graphicsById: Map<string, Graphics>, snapshot: SceneRendererSnapshot, strokeScale: number): void {
   const style = getSceneLayerStyle(snapshot.scene, 'zones')
   layer.visible = style.visible
   layer.alpha = style.opacity
   if (!style.visible) {
-    if (reconcileRemoved) destroyEntriesNotIn(graphicsById, new Set(snapshot.scene.zones.map((zone) => zone.id)))
+    destroyEntriesNotIn(graphicsById, new Set(snapshot.scene.zones.map((zone) => zone.id)))
     return
   }
 
@@ -214,16 +207,8 @@ function syncZones(
       hoverStateForTarget(snapshot, 'zone', zone.id),
       strokeScale,
     )
-    graphics.visible = true
   }
-
-  if (!reconcileRemoved) return
-  for (const [zoneId, graphics] of graphicsById) {
-    if (nextZoneIds.has(zoneId)) continue
-    graphics.removeFromParent()
-    graphics.destroy()
-    graphicsById.delete(zoneId)
-  }
+  destroyEntriesNotIn(graphicsById, nextZoneIds)
 }
 
 function drawZone(
@@ -298,13 +283,12 @@ function syncMeasurementGuides(
   graphicsById: Map<string, Graphics>,
   snapshot: SceneRendererSnapshot,
   strokeScale: number,
-  reconcileRemoved: boolean,
 ): void {
   const style = getSceneLayerStyle(snapshot.scene, 'measurement-guides')
   layer.visible = style.visible
   layer.alpha = style.opacity
   if (!style.visible) {
-    if (reconcileRemoved) destroyEntriesNotIn(graphicsById, new Set(snapshot.scene.measurementGuides.map((guide) => guide.id)))
+    destroyEntriesNotIn(graphicsById, new Set(snapshot.scene.measurementGuides.map((guide) => guide.id)))
     return
   }
 
@@ -313,17 +297,7 @@ function syncMeasurementGuides(
     if (!drawMeasurementGuide(graphicsById, layer, guide, snapshot, strokeScale)) continue
     nextIds.add(guide.id)
   }
-
-  for (const [guideId, graphics] of graphicsById) {
-    if (nextIds.has(guideId)) continue
-    if (reconcileRemoved) {
-      graphics.removeFromParent()
-      graphics.destroy()
-      graphicsById.delete(guideId)
-    } else {
-      graphics.visible = false
-    }
-  }
+  destroyEntriesNotIn(graphicsById, nextIds)
 }
 
 /** Draws a guide too short to measure as nothing and returns false. */
@@ -342,7 +316,6 @@ function drawMeasurementGuide(
     graphicsById.set(guide.id, graphics)
     layer.addChild(graphics)
   }
-  graphics.visible = true
 
   const interactionState = resolveInteractionState(
     snapshot.selectedMeasurementGuideIds.has(guide.id),
