@@ -96,35 +96,25 @@ function installSatelliteConfigObserver(
  * that (`style._loaded`, what `addSource` checks) is read first: the public
  * `isStyleLoaded()` also stays false while any tile, sprite or source update
  * is loading, which on a map that already loaded is not followed by another
- * `load` or `style.load`. `isStyleLoaded` and then `loaded` are the fallbacks;
- * a map that exposes none is treated as ready so a stub map with no
- * asynchronous style load is not blocked forever.
+ * `load` or `style.load`. `isStyleLoaded()` is the fallback; it returns
+ * nothing on a map with no style yet, which is not ready.
  */
 export function mapStyleReadiness(
-  map: { isStyleLoaded?(): boolean; loaded?(): boolean },
+  map: { isStyleLoaded(): boolean | void },
   lifetime: {
     on(type: string, listener: (event?: unknown) => void): void
     off(type: string, listener: (event?: unknown) => void): void
   },
 ): MapStyleReadiness {
-  const read = (): boolean | null => {
+  const isReady = (): boolean => {
+    const loaded = (map as { style?: { _loaded?: unknown } }).style?._loaded
+    if (typeof loaded === 'boolean') return loaded
     try {
-      const style = (map as { style?: { _loaded?: unknown } }).style
-      if (typeof style?._loaded === 'boolean') return style._loaded
+      return map.isStyleLoaded() === true
     } catch {
-      // Fall through to the public probes.
+      return false
     }
-    for (const probe of [map.isStyleLoaded, map.loaded]) {
-      if (typeof probe !== 'function') continue
-      try {
-        return probe.call(map)
-      } catch {
-        return false
-      }
-    }
-    return null
   }
-  const isReady = () => read() ?? true
   return {
     isReady,
     whenReady: (listener) => {

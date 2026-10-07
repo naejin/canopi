@@ -66,13 +66,12 @@ function isMapBackgroundLayer(id: string): boolean {
 export type MapBackgroundMap = VectorBasemapMap & SatelliteMountOptions['map'] & {
   getLayersOrder(): string[]
   setPaintProperty(id: string, name: string, value: unknown): void
-  isStyleLoaded?(): boolean
-  loaded?(): boolean
-  getBounds?(): { getWest(): number; getSouth(): number; getEast(): number; getNorth(): number }
-  getZoom?(): number
-  addControl?(control: unknown, position?: string): unknown
-  removeControl?(control: unknown): unknown
-  getContainer?(): HTMLElement
+  isStyleLoaded(): boolean | void
+  getBounds(): { getWest(): number; getSouth(): number; getEast(): number; getNorth(): number }
+  getZoom(): number
+  addControl(control: object, position: 'bottom-right'): unknown
+  removeControl(control: object): unknown
+  getContainer(): HTMLElement
 }
 
 export interface MapBackgroundOptions {
@@ -239,10 +238,8 @@ export function mountMapBackground(options: MapBackgroundOptions): MapBackground
 }
 
 function readViewport(map: MapBackgroundMap): SatelliteViewport {
-  const bounds = map.getBounds?.()
-  const zoom = map.getZoom?.() ?? 0
-  if (!bounds) return { west: -180, south: -85, east: 180, north: 85, zoom }
-  return { west: bounds.getWest(), south: bounds.getSouth(), east: bounds.getEast(), north: bounds.getNorth(), zoom }
+  const bounds = map.getBounds()
+  return { west: bounds.getWest(), south: bounds.getSouth(), east: bounds.getEast(), north: bounds.getNorth(), zoom: map.getZoom() }
 }
 
 /**
@@ -252,14 +249,9 @@ function readViewport(map: MapBackgroundMap): SatelliteViewport {
  * control, so a new credit or fold remounts it.
  */
 function createAttributionOwner(maplibre: unknown, map: MapBackgroundMap) {
-  type AttributionControlClass = new (options?: { compact?: boolean; customAttribution?: string | string[] }) => unknown
-  let Control: AttributionControlClass | undefined
-  try {
-    Control = (maplibre as { AttributionControl?: AttributionControlClass } | null)?.AttributionControl
-  } catch {
-    Control = undefined
-  }
-  let control: unknown = null
+  type AttributionControlClass = new (options?: { compact?: boolean; customAttribution?: string | string[] }) => object
+  const Control = (maplibre as { AttributionControl?: AttributionControlClass } | null)?.AttributionControl
+  let control: object | null = null
   let credit = ''
   // Unset: MapLibre folds the credits into an (i) button only on a map 640 px
   // wide or narrower, so imagery terms stay readable elsewhere.
@@ -269,7 +261,7 @@ function createAttributionOwner(maplibre: unknown, map: MapBackgroundMap) {
   // drag, which the workspace map never has: fold it as soon as MapLibre makes
   // it compact (at once, or when the first source credits arrive).
   const foldWhenCompact = () => {
-    const credits = map.getContainer?.().querySelector('.maplibregl-ctrl-attrib')
+    const credits = map.getContainer().querySelector('.maplibregl-ctrl-attrib')
     if (!credits) return
     const fold = () => {
       if (!credits.classList.contains('maplibregl-compact')) return false
@@ -285,7 +277,7 @@ function createAttributionOwner(maplibre: unknown, map: MapBackgroundMap) {
     foldWatch.observe(credits, { attributes: true, attributeFilter: ['class'] })
   }
   const mount = () => {
-    if (!Control || !map.addControl) return
+    if (!Control) return
     control = new Control({
       ...(compact === undefined ? {} : { compact }),
       ...(credit ? { customAttribution: credit } : {}),
@@ -296,7 +288,7 @@ function createAttributionOwner(maplibre: unknown, map: MapBackgroundMap) {
   const unmount = () => {
     foldWatch?.disconnect()
     foldWatch = null
-    if (control && map.removeControl) map.removeControl(control)
+    if (control) map.removeControl(control)
     control = null
   }
   mount()

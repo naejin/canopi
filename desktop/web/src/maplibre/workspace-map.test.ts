@@ -45,7 +45,7 @@ function workspaceMapOptions(): MapLibreMapConstructorOptions {
   createWorkspaceMapLibreMap(maplibre, {} as HTMLElement, {
     initialCenter: { lat: 48.8566, lon: 2.3522 },
     background: {} as never,
-  })
+  }, (url) => ({ url }))
   return captured!
 }
 

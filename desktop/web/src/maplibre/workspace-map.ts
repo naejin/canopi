@@ -17,7 +17,7 @@ export function createWorkspaceMapLibreMap(
   maplibre: MapLibreApi,
   container: HTMLElement,
   snapshot: WorkspaceMapSnapshot,
-  transformRequest?: (url: string) => { url: string },
+  transformRequest: (url: string) => { url: string },
 ): MapLibreMapInstance {
   return new maplibre.Map({
     container,
@@ -36,6 +36,6 @@ export function createWorkspaceMapLibreMap(
     pitchWithRotate: false,
     dragRotate: false,
     touchZoomRotate: false,
-    ...(transformRequest ? { transformRequest } : {}),
+    transformRequest,
   })
 }

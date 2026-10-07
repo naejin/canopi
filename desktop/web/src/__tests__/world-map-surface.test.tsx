@@ -79,6 +79,8 @@ function setMapLayers(patch: {
 
 class FakeWorldMap {
   readonly addControl = vi.fn()
+  readonly removeControl = vi.fn()
+  readonly container = document.createElement('div')
   readonly remove = vi.fn()
   readonly resize = vi.fn()
   readonly fitBounds = vi.fn()
@@ -129,8 +131,12 @@ class FakeWorldMap {
     this.listeners.get(type)?.delete(listener)
   }
 
-  loaded() {
+  isStyleLoaded() {
     return true
+  }
+
+  getContainer() {
+    return this.container
   }
 
   getBounds() {

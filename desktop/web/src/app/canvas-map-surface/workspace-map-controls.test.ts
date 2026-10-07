@@ -91,6 +91,12 @@ class FakeMap implements MapLibreMapInstance {
   }
 
   getCanvas(): HTMLCanvasElement { return this.canvas }
+  readonly container = document.createElement('div')
+  getContainer(): HTMLElement { return this.container }
+  isStyleLoaded(): boolean { return true }
+  // The whole world at zoom 0.
+  getZoom(): number { return 0 }
+  getBounds() { return { getWest: () => -180, getSouth: () => -85, getEast: () => 180, getNorth: () => 85 } }
   emit(type: string, event?: unknown): void {
     for (const listener of this.listeners.get(type) ?? []) listener(event)
   }
