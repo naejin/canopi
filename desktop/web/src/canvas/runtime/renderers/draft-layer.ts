@@ -27,7 +27,7 @@ import {
 import type { DraftFill, DraftPresentation, DraftShape, DraftStroke } from '../tools/draft'
 import type { GhostEntity } from '../tools/tool'
 import type { ScreenPoint, ViewTransform, WorldPoint } from '../view/types'
-import { writeWorldAffine } from './scene-paint'
+import { pixiPaint, screenPxToWorldPx, writeWorldAffine } from './scene-paint'
 
 /** Where the scene draws the active tool's draft; mounted by pixi-scene.ts. */
 export interface DraftLayer {
@@ -44,10 +44,6 @@ export interface DraftLayer {
 
 /** The scene's own drawing code (pixi-scene.ts), lent so a ghost looks like the object a click would create. */
 export interface DraftScenePainters {
-  /** A CSS colour as Pixi paint: the colour and its own alpha. */
-  paint(color: string): { readonly color: number; readonly alpha: number }
-  /** CSS px as world units at `scale`: the scene's one rule. */
-  screenPxToWorldPx(px: number, scale: number): number
   /** A zone as the stamp ghost draws it, in world units; false when nothing is drawable. */
   drawZoneGhost(graphics: Graphics, zone: SceneZoneEntity, scale: number): boolean
   /**
@@ -164,7 +160,7 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
   }
 
   function drawShape(shape: DraftShape, scale: number): void {
-    const worldUnits = (px: number) => painters.screenPxToWorldPx(px, scale)
+    const worldUnits = (px: number) => screenPxToWorldPx(px, scale)
     switch (shape.kind) {
       case 'polyline':
         paintOutline(add(world, new Graphics()), shape.points, false, shape.style, undefined, worldUnits)
@@ -192,7 +188,7 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
   function ellipseOutline(shape: Extract<DraftShape, { kind: 'ellipse' }>, scale: number): WorldPoint[] {
     const radiusX = Math.abs(shape.radiusX)
     const radiusY = Math.abs(shape.radiusY)
-    const chord = painters.screenPxToWorldPx(OUTLINE_CHORD_PX, scale)
+    const chord = screenPxToWorldPx(OUTLINE_CHORD_PX, scale)
     const segments = outlineSegments((2 * Math.PI * Math.max(radiusX, radiusY)) / chord)
     const turn = (shape.rotationDeg * Math.PI) / 180
     const cos = Math.cos(turn)
@@ -216,7 +212,7 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
   ): void {
     if (fill && closed && points.length >= 3) {
       tracePath(graphics, points, true)
-      graphics.fill(painters.paint(getDraftVisual(fill.token).color))
+      graphics.fill(pixiPaint(getDraftVisual(fill.token).color))
     }
     if (points.length < 2) return
     strokeOutline(graphics, style, closed, units, (dash) => {
@@ -238,9 +234,9 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
     const dash = dashPattern(style.dash, units)
     const ends = closed ? CLOSED_ENDS : OPEN_ENDS
     traceOutline(dash)
-    graphics.stroke({ ...painters.paint(visual.casing), width: units(style.widthPx + OVERLAY_CASING_EXTRA_PX), ...ends })
+    graphics.stroke({ ...pixiPaint(visual.casing), width: units(style.widthPx + OVERLAY_CASING_EXTRA_PX), ...ends })
     traceOutline(dash)
-    graphics.stroke({ ...painters.paint(visual.color), width: units(style.widthPx), ...ends })
+    graphics.stroke({ ...pixiPaint(visual.color), width: units(style.widthPx), ...ends })
   }
 
   function drawMarker(shape: Extract<DraftShape, { kind: 'circle-px' }>): void {
@@ -269,7 +265,7 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
       fontFamily: visual.fontFamily,
       fontSize: visual.fontSizePx,
       fontWeight: visual.fontWeight,
-      fill: painters.paint(visual.color),
+      fill: pixiPaint(visual.color),
       lineHeight: visual.lineHeightPx,
     })
     const inset = { x: visual.borderWidthPx + visual.paddingPx.x, y: visual.borderWidthPx + visual.paddingPx.y }
@@ -280,10 +276,10 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
     // The DOM chip: --shadow-sm outside, the background under the border, the 1 px border inside the box.
     const box = new Graphics()
     drawChipShadow(box, visual.shadow, width, height, visual.radiusPx)
-    box.roundRect(0, 0, width, height, visual.radiusPx).fill(painters.paint(visual.background))
+    box.roundRect(0, 0, width, height, visual.radiusPx).fill(pixiPaint(visual.background))
     const half = visual.borderWidthPx / 2
     box.roundRect(half, half, width - visual.borderWidthPx, height - visual.borderWidthPx, Math.max(0, visual.radiusPx - half))
-      .stroke({ ...painters.paint(visual.border), width: visual.borderWidthPx })
+      .stroke({ ...pixiPaint(visual.border), width: visual.borderWidthPx })
 
     const chip = add(screen, new Container())
     chip.addChild(box, text)
@@ -333,7 +329,7 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
     radius: number,
   ): void {
     if (!shadow) return
-    const paint = painters.paint(shadow.color)
+    const paint = pixiPaint(shadow.color)
     for (let step = 0; step < CHIP_SHADOW_STEPS; step += 1) {
       const spread = shadow.blurPx * 1.5 * ((step + 0.5) / CHIP_SHADOW_STEPS - 0.5)
       // How far the step passes each side of the chip.

@@ -8,7 +8,7 @@ import type { DraftPresentation } from '../tools/draft'
 import type { ViewTransform } from '../view/types'
 import { createBillboardLayer, drawPlantGlyph, styleAnnotationText, traceAnnotationMarker } from './billboard-layer'
 import { createDraftLayer, type DraftScenePainters } from './draft-layer'
-import { cssColorAlpha, screenPxToWorldPx, toPixiColor } from './scene-paint'
+import { cssColorAlpha, pixiPaint, screenPxToWorldPx, toPixiColor } from './scene-paint'
 import type { SceneRendererSnapshot } from './scene-types'
 import { createWorldLayers, traceZonePath, ZONE_STROKE_PX } from './world-layers'
 
@@ -94,16 +94,13 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
  */
 export function createDraftScenePainters(getSnapshot: () => SceneRendererSnapshot | null): DraftScenePainters {
   return {
-    paint: (color) => ({ color: toPixiColor(color, 0), alpha: cssColorAlpha(color) }),
-    screenPxToWorldPx,
     drawZoneGhost(graphics, zone, scale) {
       // Today's ghost: the zone's fill at a fifth and its stroke, with round ends and no casing.
       const visual = resolveZoneVisual(zone)
       if (!traceZonePath(graphics, zone)) return false
-      if (zone.zoneType !== 'line') graphics.fill({ color: toPixiColor(visual.fill, 0), alpha: 0.2 * cssColorAlpha(visual.fill) })
+      if (zone.zoneType !== 'line') graphics.fill({ color: toPixiColor(visual.fill), alpha: 0.2 * cssColorAlpha(visual.fill) })
       graphics.stroke({
-        color: toPixiColor(visual.stroke, 0),
-        alpha: cssColorAlpha(visual.stroke),
+        ...pixiPaint(visual.stroke),
         width: screenPxToWorldPx(ZONE_STROKE_PX, scale),
         cap: 'round',
         join: 'round',
@@ -124,7 +121,7 @@ export function createDraftScenePainters(getSnapshot: () => SceneRendererSnapsho
       }, new Set())
       if (!entry) return false
       // Plant a row's look: a disc in the display colour, its 2 px border the same colour, so never under 2 px in radius.
-      if (mark === 'dot') graphics.circle(0, 0, Math.max(entry.radiusScreenPx, DOT_GHOST_MIN_RADIUS_PX)).fill({ color: toPixiColor(entry.color, 0) })
+      if (mark === 'dot') graphics.circle(0, 0, Math.max(entry.radiusScreenPx, DOT_GHOST_MIN_RADIUS_PX)).fill({ color: toPixiColor(entry.color) })
       else drawPlantGlyph(graphics.context, entry)
       return true
     },
@@ -136,7 +133,7 @@ export function createDraftScenePainters(getSnapshot: () => SceneRendererSnapsho
       styleAnnotationText(text, annotation, textFrame.lineHeightPx, 0)
       // Today's ghost marker has no halo.
       traceAnnotationMarker(marker, markerPaths, { x: 0, y: 0 })
-      marker.stroke({ color: toPixiColor(getAnnotationTextColor(), 0), width: markerStrokePx })
+      marker.stroke({ color: toPixiColor(getAnnotationTextColor()), width: markerStrokePx })
       return { textOpacity, markerOpacity }
     },
   }

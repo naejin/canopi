@@ -32,6 +32,7 @@ import {
   destroyEntriesNotIn,
   drawClosedPath,
   hoverStateForTarget,
+  pixiPaint,
   resolveCasedStroke,
   resolveInteractionState,
   reuseGeometry,
@@ -151,10 +152,10 @@ function drawGrid(graphics: Graphics, grid: SceneEditingAids['grid'], box: Scene
   const majorInterval = NICE_DISTANCES[Math.min(index + GRID_MAJOR_STEP, NICE_DISTANCES.length - 1)]!
   const width = screenPxToWorldPx(GRID_LINE_PX, pixelsPerMetre)
   traceLattice(graphics, box, interval)
-  graphics.stroke({ color: toPixiColor(grid.ink, 0), alpha: cssColorAlpha(grid.ink), width })
+  graphics.stroke({ ...pixiPaint(grid.ink), width })
   if (majorInterval <= interval) return
   traceLattice(graphics, box, majorInterval)
-  graphics.stroke({ color: toPixiColor(grid.majorInk, 0), alpha: cssColorAlpha(grid.majorInk), width })
+  graphics.stroke({ ...pixiPaint(grid.majorInk), width })
 }
 
 /** Lines at every whole multiple of `step` across the box, the values `snapToGrid` rounds to. */
@@ -219,7 +220,7 @@ function drawZone(
   pixelsPerMetre: number,
 ): void {
   const visual = resolveZoneVisual(zone)
-  const fillColor = toPixiColor(visual.fill, 0)
+  const fillColor = toPixiColor(visual.fill)
   const fillAlpha = 0.2 * cssColorAlpha(visual.fill)
   const interactionState = resolveInteractionState(selected, highlighted, hoverState)
   const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
