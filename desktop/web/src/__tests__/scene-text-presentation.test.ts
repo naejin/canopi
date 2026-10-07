@@ -1,6 +1,6 @@
 // Production CSP rejects Pixi's generated functions; its shim avoids eval.
 import 'pixi.js/unsafe-eval'
-import { Text } from 'pixi.js'
+import { CanvasTextMetrics, Text } from 'pixi.js'
 import { describe, expect, it, vi } from 'vitest'
 import {
   getAnnotationPresentation,
@@ -26,7 +26,8 @@ import { createTestRendererView, createTestSceneRendererSnapshot } from './suppo
 import { createZoomCalibrationScene } from './support/zoom-calibration-scenes'
 
 // jsdom has no 2D canvas and no font loading API, so this file measures through stubs: a context whose glyphs are half
-// an em wide once the web font has loaded and 0.56 em before, and a font set whose loads the test resolves.
+// an em wide and rise 0.7 em once the web font has loaded, 0.56 em wide and 0.75 em high before, and a font set whose
+// loads the test resolves. Pixi measures its texts with the same context.
 const fontSet = { loaded: true, finishLoad: null as (() => void) | null }
 Object.defineProperty(document, 'fonts', {
   configurable: true,
@@ -42,12 +43,17 @@ vi.stubGlobal('OffscreenCanvas', class {
     return {
       font: '',
       measureText(this: { font: string }, text: string) {
-        const width = Array.from(text).length * Number.parseFloat(this.font) * (fontSet.loaded ? 0.5 : 0.56)
-        return { width, actualBoundingBoxLeft: 0, actualBoundingBoxRight: width - 1 }
+        const fontSize = Number(/([\d.]+)px/.exec(this.font)![1])
+        const width = Array.from(text).length * fontSize * (fontSet.loaded ? 0.5 : 0.56)
+        return { width, actualBoundingBoxLeft: 0, actualBoundingBoxRight: width - 1,
+          actualBoundingBoxAscent: fontSize * (fontSet.loaded ? 0.7 : 0.75), actualBoundingBoxDescent: fontSize * 0.2 }
       },
     }
   }
 })
+
+// Pixi asks the context's class whether it spaces letters itself; this one does not.
+vi.stubGlobal('CanvasRenderingContext2D', class {})
 
 const SCALE = 20
 
@@ -190,6 +196,42 @@ describe('scene text presentation', () => {
       expect(drawnInFallback.destroyed, 'the fallback raster is let go').toBe(true)
       expect(noteText()).toBeDefined()
       expect(noteText()).not.toBe(drawnInFallback)
+    } finally {
+      stopListening()
+      fontSet.loaded = true
+      layer.dispose()
+    }
+  })
+
+  it('a font load lays the note\'s text out anew, on the web font\'s widths and baseline', async () => {
+    // Pixi memoises a font's ascent and descent by its CSS font string, which names the family and not whether it has
+    // loaded: a text drawn anew would sit on the fallback's baseline inside its outline. (A text's widths are memoised
+    // by its style instance, which a new text does not share.)
+    const scene = noteScene('Comfrey under the apple')
+    const note = scene.annotations[0]!
+    const snapshot = () => createTestSceneRendererSnapshot({ scene, selectedTargets: [{ kind: 'annotation', id: 'note' }] })
+    const view = createTestRendererView({ x: 0, y: 0, scale: SCALE })
+    const layer = createBillboardLayer({ createText: () => new Text(), viewSize: { width: 400, height: 300 } })
+    const noteText = () => layer.root.children.flatMap((layerRoot) => layerRoot.children)
+      .find((node): node is Text => node instanceof Text && node.text === note.text)!
+    // What Pixi's canvas text generator lays the raster out by.
+    const rasterLayout = () => {
+      const { maxLineWidth, fontProperties } = CanvasTextMetrics.measureText(note.text, noteText().style)
+      return { widthPx: maxLineWidth, ascentPx: fontProperties.ascent }
+    }
+    const loads = vi.fn()
+    const stopListening = onAnnotationFontLoad(loads)
+    try {
+      fontSet.loaded = false
+      layer.present(view, snapshot())
+      const frameWidth = () => getAnnotationPresentation(note, SCALE, true).textFrame.widthPx
+      expect(rasterLayout()).toEqual({ widthPx: frameWidth(), ascentPx: 12 })
+
+      fontSet.finishLoad!()
+      await vi.waitFor(() => expect(loads).toHaveBeenCalledTimes(1))
+      layer.present(view, snapshot())
+      expect(frameWidth()).toBe(23 * 16 * 0.5)
+      expect(rasterLayout()).toEqual({ widthPx: frameWidth(), ascentPx: 16 * 0.7 })
     } finally {
       stopListening()
       fontSet.loaded = true

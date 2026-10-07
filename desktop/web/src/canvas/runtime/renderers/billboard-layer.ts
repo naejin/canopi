@@ -16,7 +16,7 @@
 import 'pixi.js/unsafe-eval'
 import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import { SPECIES_FOCUS_DIM_OPACITY, speciesFocusOpacity } from '../species-key'
-import { AlphaFilter, Container, Graphics, GraphicsContext, Rectangle, type Text } from 'pixi.js'
+import { AlphaFilter, CanvasTextMetrics, Container, Graphics, GraphicsContext, Rectangle, type Text } from 'pixi.js'
 import { ANNOTATION_OUTLINE_PADDING_PX, getAnnotationFontEpoch, getAnnotationPresentation } from '../annotation-layout'
 import { getCanvasDetailLayout, isMeasurementLabelVisible } from '../automatic-detail'
 import {
@@ -729,10 +729,12 @@ interface BuiltNote {
 function buildNotes(createText: () => Text, notes: NoteGraphics, snapshot: SceneRendererSnapshot, pixelsPerMetre: number): void {
   const { textLayer, highlightLayer, shared, textById, markerById, outlineById } = notes
   const keep = new Set(snapshot.scene.annotations.filter((annotation) => annotation.annotationType === 'text').map((annotation) => annotation.id))
-  // Pixi keeps a text's raster while its text and style stay the same, and nothing in Pixi listens for fonts: a note
-  // drawn before its web font loaded would keep the fallback's glyphs inside an outline measured in the web font. So
-  // a font load lets every note text go, which frees the raster, and draws them anew.
+  // Pixi keeps a text's raster while its text and style stay the same, and a font's ascent and descent by its CSS font
+  // string, and nothing in Pixi listens for fonts: a note drawn before its web font loaded would keep the fallback's
+  // glyphs and baseline inside an outline measured in the web font. So a font load forgets the ascents and lets every
+  // note text go, which frees the raster, and draws them anew.
   const fontEpoch = getAnnotationFontEpoch()
+  if (notes.fontEpoch !== fontEpoch) CanvasTextMetrics.clearMetrics()
   destroyEntriesNotIn(textById, notes.fontEpoch === fontEpoch ? keep : new Set())
   notes.fontEpoch = fontEpoch
   destroyEntriesNotIn(markerById, keep, destroySharedGraphics)
