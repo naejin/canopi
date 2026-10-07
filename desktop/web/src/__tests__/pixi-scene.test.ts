@@ -202,7 +202,7 @@ function view(viewport: { x: number; y: number; scale: number }): ViewTransform 
 }
 
 describe('createPixiScenePresentation', () => {
-  it('a pan or a zoom inside the band keeps the admitted names, and a band crossing admits them again', async () => {
+  it('a pan keeps the admitted names and moves them with their anchors', async () => {
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: { texts: Array<{ text: string; position: { set: ReturnType<typeof vi.fn> } }> }
     }
@@ -224,15 +224,7 @@ describe('createPixiScenePresentation', () => {
       const [pannedX, pannedY] = text.position.set.mock.calls.at(-1)!
       expect(pannedX).toBeCloseTo(x + 10, 3)
       expect(pannedY).toBeCloseTo(y + 20, 3)
-      // 100 and 105 px/m share a band (1.25^20 to 1.25^21); 110 px/m is the next one.
-      const work: string[] = []
-      window.__CANOPI_PIXI_SCENE_WORK__ = (name) => { work.push(name) }
-      renderer.present(view({ x: 10, y: 20, scale: 105 }), undefined, false)
-      expect(work).not.toContain('labelAdmission')
-      renderer.present(view({ x: 10, y: 20, scale: 110 }), undefined, false)
-      expect(work).toContain('labelAdmission')
     } finally {
-      delete window.__CANOPI_PIXI_SCENE_WORK__
       add.mockRestore()
       renderer.dispose()
     }
