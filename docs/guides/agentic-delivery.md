@@ -24,7 +24,9 @@ Paths are relative to `/home/daylon/projects/canopi`; use them absolute in comma
 
 ## Design check
 
-A planned cut or behaviour whose design-check entry says users notice nothing names the screen surfaces it touches (ghosts and previews, Esc layers, field sizes, menus, focus) and gets a live-check scenario; a planned interaction is checked against what that screen draws. Phase 2's audit said P3, P8 and P27 changed nothing visible, and its plan had the overview band-select objects the overview never draws: the user answered seven more decision batches (U35–U40) after the build, each a fix round.
+A planned cut or behaviour whose design-check entry says users notice nothing names the screen surfaces it touches (ghosts and previews, Esc layers, field sizes, menus, focus) and gets a live-check scenario; a planned interaction is checked against what that screen draws; an entry that says "no code" names, for each pointer kind or input it covers, the existing path that already delivers it.
+
+Phase 2's audit said P3, P8 and P27 changed nothing visible, and its plan had the overview band-select objects the overview never draws: seven more decision batches (U35–U40) followed the build. Phase 3's A16 said a touch tap needed no code to move the lens probe, which only hover fed and touch never sends; the live check found it.
 
 ## Review lenses
 
