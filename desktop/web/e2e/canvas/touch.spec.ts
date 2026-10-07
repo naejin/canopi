@@ -474,6 +474,39 @@ test.describe('Chromium touch', () => {
       .toEqual([44, 44, 44, 44])
   })
 
+  test('A13: the page never overscrolls', async ({ page }) => {
+    await openBaseFixture(page, TABLET)
+    const behaviour = await page.evaluate(() => {
+      const style = getComputedStyle(document.documentElement)
+      return [style.overscrollBehaviorX, style.overscrollBehaviorY]
+    })
+    expect(behaviour).toEqual(['none', 'none'])
+  })
+
+  test('a long press opens a canvas menu whose rows are finger-sized', async ({ page }) => {
+    await openBaseFixture(page, TABLET)
+    const fingers = await Fingers.of(page)
+    await fingers.tap(TABLET.apple, { holdMs: 600 })
+    const menu = page.getByRole('menu', { name: 'Apple' })
+    await expect(menu).toBeVisible()
+
+    const touchSize = await page.evaluate(() => Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--control-size-touch')))
+    expect(touchSize).toBeGreaterThan(0)
+    const heights = await menu.getByRole('menuitem').evaluateAll((rows) => rows.map((row) => row.getBoundingClientRect().height))
+    expect(heights.length).toBeGreaterThan(0)
+    for (const height of heights) expect(height, 'each row is a touch target').toBeGreaterThanOrEqual(touchSize)
+  })
+
+  test('a tapped button keeps its tooltip hidden', async ({ page }) => {
+    await openBaseFixture(page, TABLET)
+    const button = page.getByRole('group', { name: 'Zoom' }).getByRole('button', { name: 'Fit to Design' })
+    const tooltip = button.locator('[role="tooltip"]')
+    await expect(tooltip).toHaveCount(1)
+    await button.tap()
+    // Past the tooltip's 400 ms delay and its fade.
+    await page.waitForTimeout(1000)
+    expect(await tooltip.evaluate((element) => getComputedStyle(element).visibility), 'the tap leaves no tooltip').toBe('hidden')
+  })
 })
 
 test.describe('WebKit touch', () => {
