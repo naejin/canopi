@@ -321,6 +321,8 @@ export interface ToolHarnessOptions {
   readonly settings?: ToolSettingsPort
   /** The tools' translator; default the key itself. */
   readonly translate?: ToolHostDeps['translate']
+  /** ToolHostDeps.initialPointer, the platform's pointer kind before any press; default 'mouse'. */
+  readonly initialPointer?: PointerKind
 }
 
 export interface ToolHarnessRecord {
@@ -563,6 +565,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
     navigation: view.navigation,
     nudge: options.nudge ?? createNudgeSeries(store, edits, record),
     timers: { ...timers, clock: () => now },
+    initialPointer: options.initialPointer ?? 'mouse',
     hover(target) {
       store.setHoveredTarget(target)
       record.hovers.push(target)

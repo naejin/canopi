@@ -10,6 +10,7 @@
 // card's gesture flag stays off.
 
 import type { PointerKind, ToolHandleId } from '../../interaction-types'
+import type { SceneDesignObjectTarget } from '../../scene/design-object-targets'
 import type { SceneMeasurementGuideEntity, SceneZoneEntity } from '../../scene/types'
 import type { ToolHandle } from '../draft'
 import type { CanvasTool, HitTarget, ToolContext, ToolGesture, ToolPoint, ToolReply, ToolView } from '../tool'
@@ -76,6 +77,9 @@ export function createSelectTool(): CanvasTool {
   /** The selected corner: the polygon corner last pressed without moving, or the one after a removed corner, shown as the
    *  active handle; Delete removes it. */
   let selectedCorner: ToolHandleId | null = null
+  /** The object the last press hit, or null (empty ground, a handle): a double-click selects a plant's species only when
+   *  it hits the same plant (U42). */
+  let lastPressHit: SceneDesignObjectTarget | null = null
 
   function ctx(): ToolContext {
     if (!context) throw new Error('The Select tool is not active.')
@@ -131,11 +135,14 @@ export function createSelectTool(): CanvasTool {
     const c = ctx()
     selectedCorner = null
     if (clickCount >= 2 && addCornerOnEdge(point)) {
+      lastPressHit = null
       gesture = { kind: 'done' }
       refreshHandles()
       return
     }
-    const result = pressSelection(c, point, hit, clickCount)
+    const previous = lastPressHit
+    lastPressHit = hit?.kind === 'object' ? hit.target : null
+    const result = pressSelection(c, point, hit, clickCount, previous)
     switch (result.kind) {
       case 'band':
         // The band draws from its drag: a tap (a finger's held press resolves at its lift) draws none.
@@ -210,6 +217,7 @@ export function createSelectTool(): CanvasTool {
   function handleDrag(g: Extract<ToolGesture, { kind: 'handle-drag' }>): void {
     const c = ctx()
     if (g.phase === 'start') {
+      lastPressHit = null
       startHandleDrag(g)
       refreshHandles()
       return
@@ -393,6 +401,7 @@ export function createSelectTool(): CanvasTool {
       edgeMidpoints = new Map()
       guideEndPoints = new Map()
       selectedCorner = null
+      lastPressHit = null
     },
   }
 }

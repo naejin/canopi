@@ -6,7 +6,7 @@ import type { CanvasFocusPort } from './app-adapter'
 import type { Gesture, MenuSource } from './input/gestures'
 import type { InputPlatform } from './input/platform'
 import type { AdapterEffect, RawInput, TargetClass } from './input/raw-input'
-import type { ToolHandleId, ToolId } from './interaction-types'
+import type { PointerKind, ToolHandleId, ToolId } from './interaction-types'
 import type { PlantPresentationContext } from './plant-presentation'
 import type { SpeciesCacheEntry } from './presentation-data'
 import type { SceneRenderer } from './renderers/scene-types'
@@ -127,6 +127,9 @@ export interface ToolHostDeps {
   /** Today's deps.nudge (the runtime's scene-edit commands); the host owns the series (nudge below). */
   readonly nudge: Pick<CanvasSceneEditCommandSurface, 'nudgeSelected' | 'endNudge'>
   readonly timers: { set(atMs: number, cb: () => void): number; clear(id: number): void; readonly clock: () => number }
+  /** The pointer kind before any hover, press or tap (ToolContext.pointer): 'touch' on iOS and Android, so a selection
+   *  made off the map before the first touch gets a finger's handles (interaction-session.ts, from InputPlatform.os). */
+  readonly initialPointer: PointerKind
   /** Hover restyle (a directly locked object shows the locked hover stroke): today's deps.setHoveredTarget. */
   readonly hover: (target: SceneDesignObjectTarget | null) => void
   /** The raster inspection probe (CanvasRuntimeAppAdapter.tryInspectAt, passed by scene-runtime.ts); true claims the press. */

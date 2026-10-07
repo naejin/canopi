@@ -864,20 +864,24 @@ describe('SceneInteractionSession', () => {
     })
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
-    deps.setSelection([plantTarget('apple-1'), plantTarget('apple-2'), plantTarget('pear-1')])
+    deps.setSelection([plantTarget('pear-1')])
     vi.mocked(deps.setSelection).mockClear()
     const session = createTestSession(deps)
     session.setTool('select')
 
-    events.pointerDown({ x: 20, y: 30 }, { button: 0, detail: 2, shiftKey: true })
-    events.pointerUp({ x: 20, y: 30 }, { button: 0, detail: 2, shiftKey: true })
-
-    expect(currentCanvasSelection.value).toEqual(new Set(['pear-1']))
-
+    // The double-click's first press toggles the apple in; its second adds the species.
+    events.pointerDown({ x: 20, y: 30 }, { button: 0, detail: 1, shiftKey: true })
+    events.pointerUp({ x: 20, y: 30 }, { button: 0, detail: 1, shiftKey: true })
     events.pointerDown({ x: 20, y: 30 }, { button: 0, detail: 2, shiftKey: true })
     events.pointerUp({ x: 20, y: 30 }, { button: 0, detail: 2, shiftKey: true })
 
     expect(currentCanvasSelection.value).toEqual(new Set(['pear-1', 'apple-1', 'apple-2']))
+
+    // A further click on the same plant, with the whole species selected, removes it.
+    events.pointerDown({ x: 20, y: 30 }, { button: 0, detail: 3, shiftKey: true })
+    events.pointerUp({ x: 20, y: 30 }, { button: 0, detail: 3, shiftKey: true })
+
+    expect(currentCanvasSelection.value).toEqual(new Set(['pear-1']))
     session.dispose()
   })
 

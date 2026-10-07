@@ -85,6 +85,10 @@ describe('Select clicks', () => {
       },
     })
 
+    // A double-click's second press after a press on another object is a single click (U42).
+    h.click({ x: 150, y: 50 })
+    h.click({ x: 50, y: 50 }, { clickCount: 2 })
+    expect(h.store.session.selectedTargets).toEqual([APPLE])
     h.click({ x: 50, y: 50 }, { clickCount: 2 })
     // The locked apple is not selectable.
     expect(h.store.session.selectedTargets).toEqual([APPLE])

@@ -252,26 +252,16 @@ describe('Selection chip', () => {
     expect(renameZoneDialog.value).toBeNull()
   })
 
-  it('ignores the click of a tap that pressed elsewhere: a finger finishing a zone under the chip opens no Rename', async () => {
+  it('a mouse click on Rename… opens the dialog (a finger\'s trailing click is the DOM input source\'s)', async () => {
     await act(() => render(<><SelectionChip /><RenameZoneDialog /></>, container))
     await select([{ kind: 'zone', id: RECT_ID }])
-    const rename = () => [...chip()!.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === 'Rename…')!
-    const pointerClick = (target: Element) => target.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }))
+    const rename = [...chip()!.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === 'Rename…')!
 
-    // The press went to the map; the chip appeared before the lift's click.
-    await act(() => { pointerClick(rename()) })
-    expect(renameZoneDialog.value).toBeNull()
-    await act(() => { pointerClick([...chip()!.querySelectorAll('button')].at(-1)!) })
-    expect(clearSelection).not.toHaveBeenCalled()
-
-    // A press that began on Rename and slid off within the chip leaves no press for a later stray click.
-    await act(() => { rename().dispatchEvent(new Event('pointerdown', { bubbles: true })) })
-    await act(() => { pointerClick(chip()!) })
-    await act(() => { pointerClick(rename()) })
-    expect(renameZoneDialog.value).toBeNull()
-
-    await act(() => { rename().dispatchEvent(new Event('pointerdown', { bubbles: true })) })
-    await act(() => { pointerClick(rename()) })
+    await act(() => {
+      rename.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, buttons: 1 }))
+      rename.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, button: 0 }))
+      rename.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }))
+    })
     expect(renameZoneDialog.value).not.toBeNull()
   })
 

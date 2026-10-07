@@ -153,6 +153,31 @@ describe('SceneInteractionSession: touch', () => {
     session.dispose()
   })
 
+  it('a double tap selects a species only on one plant: taps 25 px apart on two plants of it select the second alone (U42)', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [
+        makePlant('plant-1', 'Malus domestica', { x: 100, y: 100 }),
+        makePlant('plant-2', 'Malus domestica', { x: 125, y: 100 }),
+        makePlant('plant-3', 'Malus domestica', { x: 300, y: 300 }),
+      ]
+    })
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('select')
+
+    touchDown({ x: 100, y: 100 }, 1, 0)
+    touchUp({ x: 100, y: 100 }, 1, 60)
+    touchDown({ x: 125, y: 100 }, 1, 200)
+    touchUp({ x: 125, y: 100 }, 1, 260)
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-2']))
+
+    touchDown({ x: 300, y: 300 }, 1, 2000)
+    touchUp({ x: 300, y: 300 }, 1, 2060)
+    touchDown({ x: 302, y: 301 }, 1, 2200)
+    touchUp({ x: 302, y: 301 }, 1, 2260)
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1', 'plant-2', 'plant-3']))
+    session.dispose()
+  })
+
   it('E14 a long press with Plant stamp opens the menu at the finger and places nothing, the lift included', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     choosePlant()
@@ -314,6 +339,50 @@ describe('SceneInteractionSession: touch', () => {
     // A panel selects the other zone: the host hears no press.
     currentCanvasSelection.value = new Set(['zone-2'])
     session.refreshMeasurements()
+    expect(widths()).toEqual(['44px', '44px', '44px', '44px'])
+    session.dispose()
+  })
+
+  it('on Android a selection made before any press on the map shows 44 px handles', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [{ x: 40, y: 60 }, { x: 240, y: 60 }, { x: 240, y: 160 }, { x: 40, y: 160 }])]
+    })
+    const deps = { ...createInteractionDeps(container, store, testView), platform: { os: 'android', gestureEvents: false } as const }
+    const session = createTestSession(deps)
+    session.setTool('select')
+
+    // A panel selects the zone: the host has heard no pointer yet.
+    deps.setSelection([{ kind: 'zone', id: 'zone-1' }])
+    session.refreshMeasurements()
+
+    const widths = [...container.querySelectorAll<HTMLElement>('[data-canvas-handle^="rect-corner:"]')].map((element) => element.style.width)
+    expect(widths).toEqual(['44px', '44px', '44px', '44px'])
+    session.dispose()
+  })
+
+  it('a long press after a mouse hover gives the object it selects 44 px handles', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    store.updatePersisted((draft) => {
+      draft.zones = [
+        makeRectZone('zone-1', [{ x: 40, y: 60 }, { x: 240, y: 60 }, { x: 240, y: 160 }, { x: 40, y: 160 }]),
+        makeRectZone('zone-2', [{ x: 300, y: 60 }, { x: 400, y: 60 }, { x: 400, y: 160 }, { x: 300, y: 160 }]),
+      ]
+    })
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('select')
+    const widths = () => [...container.querySelectorAll<HTMLElement>('[data-canvas-handle^="rect-corner:"]')].map((element) => element.style.width)
+
+    events.pointerMove({ x: 140, y: 110 }, { pointerType: 'mouse', buttons: 0 })
+    events.pointerDown({ x: 140, y: 110 }, { pointerType: 'mouse', button: 0, buttons: 1 })
+    events.pointerUp({ x: 140, y: 110 }, { pointerType: 'mouse', button: 0, buttons: 0 })
+    expect(widths()).toEqual(['20px', '20px', '20px', '20px'])
+
+    // On zone-2's outline: the menu retargets to an outline hit, not a fill.
+    touchDown({ x: 300, y: 110 })
+    vi.advanceTimersByTime(600)
+    touchUp({ x: 300, y: 110 })
+
+    expect(currentCanvasSelection.value).toEqual(new Set(['zone-2']))
     expect(widths()).toEqual(['44px', '44px', '44px', '44px'])
     session.dispose()
   })
