@@ -653,7 +653,7 @@ describe('scene canvas runtime', () => {
       runtime.commandSurface.tools.setTool('select')
       runtime.commandSurface.sceneEdits.selectAll()
 
-      // Zoom about the screen centre, away from the plants: they move on screen, and the handle with them (INV-REN-11).
+      // Zoom about the screen centre, away from the plants: they move on screen, and the handle with them.
       for (let step = 0; step < 3; step += 1) runtime.commandSurface.viewport.zoomIn()
 
       const bounds = runtime.querySurface.getDesignObjectSelection().bounds!

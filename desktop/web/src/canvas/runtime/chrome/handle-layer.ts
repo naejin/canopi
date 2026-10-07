@@ -8,7 +8,7 @@
 // active one (U37); a polygon edge's midpoint dot is fainter
 // (opacity 0.5, a 1 px ring: GeoLibre's edge marker), drawn under the corners and left out of the tab order. The rotate handle is a 28 px button
 // in a hit box of its own size or larger (44 px after a touch, Q4), kept inside the visible map area, with its key swallow
-// and click stop (INV-LSN-13). A handle's readout shows as a chip
+// and click stop (handle-layer.test.ts). A handle's readout shows as a chip
 // under it, and the active handle (the one dragged, or Select's selected corner) is marked and its mark drawn hollow. Presses on a handle are
 // the DOM input source's, which reads data-canvas-handle (input/dom-input-source.ts); the layer listens only on
 // its own elements (P6).

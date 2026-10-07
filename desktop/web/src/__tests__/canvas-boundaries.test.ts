@@ -153,7 +153,7 @@ const P8_POLICY = {
   scope: ['src/**'],
   // The owner; its keyState(event, 'keydown', …) calls also match the helper form.
   except: [KEY_ROUTER],
-  // The handles, the note editor and the unlock button take keys on their own elements (inventory INV-KEY-18).
+  // The handles, the note editor and the unlock button take keys on their own elements.
   allowlist: Object.fromEntries(CHROME_ELEMENT_LISTENERS.map((path) => [path, 1])),
 } as const satisfies RegexPolicy
 

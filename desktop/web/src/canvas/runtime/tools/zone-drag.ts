@@ -5,7 +5,7 @@
 // point redraws the draft between the drag's start, which the host keeps on the ground (plan §1, exception 1), and the
 // snapped pointer, with its measure chips (tools/measure-labels.ts); the release adds the object and selects it in that
 // edit, and a cancel, a tool change or a closed layer aborts it. Rectangles and ellipses are level with the screen
-// (ToolView.screenAlignedRect, INV-TOOL-03): the zone stores the unturned box about its centre and the bearing as its
+// (ToolView.screenAlignedRect): the zone stores the unturned box about its centre and the bearing as its
 // rotationDeg, so at bearing 0 they are today's world boxes. Shift draws a square or a circle (screenAlignedRect's
 // `square`), and turns a line or a measure to 45° steps against the screen from its start (the host's 'direction'
 // constraint, then the length along it snaps). A release that adds nothing aborts its edit, as today's cancellation after every pointerup did; a release that throws is the host's fault
