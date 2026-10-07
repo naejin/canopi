@@ -477,7 +477,7 @@ describe('WorldMapSurface', () => {
     expect(maps[0]!.options.touchZoomRotate).not.toBe(false)
     expect(maps[0]!.touchZoomRotate.rotationDisabled).toBe(true)
     // Two fingers sliding up together would tilt it, and nothing on the World map resets a tilt.
-    expect(maps[0]!.options).toMatchObject({ touchPitch: false, maxPitch: 0 })
+    expect(maps[0]!.options).toMatchObject({ touchPitch: false })
   })
 
   it('switches between Basemap and Satellite on the live map instead of rebuilding it', async () => {

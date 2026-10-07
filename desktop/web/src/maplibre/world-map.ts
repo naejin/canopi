@@ -67,7 +67,6 @@ export function createWorldMapLibreMap(
     dragRotate: false,
     // North-up and flat: two fingers sliding together would tilt it, and no control resets a tilt.
     touchPitch: false,
-    maxPitch: 0,
     // Shift+drag pans like any drag instead of drawing MapLibre's zoom box (spec §4.17).
     boxZoom: false,
     transformRequest: options.transformRequest,
