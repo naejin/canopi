@@ -212,7 +212,6 @@ export function createBillboardLayer(options: BillboardLayerOptions): BillboardL
       plantLayers.resize(width, height)
     },
     dispose() {
-      labels.dispose()
       snapshot = null
       drawnLabels = null
       for (const byId of [plants.graphicsById, plants.ringById, plants.badgeById, notes.markerById]) {
