@@ -124,6 +124,20 @@ describe('scene design object selection model', () => {
     expect(resized).not.toBe(edited)
   })
 
+  it('two Scenes read in turn each keep their memoised model', () => {
+    // The workspace and the snapshot or print map read their own Scenes in turn.
+    const workspace = makeScene()
+    const snapshot = makeScene()
+    const selection: SceneDesignObjectTarget[] = [{ kind: 'plant', id: 'plant-2' }]
+    window.__CANOPI_SELECTION_MODEL_BUILDS__ = 0
+
+    const workspaceModel = readModel(workspace, selection, 4)
+    const snapshotModel = readModel(snapshot, selection, 4)
+    expect(readModel(workspace, selection, 4)).toBe(workspaceModel)
+    expect(readModel(snapshot, selection, 4)).toBe(snapshotModel)
+    expect(window.__CANOPI_SELECTION_MODEL_BUILDS__).toBe(2)
+  })
+
   it('projects large typed selections with a linear entity scan', () => {
     const scene = makeScene()
     const plantCount = 100
