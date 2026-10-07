@@ -14,7 +14,8 @@ Paths are relative to `/home/daylon/projects/canopi`; use them absolute in comma
 
 ## Gates
 
-- **Quick**, after each stream commit: `/home/daylon/projects/canopi/.rq-scratch/tools/quiet-gates.sh <worktree> quick` (tsc, `check:ui`, vitest).
+- **Affected**, after a build or fix agent's last commit: `BASE=<branch it builds on> /home/daylon/projects/canopi/.rq-scratch/tools/quiet-gates.sh <worktree> affected` (tsc, `check:ui`, `vitest related` on the changed files). Every agent running the whole suite took about 60 % of phase R's single-slot build. **Quick** (the whole suite) is for a worktree with no base.
+- **Slots**: build agents per `free -g` available, one per 6 GiB above a 4 GiB reserve, at most 4 (8 CPUs), re-checked as each slot is taken; under 8 GiB, `VITEST_WORKERS=2`. The user's apps often hold most of the memory at launch and release it later.
 - **Full**, at each merge and before a push: `/home/daylon/projects/canopi/.rq-scratch/tools/quiet-gates.sh <worktree> full`, the Frontend row of `AGENTS.md` (tsc, coverage as the suite, the policy tests, check:ui, both builds, docs). Add the Rust and shared-contract rows of `AGENTS.md` when those areas change.
 - **Web check** on any merge touching the renderer, camera, input or map: `cd desktop/web && npm run build:web`, then from the worktree root `docker run --rm --ipc=host -v "$PWD":/work -w /work/desktop/web --user $(id -u):$(id -g) -e HOME=/tmp mcr.microsoft.com/playwright:v1.63.0-noble npx playwright test e2e/canvas --reporter=line`.
 - **CI**: `Build & Test` and `Web Edition browsers` on every push; a push whose changes since the branch's last successful push run touch only `docs/`, `.beads/`, `.interface-design/` or Markdown runs only the `docs` job and skips the browsers; a newer push cancels the branch's older run (main always finishes), so check the newest commit's runs: `gh run list --branch feature/geolibre-adoption --event push`, then poll `gh run view <id> --json status,conclusion`.
@@ -26,9 +27,14 @@ Paths are relative to `/home/daylon/projects/canopi`; use them absolute in comma
 
 A planned cut or behaviour whose design-check entry says users notice nothing names the screen surfaces it touches (ghosts and previews, Esc layers, field sizes, menus, focus) and gets a live-check scenario; a planned interaction is checked against what that screen draws; an entry that says "no code" names, for each pointer kind or input it covers, the existing path that already delivers it.
 
+Each stream names its riskiest platform assumption (WebKitGTK against Chromium first), and its first commit probes it in both engines: phase R's note measuring assumed WebKit reports a loading font as Chromium does, and paid four fix rounds.
+
 Phase 2's audit said P3, P8 and P27 changed nothing visible, and its plan had the overview band-select objects the overview never draws: seven more decision batches (U35–U40) followed the build. Phase 3's A16 said a touch tap needed no code to move the lens probe, which only hover fed and touch never sends; the live check found it.
 
 ## Review lenses
+
+Known seams that streams share, each reviewed once after the streams on both sides merge: the scene render target (`scene-runtime/render-scheduler.ts`, `maplibre/shared-scene-layer.ts`, `maplibre/shared-scene-renderer.ts`, `app/canvas-map-surface/workspace-activation.ts`), whose create, connect, dispose and Design-switch orders reached the pre-push review twice in phase R.
+
 
 Each stream's lens names the resources its code spends (disk space, memory, the executor lane, worker time) and the numerical assumptions it rests on (scale factors, tolerances, units), besides its inputs and states: U-crs stream B had two review rounds and still shipped a too-small free-space check and a zoom that ignored the projection's scale, both found only by the pre-push review.
 
@@ -38,6 +44,8 @@ A stored-format version (the LiDAR catalogue, the user DB, `.canopi`) bumps once
 
 ## Live check
 
+- Launch once, then drive each scenario group with a fresh agent against the same instance; assert with `webview_execute_js` values, save screenshots to `.rq-scratch/screenshots/<step>/` and open them only to judge visuals (phase R's one long live-check agent used 30 % of the phase's input tokens).
+- Frame times are evidence only from a production build (`cargo tauri build`) or the Web build traced in Playwright: the DEV build freezes every Scene write and the bridge's frame loop runs near 30 Hz, so phase R's DEV numbers could not close canopi-p32r.
 - From a detached worktree nobody edits: `git -C /home/daylon/projects/canopi worktree add --detach /home/daylon/projects/canopi/.rq-scratch/canvas-v2-live <commit>` (with `npm ci`, the fonts and the catalog copy), removed afterwards.
 - Profile `R=/home/daylon/projects/canopi/.rq-scratch/reference/<step>`, then `mkdir -p $R/{config,data,cache}` (XDG ignores relative values and would fall back to the user's profile); copy the read-only master `/home/daylon/projects/canopi/.rq-scratch/reference/orchard.canopi` into it (never open the master or the user's files) and turn the basemap off once.
 - First check `ss -ltnp | grep -E ':(1420|1431|922[0-9])'`; if 1431 is held by something else, stop and ask (plan 3.1 steps 1 and 3).
