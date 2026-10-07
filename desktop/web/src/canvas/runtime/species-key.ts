@@ -31,12 +31,16 @@ export function speciesPlacementAppearance(
   }
 }
 
-/** Codes belong to a Design; removed species keep their reservation. */
+/**
+ * Codes belong to a Design; removed species keep their reservation. The keys
+ * come out sorted whatever the input order, so an unchanged Design compares
+ * equal as JSON.
+ */
 export function allocateSpeciesCodes(
   existing: Readonly<Record<string, string>>,
   canonicalNames: Iterable<string>,
 ): Record<string, string> {
-  const codes: Record<string, string> = Object.create(null)
+  const kept = new Map<string, string>()
   const used = new Set<string>()
   const names = [
     ...new Set([...Object.keys(existing), ...canonicalNames]),
@@ -48,12 +52,17 @@ export function allocateSpeciesCodes(
       /^[A-Z]{1,6}[0-9]{0,6}$/.test(code) &&
       !used.has(code)
     ) {
-      codes[name] = code
+      kept.set(name, code)
       used.add(code)
     }
   }
+  const codes: Record<string, string> = Object.create(null)
   for (const name of names) {
-    if (codes[name]) continue
+    const keptCode = kept.get(name)
+    if (keptCode) {
+      codes[name] = keptCode
+      continue
+    }
     const words =
       name
         .normalize('NFKD')

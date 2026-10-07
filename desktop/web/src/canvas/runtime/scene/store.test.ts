@@ -7,6 +7,7 @@ import { SceneStore } from './store'
 import { createDefaultScenePersistedState, createDefaultSceneSessionState } from './defaults'
 import { serializeScenePersistedState } from './codec'
 import { createSessionPlane } from '../../session-plane'
+import { createScenePatchCommand } from '../scene-commands'
 
 const TEST_FRAME_ORIGIN = { lon: 13, lat: 23 }
 
@@ -67,6 +68,22 @@ describe('scene store', () => {
     expect(codes).toEqual({ 'Malus domestica': 'MDO' })
     expect(store.persisted.plantSpeciesCodes).toBe(codes)
     expect(store.toCanopiFile().plant_species_codes).toEqual({ 'Malus domestica': 'MDO' })
+  })
+
+  it('a commit that changes nothing yields no command after a species that sorts first', () => {
+    const store = new SceneStore()
+    const plant = (id: string, canonicalName: string) => ({ kind: 'plant' as const, id, locked: false, canonicalName,
+      commonName: null, color: null, canopySpreadM: null, position: { x: 0, y: 0 }, rotationDeg: null, notes: null,
+      plantedDate: null, quantity: null })
+    store.updatePersisted((draft) => { draft.plants.push(plant('m', 'Malus domestica'), plant('p', 'Prunus avium')) })
+    store.updatePersisted((draft) => { draft.plants.push(plant('c', 'Corylus avellana')) })
+    const snapshot = () => ({ persisted: store.persisted, selectedTargets: store.session.selectedTargets })
+
+    const before = snapshot()
+    store.updatePersisted(() => {})
+
+    expect(createScenePatchCommand('noop', before, snapshot())).toBeNull()
+    expect(Object.keys(store.persisted.plantSpeciesCodes)).toEqual(['Corylus avellana', 'Malus domestica', 'Prunus avium'])
   })
 
   it('owns typed selection targets and preserves first-seen typed order', () => {
