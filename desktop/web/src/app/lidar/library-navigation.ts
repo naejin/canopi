@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals'
-import { activeLayerName } from '../canvas-settings/signals'
-import { sidePanel } from '../shell/state'
+import { openLayerRow } from '../canvas-layer-presentation/open-row'
+import { selectPanel, sidePanel } from '../shell/state'
 import { t } from '../../i18n'
 import { chooseImportFiles } from './actions'
 
@@ -38,6 +38,25 @@ export const dataDialog = signal<DataDialog | null>(null)
 /** The Data library dialog, on its list or on one item's details. */
 export function openDataLibrary(focusId: string | null = null): void {
   dataDialog.value = { kind: 'library', focusId }
+}
+
+/**
+ * Opens the Site data panel from Layers (the summary row's name and ›) and moves
+ * focus into its header once the dock has drawn it, so the keyboard continues
+ * there. The panel is a Design panel: without a Design nothing opens.
+ */
+export function openSiteDataPanel(): void {
+  selectPanel('site-data')
+  const label = t('canvas.layers.siteData')
+  let frames = 0
+  const focusHeader = () => {
+    const panel = Array.from(document.querySelectorAll<HTMLElement>('aside[aria-label]'))
+      .find((candidate) => candidate.getAttribute('aria-label') === label)
+    const target = panel?.querySelector<HTMLElement>('header button:not([disabled])')
+    if (target) target.focus()
+    else if (frames++ < 60) requestAnimationFrame(focusHeader)
+  }
+  requestAnimationFrame(focusHeader)
 }
 
 export function closeDataDialog(): void {
@@ -104,12 +123,12 @@ function siteRowId(itemId: string): string {
 
 /** The site data item whose row is active in Layers, if any. */
 export function activeSiteItemId(): string | null {
-  const active = activeLayerName.value
-  return active.startsWith(SITE_ROW_PREFIX) ? active.slice(SITE_ROW_PREFIX.length) : null
+  const active = openLayerRow.value
+  return active?.startsWith(SITE_ROW_PREFIX) ? active.slice(SITE_ROW_PREFIX.length) : null
 }
 
 export function selectSiteRow(itemId: string): void {
-  activeLayerName.value = siteRowId(itemId)
+  openLayerRow.value = siteRowId(itemId)
 }
 
 /** The site data item whose details Layers shows instead of its list. */

@@ -1,4 +1,5 @@
-import { activeLayerName, layerLockState, layerOpacity, layerVisibility } from '../canvas-settings/signals'
+import { NEW_DESIGN_LAYER_DEFAULTS } from '../../generated/new-design-defaults'
+import { openLayerRow } from './open-row'
 import { googleMapsApiKey } from '../settings/state'
 import { mapLayers } from '../map-layers/state'
 import {
@@ -18,11 +19,11 @@ const MAP_LAYER_ROW_IDS: ReadonlySet<string> = new Set<MapLayerId>(['basemap', '
 type CanvasLayerPresentationAuthority = 'scene' | 'map-layers'
 
 /**
- * The Layers section a row belongs to: the Design's own objects, site data
- * (the Design's LiDAR items and the online-elevation terrain rows), and the
- * background the map draws under everything.
+ * The Layers section a row belongs to: the Design's own objects, the Map's
+ * online-elevation rows (contour lines and hillshading), and the background
+ * the map draws under everything.
  */
-type CanvasLayerPresentationGroup = 'design' | 'site' | 'background'
+type CanvasLayerPresentationGroup = 'design' | 'map' | 'background'
 
 export type CanvasLayerPresentationDetail =
   | { readonly type: 'scene' }
@@ -48,6 +49,7 @@ export interface CanvasLayerPresentationRow {
   readonly label: string
   readonly authority: CanvasLayerPresentationAuthority
   readonly group: CanvasLayerPresentationGroup
+  /** The row is open: its settings show under it (one row at a time; `open-row.ts`). */
   readonly active: boolean
   readonly visible: boolean
   readonly opacity: number
@@ -61,14 +63,16 @@ export interface CanvasLayerPresentation {
   readonly rows: readonly CanvasLayerPresentationRow[]
 }
 
+/**
+ * The Layers rows. Design rows read only the scene snapshot, the one authority
+ * for a layer's eye, lock and opacity; before a scene exists they show the New
+ * Design defaults.
+ */
 export function readCanvasLayerPresentation(): CanvasLayerPresentation {
   const runtime = currentCanvasQuerySurface.value
   void runtime?.revision.scene.value
   const scene = runtime?.getSceneSnapshot()
-  const visibility = layerVisibility.value
-  const locks = layerLockState.value
-  const opacities = layerOpacity.value
-  const active = activeLayerName.value
+  const open = openLayerRow.value
   const layers = mapLayers.value
 
   const mapRow = (
@@ -80,8 +84,8 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
     id,
     label,
     authority: 'map-layers',
-    group: id === 'basemap' || id === 'satellite' ? 'background' : 'site',
-    active: active === id,
+    group: id === 'basemap' || id === 'satellite' ? 'background' : 'map',
+    active: open === id,
     visible: state.visible,
     opacity: state.opacity,
     locked: false,
@@ -92,16 +96,17 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
   const rows: CanvasLayerPresentationRow[] = [
     ...SCENE_LAYER_ROW_IDS.map((id) => {
       const sceneLayer = scene?.layers.find((layer) => layer.name === id)
+        ?? NEW_DESIGN_LAYER_DEFAULTS.find((layer) => layer.name === id)
       return {
         id,
         label: t(`canvas.layers.${id}`),
         authority: 'scene' as const,
         group: 'design' as const,
         count: (id === 'measurement-guides' ? scene?.measurementGuides : scene?.[id])?.length ?? 0,
-        active: active === id,
-        visible: sceneLayer?.visible ?? visibility[id] ?? true,
-        opacity: sceneLayer?.opacity ?? opacities[id] ?? 1,
-        locked: sceneLayer?.locked ?? locks[id] ?? false,
+        active: open === id,
+        visible: sceneLayer?.visible ?? true,
+        opacity: sceneLayer?.opacity ?? 1,
+        locked: sceneLayer?.locked ?? false,
         canLock: true,
         detail: { type: 'scene' as const },
       }
@@ -125,10 +130,6 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
   ]
 
   return { rows }
-}
-
-export function setCanvasLayerPresentationActiveLayer(id: string): void {
-  activeLayerName.value = id
 }
 
 export function setCanvasLayerPresentationVisibility(id: string, visible: boolean): boolean {

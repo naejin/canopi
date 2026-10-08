@@ -57,7 +57,7 @@ import { DataDialogs } from '../components/panels/lidar/DataDialogs'
 import { lidarLibrary } from '../app/lidar/library-store'
 import { currentDesign } from '../app/document-session/store'
 import { analyzeItem, dataDialog, openDataLibrary } from '../app/lidar/library-navigation'
-import { activeLayerName } from '../app/canvas-settings/signals'
+import { openLayerRow } from '../app/canvas-layer-presentation/open-row'
 import { sidePanel } from '../app/shell/state'
 import { locale } from '../app/settings/state'
 import { dropdownTrigger } from './support/dropdown-trigger'
@@ -458,7 +458,7 @@ describe('Data library, Import and Analyze dialogs', () => {
     expect(container.textContent).toContain('Already in Layers.')
     await click(button('Show in Layers'))
     expect(sidePanel.value).toBe('layers')
-    expect(activeLayerName.value).toBe('site:s')
+    expect(openLayerRow.value).toBe('site:s')
     expect(dataDialog.value).toBeNull()
     expect(actions.runAnalysis).not.toHaveBeenCalled()
   })

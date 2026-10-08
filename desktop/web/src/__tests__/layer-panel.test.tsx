@@ -2,17 +2,21 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('../app/lidar/library-store', async () => ({
+  ...(await vi.importActual<typeof import('../app/lidar/library-store')>('../app/lidar/library-store')),
+  installLidarLibraryObserver: () => () => {},
+}))
+
 import { LayersPanel as LayerPanel } from '../components/panels/LayersPanel'
-import {
-  activeLayerName,
-  layerLockState,
-  layerOpacity,
-  layerVisibility,
-} from '../app/canvas-settings/signals'
+import { openLayerRow } from '../app/canvas-layer-presentation/open-row'
+import { lidarLibrary } from '../app/lidar/library-store'
+import type { CanopiFile } from '../types/design'
+import { librarySnapshot, sourceItem } from './support/library-fixtures'
 import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
 import { googleMapsApiKey } from '../app/settings/state'
 import type { Settings } from '../types/settings'
 import {
+  currentDesign,
   designSessionFixture,
 } from './support/design-session-state'
 import { locale } from '../app/settings/state'
@@ -64,6 +68,22 @@ function baseSettings(): Settings {
 
 describe('LayerPanel', () => {
   let container: HTMLDivElement
+
+  /** A row's name button, which opens and closes the row. */
+  function nameButton(label: string): HTMLButtonElement {
+    const found = Array.from(container.querySelectorAll<HTMLButtonElement>('button[aria-expanded]'))
+      .find((button) => button.textContent?.startsWith(label))
+    if (!found) throw new Error(`no row ${label}`)
+    return found
+  }
+
+  /** The summary row's name area, which runs Site data's panel command. */
+  function siteDataName(): HTMLButtonElement {
+    const found = Array.from(container.querySelectorAll<HTMLButtonElement>('button:not([aria-label])'))
+      .find((button) => button.textContent?.startsWith('Site data'))
+    if (!found) throw new Error('no Site data row')
+    return found
+  }
   const saveSettings = vi.fn(async (_settings: Settings): Promise<void> => {})
 
   beforeEach(() => {
@@ -92,10 +112,8 @@ describe('LayerPanel', () => {
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
     }
-    activeLayerName.value = 'basemap'
-    layerVisibility.value = { plants: true, zones: true, annotations: true }
-    layerLockState.value = { plants: false, zones: false, annotations: false }
-    layerOpacity.value = { plants: 1, zones: 1, annotations: 1 }
+    openLayerRow.value = null
+    lidarLibrary.value = null
     mapLayers.value = createDefaultMapLayers()
     googleMapsApiKey.value = null
     activePanel.value = 'canvas'
@@ -134,7 +152,7 @@ describe('LayerPanel', () => {
     expect(container.querySelector('header')?.textContent).not.toMatch(/\d/)
     expect(container.querySelector('input[aria-label="Opacity: Street map"]')).toBeTruthy()
     // Background has no eye toggles: it is one choice.
-    expect(container.querySelector('button[aria-label="Toggle visibility: Street map"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="Hide Street map"]')).toBeNull()
 
     await act(async () => { radio('None').click() })
     expect(mapLayers.value.basemap.visible).toBe(false)
@@ -172,11 +190,8 @@ describe('LayerPanel', () => {
     expect(soften()?.checked).toBe(true)
     expect(container.querySelector('input[type="password"]')).toBeTruthy()
 
-    // Choosing a row elsewhere hides the background settings; choosing the
-    // background again brings them back.
-    await act(async () => { activeLayerName.value = 'plants' })
-    expect(soften()).toBeUndefined()
-    await act(async () => { satellite.click() })
+    // Opening a row elsewhere keeps the chosen background's settings in view.
+    await act(async () => { nameButton('Plants').click() })
     expect(soften()).toBeTruthy()
   })
 
@@ -221,7 +236,6 @@ describe('LayerPanel', () => {
 
   it('shows the optional Google key field without any imagery choice', async () => {
     await act(async () => {
-      activeLayerName.value = 'satellite'
       mapLayers.value = { ...createDefaultMapLayers(), satellite: { visible: true, opacity: 1 } }
       render(<LayerPanel />, container)
     })
@@ -236,7 +250,6 @@ describe('LayerPanel', () => {
 
   it('saves the Google key trimmed without echoing it and clears it', async () => {
     await act(async () => {
-      activeLayerName.value = 'satellite'
       mapLayers.value = { ...createDefaultMapLayers(), satellite: { visible: true, opacity: 1 } }
       render(<LayerPanel />, container)
     })
@@ -282,21 +295,15 @@ describe('LayerPanel', () => {
     expect(hasLocationButton()).toBe(false)
     expect(container.querySelector('input[aria-label="Opacity: Street map"]')).toBeTruthy()
 
-    await act(async () => {
-      activeLayerName.value = 'contours'
-      await Promise.resolve()
-    })
+    await act(async () => { nameButton('Contour lines').click() })
 
     expect(hasLocationButton()).toBe(false)
     expect(container.querySelector<HTMLInputElement>('input[aria-label="Contour interval"]')).toBeTruthy()
 
-    await act(async () => {
-      activeLayerName.value = 'hillshade'
-      await Promise.resolve()
-    })
+    await act(async () => { nameButton('Hillshading').click() })
 
     expect(hasLocationButton()).toBe(false)
-    expect(container.querySelector<HTMLInputElement>('input[aria-label="Hillshade opacity"]')).toBeTruthy()
+    expect(container.querySelector<HTMLInputElement>('input[aria-label="Opacity: Hillshading"]')).toBeTruthy()
   })
 
   it('exposes scene Layer lock controls through Canvas Layer Presentation', async () => {
@@ -347,24 +354,134 @@ describe('LayerPanel', () => {
     expect(layerCommands.setSceneLayerLocked).toHaveBeenCalledWith('plants', false)
   })
 
-  it('lists the Design, its site data and the background as sections', async () => {
+  it('lists the Design, the Site data summary and the Map with its Background, and has no footer', async () => {
     await act(async () => {
       render(<LayerPanel />, container)
     })
     const sections = Array.from(container.querySelectorAll('section h3')).map((heading) => heading.textContent)
-    expect(sections.slice(0, 3)).toEqual(['Design', 'Site data', 'Background'])
-    const site = container.querySelector('section[aria-labelledby="layers-site"]')!
-    // Contour lines and hillshading say which elevation they come from.
-    expect(site.textContent).toContain('Online elevation')
-    expect(site.textContent).toContain('Contour lines')
-    expect(site.textContent).toContain('from online elevation · spacing follows zoom')
-    expect(site.textContent).toContain('Hillshading')
-    // Site data has its own panel: Layers lists none of its rows and no Add data.
-    expect(site.textContent).not.toContain('No site data yet')
-    expect(site.querySelector('button[aria-haspopup="menu"]')).toBeNull()
-    const background = container.querySelector('section[aria-labelledby="layers-background"]')!
-    expect(Array.from(background.querySelectorAll('input[type="radio"]')).map((input) => (input as HTMLInputElement).value))
+    expect(sections).toEqual(['Design', 'Map'])
+    expect(container.textContent).toContain('Site data')
+    const map = container.querySelector('section[aria-labelledby="layers-map"]')!
+    // Contour lines and hillshading say which elevation they come from, then the background is chosen.
+    expect(map.textContent).toContain('Contour lines')
+    expect(map.textContent).toContain('from online elevation · spacing follows zoom')
+    expect(map.textContent).toContain('Hillshading')
+    expect(map.textContent).not.toContain('Online elevation')
+    expect(map.querySelector('h4')?.textContent).toBe('Background')
+    expect(Array.from(map.querySelectorAll('input[type="radio"]')).map((input) => (input as HTMLInputElement).value))
       .toEqual(['satellite', 'basemap', 'none'])
+    // Nothing replaces the list: no footer, no inspector heading, no Add data.
+    expect(container.textContent).not.toMatch(/Visible ·|Hidden ·/)
+    expect(container.querySelector('button[aria-haspopup="menu"]')).toBeNull()
+  })
+
+  it('names every eye Hide or Show with the row, and opens one row at a time', async () => {
+    await act(async () => {
+      render(<LayerPanel />, container)
+    })
+    expect(container.querySelector('button[aria-label="Hide Zones"]')).toBeTruthy()
+    expect(container.querySelector('button[aria-label="Show Contour lines"]')).toBeTruthy()
+    expect(container.textContent).not.toContain('Toggle visibility')
+    // Nothing is open at start.
+    expect(container.querySelectorAll('[aria-expanded="true"]')).toHaveLength(0)
+    expect(container.querySelector('input[aria-label="Opacity: Zones"]')).toBeNull()
+
+    await act(async () => { nameButton('Zones').click() })
+    expect(nameButton('Zones').getAttribute('aria-expanded')).toBe('true')
+    const zones = nameButton('Zones').closest('[role="listitem"]')!
+    expect(zones.querySelector('input[aria-label="Opacity: Zones"]')).toBeTruthy()
+
+    await act(async () => { nameButton('Plants').click() })
+    expect(nameButton('Zones').getAttribute('aria-expanded')).toBe('false')
+    expect(nameButton('Plants').getAttribute('aria-expanded')).toBe('true')
+    expect(container.querySelector('input[aria-label="Opacity: Zones"]')).toBeNull()
+
+    // A second click closes the open row.
+    await act(async () => { nameButton('Plants').click() })
+    expect(container.querySelectorAll('[aria-expanded="true"]')).toHaveLength(0)
+  })
+
+  it('always shows the chosen background\'s settings, and none for None', async () => {
+    await act(async () => {
+      render(<LayerPanel />, container)
+    })
+    await act(async () => { nameButton('Zones').click() })
+    expect(dropdownTrigger(container, 'Style')).toBeTruthy()
+    expect(container.querySelector('input[aria-label="Opacity: Street map"]')).toBeTruthy()
+    const radio = (value: string) => container.querySelector<HTMLInputElement>(`input[type="radio"][value="${value}"]`)!
+    await act(async () => { radio('satellite').click() })
+    expect(container.querySelector('input[type="password"]')).toBeTruthy()
+    expect(container.querySelector('input[aria-label="Opacity: Satellite"]')).toBeTruthy()
+    await act(async () => { radio('none').click() })
+    expect(container.querySelector('input[aria-label^="Opacity: S"]')).toBeNull()
+    expect(container.querySelector('input[type="password"]')).toBeNull()
+  })
+
+  describe('the Site data summary row (Desktop)', () => {
+    function entry(id: string, name: string, visible: boolean, order: number) {
+      return { kind: 'Source' as const, id, name, visible, opacity: 1, order, ramp: null, reversed: false, range: null }
+    }
+
+    function withSiteData(entries: ReturnType<typeof entry>[], visible = true): void {
+      designSessionFixture.file = { ...currentDesign.value!, lidar: { schema_version: 1, visible, entries } } as CanopiFile
+    }
+
+    const threeEntries = () => [entry('a', 'Ground', true, 0), entry('b', 'Surface', true, 1), entry('c', 'Canopy', false, 2)]
+
+    it('says how many entries are shown, and its eye hides all site data and leaves the row eyes', async () => {
+      withSiteData(threeEntries())
+      lidarLibrary.value = librarySnapshot([sourceItem('a', 'Ground'), sourceItem('b', 'Surface'), sourceItem('c', 'Canopy')])
+      await act(async () => {
+        render(<LayerPanel />, container)
+      })
+      expect(container.textContent).toContain('2 of 3 shown')
+      const eye = container.querySelector<HTMLButtonElement>('button[aria-label="Hide Site data"]')!
+      expect(eye.getAttribute('aria-pressed')).toBe('true')
+      await act(async () => { eye.click() })
+      expect(currentDesign.value?.lidar?.visible).toBe(false)
+      expect(currentDesign.value?.lidar?.entries.map((item) => item.visible)).toEqual([true, true, false])
+      expect(container.textContent).toContain('0 of 3 shown')
+      await act(async () => { container.querySelector<HTMLButtonElement>('button[aria-label="Show Site data"]')!.click() })
+      expect(currentDesign.value?.lidar?.visible).toBe(true)
+      expect(container.textContent).toContain('2 of 3 shown')
+    })
+
+    it('counts entries by their own eye while the library is still loading, and leaves missing entries out', async () => {
+      withSiteData(threeEntries())
+      await act(async () => {
+        render(<LayerPanel />, container)
+      })
+      expect(container.textContent).toContain('2 of 3 shown')
+      // Loaded: the library has no Surface, so it is missing and not shown.
+      await act(async () => {
+        lidarLibrary.value = librarySnapshot([sourceItem('a', 'Ground'), sourceItem('c', 'Canopy')])
+      })
+      expect(container.textContent).toContain('1 of 3 shown')
+    })
+
+    it('opens Site data from its name and from Open Site data', async () => {
+      withSiteData(threeEntries())
+      sidePanel.value = 'layers'
+      await act(async () => {
+        render(<LayerPanel />, container)
+      })
+      await act(async () => { siteDataName().click() })
+      expect(sidePanel.value).toBe('site-data')
+      sidePanel.value = 'layers'
+      await act(async () => { container.querySelector<HTMLButtonElement>('button[aria-label="Open Site data"]')!.click() })
+      expect(sidePanel.value).toBe('site-data')
+    })
+
+    it('reads None yet with no eye when the Design has no site data, and still opens the panel', async () => {
+      sidePanel.value = 'layers'
+      await act(async () => {
+        render(<LayerPanel />, container)
+      })
+      expect(container.textContent).toContain('None yet')
+      expect(container.querySelector('button[aria-label="Hide Site data"]')).toBeNull()
+      await act(async () => { siteDataName().click() })
+      expect(sidePanel.value).toBe('site-data')
+    })
   })
 
   it('exposes terrain controls without coupling them to the basemap toggle', async () => {
@@ -374,7 +491,7 @@ describe('LayerPanel', () => {
 
     // Toggle contours visibility via eye button
     const contourToggle = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.getAttribute('aria-label') === 'Toggle visibility: Contour lines')
+      .find((button) => button.getAttribute('aria-label') === 'Show Contour lines')
     expect(contourToggle).toBeTruthy()
 
     await act(async () => {
@@ -410,7 +527,7 @@ describe('LayerPanel', () => {
 
     // Toggle hillshade visibility
     const hillshadeToggle = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.getAttribute('aria-label') === 'Toggle visibility: Hillshading')
+      .find((button) => button.getAttribute('aria-label') === 'Show Hillshading')
     expect(hillshadeToggle).toBeTruthy()
     await act(async () => {
       hillshadeToggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -425,7 +542,7 @@ describe('LayerPanel', () => {
       hillshadeName?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    const hillshadeSlider = container.querySelector<HTMLInputElement>('input[aria-label="Hillshade opacity"]')
+    const hillshadeSlider = container.querySelector<HTMLInputElement>('input[aria-label="Opacity: Hillshading"]')
     expect(hillshadeSlider).toBeTruthy()
     await act(async () => {
       if (!hillshadeSlider) return
