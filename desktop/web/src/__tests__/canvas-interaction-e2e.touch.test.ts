@@ -164,6 +164,26 @@ describe('SceneInteractionSession: touch', () => {
     session.dispose()
   })
 
+  it('a finger\'s double tap 20 px apart finishes a polygon with pointerdown detail 0, as Profile finishes (canopi-f47t.42 probe)', () => {
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('polygon')
+    // Each down sends detail 0, as WebKitGTK's and Chromium's touch pointerdowns do; the recogniser counts the clicks.
+    const tap = (at: ScenePoint, t: number) => {
+      events.pointerDown(at, { ...finger(1, t), button: 0, buttons: 1, detail: 0 })
+      events.pointerUp(at, { ...finger(1, t + 40), button: 0, buttons: 0, detail: 0 })
+    }
+    tap({ x: 20, y: 20 }, 0)
+    tap({ x: 120, y: 20 }, 1000)
+    tap({ x: 120, y: 100 }, 2000)
+    expect(draftCorners()).toBe(3)
+
+    tap({ x: 120, y: 120 }, 2300)
+
+    expect(store.persisted.zones).toHaveLength(1)
+    expect(store.persisted.zones[0]!.points).toEqual([{ x: 20, y: 20 }, { x: 120, y: 20 }, { x: 120, y: 100 }])
+    session.dispose()
+  })
+
   it('E13 a pinch from empty ground with Select keeps the selection', () => {
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
