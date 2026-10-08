@@ -87,9 +87,17 @@ function AnalyzeRequest({ request }: { readonly request: Extract<DataDialog, { k
   const eligible = from
     ? (isSource(fixedInput) ? [fixedInput] : [])
     : design.map((entry) => byId.get(entry.id)).filter(isSource)
-  // With nothing eligible, the item asked for still opens alone, so Analyze says why each analysis cannot run.
+  // The item asked for opens as the Source even when no analysis accepts it (a result whose input is eligible opens on
+  // that input instead), listed beside the eligible items, so Analyze says why each analysis cannot run on it rather
+  // than opening on another item.
   const asked = from ? fixedInput : byId.get(request.itemId ?? '')
-  const sources = eligible.length > 0 ? eligible : asked?.status === 'ready' ? [asked] : []
+  const isEligible = (id: string | null | undefined) => eligible.some((item) => item.id === id)
+  const askedJoins = asked?.status === 'ready' && !isEligible(asked.id) && !isEligible(asked.parentId)
+  const sources = !askedJoins
+    ? eligible
+    : design.some((entry) => entry.id === asked.id)
+      ? design.map((entry) => byId.get(entry.id)).filter((item): item is LibraryItem => item === asked || isEligible(item?.id))
+      : [asked, ...eligible]
   const sourceId = from
     ? sources[0]?.id ?? null
     : defaultAnalysisSource(sources, design.map((entry) => ({ id: entry.id, inputId: byId.get(entry.id)?.parentId ?? null })), request.itemId)
