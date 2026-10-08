@@ -116,6 +116,15 @@ describe('an open item\'s Range', () => {
     expect(setLidarEntryDisplay).toHaveBeenLastCalledWith('a', { range: { mode: 'Custom', min: 100, max: 200 } })
   })
 
+  it('shows a float raster\'s range in use to two decimals, so it fits its field', () => {
+    mount(item({ displayRange: [312.4700012207031, 1408.0999755859375] }))
+    expect((named('Minimum') as HTMLInputElement).value).toBe('312.47')
+    expect((named('Maximum') as HTMLInputElement).value).toBe('1408.1')
+    locale.value = 'fr'
+    mount(item({ ...slope, range: { mode: 'Data' }, displayRange: [0, 67.83412170410156] }))
+    expect((named('Maximum') as HTMLInputElement).value).toBe('67,83')
+  })
+
   it('shows a slope\'s default 0–30° as Custom, with no Reset', () => {
     mount(item(slope))
     expect(radios('Range').find((radio) => radio.getAttribute('aria-checked') === 'true')?.textContent).toBe('Custom')

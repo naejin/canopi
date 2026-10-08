@@ -116,7 +116,8 @@
 }
 
 .field {
-  width: 9ch;
+  /* Eight tabular digits, such as -1234.56, inside the padding and border. */
+  width: calc(8ch + 2 * var(--space-1-5) + 2px);
   min-height: var(--control-size-sm);
   padding: 0 var(--space-1-5);
   border: 1px solid var(--color-border-strong);
@@ -126,6 +127,7 @@
   font: inherit;
   font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
 }
 
 .dash,

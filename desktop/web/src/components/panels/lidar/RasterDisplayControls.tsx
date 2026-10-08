@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Ref } from 'preact'
 import { setLidarEntryDisplay } from '../../../app/lidar/actions'
-import { formatLocaleNumber, parseLocaleNumber } from '../../../app/analyses/model'
+import { parseLocaleNumber } from '../../../app/analyses/model'
 import { lidarDisplayStyle } from '../../../app/lidar/display'
 import { formatLegendValue, legendGradient } from '../../../app/lidar/display-legend'
 import { kindDisplayDefaults, kindRamps, unitSuffix } from '../../../app/lidar/item-types'
@@ -171,6 +171,11 @@ function Range({ item, mode, values }: {
   )
 }
 
+/** A range end as its field shows it: two decimals at most (centimetres, hundredths of a degree), no grouping, so an f32 raster's range fits. */
+function fieldNumber(value: number, localeTag: string): string {
+  return new Intl.NumberFormat(localeTag, { useGrouping: false, maximumFractionDigits: 2 }).format(value)
+}
+
 /**
  * One end of the range: it always shows the value in use, accepts the
  * locale's decimal mark, and commits on Enter or leaving the field; a value
@@ -184,7 +189,7 @@ function RangeField({ label, value, onCommit, inputRef }: {
   onCommit(value: number): boolean
   readonly inputRef?: Ref<HTMLInputElement>
 }) {
-  const shown = formatLocaleNumber(value, locale.value)
+  const shown = fieldNumber(value, locale.value)
   const [draft, setDraft] = useState(shown)
   const previous = useRef(shown)
   useEffect(() => {
@@ -195,7 +200,7 @@ function RangeField({ label, value, onCommit, inputRef }: {
   const finish = () => {
     if (draft === shown) return
     const parsed = parseLocaleNumber(draft, locale.value)
-    if (parsed !== null && onCommit(parsed)) setDraft(formatLocaleNumber(parsed, locale.value))
+    if (parsed !== null && onCommit(parsed)) setDraft(fieldNumber(parsed, locale.value))
     else setDraft(shown)
   }
   return (
