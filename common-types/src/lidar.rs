@@ -209,6 +209,37 @@ pub enum LidarSampleOutcome {
     },
 }
 
+// One sampler for the Site data row values, the pin and the profile: the
+// native cell under each WGS84 point (no interpolation) of each target, read
+// through the one CRS authority. A request carries at most 8 targets and
+// 4,096 points and is refused before any work beyond either.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct LidarSamplePointsRequest {
+    pub targets: Vec<LidarSampleTarget>,
+    /// WGS84 `[longitude, latitude]` in degrees, in the caller's order.
+    pub points: Vec<[f64; 2]>,
+}
+
+/// One item to sample, aimed at the generation the caller believes current.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct LidarSampleTarget {
+    pub kind: crate::library::LibraryItemRole,
+    /// Library item id, matching `kind`.
+    pub entity_id: String,
+    pub expected_generation_id: String,
+}
+
+/// One target's answer, in target order.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub enum LidarSampleSeries {
+    /// One value per point, in point order; `None` where the cell declares no
+    /// data or the point lies outside the generation.
+    Values { values: Vec<Option<f64>> },
+    Unavailable {
+        reason: LidarSampleUnavailableReason,
+    },
+}
+
 // Display derivatives: regenerable tiled COGs with overviews that the upstream
 // WASM renderer reads through the scoped asset protocol. They are never source
 // members, heads or results; numeric inspection and analysis keep reading the
@@ -350,3 +381,42 @@ pub enum LidarColourRange {
 }
 
 pub const LIDAR_PRESENTATION_SCHEMA_VERSION: u32 = 1;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn a_batched_sample_crosses_ipc_in_target_order() {
+        let request: LidarSamplePointsRequest = serde_json::from_value(json!({
+            "targets": [
+                { "kind": "Source", "entity_id": "ground", "expected_generation_id": "g1" },
+                { "kind": "Derived", "entity_id": "slope", "expected_generation_id": "g2" }
+            ],
+            "points": [[0.0338, 48.2202], [0.0339, 48.2203]]
+        }))
+        .expect("a sample request decodes");
+        assert_eq!(
+            request.targets[1].kind,
+            crate::library::LibraryItemRole::Derived
+        );
+        assert_eq!(request.points[1], [0.0339, 48.2203]);
+
+        let series = vec![
+            LidarSampleSeries::Values {
+                values: vec![Some(142.5), None],
+            },
+            LidarSampleSeries::Unavailable {
+                reason: LidarSampleUnavailableReason::StaleGeneration,
+            },
+        ];
+        assert_eq!(
+            serde_json::to_value(series).unwrap(),
+            json!([
+                { "Values": { "values": [142.5, null] } },
+                { "Unavailable": { "reason": "StaleGeneration" } }
+            ])
+        );
+    }
+}

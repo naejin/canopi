@@ -604,6 +604,12 @@ export type LidarSampleOutcome = { Value: { generation_id: string; value: number
 // Inside the generation, but the containing pixel declares no data.
 { NoData: { generation_id: string } } | { Unavailable: { reason: LidarSampleUnavailableReason } };
 
+export type LidarSamplePointsRequest = {
+	targets: LidarSampleTarget[],
+	// WGS84 `[longitude, latitude]` in degrees, in the caller's order.
+	points: ([number, number])[],
+};
+
 export type LidarSampleRequest = {
 	kind: LibraryItemRole,
 	// Library item id, matching `kind`.
@@ -631,6 +637,22 @@ export type LidarSampleRequest = {
 	longitude: number,
 	// WGS84 latitude in degrees of the point to sample.
 	latitude: number,
+};
+
+// One target's answer, in target order.
+export type LidarSampleSeries =
+/**
+ *  One value per point, in point order; `None` where the cell declares no
+ *  data or the point lies outside the generation.
+ */
+{ Values: { values: (number | null)[] } } | { Unavailable: { reason: LidarSampleUnavailableReason } };
+
+// One item to sample, aimed at the generation the caller believes current.
+export type LidarSampleTarget = {
+	kind: LibraryItemRole,
+	// Library item id, matching `kind`.
+	entity_id: string,
+	expected_generation_id: string,
 };
 
 // Why a sample could not produce a physical value.
