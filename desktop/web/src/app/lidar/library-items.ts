@@ -11,6 +11,7 @@ import type {
 } from '../../generated/contracts'
 import { analysisGroup } from '../analyses/registry'
 import { itemDisplayRange, libraryItemName } from './library-store'
+import { treeRows } from './reference-tree'
 
 /**
  * One reusable Data Library item: an imported source or a derived result.
@@ -85,32 +86,9 @@ export function libraryItems(snapshot: LibrarySnapshot | null): LibraryItem[] {
         : summary.run?.message ?? null,
     }
   })
-  const ids = new Set(items.map((item) => item.id))
-  const children = new Map<string | null, Omit<LibraryItem, 'depth'>[]>()
-  for (const item of items) {
-    const parent = item.parentId !== null && item.parentId !== item.id && ids.has(item.parentId) ? item.parentId : null
-    children.set(parent, [...(children.get(parent) ?? []), item])
-  }
-  const ordered: LibraryItem[] = []
-  const visited = new Set<string>()
-  const visit = (parent: string | null, depth: number) => {
-    // Stable name order, identity as the tie-breaker: names are not unique.
-    const rows = [...(children.get(parent) ?? [])].sort((left, right) =>
-      left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
-      || left.id.localeCompare(right.id))
-    for (const row of rows) {
-      if (visited.has(row.id)) continue
-      visited.add(row.id)
-      ordered.push({ ...row, depth })
-      visit(row.id, depth + 1)
-    }
-  }
-  visit(null, 0)
-  // A cycle has no root; list whatever it left out at the top level.
-  for (const item of items) {
-    if (!visited.has(item.id)) ordered.push({ ...item, depth: 0 })
-  }
-  return ordered
+  // Stable name order, identity as the tie-breaker: names are not unique.
+  return treeRows(items, (left, right) =>
+    left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }) || left.id.localeCompare(right.id))
 }
 
 /**

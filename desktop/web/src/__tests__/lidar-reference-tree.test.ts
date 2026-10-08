@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   canMoveReference,
+  filterKeepingAncestors,
   movedReferenceOrders,
   referenceDrawOrder,
   referenceRows,
+  treeRows,
 } from '../app/lidar/reference-tree'
 
 const node = (id: string, order: number, parentId: string | null = null) => ({ id, order, parentId })
@@ -70,3 +72,45 @@ describe('site data tree', () => {
     expect(referenceRows(moved).map((row) => row.id)).toEqual(['b', 'a'])
   })
 })
+
+describe('one tree for the library and Site data (finding 9)', () => {
+  const item = (id: string, name: string, parentId: string | null = null) => ({ id, name, parentId })
+  const byName = (left: { name: string; id: string }, right: { name: string; id: string }) =>
+    left.name.localeCompare(right.name) || left.id.localeCompare(right.id)
+
+  it('nests children under their parent, siblings in the comparator\'s order', () => {
+    const rows = treeRows([item('b', 'Beta'), item('a2', 'Zed', 'a'), item('a', 'Alpha'), item('a1', 'Aa', 'a')], byName)
+
+    expect(rows.map((row) => [row.id, row.depth])).toEqual([['a', 0], ['a1', 1], ['a2', 1], ['b', 0]])
+  })
+
+  it('lists a row whose parent is missing, or is itself, at the top level', () => {
+    const rows = treeRows([item('orphan', 'Orphan', 'gone'), item('self', 'Self', 'self')], byName)
+
+    expect(rows.map((row) => [row.id, row.depth])).toEqual([['orphan', 0], ['self', 0]])
+  })
+
+  it('survives a cycle by listing its members once, at the top level', () => {
+    const rows = treeRows([item('x', 'X', 'y'), item('y', 'Y', 'x')], byName)
+
+    expect(rows.map((row) => [row.id, row.depth, row.parentId])).toEqual([['x', 0, null], ['y', 0, null]])
+  })
+
+  it('a match three deep keeps both its ancestors and drops everything else', () => {
+    const rows = treeRows([
+      item('ground', 'Ground'), item('slope', 'Slope', 'ground'), item('steep', 'Steep', 'slope'),
+      item('canopy', 'Canopy'), item('other', 'Other slope', 'ground'),
+    ], byName)
+
+    const kept = filterKeepingAncestors(rows, (row) => row.name === 'Steep')
+
+    expect(kept.map((row) => [row.id, row.depth])).toEqual([['ground', 0], ['slope', 1], ['steep', 2]])
+  })
+
+  it('keeps a match whose parent is not listed, alone', () => {
+    const rows = treeRows([item('orphan', 'Steep', 'gone'), item('canopy', 'Canopy')], byName)
+
+    expect(filterKeepingAncestors(rows, (row) => row.name === 'Steep').map((row) => row.id)).toEqual(['orphan'])
+  })
+})
+
