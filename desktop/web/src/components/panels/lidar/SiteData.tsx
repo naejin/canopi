@@ -355,9 +355,9 @@ export function SiteDataInspector() {
           </ul>
         </Notice>
       )}
-      {available && (
+      {available && style && (
         <div className={styles.legend} aria-label={t('canvas.lidar.layers.legend')}>
-          <div className={styles.ramp} style={{ backgroundImage: legendGradient(style.colormap, style.reversed) }} />
+          <div className={styles.ramp} style={{ backgroundImage: legendGradient(style.ramp, style.reversed) }} />
           <div className={styles.legendLabels}>
             <span>{formatLegendValue(style.rescale[0], style.units, locale.value)}</span>
             <span>{formatLegendValue(style.rescale[1], style.units, locale.value)}</span>

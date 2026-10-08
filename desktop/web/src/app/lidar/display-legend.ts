@@ -1,7 +1,9 @@
+import type { LidarRamp } from '../../generated/contracts'
 import { unitSuffix } from './item-types'
 
 /**
- * Legend ramps for the upstream renderer's built-in colormaps.
+ * Legend stops for each ramp, as the upstream renderer paints its colormap
+ * (`RAMP_COLORMAPS` in item-types.ts).
  *
  * Stops are `colorize()` of the pinned `cog-tiler-wasm@0.4.0` at i/(n-1), with
  * as many stops (9, 17 or 65) as keep the gradient's straight-line blend within
@@ -9,8 +11,8 @@ import { unitSuffix } from './item-types'
  * (held by display-legend.test.ts). A legend never measures anything: numeric
  * values come from native inspection.
  */
-const RAMPS: Readonly<Record<string, readonly string[]>> = {
-  schwarzwald: [
+const RAMP_STOPS: Readonly<Record<LidarRamp, readonly string[]>> = {
+  Terrain: [
     '#aeefd5', '#b0f2cd', '#b1f4c1', '#b2f6b5', '#bbf7b2', '#c8f9b2', '#d8fab2', '#eafcb2',
     '#f7fcb2', '#eff4a3', '#cfe888', '#b2dc72', '#8dce5b', '#68c047', '#48b437', '#29a62c',
     '#17992f', '#0c8b37', '#0b823f', '#2c853d', '#448c3b', '#619436', '#7b9b31', '#8da02d',
@@ -21,17 +23,20 @@ const RAMPS: Readonly<Record<string, readonly string[]>> = {
     '#a7a19d', '#adacac', '#b5b4b5', '#bdbcbd', '#c6c5c6', '#cecdce', '#d7d5d7', '#dfdddf',
     '#e9e7e9',
   ],
-  greens: ['#f7fcf5', '#e3f4de', '#c5e7be', '#9fd79b', '#72c378', '#42aa5d', '#218b44', '#026c2c', '#00441b'],
-  ylorrd: ['#ffffcc', '#ffeba1', '#fed775', '#fdb24d', '#fc8b3b', '#fa4e2a', '#e11b1d', '#bc0126', '#800026'],
-  viridis: [
-    '#440154', '#471768', '#462c79', '#414085', '#3a5189', '#33618c', '#2c718d', '#26808c',
-    '#20908c', '#209f87', '#29ad7f', '#3ebb72', '#5cc862', '#82d34b', '#aadb32', '#d5e11b',
-    '#fde724',
+  Earth: ['#e8f5ab', '#d8d17f', '#c9ad59', '#b88c42', '#a0713c', '#835a38', '#634633', '#423228', '#221e1b'],
+  Greens: ['#f7fcf5', '#e3f4de', '#c5e7be', '#9fd79b', '#72c378', '#42aa5d', '#218b44', '#026c2c', '#00441b'],
+  YellowRed: ['#ffffcc', '#ffeba1', '#fed775', '#fdb24d', '#fc8b3b', '#fa4e2a', '#e11b1d', '#bc0126', '#800026'],
+  Magma: [
+    '#000003', '#0a0721', '#1d0f46', '#350f69', '#50127b', '#691b7e', '#822581', '#9c2e7e',
+    '#b53679', '#ce426e', '#e45163', '#f3695d', '#fa8762', '#fda572', '#fec287', '#fcdfa3',
+    '#fbfcbf',
   ],
+  Gray: ['#000000', '#202020', '#404040', '#606060', '#808080', '#9f9f9f', '#bfbfbf', '#dfdfdf', '#ffffff'],
 }
 
-export function legendGradient(colormap: string, reversed: boolean): string {
-  const stops = [...RAMPS[colormap]!]
+/** A ramp as a left-to-right CSS gradient: the legend bar and the row's swatch. */
+export function legendGradient(ramp: LidarRamp, reversed: boolean): string {
+  const stops = [...RAMP_STOPS[ramp]]
   if (reversed) stops.reverse()
   return `linear-gradient(90deg, ${stops.join(', ')})`
 }

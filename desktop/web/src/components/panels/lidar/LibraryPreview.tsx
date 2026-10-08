@@ -50,7 +50,8 @@ export function LibraryPreview({ item, client, width, height, large = false }: {
   const kind = item.role
   const ready = item.status === 'ready' && item.generationId !== null
   const descriptor = ready ? readLidarDisplay(kind, item.id, item.generationId) : null
-  const style = lidarDisplayStyle(item)
+  // A preview draws the item kind's default look; an entry's own look belongs to its Design.
+  const style = lidarDisplayStyle({ ...item, ramp: null, reversed: false, range: null })!
   const key = `${item.generationId}|${width}x${height}|${style.colormap}|${style.reversed}|${style.rescale.join(',')}`
   const [url, setUrl] = useState<string | null>(previewCache.get(key) ?? null)
   const [failed, setFailed] = useState(false)

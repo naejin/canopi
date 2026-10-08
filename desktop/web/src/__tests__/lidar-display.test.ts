@@ -109,12 +109,13 @@ describe('LiDAR display projection', () => {
     expect(drawn(new Set())).toEqual([])
   })
 
-  it('styles each reference by its item type and its own units', () => {
+  it('styles each reference by its item type, its own units and its own display, and a missing one not at all', () => {
     const slope = { kind: 'Derived' as const, itemType: { kind: 'Raster' as const, quantity: 'Slope' as const } }
     expect(display.lidarDisplayStyle(item({ ...slope, units: '%' })))
       .toMatchObject({ colormap: 'ylorrd', reversed: false, rescale: [0, 57.7], units: '%' })
-    expect(display.lidarDisplayStyle(item({ itemType: null, availability: 'not-in-library', state: null, units: '' })))
-      .toMatchObject({ colormap: 'viridis', rescale: [0, 1] })
+    expect(display.lidarDisplayStyle(item({ ramp: 'Earth', reversed: true, range: { mode: 'Custom', min: 110, max: 120 } })))
+      .toMatchObject({ ramp: 'Earth', colormap: 'turbid', reversed: true, rescale: [110, 120] })
+    expect(display.lidarDisplayStyle(item({ itemType: null, availability: 'not-in-library', state: null, units: '' }))).toBeNull()
   })
 
   it('names a derived layer as a result, keyed by its role', () => {

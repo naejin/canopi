@@ -3,7 +3,7 @@ import type { convertFileSrc } from '@tauri-apps/api/core'
 import type { RasterDisplayLayer } from '../../maplibre/raster-display/adapter'
 import { lidarDisplayDescriptor, type LidarDisplayDescriptor } from '../../ipc/lidar'
 import type { LibraryItemRole, LibraryItemType } from '../../generated/contracts'
-import { itemTypeStyle, type LidarDisplayStyle } from './item-types'
+import { itemTypeStyle, type LidarDisplayStyle, type RasterStyleInput } from './item-types'
 import { storyPresentationOverrides } from '../story-presentation/overrides'
 import { readCurrentLidarPresentation, refreshLidarLibrary, type LidarPresentationItem } from './library-store'
 
@@ -144,17 +144,12 @@ export function lidarAssetUrl(path: string): string {
 }
 
 /**
- * Upstream palette and stretch for one item, always in its stored units,
- * dispatched on its item type. A reference whose item is gone has no type and
- * draws nothing, so its neutral style only serves an empty legend.
+ * Upstream palette and stretch for one entry, always in its item's stored
+ * units: its own ramp, Reverse and range over its item type's defaults. A
+ * reference whose item is gone has no type: it draws nothing and has no legend.
  */
-export function lidarDisplayStyle(item: {
-  readonly itemType: LibraryItemType | null
-  readonly units: string
-  readonly displayRange: readonly [number, number] | null
-}): LidarDisplayStyle {
-  if (!item.itemType) return { colormap: 'viridis', reversed: false, rescale: [0, 1], units: item.units }
-  return itemTypeStyle(item.itemType, item)
+export function lidarDisplayStyle(item: RasterStyleInput & { readonly itemType: LibraryItemType | null }): LidarDisplayStyle | null {
+  return item.itemType ? itemTypeStyle(item.itemType, item) : null
 }
 
 /**
@@ -175,6 +170,7 @@ export function lidarDisplayLayers(
     if (!descriptor || descriptor.state !== 'Ready' || descriptor.generation_id !== item.generationId) continue
     if (descriptor.assets.length === 0) continue
     const style = lidarDisplayStyle(item)
+    if (!style) continue
     const bounds = descriptor.assets.reduce<[number, number, number, number]>(
       (union, asset) => [
         Math.min(union[0], asset.bounds[0]),
