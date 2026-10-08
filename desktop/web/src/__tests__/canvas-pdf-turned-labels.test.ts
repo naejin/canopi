@@ -6,6 +6,7 @@ import { contains, outlineSegments, type Segment } from '../app/canvas-pdf/field
 import { pageFrame } from '../app/canvas-pdf/page-frame'
 import { zoneLabels } from '../app/canvas-pdf/zone-labels'
 import { FieldSpace } from '../app/canvas-pdf/field-placement'
+import { drawField, type FieldReferences } from '../app/canvas-pdf/field-layout'
 import type { ZoneMeasurements } from '../app/canvas-pdf/zone-measurements'
 import type { PdfInput, PdfLabels, PdfPage, PdfSetup } from '../app/canvas-pdf/types'
 import type { PrintBounds, PrintPoint, PrintZone } from '../canvas/print'
@@ -135,4 +136,37 @@ it('prints a band zone\'s code at its own top, above its neighbour\'s, whatever 
     return [centre(band), centre(neighbour)]
   })
   expect(placed[0]).toEqual(placed[1])
+})
+
+/**
+ * One detail page, frame 10 mm right and 30 mm down, ground metres at 10 mm each: plan (X, Y) prints at
+ * (10 + 10X, 30 + 10Y) mm. Reserved rectangles are in millimetres; guides start off the ground so none is a dimension.
+ */
+function guidePage(measurements: PdfInput['canvas']['measurements'], reserved: readonly PrintBounds[], homes?: ReadonlyMap<string, string>) {
+  const input = { ...design({ measurements }), viewBearingDeg: 0 }
+  const references: FieldReferences = { species: new Map(), notes: new Map(), plants: new Map(), zones: [], measurementHomes: homes,
+    measurements: new Map(measurements.map((g, i) => [g.id, `M${i + 1}`])) }
+  const toPoints = (r: PrintBounds) => ({ x: r.x * MM, y: r.y * MM, width: r.width * MM, height: r.height * MM })
+  return drawField(input, { x: 10 * MM, y: 30 * MM, width: 180 * MM, height: 240 * MM }, { x: 0, y: 0, width: 18, height: 24 }, 10 * MM,
+    { id: 'here', width: 210 * MM, height: 297 * MM, reserved: reserved.map(toPoints) }, text(), references)
+}
+const printedCodes = (operations: readonly PdfPage['operations'][number][]) => codes({ operations } as PdfPage, /^M\d+$/)
+
+it('places a continuing guide\'s wide M code beside its guide at any angle, keeping its link to the home page', () => {
+  const space = new FieldSpace({ x: -1000, y: -1000, width: 2000, height: 2000 }, text())
+  const wide = space.measure('M3      000', 8)
+  for (const degrees of [0, 30, 45, 60, 90]) {
+    const angle = degrees * Math.PI / 180, guide = { a: { x: 0, y: 0 }, b: { x: 30 * Math.cos(angle), y: 30 * Math.sin(angle) } }
+    const box = space.beside(wide, guide)
+    expect(box, `${degrees}°`).not.toBeNull()
+    // Its near edge stays within the widest gap of the guide.
+    const corners = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([i, j]) => ({ x: box!.x + i! * box!.width, y: box!.y + j! * box!.height }))
+    expect(Math.min(...corners.map(c => toSegment(c, guide))), `${degrees}°`).toBeLessThanOrEqual(2.5 + 1e-9)
+  }
+  // On the page: a north-south guide whose length is crowded out of its middle, its home another page.
+  const drawing = guidePage([{ id: 'g', start: { x: 9, y: -3 }, end: { x: 9, y: 9 } }], [{ x: 60, y: 60, width: 76, height: 30 }], new Map([['g', 'home']]))
+  expect(drawing.notes.find(n => n.id === 'g')?.location).toBeUndefined()
+  expect(printedCodes(drawing.operations).map(c => c.code)).toEqual(['M1'])
+  expect(drawing.links.map(l => l.target)).toContain('page:home')
+  expect(drawing.pageReferences.map(r => r.target)).toEqual(['home'])
 })
