@@ -1,20 +1,39 @@
 import { signal } from '@preact/signals'
 import type { SavedObjectStamp } from '../src/types/saved-object-stamps'
-import type {
-  AnalysisOffer,
-  AnalysisRequest,
-  LibraryItemSummary,
-  LidarImportJob,
-  ProcessingRun,
-  RasterQuantity,
-  DesignSketch,
-  RecentDesignPreview,
-  SpeciesListItem,
-  SpeciesSearchRequest,
+import {
+  LIDAR_SAMPLE_MAX_POINTS,
+  LIDAR_SAMPLE_MAX_TARGETS,
+  type AnalysisOffer,
+  type AnalysisRequest,
+  type LibraryItemSummary,
+  type LidarImportJob,
+  type LidarSamplePointsRequest,
+  type LidarSampleSeries,
+  type ProcessingRun,
+  type RasterQuantity,
+  type DesignSketch,
+  type RecentDesignPreview,
+  type SpeciesListItem,
+  type SpeciesSearchRequest,
 } from '../src/generated/contracts'
-import { appleDetail, applePhotos, detail, designFixture, drawnPhoto, frenchNames, species, specimens } from './fixtures'
+import rasterDisplayCogUrl from '../src/maplibre/raster-display/fixtures/rust-display-cog.tif?url'
+import {
+  appleDetail,
+  applePhotos,
+  detail,
+  designFixture,
+  drawnPhoto,
+  frenchNames,
+  galleryLongSiteDataNames,
+  galleryRasterSite,
+  species,
+  specimens,
+} from './fixtures'
 
-const state = new URLSearchParams(location.search).get('state') ?? 'populated'
+const params = new URLSearchParams(location.search)
+const state = params.get('state') ?? 'populated'
+/** `sampleDelay=<ms>`: each lidar_sample_points answer waits this long, so a superseded answer can be seen never to land. */
+const sampleDelayMs = Math.max(0, Number(params.get('sampleDelay')) || 0)
 const favoriteNames = new Set(state === 'empty' ? [] : species.map(plant => plant.canonical_name))
 const file = designFixture()
 let sequence = 3
@@ -31,7 +50,11 @@ let stamps: SavedObjectStamp[] = state === 'empty' ? [] : ['Orchard guild', 'Pol
   }),
   created_at: file.created_at, updated_at: file.updated_at,
 }))
-const lidarBounds: [number, number, number, number] = [-0.427, 48.305, -0.413, 48.314]
+// The data covers the west of the fixture Design's site (fixtures.ts, origin 13° E, 23° N): its plants run about 20 m east,
+// so a pointer over the east of the planting reads no data.
+const lidarBounds: [number, number, number, number] = state === 'lidar-raster'
+  ? galleryRasterSite.bounds
+  : [12.9998, 22.9998, 13.0001, 23.0002]
 const galleryTool = { engine: 'geolibre', version: 'geolibre-cli 1.5.3 (gallery)', revision: 'aac2b7439786aac2b7439786', tools: ['slope'] }
 const galleryCreatedAt = String(Date.UTC(2026, 8, 12, 9, 30))
 
@@ -44,10 +67,11 @@ function galleryOffers(item: Pick<LibraryItemSummary, 'role' | 'item_type' | 'st
 }
 
 function gallerySource(id: string, name: string, quantity: RasterQuantity, overrides: Partial<LibraryItemSummary> = {}): LibraryItemSummary {
+  const [low, high] = state === 'lidar-raster' ? galleryRasterSite.valueRange : [131.2, 287.8]
   const item: LibraryItemSummary = {
     id, name, role: 'Source', item_type: { kind: 'Raster', quantity }, units: 'm', state: 'Ready',
-    generation_id: `${id}-g1`, bounds: lidarBounds, value_range: [131.2, 287.8],
-    display_range: { min: 131.2, max: 287.8, basis: 'Exact' }, resolution_m: 0.5, coverage_cells: '4000000',
+    generation_id: `${id}-g1`, bounds: lidarBounds, value_range: [low, high],
+    display_range: { min: low, max: high, basis: 'Exact' }, resolution_m: 0.5, coverage_cells: '4000000',
     import_job: null, provenance: null, freshness: { state: 'Current' }, run: null, offers: [], dependents: 0,
     created_at: galleryCreatedAt,
     ...overrides,
@@ -73,7 +97,7 @@ function gallerySlope(id: string, input: string, unit: 'degrees' | 'percent', ov
   return { ...item, offers: galleryOffers(item) }
 }
 
-let lidarItems: LibraryItemSummary[] = state === 'empty' ? [] : [
+let lidarItems: LibraryItemSummary[] = state === 'empty' || state === 'no-design' ? [] : [
   gallerySource('lidar-ground', state === 'long'
     ? 'IGN bare-earth elevation — La Maignannerie regional survey comparison layer'
     : 'IGN ground elevation', 'GroundElevation', { dependents: 2 }),
@@ -83,6 +107,22 @@ let lidarItems: LibraryItemSummary[] = state === 'empty' ? [] : [
     freshness: { state: 'Stale', reasons: [{ reason: 'ToolUpdated', from: 'geolibre-cli 1.5.2', to: 'geolibre-cli 1.5.3' }] },
   }),
 ]
+// `state=long`: a 40-item library, one added each day before the three above, for the large library sheet.
+if (state === 'long') {
+  lidarItems = [...lidarItems, ...Array.from({ length: 37 }, (_, index) => gallerySource(
+    `lidar-tile-${index + 1}`,
+    `IGN LiDAR HD MNT tile 0470_${6800 + index}`,
+    index % 5 === 4 ? 'SurfaceElevation' : 'GroundElevation',
+    { created_at: String(Date.UTC(2026, 8, 11 - index, 9, 30)) },
+  ))]
+}
+// `state=lidar-long`: the nine more Site data entries of the Design (fixtures.ts).
+if (state === 'lidar-long') {
+  lidarItems = [...lidarItems, ...galleryLongSiteDataNames.map((name, index) => gallerySource(
+    `lidar-block-${index + 1}`, name,
+    name.startsWith('Canopy') ? 'AboveGroundHeight' : name.startsWith('Surface') ? 'SurfaceElevation' : 'GroundElevation',
+  ))]
+}
 function galleryImport(layerId: string, name: string, quantity: RasterQuantity, job: Partial<LidarImportJob>): LibraryItemSummary {
   const failed = job.state === 'Failed'
   return gallerySource(layerId, name, quantity, {
@@ -218,6 +258,42 @@ function localized(plant: SpeciesListItem, locale: unknown): SpeciesListItem {
   const common_name = frenchNames[plant.canonical_name] ?? null
   return { ...plant, common_name, is_name_fallback: common_name === null }
 }
+/**
+ * The analytic site the gallery samples (spec §1.10, `lidar_sample_points`): ground elevation 140 + 30·sin over the
+ * ground, the surface 6 m above it, a canopy 6 ± 4 m, and slope from the ground's gradient, in each item's units; no data
+ * outside an item's bounds. Requests over the generated caps are refused before any answer, as Rust refuses them.
+ */
+async function sampleGalleryPoints(request: LidarSamplePointsRequest): Promise<LidarSampleSeries[]> {
+  if (request.targets.length > LIDAR_SAMPLE_MAX_TARGETS || request.points.length > LIDAR_SAMPLE_MAX_POINTS) {
+    throw `lidar_sample_points refused: a request carries at most ${LIDAR_SAMPLE_MAX_TARGETS} targets and ${LIDAR_SAMPLE_MAX_POINTS} points`
+  }
+  if (sampleDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, sampleDelayMs))
+  return request.targets.map((target): LidarSampleSeries => {
+    const item = lidarItems.find((candidate) => candidate.id === target.entity_id && candidate.role === target.kind)
+    if (!item?.generation_id || !item.bounds) return { Unavailable: { reason: 'MissingGeneration' } }
+    if (item.generation_id !== target.expected_generation_id) return { Unavailable: { reason: 'StaleGeneration' } }
+    return { Values: { values: request.points.map(([lon, lat]) => analyticValue(item, lon, lat)) } }
+  })
+}
+
+function analyticValue(item: LibraryItemSummary, lon: number, lat: number): number | null {
+  const [west, south, east, north] = item.bounds!
+  if (lon < west || lon > east || lat < south || lat > north) return null
+  const x = (lon - west) * 111_320 * Math.cos((lat * Math.PI) / 180)
+  const y = (lat - south) * 110_540
+  const phase = x / 25 + y / 40
+  const elevation = 140 + 30 * Math.sin(phase)
+  switch (item.item_type.quantity) {
+    case 'SurfaceElevation': return elevation + 6
+    case 'AboveGroundHeight': return 6 + 4 * Math.sin(x / 7)
+    case 'Slope': {
+      const gradient = 30 * Math.abs(Math.cos(phase)) * Math.hypot(1 / 25, 1 / 40)
+      return item.units === '%' ? gradient * 100 : (Math.atan(gradient) * 180) / Math.PI
+    }
+    default: return elevation
+  }
+}
+
 export function convertFileSrc(path: string) { return path }
 export async function invoke<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
   const canonicalName = String(args.canonicalName ?? '')
@@ -389,11 +465,16 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
       }
       break
     case 'lidar_display_descriptor': {
-      // The gallery serves no managed derivatives, so previews stay placeholders.
-      const request = args.request as { kind: string; entity_id: string; generation_id: string | null }
-      result = { kind: request.kind, entity_id: request.entity_id, generation_id: request.generation_id, profile: 'gallery', state: 'Unavailable', message: null, assets: [] }
+      const request = args.request as { kind: string; entity_id: string; expected_generation_id: string | null }
+      const descriptor = { kind: request.kind, entity_id: request.entity_id, generation_id: request.expected_generation_id, profile: 'gallery', message: null }
+      // `state=lidar-raster` serves the Rust engine's display COG for the ground elevation; every other derivative stays a
+      // placeholder.
+      result = state === 'lidar-raster' && request.entity_id === 'lidar-ground'
+        ? { ...descriptor, state: 'Ready', assets: [{ path: rasterDisplayCogUrl, bounds: galleryRasterSite.bounds }], prepared_assets: 1, total_assets: 1 }
+        : { ...descriptor, state: 'Unavailable', assets: [], prepared_assets: 0, total_assets: 0 }
       break
     }
+    case 'lidar_sample_points': result = await sampleGalleryPoints(args.request as LidarSamplePointsRequest); break
     default: throw new Error(`Gallery backend has no fixture for ${command}.`)
   }
   return structuredClone(result) as T

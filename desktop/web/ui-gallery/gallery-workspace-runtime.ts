@@ -11,6 +11,13 @@ import {
   type WorkspaceRuntimeMountOptions,
 } from '../src/app/canvas-map-surface/workspace-runtime-composition'
 import { mapLayers, type MapLayersState } from '../src/app/map-layers/state'
+import {
+  readWorkspaceMapContributions,
+  type WorkspaceMapContributionAdapter,
+} from '../src/app/canvas-map-surface/workspace-map-contribution-adapter'
+import { installLidarDisplayDescriptors, lidarDisplayDescriptors, lidarDisplayLayers } from '../src/app/lidar/display'
+import { installLidarLibraryObserver, readCurrentLidarPresentation } from '../src/app/lidar/library-store'
+import { createRasterDisplay } from '../src/maplibre/raster-display/adapter'
 import { savedObjectStampWorkbench } from '../src/app/saved-object-stamps'
 import type { CanopiFile } from '../src/types/design'
 import { createBrowserWorkspaceMapContributionAdapter } from '../src/web/browser-workspace-map-contribution-adapter'
@@ -24,7 +31,9 @@ export interface GalleryWorkspaceRuntimeOptions extends WorkspaceRuntimeMountOpt
  * The production shared workspace (MapLibre and its Pixi scene layer) with memory
  * presentation data. The gallery must run offline and render the same pixels
  * on every load, so the background band stays hidden and the map shows only
- * its local empty style; LiDAR and terrain contributions are empty.
+ * its local empty style; terrain is off and LiDAR is empty, except in
+ * `state=lidar-raster`, where Desktop's raster renderer draws the Design's
+ * Site data from the Rust engine's display COG (architecture review finding 15).
  */
 export function createGalleryWorkspaceRuntimeComposition(
   options: GalleryWorkspaceRuntimeOptions,
@@ -37,7 +46,9 @@ export function createGalleryWorkspaceRuntimeComposition(
     ...mount,
     appAdapter: createGalleryCanvasRuntimeAppAdapter(design),
     targetPresentation: createAppSceneRuntimePanelTargetAdapter(),
-    mapContributions: createBrowserWorkspaceMapContributionAdapter(store),
+    mapContributions: new URLSearchParams(location.search).get('state') === 'lidar-raster'
+      ? createGalleryRasterContributionAdapter(store)
+      : createBrowserWorkspaceMapContributionAdapter(store),
     readSnapshot: (readInitialCenter) => readWorkspaceActivationSnapshot({
       store,
       readInitialCenter,
@@ -46,6 +57,31 @@ export function createGalleryWorkspaceRuntimeComposition(
     readBackgroundPresentation: () => readWorkspaceBackgroundPresentation({ readMapLayers: readOfflineMapLayers }),
   })
 }
+
+/**
+ * Desktop's raster seam over the memory backend: the Design's Site data as the app joins it, the descriptors the backend
+ * serves (one Ready display COG) and the upstream renderer, so a display change (Reverse, a range) repaints real pixels.
+ */
+function createGalleryRasterContributionAdapter(
+  store: Parameters<typeof readWorkspaceMapContributions>[1],
+): WorkspaceMapContributionAdapter {
+  installLidarLibraryObserver()
+  installLidarDisplayDescriptors()
+  return {
+    createRasterDisplay: (map, options) => createRasterDisplay(map, options),
+    read: (runtime) => readWorkspaceMapContributions(runtime, store, () => ({
+      // The memory backend's asset paths are already URLs the gallery server serves by range.
+      lidar: lidarDisplayLayers(readCurrentLidarPresentation(), lidarDisplayDescriptors.value, null, (path) => path),
+      terrain: OFFLINE_TERRAIN,
+      site: null,
+    })),
+  }
+}
+
+const OFFLINE_TERRAIN = Object.freeze({
+  contoursVisible: false, contoursOpacity: 0, contourIntervalMeters: 1,
+  hillshadeVisible: false, hillshadeOpacity: 0, isDark: false,
+})
 
 function readOfflineMapLayers(): MapLayersState {
   const layers = mapLayers.value
