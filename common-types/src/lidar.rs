@@ -209,10 +209,18 @@ pub enum LidarSampleOutcome {
     },
 }
 
+/// The most targets one `lidar_sample_points` request may carry; the
+/// frontend splits longer lists into batches of this size.
+pub const LIDAR_SAMPLE_MAX_TARGETS: usize = 8;
+/// The most points one `lidar_sample_points` request may carry: a profile
+/// samples at most this many points along its line.
+pub const LIDAR_SAMPLE_MAX_POINTS: usize = 4096;
+
 // One sampler for the Site data row values, the pin and the profile: the
 // native cell under each WGS84 point (no interpolation) of each target, read
-// through the one CRS authority. A request carries at most 8 targets and
-// 4,096 points and is refused before any work beyond either.
+// through the one CRS authority. A request carries at most
+// `LIDAR_SAMPLE_MAX_TARGETS` targets and `LIDAR_SAMPLE_MAX_POINTS` points and
+// is refused before any work beyond either.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 pub struct LidarSamplePointsRequest {
     pub targets: Vec<LidarSampleTarget>,

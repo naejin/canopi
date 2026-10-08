@@ -1316,3 +1316,6 @@ export type Zone = {
 	fill_color: string | null,
 	notes: string | null,
 };
+
+export const LIDAR_SAMPLE_MAX_TARGETS = 8
+export const LIDAR_SAMPLE_MAX_POINTS = 4096

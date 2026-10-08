@@ -136,5 +136,28 @@ pub(crate) fn render_typescript_contracts() -> Result<String, Box<dyn std::error
         .collect::<Vec<_>>()
         .join("\n");
     normalized.push('\n');
+    // The sampler's caps: Rust refuses a request beyond either, so the
+    // frontend batches by the same numbers.
+    normalized.push_str(&format!(
+        "\nexport const LIDAR_SAMPLE_MAX_TARGETS = {}\nexport const LIDAR_SAMPLE_MAX_POINTS = {}\n",
+        common_types::lidar::LIDAR_SAMPLE_MAX_TARGETS,
+        common_types::lidar::LIDAR_SAMPLE_MAX_POINTS,
+    ));
     Ok(normalized)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_sample_caps_reach_typescript_from_rust() {
+        let rendered = super::render_typescript_contracts().expect("contracts render");
+        assert!(rendered.contains(&format!(
+            "export const LIDAR_SAMPLE_MAX_TARGETS = {}\n",
+            common_types::lidar::LIDAR_SAMPLE_MAX_TARGETS
+        )));
+        assert!(rendered.contains(&format!(
+            "export const LIDAR_SAMPLE_MAX_POINTS = {}\n",
+            common_types::lidar::LIDAR_SAMPLE_MAX_POINTS
+        )));
+    }
 }
