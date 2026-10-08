@@ -72,18 +72,38 @@ describe('Cut outliers ranges', () => {
     expect(high).toBeLessThan(200)
   })
 
-  it('keeps the data range for an asset with no valid pixel or a failed read, and does not ask again', async () => {
+  it('keeps the data range for an asset with no valid pixel, and does not ask again', async () => {
     requestCutOutlierRange('Source/e/g1', ['empty.tif'])
     answers.get('empty.tif')!(null)
     await settle()
     expect(cutOutlierRange('Source/e/g1')).toBeNull()
     requestCutOutlierRange('Source/e/g1', ['empty.tif'])
     expect(asked).toEqual(['empty.tif'])
-    requestCutOutlierRange('Source/f/g1', ['failing.tif'])
-    answers.get('failing.tif')!(undefined as never)
+    expect(clients).toBe(0)
+  })
+
+  it('reads a mosaic asset whose read failed again, keeping the assets that answered', async () => {
+    requestCutOutlierRange('Source/m/g1', ['west.tif', 'east.tif'])
+    answers.get('west.tif')!(stats(0, 100, 2, 98))
+    answers.get('east.tif')!(undefined as never)
+    await vi.waitFor(() => expect(asked).toEqual(['west.tif', 'east.tif', 'east.tif']))
+    answers.get('east.tif')!(stats(100, 200, 102, 198))
+    await vi.waitFor(() => expect(cutOutlierRange('Source/m/g1')).not.toBeNull())
+    expect(clients).toBe(0)
+  })
+
+  it('after three failed reads keeps the data range, and a later request reads again', async () => {
+    requestCutOutlierRange('Source/f/g1', ['west.tif', 'failing.tif'])
+    answers.get('west.tif')!(stats(0, 100, 2, 98))
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      await vi.waitFor(() => expect(asked.filter((url) => url === 'failing.tif')).toHaveLength(attempt))
+      answers.get('failing.tif')!(undefined as never)
+    }
     await settle()
     expect(cutOutlierRange('Source/f/g1')).toBeNull()
     expect(clients).toBe(0)
+    requestCutOutlierRange('Source/f/g1', ['west.tif', 'failing.tif'])
+    expect(asked.filter((url) => url === 'failing.tif')).toHaveLength(4)
   })
 
   it('drops an answer that lands after a reset', async () => {
