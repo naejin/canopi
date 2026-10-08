@@ -6,6 +6,7 @@ import {
   referenceDrawOrder,
   referenceRows,
   siblingMoveOrders,
+  siblingNeighbour,
   treeRows,
 } from '../app/lidar/reference-tree'
 
@@ -130,5 +131,43 @@ describe('moving a row to a sibling\'s place (drag and Alt arrows)', () => {
     expect(siblingMoveOrders(nodes, 'r', 'b')).toBeNull()
     expect(siblingMoveOrders(nodes, 'b', 'b')).toBeNull()
     expect(siblingMoveOrders(nodes, 'b', 'gone')).toBeNull()
+  })
+})
+
+describe('an analysis run\'s outputs move as one block among their siblings (finding 1)', () => {
+  const output = (id: string, order: number, definitionId: string) => ({ id, order, parentId: 'mnt', definitionId })
+  // Under the MNT: two outputs of one water-flow run (streams 3, wetness 1) and a slope (2).
+  const nodes = [
+    { id: 'mnt', order: 0, parentId: null, definitionId: null },
+    output('streams', 3, 'flow'),
+    output('wetness', 1, 'flow'),
+    { id: 'slope', order: 2, parentId: 'mnt', definitionId: 'slope-run' },
+  ]
+  const listed = (orders: Map<string, number>) =>
+    referenceRows(nodes.map((n) => ({ ...n, order: orders.get(n.id)! }))).map((row) => row.id)
+
+  it('lists a run\'s outputs together, ranked by its front member, members in their own order', () => {
+    expect(referenceRows(nodes).map((row) => row.id)).toEqual(['mnt', 'streams', 'wetness', 'slope'])
+    expect(referenceDrawOrder(nodes).map((row) => row.id)).toEqual(['mnt', 'slope', 'wetness', 'streams'])
+  })
+
+  it('moves a row that is not in the run past the whole run, whichever member it is dropped on', () => {
+    expect(listed(siblingMoveOrders(nodes, 'slope', 'wetness')!)).toEqual(['mnt', 'slope', 'streams', 'wetness'])
+    expect(listed(siblingMoveOrders(nodes, 'slope', 'streams')!)).toEqual(['mnt', 'slope', 'streams', 'wetness'])
+  })
+
+  it('moves a member only inside its run', () => {
+    expect(listed(siblingMoveOrders(nodes, 'wetness', 'streams')!)).toEqual(['mnt', 'wetness', 'streams', 'slope'])
+    expect(siblingMoveOrders(nodes, 'streams', 'slope')).toBeNull()
+  })
+
+  it('names the neighbour Alt ↑ and Alt ↓ move to: a whole run for a row outside it, a member inside it', () => {
+    expect(siblingNeighbour(nodes, 'slope', 'front')).toBe('wetness')
+    expect(siblingNeighbour(nodes, 'slope', 'back')).toBeNull()
+    expect(siblingNeighbour(nodes, 'streams', 'front')).toBeNull()
+    expect(siblingNeighbour(nodes, 'streams', 'back')).toBe('wetness')
+    expect(siblingNeighbour(nodes, 'wetness', 'back')).toBeNull()
+    expect(siblingNeighbour(nodes, 'mnt', 'front')).toBeNull()
+    expect(siblingNeighbour(nodes, 'gone', 'front')).toBeNull()
   })
 })
