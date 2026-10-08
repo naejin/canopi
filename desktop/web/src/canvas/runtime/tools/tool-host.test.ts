@@ -2375,6 +2375,34 @@ describe('ToolHost', () => {
       view.dispose()
     })
 
+    it('a right-click inside a selected zone\'s fill opens its menu when an unselected zone overlaps it, above or below (Q4)', () => {
+      const bed = rectZone('z1', [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }])
+      const inner = rectZone('z2', [{ x: 20, y: 20 }, { x: 40, y: 20 }, { x: 40, y: 40 }, { x: 20, y: 40 }])
+      const Z2: SceneDesignObjectTarget = { kind: 'zone', id: 'z2' }
+      for (const [zones, selected] of [[[bed, inner], Z1], [[inner, bed], Z2]] as const) {
+        const store = sceneStoreWith({ zones: [...zones] })
+        const source = createToolSceneSource(store)
+        const opened: CanvasContextMenuRequest[] = []
+        const view = createTestView()
+        const port = createContextMenuPort({
+          container: document.createElement('div'),
+          view: view.view,
+          adapter: { open: (request) => opened.push(request), close: () => {} },
+          commands: {} as never,
+          returnFocus: () => {},
+          scene: createToolScene(source),
+          selectionModel: source.selectionModel,
+        })
+        store.updateSession((session) => { session.selectedTargets = [selected] })
+
+        // Inside both fills: the selected zone's menu, whichever zone is drawn on top.
+        port.open({ at: { x: 30, y: 30 }, screen: null })
+        expect(opened.at(-1)!.selection?.editableTargets).toEqual([selected])
+        port.close()
+        view.dispose()
+      }
+    })
+
     it('a right-click inside a selected zone keeps it selected; a plant inside it takes the selection', () => {
       useStubTools(stubTool('select'))
       const h = harness({ scene: {

@@ -70,10 +70,11 @@ export interface HitFilter {
   /** hitAt: answers only the nearest zone edge within this many CSS px ("Turn view to this edge", spec §4.16), converted at
    *  the frame's pixelsPerMetre. hitAt only: a band has no tolerance. */
   readonly toleranceScreenPx?: number
-  /** hitAt: when nothing else hits, the topmost zone whose fill holds the point (or its group). Read by Select (spec §3.2)
-   *  and by the menu target, which takes a fill hit only when that zone is already selected, so an unselected zone's fill
-   *  gives the empty map's menu (Q4); the other hitAt callers (stamp pick, hover) keep outline hits. */
-  readonly fill?: true
+  /** hitAt: when nothing else hits, the topmost zone whose fill holds the point (or its group). Read by Select (spec §3.2).
+   *  `'selected'`: the topmost selected one, past unselected fills drawn above it; the menu target reads it, so a selected
+   *  zone's fill opens its menu even under an overlapping zone and an unselected zone's fill gives the empty map's menu
+   *  (Q4). The other hitAt callers (stamp pick, hover) keep outline hits. */
+  readonly fill?: true | 'selected'
 }
 /** The selection read model: today's CanvasDesignObjectSelectionModel (canvas/runtime/runtime.ts:48), unchanged. */
 export type SelectionReadModel = CanvasDesignObjectSelectionModel
