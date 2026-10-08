@@ -10,7 +10,7 @@ import type {
 // the generated type surface).
 const LIDAR_PRESENTATION_SCHEMA_VERSION = 1
 
-import { editCurrentDesign } from './core'
+import { editCurrentDesign, readCurrentDesign, reconcileCurrentDesign } from './core'
 
 function emptySection(): LidarPresentationSection {
   return { schema_version: LIDAR_PRESENTATION_SCHEMA_VERSION, visible: true, entries: [] }
@@ -199,5 +199,33 @@ export function setLidarEntryOrders(orders: ReadonlyMap<string, number>): void {
       return design
     }
     return { ...design, lidar: { ...section, entries: nextEntries } }
+  })
+}
+
+/**
+ * Refresh stored entry names from the library's names, keyed by item id. A
+ * library rename is not a Design Edit: like the consortium sync this
+ * reconciles the open Design without dirtying it, and the next save writes
+ * the new name. Names already current (and empty library names) leave the
+ * Design untouched, so the effect calling it settles after one pass.
+ */
+export function reconcileLidarEntryNames(names: ReadonlyMap<string, string>): void {
+  const renamed = (entry: LidarPresentationEntry): string | null => {
+    const name = names.get(entry.id)
+    return name !== undefined && name.trim() !== '' && name !== entry.name ? name : null
+  }
+  if (!readCurrentDesign()?.lidar?.entries.some((entry) => renamed(entry) !== null)) {
+    return
+  }
+  reconcileCurrentDesign((design) => {
+    const section = design.lidar
+    if (!section) {
+      return design
+    }
+    const entries = section.entries.map((entry) => {
+      const name = renamed(entry)
+      return name === null ? entry : { ...entry, name }
+    })
+    return { ...design, lidar: { ...section, entries } }
   })
 }

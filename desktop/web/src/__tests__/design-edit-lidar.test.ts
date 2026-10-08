@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   upsertLidarEntry,
   patchLidarEntryById,
+  reconcileLidarEntryNames,
   removeLidarEntries,
   setLidarEntryOrders,
   setSiteDataVisible,
@@ -175,5 +176,27 @@ describe('LiDAR presentation entries through the Design Edit seam', () => {
     const hidden = currentDesign.value
     setSiteDataVisible(false)
     expect(currentDesign.value).toBe(hidden)
+  })
+
+  it('refreshes stored names from the library without dirtying the Design, once', () => {
+    replaceCurrentDesignState(design('Names'), null, 'Names')
+    upsertLidarEntry('Source', 'lyr-n', 'Old name')
+    upsertLidarEntry('Derived', 'slope-n', 'Slope')
+    designSessionFixture.nonCanvasSavedRevision = nonCanvasRevision.value
+    expect(designSessionStore.designDirty.value).toBe(false)
+
+    // Names the library lists; an id the Design does not present is ignored.
+    const names = new Map([['lyr-n', 'Renamed'], ['slope-n', 'Slope'], ['absent', 'Absent']])
+    reconcileLidarEntryNames(names)
+    const renamed = currentDesign.value
+    expect(readLidarEntries(renamed as CanopiFile).map((entry) => entry.name)).toEqual(['Renamed', 'Slope'])
+    expect(designSessionStore.designDirty.value).toBe(false)
+
+    // The effect that calls it runs again on the new Design: nothing left to do.
+    reconcileLidarEntryNames(names)
+    expect(currentDesign.value).toBe(renamed)
+    // An empty library name never replaces a stored one.
+    reconcileLidarEntryNames(new Map([['lyr-n', '  ']]))
+    expect(currentDesign.value).toBe(renamed)
   })
 })
