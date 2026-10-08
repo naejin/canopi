@@ -72,7 +72,8 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
   const references = currentDesign.value?.lidar?.entries ?? []
   const [requestedId, setRequestedId] = useState<string | null>(focusId)
   const [pane, setPane] = useState<Pane>(focusId ? 'details' : 'list')
-  const [mode, setMode] = useState<DetailMode>('details')
+  // Rename or Delete everywhere belongs to the item it opened for: a search or filter that moves the selection closes it.
+  const [modeFor, setModeFor] = useState<{ readonly mode: DetailMode; readonly itemId: string | null }>({ mode: 'details', itemId: null })
   const [query, setQuery] = useState('')
   const [type, setType] = useState<LibraryTypeFilter>('all')
   const [error, setError] = useState<string | null>(null)
@@ -92,9 +93,12 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
   const visible = filterLibraryItems(items, query, type)
   const selectedId = selectionAfter(listed.current, visible, requestedId)
   const item = visible.find((row) => row.id === selectedId) ?? null
+  const mode: DetailMode = modeFor.itemId === selectedId ? modeFor.mode : 'details'
+  const setMode = (next: DetailMode) => setModeFor({ mode: next, itemId: selectedId })
   useLayoutEffect(() => {
     listed.current = visible
     if (selectedId !== requestedId) setRequestedId(selectedId)
+    if (modeFor.mode !== 'details' && modeFor.itemId !== selectedId) setModeFor({ mode: 'details', itemId: null })
     if (focusSelection.current && selectedId) {
       focusSelection.current = false
       document.getElementById(rowId(selectedId))?.focus()
@@ -113,7 +117,7 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
 
   const select = (id: string, show: boolean) => {
     setRequestedId(id)
-    setMode('details')
+    setModeFor({ mode: 'details', itemId: null })
     setError(null)
     if (show) setPane('details')
   }

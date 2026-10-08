@@ -350,6 +350,28 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(actions.deleteLibraryItem).not.toHaveBeenCalled()
     })
 
+    it('closes Rename and Delete everywhere when a search moves the selection to another item', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Hedge DSM')])
+      actions.fetchDeleteImpact.mockResolvedValue({ dependent_item_ids: [] })
+      mount()
+      await selectRow('Ground')
+      await click(button(/^Rename…$/))
+      await type(container.querySelector<HTMLInputElement>('section[aria-labelledby] form input')!, 'Bare earth')
+      const search = container.querySelector<HTMLInputElement>('input[type="search"]')!
+      await type(search, 'hedge')
+      expect(detailsHeading()).toBe('Hedge DSM')
+      expect(container.querySelector('section[aria-labelledby] form')).toBeNull()
+
+      await type(search, '')
+      await selectRow('Ground')
+      await click(button(/^Delete everywhere$/))
+      await type(search, 'hedge')
+      expect(container.querySelector('#library-delete-title')).toBeNull()
+      await type(search, '')
+      expect(detailsHeading()).toBe('Hedge DSM')
+      expect(container.querySelector('#library-delete-title')).toBeNull()
+    })
+
     it('names an input that left the library Deleted item', () => {
       lidarLibrary.value = library([], [slope('s', 'gone', { name: 'Orphan' })])
       mount()
