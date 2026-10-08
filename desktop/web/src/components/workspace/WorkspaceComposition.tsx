@@ -1,7 +1,6 @@
 import type { ComponentType } from 'preact'
 import { Suspense } from 'preact/compat'
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'preact/hooks'
-import { currentDesign } from '../../app/document-session/store'
+import { useEffect, useMemo, useRef } from 'preact/hooks'
 import { usePlanningViewState } from '../../app/planning-view/state'
 import { phoneLayout } from '../../app/shell/phone-layout'
 import { siteLocateOpen } from '../../app/site-onboarding/state'
@@ -71,15 +70,9 @@ export function WorkspaceComposition({
   const locating = siteLocateOpen.value
   // A presented story fills the window; the dock comes back when it ends.
   const presenting = storyPresentationActive.value
-  // Close Design closes every side panel but the Catalog, in the render where the Design goes (Q5). Panels that run
-  // from the start screen (the Catalog, the Design Notebook, Web Favorites) still open without a Design.
-  const hasDesign = currentDesign.value !== null
-  const hadDesign = useRef(hasDesign)
-  const closing = hadDesign.current && !hasDesign && requestedSide !== null && requestedSide !== 'plant-db'
   const mountedSide = primary === 'canvas'
     && !locating
     && !presenting
-    && !closing
     && requestedSide
     && registrations.side.has(requestedSide)
       ? requestedSide
@@ -98,11 +91,6 @@ export function WorkspaceComposition({
       </Suspense>
     </div>
   ) : null
-
-  useLayoutEffect(() => {
-    hadDesign.current = hasDesign
-    if (closing) sidePanel.value = null
-  }, [hasDesign, closing])
 
   useEffect(() => {
     if (

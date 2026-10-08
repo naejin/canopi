@@ -1,4 +1,5 @@
-import { signal, batch } from "@preact/signals";
+import { signal, batch, effect } from "@preact/signals";
+import { currentDesign } from "../document-session/store";
 import { DEFAULT_SETTINGS } from "../../generated/settings";
 
 export type Panel = "plant-db" | "canvas" | "favorites" | "templates" | "design-notebook" | "species-key" | "layers" | "calendar" | "budget" | "consortium" | "stories";
@@ -18,6 +19,12 @@ export const activePanel = signal<Panel>("canvas");
 // Starts closed — the user opens the Species Catalog Workbench when they need it
 // (by then IPC is ready).
 export const sidePanel = signal<SidePanel | null>(null);
+
+// Close Design closes every side panel but the Catalog before the next render (Q5). Only the Design is tracked, so
+// panels that run from the start screen (the Catalog, the Design Notebook, Web Favorites) still open without one.
+effect(() => {
+  if (currentDesign.value === null && sidePanel.peek() !== "plant-db") sidePanel.value = null;
+});
 
 // Sidebar width in pixels. null = no explicit user resize, so the shell uses
 // the responsive first-use default.
