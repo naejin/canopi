@@ -168,7 +168,8 @@
       "placePlantsHere": "Разместить растения здесь",
       "turnViewToEdge": "Повернуть вид по этому краю",
       "finishShape": "Завершить фигуру",
-      "renameZone": "Переименовать зону…"
+      "renameZone": "Переименовать зону…",
+      "profileLine": "Профиль этой линии"
     },
     "rotationHandle": {
       "label": "Повернуть"
@@ -299,7 +300,18 @@
       "background": "Фон",
       "backgroundMap": "Карта",
       "backgroundNone": "Нет",
-      "backgroundPlainPaper": "Чистый лист"
+      "backgroundPlainPaper": "Чистый лист",
+      "map": "Карта",
+      "openSiteData": "Открыть данные участка",
+      "siteDataShown_one": "Показано: {{shown, number}} из {{count, number}}",
+      "siteDataShown_few": "Показано: {{shown, number}} из {{count, number}}",
+      "siteDataShown_many": "Показано: {{shown, number}} из {{count, number}}",
+      "siteDataShown_other": "Показано: {{shown, number}} из {{count, number}}",
+      "siteDataNone": "Пока нет",
+      "siteDataWeb_one": "{{count, number}} слой рельефа или высоты в этом проекте · Нужен Canopi Desktop",
+      "siteDataWeb_few": "{{count, number}} слоя рельефа или высоты в этом проекте · Нужен Canopi Desktop",
+      "siteDataWeb_many": "{{count, number}} слоёв рельефа или высоты в этом проекте · Нужен Canopi Desktop",
+      "siteDataWeb_other": "{{count, number}} слоя рельефа или высоты в этом проекте · Нужен Canopi Desktop"
     },
     "timeline": {
       "actionType": "Тип действия",
@@ -597,7 +609,12 @@
         "renameEllipsis": "Переименовать…",
         "recovered": "Canopi восстановил Библиотеку данных из файлов, которые он хранит. Элементы с отметкой об ошибке можно подготовить заново кнопкой «Повторить».",
         "refusedNewer": "Библиотека данных сохранена более новой версией Canopi. Установите последнюю версию Canopi, чтобы использовать её; эта версия не будет её изменять.",
-        "unavailable": "Не удалось открыть Библиотеку данных. Импорт и изменения отключены до перезапуска Canopi."
+        "unavailable": "Не удалось открыть Библиотеку данных. Импорт и изменения отключены до перезапуска Canopi.",
+        "sortLabel": "Сортировка",
+        "sortRecent": "Недавно добавленные",
+        "factAdded": "Добавлено",
+        "deletedItem": "Удалённый элемент",
+        "importNeedsDesign": "Откройте проект, чтобы импортировать данные"
       },
       "layers": {
         "addData": "Добавить данные",
@@ -1124,7 +1141,7 @@
     "view.labelsNames": "Названия",
     "view.cycleLabels": "Подписи: нет, коды, названия",
     "edit.rotate": "Повернуть…",
-    "file.addData": "Добавить данные…",
+    "file.addData": "Импорт данных рельефа или высоты…",
     "file.exportBudgetCsv": "Бюджет в CSV…",
     "file.close": "Закрыть проект",
     "help.gettingStarted": "Начало работы",
@@ -1638,7 +1655,8 @@
       "GridNotProjectedMetres": "Требуется проецированная сетка в метрах на местности, а не Web Mercator или долгота и широта.",
       "EngineMissing": "Недоступно: отсутствует движок GeoLibre.",
       "NeedsDesktop": "Требуется Canopi Desktop.",
-      "AlreadyInLayers": "Уже в слоях."
+      "AlreadyInLayers": "Уже в слоях.",
+      "AlreadyInSiteData": "Уже в данных участка."
     },
     "stale": {
       "InputUpdated": "{{input}} изменился после этого расчёта.",
@@ -1667,7 +1685,10 @@
         "noOutputs": "Выберите хотя бы один результат."
       },
       "introLayers": "Из {{name}}. Результаты добавляются под ним в слоях и сохраняются в вашей библиотеке.",
-      "introLibrary": "Из {{name}}. Результаты сохраняются в вашей библиотеке; добавьте их в любой проект."
+      "introLibrary": "Из {{name}}. Результаты сохраняются в вашей библиотеке; добавьте их в любой проект.",
+      "source": "Источник",
+      "intro": "Результаты добавляются под источником в данных участка и сохраняются в вашей библиотеке.",
+      "showInSiteData": "Показать в данных участка"
     },
     "details": {
       "analysis": "Анализ",
@@ -2009,5 +2030,63 @@
     "speciesPlants_few": "{{name}} · {{count, number}} растения",
     "speciesPlants_many": "{{name}} · {{count, number}} растений",
     "speciesPlants_other": "{{name}} · {{count, number}} растения"
+  },
+  "siteData": {
+    "unpin": "Открепить",
+    "hint": "Наведите на карту, чтобы прочитать значения · щёлкните, чтобы закрепить",
+    "hintTouch": "Коснитесь карты, чтобы закрепить точку",
+    "analyzeNeedsData": "Сначала добавьте данные рельефа или высоты",
+    "profile": "Профиль",
+    "profileNeedsLayer": "Покажите слой рельефа или высоты, чтобы построить профиль",
+    "hiddenFromMap": "Данные участка скрыты на карте",
+    "show": "Показать",
+    "filterLabel": "Фильтр данных участка",
+    "filterPlaceholder": "Фильтр по названию",
+    "reorder": "Изменить порядок: {{name}}",
+    "expand": "Развернуть {{name}}",
+    "collapse": "Свернуть {{name}}",
+    "missing": "Отсутствует",
+    "noData": "Нет данных",
+    "missingReason": {
+      "not-in-library": "Нет в Библиотеке данных на этом компьютере",
+      "needs-newer-canopi": "Библиотеке данных нужна более новая версия Canopi",
+      "library-unopened": "Не удалось открыть Библиотеку данных. Перезапустите Canopi."
+    },
+    "display": {
+      "colors": "Цвета",
+      "ramp": {
+        "Terrain": "Рельеф",
+        "Earth": "Земля",
+        "Gray": "Серый",
+        "Greens": "Зелёные",
+        "Magma": "Магма",
+        "YellowRed": "Жёлто-красный"
+      },
+      "reverse": "Обратить",
+      "range": "Диапазон",
+      "dataRange": "Диапазон данных",
+      "cutOutliers": "Отсечь выбросы",
+      "cutOutliersHint": "Не учитывает 2 % самых низких и самых высоких значений",
+      "custom": "Свой",
+      "minimum": "Минимум",
+      "maximum": "Максимум",
+      "reset": "Сбросить"
+    },
+    "chart": {
+      "copyValues": "Копировать значения",
+      "close": "Закрыть профиль",
+      "at": "На {{distance}}",
+      "rise": "Перепад {{value}}",
+      "steepest": "Наибольший уклон {{percent}} на 2 м",
+      "highest": "Наибольшая {{value}}",
+      "reading": "Чтение значений…",
+      "noValues": "Нет значений вдоль этой линии",
+      "needsLayer": "Покажите слой рельефа или высоты, чтобы увидеть его профиль",
+      "distance": "Расстояние (м)",
+      "longitude": "Долгота",
+      "latitude": "Широта",
+      "copied": "Скопировано",
+      "copyFailed": "Не удалось скопировать значения"
+    }
   }
 }

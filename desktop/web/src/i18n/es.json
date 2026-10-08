@@ -168,7 +168,8 @@
       "placePlantsHere": "Colocar plantas aquí",
       "turnViewToEdge": "Girar la vista a este borde",
       "finishShape": "Terminar la forma",
-      "renameZone": "Renombrar zona…"
+      "renameZone": "Renombrar zona…",
+      "profileLine": "Perfil de esta línea"
     },
     "rotationHandle": {
       "label": "Girar"
@@ -299,7 +300,18 @@
       "background": "Fondo",
       "backgroundMap": "Mapa",
       "backgroundNone": "Ninguno",
-      "backgroundPlainPaper": "Papel liso"
+      "backgroundPlainPaper": "Papel liso",
+      "map": "Mapa",
+      "openSiteData": "Abrir Datos del lugar",
+      "siteDataShown_one": "{{shown, number}} de {{count, number}} visible",
+      "siteDataShown_few": "{{shown, number}} de {{count, number}} visibles",
+      "siteDataShown_many": "{{shown, number}} de {{count, number}} visibles",
+      "siteDataShown_other": "{{shown, number}} de {{count, number}} visibles",
+      "siteDataNone": "Nada todavía",
+      "siteDataWeb_one": "{{count, number}} capa de terreno o altura en este diseño · Necesita Canopi Desktop",
+      "siteDataWeb_few": "{{count, number}} capas de terreno o altura en este diseño · Necesita Canopi Desktop",
+      "siteDataWeb_many": "{{count, number}} capas de terreno o altura en este diseño · Necesita Canopi Desktop",
+      "siteDataWeb_other": "{{count, number}} capas de terreno o altura en este diseño · Necesita Canopi Desktop"
     },
     "timeline": {
       "actionType": "Tipo de acción",
@@ -597,7 +609,12 @@
         "renameEllipsis": "Renombrar…",
         "recovered": "Canopi reconstruyó su Biblioteca de datos a partir de los archivos que conserva. Los elementos marcados como fallidos se pueden preparar de nuevo con Reintentar.",
         "refusedNewer": "La Biblioteca de datos fue guardada por una versión más reciente de Canopi. Instala la última versión de Canopi para usarla; esta versión no la modificará.",
-        "unavailable": "No se pudo abrir la Biblioteca de datos. Las importaciones y los cambios están desactivados hasta que Canopi se reinicie."
+        "unavailable": "No se pudo abrir la Biblioteca de datos. Las importaciones y los cambios están desactivados hasta que Canopi se reinicie.",
+        "sortLabel": "Ordenar",
+        "sortRecent": "Añadidos recientemente",
+        "factAdded": "Añadido",
+        "deletedItem": "Elemento eliminado",
+        "importNeedsDesign": "Abre un diseño para importar datos"
       },
       "layers": {
         "addData": "Añadir datos",
@@ -1124,7 +1141,7 @@
     "view.labelsNames": "Nombres",
     "view.cycleLabels": "Etiquetas: ninguna, códigos, nombres",
     "edit.rotate": "Girar…",
-    "file.addData": "Añadir datos…",
+    "file.addData": "Importar datos de terreno o altura…",
     "file.exportBudgetCsv": "Presupuesto en CSV…",
     "file.close": "Cerrar diseño",
     "help.gettingStarted": "Primeros pasos",
@@ -1638,7 +1655,8 @@
       "GridNotProjectedMetres": "Necesita una cuadrícula proyectada en metros sobre el terreno, no Web Mercator ni longitud y latitud.",
       "EngineMissing": "No disponible: falta el motor GeoLibre.",
       "NeedsDesktop": "Necesita Canopi Desktop.",
-      "AlreadyInLayers": "Ya está en Capas."
+      "AlreadyInLayers": "Ya está en Capas.",
+      "AlreadyInSiteData": "Ya está en Datos del lugar."
     },
     "stale": {
       "InputUpdated": "{{input}} ha cambiado desde este cálculo.",
@@ -1667,7 +1685,10 @@
         "noOutputs": "Elige al menos un resultado."
       },
       "introLayers": "De {{name}}. Los resultados se añaden debajo en Capas y se guardan en tu biblioteca.",
-      "introLibrary": "De {{name}}. Los resultados se guardan en tu biblioteca; añádelos a cualquier diseño."
+      "introLibrary": "De {{name}}. Los resultados se guardan en tu biblioteca; añádelos a cualquier diseño.",
+      "source": "Origen",
+      "intro": "Los resultados se añaden bajo su origen en Datos del lugar y se guardan en tu biblioteca.",
+      "showInSiteData": "Mostrar en Datos del lugar"
     },
     "details": {
       "analysis": "Análisis",
@@ -2009,5 +2030,63 @@
     "speciesPlants_few": "{{name}} · {{count, number}} plantas",
     "speciesPlants_many": "{{name}} · {{count, number}} plantas",
     "speciesPlants_other": "{{name}} · {{count, number}} plantas"
+  },
+  "siteData": {
+    "unpin": "Desfijar",
+    "hint": "Señala el mapa para leer valores · haz clic para fijar",
+    "hintTouch": "Toca el mapa para fijar un punto",
+    "analyzeNeedsData": "Primero añade datos de terreno o altura",
+    "profile": "Perfil",
+    "profileNeedsLayer": "Muestra una capa de elevación o altura para trazar un perfil",
+    "hiddenFromMap": "Los Datos del lugar están ocultos en el mapa",
+    "show": "Mostrar",
+    "filterLabel": "Filtrar datos del lugar",
+    "filterPlaceholder": "Filtrar por nombre",
+    "reorder": "Reordenar {{name}}",
+    "expand": "Expandir {{name}}",
+    "collapse": "Contraer {{name}}",
+    "missing": "Falta",
+    "noData": "Sin datos",
+    "missingReason": {
+      "not-in-library": "No está en la Biblioteca de datos de este equipo",
+      "needs-newer-canopi": "La Biblioteca de datos necesita un Canopi más reciente",
+      "library-unopened": "No se pudo abrir la Biblioteca de datos. Reinicia Canopi."
+    },
+    "display": {
+      "colors": "Colores",
+      "ramp": {
+        "Terrain": "Terreno",
+        "Earth": "Tierra",
+        "Gray": "Gris",
+        "Greens": "Verdes",
+        "Magma": "Magma",
+        "YellowRed": "Amarillo–rojo"
+      },
+      "reverse": "Invertir",
+      "range": "Rango",
+      "dataRange": "Rango de datos",
+      "cutOutliers": "Excluir extremos",
+      "cutOutliersHint": "Deja fuera el 2 % de valores más bajos y más altos",
+      "custom": "Personalizado",
+      "minimum": "Mínimo",
+      "maximum": "Máximo",
+      "reset": "Restablecer"
+    },
+    "chart": {
+      "copyValues": "Copiar valores",
+      "close": "Cerrar perfil",
+      "at": "A {{distance}}",
+      "rise": "Desnivel {{value}}",
+      "steepest": "Máxima pendiente {{percent}} en 2 m",
+      "highest": "Máximo {{value}}",
+      "reading": "Leyendo valores…",
+      "noValues": "No hay valores a lo largo de esta línea",
+      "needsLayer": "Muestra una capa de elevación o altura para ver su perfil",
+      "distance": "Distancia (m)",
+      "longitude": "Longitud",
+      "latitude": "Latitud",
+      "copied": "Copiado",
+      "copyFailed": "No se pudieron copiar los valores"
+    }
   }
 }

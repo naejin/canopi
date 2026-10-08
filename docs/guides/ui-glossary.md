@@ -67,6 +67,7 @@ Tool names are the `canvas.tools.*` keys and panel names the `panelRail.*` keys 
 | Measure | Mesurer | Medir | Medir | Misura | Messen |
 | Profile | Profil | Perfil | Perfil | Profilo | Profil |
 | Layers | Calques | Capas | Camadas | Livelli | Ebenen |
+| Site data | Données du site | Datos del lugar | Dados do local | Dati del sito | Standortdaten |
 | Plants in this Design | Plantes de ce Design | Plantas de este diseño | Plantas deste design | Piante di questo progetto | Pflanzen in diesem Design |
 | Favorites and stamps | Favoris et tampons | Favoritos y sellos | Favoritos e carimbos | Preferiti e timbri | Favoriten und Stempel |
 | Calendar | Calendrier | Calendario | Calendário | Calendario | Kalender |
@@ -86,6 +87,7 @@ Tool names are the `canvas.tools.*` keys and panel names the `panelRail.*` keys 
 | Measure | Meten | Измерить | 测量 | 計測 | 측정 |
 | Profile | Profiel | Профиль | 剖面图 | 断面図 | 단면도 |
 | Layers | Lagen | Слои | 图层 | レイヤー | 레이어 |
+| Site data | Terreindata | Данные участка | 场地数据 | 敷地データ | 부지 데이터 |
 | Plants in this Design | Planten in dit ontwerp | Растения в этом проекте | 此设计中的植物 | このデザインの植物 | 이 디자인의 식물 |
 | Favorites and stamps | Favorieten en stempels | Избранное и штампы | 收藏与图章 | お気に入りとスタンプ | 즐겨찾기와 스탬프 |
 | Calendar | Kalender | Календарь | 日历 | カレンダー | 달력 |

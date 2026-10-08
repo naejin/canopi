@@ -168,7 +168,8 @@
       "placePlantsHere": "여기에 식물 배치",
       "turnViewToEdge": "이 가장자리에 맞춰 보기 회전",
       "finishShape": "도형 완성",
-      "renameZone": "구역 이름 바꾸기…"
+      "renameZone": "구역 이름 바꾸기…",
+      "profileLine": "이 선의 단면도"
     },
     "rotationHandle": {
       "label": "회전"
@@ -299,7 +300,18 @@
       "background": "배경",
       "backgroundMap": "지도",
       "backgroundNone": "없음",
-      "backgroundPlainPaper": "빈 종이"
+      "backgroundPlainPaper": "빈 종이",
+      "map": "지도",
+      "openSiteData": "부지 데이터 열기",
+      "siteDataShown_one": "{{count, number}}개 중 {{shown, number}}개 표시",
+      "siteDataShown_few": "{{count, number}}개 중 {{shown, number}}개 표시",
+      "siteDataShown_many": "{{count, number}}개 중 {{shown, number}}개 표시",
+      "siteDataShown_other": "{{count, number}}개 중 {{shown, number}}개 표시",
+      "siteDataNone": "아직 없음",
+      "siteDataWeb_one": "이 디자인의 지형 또는 높이 레이어 {{count, number}}개 · Canopi Desktop 필요",
+      "siteDataWeb_few": "이 디자인의 지형 또는 높이 레이어 {{count, number}}개 · Canopi Desktop 필요",
+      "siteDataWeb_many": "이 디자인의 지형 또는 높이 레이어 {{count, number}}개 · Canopi Desktop 필요",
+      "siteDataWeb_other": "이 디자인의 지형 또는 높이 레이어 {{count, number}}개 · Canopi Desktop 필요"
     },
     "timeline": {
       "actionType": "작업 유형",
@@ -597,7 +609,12 @@
         "renameEllipsis": "이름 바꾸기…",
         "recovered": "Canopi가 보관 중인 파일로 데이터 라이브러리를 다시 구성했습니다. 실패로 표시된 항목은 다시 시도로 다시 준비할 수 있습니다.",
         "refusedNewer": "데이터 라이브러리가 더 새로운 버전의 Canopi로 저장되었습니다. 사용하려면 최신 Canopi를 설치하세요. 이 버전은 데이터 라이브러리를 변경하지 않습니다.",
-        "unavailable": "데이터 라이브러리를 열 수 없습니다. Canopi를 다시 시작할 때까지 가져오기와 변경은 비활성화됩니다."
+        "unavailable": "데이터 라이브러리를 열 수 없습니다. Canopi를 다시 시작할 때까지 가져오기와 변경은 비활성화됩니다.",
+        "sortLabel": "정렬",
+        "sortRecent": "최근 추가순",
+        "factAdded": "추가됨",
+        "deletedItem": "삭제된 항목",
+        "importNeedsDesign": "데이터를 가져오려면 디자인을 여세요"
       },
       "layers": {
         "addData": "데이터 추가",
@@ -1124,7 +1141,7 @@
     "view.labelsNames": "이름",
     "view.cycleLabels": "레이블: 없음, 코드, 이름",
     "edit.rotate": "회전…",
-    "file.addData": "데이터 추가…",
+    "file.addData": "지형 또는 높이 데이터 가져오기…",
     "file.exportBudgetCsv": "예산(CSV)…",
     "file.close": "디자인 닫기",
     "help.gettingStarted": "시작하기",
@@ -1638,7 +1655,8 @@
       "GridNotProjectedMetres": "지상 미터 단위의 투영 격자가 필요합니다. Web Mercator나 경위도는 사용할 수 없습니다.",
       "EngineMissing": "사용할 수 없음: GeoLibre 엔진이 없습니다.",
       "NeedsDesktop": "Canopi Desktop이 필요합니다.",
-      "AlreadyInLayers": "이미 레이어에 있습니다."
+      "AlreadyInLayers": "이미 레이어에 있습니다.",
+      "AlreadyInSiteData": "이미 부지 데이터에 있습니다."
     },
     "stale": {
       "InputUpdated": "이 계산 이후 {{input}}이(가) 변경되었습니다.",
@@ -1667,7 +1685,10 @@
         "noOutputs": "결과를 하나 이상 선택하세요."
       },
       "introLayers": "{{name}}에서. 결과는 레이어에서 그 아래에 추가되고 라이브러리에 보관됩니다.",
-      "introLibrary": "{{name}}에서. 결과는 라이브러리에 저장됩니다. 어느 디자인에나 추가하세요."
+      "introLibrary": "{{name}}에서. 결과는 라이브러리에 저장됩니다. 어느 디자인에나 추가하세요.",
+      "source": "원본",
+      "intro": "결과는 부지 데이터에서 원본 아래에 추가되고 라이브러리에 보관됩니다.",
+      "showInSiteData": "부지 데이터에서 보기"
     },
     "details": {
       "analysis": "분석",
@@ -2009,5 +2030,63 @@
     "speciesPlants_few": "{{name}} · 식물 {{count, number}}그루",
     "speciesPlants_many": "{{name}} · 식물 {{count, number}}그루",
     "speciesPlants_other": "{{name}} · 식물 {{count, number}}그루"
+  },
+  "siteData": {
+    "unpin": "고정 해제",
+    "hint": "지도를 가리키면 값 표시 · 클릭하여 고정",
+    "hintTouch": "지도를 탭하여 지점 고정",
+    "analyzeNeedsData": "먼저 지형 또는 높이 데이터를 추가하세요",
+    "profile": "단면도",
+    "profileNeedsLayer": "단면도를 그리려면 고도 또는 높이 레이어를 표시하세요",
+    "hiddenFromMap": "부지 데이터가 지도에서 숨겨져 있습니다",
+    "show": "표시",
+    "filterLabel": "부지 데이터 필터",
+    "filterPlaceholder": "이름으로 필터",
+    "reorder": "{{name}} 순서 변경",
+    "expand": "{{name}} 펼치기",
+    "collapse": "{{name}} 접기",
+    "missing": "없음",
+    "noData": "데이터 없음",
+    "missingReason": {
+      "not-in-library": "이 컴퓨터의 데이터 라이브러리에 없습니다",
+      "needs-newer-canopi": "데이터 라이브러리에는 최신 Canopi가 필요합니다",
+      "library-unopened": "데이터 라이브러리를 열 수 없습니다. Canopi를 다시 시작하세요."
+    },
+    "display": {
+      "colors": "색상",
+      "ramp": {
+        "Terrain": "지형",
+        "Earth": "대지",
+        "Gray": "회색",
+        "Greens": "녹색",
+        "Magma": "마그마",
+        "YellowRed": "노랑–빨강"
+      },
+      "reverse": "반전",
+      "range": "범위",
+      "dataRange": "데이터 범위",
+      "cutOutliers": "이상값 제외",
+      "cutOutliersHint": "가장 낮은 값과 가장 높은 값 2%를 제외합니다",
+      "custom": "사용자 지정",
+      "minimum": "최솟값",
+      "maximum": "최댓값",
+      "reset": "초기화"
+    },
+    "chart": {
+      "copyValues": "값 복사",
+      "close": "단면도 닫기",
+      "at": "{{distance}} 지점",
+      "rise": "고도차 {{value}}",
+      "steepest": "2m 구간 최대 경사 {{percent}}",
+      "highest": "최고 {{value}}",
+      "reading": "값을 읽는 중…",
+      "noValues": "이 선을 따라 값이 없습니다",
+      "needsLayer": "단면도를 보려면 고도 또는 높이 레이어를 표시하세요",
+      "distance": "거리(m)",
+      "longitude": "경도",
+      "latitude": "위도",
+      "copied": "복사됨",
+      "copyFailed": "값을 복사할 수 없습니다"
+    }
   }
 }

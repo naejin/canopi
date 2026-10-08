@@ -59,6 +59,8 @@ const PLACEHOLDER_BUDGETS: Record<string, number> = {
   'filters.searchFields': DOCK_FIELD,
   'start.searchDesigns': DOCK_FIELD,
   'canvas.placeSearch.placeholder': 26,
+  // The Site data filter sits in the 440 px panel above the rows (spec §9.5).
+  'siteData.filterPlaceholder': 40,
   'canvas.placeSearch.placeholderShort': 18,
 }
 
@@ -98,7 +100,7 @@ const PROPER_NOUNS = new Set([
   'Ctrl', 'Shift', 'Alt', 'Esc', 'Tab', 'Enter', 'Space', 'Delete', 'Backspace', 'Home', 'End', 'Plus', 'Minus',
 ])
 /** Panel and frame names that a sentence refers to by name. */
-const PROPER_NAMES = ['Data library', 'Saved stamps', 'Plant catalog', 'Plants in this Design', 'Design notebook']
+const PROPER_NAMES = ['Data library', 'Site data', 'Saved stamps', 'Plant catalog', 'Plants in this Design', 'Design notebook']
 
 function titleCaseWords(text: string): string[] {
   const words = PROPER_NAMES.reduce((copy, name) => copy.split(name).join(name.toLowerCase()), text)

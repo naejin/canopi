@@ -168,7 +168,8 @@
       "placePlantsHere": "Place plants here",
       "turnViewToEdge": "Turn view to this edge",
       "finishShape": "Finish shape",
-      "renameZone": "Rename zone…"
+      "renameZone": "Rename zone…",
+      "profileLine": "Profile this line"
     },
     "rotationHandle": {
       "label": "Rotate"
@@ -299,7 +300,18 @@
       "background": "Background",
       "backgroundMap": "Map",
       "backgroundNone": "None",
-      "backgroundPlainPaper": "Plain paper"
+      "backgroundPlainPaper": "Plain paper",
+      "map": "Map",
+      "openSiteData": "Open Site data",
+      "siteDataShown_one": "{{shown, number}} of {{count, number}} shown",
+      "siteDataShown_few": "{{shown, number}} of {{count, number}} shown",
+      "siteDataShown_many": "{{shown, number}} of {{count, number}} shown",
+      "siteDataShown_other": "{{shown, number}} of {{count, number}} shown",
+      "siteDataNone": "None yet",
+      "siteDataWeb_one": "{{count, number}} terrain or height layer in this Design · Needs Canopi Desktop",
+      "siteDataWeb_few": "{{count, number}} terrain or height layers in this Design · Needs Canopi Desktop",
+      "siteDataWeb_many": "{{count, number}} terrain or height layers in this Design · Needs Canopi Desktop",
+      "siteDataWeb_other": "{{count, number}} terrain or height layers in this Design · Needs Canopi Desktop"
     },
     "timeline": {
       "actionType": "Action type",
@@ -597,7 +609,12 @@
         "renameEllipsis": "Rename…",
         "recovered": "Canopi rebuilt its Data library from the files it keeps. Items marked failed can be prepared again with Retry.",
         "refusedNewer": "The Data library was saved by a newer version of Canopi. Install the latest Canopi to use it; this version will not change it.",
-        "unavailable": "The Data library could not be opened. Imports and changes are off until Canopi restarts."
+        "unavailable": "The Data library could not be opened. Imports and changes are off until Canopi restarts.",
+        "sortLabel": "Sort",
+        "sortRecent": "Recently added",
+        "factAdded": "Added",
+        "deletedItem": "Deleted item",
+        "importNeedsDesign": "Open a Design to import data"
       },
       "layers": {
         "addData": "Add data",
@@ -1245,7 +1262,7 @@
     "view.labelsNames": "Names",
     "view.cycleLabels": "Labels: none, codes, names",
     "edit.rotate": "Rotate…",
-    "file.addData": "Add data…",
+    "file.addData": "Import terrain or height data…",
     "file.exportBudgetCsv": "Budget as CSV…",
     "file.close": "Close Design",
     "help.gettingStarted": "Getting started",
@@ -1638,7 +1655,8 @@
       "GridNotProjectedMetres": "Needs a projected grid in ground metres, not Web Mercator or longitude and latitude.",
       "EngineMissing": "Unavailable: the GeoLibre engine is missing.",
       "NeedsDesktop": "Needs Canopi Desktop.",
-      "AlreadyInLayers": "Already in Layers."
+      "AlreadyInLayers": "Already in Layers.",
+      "AlreadyInSiteData": "Already in Site data."
     },
     "stale": {
       "InputUpdated": "{{input}} has changed since this was calculated.",
@@ -1667,7 +1685,10 @@
         "noOutputs": "Choose at least one result."
       },
       "introLayers": "From {{name}}. Results are added under it in Layers and kept in your library.",
-      "introLibrary": "From {{name}}. Results are saved to your library; add them to any Design."
+      "introLibrary": "From {{name}}. Results are saved to your library; add them to any Design.",
+      "source": "Source",
+      "intro": "Results are added under their source in Site data and kept in your library.",
+      "showInSiteData": "Show in Site data"
     },
     "details": {
       "analysis": "Analysis",
@@ -2009,5 +2030,63 @@
     "speciesPlants_few": "{{name}} · {{count, number}} plants",
     "speciesPlants_many": "{{name}} · {{count, number}} plants",
     "speciesPlants_other": "{{name}} · {{count, number}} plants"
+  },
+  "siteData": {
+    "unpin": "Unpin",
+    "hint": "Point at the map to read values · click to pin",
+    "hintTouch": "Tap the map to pin a point",
+    "analyzeNeedsData": "Add terrain or height data first",
+    "profile": "Profile",
+    "profileNeedsLayer": "Show an elevation or height layer to draw a profile",
+    "hiddenFromMap": "Site data is hidden from the map",
+    "show": "Show",
+    "filterLabel": "Filter site data",
+    "filterPlaceholder": "Filter by name",
+    "reorder": "Reorder {{name}}",
+    "expand": "Expand {{name}}",
+    "collapse": "Collapse {{name}}",
+    "missing": "Missing",
+    "noData": "No data",
+    "missingReason": {
+      "not-in-library": "Not in this computer’s Data library",
+      "needs-newer-canopi": "The Data library needs a newer Canopi",
+      "library-unopened": "The Data library couldn’t be opened. Restart Canopi."
+    },
+    "display": {
+      "colors": "Colors",
+      "ramp": {
+        "Terrain": "Terrain",
+        "Earth": "Earth",
+        "Gray": "Gray",
+        "Greens": "Greens",
+        "Magma": "Magma",
+        "YellowRed": "Yellow–red"
+      },
+      "reverse": "Reverse",
+      "range": "Range",
+      "dataRange": "Data range",
+      "cutOutliers": "Cut outliers",
+      "cutOutliersHint": "Leaves out the lowest and highest 2 % of values",
+      "custom": "Custom",
+      "minimum": "Minimum",
+      "maximum": "Maximum",
+      "reset": "Reset"
+    },
+    "chart": {
+      "copyValues": "Copy values",
+      "close": "Close profile",
+      "at": "At {{distance}}",
+      "rise": "Rise {{value}}",
+      "steepest": "Steepest {{percent}} over 2 m",
+      "highest": "Highest {{value}}",
+      "reading": "Reading values…",
+      "noValues": "No values along this line",
+      "needsLayer": "Show an elevation or height layer to see its profile",
+      "distance": "Distance (m)",
+      "longitude": "Longitude",
+      "latitude": "Latitude",
+      "copied": "Copied",
+      "copyFailed": "Couldn’t copy the values"
+    }
   }
 }
