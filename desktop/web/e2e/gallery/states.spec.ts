@@ -7,14 +7,14 @@ import type { Locator, Page } from '@playwright/test'
 import { expect, openGallery, test } from '../support/gallery'
 
 /** The memory backend's `invoke`, imported in the page from the module the app's Tauri alias resolves to. */
-async function invokeInPage(page: Page, command: string, args: Record<string, unknown>): Promise<{ ok: unknown } | { refused: unknown }> {
+async function invokeInPage(page: Page, command: string, args: Record<string, unknown>): Promise<{ ok: unknown } | { failed: true }> {
   return page.evaluate(async ({ command, args }) => {
     const url = '/memory-backend.ts'
     const backend = await import(url) as { invoke(command: string, args: Record<string, unknown>): Promise<unknown> }
     try {
       return { ok: await backend.invoke(command, args) }
-    } catch (error) {
-      return { refused: error }
+    } catch {
+      return { failed: true as const }
     }
   }, { command, args })
 }
@@ -59,7 +59,7 @@ test.describe('the UI gallery for Site data', () => {
     await expect(page.getByRole('dialog', { name: 'Data library' }).getByRole('button', { name: /^IGN LiDAR HD MNT tile 0470_6836 / })).toBeAttached()
   })
 
-  test('the analytic sampler answers within the caps and refuses beyond them as Rust does', async ({ page }) => {
+  test('the analytic sampler answers within the generated caps and never exceeds them', async ({ page }) => {
     await openGallery(page, { surface: 'site-data' })
     const ground = { kind: 'Source', entity_id: 'lidar-ground', expected_generation_id: 'lidar-ground-g1' }
     // The data covers the west of the fixture site (13° E, 23° N); 0.0005° east is off it.
@@ -81,8 +81,8 @@ test.describe('the UI gallery for Site data', () => {
     expect(elevation).toBeLessThanOrEqual(170)
 
     const nine = await invokeInPage(page, 'lidar_sample_points', { request: { targets: Array(9).fill(ground), points: [[13, 23]] } })
-    expect(nine).toEqual({ refused: expect.stringContaining('at most 8 targets and 4096 points') })
+    expect(nine).toEqual({ failed: true })
     const tooLong = await invokeInPage(page, 'lidar_sample_points', { request: { targets: [ground], points: Array(4097).fill([13, 23]) } })
-    expect(tooLong).toEqual({ refused: expect.stringContaining('at most 8 targets and 4096 points') })
+    expect(tooLong).toEqual({ failed: true })
   })
 })

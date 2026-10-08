@@ -261,11 +261,12 @@ function localized(plant: SpeciesListItem, locale: unknown): SpeciesListItem {
 /**
  * The analytic site the gallery samples (spec §1.10, `lidar_sample_points`): ground elevation 140 + 30·sin over the
  * ground, the surface 6 m above it, a canopy 6 ± 4 m, and slope from the ground's gradient, in each item's units; no data
- * outside an item's bounds. Requests over the generated caps are refused before any answer, as Rust refuses them.
+ * outside an item's bounds. A request over the generated caps throws, so the test that sent it fails; Rust's own refusal
+ * is tested in Rust, and no string is shared with it.
  */
 async function sampleGalleryPoints(request: LidarSamplePointsRequest): Promise<LidarSampleSeries[]> {
   if (request.targets.length > LIDAR_SAMPLE_MAX_TARGETS || request.points.length > LIDAR_SAMPLE_MAX_POINTS) {
-    throw `lidar_sample_points refused: a request carries at most ${LIDAR_SAMPLE_MAX_TARGETS} targets and ${LIDAR_SAMPLE_MAX_POINTS} points`
+    throw new Error('sampler exceeded the generated caps')
   }
   if (sampleDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, sampleDelayMs))
   return request.targets.map((target): LidarSampleSeries => {
