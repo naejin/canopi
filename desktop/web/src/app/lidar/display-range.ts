@@ -18,7 +18,7 @@ type Range = readonly [number, number]
 type Bounds = readonly [number, number, number, number]
 
 /** One display COG of a generation, as the map draws it: first listed on top where assets overlap. */
-export interface CutOutlierAsset {
+interface CutOutlierAsset {
   readonly url: string
   readonly bbox: Bounds
 }
