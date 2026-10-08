@@ -1,0 +1,54 @@
+/*
+ * One layer row look in Layers and Site data (U49 Q7; architecture review finding 5): rows of 32 px (44 px under a
+ * coarse pointer), the eye button, the open row's 3 px amber bar and semibold name with no fill, and a hidden row's muted
+ * eye and name. Each panel lays out its own columns around these.
+ */
+.row {
+  min-height: var(--control-size-lg);
+}
+
+@media (pointer: coarse) {
+  .row {
+    min-height: var(--control-size-touch);
+  }
+}
+
+/* The open row: its name button is expanded (one row at a time). */
+.row:has(.name[aria-expanded='true']) {
+  box-shadow: inset 3px 0 0 var(--color-accent);
+}
+
+.name[aria-expanded='true'] {
+  font-weight: 600;
+}
+
+.row[data-hidden='true'] .name,
+.row[data-hidden='true'] .eye {
+  color: var(--color-text-muted);
+}
+
+.eye {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-size-sm);
+  height: var(--control-size-sm);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.eye:hover {
+  background: var(--color-control-hover);
+}
+
+.eye:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

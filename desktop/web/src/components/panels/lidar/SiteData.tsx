@@ -33,10 +33,11 @@ import { beginInspection, endInspection, inspectionTarget } from '../../../app/l
 import { locale } from '../../../app/settings/state'
 import type { LibraryItemSummary } from '../../../generated/contracts'
 import { t } from '../../../i18n'
-import { LayerVisibilityIcon } from '../../canvas/LayerPanel'
 import { ActionMenu, type ActionMenuEntry } from '../../shared/ActionMenu'
 import { ButtonTooltip } from '../../shared/ButtonTooltip'
 import { ControlIcon } from '../../shared/ControlIcon'
+import { LayerVisibilityIcon } from '../../shared/LayerVisibilityIcon'
+import layerRow from '../../shared/layer-row.module.css'
 import { Notice } from '../../shared/Notice'
 import { Slider } from '../../shared/Slider'
 import { staleReasonText } from '../analyze/analysis-text'
@@ -173,10 +174,10 @@ function AnalysisGroupRow({ members, depth }: { members: readonly SiteRow[]; dep
     t('canvas.lidar.layers.resultCount', { count: members.length }),
   ].filter(Boolean).join(' · ')
   return (
-    <li className={styles.row} data-hidden={!visible} data-depth={Math.min(depth, 3)} data-analysis-group>
+    <li className={`${layerRow.row} ${styles.row}`} data-hidden={!visible} data-depth={Math.min(depth, 3)} data-analysis-group>
       <button
         type="button"
-        className={styles.eye}
+        className={layerRow.eye}
         aria-pressed={visible}
         aria-label={visibilityLabel}
         onClick={() => { for (const member of members) setLidarEntryVisibility(member.id, !visible) }}
@@ -199,14 +200,13 @@ function SiteDataRow({ row, depth, grouped, active }: { row: SiteRow; depth: num
     : t('canvas.lidar.layers.show', { name: label })
   return (
     <li
-      className={styles.row}
-      data-active={active}
+      className={`${layerRow.row} ${styles.row}`}
       data-hidden={!row.visible}
       data-depth={Math.min(depth, 3)}
     >
       <button
         type="button"
-        className={styles.eye}
+        className={layerRow.eye}
         aria-pressed={row.visible}
         aria-label={visibilityLabel}
         onClick={() => setLidarEntryVisibility(row.id, !row.visible)}
@@ -216,8 +216,8 @@ function SiteDataRow({ row, depth, grouped, active }: { row: SiteRow; depth: num
       </button>
       <button
         type="button"
-        className={styles.name}
-        aria-current={active ? 'true' : undefined}
+        className={`${layerRow.name} ${styles.name}`}
+        aria-expanded={active}
         aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
         onClick={() => selectSiteRow(row.id)}
         onKeyDown={(event) => {

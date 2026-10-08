@@ -11,6 +11,8 @@ import type { BasemapStyle } from '../../generated/contracts'
 import type { MapBackground } from '../../app/map-layers/state'
 import { Slider } from '../shared/Slider'
 import { Switch } from '../shared/Switch'
+import { LayerVisibilityIcon } from '../shared/LayerVisibilityIcon'
+import layerRow from '../shared/layer-row.module.css'
 import styles from './LayerPanel.module.css'
 
 function LayerIcon({ id }: { id: string }) {
@@ -23,20 +25,6 @@ function LayerIcon({ id }: { id: string }) {
     hillshade: 'm1 13 5-9 3 5 2-3 4 7ZM6 4l3 9',
   }[id]
   return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" aria-hidden="true"><path d={path} /></svg>
-}
-
-export function LayerVisibilityIcon({ open }: { open: boolean }) {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M1.2 8C1.2 8 3.7 3.5 8 3.5C12.3 3.5 14.8 8 14.8 8C14.8 8 12.3 12.5 8 12.5C3.7 12.5 1.2 8 1.2 8Z"
-        stroke="currentColor"
-        stroke-width="1.3"
-        stroke-linejoin="round"
-      />
-      {open ? <circle cx="8" cy="8" r="2.2" fill="currentColor" /> : <path d="M2 2L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />}
-    </svg>
-  )
 }
 
 function LockIcon({ locked }: { locked: boolean }) {
@@ -222,7 +210,7 @@ function LayerRow({ row, actions, nested = false, caption }: {
   return (
     <div
       role="listitem"
-      className={styles.layerRow}
+      className={`${layerRow.row} ${styles.layerRow}`}
       data-active={row.active ? 'true' : 'false'}
       data-hidden={row.visible ? 'false' : 'true'}
       data-locked={row.locked ? 'true' : 'false'}
@@ -230,7 +218,7 @@ function LayerRow({ row, actions, nested = false, caption }: {
     >
       <button
         type="button"
-        className={styles.toggleBtn}
+        className={layerRow.eye}
         aria-label={`${t('canvas.layers.visibility')}: ${row.label}`}
         aria-pressed={row.visible}
         onClick={() => {
@@ -242,7 +230,7 @@ function LayerRow({ row, actions, nested = false, caption }: {
       </button>
       <button
         type="button"
-        className={styles.layerName}
+        className={`${layerRow.name} ${styles.layerName}`}
         aria-current={row.active ? 'true' : undefined}
         title={row.label}
         onClick={() => actions.active(row.id)}

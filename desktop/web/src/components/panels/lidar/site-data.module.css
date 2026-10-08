@@ -15,17 +15,13 @@
 .emptyActions button:hover, .actions button:hover:not(:disabled), .pendingActions button:hover, .noticeButton:hover { background: var(--color-control-hover); }
 
 .list { list-style: none; margin: 0; padding: 0; }
-.row { display: flex; align-items: center; gap: var(--space-1); min-height: 40px; padding: var(--space-1) var(--space-2); border-bottom: 1px solid var(--color-border); border-left: 2px solid transparent; }
+.row { display: flex; align-items: center; gap: var(--space-1); padding: var(--space-1) var(--space-2); border-bottom: 1px solid var(--color-border); }
 .row[data-depth='1'] { padding-left: calc(var(--space-2) + var(--space-5)); }
 .row[data-depth='2'] { padding-left: calc(var(--space-2) + var(--space-5) + var(--space-5)); }
 .row[data-depth='3'] { padding-left: calc(var(--space-2) + var(--space-5) + var(--space-5) + var(--space-5)); }
-.row[data-active='true'] { background: var(--color-accent-soft); box-shadow: inset 3px 0 0 var(--color-accent); }
-.row[data-hidden='true'] .name strong, .row[data-hidden='true'] .eye { color: var(--color-text-muted); }
-.eye { position: relative; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: var(--control-size-sm); height: var(--control-size-sm); border: 0; border-radius: var(--radius-sm); background: transparent; }
-.eye:hover, .name:hover { background: var(--color-control-hover); }
+.name:hover { background: var(--color-control-hover); }
 .name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-0-5); padding: var(--space-1); border: 0; border-radius: var(--radius-sm); background: transparent; text-align: left; line-height: 1.25; }
-.name strong { font-size: var(--text-sm); font-weight: 400; overflow-wrap: anywhere; }
-.row[data-active='true'] .name strong { font-weight: 600; }
+.name strong { font-size: var(--text-sm); font-weight: inherit; overflow-wrap: anywhere; }
 .name small { font-size: var(--text-xs); color: var(--color-text-muted); overflow-wrap: anywhere; }
 /* An analysis with several outputs: a heading line over its nested results, not a selectable item. */
 .groupName { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-0-5); padding: var(--space-1); line-height: 1.25; }
