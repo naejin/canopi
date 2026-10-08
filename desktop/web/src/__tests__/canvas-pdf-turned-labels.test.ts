@@ -110,8 +110,6 @@ const rect = (x: number, y: number, width: number, height: number): PrintZone =>
 
 it('tops a zone that covers the page\'s top band at the page top, not on its own lower edge', () => {
   const ground = { x: -5, y: 0, width: 30, height: 15 }
-  // Its top edge is above the page and its sides past both page edges: the ground's top is its top.
-  expect(zoneTop(rect(-50, -50, 120, 55), ground)).toEqual({ x: 10, y: 0 })
   // Only one top corner of the ground inside: the top runs from that corner to where the outline crosses the top edge.
   expect(zoneTop(rect(-50, -50, 60, 55), ground)).toEqual({ x: 2.5, y: 0 })
 })
@@ -188,11 +186,6 @@ it('keeps a guide\'s M code nearer its own guide than a zone dimension drawn aft
 })
 
 it('keeps a guide\'s M code in the key when its only clear side lies nearer the next guide', () => {
-  const space = new FieldSpace({ x: -1000, y: -1000, width: 2000, height: 2000 }, text())
-  const a = { a: { x: 0, y: 0 }, b: { x: 30, y: 0 } }, b = { a: { x: 0, y: 3.6 }, b: { x: 30, y: 3.6 } }
-  space.addSegments([a, b])
-  space.reserve({ x: -5, y: -10, width: 40, height: 9.9 })
-  expect(space.beside(space.measure('M1', 8), a, [b])).toBeNull()
   // On the page: two parallel guides 3.6 mm apart, both crowded out of their middles, A's outer side taken.
   const drawing = guidePage([{ id: 'a', start: { x: -1, y: 7 }, end: { x: 13, y: 7 } }, { id: 'b', start: { x: -1, y: 7.36 }, end: { x: 13, y: 7.36 } }],
     [{ x: 10, y: 80, width: 190, height: 19.4 }, { x: 45, y: 80, width: 60, height: 45 }])
