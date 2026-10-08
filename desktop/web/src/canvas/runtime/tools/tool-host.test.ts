@@ -567,6 +567,28 @@ describe('ToolHost', () => {
       expect(pin).not.toHaveBeenCalled()
     })
 
+    it('Profile finishing on empty ground and then requesting Select never pins: the tool that heard the tap decides', () => {
+      const line = [{ x: 1, y: 2 }, { x: 30, y: 40 }]
+      const profile: StubTool = stubTool('profile', {
+        gesture: (g) => {
+          if (g.kind === 'tap' && g.clickCount === 2) {
+            profile.ctx().effects.finishProfile(line)
+            profile.ctx().effects.requestTool('select')
+          }
+          return 'pass'
+        },
+      })
+      useStubTools(profile, stubTool('select'))
+      const pin = vi.fn()
+      const h = harness({ tool: 'profile', pin, finishProfile: vi.fn() })
+
+      h.click({ x: 300, y: 100 })
+      h.click({ x: 300, y: 100 }, { clickCount: 2 })
+
+      expect(h.host.activeToolIsSelect()).toBe(true)
+      expect(pin).not.toHaveBeenCalled()
+    })
+
     it('J10: a finger\'s Select tap on empty ground pins at the down point', () => {
       useStubTools(stubTool('select'))
       const pin = vi.fn()

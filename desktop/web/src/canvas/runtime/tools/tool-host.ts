@@ -848,8 +848,10 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
           }))
         } else {
           const point = pointAt(g.at, g.mods, g.pointer)
+          // The tool that hears the tap decides the pin, not the one it may arm (Profile requests Select as it finishes).
+          const heardBy = currentId
           callTool(() => tool.gesture({ kind: 'tap', point, hit: hitAt(point.world), clickCount: g.clickCount }))
-          pinAfterTap(gesture, point.world)
+          pinAfterTap(heardBy, gesture, point.world)
         }
       } finally {
         endLive({ screen: g.at, mods: g.mods, pointer: g.pointer })
@@ -860,13 +862,13 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   /**
    * The Site data pin (spec §3.8, fixture J10; U49 Q17): a tap no tool uses pins its point once the tool has heard it, and
    * claims nothing. That is a Select tap whose press hit nothing, not even a zone's fill (Select cleared the selection), or
-   * any Pan-tool tap; never another tool, a handle, a drag or overview. deps.pin is absent on Web and while the Site data
-   * panel is closed.
+   * any Pan-tool tap; never another tool, a handle, a drag or overview. `heardBy` is the tool the tap reached, read before
+   * the tool ran. deps.pin is absent on Web and while the Site data panel is closed.
    */
-  function pinAfterTap(gesture: LiveGesture, world: WorldPoint): void {
+  function pinAfterTap(heardBy: ToolId, gesture: LiveGesture, world: WorldPoint): void {
     if (!deps.pin || frame().mode !== 'site') return
-    const pins = currentId === 'hand'
-      || (currentId === 'select' && gesture.startHit === null && deps.scene.hitAt(gesture.start.world, { fill: true }) === null)
+    const pins = heardBy === 'hand'
+      || (heardBy === 'select' && gesture.startHit === null && deps.scene.hitAt(gesture.start.world, { fill: true }) === null)
     if (pins) deps.pin(world)
   }
 
