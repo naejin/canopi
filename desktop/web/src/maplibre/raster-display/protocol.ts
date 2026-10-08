@@ -17,15 +17,15 @@ export interface RasterSourceMetadata {
 }
 
 /**
- * Band 1's statistics over the COG's largest overview no wider than 1024 px:
- * what Cut outliers draws (its 2–98 % range) and, for a mosaic, what merges.
+ * Band 1's statistics over the COG's finest overview of at most 512² pixels:
+ * what Cut outliers draws (its 2–98 % range) and, for a mosaic, what pools.
  */
 export interface RasterBandStatistics {
   readonly min: number
   readonly max: number
   readonly percentile2: number
   readonly percentile98: number
-  /** Counts in 128 equal bins over [min, max], the bin count maplibre-gl-raster's `mergeBandStats` reads. */
+  /** Counts in 128 equal bins over [min, max] (cog-tiler's), which a mosaic's pooled range reads. */
   readonly histogram: readonly number[]
 }
 

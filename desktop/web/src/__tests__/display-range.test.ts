@@ -29,6 +29,17 @@ function stats(min: number, max: number, percentile2: number, percentile98: numb
   return { min, max, percentile2, percentile98, histogram: Array.from({ length: 128 }, () => 10) }
 }
 
+/** cog-tiler's statistics of these values (`statistics.js`): exact 2 % and 98 % points, 128 equal bins over [min, max]. */
+function statsOf(values: readonly number[]): RasterBandStatistics {
+  const sorted = [...values].sort((a, b) => a - b)
+  const [min, max] = [sorted[0]!, sorted.at(-1)!]
+  const span = max - min || 1
+  const histogram = Array.from({ length: 128 }, () => 0)
+  for (const value of sorted) histogram[Math.min(127, Math.floor(((value - min) / span) * 128))]! += 1
+  const at = (percent: number) => sorted[Math.min(sorted.length - 1, Math.floor((percent / 100) * sorted.length))]!
+  return { min, max, percentile2: at(2), percentile98: at(98), histogram }
+}
+
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 describe('Cut outliers ranges', () => {
@@ -70,6 +81,20 @@ describe('Cut outliers ranges', () => {
     expect(low).toBeLessThan(10)
     expect(high).toBeGreaterThan(190)
     expect(high).toBeLessThan(200)
+  })
+
+  it('gives a mosaic with one outlier spike the range one COG of the same data would get', async () => {
+    // 300–340 m on both assets, one 10 000 m spike in the second: one COG of all of it cuts at about 300.8 and 339.2.
+    const terrain = Array.from({ length: 50_000 }, (_, index) => 300 + (40 * index) / 49_999)
+    const spiked = [...terrain.slice(1), 10_000]
+    const whole = statsOf([...terrain, ...spiked])
+    requestCutOutlierRange('Source/s/g1', ['west.tif', 'east.tif'])
+    answers.get('west.tif')!(statsOf(terrain))
+    answers.get('east.tif')!(statsOf(spiked))
+    await vi.waitFor(() => expect(cutOutlierRange('Source/s/g1')).not.toBeNull())
+    const [low, high] = cutOutlierRange('Source/s/g1')!
+    expect(Math.abs(low - whole.percentile2)).toBeLessThan(0.5)
+    expect(Math.abs(high - whole.percentile98)).toBeLessThan(0.5)
   })
 
   it('keeps the data range for an asset with no valid pixel, and does not ask again', async () => {

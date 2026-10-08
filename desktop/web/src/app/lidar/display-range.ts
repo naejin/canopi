@@ -2,8 +2,8 @@
 //
 // Owns the ranges Cut outliers draws (canopi-f47t.42, spec §1.10 "Open item"): the 2–98 % range of one displayed
 // generation, read once per display key from its display COGs in the shared raster worker lanes (`pool.ts`). One asset
-// uses cog-tiler's own percentiles; a mosaic merges its assets' histograms with maplibre-gl-raster's `mergeBandStats`
-// and takes `autoRangeFor` (GeoLibre's rule). Never stored: a reopened Design reads it again. Until it lands, or when it
+// uses cog-tiler's own percentiles; a mosaic takes the same 2–98 % points (GeoLibre's `autoRangeFor` rule) of its
+// assets' pooled distribution (`mosaicRange`). Never stored: a reopened Design reads it again. Until it lands, or when it
 // cannot be read, the entry draws its data range. An asset whose read fails (a lane restart, an asset error) is read
 // again up to `READ_ATTEMPTS` times; past that the key is forgotten, so a later request reads it again.
 
@@ -63,10 +63,68 @@ async function readRange(urls: readonly string[]): Promise<Range | null> {
     const statistics = [...read.values()].filter((entry): entry is RasterBandStatistics => entry !== null)
     if (statistics.length === 0) return null
     if (statistics.length === 1) return [statistics[0]!.percentile2, statistics[0]!.percentile98]
-    const { autoRangeFor, mergeBandStats } = await import('maplibre-gl-raster')
-    const merged = mergeBandStats(statistics.map(({ min, max, histogram }) => ({ min, max, histogram: [...histogram] })))
-    return merged ? autoRangeFor(merged) : null
+    return mosaicRange(statistics)
   } finally {
     client.dispose()
+  }
+}
+
+/**
+ * The 2–98 % range of several assets pooled. Each asset keeps its own resolution: its cumulative count is known at
+ * its bin edges, its 2 % and 98 % points and its ends, and runs linearly between them. maplibre-gl-raster's
+ * `mergeBandStats` rebins every asset onto 128 bins over the union instead, so one spike in one asset coarsens every
+ * asset to 1/128 of the spike's span.
+ */
+function mosaicRange(statistics: readonly RasterBandStatistics[]): Range {
+  const curves = statistics.map(cumulativeCurve)
+  const total = curves.reduce((sum, curve) => sum + curve.total, 0)
+  const low = Math.min(...statistics.map(({ min }) => min))
+  const high = Math.max(...statistics.map(({ max }) => max))
+  const quantile = (fraction: number): number => {
+    let [below, above] = [low, high]
+    for (let step = 0; step < 64 && below < above; step += 1) {
+      const middle = (below + above) / 2
+      if (curves.reduce((sum, curve) => sum + curve.at(middle), 0) < fraction * total) below = middle
+      else above = middle
+    }
+    return above
+  }
+  return [quantile(0.02), quantile(0.98)]
+}
+
+interface CumulativeCurve {
+  readonly total: number
+  /** Values counted at or below `value`, linear between known points. */
+  at(value: number): number
+}
+
+function cumulativeCurve({ min, max, percentile2, percentile98, histogram }: RasterBandStatistics): CumulativeCurve {
+  const total = histogram.reduce((sum, count) => sum + count, 0)
+  const span = max - min
+  const points: [number, number][] = [[min, 0], [percentile2, 0.02 * total], [percentile98, 0.98 * total], [max, total]]
+  // cog-tiler's bins are equal over [min, max]: values below edge k sit in bins 0..k-1.
+  let below = 0
+  for (let edge = 1; edge < histogram.length; edge += 1) {
+    below += histogram[edge - 1]!
+    points.push([min + (span * edge) / histogram.length, below])
+  }
+  points.sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  for (let index = 1; index < points.length; index += 1) points[index]![1] = Math.max(points[index]![1], points[index - 1]![1])
+  return {
+    total,
+    at(value) {
+      if (value < min) return 0
+      if (value >= max) return total
+      // The last point at or below `value`; the first point is `min`, so there is one.
+      let [index, after] = [0, points.length]
+      while (after - index > 1) {
+        const middle = (index + after) >> 1
+        if (points[middle]![0] <= value) index = middle
+        else after = middle
+      }
+      const [x0, y0] = points[index]!
+      const [x1, y1] = points[index + 1] ?? [x0, y0]
+      return x1 > x0 ? y0 + ((value - x0) / (x1 - x0)) * (y1 - y0) : y0
+    },
   }
 }
