@@ -3,7 +3,7 @@
 python3 .interface-design/boards/build.py            → out/<Board>.html for every board, out/index.html, out/assets/
 python3 .interface-design/boards/build.py Name ...   → only those boards (assets and index are always refreshed)
 
-Boards are registered by importing boards_a, boards_b and boards_nav. Everything under out/ is generated and ignored by git.
+Boards are registered by importing boards_a, boards_site, boards_b and boards_nav. Everything under out/ is generated and ignored by git.
 """
 import json
 import os
@@ -25,14 +25,15 @@ ROWS = [
     ('Moving and turning the map: compass, pointing device', ['Navigation', 'NavigationSettings', 'NavigationPhone']),
     ('Designing: catalog and placing', ['Catalog', 'CatalogFilters', 'SpeciesDetail', 'PlacePlants', 'PlantRow', 'StampPlace']),
     ('Designing: selection, appearance, zones, notes', ['Selection', 'Appearance', 'ZoneDraw', 'ZoneSelected', 'MeasureText']),
-    ('Site data: layers, import, analysis, library', ['Layers', 'AddDataMenu', 'AddData', 'ImportProgress', 'AnalyzeDialog', 'SlopeAnalysis', 'Library']),
-    ('Analyses: water flow, canopy, provenance', ['AnalyzeWater', 'WaterFlow', 'CanopyAnalysis', 'ResultDetails']),
+    ('Layers', ['Layers']),
+    ('Site data: panel, values, profile, import, analysis, library', ['SiteData', 'SiteDataValues', 'SiteDataMissing', 'SiteDataProfile', 'Import', 'AnalyzeDialog', 'Library']),
+    ('Planned analyses', ['WaterFlow']),
     ('Planning', ['Calendar', 'CalendarAction', 'Budget', 'Consortium', 'Notebook', 'Favorites']),
     ('Output and system', ['PdfExport', 'PdfKeyPage', 'Menus', 'SaveStates', 'Settings', 'ProblemReport', 'Shortcuts']),
     ('Empty, loading and error states', ['EmptyStates', 'LoadingStates', 'ErrorStates']),
     ('Stories: saved views told as a story, inside Canopi', ['StoryAuthor', 'StoryPresent', 'StoryPhone']),
-    ('Web Edition and phones', ['WebWorkspace', 'WebPhone', 'WebPhoneSearch']),
-    ('Dark theme and French', ['CatalogDark', 'LayersDark', 'SettingsDark', 'French', 'FrenchDialogs']),
+    ('Web Edition and phones', ['WebWorkspace', 'WebPhone', 'WebPhoneLayers', 'WebPhoneSearch']),
+    ('Dark theme and French', ['CatalogDark', 'LayersDark', 'SiteDataDark', 'LibraryDark', 'SettingsDark', 'French', 'FrenchDialogs']),
 ]
 
 
@@ -123,6 +124,7 @@ def main(names):
     assets.write_all(os.path.join(OUT, 'assets'))
     shutil.copy(os.path.join(HERE, 'runtime.js'), os.path.join(OUT, 'runtime.js'))
     import boards_a  # noqa: F401  (registers boards on this module)
+    import boards_site  # noqa: F401
     import boards_b  # noqa: F401
     import boards_nav  # noqa: F401
     unknown = [n for n in names if n not in BOARDS]

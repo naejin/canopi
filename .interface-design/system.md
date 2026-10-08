@@ -2,13 +2,14 @@
 
 Canopi is a field atlas for designing a living landscape on the map: parchment, ink and ochre floating over satellite or map, with dense, readable controls. Reasons: [ADR 0010](../docs/adr/0010-map-first-interface.md). The target is the design boards in [`boards/`](boards/README.md); the UI gallery shows what shipped.
 
-Read this file, then the one pattern file for the surface you touch:
+Read this file, then the pattern file for your surface:
 
 | Surface | Pattern |
 | --- | --- |
 | Map canvas, rails, view chip, zoom, annotations, selection and canvas menu, inspection lens, symbol and colour, stories | [Canvas workspace](patterns/canvas-workspace.md) |
 | Pan, zoom and turn the map, compass, Pointing device, F1 gestures, PDF map orientation | [Canvas navigation](patterns/canvas-navigation.md) |
-| Plants in this Design, Layers, data library and analysis, Calendar, Budget, Consortium, Favorites, Design notebook, Stories, finder | [Dock panels](patterns/dock-panels.md) |
+| Plants in this Design, Layers, Calendar, Budget, Consortium, Favorites, Design notebook, Stories, finder | [Dock panels](patterns/dock-panels.md) |
+| Site data, Profile, Import, Analyze, Data library | [Site data](patterns/site-data.md) |
 | Plant catalog, filters, species detail, photos | [Catalog and details](patterns/catalog-and-details.md) |
 | Title bar, menus, start screen, dialogs, settings, notices, empty/loading/error states, PDF export, Web on phones | [Controls and shell](patterns/controls-and-shell.md) |
 
@@ -23,7 +24,7 @@ Read this file, then the one pattern file for the surface you touch:
 
 - Title bar (floating, 50 px): logo, menubar (File, Edit, View, Tools, Help), Design name (click to rename), save status with its one action, place search (Ctrl K), Help, Settings.
 - Left: tool rail (Select · Place plants, Plant a row, Place a stamp · Polygon, Rectangle, Ellipse, Line · Text note, Measure · Undo, Redo), labelled with keys until each tool is used once, then icons; in a short window the last tools fold into More tools, never Undo and Redo. Pan (H) is off the rail, in View and Tools.
-- Right: panel rail (Ctrl 1–9; folds into More in a short window) and one panel at a time: 380 px, or 440 px for Budget, Consortium and Stories; Calendar can Expand.
+- Right: panel rail (Ctrl 1–9; folds into More in a short window) and one panel at a time: 380 px, or 440 px for Site data, Budget, Consortium and Stories; Calendar can Expand.
 - Bottom left: view chip with pressed toggles (Grid, Snap to grid). Bottom right: attribution pill, then zoom group (scale bar, −, scale ratio menu, +, Fit to Design, compass).
 - Tool cards sit top-left beside the rail (320 px). Status chips (40 px) sit top- or bottom-centre of the visible map area.
 
@@ -52,11 +53,11 @@ Read this file, then the one pattern file for the surface you touch:
 
 ## Layout and interaction
 
-- Keep the map visible and useful. A panel has one title, a close action, compact controls and a scrolling body; apply actions stay visible.
-- Preview before mutation; each action keeps its command or workbench authority. Selection, focus, hover, visibility and locks are distinct states.
-- Destructive actions confirm and name what is lost, or show an Undo toast (also Ctrl Z). Toasts do not time out while hovered or focused.
+- Keep the map visible. A panel has one title, a close action, compact controls and a scrolling body; apply actions stay visible.
+- Preview before mutation; each action keeps its command or workbench authority. Selection, focus, hover, visibility and locks stay distinct.
+- Destructive actions confirm and name what is lost, or show an Undo toast (also Ctrl Z). Toasts wait while hovered or focused.
 - Keyboard: every pointer action has a keyboard path, turning the map included; one keyboard owner routes keys. F6 and Shift F6 cycle title bar, tool rail, map and open panel. One Esc does one thing, the tool's first: menu or dialog → text entry → gesture → held pick or draft → Select → selection. Single keys work anywhere except text fields and dialogs and can be turned off; Shift N always resets north.
-- Popups anchor to their trigger and stay in the viewport: flipped above, or capped and scrolling, when too tall. Dialogs are modal, trap focus and return it. Layering uses only the stacking scale in `global.css` (`stacking-order.test.ts`).
+- Popups anchor to their trigger and stay in the viewport (flipped above, or capped and scrolling). Dialogs are modal, trap focus and return it. Layering uses only the stacking scale in `global.css` (`stacking-order.test.ts`).
 - Locale: numbers, dates, currency and units through `Intl`; message formats for plurals and names inside sentences; buttons, footers and segments wrap instead of clipping; terms from the [UI glossary](../docs/guides/ui-glossary.md).
 
 ## Reuse before adding a pattern
@@ -67,7 +68,7 @@ Shared blocks live in `desktop/web/src/components/shared/` (`SurfaceHeader`, `Do
 
 1. Find the surface on its board and in the gallery. Read its pattern file, component, authority seam and tests.
 2. Implement through existing authorities with focused behavioural tests. Review populated, empty, long and French states, light and dark, keyboard and pointer, narrow and short viewports.
-3. When the change sets a reusable decision, update the pattern file, the board and a gallery fixture in the same change.
+3. When the change sets a reusable decision, update the pattern file, the board and a gallery fixture together.
 
 ## Executable reference
 

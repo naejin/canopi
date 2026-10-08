@@ -32,6 +32,7 @@ LIGHT = {
     'scrim': 'rgba(24,20,14,0.42)',
     'shadow': '0 10px 30px rgba(30,22,10,0.16), 0 1px 3px rgba(30,22,10,0.10)', 'shadow-sm': '0 2px 8px rgba(30,22,10,0.12)',
     'tip': '#27231D', 'on-tip': '#FBF3E4',
+    'curve-1': '#27231D', 'curve-2': '#9C5A16', 'curve-3': '#2E7D4F', 'curve-4': '#8A3F7A',   # profile curves, never blue
 }
 DARK = {
     'paper': '#161510', 'surface': '#201E19', 'surface-2': '#2A2721', 'glass': 'rgba(30,28,23,0.93)',
@@ -46,6 +47,7 @@ DARK = {
     'scrim': 'rgba(0,0,0,0.55)',
     'shadow': '0 12px 34px rgba(0,0,0,0.45), 0 1px 3px rgba(0,0,0,0.4)', 'shadow-sm': '0 2px 8px rgba(0,0,0,0.35)',
     'tip': '#EFE8DA', 'on-tip': '#1D1A14',
+    'curve-1': '#EFE8DA', 'curve-2': '#E3A04C', 'curve-3': '#7FC79A', 'curve-4': '#D58BC6',
 }
 
 
@@ -212,6 +214,47 @@ input[type=range]{accent-color:var(--accent);margin:0;height:24px}
 """
 
 
+# Raster ramps: the stops `colorize()` paints in the pinned cog-tiler-wasm (as desktop/web/src/app/lidar/display-legend.ts
+# keeps them), so a board's swatch and legend show the colours the map draws. Every ramp has one end that nearly vanishes
+# into a panel, so swatches and legends get a --line-strong edge. Blue is water's alone: 'blues' and 'ice' serve water
+# kinds only (2.1 hydrology); differences use 'puor' (purple to orange).
+RAMPS = {
+    'schwarzwald': ['#aeefd5', '#b0f2cd', '#b1f4c1', '#b2f6b5', '#bbf7b2', '#c8f9b2', '#d8fab2', '#eafcb2',
+                    '#f7fcb2', '#eff4a3', '#cfe888', '#b2dc72', '#8dce5b', '#68c047', '#48b437', '#29a62c',
+                    '#17992f', '#0c8b37', '#0b823f', '#2c853d', '#448c3b', '#619436', '#7b9b31', '#8da02d',
+                    '#a4a627', '#beae21', '#d3b21a', '#ebb50f', '#f6ad04', '#ec9802', '#de7c02', '#d36402',
+                    '#c44f02', '#b53b02', '#a82902', '#9a1b01', '#8d0e01', '#810500', '#790a01', '#751102',
+                    '#741504', '#721905', '#711d06', '#6f2108', '#6e2509', '#6c290a', '#6b2d0c', '#6b310f',
+                    '#723b19', '#784625', '#805133', '#885d42', '#906953', '#967561', '#9d8475', '#a3938c',
+                    '#a7a19d', '#adacac', '#b5b4b5', '#bdbcbd', '#c6c5c6', '#cecdce', '#d7d5d7', '#dfdddf', '#e9e7e9'],
+    'turbid': ['#e8f5ab', '#e0e395', '#d8d17f', '#d0bf6a', '#c9ad59', '#c19c4b', '#b88c42', '#ac7e3e', '#a0713c',
+               '#93643a', '#835a38', '#735036', '#634633', '#533c2e', '#423228', '#322821', '#221e1b'],
+    'gray': ['#000000', '#202020', '#404040', '#606060', '#808080', '#9f9f9f', '#bfbfbf', '#dfdfdf', '#ffffff'],
+    'greens': ['#f7fcf5', '#e3f4de', '#c5e7be', '#9fd79b', '#72c378', '#42aa5d', '#218b44', '#026c2c', '#00441b'],
+    'magma': ['#000003', '#0a0721', '#1d0f46', '#350f69', '#50127b', '#691b7e', '#822581', '#9c2e7e', '#b53679',
+              '#ce426e', '#e45163', '#f3695d', '#fa8762', '#fda572', '#fec287', '#fcdfa3', '#fbfcbf'],
+    'ylorrd': ['#ffffcc', '#ffeba1', '#fed775', '#fdb24d', '#fc8b3b', '#fa4e2a', '#e11b1d', '#bc0126', '#800026'],
+    'puor': ['#7f3b08', '#be6209', '#ee9c3b', '#fdd4a0', '#f6f6f5', '#cecee4', '#998ebf', '#5f3b90', '#2d004b'],
+    'blues': ['#f7fbff', '#deebf7', '#c5daef', '#9cc8e1', '#6caed5', '#4390c5', '#2271b3', '#09519b', '#08306b'],
+    'ice': ['#030512', '#11122a', '#1f1f41', '#2d2c59', '#363874', '#3c468d', '#3e56a2', '#3f68ae', '#437ab7',
+            '#4a8bbd', '#599cc3', '#67adca', '#7abed0', '#92ced8', '#afdde2', '#cdecee', '#eafcfd'],
+}
+RAMP_NAMES = {'schwarzwald': 'Terrain', 'turbid': 'Earth', 'gray': 'Gray', 'greens': 'Greens', 'magma': 'Magma',
+              'ylorrd': 'Yellow–red', 'puor': 'Purple–orange', 'blues': 'Blues', 'ice': 'Ice'}
+# The ramps each kind offers, its default first.
+KIND_RAMPS = {'elevation': ['schwarzwald', 'turbid', 'gray'], 'height': ['greens', 'magma', 'gray'],
+              'slope': ['ylorrd', 'magma', 'gray'], 'other': ['magma', 'ylorrd', 'gray'], 'water': ['blues', 'ice', 'gray']}
+WATER = '#3E8CC0'
+# Map overlays are theme-independent (they sit on imagery): the pinned-point dot (ink core, white ring), the drawn line
+# (light line on a dark casing, as the draft and Measure tokens), and the online contour lines.
+MAPINK = {'ink': '#27231D', 'ring': '#FFFFFF', 'line': '#FFF3D6', 'casing': 'rgba(20,16,10,0.6)', 'contour': '#FFF3D6'}
+
+
+def ramp(name, angle=90, reversed=False):
+    stops = RAMPS[name][::-1] if reversed else RAMPS[name]
+    return f'linear-gradient({angle}deg, {", ".join(stops)})'
+
+
 def css():
     return CSS.replace('%LIGHT%', _vars(LIGHT)).replace('%DARK%', _vars(DARK))
 
@@ -299,6 +342,11 @@ IC = {
     'play': 'M6.5 4.5l9 5.5-9 5.5z',
     'camera': 'M3 6.5h3l1.5-2h5l1.5 2h3v9H3zM10 13.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
     'compass': 'M18.2 10a8.2 8.2 0 1 1-16.4 0 8.2 8.2 0 0 1 16.4 0zM10 3.6L12.6 10H7.4zM7.4 10h5.2L10 16.4z',
+    'contours': 'M2.5 14.5c2.5-2.6 4.6-.4 7-2.4s4.3-1.7 8-3.6M2.5 10.5c2.5-2.6 4.6-.4 7-2.4s4.3-1.7 8-3.6M2.5 18c2.5-2.6 4.6-.4 7-2.4s4.3-1.7 8-3.6',
+    'hillshade': 'M2.5 16l5-8 3 4.5 2-3 5 6.5zM7.5 8l-1 8M12.5 9.5L12 16',
+    'sitedata': 'M10 2.8c4.3 0 7.4 2.9 7.2 7.1-.2 4.1-3.6 7.3-7.6 7.3S2.6 14.4 2.8 10.3C3 6 5.8 2.8 10 2.8zM10.2 6c2.4 0 4.2 1.7 4 4.1-.1 2.3-2 3.9-4.3 3.9S5.8 12.4 6 10.1C6.1 7.7 7.8 6 10.2 6zM10.3 8.9c.8 0 1.3.5 1.3 1.2s-.6 1.3-1.4 1.3-1.3-.6-1.2-1.3c0-.7.6-1.2 1.3-1.2z',
+    'profile': 'M2.5 16.5h15M2.5 13.5l3.5-4.5 3 2.5 3.5-6.5 5 6',
+    'library': 'M3.5 3.5h3v13h-3zM7.5 3.5h3v13h-3zM11.6 4.6l2.9-.8 3.1 12-2.9.8z',
 }
 
 
@@ -445,12 +493,14 @@ def species_row(sym, colour, common, latin, code='', count='', sel=False, trail=
     return f'<div class="row{" sel" if sel else ""}" style="min-height: 46px; gap: 8px; padding: 0 6px 0 8px;">{lead}{sw}{body}{trail}</div>'
 
 
-def dialog(title, body, actions, width=460, close=True, extra=''):
+def dialog(title, body, actions, width=460, close=True, extra='', max_h=None):
+    """max_h: a height cap; the body then scrolls between the fixed head and foot."""
     i = uid('dlg')
     c = ib('close', 'Close', size='sm') if close else ''
-    return (f'<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="{i}" style="width: {width}px;{extra}">'
+    cap, scroll = (f' max-height: {max_h}px;', ' style="min-height: 0; overflow-y: auto;"') if max_h else ('', '')
+    return (f'<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="{i}" style="width: {width}px;{cap}{extra}">'
             f'<div class="dhead"><h2 class="dtitle" id="{i}">{esc(title)}</h2>{c}</div>'
-            f'<div class="dbody">{body}</div><div class="dfoot">{actions}</div></div>')
+            f'<div class="dbody"{scroll}>{body}</div><div class="dfoot">{actions}</div></div>')
 
 
 def sec(text, extra=''):
@@ -521,23 +571,30 @@ def toolrail(active='select', labelled=False, top=72, disabled=False, names=None
     return f'<div class="float" role="toolbar" aria-label="Tools" aria-orientation="vertical" style="position: absolute; left: 12px; top: {top}px; width: {w}; padding: 5px; display: flex; flex-direction: column; gap: 2px;">{"".join(out)}</div>'
 
 
-PANELS = [('layers', 'Layers', '1'), ('plants', 'Plants in this Design', '2'), ('catalog', 'Plant catalog', '3'), ('star', 'Favorites and stamps', '4'),
-          None, ('calendar', 'Calendar', '5'), ('budget', 'Budget', '6'), ('consortium', 'Consortium', '7'), ('notebook', 'Design notebook', '8'), ('story', 'Stories', '9')]
+# The panel rail, in order; the key is its Ctrl digit ('' = none). Site data is Desktop only.
+PANELS = [('layers', 'Layers', '1'), ('sitedata', 'Site data', '2'), ('plants', 'Plants in this Design', '3'), ('catalog', 'Plant catalog', '4'),
+          ('star', 'Favorites and stamps', '5'), None, ('calendar', 'Calendar', '6'), ('budget', 'Budget', '7'), ('consortium', 'Consortium', '8'),
+          ('notebook', 'Design notebook', '9'), ('story', 'Stories', '')]
+DESKTOP_PANELS = {'sitedata'}
 
 
-def panelrail(active=None, top=72, labelled=False):
+def panelrail(active=None, top=72, labelled=False, web=False):
     out = []
     for p in PANELS:
         if p is None:
             out.append('<div class="rule" style="margin: 3px 6px;" role="separator"></div>')
             continue
         ic, label, n = p
+        if web and ic in DESKTOP_PANELS:
+            continue
         on = ic == active
         if labelled:
+            k = f'<span class="kbd">Ctrl {n}</span>' if n else ''
             out.append(f'<button type="button" class="btn ghost plain" aria-expanded="{"true" if on else "false"}" style="justify-content: flex-start; height: 36px; padding: 0 8px; gap: 10px; font-weight: {600 if on else 400};{" background: var(--accent); color: var(--on-accent);" if on else " color: var(--ink);"}">'
-                       f'{icon(ic)}<span style="flex: 1 1 auto; text-align: left; white-space: nowrap;">{esc(label)}</span><span class="kbd">Ctrl {n}</span></button>')
+                       f'{icon(ic)}<span style="flex: 1 1 auto; text-align: left; white-space: nowrap;">{esc(label)}</span>{k}</button>')
         else:
-            out.append(ib(ic, f'{label} (Ctrl {n})', on=on, size='lg', extra=f' aria-expanded="{"true" if on else "false"}" aria-keyshortcuts="Control+{n}"'))
+            keys = f' aria-keyshortcuts="Control+{n}"' if n else ''
+            out.append(ib(ic, f'{label} (Ctrl {n})' if n else label, on=on, size='lg', extra=f' aria-expanded="{"true" if on else "false"}"{keys}'))
     w = 'max-content; min-width: 250px' if labelled else '52px'
     return f'<nav class="float" aria-label="Panels" style="position: absolute; right: 12px; top: {top}px; width: {w}; padding: 5px; display: flex; flex-direction: column; gap: 2px;">{"".join(out)}</nav>'
 

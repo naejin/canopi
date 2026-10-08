@@ -6,14 +6,14 @@ Read the [design system](../system.md) first. Boards: DesignSystem, DesignSystem
 
 - The place field searches on Enter; while a name waits, its popup says "Press Enter to search". The Design name is a button that renames (F2).
 - Save status is a live region: Saved, Saving… (not announced), Draft with Save as…, Couldn't save (alert) with Details… (the reason and Retry / Save as…), Changed outside Canopi (alert) with Resolve…. Web shows "Saved in this browser" and Download a copy.
-- Menus (native on macOS): File (new, open, recent, rename, save, revert, Add data… and Data library… on Desktop, Import GeoJSON…, Export ▸, Settings…, Close, Quit), Edit (history, clipboard, Find plants, selection, species commands, Arrange ▸, Rotate…, locks, stamps), View (zoom, fit, Reset north, Turn view left/right 15°, Pan, place search, saved views, Grid/Snap, Labels ▸, Tool names, panels Ctrl 1–9, Background, Theme), Tools (every tool with its key), Help (Command palette… Ctrl Shift P, Keyboard shortcuts F1, Getting started, Report a problem…, About).
+- Menus (native on macOS): File (new, open, recent, rename, save, revert, Import terrain or height data… (Desktop), Import GeoJSON…, Data library… (Desktop), Export ▸, Settings…, Close, Quit), Edit (history, clipboard, Find plants, selection, species commands, Arrange ▸, Rotate…, locks, stamps), View (zoom, fit, Reset north, Turn view left/right 15°, Pan, place search, saved views, Grid/Snap, Labels ▸, Tool names, panels Ctrl 1–9, Background, Theme), Tools (every tool with its key), Help (Command palette… Ctrl Shift P, Keyboard shortcuts F1, Getting started, Report a problem…, About).
 - Checkable items are `menuitemcheckbox` (Labels are radio items); a check column is reserved when a menu has any. Plant color, Plant symbol, Species details, Add to calendar… and Set unit cost… live in the right-click menu, not Edit. Below 760 px the menubar is one Menu button with submenus inline, holding Help, Settings and the Web file icons.
 
 ## Start and new Designs
 
 - Start: left column with logo, one line of purpose, New Design (Ctrl N, primary) and Open Design… (Ctrl O), Settings, Keyboard shortcuts, Report a problem…. Right: Search your Designs, Recent Designs, Drafts (dashed tile; deleting confirms inline and names the draft).
 - A recent row: a sketch thumbnail (72 × 52, from the file: zones as ink outlines, plants as ochre dots, north up, no map, no network), name, "2,201 plants · 24 zones", relative date and More (Show in folder, Remove from list, which keeps the file).
-- First run (nothing recent, no Drafts): no search; the section title sits over an `EmptyState` that says where Designs will appear and offers New Design.
+- First run (nothing recent, no Drafts): no search; the section title sits over an `EmptyState` saying where Designs will appear, with New Design.
 - New Design opens "Where is your site?" over the world map: a combobox with results (coordinates offered only when the input reads as coordinates), attribution, and Skip. Then "Start your Design" beside the labelled tool rail: draw a zone, open the catalog, rename and Save as….
 - A Design that cannot open shows "Can’t open this Design" with the reason and never a path: a native dialog on Desktop, the shell notice on Web.
 
@@ -21,9 +21,9 @@ Read the [design system](../system.md) first. Boards: DesignSystem, DesignSystem
 
 - Dialogs: Literata 20 title, body 14.5, footer actions right-aligned and wrapping, a leading ghost action aligned with the text. Modal, focus-trapped, Esc closes and returns focus. Everything under the scrim is inert: no press, focus, key or shortcut reaches it.
 - Saved views: Save current view… has Name (selected, default "View n") and an optional Title. Manage views… lists each view with its thumbnail (64 × 40), Go to, Rename in place (Enter keeps, Esc cancels only the rename) and Delete.
-- Notices: info (surface-alt), warning (amber), error (red, alert). Toasts are dark, carry Undo when it applies, and do not time out while hovered or focused.
+- Notices: info (surface-alt), warning (amber), error (red, alert). Toasts are dark, carry Undo when it applies, and wait while hovered or focused.
 - Notices never cover controls. An app-wide notice (catalog database missing or damaged; Data library refused; earlier data set aside, dismissible; a Web shell notice) takes its own row under the title bar and lowers `--chrome-rail-top` while it shows.
-- Empty states say what goes here and give the one action to start. Loading keeps the frame: inline "Searching…", row skeletons, a progress bar for long opens. Errors say what happened, what is safe and the next step.
+- Empty states say what goes here and give the action to start. Loading keeps the frame: inline "Searching…", row skeletons, a progress bar for long opens. Errors say what happened, what is safe and the next step.
 
 ## Settings
 
@@ -35,13 +35,13 @@ A wide dialog with a section list on the left (`nav`, the current section `aria-
 - New Designs: Open on satellite, symbol size (50–200 %), labels (None, Codes, Names); applied once when a Design is created.
 - Keyboard: Single-key shortcuts and Show all shortcuts (closes Settings, opens F1). The section says remapping is not offered.
 - Files and data: Desktop lists the Drafts and Data library paths with Show in folder; Web says Designs and Drafts stay in the browser.
-- About: the version and About Canopi… (closes Settings, opens the dialog).
+- About: the version and About Canopi… (closes Settings, opens it).
 
 ## Export planting plan
 
 A side sheet (280 px) beside the live preview, top to bottom: Back to Design and the title; paper; plant colours as a segmented radio group (As in the Design, Grayscale, Black); Map orientation (canvas navigation); Include (printable layers) plus a "North arrow and scale" switch; the selected page's options (Fit, zoom, orientation, Split into readable sheets, Inspect); Find in key (Ctrl F); Add field sheet and Whole Design; page thumbnails with key pages nested; Save PDF with the page count.
 
-Displacement stays on the preview (drag, or arrow keys on the focused page). No map backgrounds, no manual symbol size (ADR 0008). The key is automatic (on the sheet when it fits, otherwise on following pages), grouped by plant habit (Tree, Shrub, Herbaceous, Climber, Other), marks names missing in the chosen language "(en)", and never truncates.
+Displacement stays on the preview (drag, or arrows on the focused page). No map backgrounds, no manual symbol size (ADR 0008). The key is automatic (on the sheet when it fits, otherwise on following pages), grouped by plant habit (Tree, Shrub, Herbaceous, Climber, Other), marks names missing in the chosen language "(en)", and never truncates.
 
 ## Controls
 

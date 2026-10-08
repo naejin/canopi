@@ -37,7 +37,7 @@ The better source is the ONF plugin for Computree (`ct_pluginonf`, https://gitla
 - **GeoLibre stays** the engine for slope, hillshade, contours and hydrology. ADR 0011's optional Computree integration is dropped.
 - **Scope.** The work is ordered as follows:
   1. Raster canopy from above-ground height: gaps, tree tops, and cover facts.
-  2. Point-cloud library items (library-only, with a footprint outline in Layers) and terrain models from points.
+  2. Point-cloud library items (library-only, with a footprint outline in Site data) and terrain models from points.
   3. Crowns, gap depth, vegetation structure grids for the syntropic strata, and point cleaning.
 
   Terrestrial scans, stems, voxels and inventory tools are out of scope. ONF defaults ship with "Forest" and "Orchard / agroforestry" presets over the same recipes.

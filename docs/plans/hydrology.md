@@ -2,14 +2,14 @@
 
 Status: agreed (2026-09-26); not started as of 2026-09-28 (canopi-5ys2.1.1 and .1.2 open). The registry it needs shipped in v2.0.0 (canopi-h90p.9.1); the global lane (canopi-h90p.9.3) has not. Technical detail: `analysis-registry-and-hydrology.md` in this folder.
 Beads: canopi-h90p.9.1 registry (prerequisite, parked), .9.3 contours + global lane, canopi-5ys2.1.1 water flow, .1.2 catchments.
-Mockups: design canvas boards AnalyzeWater, WaterFlow, ResultDetails.
+Mockups: the WaterFlow board (rows in the Site data panel); 2.1 draws its Analyze and details boards.
 
 ## 1. What users get
 
 From a terrain layer (IGN or any metre-based elevation GeoTIFF), Analyze › Water offers:
 - **Water flow:** where water runs and collects — upslope area (m², shown on a log colour scale), streams as lines with their order (wider downstream), wetness index (where soil stays wet), ponding depth (where water sits in hollows). Choose which results to add; streams start from an upslope area you set in hectares.
 - **Catchments:** click one or more outlet points on the map; Canopi draws the land draining to each, with its area.
-Results nest under their terrain in Layers, read out on hover ("Stream, order 3 · upslope area 4.8 ha · wetness 11.2"), keep a record of how they were made, and can be refreshed.
+Results nest under their terrain in Site data, read out on the rows ("Stream, order 3 · upslope area 4.8 ha · wetness 11.2"), keep a record of how they were made, and can be refreshed.
 
 Design uses: swales and keylines along contours, pond and wetland placement, water-loving species in wet zones, avoiding planting in flow paths or frost pockets.
 

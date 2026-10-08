@@ -18,11 +18,9 @@ Check every section in light and dark, English and French, and a 720 px tall win
 
 ## Map canvas and tools
 
-Items 1, 7 and 8 are canvas v2 ([plan](plans/canvas-v2-plan.md)); until phases 1–2 ship check today's: no turning, Shift arrows 1 m, menu at right press.
-
 1. Pan (right-, middle- and Space + drag), zoom, turn the view (Shift + right-drag, Shift + ← →, the compass) and search a place (Ctrl K): only the view moves; plant names stay upright; N resets north; reopening restores the turn. Fit to Design frames objects in the visible map area.
-2. Layers › Background: Satellite, Map (each style) and None; map and plant labels stay readable in both themes.
-3. Online elevation › Contour lines and Hillshading switch on and off.
+2. Layers › Background: Satellite, Street map (each style) and None; map and plant labels stay readable in both themes.
+3. Layers › Map: Contour lines and Hillshading switch on and off; a name opens its settings, one row at a time.
 4. Every tool shows a tool card with its keys; Esc ends the tool, then clears the selection.
 5. Place plants without a species: the chooser lists Design, Favorites, Recent and search; the preview shows the mature-width ring and "x m to <name>".
 6. Plant a row with an Interval: the count updates; Shift keeps 45°; Undo removes the whole row.
@@ -37,23 +35,23 @@ Items 1, 7 and 8 are canvas v2 ([plan](plans/canvas-v2-plan.md)); until phases 1
 
 ## Plant catalog and finder
 
-1. Plant catalog (Ctrl 3): the first rows are edible and multi-use species; sort by Name, Height and Edibility; quick filters and Filters tokens add and remove one by one.
+1. Plant catalog (Ctrl 4): the first rows are edible and multi-use species; sort by Name, Height and Edibility; quick filters and Filters tokens add and remove one by one.
 2. Search "pomme" in French and "apple" in English: results match; a species with no French name shows "(en)".
 3. Species details: key facts first, "Not recorded" for gaps, photos with source and licence, Place, and for a placed species its code, count, Select them and Zoom to them.
 4. Ctrl F in Plants in this Design, Budget, Consortium and Favorites: one finder, accent-insensitive and typo-tolerant; matches are ringed on the map with Zoom to them and Select all.
 5. Selected on map, Stratum and Form narrow each list with counts.
 6. Start with the plant database missing: the notice says search and details are off and Designs are safe; the app stays usable.
 
-## Data library and analyses (Desktop)
+## Site data, Data library and analyses (Desktop)
 
-1. On a machine with no GDAL installed, Layers › Add data › Terrain or height from files…: the dialog names the accepted files, says "Covers your site." for a matching tile and warns for a distant one; a taken name is refused with a suggestion.
-2. Import runs with progress and Cancel under Site data while you keep editing; the item appears with legend, opacity, Fit to data and Read values.
-3. Analyze… › Slope on a ground-elevation item runs through the bundled GeoLibre tool: the result nests under its source with its unit; Details show Calculated from, processing history and Run again with changes….
+1. On a machine with no GDAL installed, Site data (Ctrl 2) › Import…: the dialog names the accepted files, says "Covers your site." for a matching tile and warns for a distant one; a taken name is refused with a suggestion.
+2. Import shows progress and Cancel atop Site data while you keep editing; the row then shows its value under the pointer and opens Colors, Range, Opacity and Fit to data.
+3. Analyze… › Slope on a ground-elevation item runs through the bundled GeoLibre tool: the result nests under its source with its unit; Details open the Data library on it with Calculated from, history and Run again with changes….
 4. Refresh a result: same item, the earlier run stays in the processing history, every Design showing it sees the new result; Out of date names its reason.
-5. Data library dialog: the footer states the size on disk and Show in folder opens it; Remove from Design keeps the item; Delete everywhere warns and removes it.
+5. Data library: the footer states the size on disk and Show in folder opens it; Remove from Design keeps the item; Delete everywhere, confirmed in place, removes it.
 6. With `CANOPI_GEOLIBRE_BIN` pointing at a missing path: import still works, Analyze… says "Unavailable: the GeoLibre engine is missing.", and saved results still display.
-7. Replace `lidar-library.sqlite` with a damaged file: the Data library dialog says Canopi rebuilt it and Retry prepares items again; a catalogue from a newer Canopi shows "saved by a newer version of Canopi" and is read-only.
-8. Alt ↑ and Alt ↓ reorder Site data rows and the change survives reopening the Design.
+7. Replace `lidar-library.sqlite` with a damaged file: the Data library says Canopi rebuilt it and Retry prepares items again; a catalogue from a newer Canopi shows "saved by a newer version of Canopi" and is read-only.
+8. Drag a Site data row or press Alt ↑ / ↓: it moves among its siblings and the order survives reopening. A click on empty ground pins a point; Profile's Copy values pastes into a spreadsheet as cells.
 
 ## Planning panels
 
@@ -67,7 +65,7 @@ Items 1, 7 and 8 are canvas v2 ([plan](plans/canvas-v2-plan.md)); until phases 1
 
 1. View › Save current view…; change zoom and background; View › Saved views › the view flies back and restores background, layers, labels and focused species; no object moves.
 2. Manage views…: rename, delete (Undo restores it); deleting a view a story uses lists the stories first.
-3. Stories (Ctrl 9): add three steps, edit title and text (bold, italic, bullets, link), add a picture with a description (over 1 MB is reduced); drag and Alt ↑ / ↓ reorder; Duplicate, Move to and Delete with Undo.
+3. Stories: add three steps, edit title and text (bold, italic, bullets, link), add a picture with a description (over 1 MB is reduced); drag and Alt ↑ / ↓ reorder; Duplicate, Move to and Delete with Undo.
 4. Present: card beside the live map, step dots, Previous, Next, Finish, arrow keys, Space, Esc; leaving restores the map and focus; the save status does not change.
 5. Present › Full screen on Linux and Windows; on macOS the button is absent (no fallback yet) and presenting still fills the window.
 6. On WebView2 and WebKitGTK every saved view and story step shows a picture, not an empty frame, after saving and after reopening the Design.
@@ -98,7 +96,7 @@ Items 1, 7 and 8 are canvas v2 ([plan](plans/canvas-v2-plan.md)); until phases 1
 1. `npm run package:web`, serve the archive at `/app/`: the shell loads without missing assets or Tauri requests; New Design, Open a .canopi file…, Download a copy and "Saved in this browser" work.
 2. Browser catalog: browse, a two-character search and a filter work; sort offers Recommended and Name.
 3. Import GeoJSON, export GeoJSON, Budget CSV and the PDF; reload: the Draft is back.
-4. Site data says "Terrain and height data need Canopi Desktop."; a Design's Desktop terrain layers survive a Web round trip.
+4. Layers reads "N terrain or height layers in this Design · Needs Canopi Desktop"; they survive a Web round trip.
 5. Phone (a real device, portrait and landscape): the top bar with Menu, name, Undo and search; the tool strip; the compass; the bottom sheet (Layers, Plants, Catalog, More) opens to half and full height by drag, tap and arrow keys; targets ≥ 44 px; typing in a field does not zoom the page; the notch and home indicator are clear.
 6. Present a story on the phone: swipe moves steps; Esc or Finish returns to the panel.
 7. Open the 1.x Web storage profile: one notice says earlier data was set aside (`…before-2.0-…` keys); the app starts empty.

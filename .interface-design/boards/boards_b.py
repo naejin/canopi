@@ -1,148 +1,8 @@
-"""Boards: site data, planning, output, system, web, theme and language, states."""
+"""Boards: planning, output, system, web, theme and language, states. Layers and Site data are in boards_site.py."""
 from build import board, blob
 from common import *  # noqa: F401,F403
+from boards_site import layers_list, plants_over
 import ds
-
-
-# ============================================================ site data
-def layer_row(name, count='', vis=True, lock=None, active=False, indent=0, sub=''):
-    eye = ib('eye' if vis else 'eye-off', ('Hide ' if vis else 'Show ') + name, size='sm')
-    if lock is None:
-        lk = ''
-    elif lock:
-        lk = ib('lock', 'Unlock ' + name, size='sm', cls='soft')
-    else:
-        lk = ib('unlock', 'Lock ' + name, size='sm', cls='quiet')
-    s = f'<span class="small muted">{esc(sub)}</span>' if sub else ''
-    c = f'<span class="count">{esc(count)}</span>' if count else ''
-    return (f'<div class="row{" sel" if active else ""}" style="min-height: 38px; padding-left: {6 + indent}px; gap: 6px;">{eye}'
-            f'<button type="button" aria-current="{"true" if active else "false"}" style="flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; border: 0; background: transparent; font: inherit; color: {"var(--ink)" if vis else "var(--muted)"}; cursor: pointer; text-align: left; min-height: 36px; padding: 0;">'
-            f'<span style="display: flex; flex-direction: column; min-width: 0; line-height: 1.2;"><span style="font-weight: {600 if active else 400};">{esc(name)}</span>{s}</span></button>{c}{lk}</div>')
-
-
-def site_footer(which):
-    if which == 'slope':
-        head = '<b style="font-weight: 600;">Slope</b><span class="small muted">degrees</span>'
-        legend = ('<div style="height: 10px; border-radius: 5px; background: linear-gradient(90deg,#FFF3C4,#F2A541,#B5402A);"></div>'
-                  '<div class="small muted num" style="display: flex; justify-content: space-between;"><span>0°</span><span>8°</span><span>16° and more</span></div>')
-        acts = (ib('fit', 'Fit to Slope', size='sm') + f'<button type="button" class="btn sm" aria-pressed="true">{icon("target", "s16")}Read values</button>'
-                + '<span style="flex: 1 1 auto;"></span>' + btn('Remove from Design', 'link', size='sm'))
-        op = 70
-    else:
-        head = '<b style="font-weight: 600;">Terrain · IGN 0.5 m</b><span class="small muted">Elevation</span>'
-        legend = ('<div style="height: 10px; border-radius: 5px; background: linear-gradient(90deg,#2F4A5E,#7FA38A,#E9E0B3,#C9854A);"></div>'
-                  '<div class="small muted num" style="display: flex; justify-content: space-between;"><span>112 m</span><span>131 m</span></div>')
-        acts = (ib('fit', 'Fit to Terrain', size='sm') + f'<button type="button" class="btn sm" aria-pressed="false">{icon("target", "s16")}Read values</button>'
-                + btn('Analyze…', size='sm') + '<span style="flex: 1 1 auto;"></span>' + btn('Remove from Design', 'link', size='sm', aria='Remove Terrain · IGN 0.5 m from this Design'))
-        op = 80
-    return (f'<div style="display: flex; flex-direction: column; gap: 8px; width: 100%;"><div style="display: flex; justify-content: space-between; align-items: baseline;">{head}</div>'
-            f'{legend}{slider("Opacity", op, "%")}<div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">{acts}</div></div>')
-
-
-def layers_panel(active='terrain', add_menu=False, progress=None, web=False, details=True):
-    rows = ((f'<div style="display: flex; align-items: center; justify-content: space-between; padding-right: 4px;">{sec("Design")}{btn("Add GeoJSON…", "link", "plus", "sm")}</div>') if web else sec('Design')) + layer_row('Plants', '2,201', lock=False) + layer_row('Zones', '3', lock=False) + layer_row('Notes and measurements', '5', lock=True)
-    rows += (sec('Site data') if web else (f'<div style="display: flex; align-items: center; justify-content: space-between; padding-right: 4px;">{sec("Site data")}'
-             f'<button type="button" class="btn link sm" aria-haspopup="menu" aria-expanded="{"true" if add_menu else "false"}">{icon("plus", "s16")}Add data</button></div>'))
-    if web:
-        rows += notice('info', 'Terrain and height data need Canopi Desktop. They stay in this Design and show again there.', 'desktop')
-    elif progress:
-        rows += layer_row('Terrain · IGN 0.5 m', sub='Elevation · 112–131 m') + layer_row('Slope', sub='from Terrain · degrees', indent=22) + layer_row('Hillshade', sub='from Terrain', indent=22, vis=False) + layer_row('Contours', sub='from Terrain · every 1 m', indent=22, vis=False)
-        rows += (f'<div class="row" style="flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 10px; background: var(--surface-2);">'
-                 f'<div style="display: flex; justify-content: space-between; gap: 8px;"><span style="font-weight: 600;">Terrain · IGN 0.5 m · 2024</span><span class="small muted num">Processing · {progress}%</span></div>'
-                 f'<div class="bar" role="progressbar" aria-valuenow="{progress}" aria-valuemin="0" aria-valuemax="100" aria-label="Import progress: Terrain · IGN 0.5 m · 2024"><i style="width: {progress}%;"></i></div>'
-                 f'<div style="display: flex; gap: 6px; align-items: center;">{btn("Cancel import", size="sm")}<span class="small muted">You can keep working.</span></div></div>')
-    else:
-        rows += layer_row('Terrain · IGN 0.5 m', sub='Elevation · 112–131 m', active=(active == 'terrain'))
-        rows += layer_row('Slope', sub='from Terrain · degrees', indent=22, active=(active == 'slope'))
-        rows += layer_row('Hillshade', sub='from Terrain', indent=22, vis=False)
-        rows += layer_row('Contours', sub='from Terrain · every 1 m', indent=22, vis=False)
-    rows += sec('Background')
-    rows += '<div role="radiogroup" aria-label="Background">' + radio('Satellite', True, 'bg', '<span class="small muted">Google</span>') + radio('Map', False, 'bg', '<span class="small muted">OpenFreeMap</span>') + radio('None', False, 'bg', '<span class="small muted">Plain paper</span>') + '</div>'
-    foot = site_footer(active) if (details and not web and not progress) else ''
-    p = panel('Layers', f'<div class="scroll" style="display: flex; flex-direction: column; gap: 2px; overflow-y: auto;">{rows}</div>', foot=foot,
-              bottom=(64 if foot else None))
-    m = ''
-    if add_menu:
-        m = menu([('#', 'Add to this Design'), ('Terrain or height from files…', '', 'ic:terrain desc:GeoTIFF_from_LiDAR_or_a_national_survey'), ('Design objects from GeoJSON…', '', 'ic:import desc:Plants,_zones,_notes'), '-',
-                  ('#', 'From your library'), ('Terrain · IGN 0.5 m', 'In this Design', 'dis ic:terrain'), ('Canopy height · 2024', '', 'ic:terrain'), '-', ('Data library…', '', 'ic:folder')], 320,
-                 ' position: absolute; right: 88px; top: 304px; z-index: 2;', label='Add data')
-    return p + m
-
-
-@board('Layers', title='Layers · design, site data and background in one list', group='sitedata')
-def layers():
-    return site_map() + layers_panel('terrain') + chrome(panel='layers')
-
-
-@board('AddDataMenu', title='Add data · one entry point, library included', group='sitedata')
-def add_data_menu():
-    return site_map() + layers_panel('terrain', add_menu=True, details=False) + chrome(panel='layers')
-
-
-@board('AddData', title='Import terrain data · coverage and name checked before import', group='sitedata')
-def add_data():
-    files = ''.join(f'<div class="row" style="min-height: 38px; gap: 6px; padding: 0 4px 0 8px;">{icon("file", "s16")}<span class="mono" style="font-size: 12.5px; flex: 1 1 auto;">{f}</span><span class="small muted">{s}</span>'
-                    f'{ib("chev-u", "Move " + f + " up", size="sm", extra=" disabled" if i == 0 else "")}{ib("chev-d", "Move " + f + " down", size="sm", extra=" disabled" if i == 1 else "")}{ib("close", "Remove " + f, size="sm")}</div>'
-                    for i, (f, s) in enumerate([('LHD_FXX_0470_6800_MNT_O_0M50.tif', '38 MB'), ('LHD_FXX_0470_6801_MNT_O_0M50.tif', '41 MB')]))
-    body = (field('Name', textin('Terrain · IGN 0.5 m', aria='Name', err=True), 'Your library already has an item with this name. Choose another, for example “Terrain · IGN 0.5 m · 2024”.', err=True)
-            + '<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">'
-            + field('What the values measure', dropdown('Elevation', 'What the values measure')) + field('Unit', dropdown('Meters', 'Unit')) + '</div>'
-            + f'<div class="field"><span class="lbl">Files · 2</span><div class="card" style="padding: 4px;">{files}</div><span class="hint">Where files overlap, the first file wins.</span></div>'
-            + notice('info', '<b style="font-weight: 600;">Covers your site.</b> The two tiles span 2 × 1 km around this Design.', 'check')
-            + '<span class="hint">Imported data goes to your library, so any Design can use it.</span>')
-    dlg = dialog('Import terrain data', body, btn('Cancel') + btn('Import 2 files', 'primary'), 540)
-    return site_map() + layers_panel('terrain', details=False) + chrome(panel='layers') + '<div class="scrim"></div>' + f'<div style="position: absolute; left: 50%; top: 96px; transform: translateX(-50%);">{dlg}</div>'
-
-
-@board('ImportProgress', title='Import in progress · you can keep working', group='sitedata')
-def import_progress():
-    return site_map() + layers_panel(progress=62) + chrome(panel='layers')
-
-
-@board('SlopeAnalysis', title='Slope · result nested under its terrain, values on hover', group='sitedata')
-def slope():
-    card = (f'<div class="float" role="status" style="position: absolute; left: 704px; top: 470px; padding: 8px 12px; border-radius: 10px; display: flex; flex-direction: column; gap: 2px; font-size: 14px;">'
-            f'<span class="small muted num">48.2201° N, 0.0350° E</span><span>Elevation <b class="num" style="font-weight: 600;">118.4 m</b></span><span>Slope <b class="num" style="font-weight: 600;">6.2°</b></span></div>'
-            '<svg width="1440" height="900" style="position: absolute; inset: 0;" aria-hidden="true"><circle cx="690" cy="462" r="7" fill="none" stroke="#1A160F" stroke-width="4"></circle><circle cx="690" cy="462" r="7" fill="none" stroke="#FFFFFF" stroke-width="2"></circle><circle cx="690" cy="462" r="1.5" fill="#FFFFFF"></circle></svg>')
-    return (f'<div class="map"><img src="{blob("orchard-sat")}" alt="Satellite view of the orchard"></div><img src="{blob("slope-overlay")}" alt="Slope overlay" style="position: absolute; left: 0; top: 0; width: 1440px; height: 900px; opacity: 0.7;">'
-            f'<img src="{blob("plants-site")}" alt="" style="position: absolute; left: 0; top: 0; width: 1440px; height: 900px;">'
-            + card + layers_panel('slope') + chrome(panel='layers', attrib='© Google · IGN'))
-
-
-@board('AnalyzeDialog', title='Analyze terrain · results nest under their source', group='sitedata')
-def analyze():
-    opts = ''.join(
-        f'<label class="row{" tile-sel" if on else ""}" style="min-height: 58px; gap: 12px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer;">'
-        f'<input type="radio" name="an" checked="{{{{ {"true" if on else "false"} }}}}"{" disabled" if dis else ""}><span style="display: flex; flex-direction: column; line-height: 1.3; flex: 1 1 auto;"><b style="font-weight: 600;{" color: var(--muted);" if dis else ""}">{a}</b><span class="small muted">{b}</span></span></label>'
-        for a, b, on, dis in [('Slope', 'Already in Layers.', False, True),
-                              ('Hillshade', 'Already in Layers.', False, True),
-                              ('Contours', 'Lines of equal height. Every 1 m is already in Layers; add another interval.', True, False),
-                              ('Aspect', 'Which way slopes face. Coming in a later version.', False, True)])
-    body = (f'<p style="margin: 0;">From <b style="font-weight: 600;">Terrain · IGN 0.5 m</b>. The result is added under it in Layers and kept in your library.</p>'
-            f'<div role="radiogroup" aria-label="Analysis" style="display: flex; flex-direction: column; gap: 6px;">{opts}</div>'
-            f'<div style="width: 180px;">{field("Contour interval", dropdown("0.5 m", "Contour interval"))}</div>')
-    dlg = dialog('Analyze terrain', body, btn('Cancel') + btn('Add contours', 'primary'), 500)
-    return site_map() + layers_panel('terrain') + chrome(panel='layers') + '<div class="scrim"></div>' + f'<div style="position: absolute; left: 50%; top: 150px; transform: translateX(-50%);">{dlg}</div>'
-
-
-@board('Library', title='Data library · shared by all your Designs', group='sitedata')
-def library():
-    items = [('Terrain · IGN 0.5 m', 'Elevation · 0.5 m · 112–131 m', 'In this Design'), ('Slope from Terrain · IGN 0.5 m', 'Slope · degrees', 'In this Design'),
-             ('Canopy height · 2024', 'Height · 1 m · 0–24 m', ''), ('Terrain · Haie nord', 'Elevation · 0.5 m', '')]
-    rows = ''.join(f'<div class="row" style="min-height: 60px; gap: 12px;"><span style="width: 56px; height: 42px; border-radius: 6px; flex-shrink: 0; background: linear-gradient(135deg,#2F4A5E,#7FA38A 45%,#E9E0B3 75%,#C9854A);" aria-hidden="true"></span>'
-                   f'<span style="display: flex; flex-direction: column; flex: 1 1 auto; line-height: 1.25;"><b style="font-weight: 600;">{a}</b><span class="small muted">{b}</span></span>'
-                   + (f'<span class="badge">{c}</span>' if c else btn('Add to Design', size='sm', aria=f'Add {a} to this Design')) + ib('more', 'More actions for ' + a, size='sm') + '</div>' for a, b, c in items[:2] + [('Hillshade from Terrain · IGN 0.5 m', 'Hillshade', 'In this Design'), ('Contours from Terrain · IGN 0.5 m', 'Contours · every 1 m', 'In this Design')])
-    confirm = (f'<div class="row" role="alertdialog" aria-label="Delete from library" style="min-height: 60px; gap: 12px; padding: 10px; background: var(--danger-soft); box-shadow: inset 3px 0 0 var(--danger); flex-wrap: wrap;">'
-               f'<span style="flex: 1 1 280px; font-size: 14px;">Delete “Canopy height · 2024” from the library? It is used by 2 Designs: Haie fruitière nord, Jardin de la mare. They will lose this layer.</span>'
-               f'{btn("Cancel", size="sm")}{btn("Delete everywhere", "danger", size="sm")}</div>')
-    rows += confirm + ''.join(f'<div class="row" style="min-height: 60px; gap: 12px;"><span style="width: 56px; height: 42px; border-radius: 6px; flex-shrink: 0; background: linear-gradient(135deg,#2F4A5E,#7FA38A 45%,#E9E0B3 75%,#C9854A);" aria-hidden="true"></span>'
-                              f'<span style="display: flex; flex-direction: column; flex: 1 1 auto; line-height: 1.25;"><b style="font-weight: 600;">{a}</b><span class="small muted">{b}</span></span>'
-                              + btn('Add to Design', size='sm', aria=f'Add {a} to this Design') + ib('more', 'More actions for ' + a, size='sm') + '</div>' for a, b, c in items[3:])
-    body = (f'<div style="display: flex; gap: 8px;"><div style="flex: 1 1 auto;">{search("Search data")}</div>{dropdown("All types", "Type")}{btn("Import…", "", "import", "md")}</div>'
-            f'<div style="display: flex; flex-direction: column; gap: 2px;">{rows}</div>'
-            '<p class="hint" style="margin: 0;">Removing an item from one Design keeps it in the library. Deleting it here removes it from every Design.</p>')
-    dlg = dialog('Data library', body, f'<span class="small muted" style="flex: 1 1 auto;">6 items · 1.2 GB on this computer</span>{btn("Show in folder", "ghost")}{btn("Done")}', 700)
-    return site_map() + chrome() + '<div class="scrim"></div>' + f'<div style="position: absolute; left: 50%; top: 72px; transform: translateX(-50%);">{dlg}</div>'
 
 
 # ============================================================ planning
@@ -446,7 +306,7 @@ def pdf_key():
 @board('Menus', w=1760, h=1040, title='Menus · every command, with its shortcut', group='system')
 def menus():
     f = menu([('New Design', 'Ctrl N'), ('Open Design…', 'Ctrl O'), ('Open recent', '', 'sub'), '-', ('Rename…', 'F2'), ('Save as…', 'Ctrl Shift S'), ('Revert to the version when opened…', ''), '-',
-              ('Add data…', ''), ('Data library…', ''), ('Import GeoJSON…', ''), ('Export', '', 'sub hot'), '-', ('Settings…', 'Ctrl ,'), '-', ('Close Design', 'Ctrl W'), ('Quit Canopi', 'Ctrl Q')], 300, label='File')
+              ('Import terrain or height data…', ''), ('Import GeoJSON…', ''), ('Data library…', ''), ('Export', '', 'sub hot'), '-', ('Settings…', 'Ctrl ,'), '-', ('Close Design', 'Ctrl W'), ('Quit Canopi', 'Ctrl Q')], 300, label='File')
     exp = menu([('Planting plan (PDF)…', 'Ctrl P'), ('GeoJSON…', ''), ('Budget as CSV…', '')], 240, ' margin-top: 335px; margin-left: -10px;', label='Export')
     e = menu([('Undo', 'Ctrl Z'), ('Redo', 'Ctrl Shift Z'), '-', ('Cut', 'Ctrl X'), ('Copy', 'Ctrl C'), ('Paste', 'Ctrl V'), ('Duplicate', 'Ctrl D'), ('Delete', 'Del'), '-',
               ('Select all', 'Ctrl A'), ('Select all of this species', 'Ctrl Shift A'), ('Deselect', 'Esc'), '-', ('Symbol and color…', ''), ('Species details', ''), ('Add to calendar…', ''), ('Set unit cost…', ''), '-', ('Group', 'Ctrl G'), ('Ungroup', 'Ctrl Shift G'), ('Arrange', '', 'sub'), ('Rotate…', 'Ctrl Alt R'), '-',
@@ -454,7 +314,7 @@ def menus():
     v = menu([('Zoom in', 'Ctrl +'), ('Zoom out', 'Ctrl −'), ('Fit to Design', 'Shift F'), ('Zoom to selection', 'Shift 2'), ('Search a place…', 'Ctrl K'), '-',
               ('Reset north', 'N'), ('Turn view left 15°', 'Shift ←'), ('Turn view right 15°', 'Shift →'), ('Pan', 'H'), '-',
               ('Grid', 'Shift G', 'nochk'), ('Snap to grid', 'Shift S', 'chk'), ('Labels', 'Shift L', 'sub'), ('Tool names', '', 'chk'), '-',
-              ('Layers', 'Ctrl 1'), ('Plants in this Design', 'Ctrl 2'), ('Plant catalog', 'Ctrl 3'), ('Favorites and stamps', 'Ctrl 4'), ('Calendar', 'Ctrl 5'), ('Budget', 'Ctrl 6'), ('Consortium', 'Ctrl 7'), ('Design notebook', 'Ctrl 8'), '-',
+              ('Layers', 'Ctrl 1'), ('Site data', 'Ctrl 2'), ('Plants in this Design', 'Ctrl 3'), ('Plant catalog', 'Ctrl 4'), ('Favorites and stamps', 'Ctrl 5'), ('Calendar', 'Ctrl 6'), ('Budget', 'Ctrl 7'), ('Consortium', 'Ctrl 8'), ('Design notebook', 'Ctrl 9'), ('Stories', ''), '-',
               ('Background', '', 'sub'), ('Theme', '', 'sub')], 290, label='View')
     t = menu([('Select', 'V'), ('Pan', 'H'), '-', ('Place plants', 'P'), ('Plant a row', 'W'), ('Place a stamp', 'K'), '-', ('Polygon zone', 'Z'), ('Rectangle zone', 'R'), ('Ellipse zone', 'E'), ('Line zone', 'L'), '-', ('Text note', 'T'), ('Measure', 'M')], 240, label='Tools')
     h = menu([('Keyboard shortcuts', 'F1'), ('Getting started', ''), '-', ('Report a problem…', ''), ('About Canopi', '')], 240, label='Help')
@@ -541,7 +401,7 @@ def shortcuts():
                         ('Nudge 10 cm on screen', 'Arrows'), ('Nudge 1 m', 'Ctrl Arrows'), ('Reorder in a list', 'Alt ↑ · Alt ↓')]),
               ('View', [('Zoom in · out', '+ · − · Ctrl + · Ctrl −'), ('Fit the Design', 'Home · Shift F · Ctrl 0'), ('Zoom to selection', 'Shift 2'), ('Turn the view 15°', 'Shift ← · Shift →'), ('Reset north', 'N · Shift N · Shift ↑'),
                         ('Search a place', 'Ctrl K'), ('Search in the open panel', 'Ctrl F'), ('Labels: none, codes, names', 'Shift L'), ('Grid · Snap to grid', 'Shift G · Shift S'),
-                        ('Layers · Plants · Catalog · Favorites', 'Ctrl 1 · 2 · 3 · 4'), ('Calendar · Budget · Consortium · Notebook', 'Ctrl 5 · 6 · 7 · 8')]),
+                        ('Layers · Site data · Plants · Catalog · Favorites', 'Ctrl 1 · 2 · 3 · 4 · 5'), ('Calendar · Budget · Consortium · Notebook', 'Ctrl 6 · 7 · 8 · 9')]),
               ('Mouse, trackpad and pen', [('Pan the map', 'Right-drag · Middle-drag · Space + drag'), ('Turn the view; add Ctrl (Cmd on Mac) for 15° steps', 'Shift + right-drag · Shift + middle-drag'),
                                            ('Click to reset north, drag to turn the view', 'Compass'), ('Open the menu', 'Right-click'), ('Zoom', 'Pinch or Ctrl + wheel'), ('Remove from the selection', 'Alt + click')]),
               ('File and help', [('New Design', 'Ctrl N'), ('Open Design', 'Ctrl O'), ('Rename', 'F2'), ('Save as', 'Ctrl Shift S'), ('Export planting plan', 'Ctrl P'), ('Settings', 'Ctrl ,'), ('Keyboard shortcuts', 'F1')])]
@@ -590,7 +450,9 @@ def empty_states():
              card('Calendar · empty month', 'Nothing planned in September.', btn('Add action', size='sm'), 'calendar'),
              card('Budget', 'Place plants first; each species then gets a line for its unit cost.', btn('Open plant catalog', size='sm'), 'budget'),
              card('Consortium', 'Place plants to see which strata and succession phases your Design covers.', btn('Open plant catalog', size='sm'), 'consortium'),
-             card('Data library', 'No data yet. Import terrain or height files once, then add them to any Design.', btn('Import…', size='sm'), 'terrain'),
+             card('Site data (Desktop)', 'No site data yet. Add terrain or height data from files or from your Data library. Results you calculate appear under their source.',
+                  f'<div style="display: flex; gap: 6px; flex-wrap: wrap;">{btn("Import files…", size="sm")}{btn("Open the Data library", size="sm")}</div>', 'sitedata'),
+             card('Data library', 'No data yet. Import terrain or height files once, then add them to any Design.', btn('Import…', size='sm'), 'library'),
              card('Design notebook', 'Saved Designs you add appear here, grouped in sections.', btn('Add this Design', size='sm'), 'notebook')]
     return (f'<div style="position: absolute; inset: 0; padding: 40px 48px; display: flex; flex-direction: column; gap: 22px;">' + H('Empty states')
             + f'<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;">{"".join(cards)}</div></div>')
@@ -613,7 +475,34 @@ def loading_states():
 @board('WebWorkspace', title='Web Edition · same workspace, file actions as icons', group='web')
 def web_workspace():
     t = topbar(ORCHARD, 'Saved in this browser', 'web', web=True, search_label='Search a place', status_action=btn('Download a copy', 'link', size='sm'))
-    return site_map() + layers_panel(web=True) + t + toolrail() + panelrail('layers') + viewchip() + zoombar()
+    body = f'<div class="scroll" style="flex: 1 1 auto; min-height: 0; overflow-y: auto;">{layers_list("Zones", web=True, bg="Street map", total=2)}</div>'
+    return (z18_map() + plants_over() + panel('Layers', body) + t + toolrail() + panelrail('layers', web=True) + viewchip() + zoombar(attrib='© OpenFreeMap'))
+
+
+# The sheet is scrolled so the Site data row, Map and Background show; the Design rows sit above.
+SCROLL_TO_SITE = ('class Component extends DCLogic {\n  componentDidMount() { const p = document.querySelector("[role=tabpanel]"); const a = document.querySelector("[data-anchor=site]");'
+                  ' if (p && a) p.scrollTop = a.getBoundingClientRect().top - p.getBoundingClientRect().top - 4; }\n  renderVals() { return {}; }\n}')
+
+
+@board('WebPhoneLayers', w=390, h=844, title='Web Edition on a phone · Layers in the sheet at half height, scrolled to Background', group='web', script=SCROLL_TO_SITE)
+def web_phone_layers():
+    tabs = ''.join(f'<button type="button" role="tab" aria-selected="{"true" if t == "Layers" else "false"}" class="chip" style="min-height: 44px; flex-shrink: 0;">{t}</button>' for t in ['Layers', 'Plants', 'Catalog', 'More'])
+    lst = layers_list(None, web=True, bg='Street map', touch=True, total=2, anchor=True)
+    return f'''
+<div class="map"><img src="{blob("site-z18")}" alt="Map of the site" style="left: -445px; top: -80px; width: 1440px; height: 900px;"></div>
+<div style="position: absolute; inset: 0; overflow: hidden;"><img src="{blob("plants-site")}" alt="" style="position: absolute; left: -445px; top: -80px; width: 1440px; height: 900px;"></div>
+<header class="float" style="position: absolute; left: 8px; right: 8px; top: 8px; height: 56px; display: flex; align-items: center; gap: 2px; padding: 0 4px;">
+  {ib("menu", "Menu", size="touch")}<div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; line-height: 1.2;"><span class="disp" style="font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{esc(ORCHARD)}</span>{save_status("Saved in this browser", "web")}</div>
+  {ib("undo", "Undo", size="touch")}{ib("search", "Search a place", size="touch")}
+</header>
+<div class="float" role="toolbar" aria-label="Tools" style="position: absolute; left: 8px; top: 72px; display: flex; flex-direction: column; gap: 2px; padding: 4px;">{ib("select", "Select", True, "touch")}{ib("hand", "Pan", size="touch")}{ib("plant", "Place plants", size="touch")}{ib("polygon", "Polygon zone", size="touch")}{ib("more", "More tools", size="touch")}</div>
+<div class="float" role="group" aria-label="Zoom" style="position: absolute; right: 8px; top: 200px; display: flex; flex-direction: column; gap: 2px; padding: 4px;">{ib("plus", "Zoom in", size="touch")}{ib("minus", "Zoom out", size="touch")}{ib("fit", "Fit to Design", size="touch")}{compass(0, size="touch")}</div>
+<span class="attrib" style="position: absolute; right: 8px; bottom: 430px;">© OpenFreeMap</span>
+<section class="float" aria-label="Panels" style="position: absolute; left: 0; right: 0; bottom: 0; height: 422px; border-radius: 18px 18px 0 0; display: flex; flex-direction: column; padding: 4px 10px 0; padding-bottom: env(safe-area-inset-bottom);">
+  <button type="button" aria-label="Expand sheet" aria-expanded="false" style="align-self: center; width: 88px; height: 44px; margin: -10px 0 -10px; border: 0; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center;"><span style="width: 40px; height: 5px; border-radius: 3px; background: var(--line-strong);"></span></button>
+  <div role="tablist" aria-label="Panels" style="display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px;">{tabs}</div>
+  <div role="tabpanel" aria-label="Layers" class="scroll" style="flex: 1 1 0; min-height: 0; overflow-y: auto;">{lst}</div>
+</section>'''
 
 
 @board('WebPhone', w=390, h=844, title='Web Edition on a phone · map first, panels in a sheet', group='web')
@@ -661,7 +550,6 @@ def web_phone_search():
 from boards_a import catalog as _catalog  # noqa: E402
 
 board('CatalogDark', title='Dark theme · plant catalog', group='theme', dark=True)(lambda: _catalog())
-board('LayersDark', title='Dark theme · layers with slope', group='theme', dark=True)(lambda: slope())
 board('SettingsDark', title='Dark theme · settings', group='theme', dark=True)(lambda: settings())
 
 
@@ -770,86 +658,3 @@ def story_phone():
   <div style="display: flex; gap: 8px;">{btn("Previous", "", "chev-l", "lg").replace('class="btn lg"', 'class="btn lg" style="flex: 1 1 0;"')}{btn("Next", "primary", "", "lg", icon_right="chev-r").replace('class="btn primary lg"', 'class="btn primary lg" style="flex: 1 1 0;"')}</div>
   <span class="small muted" style="text-align: center;">Swipe left or right to move</span>
 </article>'''
-
-
-# ============================================================ analyses: water and canopy
-def _site_layers(rows_html, foot=''):
-    body = (sec('Design') + layer_row('Plants', '2,201', lock=False) + layer_row('Zones', '3', lock=False)
-            + f'<div style="display: flex; align-items: center; justify-content: space-between; padding-right: 4px;">{sec("Site data")}<button type="button" class="btn link sm" aria-haspopup="menu">{icon("plus", "s16")}Add data</button></div>'
-            + rows_html + sec('Background') + '<div role="radiogroup" aria-label="Background">' + radio('Satellite', True, 'bg', '<span class="small muted">Google</span>') + radio('Map', False, 'bg') + radio('None', False, 'bg') + '</div>')
-    return panel('Layers', f'<div class="scroll" style="display: flex; flex-direction: column; gap: 2px; overflow-y: auto;">{body}</div>', foot=foot, bottom=(64 if foot else None))
-
-
-@board('WaterFlow', title='Water flow · streams and wetness under their terrain, readable on hover', group='analyses')
-def water_flow():
-    rows = (layer_row('Terrain · IGN 0.5 m', sub='Elevation · 108–131 m') + layer_row('Slope', sub='from Terrain · degrees', indent=22, vis=False)
-            + layer_row('Water flow', sub='from Terrain · breach, streams from 1 ha', indent=22)
-            + layer_row('Streams', sub='lines · order 1–4', indent=44, active=True) + layer_row('Wetness index', sub='raster', indent=44)
-            + layer_row('Upslope area', sub='raster · m²', indent=44, vis=False))
-    legend = ''.join(f'<span style="display: flex; align-items: center; gap: 8px;" class="small"><span style="width: 36px; height: {w}px; border-radius: 3px; background: #3E8CC0;"></span>Order {o}</span>' for o, w in [(1, 2), (2, 3), (3, 5), (4, 7)])
-    foot = (f'<div style="display: flex; flex-direction: column; gap: 8px; width: 100%;"><div style="display: flex; justify-content: space-between;"><b style="font-weight: 600;">Streams</b><span class="small muted">from Water flow</span></div>'
-            f'<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px;">{legend}</div>{slider("Opacity", 100, "%")}'
-            f'<div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">{ib("fit", "Fit to Streams", size="sm")}{btn("Details", size="sm")}<span style="flex: 1 1 auto;"></span>{btn("Remove from Design", "link", size="sm")}</div></div>')
-    card = (f'<div class="float" role="status" style="position: absolute; left: 610px; top: 520px; padding: 8px 12px; border-radius: 10px; display: flex; flex-direction: column; gap: 2px; font-size: 14px;">'
-            f'<span class="small muted num">48.2197° N, 0.0346° E</span><span>Stream, order <b style="font-weight: 600;">3</b></span><span>Upslope area <b class="num" style="font-weight: 600;">4.8 ha</b></span><span>Wetness index <b class="num" style="font-weight: 600;">11.2</b> <span class="muted">(wet)</span></span></div>'
-            '<svg width="1440" height="900" style="position: absolute; inset: 0;" aria-hidden="true"><circle cx="598" cy="512" r="7" fill="none" stroke="#1A160F" stroke-width="4"></circle><circle cx="598" cy="512" r="7" fill="none" stroke="#FFFFFF" stroke-width="2"></circle></svg>')
-    return (z18_map() + f'<img src="{blob("wetness")}" alt="Wetness index" style="position: absolute; left: 0; top: 0; width: 1440px; height: 900px; opacity: 0.55;">'
-            + f'<img src="{blob("streams")}" alt="Streams" style="position: absolute; left: 0; top: 0; width: 1440px; height: 900px;">'
-            + card + _site_layers(rows, foot) + chrome(panel='layers', name='Untitled Design', status='Draft', kind='draft', scale=('1:1,500', '50 m', 126), attrib='© Google · IGN'))
-
-
-@board('AnalyzeWater', title='Analyze terrain · water flow, generated from the analysis list', group='analyses')
-def analyze_water():
-    groups = ''
-    for g, items in [('Terrain', [('Slope', 'Already in Layers.', False, True), ('Hillshade', 'Relief shading to read the shape of the land.', False, False), ('Contours', 'Lines of equal height.', False, False)]),
-                     ('Water', [('Water flow', 'Where water collects and runs: upslope area, streams, wetness and ponding.', True, False), ('Catchments', 'The land that drains to points you pick on the map.', False, False)]),
-                     ('Vegetation', [('Tree tops, crowns and gaps', 'Needs a canopy height layer (above-ground height).', False, True)])]:
-        opts = ''.join(f'<label class="row{" tile-sel" if on else ""}" style="min-height: 52px; gap: 12px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer;"><input type="radio" name="an" checked="{{{{ {"true" if on else "false"} }}}}"{" disabled" if dis else ""}>'
-                       f'<span style="display: flex; flex-direction: column; line-height: 1.3;"><b style="font-weight: 600;{" color: var(--muted);" if dis else ""}">{a}</b><span class="small muted">{b}</span></span></label>' for a, b, on, dis in items)
-        groups += f'<div role="group" aria-label="{g}" style="display: flex; flex-direction: column; gap: 6px;"><h3 class="sec" style="padding: 4px 0 0;">{g}</h3>{opts}</div>'
-    params = (f'<div class="card" style="padding: 12px; display: flex; flex-direction: column; gap: 12px;"><h3 style="font-size: 14px; font-weight: 600;">Water flow settings</h3>'
-              + field('Depressions', seg(['Breach (recommended)', 'Fill'], 'Breach (recommended)', 'Depressions'), 'Breaching cuts through small dams such as roads and keeps the valley floor.')
-              + field('Streams start where the upslope area reaches', textin('1', aria='Minimum upslope area for streams', trail='<span class="muted">ha</span>'), 'Smaller values draw more, shorter streams.')
-              + '<div style="display: flex; flex-direction: column; gap: 4px;"><span class="lbl">Results to add</span>' + check('Streams (lines)', True) + check('Upslope area', True) + check('Wetness index', True) + check('Ponding depth', False) + '</div>'
-              + f'<button type="button" class="btn ghost sm" aria-expanded="false" style="align-self: flex-start;">{icon("chev-r", "s16")}Advanced · maximum breach distance 50 m</button></div>')
-    body = (f'<p style="margin: 0;">From <b style="font-weight: 600;">Terrain · IGN 0.5 m</b> (4.1 million cells, within the limit). Results are added under it in Layers and kept in your library.</p>'
-            f'<div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start;"><div style="display: flex; flex-direction: column; gap: 10px;">{groups}</div>{params}</div>')
-    dlg = dialog('Analyze terrain', body, btn('Cancel') + btn('Calculate water flow', 'primary'), 860)
-    rows = layer_row('Terrain · IGN 0.5 m', sub='Elevation · 108–131 m', active=True) + layer_row('Slope', sub='from Terrain · degrees', indent=22, vis=False)
-    return (z18_map() + _site_layers(rows) + chrome(panel='layers', name='Untitled Design', status='Draft', kind='draft', scale=('1:1,500', '50 m', 126))
-            + '<div class="scrim"></div>' + f'<div style="position: absolute; left: 50%; top: 80px; transform: translateX(-50%);">{dlg}</div>')
-
-
-@board('CanopyAnalysis', title='Canopy · tree tops, crowns and gaps from canopy height', group='analyses')
-def canopy():
-    st = {'trees': 140, 'mean_h': 15.4}
-    rows = (layer_row('Canopy height · IGN MNH 0.5 m', sub='Above-ground height · 0–26 m') + layer_row('Tree tops', sub=f'points · {st["trees"]} trees', indent=22, active=True)
-            + layer_row('Crowns', sub='polygons · 5.1 ha in total', indent=22) + layer_row('Canopy gaps', sub='polygons · 38 gaps', indent=22, vis=False))
-    foot = (f'<div style="display: flex; flex-direction: column; gap: 8px; width: 100%;"><div style="display: flex; justify-content: space-between;"><b style="font-weight: 600;">Tree tops</b><span class="small muted">from Canopy height</span></div>'
-            f'<div class="small" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;"><span><b class="num" style="font-weight: 600; font-size: 16px; display: block;">{st["trees"]}</b>trees</span><span><b class="num" style="font-weight: 600; font-size: 16px; display: block;">{st["mean_h"]} m</b>mean height</span><span><b class="num" style="font-weight: 600; font-size: 16px; display: block;">26.0 m</b>tallest</span></div>'
-            f'{notice("info", "Detected from the height raster; check a few trees in the field before relying on counts.", "info")}'
-            f'<div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">{ib("fit", "Fit to Tree tops", size="sm")}{btn("Details", size="sm")}{btn("Export GeoJSON…", size="sm")}<span style="flex: 1 1 auto;"></span>{btn("Remove from Design", "link", size="sm")}</div></div>')
-    card = (f'<div class="float" role="tooltip" style="position: absolute; left: 1000px; top: 170px; padding: 8px 12px; border-radius: 10px; display: flex; flex-direction: column; gap: 2px; font-size: 14px;">'
-            f'<b style="font-weight: 600;">Tree</b><span>Height <b class="num" style="font-weight: 600;">17.4 m</b></span><span>Crown <b class="num" style="font-weight: 600;">72 m²</b> <span class="muted">· ≈ 9.6 m wide</span></span></div>')
-    return (z18_map() + f'<img src="{blob("crowns")}" alt="Tree crowns" style="position: absolute; left: 0; top: 0; width: 1440px; height: 900px;">'
-            + card + _site_layers(rows, foot) + chrome(panel='layers', name='Untitled Design', status='Draft', kind='draft', scale=('1:1,500', '50 m', 126), attrib='© Google · IGN'))
-
-
-@board('ResultDetails', title='Result details · provenance, out of date, refresh and history', group='analyses')
-def result_details():
-    facts = [('Analysis', 'Water flow · version 1'), ('From', 'Terrain · IGN 0.5 m (imported Sep 24)'), ('Settings', 'Breach depressions · streams from 1 ha · maximum breach 50 m'),
-             ('Tool', 'GeoLibre 1.5.3 (aac2b74) · Whitebox hydrology'), ('Created', 'Sep 26, 2026, 5:41 PM'), ('Covers', '2.1 km² · 4.1 million cells')]
-    grid = ''.join(f'<div style="display: flex; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line);"><span class="small muted" style="width: 84px; flex-shrink: 0;">{a}</span><span class="small" style="color: var(--ink);">{esc(b)}</span></div>' for a, b in facts)
-    runs = ''.join(f'<div class="row" style="min-height: 44px; gap: 10px;"><span style="width: 8px; height: 8px; border-radius: 4px; background: {c};" aria-hidden="true"></span><span style="display: flex; flex-direction: column; flex: 1 1 auto; line-height: 1.25;"><span class="small" style="color: var(--ink); font-weight: 600;">{a}</span><span class="small muted">{b}</span></span></div>'
-                   for a, b, c in [('Refreshed · current', 'Sep 26, 5:41 PM · 38 s · 3 results', '#3E7A3A'), ('Cancelled', 'Sep 26, 5:39 PM · after 12 s', '#8C8579'), ('Created', 'Sep 25, 11:02 AM · 41 s · 3 results', '#3E7A3A')])
-    body = f'''
-  <div class="scroll" style="flex: 1 1 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 2px 6px 8px;">
-    {notice("warn", "<b style='font-weight: 600;'>Out of date.</b> Terrain · IGN 0.5 m was updated after this ran.", "alert", btn("Refresh", "primary", size="sm"))}
-    <div>{grid}</div>
-    <div style="display: flex; gap: 6px; flex-wrap: wrap;">{btn("Run again with changes…", size="sm")}{btn("Rename…", "ghost", size="sm")}</div>
-    <div style="display: flex; flex-direction: column; gap: 4px;"><h3 class="sec" style="padding: 4px 0;">Processing history</h3>{runs}</div>
-    <p class="hint" style="margin: 0;">Refresh replaces the result everywhere it is used; this history keeps the record of every run.</p>
-  </div>'''
-    p = panel('Water flow', body, back=True, sub='3 results · used in 2 Designs')
-    return (z18_map() + f'<img src="{blob("wetness")}" alt="" style="position: absolute; left: 0; top: 0; width: 1440px; height: 900px; opacity: 0.45;"><img src="{blob("streams")}" alt="" style="position: absolute; left: 0; top: 0; width: 1440px; height: 900px;">'
-            + p + chrome(panel='layers', name='Untitled Design', status='Draft', kind='draft', scale=('1:1,500', '50 m', 126), attrib='© Google · IGN'))

@@ -32,9 +32,9 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 **Session plane**: The runtime's local metre plane for the open Design, centred on the objects. Files store WGS84 longitude/latitude; the session plane converts to metres for tools, snapping, measurements and PDF layout. _Avoid:_ Anchor, spatial frame
 
-**Background**: The Layers choice under the Design: Satellite, Map or None (plain paper), with its opacity and Soften background. An app setting shared by every Design. _Avoid:_ Basemap layer, Design layer
+**Background**: The choice in Layers' Map section: Satellite, Street map or None (plain paper), with its opacity and Soften background. An app setting shared by every Design. _Avoid:_ Basemap layer, Design layer
 
-**Online elevation**: Contour lines and Hillshading, drawn from online elevation, not from imported data, listed in Layers. App settings, not Design content. _Avoid:_ Map layers, Site data
+**Online elevation**: Contour lines and Hillshading, drawn from online elevation, not from imported data, listed in Layers' Map section. App settings, not Design content. _Avoid:_ Map layers, Site data
 
 **Place search**: The title-bar field (Search a place…, Ctrl K) that finds a place by name (on Enter) or by typed coordinates and moves the view there. Only the camera moves; objects never do. _Avoid:_ Location editing, geocoding
 
@@ -130,7 +130,7 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 **Data library**: The Desktop store of imported terrain and height rasters (single-band GeoTIFF: ground elevation, surface elevation, height above ground) and calculated results, shared by every Design; it needs no GDAL or other install. Delete everywhere removes an item from the library and every Design. _Avoid:_ LiDAR panel, layer store
 
-**Site data**: The Layers section that lists the Data library items this Design shows, with results nested under their source. Remove from Design keeps the item in the library. _Avoid:_ Data layer, terrain layer
+**Site data**: The Desktop panel listing the Data library items this Design shows, results nested under their source; Layers shows it as one row. Remove from Design keeps the item in the library. _Avoid:_ Data layer, terrain layer
 
 **Analysis**: A calculation run on a Data library item with recorded parameters and history, such as Slope from ground elevation. A result knows when its source changed (Out of date, Refresh). _Avoid:_ Filter, derived layer
 

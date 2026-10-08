@@ -2,7 +2,7 @@
 
 Status: Accepted (2026-09-26, Canopi v2)
 
-Amended by [ADR 0015](0015-rotating-map-and-canvas-controls.md) and [ADR 0020](0020-focus-and-keyboard-ownership.md) (2026-09-29): the map rotates, a compass joins the zoom group, the Pan tool leaves the main rail and single-key shortcuts work anywhere except text fields and dialogs. Amended 2026-10-05 (U33): rulers are removed, so the view chip loses its Rulers toggle.
+Amended by [ADR 0015](0015-rotating-map-and-canvas-controls.md) and [ADR 0020](0020-focus-and-keyboard-ownership.md) (2026-09-29): the map rotates, a compass joins the zoom group, the Pan tool leaves the main rail and single-key shortcuts work anywhere except text fields and dialogs. Amended 2026-10-05 (U33): rulers are removed, so the view chip loses its Rulers toggle. Amended 2026-10-08 (canopi-f47t.42, plan U49): site data moves to its own Desktop panel (Ctrl 2; Stories loses its digit), Layers keeps one Site data row, and imports live in the File menu.
 
 ## Context
 
@@ -16,7 +16,7 @@ The v1 interface framed the map with fixed rails, icon-only tools, an action bar
 - **State colours.** Ochre means selected, active or primary; a blue ring means keyboard focus; amber means warning; red means error or destruction. Selected rows use a soft fill and an inset ochre edge, tiles and cells a soft fill and ring, swatches an outer ring.
 - **Plants.** 29 single-colour symbols in three families (plant form, what it gives, what it does), recolourable per species or by stratum. One species row everywhere: glyph, common name over italic scientific name, mono code, count. Strata are Emergent, High, Mid, Low and are separate from plant forms.
 - **Finding plants.** Every plant list has the same finder (Ctrl F): names in every language, scientific names, synonyms and codes; accent-, case- and typo-tolerant; matches highlighted, counted and ringed on the map with Zoom to them and Select all. "Selected on map" filters any panel to the current selection.
-- **Site data lives in Layers.** One Add data entry, results nested under their source, an Analyze dialog, a data library shared by Designs.
+- **Site data has its own panel** (amended 2026-10-08): a Desktop panel beside Layers with results nested under their source, values under the pointer, display settings, Analyze and Profile; Layers shows one Site data row; a data library shared by Designs.
 - **Safety.** Destructive actions confirm (naming what is lost) or offer Undo. Saving problems say what happened, what is safe and the next step.
 - **Accessibility and languages.** WCAG 2.2 AA: contrast, 3:1 control boundaries, 24 px targets (44 px on touch), real widget semantics, a keyboard path for every pointer action, single-key shortcuts anywhere except text fields and dialogs, and switchable off ([ADR 0020](0020-focus-and-keyboard-ownership.md)). Locale formatting through `Intl`; message formats for plurals and names; layouts wrap instead of clipping.
 

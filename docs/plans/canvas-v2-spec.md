@@ -2,7 +2,7 @@
 
 Trimmed 2026-10-02 at the phase-0 close (the full earlier text is at commit 76bd08a659d916069a340fc06e670e54e32f54c7) and 2026-10-03 at the phase-1 close (the text before it is at `da12600b`): §4.5, §4.11, §9.1 and §9.2, built and read by no later step, were deleted; section numbers are not reused, so code comments citing them resolve at that commit.
 
-Status: agreed (2026-09-29); phase 0 and phase F built (2026-10-02); phase 1 built (2026-10-03); amended 2026-10-05 for U33 (rulers, ruler guides and the locked chip removed; key admission; no last-bearing fallback; required ground size), and 2026-10-06 for phase 2's design check and U34 (turns jump; the bearing-free floor; one `contextmenu` listener; one modifier source; the cut stage's rules), and for U36 (overview selects nothing; Shift steps only the rotate handle; the native-menu trail; key admission as built), and for U37 (Delete on a corner selects the next one; the trail follows a real chord and a lost secondary release), and for U38 (edge chips beside the midpoint dots; a wheel over a handle is a map wheel), and for U39 (no menu retarget, Cut or Delete during a gesture or tool transient), and for U40 (only a still press selects a corner), and for U41, phase 3's design check (the recogniser holds every touch press; `Bindings` deleted; touch handles, feel values and phone chrome); 2, 3 and R build on it per docs/plans/canvas-v2-plan.md
+Status: agreed (2026-09-29); phase 0 and phase F built (2026-10-02); phase 1 built (2026-10-03); amended 2026-10-05 for U33 (rulers, ruler guides and the locked chip removed; key admission; no last-bearing fallback; required ground size), and 2026-10-06 for phase 2's design check and U34 (turns jump; the bearing-free floor; one `contextmenu` listener; one modifier source; the cut stage's rules), and for U36 (overview selects nothing; Shift steps only the rotate handle; the native-menu trail; key admission as built), and for U37 (Delete on a corner selects the next one; the trail follows a real chord and a lost secondary release), and for U38 (edge chips beside the midpoint dots; a wheel over a handle is a map wheel), and for U39 (no menu retarget, Cut or Delete during a gesture or tool transient), and for U40 (only a still press selects a corner), and for U41, phase 3's design check (the recogniser holds every touch press; `Bindings` deleted; touch handles, feel values and phone chrome), and 2026-10-08 for U49, the Layers redesign (§1.10: Layers and the Site data panel, values on rows and the pin replacing the raster probe, the Profile tool, the Data library sheet, the `lidar` fields; §3.2, §3.7, §3.8, J10, §8, §9.5); 2, 3 and R build on it per docs/plans/canvas-v2-plan.md
 
 This is the contract the canvas v2 work is built to. The phases, owners, gates and bead mapping are in `docs/plans/canvas-v2-plan.md`; what exists today and what happens to each piece is in `docs/plans/canvas-v2-inventory.md`. The reasons live in the ADRs: 0015 (rotating map and canvas controls; amends ADR 0010's control and shortcut rules), 0016 (one view transform), 0017 (input pipeline and gestures), 0018 (narrow tool interface), 0019 (rendering and the view transform), 0020 (focus and keyboard ownership). Delete this file with the plan at the 2.0 release close.
 
@@ -620,6 +620,7 @@ export type CancelReason = 'pointercancel' | 'lost-capture' | 'blur' | 'hidden' 
 export type ToolId =
   | 'select' | 'hand' | 'plant-stamp' | 'text' | 'line' | 'measurement-guide' | 'rectangle' | 'ellipse'
   | 'polygon' | 'object-stamp' | 'saved-object-stamp' | 'plant-spacing'
+  | 'profile'                                                   // Desktop, from canopi-f47t.42 (U49, §1.10): no key, not on the rail
 // 'hand' is the Pan tool (label "Pan", key H). It stays in every phase (user).
 /** 'rotate', 'vertex:<zone id>:<index>', 'rect-corner:<id>:ne', 'guide-end:<id>:a', 'edge-mid:<zone id>:<index>'. */
 export type ToolHandleId = string & { readonly __toolHandleId: true }
@@ -733,8 +734,10 @@ export interface ToolHostDeps {
   readonly timers: { set(atMs: number, cb: () => void): number; clear(id: number): void; readonly clock: () => number }
   /** Hover restyle (a directly locked object shows the locked hover stroke): today's deps.setHoveredTarget. */
   readonly hover: (target: SceneDesignObjectTarget | null) => void
-  /** The raster inspection probe (CanvasRuntimeAppAdapter.tryInspectAt, passed by scene-runtime.ts); true claims the press (fixture J10). */
-  readonly inspect?: (world: WorldPoint) => boolean
+  /** Pins a Site data point (canopi-f47t.42, U49 Q17; §1.10, §3.8, fixture J10): called after a resolved Select tap that hit
+   *  nothing and moved nothing, or any Pan-tool tap; never in overview, never by another tool. It claims nothing: the tap
+   *  still reaches the tool (Select clears the selection). Absent on Web and while the Site data panel is closed. */
+  readonly pin?: (world: WorldPoint) => void
   /** Today's notifyTransientHistoryChange: the runtime's transientHistory revision (Edit › Undo during a draft). */
   readonly transientHistoryChanged: () => void
   /** A drop the host placed, once its edit committed, Select is armed and the map has focus (§1.4 "Drops"): the session clears
@@ -831,13 +834,14 @@ export interface ToolHost {
    *  chrome or anything off the map publishes nothing, and a move over the text entry or a handle emits no gesture before F, so the lens keeps its point there, as today's
    *  lens skips buttons, inputs, textareas, contenteditable and [data-preserve-overlays] (spec §1.4 "Hover", §2.2 "Hover").
    *  A hover made with a button held is published too: the interaction session's subscribePointerWorld drops it (its raw
-   *  buttonMask, as today's lens skipped a move with any button held). For the inspection lens, the status line and, later, hover
+   *  buttonMask, as today's lens skipped a move with any button held). For the inspection lens, the Site data row values and hover
    *  readouts over analysis results: with the screen point (R1), so a readout can call queryRenderedFeatures without a
    *  map.project (P2). */
   subscribePointerWorld(listener: (point: PointerWorld | null) => void): () => void
   dispose(): void
 }
-export interface PointerWorld { readonly world: WorldPoint; readonly screen: ScreenPoint }
+/** pointerKind (canopi-f47t.42): Site data values ignore a touch publish for hover and read touch through the pin. */
+export interface PointerWorld { readonly world: WorldPoint; readonly screen: ScreenPoint; readonly pointerKind: PointerKind }
 // canvas/runtime/keyboard-port.ts  (from F its deps are flattened; the key router feeds it, §1.6)
 export interface CanvasKeyboardPortDeps {
   readonly host: HTMLElement
@@ -1067,6 +1071,8 @@ export interface ToolEffects {
   requestTextEntry(request: TextEntryRequest, submit: (text: string) => 'close' | 'keep', onCancel?: () => void): void  // onCancel: closed by its own Esc
   closeTextEntry(): void
   requestFocus(target: 'map'): void                         // ToolHostDeps.focus (CanvasFocusPort, §1.6), implemented by the FocusOwner from F
+  /** Profile only (canopi-f47t.42): hands the finished line (2+ points) to the Site data profile; the tool then requests Select. */
+  finishProfile(points: readonly WorldPoint[]): void
   // requestMenu and requestFocus('tool-card-field') come only with a first caller.
 }
 
@@ -1191,9 +1197,9 @@ The `ToolHost` (`tools/tool-host.ts`, interface in `interaction-ports.ts`) is th
 - **World conversion** at event time (a null `screenToWorld` drops hovers and cancels drags); a tool with `clampsToView` gets the screen point clamped to the view first.
 - **Constraint and snapping** once, filling `ToolPoint.free`, `.constrained` and `.snapped` in the order of §2.3: the active tool's `constraint()`, then the grid snap (`tools/snapping.ts`, `deps.snapping()` read per point). `ToolContext.snap` exposes the same snapping; `place-at` arrives snapped and is dropped in overview.
 - **Hits.** A handle target becomes `handle-drag`.
-- **Interceptors:** while Text is armed, a press that committed an open note entry reaches no tool (nor its drag or release); otherwise it goes on. An admitted press takes its capture first and stops if the capture was lost while taking it. The raster probe `deps.inspect` runs on a primary press after handles and pan and before the tool, never in overview or while Pan is armed (fixture J10, §3.8). Entering overview commits and closes any open entry (U34); one whose commit is refused is discarded through `cancelTextEntry`, so its tool resets; and closes the menu and every transient (`cancelTransient('overview')`).
+- **Interceptors:** while Text is armed, a press that committed an open note entry reaches no tool (nor its drag or release); otherwise it goes on. An admitted press takes its capture first and stops if the capture was lost while taking it (the claimed-press outcome, `LOST_CAPTURE_PRESS`). No interceptor claims a primary press for site data (canopi-f47t.42 deleted the raster probe): a resolved Select tap that hit nothing and did not drag, or any Pan-tool tap, reaches its tool and then calls `deps.pin` (fixture J10, §3.8). Entering overview commits and closes any open entry (U34); one whose commit is refused is discarded through `cancelTextEntry`, so its tool resets; and closes the menu and every transient (`cancelTransient('overview')`).
 - **Overview.** No primary press reaches the host in overview: the recogniser pans it (§2.2), so nothing is selectable there, since the overview draws no zones or notes (U36); `menuAt` stays refused.
-- **Hover.** Every `hover` whose target is the map (`surface`) is published to `subscribePointerWorld` first, in overview too; `hover-end` publishes `null`. The interaction session's `subscribePointerWorld` drops the point of a move whose raw `buttonMask` has any bit set. A hover over owned chrome or anything off the map publishes nothing. A finger never hovers: its `tap` publishes its point (the resolved press, the down point) unless pressed on a handle, and its drag or pair publishes nothing (A16). Outside overview the tool then gets it: `'pass'` runs the passive hover (restyle, tooltip); `'handled'` clears and skips it. On `hover-end` the tool decides what to keep (Place plants hides its preview; the stamps keep their ghost; every other tool keeps its draft). A `drag-start`/`drag-move` the tool answers `'pass'` runs the passive hover too; one it answers `'handled'` runs no hover over its moves (Select's move and band, Text, Place plants, the zone drags).
+- **Hover.** Every `hover` whose target is the map (`surface`) is published to `subscribePointerWorld` first, in overview too; `hover-end` publishes `null`. The interaction session's `subscribePointerWorld` drops the point of a move whose raw `buttonMask` has any bit set. A hover over owned chrome or anything off the map publishes nothing. A finger never hovers: its `tap` publishes its point (the resolved press, the down point) unless pressed on a handle, and its drag or pair publishes nothing (A16); every publish carries `pointerKind`. After a camera change under a still pointer the host republishes the resting pointer on the settled frame, so readouts follow the ground (canopi-f47t.42). Outside overview the tool then gets it: `'pass'` runs the passive hover (restyle, tooltip); `'handled'` clears and skips it. On `hover-end` the tool decides what to keep (Place plants hides its preview; the stamps keep their ghost; every other tool keeps its draft). A `drag-start`/`drag-move` the tool answers `'pass'` runs the passive hover too; one it answers `'handled'` runs no hover over its moves (Select's move and band, Text, Place plants, the zone drags).
 - **Drops.** One shared drop handler serves every tool: a species drop places with `tools/plant-stamp.ts`'s code, a saved stamp with `tools/saved-object-stamp.ts`'s; dragover answers `dropEffect` from the payload kind and the open layers. Dragover shows a drop preview merged with the decorations (a species payload: a small `quad`; a saved stamp: its `'objects'` ghosts at the snapped point), cleared on dragleave, drop, a refused dragover, overview, a cancellation or a document replacement. Any dragover hides the active tool's own draft; the next hover or press over the map shows it again. A drop places at the snapped point inside `deps.admission`; once its edit commits, the host requests Select, focuses the map and calls `ToolHostDeps.dropped(kind)`.
 - **Re-emit** of the live drag, or of the tool's hover under the resting pointer, on every `onViewFrame('tools')`, so a draft, ghost or preview stays on the ground under a still pointer (plan §4, phase 0, exception 1). The passive hover is not re-run on a camera frame: the tooltip hides, and the hover ring, a note's revealed text or a guide's chip stays on its object until the next pointer move (U44, Q3). A pointer-source pan hands its `at` to `notePointer`, which moves the resting pointer and re-emits under it at once (the pan's frame re-emits there too); wheel and key pans leave it where it is. With the pointer off the map the host calls the tool's `viewChanged?()` instead.
 - **Re-origin hold** (phase 2, P8). `holdsReorigin()` is true while a press is live, the active tool has a transient or the text entry is open; re-origin waits and runs on the last frame when the hold clears (§4.19). On a plane change the host hides tool ghosts only when no pointer rests on the map, until the next hover; under a still pointer the re-emitted hover shows them again in the new plane. No tool hook re-projects anything.
@@ -1549,6 +1555,56 @@ Phase 0's, F's and phase 1's deletions are done; P11 tombstones them. Left:
 | The native-menu input path: the `native-contextmenu` RawInput, normalise's `contextmenu` case, `fromKeyboard`, `menuEchoMs`, `windowsMenuTrailMs`, the three dead deadlines, the `'ignored'` mode and the keyboard echo record (`lastKeyboardMenuAt`, `CanvasKeyState.timeStamp`) (U33 and U34, P2) | one `contextmenu` listener (§2.2); the Menu key and Shift+F10 | 2 |
 | `settings.scrollWheel*` UI strings | `settings.pointingDevice*` | 2 |
 | `Bindings`, `CURRENT_BINDINGS`, `RecogniserConfig.bindings`, `DomInputSourceDeps.bindings` (A7) | touch behaviour unconditional; `dragSlopPx` in `Thresholds`; P11 tombstones the names | 3 |
+| Read values: `ToolHostDeps.inspect` and its press claim, `app/lidar/inspection.ts`, `InspectionStatus.tsx`, `formatRasterSample`, Esc layer `inspection`, the commands `lidar_sample_pixel` and `lidar_cancel_sample_pixel` with the display admission; `CLAIMED_PRESS` renamed `LOST_CAPTURE_PRESS` | values on Site data rows and the pin, `lidar_sample_points` (§1.10) | canopi-f47t.42 |
+
+### 1.10 Layers, Site data and Profile (canopi-f47t.42, U49)
+
+The user's decisions are U49 (plan §1); the step's files and checks are plan §4, "2.0 Layers redesign". Two panels, no overlap.
+
+**Layers** (both editions, 380 px). Front to back: **Design** (Annotations, Plants, Measurement guides, Zones: eye, icon, name, count, lock); one **Site data** row; **Map** (online Contour lines and Hillshading, then Background: Satellite, Street map, None, the chosen option's settings always under it). No footer, and nothing replaces the list. A name opens its row's settings under it (Opacity; Contour lines add Contour interval); one row is open at a time (`openLayerRow`, none at start), drawn with a 3 px amber bar and a semibold name, no fill. Every eye reads "Hide {{name}}"/"Show {{name}}". Drawing order is unchanged: online contours and hillshading still draw over site data.
+
+- **Site data row** (Desktop): an eye for all site data, a caption "{{shown}} of {{count}} shown" ("None yet", no eye, with no entries; while the library snapshot loads, entries count by their own eye), and › opening the Site data panel. The eye is one stored flag (`lidar.visible`) folded GeoLibre-style: an item is drawn when its own eye and the flag are both on, and items keep their own eyes. The fold applies at the map contribution adapter, saved-view capture, row values and profile curves. Not undoable, like every site-data edit.
+- **Web**: no eye and no ›; "{{count}} terrain or height layers in this Design · Needs Canopi Desktop"; absent with no entries. No Site data button, panel, Profile or library on Web.
+
+**Site data panel** (Desktop, `nav.siteData`, rail button under Layers, Ctrl 2, 440 px; a Design panel). Header: "Site data", Library (opens the Data library on the open item), close; while a point is pinned, a second line with its coordinates and Unpin, otherwise a hint while some row can show a value. Toolbar: Import… (joins this Design), Analyze… (disabled with "Add terrain or height data first" when nothing qualifies), Profile (pressed while armed; disabled with "Show an elevation or height layer to draw a profile"). While the Layers eye is off, "Site data is hidden from the map · Show" tops the list. View state (open item, collapsed sources, filter text, scroll, pin) lives in signals that survive the dock switching panels and clear with the Design; none of it is stored.
+
+- **Rows**: one line, 32 px (44 px under a coarse pointer): grip (always visible, muted), indent, chevron on rows with results, eye (an alert on a missing row), ramp swatch with a strong edge (40 % when hidden), name, and one trailing item: the value, Preparing, Display failed, Missing, Refreshing, or a Refresh button on an out-of-date result. The list is the draw order, front first; results nest under their source, collapsible for the session, expanded by default, chevron only. Drag the grip (`usePointerReorder`) or press Alt ↑/↓ on the grip or the name to move a row among its siblings; the list reflows live and one order write lands on drop. A filter shows above 8 entries (kept while it holds text): it keeps a match's ancestors, ignores collapse and turns reordering off. An import's pending row sits at the top with a progress line, a calculation's under its source; each has Cancel.
+- **Values on rows**: only while the panel is open. Each visible, ready row ends with the value under the pointer (metres to 2 decimals, degrees and percent to 1, other values to 4 significant digits; localised, tabular figures); "—" (accessible name "No data") where the raster has none. Pointer values while the pointer is over the map, otherwise the pin's. A tap no tool uses pins one point (§3.8): a two-tone dot (ink core, white ring) in the interaction-overlay band, never in overview, PDF output or snapshots; the header shows "48.851230° N, 2.352110° E" (6 decimals through `Intl`; place search shares the formatter, at 4 decimals) and Unpin. Esc (layer 20), Unpin, closing the panel, replacing the Design, leaving Canvas and entering overview unpin. An eye toggle, a new generation or a list change re-samples at once. Values come from the stored rasters, never the display tiles.
+- **Open item** (one at a time, under its row): caption; the out-of-date notice; **Colors**: the kind's three ramps as swatch buttons, Reverse, a legend with min and max marked ≤/≥ when the range clips; **Range**: Data range | Cut outliers (2–98 %) | Custom, with Minimum and Maximum always showing the values in use (typing switches to Custom; a pair commits only when both parse and min < max, else the fields revert); Reset, shown when the display differs from the kind's default, restores colours, Reverse and range; Opacity (live); Fit to data (then Return to Design), Details (the library on this item), Remove from Design. Colours and range commit on click, Enter or blur, never mid-drag.
+- **Ramps per kind** (default first; Canopi's names, mapped to the renderer's in `item-types.ts`): ground and surface elevation Terrain (schwarzwald), Earth (turbid), Gray; height above ground Greens, Magma, Gray; slope Yellow–red, Magma, Gray, default range 0–30° (57.7 % for percent), shown as Custom 0–30° with Reset hidden; other values Magma (replacing viridis), Yellow–red, Gray. Blue ramps (Blues, Ice) belong to water kinds only (hydrology 2.1); differences use Purple–orange. `display-legend.test.ts` holds the rule on the real wasm.
+- **Missing item**: one line with the stored name and "Missing"; opened, a reason that names its fix ("Not in this computer's Data library", "The Data library needs a newer Canopi", "The Data library couldn't be opened. Restart Canopi.") and Remove from Design only. While the library snapshot loads, a row draws as normal.
+
+**Profile** (Desktop): `ToolId 'profile'` (`tools/profile-line.ts`), armed from the toolbar, the palette or "Profile this line" on a Line zone's or Measure guide's menu (disabled like the button); bindings in §3.2, Esc in §3.7. The finished line is held in WGS84 and drawn in the interaction-overlay band (a light line on the draft casing, vertex dots). The chart is pinned to the panel's bottom: elevation curves (ground and surface) in one plot, height curves in a second strip below, sharing distance and cursor; one curve per visible, ready elevation or height item in draw order, coloured ink, ochre, green, plum (two tokens per theme each), a fifth and later reusing them dashed; min and max labels, NoData gaps. The header has the length, "At {{distance}}" while hovering, Copy values and ×. Legend per curve: elevation "Rise +3.2 m · Steepest 18 % over 2 m" (Rise is the signed net change; Steepest is a button that moves the cursor there), height "Highest 14.2 m". Hovering or scrubbing the chart moves a hollow ring on the line (chart to map only). Copy values copies tab-separated text with the locale's decimals (Distance, Longitude, Latitude, one column per curve). Sampling: step max(finest resolution, length / 4095), at most 4,096 points along session-plane metres, the curves split in draw order into requests of 8 targets sent one after another; a key of (line, item ids, generation ids) re-samples. The profile is never saved, printed or captured; it clears on ×, Esc (layer 25), a new line, closing the panel, replacing the Design or leaving Canvas.
+
+**Data library** (Desktop): a large modal sheet, min(1200 px, 100vw − 48) × min(860 px, 100vh − 48), centred over the dimmed workspace, opened from the Site data header, a row's Details, File ▸ Data library… and the palette. List pane (360 px): 56 × 42 preview, name, type caption ("· In this Design"), state; results nest under their source; search keeps a match's ancestors; sort by Name or Recently added; selection is a pale fill with an ochre bar, ↑/↓ moves it. Details pane: Rename…, preview, facts with Added, provenance links, saved results, source files, history, then Add to Design or Show in Site data, Run again with changes… and Delete everywhere, confirmed in place. Footer: items, disk use, Show in folder; no Done. Below 760 px one pane at a time with Back. Import and Analyze open over the sheet and return to it unchanged. The empty library offers Import…, which adds to the open Design and is disabled without one ("Open a Design to import data"). Previews use the kind's default display.
+
+**Analyze**: opened only from the Site data toolbar (and "Run again with changes…" with its input fixed). Title "Analyze"; a Source dropdown of this Design's eligible ready items defaulting to the open item, else the open result's input, else the first; results join this Design when it shows the input; an existing result reads "Already in Site data." with Show in Site data.
+
+**File menu**: Import terrain or height data… (renamed from Add data…), Import GeoJSON…, Data library…, Export ▸. Layers has no import entry.
+
+```ts
+// Map overlay (canopi-f47t.42; plan §4 says why the snapshot route): app/canvas-map-surface/overlays.ts
+export interface CanvasMapSurfaceOverlaySnapshot {
+  // … hoveredTargets, selectedTargets …
+  /** Desktop's pin, profile line and its hover point, as [lon, lat]; null on Web and in overview. Colours from scene-visuals.ts. */
+  readonly site: {
+    readonly pin: readonly [number, number] | null
+    readonly profileLine: readonly (readonly [number, number])[] | null
+    readonly profileHover: readonly [number, number] | null
+  } | null
+}
+```
+
+```rust
+// One sampler for hover, pin and profile (canopi-f47t.42); replaces lidar_sample_pixel and lidar_cancel_sample_pixel.
+// Async, executor-backed on Local, no admission ticket; the frontend sends one request at a time across hover, pin and profile.
+#[tauri::command] async fn lidar_sample_points(request: LidarSamplePointsRequest) -> Result<Vec<LidarSampleSeries>, String>
+pub struct LidarSamplePointsRequest { pub targets: Vec<LidarSampleTarget>, pub points: Vec<[f64; 2]> } // lon, lat; ≤ 8 targets, ≤ 4,096 points, refused before any work
+pub struct LidarSampleTarget { pub kind: LibraryItemRole, pub entity_id: String, pub expected_generation_id: String }
+pub enum LidarSampleSeries { Values { values: Vec<Option<f64>> }, Unavailable { reason: LidarSampleUnavailableReason } } // target order; None = NoData or outside
+```
+
+Each value is the native cell under the point (no interpolation), read through the one CRS authority. Hover, pin and profile split their targets (visible ready rows, or the profile's curves), in list order, into requests of 8 targets sent one after another; a row past the first request shows its value when its request lands, and the chart draws once every request of its key has landed.
 
 ## 2. Gesture vocabulary
 
@@ -1608,7 +1664,7 @@ The tables give the end state (phase 3) with the phase each behaviour arrives in
 
 ### 3.1 Navigation that works in every tool
 
-Rows are pointer inputs whose meaning does not depend on the tool. "Every tool" includes all twelve tool ids and overview mode; §3.8 lists the exceptions (text entry, the PDF page editor, modals, the story presenter, the World map).
+Rows are pointer inputs whose meaning does not depend on the tool. "Every tool" includes all thirteen tool ids ('profile' from canopi-f47t.42) and overview mode; §3.8 lists the exceptions (text entry, the PDF page editor, modals, the story presenter, the World map).
 
 | Input | No modifier | Shift | mod (Ctrl; Cmd on Mac) | Alt | Space held | macOS Ctrl (physical) |
 |---|---|---|---|---|---|---|
@@ -1648,6 +1704,7 @@ Rotation from the pointer is never available without Shift (user: deliberate ges
 | Rectangle (R) | nothing | draws a rectangle aligned to the screen, stored with `rotationDeg = bearing` (from 1) | nothing | square (from 2) | none | none |
 | Ellipse (E) | nothing | draws an ellipse aligned to the screen, stored with `rotationDeg = bearing` (from 1) | nothing | circle (from 2) | none | none |
 | Polygon (Z) | the press adds a corner (today); a press on the first corner finishes (3+ corners; within 8 px, 22 px on touch from 3, U41) | the press already added the corner; the drag moves nothing (today) | the second press of a double-click finishes instead of adding a corner (3+ corners, from 2) | 45° steps against the screen axes (from 1; before: world axes) | none | none |
+| Profile (no key; Site data toolbar, palette or "Profile this line"; Desktop, canopi-f47t.42) | the press adds a snapped point (crosshair cursor); segment length chips as Measure | the press already added the point; the drag moves nothing | the second press of a double-click (or double tap) finishes (2+ points), then Select is armed | 45° steps against the screen axes | none | none |
 | Handle (any tool that shows handles) | focuses nothing; handles are DOM buttons; the handle drag ends at the press point, so nothing moves (from 3, A9) | `handle-drag`; with Space held at the press: `handle-drag` today (the handle is hit before the pan check, `scene-interaction.ts:584-608`), `pan` from 2 | on a polygon edge midpoint dot (smaller and fainter than a corner: radius 4, opacity 0.5, GeoLibre's edge marker; aria "Add a corner on edge {{index}}"; shown only on an edge at least 52 px long on screen, U36; after a touch the dot is a 44 px target and shows on edges of 132 px or more, U41; while it shows, that edge's length chip sits beside it, just outside the edge, U38): adds a corner (from 2) | rotate handle: 15° steps from the press angle (today); point handles (corners, vertices, guide ends) ignore Shift and snap as usual (U36) | none | removes the corner, minimum 3 (from 2, polygons only) |
 
 Cells the table leaves implicit:
@@ -1658,6 +1715,7 @@ Cells the table leaves implicit:
 - **Text, click while an entry is open:** commits the entry and places nothing (today, `text-annotation-tool.ts:38-41`); the next click places a note.
 - **Polygon corners (from 2, polygons only):** Select keeps `selectedCorner`, the last corner pressed without moving (a corner that moved during its drag, even back to its start, is not selected, U40), shown as the handle layer's active handle; Delete or Backspace removes it (or a focused corner: handles are tabbable), keeping at least 3; the corner now at the same index (wrapped to the first) becomes the selected corner and keeps focus if a corner had it, so Delete goes on removing corners down to 3; a press elsewhere, Esc or a selection change clears it (U37); a refused removal (a triangle) keeps the corner selected and the zone (U36). Rectangles, ellipses and lines keep their own reshape (corner insertion would need a new stored zone type).
 - **Plant a row with no source:** a click or drag on empty ground does nothing; the card asks for a placed plant (today).
+- **Profile:** Enter or the long-press menu's "Finish shape" also finishes (2+ points); Backspace and Undo remove the last point; a new line replaces the previous profile. It never pins a point and never selects.
 - **Polygon, a drag after a corner press:** `drag-start` and `drag-move` move the rubber band as hovers; neither a `tap` nor a `drag-end` adds a corner (the press did, today).
 - **Alt+click on Linux desktops:** may be taken by the window manager (known limitation, §3.1); Shift or mod click and Delete on a focused corner reach the same results.
 
@@ -1817,9 +1875,10 @@ The text entry (note editor, spacing field) is not a layer: its element handler 
 | 60 | tool transient | a polygon draft or a Plant a row source (today); from 2 also a held Object stamp pick. A tool's `escape` only drops its transient and answers `pass` otherwise; the tool layer (50) leaves. Place plants' waiting point is a transient but no layer (`escapeLeaves`): the tool layer's Esc leaves at once, the point with it (U35) |
 | 50 | non-Select tool → Select | any tool but Select is armed |
 | 30 | selection → clear | something is selected |
-| 25 | raster inspection → end | inspecting |
+| 25 | Site data profile → clear (canopi-f47t.42) | a finished profile line is shown |
+| 20 | Site data pin → unpin (canopi-f47t.42) | a point is pinned |
 
-From F, per layer: the gesture (70), nudge-series (65), tool-transient (60) and tool (50) layers run from every focus class except `text` and `modal`; the selection layer (30) runs only with focus class `map`, so Esc with focus in a side panel keeps the map selection (U10, user 2026-10-02). No layer closes the dock panel or the phone sheet (U11). Phase 0 keeps today's behaviour. One Esc runs one layer. In overview only layers 100, 70 (a live pan or rotate, or today's interrupted gesture) and 25 run (U36: no selection layer there); 65, 60 and 50 never run there, so Esc never leaves the tool in overview (today), and the per-tool table below applies in site mode only.
+From F, per layer: the gesture (70), nudge-series (65), tool-transient (60) and tool (50) layers run from every focus class except `text` and `modal`; the selection layer (30) runs only with focus class `map`, so Esc with focus in a side panel keeps the map selection (U10, user 2026-10-02). No layer closes the dock panel or the phone sheet (U11). Phase 0 keeps today's behaviour. One Esc runs one layer. In overview only layers 100, 70 (a live pan or rotate, or today's interrupted gesture) and 25 run (U36: no selection layer there; entering overview unpins and overview never pins, so 20 is never active); 65, 60 and 50 never run there, so Esc never leaves the tool in overview (today), and the per-tool table below applies in site mode only.
 
 The priority table is built in F, the popover layers in the same window as the chain (fixture I8); until then the keyboard port keeps today's Esc order and popovers keep their document listeners. No canvas row matches Esc: `deselect` carries only a key hint (`app/canvas-commands/index.ts:351`) and the canvas rows come from `definition.shortcuts`.
 
@@ -1834,6 +1893,7 @@ The priority table is built in F, the popover layers in the same window as the c
 | Object stamp, pick held | drops the pick; the card shows `stampPick` (from 2; before: Select at once) | Select | clears |
 | Saved object stamp | Select at once (today; a one-shot tool, so no first Esc drops the stamp) | clears | — |
 | Polygon, draft | drops the draft | Select | clears |
+| Profile, draft (canopi-f47t.42) | drops the draft; a finished profile stays | Select | clears (then layer 25 clears the profile, 20 unpins) |
 | Line, Measure, Rectangle, Ellipse, during the drag | cancels the drag | Select | clears |
 | Text, entry open | cancels the entry | Select | clears |
 | Any tool, rotate drag live | restores the camera | next layer | — |
@@ -1853,7 +1913,7 @@ Nothing reports which layer the next Esc runs: the tool card keeps its own "Esc 
 | Arrow-owning widgets (lists, sliders, tabs, menus) | Plain and Shift+arrows stay with the widget; N, Shift+N and other `command` keys act on the canvas unless the widget claims them with `data-owns-keys`. |
 | Inspection lens preview | Arrow-owning: arrows move the lens along the screen; mod+arrow moves farther (spec, matching the canvas; was Shift); Shift+arrows move by the plain step (from 1). Drag is screen-relative. |
 | World map (template and place picker) | Its own MapLibre map: north-up, left-drag pans, wheel zooms, a touch pinch zooms with rotation disabled (from 3, U41), no rotation, no compass; `boxZoom: false` from 2 (convention; Shift+drag box-zooms it until then). Its keyboard handler keeps arrow pans and +/− zoom but `disableRotation()` stops Shift+arrows turning and tilting it (from F); its container declares `data-owns-keys="arrows"`, so Shift+←/→/↑ never reach the workspace view from it (from 1, fixture H26). |
-| Inspecting a raster (Desktop LiDAR inspection) | A plain primary press (mouse left, pen tip, and a one-finger tap) anywhere on the map samples the point instead of reaching the tool, after handles and the pan check and before the tool (today, `scene-interaction.ts:609-614`; ToolHost `deps.inspect`, fixture J10). Shift, mod or Alt at the press still samples (today: the probe reads no modifier); the sampled press starts no drag, band or move. Space+drag and a Pan-tool drag pan (the pan check comes first), and a Pan-tool click does not sample (today); from phase 3 a touch probe samples at the press the recogniser resolves (§3.4), as a mouse does, and the lens moves to a finger's tap (§1.4 "Hover"); a long press or a pinch resolves no press and samples nothing (A16). In overview the probe never runs (overview presses pan, today; U36). Right, middle and pen-barrel input, the canvas menu, wheel and every rotation input are unchanged; Esc layer 25 ends inspecting. |
+| Pinning a point (Desktop, Site data panel open; canopi-f47t.42, U49 Q17) | A press reaches its tool as everywhere else; nothing claims it (the old raster probe and its claim are gone). After a resolved tap, `deps.pin` pins the point when Select hit nothing and nothing moved (the selection clears as usual) or Pan is armed: a Pan-tool tap pins, reversing the old "a Pan-tool click does not sample". Objects still select, Select drags still band or move, Space+drag and a Pan drag pan and pin nothing; drawing tools and Profile never pin; overview never pins. A touch tap pins at the press the recogniser resolves (§3.4); a long press or a pinch pins nothing (A16). Right, middle and pen-barrel input, the canvas menu, wheel and every rotation input are unchanged; Esc layer 20 unpins. |
 | Compass, zoom group, attribution | A press there never starts a canvas gesture: the zoom group and compass sit beside the host (`foreign`); the attribution inside it is `owned-chrome` through `.maplibregl-ctrl` and no longer starts a band (phase F). |
 
 PDF page editor, every phase unless marked (today: `PdfPageEditor.tsx:60` accepts only button 0; `:106-107` arrows):
@@ -2173,7 +2233,7 @@ These run in `app/keyboard/*.test.ts` with `KeyboardEventLike` literals.
 | J2 Shift+drag is not box zoom | down(0, Shift) → drag | additive band; never zoom |
 | J3 Overview right-click | overview: still right-click | contextmenu prevented, no menu (the overview left drag is G7) |
 | J9 Space with the Pan tool | hand armed, Space held, drag | `space-drag` pan (same result) |
-| J10 Inspection probe order (the host rows in `tools/tool-host.test.ts` with harness tools, the pan rows in `input/recognise.test.ts`) | LEGACY, an inspection claiming presses: down(0) on a rotate handle; Space held, down(0) → drag; Polygon armed, down(0, Shift) on empty ground; overview, down(0); Pan armed, down(0) → up | the handle drags; `pan`; the probe claims the press and Polygon adds no corner; `pan`, no probe; no probe (today's order: handles, pan, probe, tool; a pan never reaches the host) |
+| J10 Pin order (canopi-f47t.42; the host rows in `tools/tool-host.test.ts` with harness tools and a pin port, the pan rows in `input/recognise.test.ts`) | Site data open: down(0) on a rotate handle → drag; Space held, down(0) → drag; Select, tap on empty ground; Select, tap on a zone's fill; Select, drag from empty ground; Polygon or Profile armed, tap; Pan armed, tap; overview, tap; a finger's tap with Select on empty ground | the handle drags, no pin; `pan`, no pin; the selection clears and the point pins; the zone selects, no pin; a band, no pin; the tool adds its point, no pin; the point pins; `pan`, no pin; the point pins at the down point |
 
 ## 6. Pitch readiness: what it costs now
 
@@ -2200,7 +2260,8 @@ When pitch ships (this paragraph is the recipe; the main agent notes it on canop
 - Box zoom (Shift+drag) anywhere.
 - Navigating with a second button during a drag (user, 2026-10-01): wheel zoom and keys stay live during a drag; a right or middle press during it is ignored.
 - An angle per Print Area (user, 2026-10-01: one angle for the whole PDF layout) and an edge highlight for "Turn view to this edge" (user, 2026-10-01).
-- A new stored enum for Pointing device, a stored PDF setup, or any `.canopi` change beyond the saved-view ground size and the deleted `SavedView.extent` (§4.10), or any user-DB, LiDAR catalogue or plant-catalog change.
+- A new stored enum for Pointing device, a stored PDF setup, or any `.canopi` change beyond the saved-view ground size and the deleted `SavedView.extent` (§4.10) and canopi-f47t.42's `lidar` fields (§8), or any user-DB, LiDAR catalogue or plant-catalog change.
+- In the Site data work (U49): swipe compare, custom WMTS/XYZ backgrounds, Replace or Import on a missing item, library locations (after 2.0), user layer groups, viewport stretch and gamma, more than three ramps per kind or custom colours, floating legends, gain and loss totals, saving a profile to a file, printing or sharing it, map-to-chart hover, a library resize grip, Site data, Profile or the library on Web.
 - Performance gates and optimisation beyond making canopi-p32r and canopi-wx8w fixable (phase R), and the select-all and delete-all slowness (its own bead).
 - Instanced billboard or screen-constant line shaders (they fit behind the layer's frame read later).
 
@@ -2208,10 +2269,11 @@ When pitch ships (this paragraph is the recipe; the main agent notes it on canop
 
 | Store | Change |
 |---|---|
-| `.canopi` | version stays 9. `SavedViewCamera.bearing` is now written (normalised); `SavedViewCamera.ground_size_m` added, required (U33), and `SavedView.extent` deleted (§4.10); optional top-level `map_view` added (U28, §4.15; ADR 0021, "Additive `.canopi` changes"); ruler guides (`extra.guides`) no longer read or written by the scene, a key left in a development file staying as unknown extra (U33, ADR 0011). Positions are written rounded to the 1e-9° grid, latitude clamped to ±85.051128779 (the largest grid value inside Web Mercator's limit): an unedited position on the grid is written unchanged after open, chained re-origins and save, one with more decimals is rounded once (phase 2, P26; the geo ledger goes). A plant without a saved width is no longer given the catalog's width on open and save (P3).  Notes, rectangles and ellipses created rotated store the bearing in their existing `rotationDeg`. |
+| `.canopi` | version stays 9. `SavedViewCamera.bearing` is now written (normalised); `SavedViewCamera.ground_size_m` added, required (U33), and `SavedView.extent` deleted (§4.10); optional top-level `map_view` added (U28, §4.15; ADR 0021, "Additive `.canopi` changes"); ruler guides (`extra.guides`) no longer read or written by the scene, a key left in a development file staying as unknown extra (U33, ADR 0011). Positions are written rounded to the 1e-9° grid, latitude clamped to ±85.051128779 (the largest grid value inside Web Mercator's limit): an unedited position on the grid is written unchanged after open, chained re-origins and save, one with more decimals is rounded once (phase 2, P26; the geo ledger goes). A plant without a saved width is no longer given the catalog's width on open and save (P3).  Notes, rectangles and ellipses created rotated store the bearing in their existing `rotationDeg`. The `lidar` section (canopi-f47t.42, §1.10) gains a required `visible` (the Layers Site data eye); each entry gains required `name`, `ramp`, `reversed` and `range` and loses `style`; `schema_version` stays 1. |
 | Settings | `LastView.bearing` (phase 1) and `snap_to_guides` deleted (U33); older settings still load, since settings have no `deny_unknown_fields`. `scroll_wheel` values unchanged. |
 | PDF | `PdfSetup.mapOrientation?` (default North up), in memory only; one layout angle, the view's bearing read at each capture (`PdfInput.viewBearingDeg`), also in memory; Print Areas and offsets in plan metres, independent of the frame. `PdfPrintArea.rotationDeg` is dropped (user, 2026-10-01): no stored format replaces it, since PDF setups are not saved (plan §8). |
-| User DB, LiDAR catalogue, plant catalog | none |
+| LiDAR catalogue | no schema change; `LibraryItemSummary.created_at` (IPC only) reads the existing `created_at` columns (canopi-f47t.42) |
+| User DB, plant catalog | none |
 
 ## 9. User-facing strings
 
@@ -2280,5 +2342,22 @@ F1 shows a Touch section with these three rows on every device, after "Mouse, tr
 | `shortcuts.gestures.twoFingers` | Two fingers | F1 input |
 | `shortcuts.gestures.touchNavigate` | Pan, zoom and turn the view | F1 action |
 | `shortcuts.gestures.longPress` | Press and hold | F1 input (action: `shortcuts.gestures.menu`) |
+
+### 9.5 Layers redesign (canopi-f47t.42)
+
+New keys are named in commit 0 (plan §4); "Site data" and "Profile" join the glossary's names. Existing keys keep their text unless listed here.
+
+| Surface | New or reworded English |
+|---|---|
+| Layers | Map (section); Street map (reworded from Map in `canvas.layers.backgroundMap`, `menu.view.backgroundMap`, `stories.backgroundMap`); Open Site data (aria); {{shown}} of {{count}} shown (plural); None yet; Web: {{count}} terrain or height layers in this Design · Needs Canopi Desktop (plural; "1 terrain or height layer…") |
+| Site data panel | Unpin; Point at the map to read values · click to pin; Tap the map to pin a point (coarse pointer); Add terrain or height data first; Profile; Show an elevation or height layer to draw a profile; Site data is hidden from the map; Show; Filter site data (label); Filter by name (placeholder, budget 40); Reorder {{name}}; Expand {{name}}; Collapse {{name}}; Missing; No data (aria of "—") |
+| Open item | Colors; Terrain; Earth; Gray; Greens; Magma; Yellow–red; Reverse; Range; Data range; Cut outliers; Leaves out the lowest and highest 2 % of values (tooltip); Custom; Minimum; Maximum; Reset |
+| Missing reasons | Not in this computer's Data library; The Data library needs a newer Canopi; The Data library couldn't be opened. Restart Canopi. |
+| Profile | Profile (tool title); Click to add points. Double-click or press Enter to finish. (tool card); Backspace removes the last point · Shift keeps 45° angles (tool card); Profile this line (canvas menu); Copy values; Close profile (aria); At {{distance}}; Rise {{value}}; Steepest {{percent}} over 2 m; Highest {{value}}; Reading values…; No values along this line; Show an elevation or height layer to see its profile; Distance (m); Longitude; Latitude; Copied; Couldn't copy the values |
+| Analyze | Analyze (title, reworded without the name); Source; Results are added under their source in Site data and kept in your library. (reworded); Already in Site data. (reworded); Show in Site data (reworded) |
+| Data library | Sort; Recently added; Added; Deleted item; Open a Design to import data (tooltip) |
+| File menu | Import terrain or height data… (reworded from Add data…) |
+
+Deleted in commit Z: the Read values keys, "Toggle visibility: {{name}}", the Visible/Hidden · Locked/Unlocked inspector heading, "Hillshade opacity", the Online elevation heading and note, the Add data menu, Move forward and Move back, "You can keep working.", the library's second intro, remove hint, gone item, rename title and Done, the Web notice keys (`webKept_*`, `webUnavailable`) and the other keys the old Layers footer and details used.
 
 Release-note text is written once per release and is not an i18n key.

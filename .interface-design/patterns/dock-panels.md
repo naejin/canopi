@@ -1,6 +1,6 @@
 # Dock panels
 
-Read the [design system](../system.md) first; ownership: [frontend guide](../../docs/guides/frontend.md). Boards: Workspace, FindPlants, SelectedToList, Layers, AddDataMenu, AddData, ImportProgress, AnalyzeDialog, SlopeAnalysis, Library, ResultDetails, LayersDark, Calendar, CalendarAction, Budget, Consortium, Notebook, Favorites, StoryAuthor; AnalyzeWater, WaterFlow and CanopyAnalysis show planned analyses.
+Read the [design system](../system.md) first; ownership: [frontend guide](../../docs/guides/frontend.md). Boards: Workspace, FindPlants, SelectedToList, Layers, LayersDark, WebPhoneLayers, Calendar, CalendarAction, Budget, Consortium, Notebook, Favorites, StoryAuthor. Site data boards: [site data](site-data.md).
 
 ## Panel frame
 
@@ -19,16 +19,11 @@ Read the [design system](../system.md) first; ownership: [frontend guide](../../
 - Title with a muted "N plants · N species" subtitle, then a collapsible "Display on the map" section: Color by (Species / Stratum / One color; One color adds a swatch, Stratum a legend whose swatches recolour a whole stratum, with "Reset stratum colors" once one is changed), Symbol size (50–200 %), Outline, Labels (None / Codes / Names with the "Codes shown for …" line, "Zoom in to see codes" when none shows), Soften background ("Kept on this device"), then a one-line hint.
 - Species rows with a colour swatch first while colouring by species; the glyph always shows the colour the map draws. A swatch recolours the whole species. Options are saved with the Design, except Soften background. Activating a row highlights that species on the map with a top chip (name · N plants highlighted · Select these plants · Clear).
 
-## Layers, data and analysis
+## Layers
 
-- One list in three sections, front to back: **Design** (Annotations, Plants, Measurement guides, Zones, with counts, eye and lock), **Site data** (the Design's terrain and height items; results nest under their source with "from <source> · <units>"; then **Online elevation** with Contour lines and Hillshading), **Background** (one radio group: Satellite, Map, None). No section counts.
-- "Add data" (the only entry, beside the Site data heading) opens a menu: Terrain or height from files…, Design objects from GeoJSON…, From your library ▸ (items already here are disabled), Data library….
-- One row is active across Layers. The active site item's footer: name and type, out-of-date notice with Refresh, legend with range, Opacity, Fit to data (then Return to Design), Read values (pressed while active), Analyze… on sources, Details, Move forward and back (Alt ↑/↓), and Remove from Design with "Your library keeps the data."
-- Details replace the list (Back to Layers): out-of-date notice with Refresh, facts and provenance, Run again with changes…, Rename…, Open in the Data library, Processing history.
-- Import dialog (after the native picker): what Canopi accepts (single-band GeoTIFF), name, what the values measure and unit, ordered files. A notice says whether the files cover the Design and never blocks the import. Progress shows on its own row under Site data with Cancel import and "You can keep working."
-- Analyze dialog is generated from the analysis registry (ADR 0011): it names its source and where results go, lists options with one-line explanations, marks existing results "Already in Layers", shows parameters inline, and says "Unavailable: the GeoLibre engine is missing." when the sidecar is absent.
-- Data library (dialog): search, type filter (`Dropdown`), Import…; rows with preview, type and resolution or units, and "In this Design" or Add to Design; the footer counts items and disk space, with Show in folder (ghost) and Done. A rebuilt library shows a warning naming Retry at the top; one refused as newer or unopenable shows an error saying it is read-only.
-- Web: no terrain import; Site data says terrain and height data need Canopi Desktop.
+- Front to back: **Design** (Annotations, Plants, Measurement guides, Zones: eye, icon, name, count, lock), one **Site data** row, **Map** (Contour lines, Hillshading, then Background: Satellite, Street map, None with the chosen option's settings always under it). No footer; nothing replaces the list.
+- A name opens that row's settings under it (Opacity; Contour lines add Contour interval) and a second click closes it; one row is open at a time, marked by a 3 px amber bar and a semibold name, no fill. Every eye reads "Hide X"/"Show X".
+- Site data row (Desktop): one eye for all site data, saved with the Design, that leaves each item's own eye as it was, "N of M shown" or "None yet", and › to the [Site data panel](site-data.md). Web: "N terrain or height layers in this Design · Needs Canopi Desktop", no eye, opens nothing, absent with no site data.
 
 ## Planning
 

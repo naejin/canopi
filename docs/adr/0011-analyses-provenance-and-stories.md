@@ -2,7 +2,7 @@
 
 Status: Accepted (2026-09-26, Canopi v2)
 
-Amended by [ADR 0015](0015-rotating-map-and-canvas-controls.md) (2026-09-29): saved views and stories restore their bearing; 2026-10-03 (U21, U23): a view records the ground it frames and keeps that frame in any window; the extent record is deleted; 2026-10-05 (U33): the ground size is required.
+Amended by [ADR 0015](0015-rotating-map-and-canvas-controls.md) (2026-09-29): saved views and stories restore their bearing; 2026-10-03 (U21, U23): a view records the ground it frames and keeps that frame in any window; the extent record is deleted; 2026-10-05 (U33): the ground size is required; 2026-10-08 (canopi-f47t.42): results live in the Site data panel, and capture records site data visibility with the Layers eye folded in.
 
 ## Context
 
@@ -15,7 +15,7 @@ v2.0 ships one analysis (slope) wired directly into the LiDAR workflow. Planned 
   - Executors stay handwritten in Rust.
   - Lanes: the pinned GeoLibre CLI sidecar, windowed (slope, hillshade) or global (contours, hydrology, bounded by an extent cap), and the in-process `native` lane for vegetation analysis ([ADR 0012](0012-vegetation-analysis.md)).
   - The Analyze dialog is generated from the registry for the selected source. Slope (`terrain.slope`) is the only entry in v2.0.0; hillshade, contours and hydrology become entries as they land ([plan](../plans/analysis-registry-and-hydrology.md)).
-  - Unavailable entries say why (already in Layers, needs Desktop, needs a point cloud).
+  - Unavailable entries say why (already in Site data, needs Desktop, needs a point cloud).
 - **Typed library items.** Library and site-data items carry a kind: raster (elevation, height, slope, flow…), point cloud, or vector result (streams, watersheds, detected trees, crowns). Layers, legends and value readouts dispatch on kind; nothing assumes an elevation raster.
 - **Provenance.** Every derived item records its input items and generations, analysis id and recipe version, parameters and tool version. Refresh re-runs a result in place (every Design that uses it sees the new result; the run stays in the processing history); stale results are flagged with their reason (input, recipe or tool changed); refresh is always explicit, never automatic.
 - **Saved views.**

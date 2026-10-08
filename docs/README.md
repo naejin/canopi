@@ -17,7 +17,7 @@ Also: [`workflow.md`](workflow.md) for beads, branches, ownership and delivery; 
 | --- | --- |
 | Map canvas, scene runtime, renderer, camera, input, tools, snapshots | [map-workspace.md](guides/map-workspace.md) |
 | `.canopi` format, Design Edit, settings, views and stories | [design-document.md](guides/design-document.md) |
-| LiDAR library, Layers, analyses | [data-library.md](guides/data-library.md) |
+| LiDAR library, Site data, analyses | [data-library.md](guides/data-library.md) |
 | Frontend structure, commands, keys and focus, localisation, tests | [frontend.md](guides/frontend.md) |
 | Terms per locale and copy rules | [ui-glossary.md](guides/ui-glossary.md) |
 | Desktop, Web, phones, the gallery | [editions.md](guides/editions.md) |
