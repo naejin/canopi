@@ -1,4 +1,5 @@
-import { useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
+import type { Ref } from 'preact'
 import { setLidarEntryDisplay } from '../../../app/lidar/actions'
 import { formatLocaleNumber, parseLocaleNumber } from '../../../app/analyses/model'
 import { lidarDisplayStyle } from '../../../app/lidar/display'
@@ -120,6 +121,7 @@ function Range({ item, mode, values }: {
   readonly values: readonly [number, number]
 }) {
   const label = t('siteData.display.range')
+  const minimum = useRef<HTMLInputElement>(null)
   const differs = item.ramp !== null || item.reversed || item.range !== null
   const choose = (next: RangeMode) => {
     setLidarEntryDisplay(item.id, {
@@ -148,16 +150,19 @@ function Range({ item, mode, values }: {
         ]}
       />
       <div className={styles.fields}>
-        {/* Keyed by the values in use, so a field that did not commit shows them again. */}
-        <RangeField key={`min:${values[0]}`} label={t('siteData.display.minimum')} value={values[0]}
+        <RangeField inputRef={minimum} label={t('siteData.display.minimum')} value={values[0]}
           onCommit={(min) => commit(min, values[1])} />
         <span className={styles.dash} aria-hidden="true">–</span>
-        <RangeField key={`max:${values[1]}`} label={t('siteData.display.maximum')} value={values[1]}
+        <RangeField label={t('siteData.display.maximum')} value={values[1]}
           onCommit={(max) => commit(values[0], max)} />
         <span className={styles.units}>{unitSuffix(item.units).trim()}</span>
         {differs && (
           <button type="button" className={styles.reset}
-            onClick={() => setLidarEntryDisplay(item.id, { ramp: null, reversed: false, range: null })}>
+            onClick={() => {
+              setLidarEntryDisplay(item.id, { ramp: null, reversed: false, range: null })
+              // Reset leaves once the display is the kind's: keep the keyboard in the Range fields.
+              minimum.current?.focus()
+            }}>
             {t('siteData.display.reset')}
           </button>
         )}
@@ -170,21 +175,32 @@ function Range({ item, mode, values }: {
  * One end of the range: it always shows the value in use, accepts the
  * locale's decimal mark, and commits on Enter or leaving the field; a value
  * that does not parse or would not keep minimum below maximum is reverted.
+ * The input stays mounted as the value in use changes, so focus survives a
+ * commit; a new value replaces the text unless the user is editing it.
  */
-function RangeField({ label, value, onCommit }: {
+function RangeField({ label, value, onCommit, inputRef }: {
   readonly label: string
   readonly value: number
   onCommit(value: number): boolean
+  readonly inputRef?: Ref<HTMLInputElement>
 }) {
   const shown = formatLocaleNumber(value, locale.value)
   const [draft, setDraft] = useState(shown)
+  const previous = useRef(shown)
+  useEffect(() => {
+    const before = previous.current
+    previous.current = shown
+    setDraft((current) => (current === before ? shown : current))
+  }, [shown])
   const finish = () => {
     if (draft === shown) return
     const parsed = parseLocaleNumber(draft, locale.value)
-    if (parsed === null || !onCommit(parsed)) setDraft(shown)
+    if (parsed !== null && onCommit(parsed)) setDraft(formatLocaleNumber(parsed, locale.value))
+    else setDraft(shown)
   }
   return (
     <input
+      ref={inputRef}
       className={styles.field}
       type="text"
       inputMode="decimal"

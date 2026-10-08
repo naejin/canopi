@@ -148,6 +148,37 @@ describe('an open item\'s Range', () => {
     expect(named('Reset')).toBeTruthy()
   })
 
+  it('keeps the field and its focus when an Enter commit or a new range in use lands, and a draft being typed', async () => {
+    mount(item())
+    const minimum = named('Minimum') as HTMLInputElement
+    minimum.focus()
+    await type(minimum, '150', 'Enter')
+    expect(setLidarEntryDisplay).toHaveBeenCalledWith('a', { range: { mode: 'Custom', min: 150, max: 200 } })
+    mount(item({ range: { mode: 'Custom', min: 150, max: 200 } }))
+    expect(named('Minimum')).toBe(minimum)
+    expect(document.activeElement).toBe(minimum)
+    expect(minimum.value).toBe('150')
+    // A range that lands while Maximum holds a draft keeps the draft; an untouched field shows the new value.
+    const maximum = named('Maximum') as HTMLInputElement
+    await act(async () => {
+      maximum.value = '18'
+      maximum.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    mount(item({ range: { mode: 'Custom', min: 120, max: 190 } }))
+    expect(named('Maximum')).toBe(maximum)
+    expect(maximum.value).toBe('18')
+    expect(minimum.value).toBe('120')
+  })
+
+  it('keeps focus in the Range fields after Reset removes itself', async () => {
+    mount(item({ ramp: 'Gray' }))
+    const reset = named('Reset')
+    reset.focus()
+    await click(reset)
+    mount(item())
+    expect(document.activeElement).toBe(named('Minimum'))
+  })
+
   it('writes opacity live as the slider moves', async () => {
     mount(item())
     const slider = container.querySelector<HTMLInputElement>('input[aria-label="Opacity: Ground"]')!
