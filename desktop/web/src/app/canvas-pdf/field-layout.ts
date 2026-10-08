@@ -278,7 +278,7 @@ function layoutField(input: PdfInput, frame: PrintBounds, ground: PrintBounds, s
           label.target = ''
         }
         label.route = []
-        space.admit(label, guide && beside ? guide : undefined)
+        space.admit(label, guide)
         if (note.plantIds) identifiedPlants.push({ ids: note.plantIds, reference: note.reference, bounds: paper(label.bounds) })
       } else {
         note.location = coordinates(note.position)
