@@ -379,7 +379,7 @@ describe('Data library, Import and Analyze dialogs', () => {
     mount()
     await openAnalyze('Ground')
 
-    expect(title()).toBe('Analyze Ground')
+    expect(title()).toBe('Analyze')
     expect(container.textContent).toContain('saved to your library')
     const name = container.querySelector<HTMLInputElement>('form input:not([type])')!
     expect(name.value).toBe('Ground · Slope')
@@ -461,7 +461,7 @@ describe('Data library, Import and Analyze dialogs', () => {
     await click(button('Actions for Steepness'))
     await click(document.querySelector<HTMLButtonElement>('[role="menu"] [aria-label="Run again with changes…"]')!)
 
-    expect(title()).toBe('Analyze Ground')
+    expect(title()).toBe('Analyze')
     const degrees = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]'))
       .find((candidate) => candidate.closest('label')?.textContent === 'Degrees')!
     expect(degrees.checked).toBe(true)

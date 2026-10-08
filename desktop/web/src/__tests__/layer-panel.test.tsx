@@ -119,7 +119,7 @@ describe('LayerPanel', () => {
     resetSettingsProjectionForTests()
   })
 
-  it('chooses the background as Satellite, Map or None and persists it', async () => {
+  it('chooses the background as Satellite, Street map or None and persists it', async () => {
     await act(async () => {
       render(<LayerPanel />, container)
     })
@@ -128,19 +128,19 @@ describe('LayerPanel', () => {
     const radio = (label: string) => Array.from(group.querySelectorAll('label'))
       .find((option) => option.textContent?.startsWith(label))!.querySelector('input')!
     expect(Array.from(group.querySelectorAll('label')).map((option) => option.textContent))
-      .toEqual(['SatelliteGoogle', 'MapOpenFreeMap', 'NonePlain paper'])
-    expect(radio('Map').checked).toBe(true)
+      .toEqual(['SatelliteGoogle', 'Street mapOpenFreeMap', 'NonePlain paper'])
+    expect(radio('Street map').checked).toBe(true)
     // The rows show how many layers there are; the header carries no bare count.
     expect(container.querySelector('header')?.textContent).not.toMatch(/\d/)
-    expect(container.querySelector('input[aria-label="Opacity: Map"]')).toBeTruthy()
+    expect(container.querySelector('input[aria-label="Opacity: Street map"]')).toBeTruthy()
     // Background has no eye toggles: it is one choice.
-    expect(container.querySelector('button[aria-label="Toggle visibility: Map"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="Toggle visibility: Street map"]')).toBeNull()
 
     await act(async () => { radio('None').click() })
     expect(mapLayers.value.basemap.visible).toBe(false)
     expect(mapLayers.value.satellite.visible).toBe(false)
     expect(radio('None').checked).toBe(true)
-    expect(container.querySelector('input[aria-label="Opacity: Map"]')).toBeNull()
+    expect(container.querySelector('input[aria-label="Opacity: Street map"]')).toBeNull()
     await Promise.resolve()
     expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ basemap_visible: false }))
 
@@ -148,7 +148,7 @@ describe('LayerPanel', () => {
     expect(mapLayers.value.satellite.visible).toBe(true)
     expect(container.querySelector('input[aria-label="Opacity: Satellite"]')).toBeTruthy()
 
-    await act(async () => { radio('Map').click() })
+    await act(async () => { radio('Street map').click() })
     expect(mapLayers.value.satellite.visible).toBe(false)
     expect(mapLayers.value.basemap.visible).toBe(true)
   })
@@ -280,7 +280,7 @@ describe('LayerPanel', () => {
     const hasLocationButton = () => Array.from(container.querySelectorAll('button'))
       .some((button) => button.textContent === 'Design Location')
     expect(hasLocationButton()).toBe(false)
-    expect(container.querySelector('input[aria-label="Opacity: Map"]')).toBeTruthy()
+    expect(container.querySelector('input[aria-label="Opacity: Street map"]')).toBeTruthy()
 
     await act(async () => {
       activeLayerName.value = 'contours'
