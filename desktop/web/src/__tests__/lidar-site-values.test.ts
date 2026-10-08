@@ -7,11 +7,15 @@ const native = vi.hoisted(() => ({
   requests: [] as LidarSamplePointsRequest[],
   /** Entity ids that answer no data. */
   empty: new Set<string>(),
+  /** While holding, each answer waits here until the test releases it. */
+  holding: false,
+  held: [] as (() => void)[],
 }))
 vi.mock('../ipc/lidar', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../ipc/lidar')>()),
   lidarSamplePoints: async (request: LidarSamplePointsRequest): Promise<LidarSampleSeries[]> => {
     native.requests.push(request)
+    if (native.holding) await new Promise<void>((release) => native.held.push(release))
     // Each target answers the point's longitude, so a row shows where it was read.
     return request.targets.map((target) => ({
       Values: { values: request.points.map(([lon]) => (native.empty.has(target.entity_id) ? null : lon)) },
@@ -50,6 +54,16 @@ function openDesign(entries: { id: string; visible: boolean }[]): void {
   designSessionStore.replaceCurrentDesignState(design, null, 'Orchard')
 }
 
+/** Releases every held answer, including those the released ones let run, then answers at once again. */
+async function releaseHeld(): Promise<void> {
+  native.holding = false
+  await flush()
+  while (native.held.length > 0) {
+    native.held.shift()!()
+    await flush()
+  }
+}
+
 function hover(x: number, y: number, pointerKind: PointerKind = 'mouse'): void {
   surface.emitPointerWorld({ world: { x, y }, screen: { x: 0, y: 0 }, pointerKind })
 }
@@ -75,7 +89,9 @@ describe('Site data row values', () => {
     selectPanel('site-data')
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    // A held answer would keep the shared sampler's lane busy for the next test.
+    await releaseHeld()
     endSiteDataTransients()
     sidePanel.value = null
     setCurrentCanvasSession(null)
@@ -131,6 +147,46 @@ describe('Site data row values', () => {
 
     expect(native.requests).toHaveLength(0)
     expect(siteValues.value).toBeNull()
+  })
+
+  it('publishes no late answer once the pointer leaves the map with no pin', async () => {
+    native.holding = true
+    hover(10, 20)
+    await flush()
+    hover(11, 21)
+    await flush()
+    surface.emitPointerWorld(null)
+    await flush()
+    expect(siteValues.value).toBeNull()
+
+    await releaseHeld()
+    expect(siteValues.value).toBeNull()
+  })
+
+  it('publishes no late answer once the panel closes', async () => {
+    native.holding = true
+    hover(10, 20)
+    await flush()
+    selectPanel('layers')
+    await flush()
+
+    await releaseHeld()
+    expect(siteValues.value).toBeNull()
+  })
+
+  it('a late answer never brings back the value of a row hidden meanwhile', async () => {
+    native.holding = true
+    hover(5, 5)
+    await flush()
+    setLidarEntryVisibility('dsm', false)
+    await flush()
+
+    // The answer asked with both rows lands first.
+    native.held.shift()!()
+    await flush()
+    expect(shown()).toEqual({ at: 'pointer', mnt: { kind: 'value', value: lonAt(5, 5) } })
+    await releaseHeld()
+    expect(shown()).toEqual({ at: 'pointer', mnt: { kind: 'value', value: lonAt(5, 5) } })
   })
 
   it('ignores touch for hover: a finger reads values through the pin', async () => {

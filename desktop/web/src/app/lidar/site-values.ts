@@ -52,12 +52,24 @@ effect(() => {
 
 let askedKey: string | null = null
 
+/**
+ * The rows being read since reading last started; null while nothing is read. A batch lands only into the reading it
+ * was asked in, and only for rows still read, so a late answer never brings values back after reading stopped or a row
+ * was hidden. A new point keeps the reading, so the running key's later batches still land (sampler.ts).
+ */
+let read: { ids: ReadonlySet<string> } | null = null
+
+function stopReading(): void {
+  askedKey = null
+  read = null
+  values.value = null
+}
+
 // One request per change of the point or of the rows to read: an eye, a new generation, an added, removed or reordered
 // item. The sampler keeps one in flight and drops what a newer key replaced.
 effect(() => {
   if (!reading.value) {
-    askedKey = null
-    values.value = null
+    stopReading()
     return
   }
   const hovered = pointer.value
@@ -68,8 +80,7 @@ effect(() => {
     .filter((item) => item.shown && item.availability === 'present' && item.state === 'Ready' && item.generationId !== null)
     .reverse()
   if (!point || rows.length === 0) {
-    askedKey = null
-    values.value = null
+    stopReading()
     return
   }
   const targets: LidarSampleTarget[] = rows.map((row) => ({
@@ -81,11 +92,16 @@ effect(() => {
   if (key === askedKey) return
   askedKey = key
   const ids = new Set(rows.map((row) => row.id))
+  if (read) read.ids = ids
+  else read = { ids }
+  const asked = read
   void siteSampler.request('values', key, targets, [[point.lon, point.lat]], (first, series) => {
+    if (read !== asked) return
     // Rows a later batch answers keep their last value until it lands; rows no longer read are dropped.
-    const merged = new Map([...(values.peek()?.rows ?? [])].filter(([id]) => ids.has(id)))
+    const merged = new Map([...(values.peek()?.rows ?? [])].filter(([id]) => asked.ids.has(id)))
     series.forEach((answer, index) => {
       const id = rows[first + index]!.id
+      if (!asked.ids.has(id)) return
       if ('Values' in answer) {
         const value = answer.Values.values[0]
         merged.set(id, value === null || value === undefined ? { kind: 'no-data' } : { kind: 'value', value })
