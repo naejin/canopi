@@ -42,6 +42,7 @@ vi.mock('../app/document-session/store', async () => {
 
 import { AddDataMenu, SiteDataInspector, SiteDataRows } from '../components/panels/lidar/SiteData'
 import { SiteDataDetails } from '../components/panels/lidar/SiteDataDetails'
+import { SiteDataPanel } from '../components/panels/lidar/SiteDataPanel'
 import { lidarLibrary } from '../app/lidar/library-store'
 import { currentDesign } from '../app/document-session/store'
 import { dataDialog, selectSiteRow, siteDataDetails } from '../app/lidar/library-navigation'
@@ -212,6 +213,9 @@ describe('Layers site data', () => {
     expect(button('Move Ground back').disabled).toBe(true)
     await click(button('Move Ground forward'))
     expect(actions.moveReference).toHaveBeenCalledWith('a', 'front')
+
+    // Values read on the rows now: the open row has no Read values button.
+    expect(() => button('Read values')).toThrow()
 
     await click(button(/^Analyze…$/))
     expect(dataDialog.value).toMatchObject({ kind: 'analyze', itemId: 'a', attach: true })
@@ -391,5 +395,31 @@ describe('Layers site data details', () => {
     act(() => { render(<SiteDataDetails id="s" />, container) })
     await click(button('Open in the Data library'))
     expect(dataDialog.value).toEqual({ kind: 'library', focusId: 's' })
+  })
+
+  it('the Site data panel holds the rows, Add data and the open row\'s settings under a header with Library and close', async () => {
+    siteDataDetails.value = null
+    setDesign([{ kind: 'Source', id: 'a', order: 0 }])
+    sidePanel.value = 'site-data'
+    act(() => { render(<SiteDataPanel importGeoJson={importGeoJson} />, container) })
+
+    expect(container.querySelector('aside')?.getAttribute('aria-label')).toBe('Site data')
+    expect(container.querySelector('h2')?.textContent).toBe('Site data')
+    expect(button('Add data')).toBeTruthy()
+    await click(button(/^Ground/))
+    expect(container.querySelector('[aria-label="Legend"]')).not.toBeNull()
+
+    await click(button('Data library'))
+    expect(dataDialog.value).toEqual({ kind: 'library', focusId: null })
+    await click(button('Close panel'))
+    expect(sidePanel.value).toBeNull()
+  })
+
+  it('the Site data panel shows one item\'s details in place of its list', () => {
+    siteDataDetails.value = 's'
+    act(() => { render(<SiteDataPanel importGeoJson={importGeoJson} />, container) })
+
+    expect(button('Rename…')).toBeTruthy()
+    expect(container.querySelector('aside[aria-label="Site data"]')).toBeNull()
   })
 })

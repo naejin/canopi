@@ -1,3 +1,12 @@
+/* The Site data panel: header, toolbar, the scrolling rows, then the open row's settings. */
+.panel { min-width: 0; height: 100%; display: flex; flex-direction: column; overflow: hidden; background: var(--color-surface); }
+.toolbar { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3) var(--space-2); border-bottom: 1px solid var(--color-border); }
+.body { flex: 1 1 0; min-height: calc(var(--control-size-lg) * 4); overflow-y: auto; overscroll-behavior: contain; }
+.panel > .inspector { flex: 0 1 auto; min-height: 0; overflow-y: auto; border-top: 1px solid var(--color-border-strong); }
+.headerButton { position: relative; display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: var(--control-size-md); height: var(--control-size-md); padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-secondary); cursor: pointer; }
+.headerButton:hover { background: var(--color-control-hover); color: var(--color-text); }
+.headerButton:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+
 .band { display: flex; flex-direction: column; min-width: 0; }
 .band button, .inspector button { font: inherit; cursor: pointer; color: var(--color-text); }
 .band :focus-visible, .inspector :focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
@@ -55,6 +64,6 @@
 .link { padding: 0; border: 0; background: transparent; color: var(--color-accent-ink); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 .reasons { margin: var(--space-1) 0 0; padding-left: var(--space-4); }
 
-/* One item's details inside Layers, with Back to the list. */
+/* One item's details inside Site data, with Back to the list. */
 .detailsPanel { min-width: 0; height: 100%; display: flex; flex-direction: column; background: var(--color-surface); }
 .detailsBody { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-2) var(--space-4) var(--space-6); }

@@ -65,7 +65,6 @@ function baseSettings(): Settings {
 describe('LayerPanel', () => {
   let container: HTMLDivElement
   const saveSettings = vi.fn(async (_settings: Settings): Promise<void> => {})
-  const importGeoJson = vi.fn()
 
   beforeEach(() => {
     vi.useFakeTimers()
@@ -122,7 +121,7 @@ describe('LayerPanel', () => {
 
   it('chooses the background as Satellite, Map or None and persists it', async () => {
     await act(async () => {
-      render(<LayerPanel importGeoJson={importGeoJson} />, container)
+      render(<LayerPanel />, container)
     })
 
     const group = container.querySelector('[role="radiogroup"][aria-labelledby="layers-background"]')!
@@ -156,7 +155,7 @@ describe('LayerPanel', () => {
 
   it('keeps opacity and Soften background with the chosen background', async () => {
     await act(async () => {
-      render(<LayerPanel importGeoJson={importGeoJson} />, container)
+      render(<LayerPanel />, container)
     })
     const soften = () => Array.from(container.querySelectorAll<HTMLInputElement>('input[role="switch"]'))
       .find((input) => input.closest('label')?.textContent?.includes('Soften background'))
@@ -183,7 +182,7 @@ describe('LayerPanel', () => {
 
   it('updates mounted Layer chrome when only the locale changes', async () => {
     await act(async () => {
-      render(<LayerPanel importGeoJson={importGeoJson} />, container)
+      render(<LayerPanel />, container)
     })
 
     expect(container.querySelector('aside')?.getAttribute('aria-label')).toBe('Layers')
@@ -199,7 +198,7 @@ describe('LayerPanel', () => {
 
   it('chooses the Basemap style from the Basemap row and persists it', async () => {
     await act(async () => {
-      render(<LayerPanel importGeoJson={importGeoJson} />, container)
+      render(<LayerPanel />, container)
     })
 
     const styleTrigger = dropdownTrigger(container, 'Style')
@@ -224,7 +223,7 @@ describe('LayerPanel', () => {
     await act(async () => {
       activeLayerName.value = 'satellite'
       mapLayers.value = { ...createDefaultMapLayers(), satellite: { visible: true, opacity: 1 } }
-      render(<LayerPanel importGeoJson={importGeoJson} />, container)
+      render(<LayerPanel />, container)
     })
 
     expect(container.querySelector('button[aria-label="Imagery"]')).toBeNull()
@@ -239,7 +238,7 @@ describe('LayerPanel', () => {
     await act(async () => {
       activeLayerName.value = 'satellite'
       mapLayers.value = { ...createDefaultMapLayers(), satellite: { visible: true, opacity: 1 } }
-      render(<LayerPanel importGeoJson={importGeoJson} />, container)
+      render(<LayerPanel />, container)
     })
 
     const keyInput = container.querySelector<HTMLInputElement>('input[type="password"]')
@@ -275,7 +274,7 @@ describe('LayerPanel', () => {
 
   it('shows map layer detail controls without a Design Location action', async () => {
     await act(async () => {
-      render(<LayerPanel importGeoJson={importGeoJson} />, container)
+      render(<LayerPanel />, container)
     })
 
     const hasLocationButton = () => Array.from(container.querySelectorAll('button'))
@@ -329,7 +328,7 @@ describe('LayerPanel', () => {
     }))
 
     await act(async () => {
-      render(<LayerPanel importGeoJson={importGeoJson} />, container)
+      render(<LayerPanel />, container)
     })
 
     const plantsLock = Array.from(container.querySelectorAll('button'))
@@ -350,7 +349,7 @@ describe('LayerPanel', () => {
 
   it('lists the Design, its site data and the background as sections', async () => {
     await act(async () => {
-      render(<LayerPanel importGeoJson={importGeoJson} />, container)
+      render(<LayerPanel />, container)
     })
     const sections = Array.from(container.querySelectorAll('section h3')).map((heading) => heading.textContent)
     expect(sections.slice(0, 3)).toEqual(['Design', 'Site data', 'Background'])
@@ -360,8 +359,9 @@ describe('LayerPanel', () => {
     expect(site.textContent).toContain('Contour lines')
     expect(site.textContent).toContain('from online elevation · spacing follows zoom')
     expect(site.textContent).toContain('Hillshading')
-    expect(site.textContent).toContain('No site data yet')
-    expect(site.querySelector('button[aria-haspopup="menu"]')?.textContent).toContain('Add data')
+    // Site data has its own panel: Layers lists none of its rows and no Add data.
+    expect(site.textContent).not.toContain('No site data yet')
+    expect(site.querySelector('button[aria-haspopup="menu"]')).toBeNull()
     const background = container.querySelector('section[aria-labelledby="layers-background"]')!
     expect(Array.from(background.querySelectorAll('input[type="radio"]')).map((input) => (input as HTMLInputElement).value))
       .toEqual(['satellite', 'basemap', 'none'])
@@ -369,7 +369,7 @@ describe('LayerPanel', () => {
 
   it('exposes terrain controls without coupling them to the basemap toggle', async () => {
     await act(async () => {
-      render(<LayerPanel importGeoJson={importGeoJson} />, container)
+      render(<LayerPanel />, container)
     })
 
     // Toggle contours visibility via eye button

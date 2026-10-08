@@ -330,7 +330,7 @@ function showGalleryDataSurface(next: GallerySurface): void {
 }
 
 function GalleryLayersSurface() {
-  return <LayersPanel importGeoJson={() => { activity.value = 'Design objects from GeoJSON… runs File › Import GeoJSON.' }} />
+  return <LayersPanel />
 }
 
 function GalleryNotebookSurface() {

@@ -29,7 +29,6 @@ import {
 import { isMissing, libraryItemName, lidarLibrary, readLidarPresentation, type LidarPresentationItem } from '../../../app/lidar/library-store'
 import { canMoveReference, referenceRows, type ReferenceRow } from '../../../app/lidar/reference-tree'
 import { viewDesignLocation, viewLidarCoverage } from '../../../app/lidar/camera-request'
-import { beginInspection, endInspection, inspectionTarget } from '../../../app/lidar/inspection'
 import { locale } from '../../../app/settings/state'
 import type { LibraryItemSummary } from '../../../generated/contracts'
 import { t } from '../../../i18n'
@@ -317,9 +316,8 @@ function rowCaption(item: LidarPresentationItem, grouped: boolean): string {
 }
 
 /**
- * The active site data row's settings, at the foot of Layers: legend,
- * opacity, Fit, Read values, Analyze (sources), Details, order and Remove from
- * Design. Removing only edits this Design; the library keeps the data.
+ * The active site data row's settings, at the foot of Site data: legend,
+ * opacity, Fit, Analyze (sources), Details, order and Remove from Design. Removing only edits this Design; the library keeps the data.
  */
 export function SiteDataInspector() {
   const id = activeSiteItemId()
@@ -329,7 +327,6 @@ export function SiteDataInspector() {
   if (!item) return null
   const label = rowLabel(item)
   const available = item.state === 'Ready'
-  const inspecting = inspectionTarget.value?.id === item.id
   const style = lidarDisplayStyle(item)
   const moveFront = t('canvas.lidar.layers.moveUp', { name: label })
   const moveBack = t('canvas.lidar.layers.moveDown', { name: label })
@@ -377,17 +374,6 @@ export function SiteDataInspector() {
               {t('canvas.lidar.layers.fit')}
             </button>
           )}
-        <button
-          type="button"
-          aria-pressed={inspecting}
-          disabled={!available || !item.shown}
-          onClick={() => {
-            if (inspecting) endInspection()
-            else beginInspection({ kind: item.kind, id: item.id, name: item.name })
-          }}
-        >
-          {t('canvas.lidar.layers.inspect')}
-        </button>
         {item.kind === 'Source' && available && (
           <button type="button" onClick={() => analyzeItem(item.id, { attach: true })}>
             {t('canvas.lidar.library.analyze')}
