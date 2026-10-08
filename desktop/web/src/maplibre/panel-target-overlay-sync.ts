@@ -104,6 +104,3 @@ export function syncMapOverlay(map: MapLibreOverlayMap, overlay: MapOverlayContr
     for (const [name, value] of Object.entries(layer.paint)) map.setPaintProperty?.(layer.id, name, value)
   }
 }
-
-/** The panel Target overlays' former name, still imported by their two sync tests until commit Z renames those callers. */
-export const syncPanelTargetMapOverlay = syncMapOverlay

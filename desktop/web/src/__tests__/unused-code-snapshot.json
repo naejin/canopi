@@ -317,7 +317,6 @@
     "src/components/workspace/WorkspaceComposition.tsx#validateWorkspaceSurfaces",
     "src/ipc/lidar.ts#lidarSamplePoints",
     "src/maplibre/openfreemap-basemap.ts#OPENFREEMAP_BASEMAPS",
-    "src/maplibre/panel-target-overlay-sync.ts#syncPanelTargetMapOverlay",
     "src/maplibre/raster-display/adapter.ts#tileIsRelevant",
     "src/maplibre/satellite-http.browser.ts#BASEMAP_HTTP_MAX_BODY_BYTES",
     "src/maplibre/satellite-provider-session.ts#PROVIDER_MAX_RETRIES",
