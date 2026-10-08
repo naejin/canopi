@@ -372,6 +372,18 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(container.querySelector('#library-delete-title')).toBeNull()
     })
 
+    it('shows the list pane, with No match, when a search leaves nothing selected in the details pane', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground')])
+      await act(async () => {
+        openDataLibrary('a')
+        render(<DataDialogs />, container)
+      })
+      expect(container.querySelector('[data-pane]')?.getAttribute('data-pane')).toBe('details')
+      await type(container.querySelector<HTMLInputElement>('input[type="search"]')!, 'zzz')
+      expect(container.querySelector('[data-pane]')?.getAttribute('data-pane')).toBe('list')
+      expect(container.textContent).toContain('No match')
+    })
+
     it('names an input that left the library Deleted item', () => {
       lidarLibrary.value = library([], [slope('s', 'gone', { name: 'Orphan' })])
       mount()

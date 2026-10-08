@@ -280,7 +280,8 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
         </button>
       </>}
     >
-      <div className={styles.library} data-pane={pane}>
+      {/* With nothing selected the list shows, with No match and Clear filters, whichever pane was asked for. */}
+      <div className={styles.library} data-pane={item ? pane : 'list'}>
         <div className={styles.sheetTop}>
           <LibraryOpenNotice />
           {(error || lidarStatusMessage.value) && mode === 'details' && (
