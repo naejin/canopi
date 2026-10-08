@@ -151,4 +151,18 @@ test.describe('the Data library sheet', () => {
     await expect(importButton).toBeDisabled()
     await expect(importButton).toContainText('Open a Design to import data')
   })
+
+  for (const locale of ['de', 'ru']) {
+    test(`Analyze at 320 px (${locale}): the close button never overlaps the title (canopi-f47t.48)`, async ({ page }) => {
+      await page.setViewportSize({ width: 320, height: 720 })
+      await openGallery(page, { surface: 'analyze', locale })
+      const dialog = page.getByRole('dialog')
+      await expect(dialog).toBeVisible()
+      const title = await box(dialog.getByRole('heading', { level: 2 }))
+      const close = await box(dialog.locator('header button'))
+      const apart = close.x >= title.x + title.width || close.y >= title.y + title.height || close.y + close.height <= title.y
+      expect(apart, `title ${JSON.stringify(title)} and close ${JSON.stringify(close)} do not overlap`).toBe(true)
+      expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+    })
+  }
 })
