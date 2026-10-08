@@ -310,8 +310,8 @@ function rowCaption(item: LidarPresentationItem, grouped: boolean): string {
       .filter(Boolean).join(' · ')
   if (item.state !== 'Ready') return `${what} · ${t('canvas.lidar.library.preparing')}`
   const display = item.generationId ? readLidarDisplay(item.kind, item.id, item.generationId) : null
-  if (item.visible && display?.state === 'Preparing') return `${what} · ${t('canvas.lidar.layers.preparingDisplay')}`
-  if (item.visible && display?.state === 'Failed') return `${what} · ${t('canvas.lidar.library.displayFailed')}`
+  if (item.shown && display?.state === 'Preparing') return `${what} · ${t('canvas.lidar.layers.preparingDisplay')}`
+  if (item.shown && display?.state === 'Failed') return `${what} · ${t('canvas.lidar.library.displayFailed')}`
   return what
 }
 
@@ -383,7 +383,7 @@ export function SiteDataInspector() {
         <button
           type="button"
           aria-pressed={inspecting}
-          disabled={!available || !item.visible}
+          disabled={!available || !item.shown}
           onClick={() => {
             if (inspecting) endInspection()
             else beginInspection({ kind: item.kind, id: item.id, name: item.name })

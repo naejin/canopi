@@ -4,6 +4,7 @@ import type { RasterDisplayLayer } from '../../maplibre/raster-display/adapter'
 import { lidarDisplayDescriptor, type LidarDisplayDescriptor } from '../../ipc/lidar'
 import type { LibraryItemRole, LibraryItemType } from '../../generated/contracts'
 import { itemTypeStyle, type LidarDisplayStyle } from './item-types'
+import { storyPresentationOverrides } from '../story-presentation/overrides'
 import { readCurrentLidarPresentation, refreshLidarLibrary, type LidarPresentationItem } from './library-store'
 
 /**
@@ -96,17 +97,31 @@ export function requestLidarDisplay(
     .finally(() => inflight.delete(key))
 }
 
+/**
+ * Whether the map draws an entry: as a presented story step shows it (its
+ * library ids), else as the Design shows it (`shown`). Only the map reads the
+ * story override, since the side dock is closed while a story is presented.
+ */
+function mapShown(
+  item: Pick<LidarPresentationItem, 'id' | 'shown'>,
+  presentedIds: ReadonlySet<string> | null,
+): boolean {
+  return presentedIds ? presentedIds.has(item.id) : item.shown
+}
+
 let displayDisposer: (() => void) | null = null
 
 /**
- * Keep descriptors current for every visible reference of the current Design.
- * Installed for the Desktop workspace lifetime next to the library workflow.
+ * Keep descriptors current for every reference the map draws, a presented
+ * story step's included. Installed for the Desktop workspace lifetime next to
+ * the library workflow.
  */
 export function installLidarDisplayDescriptors(): void {
   disposeLidarDisplayDescriptors()
   displayDisposer = effect(() => {
+    const presentedIds = storyPresentationOverrides.value?.siteDataIds ?? null
     for (const item of readCurrentLidarPresentation()) {
-      if (!item.visible || item.availability !== 'present' || !item.generationId) continue
+      if (!mapShown(item, presentedIds) || item.availability !== 'present' || !item.generationId) continue
       requestLidarDisplay(item.kind, item.id, item.generationId)
     }
   })
@@ -143,18 +158,19 @@ export function lidarDisplayStyle(item: {
 }
 
 /**
- * Project the current Design's visible references into renderer layers,
+ * Project the references the map draws (`mapShown`) into renderer layers,
  * back to front. A reference whose derivatives are not ready draws nothing
  * yet; the rest of the band keeps rendering.
  */
 export function lidarDisplayLayers(
   items: readonly LidarPresentationItem[],
   descriptors: ReadonlyMap<string, LidarDisplayDescriptor>,
+  presentedIds: ReadonlySet<string> | null,
   toAssetUrl: typeof convertFileSrc = lidarAssetUrl,
 ): RasterDisplayLayer[] {
   const layers: RasterDisplayLayer[] = []
   for (const item of items) {
-    if (!item.visible || item.availability !== 'present' || !item.generationId) continue
+    if (!mapShown(item, presentedIds) || item.availability !== 'present' || !item.generationId) continue
     const descriptor = descriptors.get(displayKey(item.kind, item.id, item.generationId))
     if (!descriptor || descriptor.state !== 'Ready' || descriptor.generation_id !== item.generationId) continue
     if (descriptor.assets.length === 0) continue

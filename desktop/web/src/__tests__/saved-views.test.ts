@@ -191,6 +191,14 @@ describe('saving the current view', () => {
     expect(designSessionStore.designDirty.value).toBe(true)
   })
 
+  it('captures no site data while the Site data eye is off, whatever each entry stores', () => {
+    const base = design()
+    replaceCurrentDesignState({ ...base, lidar: { ...base.lidar!, visible: false } }, null, 'Orchard')
+    mountCanvas()
+
+    expect(saveCurrentView({ name: 'Hedges' })?.visible_layers.site_data).toEqual([])
+  })
+
   it('a thumbnail shows the framed area fitted into the image, whatever the workspace size', () => {
     replaceCurrentDesignState(design(), null, 'Orchard')
     const { queries } = mountCanvas()

@@ -143,7 +143,14 @@ export interface LidarPresentationItem {
   units: string
   /** The item's state; null unless `availability` is `present`. */
   state: LidarResultState | null
+  /** The entry's own eye, which its row's eye button shows and writes. */
   visible: boolean
+  /**
+   * Whether the entry is shown: its own eye and the Site data eye both on.
+   * Captions, values, profile curves and preparing checks read this; the map
+   * adds a presented story step's choice through `mapShown` (display.ts).
+   */
+  shown: boolean
   opacity: number
   order: number
   /** The entry's colour ramp and range; null is the item kind's default. */
@@ -203,15 +210,22 @@ function absentAvailability(library: LibrarySnapshot | null, status: LidarLibrar
  * order (back to front): results draw over the item they come from
  * (`reference-tree.ts`). Unavailable references persist and are flagged
  * with the reason instead of dropped.
+ *
+ * Effective visibility is folded here, once, before anything reads the
+ * entries: `shown` is the entry's own eye and the Site data eye together,
+ * and each entry keeps its own eye (GeoLibre `effectiveLayerRenderState`,
+ * packages/core/src/layer-groups.ts). Saved-view capture, which may not
+ * import this module, folds the same two stored flags itself.
  */
 export function readLidarPresentation(
   design: {
-    lidar?: { entries: readonly LidarPresentationEntry[] } | null
+    lidar?: { visible: boolean; entries: readonly LidarPresentationEntry[] } | null
   } | null,
   library: LibrarySnapshot | null,
   libraryStatus: LidarLibraryStatus = { kind: 'ready' },
 ): LidarPresentationItem[] {
   const entries = design?.lidar?.entries ?? []
+  const sectionVisible = design?.lidar?.visible ?? true
   const items: Omit<LidarPresentationItem, 'parentId' | 'depth'>[] = []
   for (const entry of entries) {
     const item = library?.items.find((candidate) => candidate.id === entry.id && candidate.role === entry.kind)
@@ -219,6 +233,7 @@ export function readLidarPresentation(
       kind: entry.kind,
       id: entry.id,
       visible: entry.visible,
+      shown: entry.visible && sectionVisible,
       opacity: entry.opacity,
       order: entry.order,
       ramp: entry.ramp,

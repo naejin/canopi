@@ -6,7 +6,7 @@ import {
   currentCanvasQuerySurface,
   getCurrentCanvasCommandSurface,
 } from '../../canvas/session'
-import type { SavedView } from '../../types/design'
+import type { CanopiFile, SavedView } from '../../types/design'
 import { currentDesign } from '../document-session/store'
 import { mapLayers } from '../map-layers/state'
 import { currentPlantDisplay } from '../plant-display/state'
@@ -58,12 +58,21 @@ export function captureCurrentView({ id, name, title = '' }: {
       screen: capture.screen,
       mapLayers: mapLayers.value,
       sceneLayers: queries.getSceneSnapshot().layers,
-      siteData: design.lidar?.entries ?? [],
+      siteData: shownSiteData(design.lidar),
       focusedSpecies: queries.getSpeciesFocus().canonicalName,
       selection: queries.getSelection(),
     }),
     labels: currentPlantDisplay.peek().labels,
   }
+}
+
+/**
+ * Site data entries with their effective visibility: the stored own eye and
+ * Site data eye folded as the presentation join folds them
+ * (`readLidarPresentation`'s `shown`), which shared Web code may not import.
+ */
+function shownSiteData(section: CanopiFile['lidar']): { id: string; visible: boolean }[] {
+  return section ? section.entries.map((entry) => ({ id: entry.id, visible: entry.visible && section.visible })) : []
 }
 
 /**

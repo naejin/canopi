@@ -1,6 +1,6 @@
 import { designSessionStore } from '../document-session/store'
 import { mapTerrainStateOf } from '../map-layers/state'
-import { presentedMapLayers, presentedSiteDataVisible } from '../story-presentation/overrides'
+import { presentedMapLayers, storyPresentationOverrides } from '../story-presentation/overrides'
 import { readCurrentLidarPresentation } from '../lidar/library-store'
 import { lidarDisplayDescriptors, lidarDisplayLayers } from '../lidar/display'
 import { theme } from '../settings/state'
@@ -14,8 +14,9 @@ export function createDesktopWorkspaceMapContributionAdapter(): WorkspaceMapCont
     createRasterDisplay: (map, options) => createRasterDisplay(map, options),
     read: (runtime) => readWorkspaceMapContributions(runtime, designSessionStore, () => ({
       lidar: lidarDisplayLayers(
-        readCurrentLidarPresentation().map((item) => ({ ...item, visible: presentedSiteDataVisible(item.id, item.visible) })),
+        readCurrentLidarPresentation(),
         lidarDisplayDescriptors.value,
+        storyPresentationOverrides.value?.siteDataIds ?? null,
       ),
       terrain: { ...mapTerrainStateOf(presentedMapLayers()), isDark: theme.value === 'dark' },
     })),

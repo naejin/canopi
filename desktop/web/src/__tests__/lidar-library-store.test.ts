@@ -136,7 +136,7 @@ describe('LiDAR presentation join', () => {
         freshness: { state: 'Stale', reasons: [{ reason: 'InputUpdated', input_key: 'dem', item_id: 'ground' }] },
       }),
     ])
-    const design = { lidar: { entries: [
+    const design = { lidar: { visible: true, entries: [
       { kind: 'Derived' as const, id: 'slope', name: 'Ground · Slope', visible: true, opacity: 0.5, order: 1, ramp: 'Magma' as const, reversed: true, range: { mode: 'Custom' as const, min: 0, max: 30 } },
       { kind: 'Source' as const, id: 'ground', name: 'Ground', visible: false, opacity: 1, order: 0, ramp: null, reversed: false, range: null },
       { kind: 'Derived' as const, id: 'gone', name: 'Old terrain', visible: true, opacity: 1, order: 2, ramp: null, reversed: false, range: null },
@@ -160,17 +160,29 @@ describe('LiDAR presentation join', () => {
     expect([ground, slope, gone].map((item) => item && isMissing(item))).toEqual([false, false, true])
   })
 
+  it('folds the Site data eye with each own eye into shown, keeping the own eye', () => {
+    const library = librarySnapshot([sourceItem('ground', 'Ground')])
+    const read = (section: boolean, own: boolean) => readLidarPresentation({ lidar: { visible: section, entries: [
+      { kind: 'Source', id: 'ground', name: 'Ground', visible: own, opacity: 1, order: 0, ramp: null, reversed: false, range: null },
+    ] } }, library)[0]
+
+    expect(read(true, true)).toMatchObject({ visible: true, shown: true })
+    expect(read(true, false)).toMatchObject({ visible: false, shown: false })
+    expect(read(false, true)).toMatchObject({ visible: true, shown: false })
+    expect(read(false, false)).toMatchObject({ visible: false, shown: false })
+  })
+
   it('never joins an entry to an item of the other role', () => {
     const library = librarySnapshot([sourceItem('same', 'Ground')])
     const [entry] = readLidarPresentation(
-      { lidar: { entries: [{ kind: 'Derived', id: 'same', name: 'Ground', visible: true, opacity: 1, order: 0, ramp: null, reversed: false, range: null }] } },
+      { lidar: { visible: true, entries: [{ kind: 'Derived', id: 'same', name: 'Ground', visible: true, opacity: 1, order: 0, ramp: null, reversed: false, range: null }] } },
       library,
     )
     expect(entry).toMatchObject({ availability: 'not-in-library', state: null })
   })
 
   it('says why an item is missing, and that nothing is missing while the library loads', () => {
-    const design = { lidar: { entries: [
+    const design = { lidar: { visible: true, entries: [
       { kind: 'Source' as const, id: 'ground', name: 'Ground', visible: true, opacity: 1, order: 0, ramp: null, reversed: false, range: null },
     ] } }
     const missing = (library: LibrarySnapshot | null, status: Parameters<typeof readLidarPresentation>[2]) =>
