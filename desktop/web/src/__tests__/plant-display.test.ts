@@ -142,8 +142,11 @@ describe('plant display rules', () => {
       ['medium', '#0072B2'],
       ['low', '#CC79A7'],
     ])
-    // Lighter than the old #8C8577, which matched High's green under deuteranopia.
-    expect(NO_STRATUM_DISPLAY_COLOR).toBe('#B3AC9F')
+    // Not the old #8C8577, which matched High's green under deuteranopia (U48).
+    expect(NO_STRATUM_DISPLAY_COLOR).toBe('#5E5A52')
+    // The grey reads as a graphic object (WCAG 1.4.11) on the PDF paper and the light map.
+    expect(contrastRatio(NO_STRATUM_DISPLAY_COLOR, '#ffffff')).toBeGreaterThanOrEqual(3)
+    expect(contrastRatio(NO_STRATUM_DISPLAY_COLOR, '#F3EFE4')).toBeGreaterThanOrEqual(3)
   })
 
   it('keeps a stored stratum colour over the new defaults, even the old default', () => {

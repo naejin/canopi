@@ -237,7 +237,7 @@ WS_SCRIPT = r'''class Component extends DCLogic {
   renderVals() {
     const st = this.state;
     const dark = (this.props.theme ?? 'light') === 'dark';
-    const STRATUM_C = { Emergent: '#E69F00', High: '#009E73', Mid: '#0072B2', Low: '#CC79A7', None: '#B3AC9F' };
+    const STRATUM_C = { Emergent: '#E69F00', High: '#009E73', Mid: '#0072B2', Low: '#CC79A7', None: '#5E5A52' };
     const SCALE = [0.75, 1, 1.5, 2, 3];
     const z = st.zoom;
     const nf = new Intl.NumberFormat('en-US');

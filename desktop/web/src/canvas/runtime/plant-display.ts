@@ -49,9 +49,10 @@ export const PLANT_SYMBOL_SCALE_MAX = 2
 /**
  * Stratum colours, ordered by sunlight need from the sunniest layer down:
  * Okabe-Ito hues (Emergent gold, High bluish green, Mid blue, Low reddish
- * purple) plus a light warm grey for species with no stratum yet. The grey
+ * purple) plus a dark warm grey for species with no stratum yet. The grey
  * stays at least ΔE 15 from each hue with normal vision and under
- * protanopia, deuteranopia and tritanopia. They are plant data colours drawn
+ * protanopia, deuteranopia and tritanopia, and at least 3:1 against the PDF
+ * paper and the light map (U48). They are plant data colours drawn
  * on the map, so they do not follow the UI theme.
  */
 export const STRATUM_DISPLAY_COLORS: { readonly [K in PlantDisplayStratum]: string } = {
@@ -60,7 +61,7 @@ export const STRATUM_DISPLAY_COLORS: { readonly [K in PlantDisplayStratum]: stri
   medium: '#0072B2',
   low: '#CC79A7',
 }
-export const NO_STRATUM_DISPLAY_COLOR = '#B3AC9F'
+export const NO_STRATUM_DISPLAY_COLOR = '#5E5A52'
 
 export const DEFAULT_PLANT_DISPLAY: PlantDisplay = Object.freeze({
   colorBy: 'species',
