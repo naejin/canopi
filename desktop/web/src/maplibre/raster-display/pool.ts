@@ -14,7 +14,10 @@
  * Scheduling is owned here because the upstream engine never forwards
  * MapLibre's abort signal. Tile work is dispatched newest first, a bounded
  * number per lane, and a queued tile the client reports as no longer relevant
- * (outside the current viewport) is rejected before it starts. Disposing a
+ * (outside the current viewport) is rejected before it starts. Statistics
+ * (an overview decode and a sort) are background work: they start only when
+ * no tile waits, at most one per lane, so a mosaic's range reads never hold
+ * back the map. Disposing a
  * client rejects its queued work and closes its sources in every lane.
  */
 import type {
@@ -84,7 +87,7 @@ export interface RasterPoolClient {
   dispose(): void
 }
 
-type TaskKind = 'control' | 'tile'
+type TaskKind = 'control' | 'tile' | 'background'
 
 interface Task {
   readonly client: ClientState
@@ -125,6 +128,7 @@ export class RasterWorkerPool {
   private clients = 0
   private requestSequence = 0
   private handleSequence = 0
+  private backgroundInFlight = 0
   /** Lanes each handle is opened in, keyed by handle. */
   private readonly openedIn = new Map<number, Map<number, Promise<unknown>>>()
   private readonly urls = new Map<number, string>()
@@ -237,6 +241,7 @@ export class RasterWorkerPool {
         ? this.lanes[task.lane]!
         : this.leastLoadedLane()!
       lane.inFlight += 1
+      if (task.kind === 'background') this.backgroundInFlight += 1
       const started = performance.now()
       const label = task.tile ? `${task.tile.z}/${task.tile.x}/${task.tile.y}` : undefined
       task.run(lane).then((value) => {
@@ -247,6 +252,7 @@ export class RasterWorkerPool {
         task.reject(error)
       }).finally(() => {
         lane.inFlight -= 1
+        if (task.kind === 'background') this.backgroundInFlight -= 1
         this.dispatch()
       })
     }
@@ -277,6 +283,7 @@ export class RasterWorkerPool {
     // Tiles: the newest request belongs to the current viewport.
     for (let index = this.queue.length - 1; index >= 0; index -= 1) {
       const task = this.queue[index]!
+      if (task.kind !== 'tile') continue
       if (task.lane !== undefined && !capacity(this.lanes[task.lane]!)) continue
       this.queue.splice(index, 1)
       if (task.client.disposed) {
@@ -290,7 +297,11 @@ export class RasterWorkerPool {
       }
       return task
     }
-    return null
+    // Background work, oldest first, once no tile waits: one per lane.
+    if (this.backgroundInFlight >= this.lanes.length) return null
+    const index = this.queue.findIndex((task) => task.kind === 'background')
+    if (index < 0) return null
+    return this.queue.splice(index, 1)[0]!
   }
 
   private leastLoadedLane(): Lane | null {
@@ -410,7 +421,7 @@ export class RasterWorkerPool {
     this.urls.set(handle, url)
     client.handles.add(handle)
     try {
-      return await this.schedule<RasterBandStatistics | null>(client, 'control', undefined, undefined, async (lane) => {
+      return await this.schedule<RasterBandStatistics | null>(client, 'background', undefined, undefined, async (lane) => {
         await this.ensureOpen(lane, handle)
         return this.post(lane, { id: 0, op: 'statistics', handle })
       })

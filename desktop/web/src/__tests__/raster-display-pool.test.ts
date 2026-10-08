@@ -67,6 +67,32 @@ describe('raster display worker pool', () => {
     expect(lane.requests.at(-1)).toMatchObject({ op: 'close', handle: (opened as { handle: number }).handle })
   })
 
+  it('runs statistics behind tiles, one per lane at a time, so a mosaic\'s reads never hold back the map', async () => {
+    const { instance, created } = pool(2, 4)
+    const map = instance.acquire()
+    const ranges = instance.acquire()
+    const source = await map.openCog('asset://localhost/tile.tif')
+    const all = (op: string) => created.flatMap((lane) => lane.requests.filter((request) => request.op === op))
+    const reads = Array.from({ length: 30 }, (_, index) =>
+      ranges.statistics(`asset://localhost/part-${index}.tif`).catch((error: unknown) => error))
+    await settle()
+    expect(all('statistics')).toHaveLength(2)
+    const tile = source.renderTilePNG(10, 1, 1)
+    await settle()
+    expect(all('render')).toHaveLength(1)
+    // An answered read frees its lane's statistics slot for the next one.
+    const first = all('statistics')[0]!
+    created.find((lane) => lane.requests.includes(first))!.answer(first, null)
+    await expect(reads[0]).resolves.toBeNull()
+    await settle()
+    expect(all('statistics')).toHaveLength(3)
+    const render = all('render')[0]!
+    created.find((lane) => lane.requests.includes(render))!.answer(render)
+    await expect(tile).resolves.toEqual(new Uint8Array([1]))
+    ranges.dispose()
+    await expect(reads.at(-1)).resolves.toMatchObject({ name: 'AbortError' })
+  })
+
   it('starts lanes with an even share of one aggregate decoded-block budget', () => {
     const { instance, created } = pool(2)
     instance.acquire()
