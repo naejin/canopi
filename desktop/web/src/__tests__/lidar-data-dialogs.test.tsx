@@ -417,6 +417,25 @@ describe('Data library, Import and Analyze dialogs', () => {
       await click(button(/^Delete everywhere$/))
       await click(button(/^Keep$/))
       expect(document.activeElement).toBe(button(/^Delete everywhere$/))
+
+      // After a deletion, the row that took the item's place.
+      actions.deleteLibraryItem.mockImplementationOnce(async () => { lidarLibrary.value = library([layer('b', 'Canopy')]) })
+      await click(button(/^Delete everywhere$/))
+      await click(Array.from(container.querySelectorAll<HTMLButtonElement>('[role="group"] button')).find((node) => node.textContent === 'Delete everywhere')!)
+      expect(selectedName()).toBe('Canopy')
+      expect(document.activeElement).toBe(rowNamed('Canopy'))
+    })
+
+    it('gives focus back to the sheet when what opened a dialog over it is gone', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground')])
+      mount()
+      const opener = document.createElement('button')
+      document.body.append(opener)
+      opener.focus()
+      act(() => { dataDialog.value = { kind: 'import', paths: ['/data/tile.tif'] } })
+      opener.remove()
+      await act(async () => { dataDialog.value = null })
+      expect(document.activeElement).toBe(rowNamed('Ground'))
     })
 
     it('names an input that left the library Deleted item', () => {

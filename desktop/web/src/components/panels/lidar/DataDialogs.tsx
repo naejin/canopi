@@ -39,14 +39,22 @@ export function DataDialogs() {
   // opener, so the opener is read here, while rendering, and focused again once the sheet is live.
   const opener = useRef<HTMLElement | null>(null)
   if (covered && opener.current === null && document.activeElement instanceof HTMLElement) opener.current = document.activeElement
+  // When the opener is gone (the empty library's Import… once the import lists an item), the sheet's selected row, or
+  // its first control, takes focus, so the keyboard and Esc stay in the sheet.
+  const sheet = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     if (covered) return
     if (opener.current?.isConnected) opener.current.focus()
+    else if (opener.current) {
+      const target = sheet.current?.querySelector<HTMLElement>('[role="option"][tabindex="0"]')
+        ?? sheet.current?.querySelector<HTMLElement>('[role="dialog"] button:not([disabled])')
+      target?.focus()
+    }
     opener.current = null
   }, [covered])
   return <>
     {library && (
-      <div inert={covered ? true : undefined} data-library-sheet="true">
+      <div ref={sheet} inert={covered ? true : undefined} data-library-sheet="true">
         <DataLibraryView key={`library-${library.focusId ?? ''}`} focusId={library.focusId} />
       </div>
     )}
