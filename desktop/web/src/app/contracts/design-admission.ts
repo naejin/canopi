@@ -1,3 +1,4 @@
+import type { LidarColourRange } from '../../generated/contracts'
 import type { CanopiFile } from '../../types/design'
 
 /** The LiDAR presentation schema this build writes (`common-types/src/lidar.rs`). */
@@ -49,11 +50,21 @@ function annotationRangesProblem(file: CanopiFile): string | null {
 
 function layerRangesProblem(file: CanopiFile): string | null {
   for (const [index, layer] of file.layers.entries()) {
-    if (!(Number.isFinite(layer.opacity) && layer.opacity >= 0 && layer.opacity <= 1)) {
+    if (!isAdmittedOpacity(layer.opacity)) {
       return `$.layers[${index}].opacity: expected a number in [0, 1]`
     }
   }
   return null
+}
+
+/** Whether an opacity is admitted: a finite number in [0, 1]. */
+export function isAdmittedOpacity(opacity: number): boolean {
+  return Number.isFinite(opacity) && opacity >= 0 && opacity <= 1
+}
+
+/** Whether a Site data colour range is admitted: a Custom range is finite with min below max. */
+export function isAdmittedColourRange(range: LidarColourRange | null): boolean {
+  return range?.mode !== 'Custom' || (Number.isFinite(range.min) && Number.isFinite(range.max) && range.min < range.max)
 }
 
 function lidarProblem(file: CanopiFile): string | null {
@@ -63,15 +74,13 @@ function lidarProblem(file: CanopiFile): string | null {
     return `$.lidar.schema_version: expected ${LIDAR_PRESENTATION_SCHEMA_VERSION}`
   }
   for (const [index, entry] of lidar.entries.entries()) {
-    if (!(Number.isFinite(entry.opacity) && entry.opacity >= 0 && entry.opacity <= 1)) {
+    if (!isAdmittedOpacity(entry.opacity)) {
       return `$.lidar.entries[${index}].opacity: expected a number in [0, 1]`
     }
     if (entry.name.trim() === '') {
       return `$.lidar.entries[${index}].name: expected a non-empty name`
     }
-    const range = entry.range
-    if (range?.mode === 'Custom'
-      && !(Number.isFinite(range.min) && Number.isFinite(range.max) && range.min < range.max)) {
+    if (!isAdmittedColourRange(entry.range)) {
       return `$.lidar.entries[${index}].range: expected finite min and max with min below max`
     }
   }

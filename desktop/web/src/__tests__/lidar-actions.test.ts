@@ -305,6 +305,30 @@ describe('Design data references', () => {
     for (const id of ['ground', 'canopy', 'slope', 'other']) expect(stored(id)).toEqual({ ramp: null })
   })
 
+  it('never stores a range or opacity the Design could not be reopened with, keeping the rest of the patch', () => {
+    presentation.value = [{ id: 'ground', order: 0, parentId: null, itemType: { kind: 'Raster' as const, quantity: 'GroundElevation' }, units: 'm' }]
+    const stored = () => patchMock.mock.calls.at(-1)?.[1]
+
+    for (const range of [
+      { mode: 'Custom' as const, min: 190, max: 182 },
+      { mode: 'Custom' as const, min: 182, max: 182 },
+      { mode: 'Custom' as const, min: Number.NaN, max: 182 },
+      { mode: 'Custom' as const, min: 120, max: Number.POSITIVE_INFINITY },
+    ]) {
+      patchMock.mockClear()
+      setLidarEntryDisplay('ground', { range, ramp: 'Gray' })
+      expect(stored(), JSON.stringify(range)).toEqual({ ramp: 'Gray' })
+    }
+    for (const opacity of [Number.NaN, -0.1, 1.5]) {
+      patchMock.mockClear()
+      setLidarEntryDisplay('ground', { opacity, reversed: true })
+      expect(stored(), String(opacity)).toEqual({ reversed: true })
+    }
+    patchMock.mockClear()
+    setLidarEntryDisplay('ground', { range: { mode: 'Custom', min: 190, max: 182 } })
+    expect(patchMock).not.toHaveBeenCalled()
+  })
+
   it('moves a reference among its siblings and saves every order in one edit', () => {
     presentation.value = [
       { id: 'ground', order: 0, parentId: null },

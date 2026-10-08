@@ -50,6 +50,7 @@ import { kindDisplayDefaults } from './item-types'
 import { designSessionStore } from '../document-session/store'
 import { isPresentableOutput } from '../analyses/registry'
 import { reconcileInspectionWithPresentation } from './inspection'
+import { isAdmittedColourRange, isAdmittedOpacity } from '../contracts/design-admission'
 
 /**
  * Leaf action module for the Data Library and the Layers data band: every UI
@@ -214,12 +215,18 @@ export interface LidarEntryDisplay {
  * writer of display settings: a ramp or range equal to the item kind's default
  * is stored as null, so `.canopi` files hold one encoding of each default and
  * Reset's "differs from the default" is one comparison. A missing item's kind
- * is unknown, so its settings are kept as written.
+ * is unknown, so its settings are kept as written. A range or opacity the
+ * Design would be refused with on reopening (an inverted, empty or non-finite
+ * Custom range; an opacity outside [0, 1]) is never stored: that field is
+ * dropped and the rest of the patch kept.
  */
 export function setLidarEntryDisplay(id: string, display: LidarEntryDisplay): void {
   const item = readCurrentLidarPresentation().find((entry) => entry.id === id)
   const defaults = item?.itemType ? kindDisplayDefaults(item.itemType, item.units) : null
-  const patch = { ...display }
+  const patch: { -readonly [K in keyof LidarEntryDisplay]: LidarEntryDisplay[K] } = { ...display }
+  if (patch.range !== undefined && !isAdmittedColourRange(patch.range)) delete patch.range
+  if (patch.opacity !== undefined && !isAdmittedOpacity(patch.opacity)) delete patch.opacity
+  if (Object.keys(patch).length === 0) return
   if (defaults && patch.ramp === defaults.ramp) patch.ramp = null
   if (defaults && patch.range && sameColourRange(patch.range, defaults.range)) patch.range = null
   patchLidarEntryById(id, patch)
