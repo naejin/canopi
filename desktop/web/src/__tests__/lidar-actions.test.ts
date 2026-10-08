@@ -81,6 +81,7 @@ import {
   fetchProcessingHistory,
   importLibraryItem,
   moveReference,
+  moveReferenceTo,
   removeFromDesign,
   renameLibraryItem,
   rerunAnalysis,
@@ -317,6 +318,21 @@ describe('Design data references', () => {
     moveMock.mockClear()
     moveReference('canopy', 'front')
     moveReference('slope', 'back')
+    expect(moveMock).not.toHaveBeenCalled()
+  })
+
+  it('a drop moves a reference to a sibling\'s place in one order write, and a refused target writes nothing', () => {
+    presentation.value = [
+      { id: 'ground', order: 0, parentId: null },
+      { id: 'slope', order: 1, parentId: 'ground' },
+      { id: 'canopy', order: 2, parentId: null },
+    ]
+    moveReferenceTo('ground', 'canopy')
+    expect(moveMock).toHaveBeenCalledTimes(1)
+    expect([...moveMock.mock.calls[0]![0] as Map<string, number>]).toEqual([['canopy', 0], ['ground', 1], ['slope', 2]])
+
+    moveMock.mockClear()
+    moveReferenceTo('slope', 'canopy')
     expect(moveMock).not.toHaveBeenCalled()
   })
 })

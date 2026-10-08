@@ -113,6 +113,34 @@ export function movedReferenceOrders<T extends ReferenceNode>(
   return new Map(referenceDrawOrder(moved).map((node, position) => [node.id, position]))
 }
 
+/**
+ * The saved orders after moving one row to a sibling's place (a drop on that
+ * row, or Alt ↑/↓ to the neighbour): the rows between shift by one, and
+ * everything is renumbered densely in drawing order. Null when the target is
+ * the row itself, unknown, or not its sibling. It takes a row id, never an
+ * index, so the sibling rule can change without touching its callers.
+ */
+export function siblingMoveOrders<T extends ReferenceNode>(
+  nodes: readonly T[],
+  id: string,
+  targetId: string,
+): Map<string, number> | null {
+  if (id === targetId) return null
+  const rows = referenceRows(nodes)
+  const row = rows.find((candidate) => candidate.id === id)
+  const target = rows.find((candidate) => candidate.id === targetId)
+  if (!row || !target || target.parentId !== row.parentId || target.depth !== row.depth) return null
+  const siblings = rows
+    .filter((candidate) => candidate.parentId === row.parentId && candidate.depth === row.depth)
+    .map((sibling) => sibling.id)
+  const to = siblings.indexOf(targetId)
+  const reordered = siblings.filter((sibling) => sibling !== id)
+  reordered.splice(to, 0, id)
+  const ranks = new Map(reordered.map((sibling, position) => [sibling, reordered.length - 1 - position]))
+  const moved = nodes.map((node) => ranks.has(node.id) ? { ...node, order: ranks.get(node.id)! } : node)
+  return new Map(referenceDrawOrder(moved).map((node, position) => [node.id, position]))
+}
+
 /** Whether a row can move one place towards the front or back among its siblings. */
 export function canMoveReference<T extends ReferenceNode>(
   rows: readonly ReferenceRow<T>[],

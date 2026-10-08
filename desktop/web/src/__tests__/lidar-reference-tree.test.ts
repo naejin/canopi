@@ -5,6 +5,7 @@ import {
   movedReferenceOrders,
   referenceDrawOrder,
   referenceRows,
+  siblingMoveOrders,
   treeRows,
 } from '../app/lidar/reference-tree'
 
@@ -114,3 +115,20 @@ describe('one tree for the library and Site data (finding 9)', () => {
   })
 })
 
+describe('moving a row to a sibling\'s place (drag and Alt arrows)', () => {
+  const nodes = [node('a', 2), node('b', 1), node('c', 0), node('r', 0, 'a')]
+
+  it('takes the target row\'s place among its siblings and renumbers densely in drawing order', () => {
+    // Front first: a, b, c. Dropping c on a lists c, a, b.
+    const orders = siblingMoveOrders(nodes, 'c', 'a')!
+
+    expect(referenceRows(nodes.map((n) => ({ ...n, order: orders.get(n.id)! }))).map((row) => row.id)).toEqual(['c', 'a', 'r', 'b'])
+    expect([...orders.values()].sort()).toEqual([0, 1, 2, 3])
+  })
+
+  it('refuses a target that is not a sibling, the row itself or unknown', () => {
+    expect(siblingMoveOrders(nodes, 'r', 'b')).toBeNull()
+    expect(siblingMoveOrders(nodes, 'b', 'b')).toBeNull()
+    expect(siblingMoveOrders(nodes, 'b', 'gone')).toBeNull()
+  })
+})
