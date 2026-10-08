@@ -9,7 +9,8 @@ import {
   type WorkspaceSurfaces,
 } from '../components/workspace/WorkspaceComposition'
 import { activePanel, navigateTo, sidePanel, type Panel } from '../app/shell/state'
-import { designSessionFixture } from './support/design-session-state'
+import { currentDesign, designSessionFixture } from './support/design-session-state'
+import { projectBrowserShellForTest } from './support/browser-shell-projection'
 import { appCommandGraphPanelProjection } from '../commands/graph/projections'
 import type { CanopiFile } from '../types/design'
 
@@ -39,7 +40,7 @@ function projection({
 }
 
 function projectedCommand(panel: Panel): WorkspacePanelProjection['primary'][number] {
-  return { panel, disabled: false }
+  return { panel }
 }
 
 describe('shared edition workspace composition', () => {
@@ -59,36 +60,48 @@ describe('shared edition workspace composition', () => {
     designSessionFixture.file = null
   })
 
-  it('closes every design side panel with its Design, in the same flush, and keeps the Catalog (canopi-f47t.41)', async () => {
-    // The Desktop catalog's real panel projection: a design panel's command is unavailable without a Design.
-    const Surface = () => <p data-testid="panel" />
-    function Workspace() {
-      const projection = appCommandGraphPanelProjection.value
-      const surface = (commands: readonly { readonly panel: Panel }[]) => Object.fromEntries(commands.map(({ panel }) => [panel, Surface]))
-      return (
-        <WorkspaceComposition
-          panelProjection={projection}
-          surfaces={{ primary: { ...surface(projection.primary), canvas: Canvas }, side: { ...surface(projection.design), ...surface(projection.planning) } }}
-        />
-      )
-    }
-    await act(async () => { render(<Workspace />, container) })
-    for (const panel of ['favorites', 'layers', 'budget'] as const) {
-      await act(async () => { designSessionFixture.file = {} as CanopiFile; navigateTo(panel) })
-      expect(container.querySelector(`[data-workspace-side-panel="${panel}"]`)).not.toBeNull()
-      await act(() => { designSessionFixture.file = null })
-      expect(container.querySelector('[data-workspace-side-panel]')).toBeNull()
-      expect(sidePanel.value).toBeNull()
-    }
-    // The next Design opens with no panel.
-    await act(async () => { designSessionFixture.file = {} as CanopiFile })
-    expect(container.querySelector('[data-workspace-side-panel]')).toBeNull()
+  // Each edition's real panel projection, as its app builds it from the live Design Session.
+  const editions: Record<'Desktop' | 'Web', () => WorkspacePanelProjection> = {
+    Desktop: () => appCommandGraphPanelProjection.value,
+    Web: () => projectBrowserShellForTest({
+      downloadCanopiEnabled: currentDesign.value !== null,
+      currentSidePanel: sidePanel.value,
+      capabilities: { newDesign() {}, openCanopi() {}, downloadCanopi() {}, revertDesign() {}, importGeoJson() {}, exportGeoJson() {}, exportBudgetCsv() {}, closeDesign() {}, navigate: navigateTo },
+    }).panelBar,
+  }
+  const closing = { Desktop: ['favorites', 'layers', 'budget', 'design-notebook'], Web: ['favorites', 'layers', 'budget'] } as const
 
-    await act(async () => { navigateTo('plant-db') })
-    await act(() => { designSessionFixture.file = null })
-    expect(container.querySelector('[data-workspace-side-panel="plant-db"]')).not.toBeNull()
-    expect(sidePanel.value).toBe('plant-db')
-  })
+  for (const edition of ['Desktop', 'Web'] as const) {
+    it(`closes every design side panel with its Design, in the same flush, and keeps the Catalog on ${edition} (canopi-f47t.41, Q5)`, async () => {
+      const Surface = () => <p data-testid="panel" />
+      function Workspace() {
+        const projection = editions[edition]()
+        const surface = (commands: WorkspacePanelProjection['design']) => Object.fromEntries(commands.map(({ panel }) => [panel, Surface]))
+        return (
+          <WorkspaceComposition
+            panelProjection={projection}
+            surfaces={{ primary: { ...surface(projection.primary), canvas: Canvas }, side: { ...surface(projection.design), ...surface(projection.planning) } }}
+          />
+        )
+      }
+      await act(async () => { render(<Workspace />, container) })
+      for (const panel of closing[edition]) {
+        await act(async () => { designSessionFixture.file = {} as CanopiFile; navigateTo(panel) })
+        expect(container.querySelector(`[data-workspace-side-panel="${panel}"]`)).not.toBeNull()
+        await act(() => { designSessionFixture.file = null })
+        expect(container.querySelector('[data-workspace-side-panel]'), panel).toBeNull()
+        expect(sidePanel.value).toBeNull()
+      }
+      // The next Design opens with no panel.
+      await act(async () => { designSessionFixture.file = {} as CanopiFile })
+      expect(container.querySelector('[data-workspace-side-panel]')).toBeNull()
+
+      await act(async () => { navigateTo('plant-db') })
+      await act(() => { designSessionFixture.file = null })
+      expect(container.querySelector('[data-workspace-side-panel="plant-db"]')).not.toBeNull()
+      expect(sidePanel.value).toBe('plant-db')
+    })
+  }
 
   it('keeps the same canvas and its interaction state while real clicks switch dock panels', async () => {
     let canvasMounts = 0
