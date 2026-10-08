@@ -24,10 +24,17 @@ export interface RasterStyleInput {
   readonly displayRange: readonly [number, number] | null
 }
 
+/**
+ * How a profile plots a quantity: elevations share one axis, heights above
+ * ground share a second plot below it, and anything else is not profiled.
+ */
+export type ProfileRole = 'elevation' | 'height'
+
 interface RasterQuantityType {
   readonly labelKey: string
   /** Whether a source can be imported as this quantity; derived-only otherwise. */
   readonly importable: boolean
+  readonly profile: ProfileRole | null
   style(item: RasterStyleInput): LidarDisplayStyle
 }
 
@@ -47,27 +54,32 @@ export const RASTER_QUANTITIES: Readonly<Record<RasterQuantity, RasterQuantityTy
   GroundElevation: {
     labelKey: 'canvas.lidar.library.quantity.GroundElevation',
     importable: true,
+    profile: 'elevation',
     // Hypsometric without blue, so blue keeps one meaning on the map: water.
     style: overDisplayRange('schwarzwald'),
   },
   SurfaceElevation: {
     labelKey: 'canvas.lidar.library.quantity.SurfaceElevation',
     importable: true,
+    profile: 'elevation',
     style: overDisplayRange('schwarzwald'),
   },
   AboveGroundHeight: {
     labelKey: 'canvas.lidar.library.quantity.AboveGroundHeight',
     importable: true,
+    profile: 'height',
     style: overDisplayRange('greens'),
   },
   OtherContinuous: {
     labelKey: 'canvas.lidar.library.quantity.OtherContinuous',
     importable: true,
+    profile: null,
     style: overDisplayRange('viridis'),
   },
   Slope: {
     labelKey: 'canvas.lidar.library.quantity.Slope',
     importable: false,
+    profile: null,
     // A fixed domain in the result's own unit, so a percent result is never
     // coloured as degrees and two slopes compare at a glance.
     style: (item) => ({
@@ -85,6 +97,14 @@ export const IMPORTABLE_QUANTITIES: readonly RasterQuantity[] = (Object.keys(RAS
 
 export function itemTypeLabel(itemType: LibraryItemType): string {
   return t(RASTER_QUANTITIES[itemType.quantity].labelKey)
+}
+
+/**
+ * Whether and how the Profile tool plots an item type; the Site data toolbar
+ * and the profile's curves ask this instead of naming quantities.
+ */
+export function profileRole(itemType: LibraryItemType): ProfileRole | null {
+  return RASTER_QUANTITIES[itemType.quantity].profile
 }
 
 export function itemTypeStyle(itemType: LibraryItemType, item: RasterStyleInput): LidarDisplayStyle {
