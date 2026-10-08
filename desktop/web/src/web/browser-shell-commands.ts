@@ -160,11 +160,11 @@ export function createBrowserShellCatalog(
   capabilities: BrowserShellCapabilities,
   { templatesEnabled, canvasReady }: BrowserShellCatalogOptions,
 ): BrowserShellCatalog {
+  const needsDesign = (state: ShellCommandState) => !state.hasDesign
   const designPanel = (panel: SidePanel) => ({
     execute: () => capabilities.navigate(panel),
-    isExecutionDisabled: (state: ShellCommandState) => !state.hasDesign && state.sidePanel !== panel,
+    isExecutionDisabled: needsDesign,
   })
-  const needsDesign = (state: ShellCommandState) => !state.hasDesign
   return composeShellCommandCatalog({
     ...createWorkspaceShellCapabilities(),
     newDesign: { execute: () => capabilities.newDesign() },

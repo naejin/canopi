@@ -129,8 +129,9 @@ export type ContextMenuPortOptions = Parameters<typeof createCanvasContextMenu>[
 
 /**
  * ToolHostDeps.menu over the menu controller. The host hits and retargets the selection first; open() then rebuilds
- * one of three menu states: the selection's menu from the keyboard, the empty-map menu, and a right-clicked object's menu,
- * disabled when the object is on a locked layer or locked through its group (contextMenuTargetAt). A
+ * one of three menu states: the selection's menu from the keyboard, the empty-map menu, and a right-clicked object's menu
+ * (an already selected zone's fill counts as the zone), disabled when the object is on a locked layer or locked through
+ * its group (contextMenuTargetAt). A
  * pointer menu carries the host's "Turn view to this edge" onto the app's request. A menu opened during the host's
  * re-origin hold (U39) kept the selection: an object hit gets the kept selection's menu, or the empty map's with none.
  */
@@ -1536,9 +1537,16 @@ function contextMenuTargetAt(
   const persisted = scene.persisted
   const visible = objectTarget(scene.hitAt(world, { includeLocked: true }))
   if (visible && isContextMenuTargetStructurallyBlocked(persisted, visible)) return { visible, target: null }
-  const hit = objectTarget(scene.hitAt(world))
+  const hit = objectTarget(scene.hitAt(world)) ?? selectedFillAt(scene, world)
   if (!hit || isContextMenuTargetStructurallyBlocked(persisted, hit)) return { visible, target: null }
   return { visible: visible ?? hit, target: hit }
+}
+
+/** Inside a zone's fill the menu acts on the zone only when it is already selected; an unselected zone's fill gives the
+ *  empty map's menu, with Place plants here (Q4). */
+function selectedFillAt(scene: ToolScene, world: WorldPoint): SceneDesignObjectTarget | null {
+  const fill = objectTarget(scene.hitAt(world, { fill: true }))
+  return fill && includesSceneDesignObjectTarget(scene.selection(), fill) ? fill : null
 }
 
 function isContextMenuTargetStructurallyBlocked(scene: ScenePersistedState, target: SceneDesignObjectTarget): boolean {

@@ -178,6 +178,12 @@ describe('CanvasContextMenu', () => {
     const empty = await open(request({ selection: null }))
     expect(empty.querySelector('[role="presentation"]')).toBeNull()
     expect(empty.getAttribute('aria-label')).toBe('Canvas edit commands')
+
+    // An object on a locked layer opens a menu with no targets: the app's selection elsewhere is not named (canopi-f47t.39).
+    const locked = await open(request({ selection: { ...APPLES, editableTargets: [], lockedTargets: [], bounds: null,
+      sameSpeciesReferenceCanonicalName: null, plantNamePinning: { plantIds: [], allPinned: false } } }))
+    expect(locked.querySelector('[role="presentation"]')).toBeNull()
+    expect(locked.getAttribute('aria-label')).toBe('Canvas edit commands')
   })
 
   it('renders word labels as menu items with separators, shortcuts and a red Delete last', async () => {

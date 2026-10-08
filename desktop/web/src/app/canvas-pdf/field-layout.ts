@@ -31,7 +31,7 @@ export interface FieldNote {
   text: string
   position: PrintPoint
   species?: string
-  kind: 'annotation' | 'distance' | 'plants' | 'zone'
+  kind: 'annotation' | 'distance' | 'plants'
   plantIds?: readonly string[]
   location?: string
   continuation?: string
@@ -174,10 +174,12 @@ function layoutField(input: PdfInput, frame: PrintBounds, ground: PrintBounds, s
       space.admit(label)
       return
     }
+    guideInkOnPage.set(guide.id, projected)
     notes.push({ id: guide.id, reference: references.measurements.get(guide.id)!, text: value, position, kind: 'distance',
       continuation: references.measurementHomes?.get(guide.id) === page.id ? undefined : references.measurementHomes?.get(guide.id) })
   }
   const pageReferences: PdfPageReference[] = []
+  const guideInkOnPage = new Map<string, Segment>()
   const processedNotes = new Set<string>()
   const locations = new Map<string, PrintPlant[]>()
   for (const p of canvas.plants) {
@@ -220,9 +222,11 @@ function layoutField(input: PdfInput, frame: PrintBounds, ground: PrintBounds, s
     d.segments.forEach(s => line(s, '#656058', .17, opacity('measurement-guides')))
     d.ticks.forEach(s => line(s, INK, .25, opacity('measurement-guides'))); labelText(d.label, opacity('measurement-guides'))
   }
+  // Every guide's ink on this page by guide: a dimension's strokes, or the guide clipped to the ground.
+  const guideLines = new Map(nativeDimensions.map(d => [d.guide.id, d.segments]))
   for (const guide of canvas.measurements.filter(g => !nativeDimensionIds.has(g.id))) {
-    const clipped = clipSegment({ a: guide.start, b: guide.end }, ground)!
-    space.addSegments([{ a: point(clipped.a), b: point(clipped.b) }])
+    const clipped = clipSegment({ a: guide.start, b: guide.end }, ground)!, projected = { a: point(clipped.a), b: point(clipped.b) }
+    space.addSegments([projected]); guideLines.set(guide.id, [projected])
   }
   notes.push(...[...canvas.annotations].sort((a, b) => a.text.length - b.text.length || a.id.localeCompare(b.id))
     .filter(n => !directAnnotation(n, point(n.position), scale, space, opacity('annotations'), operations)).map((n): FieldNote => ({ id: n.id, reference: references.notes.get(n.id)!, text: n.text, position: n.position, kind: 'annotation' }))
@@ -243,14 +247,7 @@ function layoutField(input: PdfInput, frame: PrintBounds, ground: PrintBounds, s
       d.segments.forEach(s => line(s, '#656058', .16, opacity('zones')))
       d.ticks.forEach(s => line(s, INK, .25, opacity('zones'))); labelText(d.label, opacity('zones'))
     }
-    if (!page.summary?.length && dimensions.length + reused.size < zone.dimensions.length) {
-      const number = new Intl.NumberFormat(input.locale, { maximumFractionDigits: 2 })
-      notes.push({ id: `zone:${zone.reference}`, reference: zone.reference, kind: 'zone', position: {
-        x: Math.max(ground.x, zone.zone.bounds.x), y: Math.max(ground.y, zone.zone.bounds.y) },
-      text: `${zone.diameter ? 'Ø ' : ''}${zone.lengths.map(n => number.format(n)).join(' / ')}${zone.widths.length ? ` × ${zone.widths.map(n => number.format(n)).join('–')}` : ''} m` })
-    }
   }
-  placeNotes()
 
   function placeDimensions(): void {
     for (const guide of canvas.measurements.filter(g => !nativeDimensionIds.has(g.id))) deferredMeasurement(guide)
@@ -269,7 +266,11 @@ function layoutField(input: PdfInput, frame: PrintBounds, ground: PrintBounds, s
       const isDistance = note.kind === 'annotation' && /^\(?\s*\d+(?:[,.]\d+)?\s*(?:cm|m)\s*\)?$/u.test(note.text.trim())
       const value = note.reference + (isDistance ? ` · ${note.text}` : '')
       const reservedValue = value + (note.continuation ? '      000' : '')
-      const label = note.location ? null : space.place(space.measure(reservedValue, isDistance ? 9.5 : 8), [anchor], [note.id, ...note.plantIds ?? []], `${page.id}:note:${note.reference}`, { color: OCHRE, boxed: !isDistance, note: true, ...stripOptions(anchor) })
+      const measured = space.measure(reservedValue, isDistance ? 9.5 : 8), guide = guideInkOnPage.get(note.id)
+      // A guide's code sits beside its own guide, nearer it than any other guide, or stays in the key (Q16).
+      const beside = guide && !note.location ? space.beside(measured, guide, [...guideLines].flatMap(([id, ink]) => id === note.id ? [] : ink)) : null
+      const label = note.location ? null : guide ? beside && { ...measured, bounds: beside, route: [], ids: [note.id], target: `${page.id}:note:${note.reference}`, color: OCHRE, boxed: true }
+        : space.place(measured, [anchor], [note.id, ...note.plantIds ?? []], `${page.id}:note:${note.reference}`, { color: OCHRE, boxed: !isDistance, note: true, ...stripOptions(anchor) })
       if (label) {
         if (note.continuation) {
           label.lines = [text.line(value, label.size)]

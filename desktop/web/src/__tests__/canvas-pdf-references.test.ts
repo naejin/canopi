@@ -36,9 +36,9 @@ const setup = { paper: 'A4' as const, layers: ['plants', 'zones', 'annotations',
 const strings = (plan: PdfPlan) => plan.pages.flatMap(page => page.operations.flatMap(op => op.kind === 'text' ? [op.line.runs.map(run => run.text).join('')] : []))
 /** Every printed N, P and M code by the object it names, and every zone row's code by the size it prints. */
 function references(plan: PdfPlan) {
-  const notes = plan.pages.flatMap(page => (page as { notes?: readonly { id: string; reference: string; kind: string }[] }).notes ?? [])
+  const notes = plan.pages.flatMap(page => (page as { notes?: readonly { id: string; reference: string }[] }).notes ?? [])
   return {
-    codes: Object.fromEntries(notes.filter(n => n.kind !== 'zone').map(n => [n.id, n.reference])),
+    codes: Object.fromEntries(notes.map(n => [n.id, n.reference])),
     rows: Object.fromEntries(strings(plan).flatMap(s => [...s.matchAll(/\b(E\d\d) · (Ø [\d.]+ × [\d.]+ m)/g)].map(m => [m[1]!, m[2]!]))),
   }
 }
@@ -69,7 +69,7 @@ describe('PDF guide references across pages', () => {
       ...[30, 60].map(bearing => [`As on screen ${bearing}°`, buildPdfPlan(looseGuides(bearing), setup, text(), labels)] as const)]
     for (const [name, plan] of plans) {
       const guideCodes = (pages: PdfPlan['pages']) => Object.fromEntries(pages
-        .flatMap(page => (page as { notes?: readonly { id: string; reference: string; kind: string }[] }).notes ?? [])
+        .flatMap(page => (page as { notes?: readonly { id: string; reference: string }[] }).notes ?? [])
         .filter(note => note.reference.startsWith('M')).map(note => [note.id, note.reference]))
       const overview = guideCodes(plan.pages.filter(page => page.kind === 'overview'))
       const detail = guideCodes(plan.pages.filter(page => page.kind !== 'overview'))

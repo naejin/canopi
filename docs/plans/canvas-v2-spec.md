@@ -952,8 +952,10 @@ export type HitTarget =
 /** No filter is today's hitTestTopLevel exactly: interactive layers, a group as the top-level target, guides, the revealed
  *  (selected or hovered) note, and object-locked objects, which the caller rejects itself (Select selects them; Unlock is in the canvas menu and Edit, U33). */
 export interface HitFilter {
-  /** Select only (phase 2, canopi-f47t.2): when nothing else hits, the topmost zone whose fill
-   *  contains the point (pointInPolygon; rectangle and ellipse polygons). Plain hitAt callers are unchanged. */
+  /** When nothing else hits, the topmost zone whose fill contains the point (pointInPolygon; rectangle and ellipse
+   *  polygons). Read by Select (phase 2, canopi-f47t.2) and by the canvas menu's target: a right-click inside an already
+   *  selected zone's fill opens the zone's menu, inside an unselected zone the empty map's (Place plants here; Q4,
+   *  canopi-f47t.40). Other hitAt callers (stamp pick, hover) keep outline hits. */
   readonly fill?: true
   /** hitAt: also locked layers that are visible (hitTestVisibleTopLevel, the host's hover). hitInQuad throws a clear error
    *  (the band select skips locked layers). */
