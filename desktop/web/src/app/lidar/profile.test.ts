@@ -190,6 +190,23 @@ describe('profile statistics', () => {
     expect(ready(owner.profile.value).curves[0]!.stats).toEqual({ role: 'elevation', rise: 4, steepest: { percent: expect.closeTo(60, 6), index: 2 } })
   })
 
+  it('Steepest is never measured over less than 2 m near the line\'s end', async () => {
+    // Flat ground every 0.5 m with 10 cm of noise in the last cell: 5 % over the last 2 m, not 20 % over its last 0.5 m.
+    const { calls, owner } = profileOf([at(0, 0), at(10, 0)], [source('c', 'elevation', { resolutionM: 0.5 })])
+    await calls[0]!.answer(() => values(...Array.from({ length: 20 }, () => 100), 100.1))
+    expect(ready(owner.profile.value).curves[0]!.stats).toEqual({
+      role: 'elevation', rise: expect.closeTo(0.1, 9), steepest: { percent: expect.closeTo(5, 6), index: 18 },
+    })
+  })
+
+  it('Steepest on a line shorter than 2 m is measured end to end', async () => {
+    const { calls, owner } = profileOf([at(0, 0), at(1, 0)], [source('c', 'elevation', { resolutionM: 0.5 })])
+    await calls[0]!.answer(() => values(10, 10, 10.1))
+    expect(ready(owner.profile.value).curves[0]!.stats).toEqual({
+      role: 'elevation', rise: expect.closeTo(0.1, 9), steepest: { percent: expect.closeTo(10, 6), index: 1 },
+    })
+  })
+
   it('Highest is the largest height present', async () => {
     expect(await curveStats('height', [null, 3, 14.2, 0, null, null, null, null, null])).toEqual({ role: 'height', highest: 14.2 })
   })

@@ -146,20 +146,23 @@ function profileRise(values: readonly (number | null)[]): number | null {
 
 /**
  * Steepest: the largest slope, in percent, between two points about 2 m apart (adjacent points when they are further
- * apart than that), and the point midway between them; null with no such pair.
+ * apart than that), and the point midway between them; null with no such pair. A start too near the line's end to
+ * reach 2 m is skipped, since a shorter run magnifies cell noise; a line shorter than 2 m is measured end to end.
  */
 function profileSteepest(
   values: readonly (number | null)[],
   distances: readonly number[],
 ): { readonly percent: number; readonly index: number } | null {
   let best: { percent: number; index: number } | null = null
+  const last = values.length - 1
   let end = 0
-  for (let start = 0; start < values.length - 1; start += 1) {
+  for (let start = 0; start < last; start += 1) {
     end = Math.max(end, start + 1)
-    while (end < values.length - 1 && distances[end]! - distances[start]! < STEEPEST_RUN_M - 1e-9) end += 1
+    while (end < last && distances[end]! - distances[start]! < STEEPEST_RUN_M - 1e-9) end += 1
     const a = values[start]
     const b = values[end]
     const run = distances[end]! - distances[start]!
+    if (run < STEEPEST_RUN_M - 1e-9 && start > 0) break
     if (a === null || a === undefined || b === null || b === undefined || run <= 0) continue
     const percent = (Math.abs(b - a) / run) * 100
     if (!best || percent > best.percent) best = { percent, index: Math.round((start + end) / 2) }
