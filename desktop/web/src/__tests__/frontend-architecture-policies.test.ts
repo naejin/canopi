@@ -636,6 +636,18 @@ const CONFINED_IMPORTER_POLICIES = [
     ],
   },
   {
+    // Site data display writes normalise a kind's default to null in one place
+    // (`setLidarEntryDisplay`), so a .canopi file never holds two encodings of
+    // one default; nothing else reaches the Design Edit seam it wraps.
+    kind: 'confine-importers',
+    name: 'Site data Design Edit writes go through Site data actions',
+    targets: ['src/app/design-edit/lidar.ts'],
+    allowedFrom: [
+      'src/app/lidar/actions.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+  },
+  {
     kind: 'confine-importers',
     name: 'Generated Species Search facts stay behind the shared normalizer',
     targets: ['src/generated/species-search-normalization.ts'],
@@ -2545,6 +2557,24 @@ describe('declarative frontend architecture policies', () => {
     expect(collectArchitecturePolicyViolations(graph, policies)).toEqual([
       expect.stringContaining('src/app/canvas-runtime/app-adapter.ts:1:1 imports src/canvas/runtime/scene-runtime.ts'),
       expect.stringContaining('src/components/canvas/Planted.tsx:1:1 imports src/canvas/runtime/scene-runtime.ts'),
+    ])
+  })
+
+  it('rejects a Site data Design Edit write outside the Site data actions', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/app/design-edit/lidar.ts', ['export const patchLidarEntryById = 1']),
+      plantedSource('src/app/lidar/actions.ts', ["import { patchLidarEntryById } from '../design-edit/lidar'"]),
+      plantedSource('src/components/panels/lidar/Planted.tsx', ["import { patchLidarEntryById } from '../../../app/design-edit/lidar'"]),
+      plantedSource('src/app/lidar/planted.ts', ["import type { LidarEntryPatch } from '../design-edit/lidar'"]),
+      plantedSource('src/__tests__/planted.test.ts', ["import { patchLidarEntryById } from '../app/design-edit/lidar'"]),
+    ])
+    const policies = FRONTEND_ARCHITECTURE_POLICIES.filter(
+      ({ name }) => name === 'Site data Design Edit writes go through Site data actions',
+    )
+
+    expect(collectArchitecturePolicyViolations(graph, policies)).toEqual([
+      expect.stringContaining('src/components/panels/lidar/Planted.tsx:1:1 imports src/app/design-edit/lidar.ts'),
+      expect.stringContaining('src/app/lidar/planted.ts:1:1 imports src/app/design-edit/lidar.ts'),
     ])
   })
 
