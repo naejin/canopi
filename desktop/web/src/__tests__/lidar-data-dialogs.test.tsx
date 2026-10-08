@@ -397,6 +397,9 @@ describe('Data library, Import and Analyze dialogs', () => {
       await type(container.querySelector<HTMLInputElement>('input[type="search"]')!, 'zzz')
       expect(container.querySelector('[data-pane]')?.getAttribute('data-pane')).toBe('list')
       expect(container.textContent).toContain('No data matches this search.')
+      // Clearing the search keeps the list the user was looking at.
+      await click(button('Clear search and filters'))
+      expect(container.querySelector('[data-pane]')?.getAttribute('data-pane')).toBe('list')
     })
 
     it('keeps focus in the sheet when Rename, Delete everywhere or a pane closes under it', async () => {

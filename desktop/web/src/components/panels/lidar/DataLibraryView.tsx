@@ -102,6 +102,8 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
     listed.current = visible
     if (selectedId !== requestedId) setRequestedId(selectedId)
     if (modeFor.mode !== 'details' && modeFor.itemId !== selectedId) setModeFor({ mode: 'details', itemId: null })
+    // A search or filter that leaves nothing selected returns to the list, which stays when the filters clear.
+    if (!item && pane === 'details') setPane('list')
     if (pendingFocus.current.length > 0) {
       const targets = pendingFocus.current
       pendingFocus.current = []
@@ -307,7 +309,7 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
         </button>
       </>}
     >
-      {/* With nothing selected the list shows, with No match and Clear filters, whichever pane was asked for. */}
+      {/* With nothing selected the list shows, with No match and Clear search and filters. */}
       <div ref={root} className={styles.library} data-pane={item ? pane : 'list'}>
         <div className={styles.sheetTop}>
           <LibraryOpenNotice />
