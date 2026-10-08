@@ -152,7 +152,7 @@ describe('Analyze dialog', () => {
   })
 
   it('is titled Analyze, says where results go and starts from the given source', () => {
-    mount({ sources: [{ id: 'canopy', name: 'Canopy', offers: CANOPY_OFFERS }, { id: 'ground', name: 'Ground', offers: OFFERS }], sourceId: 'ground' })
+    mount({ sources: [{ id: 'canopy', name: 'Canopy', offers: CANOPY_OFFERS }, { id: 'ground', name: 'Ground', offers: OFFERS }], sourceId: 'ground', context: { inDesign: new Set(['canopy', 'ground']) } })
     expect(container.querySelector('h2')?.textContent).toBe('Analyze')
     expect(container.textContent).toContain('Results are added under their source in Site data and kept in your library.')
     expect(dropdownTrigger(container, 'Source')?.textContent).toContain('Ground')

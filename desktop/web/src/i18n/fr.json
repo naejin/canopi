@@ -1688,6 +1688,7 @@
       "introLibrary": "Depuis {{name}}. Les résultats sont enregistrés dans votre bibliothèque ; ajoutez-les à n’importe quel Design.",
       "source": "Source",
       "intro": "Les résultats sont ajoutés sous leur source dans Données du site et conservés dans votre bibliothèque.",
+      "introLibraryOnly": "Les résultats sont conservés dans votre bibliothèque. Ce Design n’affiche pas leur source : ils ne sont pas ajoutés à Données du site.",
       "showInSiteData": "Afficher dans Données du site"
     },
     "details": {

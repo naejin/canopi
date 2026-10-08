@@ -213,7 +213,8 @@ export function AnalyzeDialog({
             />
           </div>
         )}
-      <p className={styles.intro}>{t('analyses.dialog.intro')}</p>
+      {/* The one attach rule (`runAnalysis`): results join this Design only when it shows their source. */}
+      <p className={styles.intro}>{t(context.inDesign.has(item.id) ? 'analyses.dialog.intro' : 'analyses.dialog.introLibraryOnly')}</p>
       {options.map((group) => (
         <fieldset key={group.key} className={styles.entries}>
           <legend>{t(group.labelKey)}</legend>

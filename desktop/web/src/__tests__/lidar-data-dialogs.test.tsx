@@ -373,6 +373,15 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(selectedName()).toBe('Steepness')
     })
 
+    it('says results stay in the library when Run again with changes starts from an input this Design does not show', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', { name: 'Steepness' })])
+      mount()
+      await selectRow('Steepness')
+      await click(button(/^Run again with changes…$/))
+      expect(container.textContent).toContain('Results are kept in your library. This Design doesn’t show their source, so they aren’t added to Site data.')
+      expect(container.textContent).not.toContain('Results are added under their source in Site data')
+    })
+
     it('offers Import only in the empty library, disabled with the reason when no Design is open', async () => {
       setDesign(null)
       mount()

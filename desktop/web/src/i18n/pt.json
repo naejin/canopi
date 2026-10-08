@@ -1688,6 +1688,7 @@
       "introLibrary": "De {{name}}. Os resultados são salvos na sua biblioteca; adicione-os a qualquer design.",
       "source": "Origem",
       "intro": "Os resultados são adicionados sob a sua origem em Dados do local e mantidos na sua biblioteca.",
+      "introLibraryOnly": "Os resultados são mantidos na sua biblioteca. Este design não mostra a sua origem, por isso não são adicionados a Dados do local.",
       "showInSiteData": "Mostrar em Dados do local"
     },
     "details": {
