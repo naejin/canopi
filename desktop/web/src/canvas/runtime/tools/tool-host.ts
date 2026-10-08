@@ -1537,16 +1537,9 @@ function contextMenuTargetAt(
   const persisted = scene.persisted
   const visible = objectTarget(scene.hitAt(world, { includeLocked: true }))
   if (visible && isContextMenuTargetStructurallyBlocked(persisted, visible)) return { visible, target: null }
-  const hit = objectTarget(scene.hitAt(world)) ?? selectedFillAt(scene, world)
+  const hit = objectTarget(scene.hitAt(world, { fill: 'selected' }))
   if (!hit || isContextMenuTargetStructurallyBlocked(persisted, hit)) return { visible, target: null }
   return { visible: visible ?? hit, target: hit }
-}
-
-/** Inside a zone's fill the menu acts on the zone only when it is already selected, even under an overlapping unselected
- *  zone; an unselected zone's fill gives the empty map's menu, with Place plants here (Q4). Called only when no outline
- *  hits, so hitAt answers the selected fill. */
-function selectedFillAt(scene: ToolScene, world: WorldPoint): SceneDesignObjectTarget | null {
-  return objectTarget(scene.hitAt(world, { fill: 'selected' }))
 }
 
 function isContextMenuTargetStructurallyBlocked(scene: ScenePersistedState, target: SceneDesignObjectTarget): boolean {
