@@ -1,8 +1,5 @@
-import {
-  resolvePlantSymbolForPlant,
-  type PlantSymbolId,
-  type ScenePersistedState,
-} from './scene'
+import { resolvePlantSymbolForPlant, type PlantSymbolId } from './scene/plant-symbols'
+import type { ScenePersistedState } from './scene/types'
 import { resolvePlantBaseColor } from './plant-presentation'
 import { normalizeHexColor } from '../plant-colors'
 import { getStratumColor } from '../plants'
