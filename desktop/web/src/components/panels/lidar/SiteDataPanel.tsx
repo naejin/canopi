@@ -5,7 +5,7 @@ import { formatCoordinates } from '../../../app/geocoding/coordinates'
 import { analyzeItem, beginDataImport, openDataLibrary } from '../../../app/lidar/library-navigation'
 import { installLidarLibraryObserver, lidarLibrary, readCurrentLidarPresentation } from '../../../app/lidar/library-store'
 import { armProfile, profileAvailable } from '../../../app/lidar/profile'
-import { defaultAnalyzeSource, siteDataViewFor, type SiteDataView } from '../../../app/lidar/site-data-view'
+import { siteDataViewFor, type SiteDataView } from '../../../app/lidar/site-data-view'
 import { pin, unpin } from '../../../app/lidar/site-transients'
 import { siteValues } from '../../../app/lidar/site-values'
 import { referenceRows } from '../../../app/lidar/reference-tree'
@@ -94,10 +94,14 @@ function PinLine() {
 function Toolbar({ view }: { readonly view: SiteDataView }) {
   const items = readCurrentLidarPresentation()
   const library = lidarLibrary.value
-  // A ready item in this Design that some registered analysis can take (spec §1.10 "Toolbar").
-  const eligible = referenceRows(items).filter((item) => item.availability === 'present' && item.state === 'Ready'
-    && library?.items.find((candidate) => candidate.id === item.id)?.offers.some((offer) => !offer.unavailable))
-  const source = defaultAnalyzeSource(eligible, items.find((item) => item.id === view.openItem.value) ?? null)
+  // A ready item in this Design that an analysis accepts, as Analyze's Source lists it (spec §1.10 "Toolbar"): an engine
+  // or grid problem still counts, and Analyze names it. Analyze picks the Source from the item it is sent.
+  const eligible = referenceRows(items).filter((item) => {
+    const summary = library?.items.find((candidate) => candidate.id === item.id)
+    return summary?.state === 'Ready' && summary.offers.some((offer) =>
+      offer.unavailable?.reason !== 'WrongInput' && offer.unavailable?.reason !== 'NotReady')
+  })
+  const sourceId = eligible.length > 0 ? view.openItem.value ?? eligible[0]!.id : null
   const canProfile = profileAvailable.value
   const profiling = currentCanvasTool.value === 'profile'
   return (
@@ -108,11 +112,11 @@ function Toolbar({ view }: { readonly view: SiteDataView }) {
       <button
         type="button"
         className={styles.toolButton}
-        aria-disabled={source ? undefined : true}
-        onClick={() => { if (source) analyzeItem(source.id, { attach: true }) }}
+        aria-disabled={sourceId ? undefined : true}
+        onClick={() => { if (sourceId) analyzeItem(sourceId, { attach: true }) }}
       >
         {t('canvas.lidar.library.analyze')}
-        {!source && <ButtonTooltip label={t('siteData.analyzeNeedsData')} side="bottom" />}
+        {!sourceId && <ButtonTooltip label={t('siteData.analyzeNeedsData')} side="bottom" />}
       </button>
       <button
         type="button"

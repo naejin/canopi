@@ -183,21 +183,31 @@ describe('the Site data panel', () => {
     expect(actions.chooseImportFiles).toHaveBeenCalledOnce()
   })
 
-  it('opens Analyze on the open item, else the open result\'s input, else the first eligible item', async () => {
-    lidarLibrary.value = library([sourceItem('t1', 'Ground one'), sourceItem('t2', 'Ground two'), slopeItem('s', 't2')])
-    setDesign([{ kind: 'Source', id: 't1', order: 1 }, { kind: 'Source', id: 't2', order: 0 }, { kind: 'Derived', id: 's', order: 0 }])
+  it('sends Analyze the open item, or the first item an analysis accepts, and Analyze picks the Source', async () => {
+    // A Web Mercator grid: an analysis accepts it, and Analyze names the grid problem rather than skipping it.
+    lidarLibrary.value = library([
+      sourceItem('t1', 'Ground one'),
+      sourceItem('w', 'Web grid', { offers: [{ analysis_id: 'terrain.slope', unavailable: { reason: 'GridNotProjectedMetres' } }] }),
+    ])
+    setDesign([{ kind: 'Source', id: 't1', order: 1 }, { kind: 'Source', id: 'w', order: 0 }])
     const view = siteDataViewFor(designSessionStore.sessionIdentity.peek())
     mount()
-    expect(lines()).toEqual(['t1', 't2', '  s'])
     await click(button('Analyze…'))
     expect(dataDialog.value).toMatchObject({ kind: 'analyze', itemId: 't1' })
-    // The slope result no analysis takes is open: its input, the second terrain, is the source.
-    await act(async () => { view.openItem.value = 's' })
+    await act(async () => { view.openItem.value = 'w' })
     await click(button('Analyze…'))
-    expect(dataDialog.value).toMatchObject({ kind: 'analyze', itemId: 't2' })
-    await act(async () => { view.openItem.value = 't1' })
+    expect(dataDialog.value).toMatchObject({ kind: 'analyze', itemId: 'w' })
+  })
+
+  it('keeps Analyze enabled when the only reason is a missing engine', async () => {
+    lidarLibrary.value = library([
+      sourceItem('a', 'Ground', { offers: [{ analysis_id: 'terrain.slope', unavailable: { reason: 'EngineMissing', detail: 'not installed' } }] }),
+    ], false)
+    setDesign([{ kind: 'Source', id: 'a', order: 0 }])
+    mount()
+    expect(button('Analyze…').getAttribute('aria-disabled')).toBeNull()
     await click(button('Analyze…'))
-    expect(dataDialog.value).toMatchObject({ kind: 'analyze', itemId: 't1' })
+    expect(dataDialog.value).toMatchObject({ kind: 'analyze', itemId: 'a' })
   })
 
   it('says why Analyze and Profile are disabled', () => {

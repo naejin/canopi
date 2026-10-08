@@ -60,17 +60,3 @@ export function showInSiteData(id: string): void {
     view.reveal.value = { id }
   })
 }
-
-/**
- * Analyze's default source (spec §1.10 "Toolbar"): the open item when an analysis can take it, else the open result's
- * input, else the first eligible item. Analyze's Source field starts from it; one rule for the toolbar and the dialog.
- */
-export function defaultAnalyzeSource<Item extends { readonly id: string }>(
-  eligible: readonly Item[],
-  open: { readonly id: string; readonly inputId: string | null } | null,
-): Item | null {
-  return eligible.find((item) => item.id === open?.id)
-    ?? eligible.find((item) => open?.inputId != null && item.id === open.inputId)
-    ?? eligible[0]
-    ?? null
-}
