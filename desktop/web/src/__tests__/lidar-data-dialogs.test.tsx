@@ -53,7 +53,7 @@ vi.mock('../app/lidar/site-data-view', () => siteDataView)
 
 vi.mock('../components/panels/lidar/LibraryPreview', () => ({
   usePreviewClient: () => null,
-  LibraryPreview: () => <span data-preview="true" />,
+  LibraryPreview: ({ item, large }: { item: { id: string }; large?: boolean }) => <span data-preview={large ? `large:${item.id}` : 'small'} />,
 }))
 
 import { DataDialogs } from '../components/panels/lidar/DataDialogs'
@@ -257,6 +257,23 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(actions.fetchItemSources).not.toHaveBeenCalled()
       await act(async () => { vi.advanceTimersByTime(120) })
       expect(actions.fetchItemSources.mock.calls.map(([id]) => id)).toEqual(['c'])
+    })
+
+    it('renders the details\' large preview only once the selection has rested', async () => {
+      vi.useFakeTimers()
+      lidarLibrary.value = library([layer('a', 'Alpha'), layer('b', 'Beta'), layer('c', 'Gamma')])
+      mount()
+      const large = () => Array.from(container.querySelectorAll('[data-preview^="large:"]')).map((node) => node.getAttribute('data-preview'))
+      await act(async () => { vi.advanceTimersByTime(120) })
+      expect(large()).toEqual(['large:a'])
+      // Each row passed while ↓ is held would start a full-size worker render the row's departure never cancels.
+      await key(rowNamed('Alpha'), 'ArrowDown')
+      expect(large()).toEqual([])
+      await act(async () => { vi.advanceTimersByTime(40) })
+      await key(rowNamed('Beta'), 'ArrowDown')
+      expect(large()).toEqual([])
+      await act(async () => { vi.advanceTimersByTime(120) })
+      expect(large()).toEqual(['large:c'])
     })
 
     it('counts the library, says its size on this computer and shows its folder, with no Done', async () => {

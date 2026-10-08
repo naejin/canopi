@@ -111,7 +111,7 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
     }
   })
 
-  // The details fetch only once the selection has rested.
+  // The details fetch, and draw their large preview, only once the selection has rested.
   const [restedId, setRestedId] = useState<string | null>(null)
   useEffect(() => {
     const timer = setTimeout(() => setRestedId(selectedId), SELECTION_REST_MS)
@@ -389,7 +389,14 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
                   results={items.filter((candidate) => candidate.parentId === item.id)}
                   onRefresh={() => refresh(item)}
                   onOpenInput={openLinked}
-                  preview={<div className={styles.previewFrame}><LibraryPreview item={item} client={client} width={640} height={328} large /></div>}
+                  preview={(
+                    <div className={styles.previewFrame}>
+                      {/* A full-size worker render no departure cancels: only for the row the selection rests on; until then its empty frame. */}
+                      {restedId === item.id
+                        ? <LibraryPreview item={item} client={client} width={640} height={328} large />
+                        : <span className={styles.previewLarge} data-placeholder="true" aria-hidden="true" />}
+                    </div>
+                  )}
                   actions={mode === 'delete'
                     ? (
                       <DeleteConfirmation
