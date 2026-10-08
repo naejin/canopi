@@ -167,7 +167,7 @@ describe('Data library, Import and Analyze dialogs', () => {
     expect(Array.from(container.querySelectorAll('ol li > span:first-child')).map((row) => row.textContent)).toEqual(['tile_01.tif', 'tile_02.tif'])
     expect(container.querySelector('select')).toBeNull()
     expect(dropdownTrigger(container, 'What the values measure')?.textContent).toContain('Choose a measurement')
-    await chooseFrom('What the values measure', 'Ground elevation')
+    await chooseFrom('What the values measure', 'Ground elevation (DTM)')
     expect(submit.disabled).toBe(false)
     await act(async () => {
       container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
@@ -198,7 +198,7 @@ describe('Data library, Import and Analyze dialogs', () => {
     const warning = container.querySelector('[data-notice-tone="warning"]')!
     expect(warning.textContent).toContain('These files don’t cover your site. They lie 12 km from this Design.')
     // The import itself stays possible.
-    await chooseFrom('What the values measure', 'Ground elevation')
+    await chooseFrom('What the values measure', 'Ground elevation (DTM)')
     expect(button('Import 1 file').disabled).toBe(false)
   })
 
@@ -232,7 +232,7 @@ describe('Data library, Import and Analyze dialogs', () => {
       name.value = 'terrain'
       name.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    await chooseFrom('What the values measure', 'Ground elevation')
+    await chooseFrom('What the values measure', 'Ground elevation (DTM)')
     expect(container.textContent).toContain('already has data named “terrain”')
     expect(container.textContent).toContain('“terrain (2)”')
     expect(button('Import 1 file').disabled).toBe(true)
@@ -410,7 +410,7 @@ describe('Data library, Import and Analyze dialogs', () => {
     ])
     mount()
     await openAnalyze('Canopy')
-    expect(container.textContent).toContain('Needs Ground elevation.')
+    expect(container.textContent).toContain('Needs Ground elevation (DTM).')
     expect(button(/^Run$/).disabled).toBe(true)
 
     await click(button(/^Cancel$/))

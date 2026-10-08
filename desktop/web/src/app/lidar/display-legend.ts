@@ -3,14 +3,31 @@ import { unitSuffix } from './item-types'
 /**
  * Legend ramps for the upstream renderer's built-in colormaps.
  *
- * Stops sample the matplotlib ramps `cog-tiler-wasm@0.4.0` compiles in, so a
- * legend shows the colours the map draws. A legend never measures anything:
- * numeric values come from native inspection.
+ * Stops are `colorize()` of the pinned `cog-tiler-wasm@0.4.0` at i/(n-1), with
+ * as many stops (9, 17 or 65) as keep the gradient's straight-line blend within
+ * 8/255 of the map between them, so a legend shows the colours the map draws
+ * (held by display-legend.test.ts). A legend never measures anything: numeric
+ * values come from native inspection.
  */
 const RAMPS: Readonly<Record<string, readonly string[]>> = {
-  terrain: ['#333399', '#0294fa', '#01cc66', '#80e680', '#fefe98', '#bfa982', '#80605c', '#d9cfcd', '#ffffff'],
-  viridis: ['#440154', '#472d7b', '#3b528b', '#2c728e', '#21918c', '#28ae80', '#5ec962', '#addc30', '#fde725'],
-  magma: ['#000004', '#1c1044', '#4f127b', '#812581', '#b5367a', '#e55064', '#fb8761', '#fec287', '#fcfdbf'],
+  schwarzwald: [
+    '#aeefd5', '#b0f2cd', '#b1f4c1', '#b2f6b5', '#bbf7b2', '#c8f9b2', '#d8fab2', '#eafcb2',
+    '#f7fcb2', '#eff4a3', '#cfe888', '#b2dc72', '#8dce5b', '#68c047', '#48b437', '#29a62c',
+    '#17992f', '#0c8b37', '#0b823f', '#2c853d', '#448c3b', '#619436', '#7b9b31', '#8da02d',
+    '#a4a627', '#beae21', '#d3b21a', '#ebb50f', '#f6ad04', '#ec9802', '#de7c02', '#d36402',
+    '#c44f02', '#b53b02', '#a82902', '#9a1b01', '#8d0e01', '#810500', '#790a01', '#751102',
+    '#741504', '#721905', '#711d06', '#6f2108', '#6e2509', '#6c290a', '#6b2d0c', '#6b310f',
+    '#723b19', '#784625', '#805133', '#885d42', '#906953', '#967561', '#9d8475', '#a3938c',
+    '#a7a19d', '#adacac', '#b5b4b5', '#bdbcbd', '#c6c5c6', '#cecdce', '#d7d5d7', '#dfdddf',
+    '#e9e7e9',
+  ],
+  greens: ['#f7fcf5', '#e3f4de', '#c5e7be', '#9fd79b', '#72c378', '#42aa5d', '#218b44', '#026c2c', '#00441b'],
+  ylorrd: ['#ffffcc', '#ffeba1', '#fed775', '#fdb24d', '#fc8b3b', '#fa4e2a', '#e11b1d', '#bc0126', '#800026'],
+  viridis: [
+    '#440154', '#471768', '#462c79', '#414085', '#3a5189', '#33618c', '#2c718d', '#26808c',
+    '#20908c', '#209f87', '#29ad7f', '#3ebb72', '#5cc862', '#82d34b', '#aadb32', '#d5e11b',
+    '#fde724',
+  ],
 }
 
 export function legendGradient(colormap: string, reversed: boolean): string {

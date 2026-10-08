@@ -6,7 +6,6 @@ from ds import *  # noqa: F401,F403
 ORCHARD = "Le Sanctuaire d'Aylin – Verger Syntropique"
 ORCH = assets.orchard()
 STRATA = ['Emergent', 'High', 'Mid', 'Low']
-STRATUM_COLOR = {'Emergent': '#5A3E1B', 'High': '#B5462F', 'Mid': '#1F6F8B', 'Low': '#7A8B2A'}
 CLOSE = ('1:75', '1 m', 52)
 SITE = ('1:190', '5 m', 100)
 

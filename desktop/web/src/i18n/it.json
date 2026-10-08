@@ -575,9 +575,9 @@
         "quantityLabel": "Cosa misurano i valori",
         "chooseQuantity": "Scegli una misura",
         "quantity": {
-          "GroundElevation": "Quota del terreno",
-          "SurfaceElevation": "Quota della superficie",
-          "AboveGroundHeight": "Altezza dal suolo",
+          "GroundElevation": "Quota del terreno (DTM)",
+          "SurfaceElevation": "Quota della superficie (DSM)",
+          "AboveGroundHeight": "Altezza dal suolo (CHM)",
           "OtherContinuous": "Altri valori",
           "Slope": "Pendenza"
         },

@@ -575,9 +575,9 @@
         "quantityLabel": "값이 측정하는 것",
         "chooseQuantity": "측정값 선택",
         "quantity": {
-          "GroundElevation": "지면 고도",
-          "SurfaceElevation": "표면 고도",
-          "AboveGroundHeight": "지상 높이",
+          "GroundElevation": "지면 고도(DTM)",
+          "SurfaceElevation": "표면 고도(DSM)",
+          "AboveGroundHeight": "지상 높이(CHM)",
           "OtherContinuous": "기타 값",
           "Slope": "경사"
         },

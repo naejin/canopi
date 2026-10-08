@@ -134,6 +134,30 @@ describe('plant display rules', () => {
     for (const color of colors) expect(contrastRatio(color, '#F3EFE4')).toBeGreaterThan(1.8)
   })
 
+  it('orders the stratum defaults by sunlight need, with a grey no hue is mistaken for', () => {
+    // Sunniest first: Emergent gold, High bluish green, Mid blue, Low reddish purple (Okabe-Ito).
+    expect(Object.entries(STRATUM_DISPLAY_COLORS)).toEqual([
+      ['emergent', '#E69F00'],
+      ['high', '#009E73'],
+      ['medium', '#0072B2'],
+      ['low', '#CC79A7'],
+    ])
+    // Not the old #8C8577, which matched High's green under deuteranopia (U48).
+    expect(NO_STRATUM_DISPLAY_COLOR).toBe('#5E5A52')
+    // The grey reads as a graphic object (WCAG 1.4.11) on the PDF paper and the light map.
+    expect(contrastRatio(NO_STRATUM_DISPLAY_COLOR, '#ffffff')).toBeGreaterThanOrEqual(3)
+    expect(contrastRatio(NO_STRATUM_DISPLAY_COLOR, '#F3EFE4')).toBeGreaterThanOrEqual(3)
+  })
+
+  it('keeps a stored stratum colour over the new defaults, even the old default', () => {
+    const display = readPlantDisplayOptions(design({
+      extra: { plant_display: { color_by: 'stratum', stratum_colors: { emergent: '#0072B2', none: '#8C8577' } } },
+    }))
+    expect(stratumDisplayColor('emergent', display)).toBe('#0072B2')
+    expect(stratumDisplayColor('none', display)).toBe('#8C8577')
+    expect(stratumDisplayColor('medium', display)).toBe('#0072B2')
+  })
+
   it('cycles labels None, Codes, Names and repairs invalid display values', () => {
     expect(nextPlantLabelMode('none')).toBe('codes')
     expect(nextPlantLabelMode('codes')).toBe('names')

@@ -219,9 +219,9 @@ These are registered for TS in `bindings-gen/src/contracts.rs:28+` and generated
 
 **Display, legend and inspection**
 - `app/lidar/display.ts`:
-  - `lidarDisplayStyle` (:154): any `Analysis` gets magma reversed over `[0,60°]` or `[0,173.2%]`; ground and surface elevation get terrain; everything else gets viridis.
+  - `lidarDisplayStyle`: dispatches through `item-types.ts`. Slope gets ylorrd over `[0,30°]` or `[0,57.7%]`; ground and surface elevation get schwarzwald; height above ground gets greens; everything else gets viridis.
   - `lidarDisplayLayers` (:175).
-- `display-legend.ts`: RAMPS for terrain, viridis and magma; `°` and `%` are special-cased.
+- `display-legend.ts`: RAMPS for schwarzwald, greens, ylorrd and viridis, sampled from the wasm's `colorize()` (held by `display-legend.test.ts`); `°` and `%` are special-cased.
 - `app/lidar/inspection.ts`: native readout. The units come from `LidarSampleOutcome::Value.units`.
 - `app/design-edit/lidar.ts`: Design Edit for the entries. It holds a hand copy of schema version 1.
 
@@ -232,7 +232,7 @@ These are registered for TS in `bindings-gen/src/contracts.rs:28+` and generated
 
 **Map**
 - Raster display: `maplibre/raster-display/{adapter,pool,worker,protocol}.ts`.
-  - The cog-tiler colormaps include `blues`, `gray`, `terrain`, `viridis` and `magma`.
+  - The cog-tiler colormaps include `blues`, `gray`, `schwarzwald`, `greens`, `ylorrd` and `viridis`.
   - `RasterRenderOptions` already has `stretch: linear|sqrt|log`.
 - Band composition:
   1. `app/canvas-map-surface/desktop-workspace-map-contribution-adapter.ts:29-33`
@@ -784,9 +784,9 @@ Sources are immutable, so in v2 `InputUpdated` only happens for derived inputs t
   - `RASTER_QUANTITIES: Record<RasterQuantity, {labelKey, style(item)}>`
   - `VECTOR_FEATURES: Record<VectorFeature, {labelKey, layers(item)}>`
 - Raster styles:
-  - Ground and surface elevation: terrain over the display range.
-  - Above-ground height and other continuous: viridis.
-  - Slope: magma reversed over a fixed domain chosen by units (moved from `display.ts:142-162`).
+  - Ground and surface elevation: schwarzwald over the display range (no blue: blue means water).
+  - Above-ground height: greens. Other continuous: viridis.
+  - Slope: ylorrd over a fixed 0–30° (0–57.7 %) domain chosen by units.
   - Hillshade: gray over the value range.
   - Upslope area: blues with `stretch: 'log'`, rescaled over `[cell area, max]`.
   - Wetness index: blues over the value range.

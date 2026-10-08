@@ -31,8 +31,8 @@ interface RasterQuantityType {
   style(item: RasterStyleInput): LidarDisplayStyle
 }
 
-const SLOPE_DEGREES_MAX = 60
-/** The same 60° expressed in percent, so both units share one colour domain. */
+const SLOPE_DEGREES_MAX = 30
+/** The same 30° expressed in percent, so both units share one colour domain. */
 export const SLOPE_PERCENT_MAX = Math.round(Math.tan((SLOPE_DEGREES_MAX * Math.PI) / 180) * 1000) / 10
 
 function overDisplayRange(colormap: string) {
@@ -47,17 +47,18 @@ export const RASTER_QUANTITIES: Readonly<Record<RasterQuantity, RasterQuantityTy
   GroundElevation: {
     labelKey: 'canvas.lidar.library.quantity.GroundElevation',
     importable: true,
-    style: overDisplayRange('terrain'),
+    // Hypsometric without blue, so blue keeps one meaning on the map: water.
+    style: overDisplayRange('schwarzwald'),
   },
   SurfaceElevation: {
     labelKey: 'canvas.lidar.library.quantity.SurfaceElevation',
     importable: true,
-    style: overDisplayRange('terrain'),
+    style: overDisplayRange('schwarzwald'),
   },
   AboveGroundHeight: {
     labelKey: 'canvas.lidar.library.quantity.AboveGroundHeight',
     importable: true,
-    style: overDisplayRange('viridis'),
+    style: overDisplayRange('greens'),
   },
   OtherContinuous: {
     labelKey: 'canvas.lidar.library.quantity.OtherContinuous',
@@ -70,8 +71,8 @@ export const RASTER_QUANTITIES: Readonly<Record<RasterQuantity, RasterQuantityTy
     // A fixed domain in the result's own unit, so a percent result is never
     // coloured as degrees and two slopes compare at a glance.
     style: (item) => ({
-      colormap: 'magma',
-      reversed: true,
+      colormap: 'ylorrd',
+      reversed: false,
       rescale: [0, item.units === '%' ? SLOPE_PERCENT_MAX : SLOPE_DEGREES_MAX],
       units: item.units,
     }),

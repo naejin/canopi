@@ -575,9 +575,9 @@
         "quantityLabel": "Ce que mesurent les valeurs",
         "chooseQuantity": "Choisir une mesure",
         "quantity": {
-          "GroundElevation": "Altitude du sol",
-          "SurfaceElevation": "Altitude de surface",
-          "AboveGroundHeight": "Hauteur au-dessus du sol",
+          "GroundElevation": "Altitude du sol (MNT)",
+          "SurfaceElevation": "Altitude de surface (MNS)",
+          "AboveGroundHeight": "Hauteur au-dessus du sol (MNH)",
           "OtherContinuous": "Autres valeurs",
           "Slope": "Pente"
         },

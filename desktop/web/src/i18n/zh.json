@@ -575,9 +575,9 @@
         "quantityLabel": "数值的含义",
         "chooseQuantity": "选择测量类型",
         "quantity": {
-          "GroundElevation": "地面高程",
-          "SurfaceElevation": "表面高程",
-          "AboveGroundHeight": "离地高度",
+          "GroundElevation": "地面高程（DTM）",
+          "SurfaceElevation": "表面高程（DSM）",
+          "AboveGroundHeight": "离地高度（CHM）",
           "OtherContinuous": "其他数值",
           "Slope": "坡度"
         },
