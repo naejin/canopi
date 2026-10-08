@@ -9,6 +9,7 @@ import { LayersPanel } from '../src/components/panels/LayersPanel'
 import { DesignNotebookPanel } from '../src/components/panels/DesignNotebookPanel'
 import { PlantDbPanel } from '../src/components/panels/PlantDbPanel'
 import { DataDialogs } from '../src/components/panels/lidar/DataDialogs'
+import { SiteDataPanel } from '../src/components/panels/lidar/SiteDataPanel'
 import { FavoritesPanel } from '../src/components/panels/FavoritesPanel'
 import { BudgetPanel } from '../src/components/panels/BudgetPanel'
 import { CalendarPanel } from '../src/components/panels/CalendarPanel'
@@ -137,6 +138,7 @@ const workspaceSurfaces: WorkspaceSurfaces = edition === 'web'
       side: {
         'species-key': DesktopSpeciesKeyPanel,
         layers: GalleryLayersSurface,
+        'site-data': GallerySiteDataSurface,
         calendar: CalendarPanel,
         budget: BudgetPanel,
         consortium: ConsortiumPanel,
@@ -331,6 +333,10 @@ function showGalleryDataSurface(next: GallerySurface): void {
 
 function GalleryLayersSurface() {
   return <LayersPanel />
+}
+
+function GallerySiteDataSurface() {
+  return <SiteDataPanel importGeoJson={() => { activity.value = 'Design objects from GeoJSON… runs File › Import GeoJSON.' }} />
 }
 
 function GalleryNotebookSurface() {

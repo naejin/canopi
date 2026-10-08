@@ -6,7 +6,28 @@
 
 import { computed, signal, type ReadonlySignal } from '@preact/signals'
 import { currentCanvasQuerySurface } from '../../canvas/session'
+import { armCanvasTool } from '../keyboard/arming'
+import { selectPanel, sidePanel } from '../shell/state'
+import { profileRole } from './item-types'
+import { readCurrentLidarPresentation } from './library-store'
 import { profileLine, setProfileLine, type GeoPoint } from './site-transients'
+
+/**
+ * Whether Profile can be armed: some shown, ready elevation or height item (U49 Q31); otherwise the Site data toolbar's
+ * Profile and the palette command are disabled with "Show an elevation or height layer to draw a profile".
+ */
+export const profileAvailable: ReadonlySignal<boolean> = computed(() => readCurrentLidarPresentation().some((item) =>
+  item.shown && item.availability === 'present' && item.state === 'Ready'
+  && item.itemType !== null && profileRole(item.itemType) !== null))
+
+/**
+ * Arms Profile from the Site data toolbar ('panel') or the palette, with Site data open beside the map, so the finished
+ * line has a panel to show its chart in.
+ */
+export function armProfile(from: 'panel' | 'palette'): void {
+  armCanvasTool('profile', { from })
+  if (sidePanel.peek() !== 'site-data') selectPanel('site-data')
+}
 
 const hover = signal<GeoPoint | null>(null)
 

@@ -42,7 +42,7 @@ import styles from './StoriesPanel.module.css'
 const EMPTY_VIEWS: readonly SavedView[] = []
 
 /**
- * Stories (Ctrl 9): build a story from views of the map beside the live map.
+ * Stories (no Ctrl digit, U49 Q1): build a story from views of the map beside the live map.
  * A story selector, the steps with their thumbnails, Add the current view as
  * a step, and the selected step's editor. Both editions mount it.
  */

@@ -107,8 +107,8 @@ describe('App Command Graph shell catalog', () => {
     expect(projection.commands.get('file.downloadCanopi')).toMatchObject({ disabled: true })
     expect(projection.commands.get('nav.favorites')).toMatchObject({
       label: 'translated:panelRail.favorites',
-      shortcut: 'translated:shortcutKeys.ctrl 4',
-      ariaShortcut: 'Control+4 Meta+4',
+      shortcut: 'translated:shortcutKeys.ctrl 5',
+      ariaShortcut: 'Control+5 Meta+5',
       active: true,
       disabled: false,
     })

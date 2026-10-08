@@ -37,6 +37,7 @@ import {
 import { openProblemReportDialog } from '../../app/problem-report/submission'
 import { exportCurrentBudgetCsv } from '../../app/budget/export'
 import { beginDataImport, openDataLibrary } from '../../app/lidar/library-navigation'
+import { armProfile, profileAvailable } from '../../app/lidar/profile'
 import { createWorkspaceShellCapabilities } from '../../app/workspace-commands/capabilities'
 import {
   readWorkspaceCanvasProjectionState,
@@ -66,6 +67,7 @@ type DesktopShellCapabilityId =
   | 'exitApp'
   | 'navigateCanvas'
   | 'navigateLayers'
+  | 'navigateSiteData'
   | 'navigateSpeciesKey'
   | 'navigatePlantDatabase'
   | 'navigateFavorites'
@@ -74,6 +76,7 @@ type DesktopShellCapabilityId =
   | 'navigateConsortium'
   | 'navigateDesignNotebook'
   | 'navigateStories'
+  | 'startProfile'
   | 'toggleToolNames'
   | 'showSatellite'
   | 'showMap'
@@ -189,9 +192,9 @@ export const DESKTOP_SHELL_COMMAND_CATALOG = composeShellCommandCatalog({
     execute: () => runAsyncCommand('Export GeoJSON', desktopGeoJson.exportGeoJson),
     isExecutionDisabled: isGeoJsonTransferDisabled,
   },
-  // File › Add data… picks files and imports them into the open Design's site data.
+  // File › Import terrain or height data… picks files and imports them into the open Design's Site data.
   addData: {
-    execute: () => runAsyncCommand('Add data', () => beginDataImport()),
+    execute: () => runAsyncCommand('Import terrain or height data', () => beginDataImport()),
     isExecutionDisabled: (state) => !state.hasDesign,
   },
   openDataLibrary: { execute: () => openDataLibrary() },
@@ -210,6 +213,7 @@ export const DESKTOP_SHELL_COMMAND_CATALOG = composeShellCommandCatalog({
     execute: () => navigateTo('canvas'),
   },
   navigateLayers: designPanel('layers'),
+  navigateSiteData: designPanel('site-data'),
   navigateSpeciesKey: designPanel('species-key'),
   navigatePlantDatabase: {
     // The catalog runs from the start screen; the rail offers it with a Design.
@@ -224,6 +228,10 @@ export const DESKTOP_SHELL_COMMAND_CATALOG = composeShellCommandCatalog({
     execute: () => navigateTo('design-notebook'),
   },
   navigateStories: designPanel('stories'),
+  startProfile: {
+    execute: () => armProfile('palette'),
+    isExecutionDisabled: (state) => !state.hasDesign || !profileAvailable.value,
+  },
   reportProblem: { execute: openProblemReportDialog },
   showCommandPalette: { execute: openCommandPalette },
 })

@@ -69,7 +69,7 @@ describe('shared edition workspace composition', () => {
       capabilities: { newDesign() {}, openCanopi() {}, downloadCanopi() {}, revertDesign() {}, importGeoJson() {}, exportGeoJson() {}, exportBudgetCsv() {}, closeDesign() {}, navigate: navigateTo },
     }).panelBar,
   }
-  const closing = { Desktop: ['favorites', 'layers', 'budget', 'design-notebook'], Web: ['favorites', 'layers', 'budget'] } as const
+  const closing = { Desktop: ['favorites', 'layers', 'site-data', 'budget', 'design-notebook'], Web: ['favorites', 'layers', 'budget'] } as const
 
   for (const edition of ['Desktop', 'Web'] as const) {
     it(`closes every design side panel with its Design, in the same flush, and keeps the Catalog on ${edition} (canopi-f47t.41, Q5)`, async () => {
@@ -102,6 +102,30 @@ describe('shared edition workspace composition', () => {
       expect(sidePanel.value).toBe('plant-db')
     })
   }
+
+  it('opens Site data on Desktop directly under Layers, as a Design panel at 440 px; Web has none (U49 Q1)', async () => {
+    designSessionFixture.file = {} as CanopiFile
+    const desktop = editions.Desktop()
+    expect(desktop.design.map(({ panel }) => panel).slice(0, 2)).toEqual(['layers', 'site-data'])
+    expect(editions.Web().design.some(({ panel }) => panel === 'site-data')).toBe(false)
+    const Surface = () => <p data-testid="panel" />
+    function Workspace() {
+      const projection = editions.Desktop()
+      const surface = (commands: WorkspacePanelProjection['design']) => Object.fromEntries(commands.map(({ panel }) => [panel, Surface]))
+      return (
+        <WorkspaceComposition
+          panelProjection={projection}
+          surfaces={{ primary: { ...surface(projection.primary), canvas: Canvas }, side: { ...surface(projection.design), ...surface(projection.planning) } }}
+        />
+      )
+    }
+    await act(async () => { render(<Workspace />, container) })
+    await act(async () => { navigateTo('site-data') })
+    expect(container.querySelector('[data-workspace-side-panel="site-data"]')).not.toBeNull()
+    expect(container.querySelector<HTMLElement>('[data-dock-width]')?.dataset.dockWidth).toBe('wide')
+    await act(async () => { navigateTo('layers') })
+    expect(container.querySelector<HTMLElement>('[data-dock-width]')?.dataset.dockWidth).toBe('default')
+  })
 
   it('keeps the same canvas and its interaction state while real clicks switch dock panels', async () => {
     let canvasMounts = 0

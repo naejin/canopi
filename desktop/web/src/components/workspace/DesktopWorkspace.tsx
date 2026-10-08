@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'preact/compat'
 import { dataDialog } from '../../app/lidar/library-navigation'
-import { appCommandGraphPanelProjection } from '../../commands/registry'
+import { flattenMenuActions } from '../../app/shell-commands/menus'
+import { appCommandGraphChromeProjection, appCommandGraphPanelProjection } from '../../commands/registry'
 import { CanvasPanel } from '../panels/CanvasPanel'
 import {
   WorkspaceComposition,
@@ -32,6 +33,11 @@ const LayersPanel = lazy(async () => {
   return { default: module.LayersPanel }
 })
 
+const SiteDataPanel = lazy(async () => {
+  const module = await import('../panels/lidar/SiteDataPanel')
+  return { default: module.SiteDataPanel }
+})
+
 const DataDialogs = lazy(async () => {
   const module = await import('../panels/lidar/DataDialogs')
   return { default: module.DataDialogs }
@@ -61,6 +67,17 @@ function DesignNotebookSurface() {
   return <DesignNotebookPanel />
 }
 
+/** Site data's Add data › Design objects from GeoJSON… runs File › Import GeoJSON, until stream B replaces Add data. */
+function importGeoJsonFromSiteData(): void {
+  const command = flattenMenuActions(appCommandGraphChromeProjection.peek().menus)
+    .find((action) => action.id === 'file.importGeoJson')
+  if (command && !command.disabled) command.action()
+}
+
+function SiteDataSurface() {
+  return <SiteDataPanel importGeoJson={importGeoJsonFromSiteData} />
+}
+
 const DESKTOP_WORKSPACE_SURFACES: WorkspaceSurfaces = {
   primary: {
     canvas: CanvasPanel,
@@ -71,6 +88,7 @@ const DESKTOP_WORKSPACE_SURFACES: WorkspaceSurfaces = {
     'design-notebook': DesignNotebookSurface,
     'species-key': SpeciesKeyPanel,
     layers: LayersPanel,
+    'site-data': SiteDataSurface,
     calendar: CalendarPanel,
     budget: BudgetPanel,
     consortium: ConsortiumPanel,
