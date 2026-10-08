@@ -21,7 +21,8 @@ The canvas is the production shared workspace (MapLibre and its Pixi scene layer
 
 ## Parameters
 
-- `state=populated|empty|mixed|long|located|dense|planting|zone|overview|max-zoom|lidar-progress|lidar-failure|lidar-missing|lidar-long|lidar-raster|no-design`. `surface=start&state=empty` is the first run; `long` gives long names and a 40-item Data library; `lidar-progress` shows imports and calculations in the library and in Site data; `lidar-missing` adds two Site data entries no library here has; `lidar-long` lists twelve entries (the filter shows above 8); `lidar-raster` places the Design on the Rust engine's display COG (`src/maplibre/raster-display/fixtures/`) and draws it with Desktop's raster renderer; `no-design` opens no Design; `dense` is for Inspection Lens review; `planting` shows every plant symbol in a dense planting; `zone` shows the selection chip on one unnamed rectangle zone.
+- `state=populated|empty|mixed|long|located|dense|planting|zone|overview|max-zoom`. `surface=start&state=empty` is the first run; `long` gives long names and a 40-item Data library; `dense` is for Inspection Lens review; `planting` shows every plant symbol in a dense planting; `zone` shows the selection chip on one unnamed rectangle zone.
+- Site data states: `lidar-progress` shows imports and calculations in the library and in Site data; `lidar-failure` a failed attachment; `lidar-missing` two entries no library here has; `lidar-long` twelve entries (the filter shows above 8); `lidar-raster` places the Design on the Rust engine's display COG (`src/maplibre/raster-display/fixtures/`), drawn by Desktop's raster renderer; `no-design` opens no Design.
 - `open=<id>`: on `site-data`, the Site data item opened under its row; on `library`, the selected item.
 - `sampleDelay=<ms>`: each `lidar_sample_points` answer waits this long. The memory backend samples an analytic site (ground elevation 140 + 30·sin, the surface 6 m above, a canopy 6 ± 4 m, slope from the ground's gradient; no data outside an item's bounds, which cover the west of the fixture Design) and refuses a request over `LIDAR_SAMPLE_MAX_TARGETS` or `LIDAR_SAMPLE_MAX_POINTS`, as Rust does.
 - `plantDb=corrupt|missing` (the plant database notice), `theme=dark`, `locale=fr`, `panelWidth=320|352|480|800`.
@@ -32,7 +33,9 @@ Calendar fixtures use September 2026 so visual reviews are deterministic. Settin
 
 ## Browser checks
 
-`e2e/gallery/*.spec.ts` drive the gallery in Chromium and WebKit (Playwright projects `gallery-chromium` and `gallery-webkit`; `playwright.config.ts` starts this server). Specs import `test` from `e2e/support/gallery.ts`, which keeps the page offline, fails on console errors and stubs the clipboard; `openGallery` waits for `data-gallery-ready`. WebKit runs in the pinned image: from the worktree root, `docker run --rm --ipc=host -v "$PWD":/work -w /work/desktop/web --user $(id -u):$(id -g) -e HOME=/tmp mcr.microsoft.com/playwright:v1.63.0-noble npx playwright test e2e/gallery --project=gallery-chromium --project=gallery-webkit`.
+`e2e/gallery/*.spec.ts` drive the gallery in Chromium and WebKit (Playwright projects `gallery-chromium` and `gallery-webkit`; `playwright.config.ts` starts this server). Specs import `test` from `e2e/support/gallery.ts`, which keeps the page offline, fails on console errors and stubs the clipboard; `openGallery` waits for `data-gallery-ready`.
+
+WebKit runs in the pinned image: from the worktree root, `docker run --rm --ipc=host -v "$PWD":/work -w /work/desktop/web --user $(id -u):$(id -g) -e HOME=/tmp mcr.microsoft.com/playwright:v1.63.0-noble npx playwright test e2e/gallery --project=gallery-chromium --project=gallery-webkit`.
 
 ## Limits
 
