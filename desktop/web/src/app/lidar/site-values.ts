@@ -59,7 +59,24 @@ let askedKey: string | null = null
  */
 let read: { ids: ReadonlySet<string> } | null = null
 
+/**
+ * A refused read (the backend busy, say) asks again on its own, after RETRY_FIRST_MS doubling, at most RETRY_LIMIT
+ * times for one key, so a pin the user never moves still gets its values; the effect reads `retry` to ask again.
+ */
+const RETRY_FIRST_MS = 250
+const RETRY_LIMIT = 5
+const retry = signal(0)
+let retryTimer: ReturnType<typeof setTimeout> | null = null
+let refused: { key: string; count: number } | null = null
+
+function cancelRetry(): void {
+  if (retryTimer !== null) clearTimeout(retryTimer)
+  retryTimer = null
+}
+
 function stopReading(): void {
+  cancelRetry()
+  refused = null
   askedKey = null
   read = null
   values.value = null
@@ -68,6 +85,7 @@ function stopReading(): void {
 // One request per change of the point or of the rows to read: an eye, a new generation, an added, removed or reordered
 // item. The sampler keeps one in flight and drops what a newer key replaced.
 effect(() => {
+  void retry.value
   if (!reading.value) {
     stopReading()
     return
@@ -90,6 +108,8 @@ effect(() => {
   }))
   const key = JSON.stringify([at, point.lon, point.lat, targets])
   if (key === askedKey) return
+  cancelRetry()
+  if (refused?.key !== key) refused = null
   askedKey = key
   const ids = new Set(rows.map((row) => row.id))
   if (read) read.ids = ids
@@ -111,9 +131,21 @@ effect(() => {
       }
     })
     values.value = { at, rows: merged }
-  }).catch(() => {
-    // A failed read shows no new values; the next point or row change asks again.
+  }).then(() => {
+    if (askedKey === key) refused = null
+  }, () => {
+    // Only the newest key's refusal counts: a newer key asked meanwhile has its own answer coming.
+    if (askedKey !== key) return
     askedKey = null
+    // What is shown was read at another point, or only partly at this one: show nothing rather than stale values.
+    if (read === asked) values.value = null
+    const count = (refused?.key === key ? refused.count : 0) + 1
+    refused = { key, count }
+    if (count > RETRY_LIMIT) return
+    retryTimer = setTimeout(() => {
+      retryTimer = null
+      retry.value += 1
+    }, RETRY_FIRST_MS * 2 ** (count - 1))
   })
 })
 /**

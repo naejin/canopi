@@ -10,11 +10,17 @@ const native = vi.hoisted(() => ({
   /** While holding, each answer waits here until the test releases it. */
   holding: false,
   held: [] as (() => void)[],
+  /** How many next requests the backend refuses, as when its Local admission is full. */
+  refusals: 0,
 }))
 vi.mock('../ipc/lidar', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../ipc/lidar')>()),
   lidarSamplePoints: async (request: LidarSamplePointsRequest): Promise<LidarSampleSeries[]> => {
     native.requests.push(request)
+    if (native.refusals > 0) {
+      native.refusals -= 1
+      throw new Error('Native local operations are busy; try again')
+    }
     if (native.holding) await new Promise<void>((release) => native.held.push(release))
     // Each target answers the point's longitude, so a row shows where it was read.
     return request.targets.map((target) => ({
@@ -81,6 +87,7 @@ describe('Site data row values', () => {
   beforeEach(() => {
     native.requests.length = 0
     native.empty.clear()
+    native.refusals = 0
     lidarLibrary.value = librarySnapshot([sourceItem('mnt', 'MNT'), sourceItem('dsm', 'DSM'), sourceItem('dtm', 'DTM')])
     openDesign([{ id: 'mnt', visible: true }, { id: 'dsm', visible: true }])
     surface = createTestCanvasQuerySurface()
@@ -187,6 +194,43 @@ describe('Site data row values', () => {
     expect(shown()).toEqual({ at: 'pointer', mnt: { kind: 'value', value: lonAt(5, 5) } })
     await releaseHeld()
     expect(shown()).toEqual({ at: 'pointer', mnt: { kind: 'value', value: lonAt(5, 5) } })
+  })
+
+  it('drops values a refused read leaves behind, and asks again until the read lands', async () => {
+    setPin({ lon: 1.5, lat: 47 })
+    hover(10, 20)
+    await flush()
+    expect(shown()?.at).toBe('pointer')
+
+    vi.useFakeTimers()
+    try {
+      native.refusals = 2
+      surface.emitPointerWorld(null)
+      await vi.advanceTimersByTimeAsync(0)
+      // The pointer has left the map: its values are no longer shown while the pin's read is refused.
+      expect(siteValues.value).toBeNull()
+
+      await vi.advanceTimersByTimeAsync(10_000)
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(shown()).toEqual({ at: 'pin', dsm: { kind: 'value', value: 1.5 }, mnt: { kind: 'value', value: 1.5 } })
+  })
+
+  it('gives up asking again after a few refusals of the same read', async () => {
+    vi.useFakeTimers()
+    try {
+      native.refusals = Number.POSITIVE_INFINITY
+      setPin({ lon: 1.5, lat: 47 })
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(600_000)
+    } finally {
+      vi.useRealTimers()
+      native.refusals = 0
+    }
+    expect(native.requests.length).toBeGreaterThan(1)
+    expect(native.requests.length).toBeLessThanOrEqual(6)
+    expect(siteValues.value).toBeNull()
   })
 
   it('ignores touch for hover: a finger reads values through the pin', async () => {
