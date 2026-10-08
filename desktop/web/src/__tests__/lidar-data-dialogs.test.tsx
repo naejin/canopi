@@ -59,8 +59,9 @@ vi.mock('../components/panels/lidar/LibraryPreview', () => ({
 import { DataDialogs } from '../components/panels/lidar/DataDialogs'
 import { lidarLibrary } from '../app/lidar/library-store'
 import { currentDesign } from '../app/document-session/store'
-import { analyzeItem, dataDialog, libraryView, openDataLibrary } from '../app/lidar/library-navigation'
+import { activeSiteItemId, analyzeItem, dataDialog, libraryView, openDataLibrary } from '../app/lidar/library-navigation'
 import { locale } from '../app/settings/state'
+import { openLayerRow } from '../app/canvas-layer-presentation/open-row'
 import { dropdownTrigger } from './support/dropdown-trigger'
 import { formatDiskSize } from '../components/panels/lidar/item-text'
 
@@ -182,6 +183,7 @@ describe('Data library, Import and Analyze dialogs', () => {
     container.remove()
     dataDialog.value = null
     libraryView.value = null
+    openLayerRow.value = null
   })
 
   describe('the Data library sheet', () => {
@@ -818,6 +820,8 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(container.textContent).toContain('Already in Site data.')
       await click(button('Show in Site data'))
       expect(siteDataView.showInSiteData).toHaveBeenCalledWith('s')
+      // The row Site data marks open.
+      expect(activeSiteItemId()).toBe('s')
       expect(dataDialog.value).toBeNull()
       expect(actions.runAnalysis).not.toHaveBeenCalled()
     })

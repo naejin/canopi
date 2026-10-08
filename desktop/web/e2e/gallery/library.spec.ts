@@ -114,9 +114,13 @@ test.describe('the Data library sheet', () => {
     await page.keyboard.press('ArrowUp')
     await expect(first).toHaveAttribute('aria-selected', 'true')
     // The first row is this Design's ground elevation.
+    const name = (await first.locator('strong').textContent()) ?? ''
     await sheet(page).getByRole('button', { name: 'Show in Site data' }).click()
     await expect(sheet(page)).toBeHidden()
-    await expect(page.getByRole('complementary', { name: 'Site data' })).toBeVisible()
+    const siteData = page.getByRole('complementary', { name: 'Site data' })
+    await expect(siteData).toBeVisible()
+    // Its row is open in Site data.
+    await expect(siteData.locator('button[aria-expanded="true"]', { has: page.getByText(name, { exact: true }) })).toBeVisible()
   })
 
   test('Esc closes the sheet and returns focus to the Site data Library button', async ({ page }) => {
