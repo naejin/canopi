@@ -70,7 +70,6 @@ pub(crate) fn render_typescript_contracts() -> Result<String, Box<dyn std::error
         .register::<common_types::lidar::LidarLayerCollection>()
         .register::<common_types::lidar::LidarLayerSource>()
         .register::<common_types::lidar::LidarPresentationEntry>()
-        .register::<common_types::lidar::LidarPresentationEntryKind>()
         .register::<common_types::lidar::LidarPresentationSection>()
         .register::<common_types::lidar::LidarRamp>()
         .register::<common_types::lidar::LidarResultState>()

@@ -326,17 +326,9 @@ pub struct LidarImportCoverage {
 }
 
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
-pub enum LidarPresentationEntryKind {
-    Source,
-    // A derived library item (an analysis result).
-    Derived,
-}
-
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 pub struct LidarPresentationEntry {
-    pub kind: LidarPresentationEntryKind,
+    pub kind: crate::library::LibraryItemRole,
     // Stable library identity: source-layer ID or derived item ID.
     pub id: String,
     // The library item's name, written on attach and refreshed from the

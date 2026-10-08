@@ -89,7 +89,8 @@ pub enum LibraryItemType {
     Raster { quantity: RasterQuantity },
 }
 
-/// Whether an item was imported or produced by an analysis.
+// Whether an item was imported or produced by an analysis; also the kind a
+// Design's Site data entry stores (the schema decoder takes no doc comments).
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub enum LibraryItemRole {

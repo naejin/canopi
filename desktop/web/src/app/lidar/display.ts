@@ -107,7 +107,7 @@ export function installLidarDisplayDescriptors(): void {
   displayDisposer = effect(() => {
     for (const item of readCurrentLidarPresentation()) {
       if (!item.visible || item.state === 'unavailable' || !item.generationId) continue
-      requestLidarDisplay(item.role, item.id, item.generationId)
+      requestLidarDisplay(item.kind, item.id, item.generationId)
     }
   })
 }
@@ -155,7 +155,7 @@ export function lidarDisplayLayers(
   const layers: RasterDisplayLayer[] = []
   for (const item of items) {
     if (!item.visible || item.state === 'unavailable' || !item.generationId) continue
-    const descriptor = descriptors.get(displayKey(item.role, item.id, item.generationId))
+    const descriptor = descriptors.get(displayKey(item.kind, item.id, item.generationId))
     if (!descriptor || descriptor.state !== 'Ready' || descriptor.generation_id !== item.generationId) continue
     if (descriptor.assets.length === 0) continue
     const style = lidarDisplayStyle(item)
@@ -169,7 +169,7 @@ export function lidarDisplayLayers(
       [Infinity, Infinity, -Infinity, -Infinity],
     )
     layers.push({
-      id: `lidar-${item.role === 'Derived' ? 'result' : 'source'}-${item.id}-${item.generationId}`,
+      id: `lidar-${item.kind === 'Derived' ? 'result' : 'source'}-${item.id}-${item.generationId}`,
       name: item.name,
       assets: descriptor.assets.map((asset) => ({ url: toAssetUrl(asset.path), bbox: asset.bounds })),
       bounds,

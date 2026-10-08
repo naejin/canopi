@@ -309,7 +309,7 @@ function rowCaption(item: LidarPresentationItem, grouped: boolean): string {
     : [itemTypeLabel(item.itemType), item.displayRange ? formatRasterRange(item.displayRange, item.units, locale.value) : null]
       .filter(Boolean).join(' · ')
   if (item.state !== 'Ready') return `${what} · ${t('canvas.lidar.library.preparing')}`
-  const display = item.generationId ? readLidarDisplay(item.role, item.id, item.generationId) : null
+  const display = item.generationId ? readLidarDisplay(item.kind, item.id, item.generationId) : null
   if (item.visible && display?.state === 'Preparing') return `${what} · ${t('canvas.lidar.layers.preparingDisplay')}`
   if (item.visible && display?.state === 'Failed') return `${what} · ${t('canvas.lidar.library.displayFailed')}`
   return what
@@ -391,7 +391,7 @@ export function SiteDataInspector() {
         >
           {t('canvas.lidar.layers.inspect')}
         </button>
-        {item.role === 'Source' && available && (
+        {item.kind === 'Source' && available && (
           <button type="button" onClick={() => analyzeItem(item.id, { attach: true })}>
             {t('canvas.lidar.library.analyze')}
           </button>

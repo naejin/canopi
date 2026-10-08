@@ -9,7 +9,6 @@ import type {
   LidarColourRange,
   LidarLibraryStatus,
   LidarPresentationEntry,
-  LidarPresentationEntryKind,
   LidarRamp,
   LidarResultState,
 } from '../../generated/contracts'
@@ -130,9 +129,7 @@ export function installLidarLibraryObserver(): () => void {
 export type LidarMissingReason = 'loading' | 'needs-newer-canopi' | 'library-unopened' | 'not-in-library'
 
 export interface LidarPresentationItem {
-  /** The Design entry kind; the file format keeps `Analysis` for derived items. */
-  kind: LidarPresentationEntryKind
-  role: LibraryItemRole
+  kind: LibraryItemRole
   id: string
   /** The library's name, or the name the Design stored while the item is missing. */
   name: string
@@ -209,11 +206,9 @@ export function readLidarPresentation(
   const entries = design?.lidar?.entries ?? []
   const items: Omit<LidarPresentationItem, 'parentId' | 'depth'>[] = []
   for (const entry of entries) {
-    const role = entry.kind
-    const item = library?.items.find((candidate) => candidate.id === entry.id && candidate.role === role)
+    const item = library?.items.find((candidate) => candidate.id === entry.id && candidate.role === entry.kind)
     const presentation = {
       kind: entry.kind,
-      role,
       id: entry.id,
       visible: entry.visible,
       opacity: entry.opacity,

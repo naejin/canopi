@@ -142,10 +142,9 @@ describe('LiDAR presentation join', () => {
     ] } }
 
     const [ground, slope, gone] = readLidarPresentation(design, library)
-    expect(ground).toMatchObject({ kind: 'Source', role: 'Source', name: 'Ground', units: 'm', displayRange: [100, 180], definitionId: null, missing: null })
+    expect(ground).toMatchObject({ kind: 'Source', name: 'Ground', units: 'm', displayRange: [100, 180], definitionId: null, missing: null })
     expect(slope).toMatchObject({
       kind: 'Derived',
-      role: 'Derived',
       name: 'Ground · Slope',
       itemType: { kind: 'Raster', quantity: 'Slope' },
       units: '%',
@@ -156,7 +155,7 @@ describe('LiDAR presentation join', () => {
       range: { mode: 'Custom', min: 0, max: 30 },
     })
     // A missing item reads by the name the Design stored, with the reason.
-    expect(gone).toMatchObject({ role: 'Derived', state: 'unavailable', itemType: null, name: 'Old terrain', missing: 'not-in-library' })
+    expect(gone).toMatchObject({ kind: 'Derived', state: 'unavailable', itemType: null, name: 'Old terrain', missing: 'not-in-library' })
   })
 
   it('never joins an entry to an item of the other role', () => {

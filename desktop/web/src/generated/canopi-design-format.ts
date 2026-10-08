@@ -175,6 +175,13 @@ export const CANOPI_FILE_SCHEMA = {
       ],
       "type": "object"
     },
+    "LibraryItemRole": {
+      "enum": [
+        "Source",
+        "Derived"
+      ],
+      "type": "string"
+    },
     "LidarColourRange": {
       "oneOf": [
         {
@@ -231,7 +238,7 @@ export const CANOPI_FILE_SCHEMA = {
           "type": "string"
         },
         "kind": {
-          "$ref": "#/$defs/LidarPresentationEntryKind"
+          "$ref": "#/$defs/LibraryItemRole"
         },
         "name": {
           "type": "string"
@@ -282,13 +289,6 @@ export const CANOPI_FILE_SCHEMA = {
         "reversed"
       ],
       "type": "object"
-    },
-    "LidarPresentationEntryKind": {
-      "enum": [
-        "Source",
-        "Derived"
-      ],
-      "type": "string"
     },
     "LidarPresentationSection": {
       "properties": {

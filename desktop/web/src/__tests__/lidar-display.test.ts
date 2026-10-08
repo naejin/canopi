@@ -10,7 +10,6 @@ const display = await import('../app/lidar/display')
 function item(overrides: Partial<LidarPresentationItem> = {}): LidarPresentationItem {
   return {
     kind: 'Source',
-    role: 'Source',
     id: 'lyr-1',
     name: 'Orchard terrain',
     missing: null,
@@ -90,7 +89,7 @@ describe('LiDAR display projection', () => {
   })
 
   it('styles each reference by its item type and its own units', () => {
-    const slope = { kind: 'Derived' as const, role: 'Derived' as const, itemType: { kind: 'Raster' as const, quantity: 'Slope' as const } }
+    const slope = { kind: 'Derived' as const, itemType: { kind: 'Raster' as const, quantity: 'Slope' as const } }
     expect(display.lidarDisplayStyle(item({ ...slope, units: '%' })))
       .toMatchObject({ colormap: 'ylorrd', reversed: false, rescale: [0, 57.7], units: '%' })
     expect(display.lidarDisplayStyle(item({ itemType: null, state: 'unavailable', units: '' })))
@@ -98,7 +97,7 @@ describe('LiDAR display projection', () => {
   })
 
   it('names a derived layer as a result, keyed by its role', () => {
-    const derived = item({ kind: 'Derived', role: 'Derived', id: 'slope-1', itemType: { kind: 'Raster', quantity: 'Slope' }, units: '°' })
+    const derived = item({ kind: 'Derived', id: 'slope-1', itemType: { kind: 'Raster', quantity: 'Slope' }, units: '°' })
     const descriptors = new Map([[display.displayKey('Derived', 'slope-1', 'gen-2'), descriptor({ kind: 'Derived', entity_id: 'slope-1' })]])
     const [layer] = display.lidarDisplayLayers([derived], descriptors, (path) => path)
     expect(layer).toMatchObject({ id: 'lidar-result-slope-1-gen-2', colormap: 'ylorrd', reversed: false, rescale: [0, 30] })

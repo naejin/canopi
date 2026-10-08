@@ -1,7 +1,7 @@
 import type {
+  LibraryItemRole,
   LidarColourRange,
   LidarPresentationEntry,
-  LidarPresentationEntryKind,
   LidarPresentationSection,
   LidarRamp,
 } from '../../generated/contracts'
@@ -37,7 +37,7 @@ export interface LidarEntryPatch {
  * by name; an existing entry keeps its own (the name reconcile refreshes it).
  */
 export function upsertLidarEntry(
-  kind: LidarPresentationEntryKind,
+  kind: LibraryItemRole,
   id: string,
   name: string,
   patch: LidarEntryPatch = {},

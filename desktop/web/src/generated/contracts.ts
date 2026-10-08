@@ -338,7 +338,6 @@ export type LibraryEngines = {
 	geolibre: LidarEngineStatus,
 };
 
-// Whether an item was imported or produced by an analysis.
 export type LibraryItemRole = "Source" | "Derived";
 
 // One Data Library item as the UI reads it.
@@ -569,7 +568,7 @@ export type LidarLibraryStatus = { kind: "ready" } |
 { kind: "unavailable" };
 
 export type LidarPresentationEntry = {
-	kind: LidarPresentationEntryKind,
+	kind: LibraryItemRole,
 	id: string,
 	name: string,
 	visible: boolean,
@@ -579,8 +578,6 @@ export type LidarPresentationEntry = {
 	reversed: boolean,
 	range: LidarColourRange | null,
 };
-
-export type LidarPresentationEntryKind = "Source" | "Derived";
 
 export type LidarPresentationSection = {
 	schema_version: number,
