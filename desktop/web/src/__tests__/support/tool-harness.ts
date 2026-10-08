@@ -309,7 +309,8 @@ export interface ToolHarnessOptions {
   readonly admission?: SceneCommandAdmission
   /** Default: the scene's edit coordinator over the harness's history. */
   readonly edits?: SceneEditCoordinator
-  readonly inspect?: (world: WorldPoint) => boolean
+  /** ToolHostDeps.pin: the Site data pin, absent by default (Web, or the panel closed). */
+  readonly pin?: (world: WorldPoint) => void
   /** Default: a series over the edit coordinator, one Scene Edit until endNudge, as the runtime's. */
   readonly nudge?: ToolHostDeps['nudge']
   /**
@@ -568,7 +569,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       store.setHoveredTarget(target)
       record.hovers.push(target)
     },
-    ...(options.inspect ? { inspect: options.inspect } : {}),
+    ...(options.pin ? { pin: options.pin } : {}),
     capturePress(pointerId) {
       record.captures.push(pointerId)
       return options.capturePress?.(pointerId) ?? true

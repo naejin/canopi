@@ -28,13 +28,13 @@ export interface CanvasRuntimeAppCapabilities {
   readonly presentationData: CanvasRuntimePresentationDataAdapter
   readonly savedObjectStamps?: CanvasRuntimeSavedObjectStampAdapter
   /**
-   * Numeric inspection hook, supplied by the edition that has the capability.
+   * The Site data pin, supplied by the edition that has Site data (Desktop).
    *
    * It is a capability rather than an import because importing it here would
    * pull the raster IPC and library store into the browser workspace graph,
    * which the architecture guard forbids: Web has no raster capability.
    */
-  readonly tryInspectAt?: (point: { readonly x: number; readonly y: number }) => boolean
+  readonly pinAt?: (point: { readonly x: number; readonly y: number }) => void
 }
 
 export function createAppCanvasRuntimeAppAdapter(
@@ -46,9 +46,9 @@ export function createAppCanvasRuntimeAppAdapter(
     focus: focusOwner,
     document: { composeDocumentForSave },
     contextMenu: { open: openCanvasContextMenu, close: closeCanvasContextMenu },
-    // Read per gesture, so an inspection session needs no runtime rebuild, and
-    // undefined in an edition that has no raster capability.
-    tryInspectAt: capabilities.tryInspectAt,
+    // Called per tap, so opening or closing the Site data panel needs no runtime
+    // rebuild; undefined in an edition that has no raster capability.
+    pinAt: capabilities.pinAt,
     savedObjectStamps: capabilities.savedObjectStamps,
     presentationData: capabilities.presentationData,
     plantDisplay: {

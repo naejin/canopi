@@ -132,11 +132,14 @@ export interface ToolHostDeps {
   readonly initialPointer: PointerKind
   /** Hover restyle (a directly locked object shows the locked hover stroke): the runtime's hovered target. */
   readonly hover: (target: SceneDesignObjectTarget | null) => void
-  /** The raster inspection probe (CanvasRuntimeAppAdapter.tryInspectAt, passed by scene-runtime.ts); true claims the press. */
-  readonly inspect?: (world: WorldPoint) => boolean
+  /** Pins a Site data point (canopi-f47t.42, U49 Q17; spec §1.10, §3.8, fixture J10): called after a resolved Select tap
+   *  that hit nothing and moved nothing, or any Pan-tool tap; never in overview, never by another tool. It claims nothing:
+   *  the tap still reaches the tool (Select clears the selection). Absent on Web and while the Site data panel is closed
+   *  (CanvasRuntimeAppAdapter.pinAt, passed by scene-runtime.ts). */
+  readonly pin?: (world: WorldPoint) => void
   /**
    * Takes an admitted press's pointer capture (the recogniser's, which the session holds back until the host admits the
-   * press), before handles, the probe and the tool; a refused press takes none.
+   * press), before handles and the tool; a refused press takes none.
    * False when the capture was lost while it was taken (a synchronous lostpointercapture ended the press): the host stops
    * the press before the tool hears it.
    */
@@ -212,7 +215,7 @@ export interface ToolHost {
   /**
    * A pointer release that ended no press of the tool's, which the session reports after routing it: the end or cancel
    * (pointercancel, lost capture, Esc) of a pointer pan (middle, Space, overview or the Pan tool's), or an up with no
-   * press of the map's (a right-click release, a release off the map, after a press the scene or the probe refused); not
+   * press of the map's (a right-click release, a release off the map, after a press the scene refused or whose capture was lost); not
    * one while another pointer's press is live, in overview, or over the note editor or a handle. The host's own tap and
    * drag-end of a press the tool never heard do the same. Each one ends the transient interaction: the series commits, the
    * drop preview and the passive hover clear, the active tool's cancelTransient('navigate') runs (a tool that keeps its draft through a

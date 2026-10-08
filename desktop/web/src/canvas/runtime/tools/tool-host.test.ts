@@ -476,46 +476,82 @@ describe('ToolHost', () => {
   })
 
   describe('interceptors', () => {
-    it('an active inspection claims the plain left press after handles and pan, before the tool', () => {
-      const select = stubTool('select')
-      const polygon = stubTool('polygon')
-      useStubTools(select, polygon)
-      const inspect = vi.fn(() => true)
-      const h = harness({ inspect })
+    it('J10: a Select tap on empty ground reaches Select, then pins its point; an object or a zone\'s fill selects only', () => {
+      const order: string[] = []
+      const select = stubTool('select', {
+        gesture: (g) => {
+          if (g.kind === 'tap') order.push('tap')
+          return 'pass'
+        },
+      })
+      useStubTools(select)
+      const pin = vi.fn(() => { order.push('pin') })
+      const h = harness({ pin, scene: { plants: [appleAt({ x: 200, y: 200 })], zones: [bed()] } })
 
-      // A press on a handle drags the handle.
-      h.press({ x: 50, y: 50 }, { target: { kind: 'handle', id: 'rotate' as ToolHandleId } })
-      expect(select.last('handle-drag')).toMatchObject({ phase: 'start', handle: 'rotate' })
-      h.move({ x: 60, y: 40 })
-      h.release()
-      expect(select.last('handle-drag')).toMatchObject({ phase: 'end', handle: 'rotate' })
-      expect(inspect).not.toHaveBeenCalled()
+      // Empty ground, with a little jitter inside the slop: the tool hears the tap first, and nothing is claimed.
+      expect(h.press({ x: 300, y: 100 })).toEqual({})
+      expect(h.release({ x: 301, y: 101 })).toEqual({})
+      expect(order).toEqual(['tap', 'pin'])
+      expect(pin).toHaveBeenCalledWith(h.world({ x: 301, y: 101 }))
 
-      // Polygon, a Shift press on empty ground: the probe samples it and the tool sees nothing of the press.
-      h.arm('polygon')
-      expect(h.press({ x: 120, y: 80 }, { mods: { shift: true } })).toEqual({ rejectSession: true })
-      expect(inspect).toHaveBeenCalledWith(h.world({ x: 120, y: 80 }))
-      expect(polygon.count('press')).toBe(0)
-      expect(h.host.hasLiveGesture()).toBe(false)
+      // A plant, and a zone's fill: Select selects them, and nothing pins.
+      pin.mockClear()
+      h.click({ x: 200, y: 200 })
+      h.click({ x: 60, y: 35 })
+      expect(select.count('tap')).toBe(3)
+      expect(pin).not.toHaveBeenCalled()
 
-      // Overview: the press pans in the recogniser (U36); if one reached the host, nothing would sample or edit.
-      const overview = harness({ tool: 'polygon', viewport: OVERVIEW, inspect })
-      inspect.mockClear()
-      overview.press({ x: 120, y: 80 })
-      expect(inspect).not.toHaveBeenCalled()
-      expect(polygon.count('press')).toBe(0)
+      // A double-click on empty ground pins at each of its taps.
+      h.click({ x: 300, y: 100 }, { clickCount: 2 })
+      expect(pin).toHaveBeenCalledTimes(1)
     })
 
-    it('a Pan-tool click does not sample', () => {
+    it('J10: a drag, a handle, a lost capture, overview and the drawing tools never pin; any Pan-tool tap pins', () => {
+      const select = stubTool('select')
+      const polygon = stubTool('polygon')
       const hand = stubTool('hand')
-      useStubTools(hand)
-      const inspect = vi.fn(() => true)
-      const h = harness({ tool: 'hand', inspect })
+      useStubTools(select, polygon, hand)
+      const pin = vi.fn()
+      const h = harness({ pin, scene: { plants: [appleAt({ x: 200, y: 200 })] } })
 
-      h.click({ x: 60, y: 60 })
-      expect(inspect).not.toHaveBeenCalled()
-      expect(hand.count('press')).toBe(1)
+      // A band from empty ground, and a drag of the rotate handle.
+      h.drag({ x: 300, y: 100 }, { x: 350, y: 150 })
+      h.press({ x: 50, y: 50 }, { target: { kind: 'handle', id: 'rotate' as ToolHandleId } })
+      h.release()
+      expect(select.last('handle-drag')).toMatchObject({ phase: 'end', handle: 'rotate' })
+
+      // Polygon adds its point and pins nothing.
+      h.arm('polygon')
+      h.click({ x: 300, y: 100 })
+      expect(polygon.count('tap')).toBe(1)
+      expect(pin).not.toHaveBeenCalled()
+
+      // The Pan tool: any tap pins, on an object too.
+      h.arm('hand')
+      h.click({ x: 200, y: 200 })
       expect(hand.count('tap')).toBe(1)
+      expect(pin).toHaveBeenCalledWith(h.world({ x: 200, y: 200 }))
+
+      // A press whose capture was lost while it was taken ends with the lost-capture outcome and pins nothing.
+      pin.mockClear()
+      const lost = harness({ pin, capturePress: () => false })
+      expect(lost.click({ x: 300, y: 100 })).toEqual({ rejectSession: true })
+
+      // Overview: a press pans in the recogniser (U36); one that reached the host would pin nothing.
+      const overview = harness({ tool: 'hand', viewport: OVERVIEW, pin })
+      overview.click({ x: 120, y: 80 })
+      expect(pin).not.toHaveBeenCalled()
+    })
+
+    it('J10: a finger\'s Select tap on empty ground pins at the down point', () => {
+      useStubTools(stubTool('select'))
+      const pin = vi.fn()
+      const h = harness({ pin })
+
+      // The recogniser resolves a finger's tap at its down point (input/recognise.ts).
+      h.click({ x: 120, y: 90 }, { pointer: 'touch' })
+
+      expect(pin).toHaveBeenCalledWith(h.world({ x: 120, y: 90 }))
     })
 
     it('a press the scene does not admit is quarantined and rejected', () => {

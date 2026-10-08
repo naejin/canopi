@@ -186,14 +186,11 @@ export interface CanvasRuntimeAppAdapter {
   /** Absent in a detached runtime, where right-click only suppresses the native menu. */
   readonly contextMenu?: CanvasRuntimeContextMenuAdapter
   /**
-   * Numeric inspection hook, when a surface has inspection active.
-   *
-   * Injected rather than imported so the generic canvas runtime stays
-   * independent of the LiDAR feature, and consulted per gesture so a
-   * session can be installed and released without rebuilding the runtime.
-   * `undefined` means nothing is inspecting and the click is ordinary.
+   * The Site data pin (canopi-f47t.42, spec §3.8): a Select tap on empty ground or any Pan-tool tap pins this Scene point
+   * once the tool has heard the tap (ToolHostDeps.pin). Injected rather than imported, so the generic runtime stays
+   * independent of the LiDAR feature; the edition decides per call whether the Site data panel is open. Absent on Web.
    */
-  readonly tryInspectAt?: (point: { readonly x: number; readonly y: number }) => boolean
+  readonly pinAt?: (point: { readonly x: number; readonly y: number }) => void
   readonly presentationData?: CanvasRuntimePresentationDataAdapter
   /** Absent in a detached runtime, which draws the default display. */
   readonly plantDisplay?: CanvasRuntimePlantDisplayAdapter

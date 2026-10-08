@@ -2,7 +2,7 @@
 //
 // Owns the ToolHost (spec §1.4, ADR 0018), the only code that builds ToolGestures. It converts the recogniser's screen
 // gestures to world points at event time, resolves modifiers (§2.3), applies the active tool's constraint and the grid
-// and guide snapping, and runs the interceptors (admission, handles, the inspection probe) before the tool; every raw
+// and guide snapping, and runs the interceptors (admission, the press's capture, handles) before the tool; every raw
 // press first commits the nudge series and, as today's pointerdown, closes the menu and moves focus to the map. A drag
 // starts at the press's world point, and every camera frame re-emits the live drag or the resting pointer, which a
 // pointer pan moves (plan §1, exception 1). It holds re-origin while a press, a tool transient or the text entry is
@@ -63,8 +63,9 @@ const NOTHING: GestureOutcome = Object.freeze({})
 const QUARANTINE: GestureOutcome = Object.freeze({ quarantine: true })
 /** A press the scene refused: quarantined, and its recogniser session ends with no gesture. */
 const REFUSED_PRESS: GestureOutcome = Object.freeze({ quarantine: true, rejectSession: true })
-/** A press the inspection probe sampled: nothing else happens until the next press. */
-const CLAIMED_PRESS: GestureOutcome = Object.freeze({ rejectSession: true })
+/** A press whose capture was lost while it was taken (a synchronous lostpointercapture): its recogniser session ends with
+ *  no gesture, and nothing else happens until the next press. */
+const LOST_CAPTURE_PRESS: GestureOutcome = Object.freeze({ rejectSession: true })
 const DROP_COPY: GestureOutcome = Object.freeze({ dropEffect: 'copy' })
 const DROP_NONE: GestureOutcome = Object.freeze({ dropEffect: 'none' })
 /** A dragover in overview or while the scene is busy: refused. */
@@ -688,19 +689,20 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     lastHover = null
     // An overview press pans in the recogniser and never reaches the host (U36); nothing here samples or edits.
     if (frame().mode === 'overview') return NOTHING
-    let claimed = false
+    let lost = false
     const admitted = deps.admission.runWhenSettled(() => {
-      claimed = pressWhenSettled(g, commitsNote)
+      lost = pressWhenSettled(g, commitsNote)
       return true
     }, false)
     if (!admitted) return REFUSED_PRESS
-    return claimed ? CLAIMED_PRESS : NOTHING
+    return lost ? LOST_CAPTURE_PRESS : NOTHING
   }
 
-  /** Today's _pointerDownWhenSettled, in order: the press's capture, handles, the probe, the tool. Focus moved at the raw
-   *  press (rawPress), so an open text entry has committed. A capture lost while it is taken (a synchronous lostpointercapture)
-   *  ended the press: nothing else happens, as today's check after capture. A press that committed a new note (`commitsNote`)
-   *  ends where today's Text adapter took it: the tool hears none of it, nor its drag or release. */
+  /** Today's _pointerDownWhenSettled, in order: the press's capture, handles, the tool; true when the capture was lost.
+   *  Focus moved at the raw press (rawPress), so an open text entry has committed. A capture lost while it is taken (a
+   *  synchronous lostpointercapture) ended the press: nothing else happens, as today's check after capture. A press that
+   *  committed a new note (`commitsNote`) ends where today's Text adapter took it: the tool hears none of it, nor its drag
+   *  or release. No interceptor claims a press for site data: the pin follows the tap (pinAfterTap). */
   function pressWhenSettled(g: Extract<Gesture, { kind: 'press' }>, commitsNote: boolean): boolean {
     const tool = activeTool
     if (!deps.capturePress(g.id)) return true
@@ -713,9 +715,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       clearPassiveHoverForEdit()
       return false
     }
-    // Inspection owns the plain primary press, after handles and the pan check and before the tool; a Pan-tool press
-    // never samples (spec §3.8, fixture J10).
-    if (currentId !== 'hand' && deps.inspect?.(point.world)) return true
     if (commitsNote) return false
     const hit = hitAt(point.world)
     live = liveGesture(g, 'tool', point, hit)
@@ -846,11 +845,25 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         } else {
           const point = pointAt(g.at, g.mods, g.pointer)
           callTool(() => tool.gesture({ kind: 'tap', point, hit: hitAt(point.world), clickCount: g.clickCount }))
+          pinAfterTap(gesture, point.world)
         }
       } finally {
         endLive({ screen: g.at, mods: g.mods, pointer: g.pointer })
       }
     })
+  }
+
+  /**
+   * The Site data pin (spec §3.8, fixture J10; U49 Q17): a tap no tool uses pins its point once the tool has heard it, and
+   * claims nothing. That is a Select tap whose press hit nothing, not even a zone's fill (Select cleared the selection), or
+   * any Pan-tool tap; never another tool, a handle, a drag or overview. deps.pin is absent on Web and while the Site data
+   * panel is closed.
+   */
+  function pinAfterTap(gesture: LiveGesture, world: WorldPoint): void {
+    if (!deps.pin || frame().mode !== 'site') return
+    const pins = currentId === 'hand'
+      || (currentId === 'select' && gesture.startHit === null && deps.scene.hitAt(gesture.start.world, { fill: true }) === null)
+    if (pins) deps.pin(world)
   }
 
   // ── Drops ────────────────────────────────────────────────────────────────────────────────────────────────────────
