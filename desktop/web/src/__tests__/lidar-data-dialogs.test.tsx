@@ -431,6 +431,48 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(document.activeElement).toBe(rowNamed('Canopy'))
     })
 
+    it('keeps focus in the sheet when a deletion leaves no row to select', async () => {
+      actions.fetchDeleteImpact.mockResolvedValue({ dependent_item_ids: [] })
+      const confirmDelete = async () => {
+        await click(button(/^Delete everywhere$/))
+        await click(Array.from(container.querySelectorAll<HTMLButtonElement>('[role="group"] button')).find((node) => node.textContent === 'Delete everywhere')!)
+      }
+
+      // A search that matched only the deleted item: the search field, with No match below it.
+      lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Canopy')])
+      mount()
+      const search = container.querySelector<HTMLInputElement>('input[type="search"]')!
+      await type(search, 'ground')
+      await selectRow('Ground')
+      actions.deleteLibraryItem.mockImplementationOnce(async () => { lidarLibrary.value = library([layer('b', 'Canopy')]) })
+      await confirmDelete()
+      expect(container.textContent).toContain('No data matches this search.')
+      expect(document.activeElement).toBe(search)
+
+      // The last item in the library: the empty library's Import…, and Esc still closes the sheet.
+      await type(search, '')
+      await selectRow('Canopy')
+      actions.deleteLibraryItem.mockImplementationOnce(async () => { lidarLibrary.value = library([]) })
+      await confirmDelete()
+      expect(document.activeElement).toBe(button('Import'))
+      await key(document.activeElement!, 'Escape')
+      expect(libraryView.value).toBeNull()
+    })
+
+    it('keeps focus in the sheet when the last item goes with no Design open to import into', async () => {
+      setDesign(null)
+      actions.fetchDeleteImpact.mockResolvedValue({ dependent_item_ids: [] })
+      lidarLibrary.value = library([layer('a', 'Ground')])
+      mount()
+      await selectRow('Ground')
+      actions.deleteLibraryItem.mockImplementationOnce(async () => { lidarLibrary.value = library([]) })
+      await click(button(/^Delete everywhere$/))
+      await click(Array.from(container.querySelectorAll<HTMLButtonElement>('[role="group"] button')).find((node) => node.textContent === 'Delete everywhere')!)
+      expect(container.querySelector('[role="dialog"]')?.contains(document.activeElement)).toBe(true)
+      await key(document.activeElement!, 'Escape')
+      expect(libraryView.value).toBeNull()
+    })
+
     it('gives focus back to the sheet when what opened a dialog over it is gone', async () => {
       lidarLibrary.value = library([layer('a', 'Ground')])
       mount()

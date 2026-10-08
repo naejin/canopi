@@ -48,7 +48,7 @@ const SELECTION_REST_MS = 120
 type Pane = 'list' | 'details'
 type DetailMode = 'details' | 'rename' | 'delete'
 /** Where focus goes after a change that hides or removes the focused control: the first of these that takes it. */
-type FocusTarget = 'row' | 'heading' | 'back' | 'rename' | 'delete'
+type FocusTarget = 'row' | 'heading' | 'back' | 'rename' | 'delete' | 'search' | 'import'
 
 /**
  * The Data library: terrain and height data shared by every Design, with the
@@ -136,7 +136,8 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
     pendingFocus.current = ['row']
     setPane('list')
   }
-  // Rename and Delete everywhere give focus back to their trigger; after a deletion, to the row that took the item's place.
+  // Rename and Delete everywhere give focus back to their trigger; after a deletion, to the row that took the item's place,
+  // or, with no row left, to the search that now matches nothing or the empty library's Import….
   const endMode = (focus: readonly FocusTarget[]) => {
     pendingFocus.current = focus
     setMode('details')
@@ -397,7 +398,7 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
                         busy={busy}
                         error={error}
                         onKeep={() => endMode(['delete'])}
-                        onDelete={() => void run(() => deleteLibraryItem(item.id), () => endMode(['row', 'back']))}
+                        onDelete={() => void run(() => deleteLibraryItem(item.id), () => endMode(['row', 'back', 'search', 'import']))}
                       />
                     )
                     : actionsFor(item)}
@@ -416,16 +417,25 @@ function rowId(id: string): string {
   return `library-item-${id}`
 }
 
-/** Focuses the first target that takes focus: a control hidden by the narrow layout does not, so the next is tried. */
+/**
+ * Focuses the first target that takes focus: a control hidden by the narrow layout or disabled does not, so the next is
+ * tried. When none does and focus has left the sheet with the control that held it, the sheet's first enabled control
+ * takes it, so Esc and the Tab trap, which the dialog handles, keep working.
+ */
 function focusFirst(root: HTMLElement | null, targets: readonly FocusTarget[], selectedId: string | null): void {
   for (const target of targets) {
     const element = target === 'row'
       ? (selectedId ? document.getElementById(rowId(selectedId)) : null)
-      : root?.querySelector<HTMLElement>(`[data-focus-target="${target}"]`) ?? null
+      : target === 'search'
+        ? root?.querySelector<HTMLElement>('input[type="search"]') ?? null
+        : root?.querySelector<HTMLElement>(`[data-focus-target="${target}"]`) ?? null
     if (!element) continue
     element.focus()
     if (document.activeElement === element) return
   }
+  const dialog = root?.closest<HTMLElement>('[role="dialog"]')
+  if (!dialog || dialog.contains(document.activeElement)) return
+  dialog.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')?.focus()
 }
 
 /**
@@ -443,6 +453,7 @@ function EmptyLibrary() {
       <button
         type="button"
         className={`${styles.dialogButton} ${styles.withTooltip}`}
+        data-focus-target="import"
         disabled={noDesign}
         onClick={() => void beginDataImport()}
       >
