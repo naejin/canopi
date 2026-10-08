@@ -143,6 +143,14 @@ function moveUnits<T extends ReferenceNode>(nodes: readonly T[], id: string): { 
   return { units, siblings: ids }
 }
 
+/**
+ * The units a drag moves a row among, front first (each a run's outputs or
+ * one row), for the panel to measure; null for an unlisted row.
+ */
+export function siblingUnits<T extends ReferenceNode>(nodes: readonly T[], id: string): string[][] | null {
+  return moveUnits(nodes, id)?.units ?? null
+}
+
 /** The saved orders for siblings listed front first, renumbered densely in drawing order. */
 function renumbered<T extends ReferenceNode>(nodes: readonly T[], listed: readonly string[]): Map<string, number> {
   const ranked = new Map(listed.map((sibling, position) => [sibling, listed.length - 1 - position]))

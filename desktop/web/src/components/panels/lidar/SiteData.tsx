@@ -1,54 +1,81 @@
-import { designSessionStore, currentDesign } from '../../../app/document-session/store'
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { currentDesign, designSessionStore } from '../../../app/document-session/store'
 import {
-  addToDesign,
   attachmentFailure,
   cancelAnalysisJob,
   cancelLibraryImport,
   dismissAttachmentFailure,
-  moveReference,
+  moveReferenceTo,
   pendingAttachments,
   removeFromDesign,
   rerunAnalysis,
-  setLidarEntryDisplay,
   setLidarEntryVisibility,
+  setSiteDataShown,
 } from '../../../app/lidar/actions'
-import { siteDataLines } from '../../../app/lidar/analysis-groups'
-import { lidarDisplayStyle, readLidarDisplay } from '../../../app/lidar/display'
-import { analysisTitle, findAnalysis } from '../../../app/analyses/registry'
-import { formatLegendValue, formatRasterRange, legendGradient } from '../../../app/lidar/display-legend'
-import { itemTypeLabel } from '../../../app/lidar/item-types'
-import { libraryItems } from '../../../app/lidar/library-items'
-import {
-  activeSiteItemId,
-  analyzeItem,
-  beginDataImport,
-  openDataLibrary,
-  openSiteDataDetails,
-  selectSiteRow,
-} from '../../../app/lidar/library-navigation'
-import { isMissing, libraryItemName, lidarLibrary, readCurrentLidarPresentation, type LidarPresentationItem } from '../../../app/lidar/library-store'
-import { canMoveReference, referenceRows, type ReferenceRow } from '../../../app/lidar/reference-tree'
+import { siteDataLines, type SiteDataLine } from '../../../app/lidar/analysis-groups'
+import { analysisTitle } from '../../../app/analyses/registry'
 import { viewDesignLocation, viewLidarCoverage } from '../../../app/lidar/camera-request'
+import { lidarDisplayStyle, readLidarDisplay } from '../../../app/lidar/display'
+import { formatRasterRange, legendGradient } from '../../../app/lidar/display-legend'
+import { itemTypeLabel } from '../../../app/lidar/item-types'
+import { beginDataImport, openDataLibrary } from '../../../app/lidar/library-navigation'
+import {
+  isMissing,
+  libraryItemName,
+  lidarLibrary,
+  readCurrentLidarPresentation,
+  type LidarMissingReason,
+  type LidarPresentationItem,
+} from '../../../app/lidar/library-store'
+import {
+  filterKeepingAncestors,
+  referenceRows,
+  siblingMoveOrders,
+  siblingNeighbour,
+  siblingUnits,
+  type ReferenceRow,
+} from '../../../app/lidar/reference-tree'
+import type { SiteDataView } from '../../../app/lidar/site-data-view'
+import { siteValues } from '../../../app/lidar/site-values'
+import { formatRowValue } from '../../../app/lidar/value-format'
 import { locale } from '../../../app/settings/state'
 import type { LibraryItemSummary } from '../../../generated/contracts'
 import { t } from '../../../i18n'
-import { ActionMenu, type ActionMenuEntry } from '../../shared/ActionMenu'
 import { ButtonTooltip } from '../../shared/ButtonTooltip'
 import { ControlIcon } from '../../shared/ControlIcon'
 import { LayerVisibilityIcon } from '../../shared/LayerVisibilityIcon'
 import layerRow from '../../shared/layer-row.module.css'
 import { Notice } from '../../shared/Notice'
-import { Slider } from '../../shared/Slider'
+import { PanelIcon } from '../../shared/PanelIcon'
+import { SurfaceSearch } from '../../shared/SurfaceSearch'
+import { usePointerReorder } from '../../shared/usePointerReorder'
 import { staleReasonText } from '../analyze/analysis-text'
+import { RasterDisplayControls } from './RasterDisplayControls'
 import { unitWords } from './item-text'
 import styles from './site-data.module.css'
-import { useState } from 'preact/hooks'
 
 type SiteRow = ReferenceRow<LidarPresentationItem>
 
-/** The Design's site data rows in Layers: front first, results under their source. */
-function readSiteRows(): SiteRow[] {
-  return referenceRows(readCurrentLidarPresentation())
+/** The filter appears once the Design holds more than this many entries (U49 decision 3). */
+const FILTER_ABOVE = 8
+/** Indent per nesting depth, in px (spec §1.10 "Rows"). */
+const INDENT_PX = 16
+
+/** One listed line: an item, an analysis run's heading, or library work joining the Design. */
+type ListLine =
+  | (SiteDataLine<LidarPresentationItem> & { readonly collapsible: boolean })
+  | { readonly kind: 'pending'; readonly key: string; readonly work: 'import' | 'analysis'; readonly items: readonly LibraryItemSummary[]; readonly depth: number }
+
+interface DragSession {
+  readonly sourceId: string
+  /** The units the row moves among, front first, as stored when the drag began. */
+  readonly units: readonly (readonly string[])[]
+  readonly from: number
+  target: string | null
+}
+
+function collapseKey(line: SiteDataLine<LidarPresentationItem>): string {
+  return line.kind === 'analysis' ? `analysis:${line.definitionId}` : line.row.id
 }
 
 function nameOfItem(id: string): string {
@@ -57,86 +84,87 @@ function nameOfItem(id: string): string {
   return item ? libraryItemName(item, library) : t('canvas.lidar.library.dataUnavailable')
 }
 
-function rowLabel(item: LidarPresentationItem): string {
-  return isMissing(item) ? t('canvas.lidar.library.unavailableItem') : item.name
+/** The library's match rule: trimmed, case-folded, anywhere in the name. */
+function matches(item: LidarPresentationItem, query: string): boolean {
+  return item.name.toLocaleLowerCase(locale.value).includes(query.toLocaleLowerCase(locale.value))
 }
 
 /**
- * "Add data": the one entry point for site data. Files open the native picker
- * then Import (the item joins this Design once published); Design objects
- * from GeoJSON run the File › Import GeoJSON command; library items are added
- * directly; the Data library opens for everything else.
+ * The Design's site data (canopi-f47t.42, spec §1.10): one line per item,
+ * front first (the list is the draw order), results under their source and a
+ * run's outputs under one analysis line; pending imports and calculations
+ * where they will land; the open item's settings under its row. Order,
+ * visibility and display are Design presentation; they never change an
+ * item's values or source priority. Collapse, the filter and the open item
+ * are the session's view (`site-data-view.ts`), never stored.
  */
-export function AddDataMenu({ importGeoJson }: { readonly importGeoJson: () => void }) {
-  const library = libraryItems(lidarLibrary.value).filter((item) => item.status === 'ready')
-  const inDesign = new Set((currentDesign.value?.lidar?.entries ?? []).map((entry) => entry.id))
-  const fromLibrary: ActionMenuEntry[] = library.length === 0
-    ? [{ label: t('canvas.lidar.layers.libraryEmpty'), disabled: true, run: () => {} }]
-    : library.map((item) => ({
-      label: inDesign.has(item.id) ? t('canvas.lidar.layers.inThisDesign', { name: item.name }) : item.name,
-      disabled: inDesign.has(item.id),
-      run: () => {
-        addToDesign(item.role, item.id)
-        selectSiteRow(item.id)
-      },
-    }))
-  return (
-    <ActionMenu
-      label={t('canvas.lidar.layers.addData')}
-      triggerLabel={<span>{t('canvas.lidar.layers.addData')}</span>}
-      triggerIcon="plus"
-      triggerClassName={styles.addTrigger}
-      iconSize={18}
-      items={[
-        { label: t('canvas.lidar.layers.fromFiles'), opensDialog: true, run: () => { void beginDataImport() } },
-        { label: t('canvas.lidar.layers.fromGeoJson'), opensDialog: true, run: importGeoJson },
-        { label: t('canvas.lidar.layers.fromLibrary'), submenu: fromLibrary },
-        { separator: true },
-        { label: t('canvas.lidar.layers.openLibrary'), opensDialog: true, run: () => openDataLibrary() },
-      ]}
-    />
-  )
-}
-
-/**
- * The Design's site data: its terrain and height items with the results
- * calculated from them nested underneath, and imports or calculations started
- * from Layers that will join it. Order, visibility and opacity are Design
- * presentation; they never change an item's values or source priority.
- */
-export function SiteDataRows() {
-  const rows = readSiteRows()
-  const active = activeSiteItemId()
+export function SiteDataList({ view }: { readonly view: SiteDataView }) {
+  const items = readCurrentLidarPresentation()
+  const sectionShown = currentDesign.value?.lidar?.visible ?? true
   const identity = designSessionStore.sessionIdentity.value
   const pending = pendingAttachments.value.filter((entry) => entry.identity === identity)
-  const snapshot = lidarLibrary.value
   const failure = attachmentFailure.value
+  const openItem = view.openItem.value
+  const collapsed = view.collapsed.value
+  const query = view.filter.value.trim()
+  const filtering = query !== ''
+  const list = useRef<HTMLUListElement>(null)
+  const [drag, setDrag] = useState<{ readonly sourceId: string; readonly target: string | null } | null>(null)
+
+  useExpandForNewResults(items, view)
+
+  const beginDrag = usePointerReorder<DragSession>({
+    move(session, event) {
+      event.preventDefault()
+      const target = dropTarget(list.current, session, event.clientY)
+      if (target === session.target) return
+      session.target = target
+      setDrag({ sourceId: session.sourceId, target })
+    },
+    finish(session, event) {
+      event.preventDefault()
+      setDrag(null)
+      if (session.target) moveReferenceTo(session.sourceId, session.target)
+    },
+    cancel: () => setDrag(null),
+  })
+
+  // While dragging, the list shows the order the drop would write: the same rule writes it.
+  const preview = drag?.target ? siblingMoveOrders(items, drag.sourceId, drag.target) : null
+  const nodes = preview ? items.map((item) => ({ ...item, order: preview.get(item.id) ?? item.order })) : items
+  const rows = referenceRows(nodes)
+  const shownRows = filtering ? filterKeepingAncestors(rows, (row) => row.id === openItem || matches(row, query)) : rows
+  const lines = withPending(visibleLines(siteDataLines(shownRows), filtering ? new Set() : collapsed), pending, rows)
+
+  function toggleCollapsed(key: string, ids: readonly string[]): void {
+    const next = new Set(collapsed)
+    if (next.has(key)) {
+      next.delete(key)
+    } else {
+      next.add(key)
+      // Collapsing a parent closes an open item it hides.
+      if (openItem && ids.includes(openItem)) view.openItem.value = null
+    }
+    view.collapsed.value = next
+  }
+
+  function move(row: SiteRow, towards: 'front' | 'back', control: 'grip' | 'name'): void {
+    if (filtering) return
+    const target = siblingNeighbour(items, row.id, towards)
+    if (!target) return
+    moveReferenceTo(row.id, target)
+    // The row moved: keep focus on the same control (the Stories precedent).
+    requestAnimationFrame(() => rowElement(list.current, row.id)?.querySelector<HTMLElement>(`[data-control="${control}"]`)?.focus())
+  }
 
   return (
     <div className={styles.band}>
-      {rows.length === 0 && pending.length === 0 && (
-        <div className={styles.empty}>
-          <strong>{t('canvas.lidar.layers.emptyTitle')}</strong>
-          <p>{t('canvas.lidar.layers.emptyBody')}</p>
-          <div className={styles.emptyActions}>
-            <button type="button" onClick={() => { void beginDataImport() }}>{t('canvas.lidar.layers.emptyImport')}</button>
-            <button type="button" onClick={() => openDataLibrary()}>{t('canvas.lidar.layers.emptyLibrary')}</button>
-          </div>
+      {!sectionShown && items.length > 0 && (
+        <div className={styles.strip} role="status">
+          <span>{t('siteData.hiddenFromMap')}</span>
+          <button type="button" className={styles.stripButton} onClick={() => setSiteDataShown(true)}>{t('siteData.show')}</button>
         </div>
       )}
-      {rows.length > 0 && (
-        <ul className={styles.list}>
-          {siteDataLines(rows).map((line) => line.kind === 'analysis'
-            ? <AnalysisGroupRow key={`analysis:${line.definitionId}`} members={line.members} depth={line.depth} />
-            : <SiteDataRow key={line.row.id} row={line.row} depth={line.depth} grouped={line.grouped} active={line.row.id === active} />)}
-        </ul>
-      )}
-      {pending.map((entry) => {
-        const items = entry.itemIds
-          .map((id) => snapshot?.items.find((candidate) => candidate.id === id))
-          .filter((item): item is LibraryItemSummary => item !== undefined)
-        return items.length > 0 ? <PendingRow key={entry.key} kind={entry.kind} items={items} /> : null
-      })}
       {failure && (
         <Notice
           tone="warning"
@@ -152,131 +180,296 @@ export function SiteDataRows() {
             : t('canvas.lidar.layers.failedNoMessage', { name: nameOfItem(failure.itemId) })}
         </Notice>
       )}
+      {(items.length > FILTER_ABOVE || filtering) && (
+        <div className={styles.filter}>
+          <SurfaceSearch
+            value={view.filter.value}
+            onChange={(value) => { view.filter.value = value }}
+            label={t('siteData.filterLabel')}
+            placeholder={t('siteData.filterPlaceholder')}
+            onKeyDown={(event) => {
+              if (event.key !== 'Escape' || !view.filter.value) return
+              event.preventDefault()
+              event.stopPropagation()
+              view.filter.value = ''
+            }}
+          />
+        </div>
+      )}
+      {items.length === 0 && pending.length === 0 && (
+        <div className={styles.empty}>
+          <span className={styles.emptyIcon} aria-hidden="true"><PanelIcon panel="site-data" /></span>
+          <strong>{t('canvas.lidar.layers.emptyTitle')}</strong>
+          <p>{t('canvas.lidar.layers.emptyBody')}</p>
+          <div className={styles.emptyActions}>
+            <button type="button" onClick={() => { void beginDataImport() }}>{t('canvas.lidar.layers.emptyImport')}</button>
+            <button type="button" onClick={() => openDataLibrary()}>{t('canvas.lidar.layers.emptyLibrary')}</button>
+          </div>
+        </div>
+      )}
+      {filtering && shownRows.length === 0 && <p className={styles.noMatch} role="status">{t('canvas.lidar.library.noMatch')}</p>}
+      {lines.length > 0 && (
+        <ul ref={list} className={styles.list} data-dragging={drag ? 'true' : undefined}>
+          {lines.map((line) => {
+            if (line.kind === 'pending') return <PendingLine key={`pending:${line.key}`} line={line} />
+            const key = collapseKey(line)
+            const expanded = !collapsed.has(key)
+            const descendants = line.kind === 'analysis'
+              ? line.members.map((member) => member.id)
+              : rows.filter((candidate) => isDescendant(rows, candidate, line.row.id)).map((candidate) => candidate.id)
+            const chevron = line.collapsible && !filtering
+              ? { expanded, toggle: () => toggleCollapsed(key, descendants) }
+              : null
+            if (line.kind === 'analysis') return <AnalysisLine key={key} line={line} chevron={chevron} />
+            return (
+              <SiteDataRow
+                key={key}
+                row={line.row}
+                depth={line.depth}
+                open={line.row.id === openItem}
+                reorder={!filtering}
+                chevron={chevron}
+                onToggleOpen={() => { view.openItem.value = openItem === line.row.id ? null : line.row.id }}
+                onMove={(towards, control) => move(line.row, towards, control)}
+                onDragBegin={(event) => {
+                  if (event.button !== 0 || filtering) return
+                  const units = siblingUnits(items, line.row.id)
+                  if (!units) return
+                  event.preventDefault()
+                  beginDrag(event, { sourceId: line.row.id, units, from: units.findIndex((unit) => unit.includes(line.row.id)), target: null })
+                }}
+              />
+            )
+          })}
+        </ul>
+      )}
     </div>
   )
 }
 
 /**
- * The parent line of an analysis with several outputs in this Design: its
- * title, where it comes from and how many results it has. Its eye shows or
- * hides every output; each output keeps its own row, settings and order.
+ * Where a drop at `clientY` puts the dragged unit: before the first other
+ * unit whose first row's middle is below the pointer. Returns the row whose
+ * place it takes (`siblingMoveOrders`), or null where it started.
  */
-function AnalysisGroupRow({ members, depth }: { members: readonly SiteRow[]; depth: number }) {
-  const first = members[0]!
-  const label = first.analysisId ? analysisTitle(first.analysisId) : rowLabel(first)
-  const visible = members.some((member) => member.visible)
-  const visibilityLabel = visible
-    ? t('canvas.lidar.layers.hide', { name: label })
-    : t('canvas.lidar.layers.show', { name: label })
-  const caption = [
-    first.inputId ? t('canvas.lidar.layers.fromItem', { name: nameOfItem(first.inputId) }) : null,
-    t('canvas.lidar.layers.resultCount', { count: members.length }),
-  ].filter(Boolean).join(' · ')
+function dropTarget(list: HTMLUListElement | null, session: DragSession, clientY: number): string | null {
+  const others = session.units.filter((_, index) => index !== session.from)
+  let insert = others.length
+  for (let index = 0; index < others.length; index += 1) {
+    const head = rowElement(list, others[index]![0]!)
+    if (!head) continue
+    const rect = head.getBoundingClientRect()
+    if (clientY < rect.top + rect.height / 2) {
+      insert = index
+      break
+    }
+  }
+  return insert === session.from ? null : session.units[insert]![0]!
+}
+
+/** The list item of one Site data row; ids are matched as data, never as selector text. */
+export function rowElement(root: ParentNode | null, id: string): HTMLElement | null {
+  return Array.from(root?.querySelectorAll<HTMLElement>('[data-site-row]') ?? []).find((element) => element.dataset.siteRow === id) ?? null
+}
+
+function isDescendant(rows: readonly SiteRow[], row: SiteRow, ancestorId: string): boolean {
+  const byId = new Map(rows.map((candidate) => [candidate.id, candidate]))
+  for (let parent = row.parentId; parent; parent = byId.get(parent)?.parentId ?? null) {
+    if (parent === ancestorId) return true
+  }
+  return false
+}
+
+/** The lines left once collapsed parents hide theirs (in the panel only; the map is unchanged), each told whether it has any. */
+function visibleLines(
+  all: readonly SiteDataLine<LidarPresentationItem>[],
+  collapsed: ReadonlySet<string>,
+): (SiteDataLine<LidarPresentationItem> & { readonly collapsible: boolean })[] {
+  const shown: (SiteDataLine<LidarPresentationItem> & { readonly collapsible: boolean })[] = []
+  let hiddenBelow: number | null = null
+  all.forEach((line, index) => {
+    if (hiddenBelow !== null && line.depth > hiddenBelow) return
+    hiddenBelow = null
+    const collapsible = line.kind === 'analysis' || (all[index + 1]?.depth ?? -1) > line.depth
+    shown.push({ ...line, collapsible })
+    if (collapsible && collapsed.has(collapseKey(line))) hiddenBelow = line.depth
+  })
+  return shown
+}
+
+/**
+ * Library work joining this Design, where it will land (U49 Q11): an import
+ * at the top of the list, a calculation as the first line under its source,
+ * or at the top when its source is not listed.
+ */
+function withPending(
+  lines: readonly (SiteDataLine<LidarPresentationItem> & { readonly collapsible: boolean })[],
+  pending: readonly { readonly key: string; readonly kind: 'import' | 'analysis'; readonly itemIds: readonly string[] }[],
+  rows: readonly SiteRow[],
+): ListLine[] {
+  const snapshot = lidarLibrary.value
+  const out: ListLine[] = [...lines]
+  for (const entry of pending) {
+    const work = entry.itemIds
+      .map((id) => snapshot?.items.find((candidate) => candidate.id === id))
+      .filter((item): item is LibraryItemSummary => item !== undefined)
+    if (work.length === 0) continue
+    const inputId = entry.kind === 'analysis' ? work[0]!.provenance?.inputs[0]?.item_id ?? null : null
+    const parent = inputId ? out.findIndex((line) => line.kind === 'item' && line.row.id === inputId) : -1
+    const parentLine = parent >= 0 ? out[parent] as SiteDataLine<LidarPresentationItem> : null
+    const line: ListLine = { kind: 'pending', key: entry.key, work: entry.kind, items: work, depth: parentLine ? parentLine.depth + 1 : 0 }
+    if (parentLine && rows.some((row) => row.id === inputId)) out.splice(parent + 1, 0, line)
+    else out.unshift(line)
+  }
+  return out
+}
+
+/** A result that joins this Design opens the collapsed rows above it, so it is seen landing. */
+function useExpandForNewResults(items: readonly LidarPresentationItem[], view: SiteDataView): void {
+  const known = useRef<ReadonlySet<string> | null>(null)
+  const ids = items.map((item) => item.id).join('\n')
+  useEffect(() => {
+    const previous = known.current
+    known.current = new Set(items.map((item) => item.id))
+    if (!previous) return
+    const byId = new Map(items.map((item) => [item.id, item]))
+    const expand = new Set<string>()
+    for (const item of items) {
+      if (previous.has(item.id) || !item.parentId) continue
+      for (let parent = byId.get(item.parentId); parent; parent = parent.parentId ? byId.get(parent.parentId) : undefined) {
+        expand.add(parent.id)
+        if (parent.definitionId) expand.add(`analysis:${parent.definitionId}`)
+      }
+      if (item.definitionId) expand.add(`analysis:${item.definitionId}`)
+    }
+    const collapsed = view.collapsed.peek()
+    if ([...expand].some((key) => collapsed.has(key))) {
+      view.collapsed.value = new Set([...collapsed].filter((key) => !expand.has(key)))
+    }
+  }, [ids])
+}
+
+function Chevron({ name, chevron }: {
+  readonly name: string
+  readonly chevron: { readonly expanded: boolean; toggle(): void } | null
+}) {
+  if (!chevron) return <span className={styles.chevronSlot} aria-hidden="true" />
+  const label = chevron.expanded ? t('siteData.collapse', { name }) : t('siteData.expand', { name })
   return (
-    <li className={`${layerRow.row} ${styles.row}`} data-hidden={!visible} data-depth={Math.min(depth, 3)} data-analysis-group>
-      <button
-        type="button"
-        className={layerRow.eye}
-        aria-pressed={visible}
-        aria-label={visibilityLabel}
-        onClick={() => { for (const member of members) setLidarEntryVisibility(member.id, !visible) }}
-      >
-        <LayerVisibilityIcon open={visible} />
-        <ButtonTooltip label={visibilityLabel} side="left" />
-      </button>
-      <span className={styles.groupName}>
-        <strong>{label}</strong>
-        <small>{caption}</small>
-      </span>
-    </li>
+    <button type="button" className={styles.chevron} aria-label={label} aria-expanded={chevron.expanded} onClick={chevron.toggle}>
+      <ControlIcon name={chevron.expanded ? 'chevron-down' : 'chevron-right'} size={16} />
+    </button>
   )
 }
 
-function SiteDataRow({ row, depth, grouped, active }: { row: SiteRow; depth: number; grouped: boolean; active: boolean }) {
-  const label = rowLabel(row)
-  const visibilityLabel = row.visible
-    ? t('canvas.lidar.layers.hide', { name: label })
-    : t('canvas.lidar.layers.show', { name: label })
-  return (
-    <li
-      className={`${layerRow.row} ${styles.row}`}
-      data-hidden={!row.visible}
-      data-depth={Math.min(depth, 3)}
-    >
-      <button
-        type="button"
-        className={layerRow.eye}
-        aria-pressed={row.visible}
-        aria-label={visibilityLabel}
-        onClick={() => setLidarEntryVisibility(row.id, !row.visible)}
-      >
-        <LayerVisibilityIcon open={row.visible} />
-        <ButtonTooltip label={visibilityLabel} side="left" />
-      </button>
-      <button
-        type="button"
-        className={`${layerRow.name} ${styles.name}`}
-        aria-expanded={active}
-        aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
-        onClick={() => selectSiteRow(row.id)}
-        onKeyDown={(event) => {
-          if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return
-          event.preventDefault()
-          moveReference(row.id, event.key === 'ArrowUp' ? 'front' : 'back')
-        }}
-      >
-        <strong>{label}</strong>
-        <small>{rowCaption(row, grouped)}</small>
-      </button>
-      {isStale(row) && (
-        isRefreshing(row)
-          ? <span className={styles.badge}>{t('analyses.details.refreshing')}</span>
-          : (
-            <button type="button" className={styles.stale} aria-label={t('analyses.details.refreshAria', { name: label })}
-              onClick={() => refresh(row)}>
-              {t('analyses.details.outOfDate')} · {t('analyses.details.refresh')}
-            </button>
-          )
-      )}
-    </li>
-  )
+function Indent({ depth }: { readonly depth: number }) {
+  return depth > 0 ? <span className={styles.indent} style={{ width: `${depth * INDENT_PX}px` }} aria-hidden="true" /> : null
 }
 
-function PendingRow({ kind, items }: { kind: 'import' | 'analysis'; items: readonly LibraryItemSummary[] }) {
-  const first = items[0]!
-  const name = libraryItemName(first, lidarLibrary.value)
-  const percent = kind === 'import' ? first.import_job?.progress?.percent : undefined
-  const status = kind === 'import'
-    ? t('canvas.lidar.layers.importing')
-    : t('canvas.lidar.library.calculating')
+/**
+ * The heading of an analysis run with several outputs in this Design (kept
+ * for hydrology 2.1): its title, a chevron and one eye for every output; no
+ * grip, since the run moves with its outputs.
+ */
+function AnalysisLine({ line, chevron }: {
+  readonly line: Extract<SiteDataLine<LidarPresentationItem>, { kind: 'analysis' }>
+  readonly chevron: { readonly expanded: boolean; toggle(): void } | null
+}) {
+  const first = line.members[0]!
+  const label = first.analysisId ? analysisTitle(first.analysisId) : first.name
+  const visible = line.members.some((member) => member.visible)
+  const shown = line.members.some((member) => member.shown)
+  const eyeLabel = visible ? t('canvas.lidar.layers.hide', { name: label }) : t('canvas.lidar.layers.show', { name: label })
   return (
-    <div className={styles.pending} role="group" aria-label={name}>
-      <div className={styles.pendingHead}>
-        <strong>{name}</strong>
-        <span>{percent !== undefined ? `${status} · ${new Intl.NumberFormat(locale.value, { style: 'percent' }).format(percent / 100)}` : status}</span>
+    <li className={`${layerRow.row} ${styles.row}`} data-site-line={`analysis:${line.definitionId}`} data-depth={line.depth} data-hidden={!shown}>
+      <div className={styles.line}>
+        <span className={styles.gripSlot} aria-hidden="true" />
+        <Indent depth={line.depth} />
+        <Chevron name={label} chevron={chevron} />
+        <button type="button" className={layerRow.eye} aria-pressed={visible} aria-label={eyeLabel}
+          onClick={() => { for (const member of line.members) setLidarEntryVisibility(member.id, !visible) }}>
+          <LayerVisibilityIcon open={visible} />
+          <ButtonTooltip label={eyeLabel} side="left" />
+        </button>
+        <span className={styles.groupName} title={label}>{label}</span>
       </div>
-      <progress
-        max={100}
-        value={percent}
-        aria-label={kind === 'import'
-          ? t('canvas.lidar.library.progressAria', { name })
-          : t('canvas.lidar.layers.calculationAria', { name })}
-      />
-      <div className={styles.pendingActions}>
-        {kind === 'import'
-          ? first.import_job && (
-            <button type="button" onClick={() => { void cancelLibraryImport(first.import_job!.job_id).catch(() => {}) }}>
-              {t('canvas.lidar.layers.cancelImport')}
+    </li>
+  )
+}
+
+function SiteDataRow({ row, depth, open, reorder, chevron, onToggleOpen, onMove, onDragBegin }: {
+  readonly row: SiteRow
+  readonly depth: number
+  readonly open: boolean
+  readonly reorder: boolean
+  readonly chevron: { readonly expanded: boolean; toggle(): void } | null
+  onToggleOpen(): void
+  onMove(towards: 'front' | 'back', control: 'grip' | 'name'): void
+  onDragBegin(event: PointerEvent): void
+}) {
+  const element = useRef<HTMLLIElement>(null)
+  const missing = isMissing(row)
+  const style = missing ? null : lidarDisplayStyle(row)
+  const eyeLabel = row.visible ? t('canvas.lidar.layers.hide', { name: row.name }) : t('canvas.lidar.layers.show', { name: row.name })
+  const reorderLabel = t('siteData.reorder', { name: row.name })
+  const altArrows = (control: 'grip' | 'name') => (event: KeyboardEvent) => {
+    if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return
+    event.preventDefault()
+    onMove(event.key === 'ArrowUp' ? 'front' : 'back', control)
+  }
+
+  useLayoutEffect(() => {
+    if (open) element.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [open])
+
+  return (
+    <li ref={element} className={`${layerRow.row} ${styles.row}`} data-site-line="item" data-site-row={row.id} data-depth={depth} data-hidden={!row.shown}>
+      <div className={styles.line}>
+        {reorder
+          ? (
+            <button
+              type="button"
+              className={styles.grip}
+              data-control="grip"
+              aria-label={reorderLabel}
+              aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+              onPointerDown={onDragBegin}
+              onKeyDown={altArrows('grip')}
+            >
+              <ControlIcon name="grip" size={16} />
+              <ButtonTooltip label={reorderLabel} description={t('stories.reorderHint')} side="right" />
             </button>
           )
+          : <span className={styles.gripSlot} aria-hidden="true" />}
+        <Indent depth={depth} />
+        <Chevron name={row.name} chevron={chevron} />
+        {missing
+          ? <span className={styles.alert} aria-hidden="true"><ControlIcon name="alert" size={16} /></span>
           : (
-            <button type="button" onClick={() => { void cancelAnalysisJob(first).catch(() => {}) }}>
-              {t('canvas.lidar.layers.cancelCalculation')}
+            <button type="button" className={layerRow.eye} aria-pressed={row.visible} aria-label={eyeLabel}
+              onClick={() => setLidarEntryVisibility(row.id, !row.visible)}>
+              <LayerVisibilityIcon open={row.visible} />
+              <ButtonTooltip label={eyeLabel} side="left" />
             </button>
           )}
-        <span>{t('canvas.lidar.layers.keepWorking')}</span>
+        <span className={styles.swatch} data-swatch
+          style={style ? { backgroundImage: legendGradient(style.ramp, style.reversed) } : undefined} />
+        <button
+          type="button"
+          className={`${layerRow.name} ${styles.name}`}
+          data-control="name"
+          title={row.name}
+          aria-expanded={open}
+          aria-keyshortcuts={reorder ? 'Alt+ArrowUp Alt+ArrowDown' : undefined}
+          onClick={onToggleOpen}
+          onKeyDown={altArrows('name')}
+        >
+          {row.name}
+        </button>
+        <Trailing row={row} />
       </div>
-    </div>
+      {open && <ItemBody row={row} />}
+    </li>
   )
 }
 
@@ -284,136 +477,144 @@ function isStale(item: LidarPresentationItem): boolean {
   return item.state === 'Ready' && item.freshness.state === 'Stale'
 }
 
-function isRefreshing(item: LidarPresentationItem): boolean {
-  return item.run?.state === 'Preparing'
-}
-
 function refresh(item: LidarPresentationItem): void {
   if (item.definitionId) void rerunAnalysis(item.definitionId).catch(() => {})
 }
 
 /**
- * What a row is: a source's type and range, or where a result comes from;
- * under its analysis line, which output it is. Preparing and failing display
- * states follow.
+ * The one thing at a row's end: Missing, Refreshing or Refresh on an
+ * out-of-date result, Preparing, Display failed, or the value under the
+ * pointer or the pin ("—" where the data has none). Hidden rows show none.
  */
-function rowCaption(item: LidarPresentationItem, grouped: boolean): string {
-  // A row whose library is still loading has no type yet; it is never captioned missing.
-  if (item.availability === 'loading') return ''
-  if (item.availability !== 'present' || !item.itemType) return t('canvas.lidar.library.dataUnavailable')
-  const output = grouped && item.analysisId
-    ? findAnalysis(item.analysisId)?.outputs.find((candidate) => candidate.key === item.outputKey)
-    : undefined
-  const what = output
-    ? [t(output.labelKey), unitWords(item.units)].filter(Boolean).join(' · ')
-    : item.inputId
-    ? [t('canvas.lidar.layers.fromItem', { name: nameOfItem(item.inputId) }), unitWords(item.units)].filter(Boolean).join(' · ')
-    : [itemTypeLabel(item.itemType), item.displayRange ? formatRasterRange(item.displayRange, item.units, locale.value) : null]
-      .filter(Boolean).join(' · ')
-  if (item.state !== 'Ready') return `${what} · ${t('canvas.lidar.library.preparing')}`
-  const display = item.generationId ? readLidarDisplay(item.kind, item.id, item.generationId) : null
-  if (item.shown && display?.state === 'Preparing') return `${what} · ${t('canvas.lidar.layers.preparingDisplay')}`
-  if (item.shown && display?.state === 'Failed') return `${what} · ${t('canvas.lidar.library.displayFailed')}`
-  return what
+function Trailing({ row }: { readonly row: LidarPresentationItem }) {
+  if (isMissing(row)) return <span className={`${styles.trailing} ${styles.warning}`} data-trailing>{t('siteData.missing')}</span>
+  if (row.availability !== 'present') return <span className={styles.trailing} data-trailing />
+  if (isStale(row)) {
+    if (row.run?.state === 'Preparing') return <span className={`${styles.trailing} ${styles.muted}`} data-trailing>{t('analyses.details.refreshing')}</span>
+    return (
+      <span className={styles.trailing} data-trailing>
+        <button type="button" className={styles.refresh} aria-label={t('analyses.details.refreshAria', { name: row.name })} onClick={() => refresh(row)}>
+          {t('analyses.details.refresh')}
+          <ButtonTooltip label={t('analyses.details.outOfDate')} side="left" />
+        </button>
+      </span>
+    )
+  }
+  if (row.state !== 'Ready') return <span className={`${styles.trailing} ${styles.muted}`} data-trailing>{t('canvas.lidar.library.preparing')}</span>
+  if (!row.shown) return <span className={styles.trailing} data-trailing />
+  const display = row.generationId ? readLidarDisplay(row.kind, row.id, row.generationId) : null
+  if (display?.state === 'Failed') return <span className={`${styles.trailing} ${styles.warning}`} data-trailing>{t('canvas.lidar.library.displayFailed')}</span>
+  if (display?.state === 'Preparing') return <span className={`${styles.trailing} ${styles.muted}`} data-trailing>{t('canvas.lidar.library.preparing')}</span>
+  const value = siteValues.value?.rows.get(row.id)
+  if (!value) return <span className={styles.trailing} data-trailing />
+  if (value.kind === 'no-data') {
+    return <span className={`${styles.trailing} ${styles.muted}`} data-trailing role="img" aria-label={t('siteData.noData')}>—</span>
+  }
+  return <span className={styles.trailing} data-trailing>{formatRowValue(value.value, row.units, locale.value)}</span>
 }
 
-/** The inspector's type line: the item type, nothing while the library loads, else missing. */
-function inspectorCaption(item: LidarPresentationItem): string {
-  if (item.itemType) return itemTypeLabel(item.itemType)
-  return item.availability === 'loading' ? '' : t('canvas.lidar.library.dataUnavailable')
+const MISSING_REASON_KEYS: Readonly<Record<LidarMissingReason, string>> = {
+  'not-in-library': 'siteData.missingReason.not-in-library',
+  'needs-newer-canopi': 'siteData.missingReason.needs-newer-canopi',
+  'library-unopened': 'siteData.missingReason.library-unopened',
+}
+
+/** What a row is: a source's type and range, or where a result comes from, with its units. */
+function caption(item: LidarPresentationItem): string {
+  if (!item.itemType) return ''
+  if (item.inputId) return [t('canvas.lidar.layers.fromItem', { name: nameOfItem(item.inputId) }), unitWords(item.units)].filter(Boolean).join(' · ')
+  return [itemTypeLabel(item.itemType), item.displayRange ? formatRasterRange(item.displayRange, item.units, locale.value) : null]
+    .filter(Boolean).join(' · ')
 }
 
 /**
- * The active site data row's settings, at the foot of Site data: legend,
- * opacity, Fit, Analyze (sources), Details, order and Remove from Design. Removing only edits this Design; the library keeps the data.
+ * The open item's body under its row: what it is, why it is out of date, its
+ * display, then Fit to data, Details and Remove from Design. A missing item
+ * shows its reason and Remove from Design only (U49 decision 7).
  */
-export function SiteDataInspector() {
-  const id = activeSiteItemId()
-  const rows = readSiteRows()
-  const item = id ? rows.find((row) => row.id === id) ?? null : null
+function ItemBody({ row }: { readonly row: LidarPresentationItem }) {
   const [focused, setFocused] = useState(false)
-  if (!item) return null
-  const label = rowLabel(item)
-  const available = item.state === 'Ready'
-  const style = lidarDisplayStyle(item)
-  const moveFront = t('canvas.lidar.layers.moveUp', { name: label })
-  const moveBack = t('canvas.lidar.layers.moveDown', { name: label })
-  return (
-    <section className={styles.inspector} aria-label={label}>
-      <div className={styles.inspectorHead}>
-        <h3>{label}</h3>
-        <span>{inspectorCaption(item)}</span>
+  const remove = (
+    <div className={styles.remove}>
+      <button type="button" className={styles.link} aria-label={t('canvas.lidar.layers.removeAria', { name: row.name })}
+        onClick={() => removeFromDesign(row.id)}>
+        {t('canvas.lidar.layers.removeFromDesign')}
+      </button>
+      <span>{t('canvas.lidar.layers.removeKeeps')}</span>
+    </div>
+  )
+  if (isMissing(row)) {
+    return (
+      <div className={styles.itemBody}>
+        <p className={styles.reason}>{t(MISSING_REASON_KEYS[row.availability as LidarMissingReason])}</p>
+        {remove}
       </div>
-      {isStale(item) && item.freshness.state === 'Stale' && (
-        <Notice
-          tone="warning"
-          action={!isRefreshing(item) && <button type="button" className={styles.noticeButton} onClick={() => refresh(item)}>{t('analyses.details.refresh')}</button>}
-        >
+    )
+  }
+  const present = row.availability === 'present'
+  return (
+    <div className={styles.itemBody}>
+      {present && <p className={styles.caption}>{caption(row)}</p>}
+      {isStale(row) && row.freshness.state === 'Stale' && (
+        <Notice tone="warning">
           <strong>{t('analyses.details.outOfDate')}</strong>
           <ul className={styles.reasons}>
-            {item.freshness.reasons.map((reason, index) => <li key={index}>{staleReasonText(reason, nameOfItem)}</li>)}
+            {row.freshness.reasons.map((reason, index) => <li key={index}>{staleReasonText(reason, nameOfItem)}</li>)}
           </ul>
         </Notice>
       )}
-      {available && style && (
-        <div className={styles.legend} aria-label={t('canvas.lidar.layers.legend')}>
-          <div className={styles.ramp} style={{ backgroundImage: legendGradient(style.ramp, style.reversed) }} />
-          <div className={styles.legendLabels}>
-            <span>{formatLegendValue(style.rescale[0], style.units, locale.value)}</span>
-            <span>{formatLegendValue(style.rescale[1], style.units, locale.value)}</span>
-          </div>
-        </div>
-      )}
-      <Slider
-        label={t('canvas.lidar.layers.opacity')}
-        ariaLabel={`${t('canvas.lidar.layers.opacity')}: ${label}`}
-        min={0}
-        max={100}
-        value={Math.round(item.opacity * 100)}
-        format={(value) => new Intl.NumberFormat(locale.value, { style: 'percent' }).format(value / 100)}
-        onInput={(value) => setLidarEntryDisplay(item.id, { opacity: value / 100 })}
-      />
+      <RasterDisplayControls item={row} />
       <div className={styles.actions}>
         {focused
           ? <button type="button" onClick={() => { viewDesignLocation(); setFocused(false) }}>{t('canvas.lidar.layers.returnToDesign')}</button>
           : (
-            <button type="button" disabled={!available || !item.bounds}
-              onClick={() => { if (item.bounds && viewLidarCoverage(item.bounds)) setFocused(true) }}>
+            <button type="button" disabled={row.state !== 'Ready' || !row.bounds}
+              onClick={() => { if (row.bounds && viewLidarCoverage(row.bounds)) setFocused(true) }}>
               {t('canvas.lidar.layers.fit')}
             </button>
           )}
-        {item.kind === 'Source' && available && (
-          <button type="button" onClick={() => analyzeItem(item.id, { attach: true })}>
-            {t('canvas.lidar.library.analyze')}
-          </button>
-        )}
-        {item.availability === 'present' && (
-          <button type="button" onClick={() => openSiteDataDetails(item.id)}>{t('canvas.lidar.layers.details')}</button>
-        )}
-        <span className={styles.order}>
-          <button type="button" className={styles.iconButton} aria-label={moveFront}
-            disabled={!canMoveReference(rows, item.id, 'front')} onClick={() => moveReference(item.id, 'front')}>
-            <ControlIcon name="chevron-down" className={styles.flip} />
-            <ButtonTooltip label={moveFront} side="left" />
-          </button>
-          <button type="button" className={styles.iconButton} aria-label={moveBack}
-            disabled={!canMoveReference(rows, item.id, 'back')} onClick={() => moveReference(item.id, 'back')}>
-            <ControlIcon name="chevron-down" />
-            <ButtonTooltip label={moveBack} side="left" />
-          </button>
+        {present && <button type="button" onClick={() => openDataLibrary(row.id)}>{t('canvas.lidar.layers.details')}</button>}
+      </div>
+      {remove}
+    </div>
+  )
+}
+
+/** Library work joining this Design: its name, progress and Cancel, with no grip and no eye. */
+function PendingLine({ line }: { readonly line: Extract<ListLine, { kind: 'pending' }> }) {
+  const first = line.items[0]!
+  const name = libraryItemName(first, lidarLibrary.value)
+  const percent = line.work === 'import' ? first.import_job?.progress?.percent : undefined
+  const status = line.work === 'import' ? t('canvas.lidar.layers.importing') : t('canvas.lidar.library.calculating')
+  const cancel = line.work === 'import' ? t('canvas.lidar.layers.cancelImport') : t('canvas.lidar.layers.cancelCalculation')
+  return (
+    <li className={`${layerRow.row} ${styles.row} ${styles.pending}`} data-site-line={`pending:${line.key}`} data-depth={line.depth}>
+      <div className={styles.line}>
+        <span className={styles.gripSlot} aria-hidden="true" />
+        <Indent depth={line.depth} />
+        <span className={styles.chevronSlot} aria-hidden="true" />
+        <span className={styles.name}>{name}</span>
+        <span className={`${styles.trailing} ${styles.muted}`}>
+          {percent !== undefined ? `${status} · ${new Intl.NumberFormat(locale.value, { style: 'percent' }).format(percent / 100)}` : status}
         </span>
+        {(line.work === 'analysis' || first.import_job) && (
+          <button
+            type="button"
+            className={styles.cancel}
+            aria-label={cancel}
+            onClick={() => {
+              if (line.work === 'import') void cancelLibraryImport(first.import_job!.job_id).catch(() => {})
+              else void cancelAnalysisJob(first).catch(() => {})
+            }}
+          >
+            <ControlIcon name="close" size={16} />
+            <ButtonTooltip label={cancel} side="left" />
+          </button>
+        )}
       </div>
-      <div className={styles.remove}>
-        <button
-          type="button"
-          className={styles.link}
-          aria-label={t('canvas.lidar.layers.removeAria', { name: label })}
-          onClick={() => removeFromDesign(item.id)}
-        >
-          {t('canvas.lidar.layers.removeFromDesign')}
-        </button>
-        <span>{t('canvas.lidar.layers.removeKeeps')}</span>
-      </div>
-    </section>
+      {line.work === 'import' && (
+        <progress className={styles.progress} max={100} value={percent} aria-label={t('canvas.lidar.library.progressAria', { name })} />
+      )}
+    </li>
   )
 }

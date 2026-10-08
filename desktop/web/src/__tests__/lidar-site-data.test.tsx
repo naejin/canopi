@@ -1,24 +1,21 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { librarySnapshot, slopeItem, sourceItem } from './support/library-fixtures'
+import { librarySnapshot, slopeItem, slopeProvenance, sourceItem } from './support/library-fixtures'
 
 const actions = vi.hoisted(() => ({
-  addToDesign: vi.fn(),
   cancelAnalysisJob: vi.fn().mockResolvedValue(true),
   cancelLibraryImport: vi.fn().mockResolvedValue(undefined),
   chooseImportFiles: vi.fn().mockResolvedValue(null),
   dismissAttachmentFailure: vi.fn(),
-  fetchItemSources: vi.fn().mockResolvedValue({ sources: [] }),
-  fetchProcessingHistory: vi.fn().mockResolvedValue({ definition_id: 's-def', runs: [], next_cursor: null }),
-  moveReference: vi.fn(),
+  moveReferenceTo: vi.fn(),
   removeFromDesign: vi.fn(),
-  renameLibraryItem: vi.fn().mockResolvedValue(undefined),
   rerunAnalysis: vi.fn().mockResolvedValue(undefined),
   setLidarEntryDisplay: vi.fn(),
   setLidarEntryVisibility: vi.fn(),
+  setSiteDataShown: vi.fn(),
 }))
-const pending = vi.hoisted(() => ({ attachments: null as unknown, failure: null as unknown }))
+const pending = vi.hoisted(() => ({ attachments: null as unknown, failure: null as unknown, values: null as unknown }))
 
 vi.mock('../app/lidar/actions', async () => {
   const { signal } = await import('@preact/signals')
@@ -26,49 +23,77 @@ vi.mock('../app/lidar/actions', async () => {
   pending.failure = signal(null)
   return { ...actions, pendingAttachments: pending.attachments, attachmentFailure: pending.failure }
 })
+vi.mock('../app/lidar/site-values', async () => {
+  const { signal } = await import('@preact/signals')
+  pending.values = signal(null)
+  return { siteValues: pending.values }
+})
 vi.mock('../ipc/lidar', () => ({
   lidarDisplayDescriptor: vi.fn(() => new Promise(() => {})),
-  lidarListLibrary: vi.fn(() => new Promise(() => {})),
-  lidarSamplePixel: vi.fn(),
-  lidarCancelSamplePixel: vi.fn(),
+  // The panel's library observer reads the list on mount: it answers with the snapshot the test set.
+  lidarListLibrary: vi.fn(async () => (await import('../app/lidar/library-store')).lidarLibrary.peek()),
 }))
 vi.mock('../app/document-session/store', async () => {
   const { signal } = await import('@preact/signals')
   return {
     currentDesign: signal<unknown>(null),
-    designSessionStore: { sessionIdentity: signal('design-a') },
+    designSessionStore: { sessionIdentity: signal({ session: 'design-a' }) },
   }
 })
 
-import { AddDataMenu, SiteDataInspector, SiteDataRows } from '../components/panels/lidar/SiteData'
-import { SiteDataDetails } from '../components/panels/lidar/SiteDataDetails'
 import { SiteDataPanel } from '../components/panels/lidar/SiteDataPanel'
 import { lidarLibrary, refreshLidarLibrary } from '../app/lidar/library-store'
 import { lidarListLibrary } from '../ipc/lidar'
-import { currentDesign } from '../app/document-session/store'
-import { dataDialog, selectSiteRow, siteDataDetails } from '../app/lidar/library-navigation'
-import { activeLayerName } from '../app/canvas-settings/signals'
-import { sidePanel } from '../app/shell/state'
+import { currentDesign, designSessionStore } from '../app/document-session/store'
+import { dataDialog } from '../app/lidar/library-navigation'
+import { showInSiteData, siteDataViewFor } from '../app/lidar/site-data-view'
+import { pin, setPin, unpin } from '../app/lidar/site-transients'
+import { activePanel, sidePanel } from '../app/shell/state'
 import { locale } from '../app/settings/state'
+import type { LibraryItemSummary } from '../generated/contracts'
 import type { Signal } from '@preact/signals'
 
 const library = librarySnapshot
 
 let container: HTMLDivElement
-const importGeoJson = vi.fn()
 
-function setDesign(entries: Array<{ kind: 'Source' | 'Derived'; id: string; order: number; visible?: boolean; opacity?: number }>): void {
+interface Entry { kind: 'Source' | 'Derived'; id: string; order: number; visible?: boolean; opacity?: number; name?: string }
+
+function setDesign(entries: readonly Entry[], visible = true): void {
   (currentDesign as unknown as { value: unknown }).value = {
-    lidar: { entries: entries.map((entry) => ({ name: entry.id, visible: true, opacity: 1, ramp: null, reversed: false, range: null, ...entry })) },
+    lidar: { visible, entries: entries.map((entry) => ({ name: entry.id, visible: true, opacity: 1, ramp: null, reversed: false, range: null, ...entry })) },
   }
 }
 
+function newSession(): void {
+  (designSessionStore.sessionIdentity as unknown as { value: object }).value = { session: Math.random() }
+}
+
+function buttons(root: ParentNode = container): HTMLButtonElement[] {
+  return Array.from(root.querySelectorAll('button'))
+}
+
+/** A button's name: its aria-label, else its text without its tooltip. */
+function nameOf(candidate: HTMLButtonElement): string {
+  const label = candidate.getAttribute('aria-label')
+  if (label) return label
+  const copy = candidate.cloneNode(true) as HTMLElement
+  copy.querySelectorAll('[role="tooltip"]').forEach((tooltip) => tooltip.remove())
+  return (copy.textContent ?? '').trim()
+}
+
 function button(label: string | RegExp, root: ParentNode = container): HTMLButtonElement {
-  const found = Array.from(root.querySelectorAll('button')).find((candidate) => {
-    const text = `${candidate.textContent ?? ''} ${candidate.getAttribute('aria-label') ?? ''}`.trim()
-    return typeof label === 'string' ? text.includes(label) : label.test(text)
+  const found = buttons(root).find((candidate) => {
+    const text = nameOf(candidate)
+    return typeof label === 'string' ? text === label : label.test(text)
   })
   if (!found) throw new Error(`no button ${String(label)}`)
+  return found
+}
+
+function row(id: string): HTMLElement {
+  const found = container.querySelector<HTMLElement>(`[data-site-row="${id}"]`)
+  if (!found) throw new Error(`no row ${id}`)
   return found
 }
 
@@ -78,230 +103,211 @@ async function click(target: HTMLElement): Promise<void> {
   })
 }
 
+async function key(target: HTMLElement, init: KeyboardEventInit): Promise<void> {
+  await act(async () => {
+    target.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }))
+  })
+}
+
 function mount(): void {
   act(() => {
-    render(<><AddDataMenu importGeoJson={importGeoJson} /><SiteDataRows /><SiteDataInspector /></>, container)
+    render(<SiteDataPanel />, container)
   })
 }
 
-function rowNames(): Array<[string | null | undefined, string | undefined]> {
-  return Array.from(container.querySelectorAll('li')).map((row) => [
-    row.querySelector('strong')?.textContent,
-    (row as HTMLElement).dataset.depth,
+/** Each listed line, front first: its row id (or `[run]` for an analysis line) and its depth. */
+function lines(): string[] {
+  return Array.from(container.querySelectorAll<HTMLElement>('[data-site-line]')).map((line) =>
+    `${'  '.repeat(Number(line.dataset.depth))}${line.dataset.siteRow ?? `[${line.dataset.siteLine}]`}`)
+}
+
+function trailing(id: string): string {
+  return row(id).querySelector('[data-trailing]')?.textContent ?? ''
+}
+
+function values(entries: Record<string, number | null>, at: 'pointer' | 'pin' = 'pointer'): void {
+  (pending.values as Signal<unknown>).value = {
+    at,
+    rows: new Map(Object.entries(entries).map(([id, value]) => [id, value === null ? { kind: 'no-data' } : { kind: 'value', value }])),
+  }
+}
+
+beforeEach(() => {
+  locale.value = 'en'
+  vi.clearAllMocks()
+  newSession()
+  sidePanel.value = 'site-data'
+  dataDialog.value = null
+  unpin()
+  ;(pending.attachments as Signal<unknown[]>).value = []
+  ;(pending.failure as Signal<unknown>).value = null
+  ;(pending.values as Signal<unknown>).value = null
+  lidarLibrary.value = library([
+    sourceItem('a', 'Ground', { value_range: [100, 200] }),
+    sourceItem('b', 'Canopy', { value_range: [0, 24], item_type: { kind: 'Raster', quantity: 'AboveGroundHeight' } }),
+    slopeItem('s', 'a'),
   ])
-}
+  setDesign([])
+  container = document.createElement('div')
+  document.body.append(container)
+})
 
-describe('Layers site data', () => {
-  beforeEach(() => {
-    locale.value = 'en'
-    vi.clearAllMocks()
-    sidePanel.value = 'layers'
-    activeLayerName.value = 'zones'
-    dataDialog.value = null
-    siteDataDetails.value = null
-    ;(pending.attachments as Signal<unknown[]>).value = []
-    ;(pending.failure as Signal<unknown>).value = null
-    lidarLibrary.value = library([
-      sourceItem('a', 'Ground', { value_range: [100, 200] }),
-      sourceItem('b', 'Canopy', { value_range: [0, 24], item_type: { kind: 'Raster', quantity: 'AboveGroundHeight' } }),
-      slopeItem('s', 'a'),
-    ])
-    setDesign([])
-    container = document.createElement('div')
-    document.body.append(container)
+afterEach(() => {
+  render(null, container)
+  container.remove()
+})
+
+describe('the Site data panel', () => {
+  it('has a header with the Data library and close, and a toolbar with Import, Analyze and Profile', async () => {
+    setDesign([{ kind: 'Source', id: 'a', order: 0 }])
+    mount()
+    expect(container.querySelector('aside')?.getAttribute('aria-label')).toBe('Site data')
+    expect(container.querySelector('h2')?.textContent).toBe('Site data')
+    await click(button('Import…'))
+    expect(actions.chooseImportFiles).toHaveBeenCalledWith('Choose GeoTIFF files', 'GeoTIFF rasters')
+    await click(button('Analyze…'))
+    expect(dataDialog.value).toMatchObject({ kind: 'analyze', itemId: 'a', attach: true })
+    await click(button('Ground'))
+    await click(button('Data library'))
+    expect(dataDialog.value).toEqual({ kind: 'library', focusId: 'a' })
+    await click(button('Close panel'))
+    expect(sidePanel.value).toBeNull()
   })
 
-  afterEach(() => {
-    render(null, container)
-    container.remove()
-    document.body.querySelectorAll('[role="menu"]').forEach((menu) => menu.remove())
-  })
-
-  it('offers files or the Data library to an empty Design', async () => {
+  it('offers files or the Data library to an empty Design, under the toolbar', async () => {
     mount()
     expect(container.textContent).toContain('No site data yet')
     await click(button('Open the Data library'))
     expect(dataDialog.value).toEqual({ kind: 'library', focusId: null })
     await click(button('Import files…'))
-    expect(actions.chooseImportFiles).toHaveBeenCalledWith('Choose GeoTIFF files', 'GeoTIFF rasters')
+    expect(actions.chooseImportFiles).toHaveBeenCalledOnce()
   })
 
-  it('adds from files, from the library or through the Data library in one menu', async () => {
-    setDesign([{ kind: 'Source', id: 'a', order: 0 }])
+  it('says why Analyze and Profile are disabled', () => {
+    lidarLibrary.value = library([sourceItem('a', 'Ground', { offers: [] }), slopeItem('s', 'a')])
+    setDesign([{ kind: 'Derived', id: 's', order: 0 }])
     mount()
-    await click(button(/^Add data/))
-    const menu = document.querySelector<HTMLElement>('[role="menu"]')!
-    expect(Array.from(menu.querySelectorAll('[role="menuitem"]')).map((item) => item.textContent?.trim()))
-      .toEqual(expect.arrayContaining(['Terrain or height from files…', 'From your library', 'Data library…']))
-    await click(button('From your library', menu))
-    const submenu = Array.from(document.querySelectorAll<HTMLElement>('[role="menu"]')).at(-1)!
-    expect(button('Ground · in this Design', submenu).getAttribute('aria-disabled')).toBe('true')
-    await click(button('Canopy', submenu))
-    expect(actions.addToDesign).toHaveBeenCalledWith('Source', 'b')
-    expect(activeLayerName.value).toBe('site:b')
+    const analyze = button('Analyze…')
+    expect(analyze.getAttribute('aria-disabled')).toBe('true')
+    expect(analyze.textContent).toContain('Add terrain or height data first')
+    const profile = button('Profile')
+    expect(profile.getAttribute('aria-disabled')).toBe('true')
+    expect(profile.textContent).toContain('Show an elevation or height layer to draw a profile')
   })
 
-  it('offers Design objects from GeoJSON through the GeoJSON import command', async () => {
-    mount()
-    await click(button(/^Add data/))
-    const menu = document.querySelector<HTMLElement>('[role="menu"]')!
-    expect(Array.from(menu.querySelectorAll('[role="menuitem"]')).map((item) => item.textContent?.trim()).slice(0, 2))
-      .toEqual(['Terrain or height from files…', 'Design objects from GeoJSON…'])
-    await click(button('Design objects from GeoJSON…', menu))
-    expect(importGeoJson).toHaveBeenCalledOnce()
-  })
-
-  it('gathers the outputs of one analysis under a parent row', async () => {
+  it('lists one line per item, front first, results under their source and a run under one analysis line', () => {
     const output = (id: string, key: string) => slopeItem(id, 'a', {
-      provenance: { ...slopeItem(id, 'a').provenance!, definition_id: 'flow-def', output_key: key },
+      provenance: slopeProvenance(id, 'a', { definition_id: 'flow-def', output_key: key }),
     })
-    lidarLibrary.value = library([sourceItem('a', 'Ground'), output('o1', 'slope'), output('o2', 'other'), slopeItem('s', 'a')])
-    setDesign([
-      { kind: 'Source', id: 'a', order: 0 },
-      { kind: 'Derived', id: 'o1', order: 3 },
-      { kind: 'Derived', id: 'o2', order: 2 },
-      { kind: 'Derived', id: 's', order: 1 },
-    ])
-    mount()
-
-    expect(rowNames()).toEqual([
-      ['Ground', '0'],
-      ['Slope', '1'],
-      ['Ground · Slope', '2'],
-      ['Ground · Slope', '2'],
-      ['Ground · Slope', '1'],
-    ])
-    const parent = container.querySelector<HTMLElement>('[data-analysis-group]')!
-    expect(parent.textContent).toContain('from Ground · 2 results')
-    // Each output says which one it is; a lone result still says where it comes from.
-    const rows = Array.from(container.querySelectorAll('li'))
-    expect(rows[2]!.textContent).toContain('Slope · degrees')
-    expect(rows[4]!.textContent).toContain('from Ground · degrees')
-
-    await click(button('Hide Slope', parent))
-    expect(actions.setLidarEntryVisibility).toHaveBeenCalledWith('o1', false)
-    expect(actions.setLidarEntryVisibility).toHaveBeenCalledWith('o2', false)
-    expect(actions.setLidarEntryVisibility).not.toHaveBeenCalledWith('s', false)
-  })
-
-  it('nests a result under its source and says where it comes from', () => {
+    lidarLibrary.value = library([sourceItem('a', 'Ground'), sourceItem('b', 'Canopy'), output('o1', 'slope'), output('o2', 'other'), slopeItem('s', 'a')])
     setDesign([
       { kind: 'Source', id: 'a', order: 0 },
       { kind: 'Source', id: 'b', order: 1 },
+      { kind: 'Derived', id: 'o1', order: 3 },
       { kind: 'Derived', id: 's', order: 2 },
+      { kind: 'Derived', id: 'o2', order: 1 },
     ])
     mount()
-    expect(rowNames()).toEqual([['Canopy', '0'], ['Ground', '0'], ['Ground · Slope', '1']])
-    const slope = button('Ground · Slope').closest('li')!
-    expect(slope.textContent).toContain('from Ground · degrees')
-    expect(button(/^Ground/).closest('li')!.textContent).toContain('Ground elevation (DTM) · 100.0 – 200.0 m')
+    expect(lines()).toEqual(['b', 'a', '  [analysis:flow-def]', '    o1', '    o2', '  s'])
+    // An analysis line has a chevron and no grip; a row's name is one line with its full name as its title.
+    const group = container.querySelector<HTMLElement>('[data-site-line="analysis:flow-def"]')!
+    expect(group.querySelector('[aria-label^="Reorder"]')).toBeNull()
+    expect(button('Collapse Slope', group).getAttribute('aria-expanded')).toBe('true')
+    expect(button('Ground · Slope', row('s')).getAttribute('title')).toBe('Ground · Slope')
+    expect(row('a').querySelector('[data-swatch]')).not.toBeNull()
   })
 
-  it('shows the active row settings and edits only this Design', async () => {
-    setDesign([
-      { kind: 'Source', id: 'a', order: 0 },
-      { kind: 'Source', id: 'b', order: 1, visible: false },
-    ])
-    mount()
-    expect(container.querySelector('[aria-label="Legend"]')).toBeNull()
-    await click(button('Show Canopy'))
-    expect(actions.setLidarEntryVisibility).toHaveBeenCalledWith('b', true)
-
-    await click(button(/^Ground/))
-    expect(activeLayerName.value).toBe('site:a')
-    expect(container.querySelector('[aria-label="Legend"]')).not.toBeNull()
-    expect(button('Move Ground forward').disabled).toBe(false)
-    expect(button('Move Ground back').disabled).toBe(true)
-    await click(button('Move Ground forward'))
-    expect(actions.moveReference).toHaveBeenCalledWith('a', 'front')
-
-    // Values read on the rows now: the open row has no Read values button.
-    expect(() => button('Read values')).toThrow()
-
-    await click(button(/^Analyze…$/))
-    expect(dataDialog.value).toMatchObject({ kind: 'analyze', itemId: 'a', attach: true })
-    await click(button(/^Details$/))
-    expect(siteDataDetails.value).toBe('a')
-
-    await click(button('Remove Ground from this Design'))
-    expect(actions.removeFromDesign).toHaveBeenCalledWith('a')
-    expect(container.textContent).toContain('Your library keeps the data.')
-  })
-
-  it('writes the open row\'s opacity through the one display writer', async () => {
-    setDesign([{ kind: 'Source', id: 'a', order: 0, opacity: 1 }])
-    mount()
-    await click(button(/^Ground/))
-    const slider = container.querySelector<HTMLInputElement>('input[aria-label="Opacity: Ground"]')!
-    await act(async () => {
-      slider.value = '40'
-      slider.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    expect(actions.setLidarEntryDisplay).toHaveBeenCalledWith('a', { opacity: 0.4 })
-  })
-
-  it('moves a row with Alt and the arrow keys', async () => {
+  it('opens one item at a time under its row, with its settings and actions, and closes it on a second click', async () => {
     setDesign([{ kind: 'Source', id: 'a', order: 0 }, { kind: 'Source', id: 'b', order: 1 }])
     mount()
-    await act(async () => {
-      button(/^Ground/).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true, bubbles: true }))
-    })
-    expect(actions.moveReference).toHaveBeenCalledWith('a', 'front')
+    const name = button('Ground')
+    expect(name.getAttribute('aria-expanded')).toBe('false')
+    await click(name)
+    expect(name.getAttribute('aria-expanded')).toBe('true')
+    const body = row('a')
+    expect(body.textContent).toContain('Ground elevation (DTM)')
+    expect(body.querySelector('[role="radiogroup"][aria-label="Colors"]')).not.toBeNull()
+    expect(body.querySelector('[role="radiogroup"][aria-label="Range"]')).not.toBeNull()
+    expect(body.querySelector('input[aria-label="Opacity: Ground"]')).not.toBeNull()
+    await click(button('Details', body))
+    expect(dataDialog.value).toEqual({ kind: 'library', focusId: 'a' })
+    await click(button('Remove Ground from this Design', body))
+    expect(actions.removeFromDesign).toHaveBeenCalledWith('a')
+    expect(body.textContent).toContain('Your library keeps the data.')
+
+    await click(button('Canopy'))
+    expect(button('Ground').getAttribute('aria-expanded')).toBe('false')
+    expect(row('a').querySelector('[role="radiogroup"]')).toBeNull()
+    await click(button('Canopy'))
+    expect(button('Canopy').getAttribute('aria-expanded')).toBe('false')
   })
 
-  it('keeps a reference whose library item is gone, labelled unavailable', () => {
-    setDesign([{ kind: 'Source', id: 'gone', order: 0 }])
+  it('writes an eye through the one visibility writer, and dims a hidden row', async () => {
+    setDesign([{ kind: 'Source', id: 'a', order: 0, visible: false }])
     mount()
-    expect(container.textContent).toContain('Unavailable data')
-    expect(container.textContent).toContain('Data unavailable')
+    expect(row('a').dataset.hidden).toBe('true')
+    await click(button('Show Ground'))
+    expect(actions.setLidarEntryVisibility).toHaveBeenCalledWith('a', true)
   })
 
-  it('draws a reference as a normal row while the library loads, never captioned unavailable', async () => {
+  it('shows a missing item\'s stored name with Missing, and opened, the reason and Remove from Design only', async () => {
+    setDesign([{ kind: 'Source', id: 'gone', name: 'Old survey', order: 0 }])
+    mount()
+    expect(button('Old survey')).toBeTruthy()
+    expect(trailing('gone')).toBe('Missing')
+    expect(row('gone').querySelector('[aria-label^="Hide"], [aria-label^="Show"]')).toBeNull()
+    await click(button('Old survey'))
+    const body = row('gone')
+    expect(body.textContent).toContain('Not in this computer’s Data library')
+    expect(buttons(body).map(nameOf))
+      .toEqual(['Reorder Old survey', 'Old survey', 'Remove Old survey from this Design'])
+  })
+
+  it('draws an entry as a normal row while the library loads, and as missing once the list cannot be read', async () => {
+    let fail!: (error: Error) => void
+    vi.mocked(lidarListLibrary).mockImplementationOnce(() => new Promise((_, reject) => { fail = reject }))
     lidarLibrary.value = null
     setDesign([{ kind: 'Source', id: 'ground', order: 0 }])
     mount()
-    expect(container.querySelector('li strong')?.textContent).toBe('ground')
-    expect(container.textContent).not.toContain('Data unavailable')
+    expect(trailing('ground')).toBe('')
+    expect(button('Hide ground')).toBeTruthy()
 
-    await act(async () => { selectSiteRow('ground') })
-    expect(container.querySelector('section h3')?.textContent).toBe('ground')
-    expect(container.textContent).not.toContain('Data unavailable')
-  })
-
-  it('labels a reference unavailable once the library list cannot be read, not loading forever', async () => {
-    lidarLibrary.value = null
-    setDesign([{ kind: 'Source', id: 'gone', order: 0 }])
-    mount()
-    expect(container.textContent).not.toContain('Unavailable data')
-    expect(container.textContent).not.toContain('Data unavailable')
-
-    vi.mocked(lidarListLibrary).mockRejectedValueOnce(new Error('catalogue locked'))
     await act(async () => {
+      fail(new Error('catalogue locked'))
       await refreshLidarLibrary()
     })
-
-    expect(container.textContent).toContain('Unavailable data')
-    expect(container.querySelector('li small')?.textContent).toBe('Data unavailable')
+    expect(trailing('ground')).toBe('Missing')
+    await click(button('ground'))
+    expect(row('ground').textContent).toContain('The Data library couldn’t be opened. Restart Canopi.')
   })
 
-  it('marks an out-of-date result, says why, and refreshes it in place', async () => {
+  it('ends each shown, ready row with its value under the pointer, "—" off the data, and nothing on hidden rows', () => {
+    setDesign([
+      { kind: 'Source', id: 'a', order: 0 },
+      { kind: 'Source', id: 'b', order: 1, visible: false },
+      { kind: 'Derived', id: 's', order: 2 },
+    ])
+    values({ a: 312.456, b: 3, s: null })
+    mount()
+    expect(trailing('a')).toBe('312.46 m')
+    expect(trailing('b')).toBe('')
+    expect(trailing('s')).toBe('—')
+    expect(row('s').querySelector('[data-trailing]')?.getAttribute('aria-label')).toBe('No data')
+  })
+
+  it('marks an out-of-date result with Refresh, says why when opened, and shows a refresh in progress', async () => {
     lidarLibrary.value = library([
       sourceItem('a', 'Ground'),
       slopeItem('s', 'a', { freshness: { state: 'Stale', reasons: [{ reason: 'InputUpdated', input_key: 'dem', item_id: 'a' }] } }),
     ])
     setDesign([{ kind: 'Derived', id: 's', order: 0 }])
     mount()
-
-    expect(container.querySelector('li')!.textContent).toContain('Out of date')
     await click(button('Refresh Ground · Slope'))
     expect(actions.rerunAnalysis).toHaveBeenCalledWith('s-def')
+    await click(button('Ground · Slope'))
+    expect(row('s').textContent).toContain('Ground has changed since this was calculated.')
 
-    await act(async () => { selectSiteRow('s') })
-    expect(container.textContent).toContain('Ground has changed since this was calculated.')
-    expect(container.querySelector('[aria-label="Legend"]')?.textContent).toContain('30.0°')
-  })
-
-  it('shows a refresh in progress instead of offering another', () => {
+    render(null, container)
     lidarLibrary.value = library([
       sourceItem('a', 'Ground'),
       slopeItem('s', 'a', {
@@ -309,37 +315,221 @@ describe('Layers site data', () => {
         run: { job_id: 'j', state: 'Preparing', message: null },
       }),
     ])
-    setDesign([{ kind: 'Derived', id: 's', order: 0 }])
     mount()
-    expect(container.textContent).toContain('Refreshing')
+    expect(trailing('s')).toBe('Refreshing')
     expect(() => button('Refresh Ground · Slope')).toThrow()
   })
 
-  it('shows imports and calculations joining this Design, with Cancel', async () => {
-    lidarLibrary.value = library([
-      sourceItem('a', 'Ground'),
-      sourceItem('n', 'North tiles', {
-        state: 'Preparing', generation_id: null,
-        import_job: { job_id: 'job-n', layer_id: 'n', state: 'Applying', message: null, progress: { phase: 'RenderingMap', percent: 62 } },
-      }),
-      slopeItem('r', 'a', { name: 'Terrace', state: 'Preparing', generation_id: null, run: { job_id: 'job-r', state: 'Preparing', message: null } }),
-    ])
-    ;(pending.attachments as Signal<unknown[]>).value = [
-      { key: 'import:n', kind: 'import', identity: 'design-a', itemIds: ['n'] },
-      { key: 'r-def', kind: 'analysis', identity: 'design-a', itemIds: ['r'] },
-      { key: 'import:other', kind: 'import', identity: 'design-b', itemIds: ['a'] },
-    ]
+  it('says Preparing while an item or its display prepares', () => {
+    lidarLibrary.value = library([sourceItem('a', 'Ground', { state: 'Preparing' })])
     setDesign([{ kind: 'Source', id: 'a', order: 0 }])
     mount()
-    const importing = container.querySelector<HTMLElement>('[role="group"][aria-label="North tiles"]')!
-    expect(importing.textContent).toContain('Importing · 62%')
-    expect(importing.textContent).toContain('You can keep working.')
+    expect(trailing('a')).toBe('Preparing')
+  })
+})
+
+describe('collapse and the view that survives switching panels', () => {
+  beforeEach(() => {
+    setDesign([
+      { kind: 'Source', id: 'a', order: 0 },
+      { kind: 'Source', id: 'b', order: 1 },
+      { kind: 'Derived', id: 's', order: 2 },
+    ])
+  })
+
+  it('folds a source\'s results in the panel only, and collapsing closes an open result', async () => {
+    mount()
+    await click(button('Ground · Slope'))
+    await click(button('Collapse Ground'))
+    expect(lines()).toEqual(['b', 'a'])
+    expect(siteDataViewFor(designSessionStore.sessionIdentity.value).openItem.value).toBeNull()
+    expect(button('Expand Ground').getAttribute('aria-expanded')).toBe('false')
+    await click(button('Expand Ground'))
+    expect(lines()).toEqual(['b', 'a', '  s'])
+  })
+
+  it('keeps the open item and collapse when the panel mounts again', async () => {
+    mount()
+    await click(button('Canopy'))
+    await click(button('Collapse Ground'))
+    render(null, container)
+    mount()
+    expect(button('Canopy').getAttribute('aria-expanded')).toBe('true')
+    expect(lines()).toEqual(['b', 'a'])
+  })
+
+  it('Show in Site data expands the item\'s source and opens it', async () => {
+    mount()
+    await click(button('Collapse Ground'))
+    await act(async () => { showInSiteData('s') })
+    expect(lines()).toEqual(['b', 'a', '  s'])
+    expect(button('Ground · Slope').getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('a result that joins this Design expands its collapsed source', async () => {
+    setDesign([{ kind: 'Source', id: 'a', order: 0 }, { kind: 'Source', id: 'b', order: 1 }])
+    lidarLibrary.value = library([sourceItem('a', 'Ground'), sourceItem('b', 'Canopy'), slopeItem('s', 'a'), slopeItem('t', 'a')])
+    setDesign([{ kind: 'Source', id: 'a', order: 0 }, { kind: 'Source', id: 'b', order: 1 }, { kind: 'Derived', id: 's', order: 2 }])
+    mount()
+    await click(button('Collapse Ground'))
+    await act(async () => {
+      setDesign([
+        { kind: 'Source', id: 'a', order: 0 }, { kind: 'Source', id: 'b', order: 1 },
+        { kind: 'Derived', id: 's', order: 2 }, { kind: 'Derived', id: 't', order: 3 },
+      ])
+    })
+    expect(lines()).toEqual(['b', 'a', '  t', '  s'])
+  })
+})
+
+describe('the filter', () => {
+  const many = Array.from({ length: 9 }, (_, index) => sourceItem(`n${index}`, `North block ${index}`))
+
+  it('shows only above eight items, keeps a match\'s source, hides the grips and clears with Esc', async () => {
+    setDesign([{ kind: 'Source', id: 'a', order: 0 }, { kind: 'Derived', id: 's', order: 1 }])
+    mount()
+    expect(container.querySelector('input[type="search"]')).toBeNull()
+    render(null, container)
+
+    lidarLibrary.value = library([sourceItem('a', 'Ground'), slopeItem('s', 'a', { name: 'Steepness' }), ...many])
+    setDesign([
+      { kind: 'Source', id: 'a', order: 20 }, { kind: 'Derived', id: 's', order: 21 },
+      ...many.map((item, index) => ({ kind: 'Source' as const, id: item.id, order: index })),
+    ])
+    mount()
+    const field = container.querySelector<HTMLInputElement>('input[type="search"][aria-label="Filter site data"]')!
+    expect(field.placeholder).toBe('Filter by name')
+    await act(async () => {
+      field.value = 'steep'
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(lines()).toEqual(['a', '  s'])
+    expect(container.querySelector('[aria-label^="Reorder"]')).toBeNull()
+    await key(button('Steepness'), { key: 'ArrowUp', altKey: true })
+    expect(actions.moveReferenceTo).not.toHaveBeenCalled()
+
+    await act(async () => {
+      field.value = 'zzz'
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(container.textContent).toContain('No data matches this search.')
+    await key(field, { key: 'Escape' })
+    expect(field.value).toBe('')
+    expect(lines()).toHaveLength(11)
+  })
+})
+
+describe('reordering', () => {
+  function rects(ids: readonly string[]): void {
+    ids.forEach((id, index) => {
+      vi.spyOn(row(id), 'getBoundingClientRect').mockReturnValue(new DOMRect(0, index * 32, 440, 32))
+    })
+  }
+
+  async function drag(grip: HTMLElement, toY: number): Promise<void> {
+    grip.setPointerCapture = vi.fn()
+    grip.releasePointerCapture = vi.fn()
+    await act(async () => {
+      grip.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1, button: 0, clientY: 0, bubbles: true }))
+    })
+    await act(async () => {
+      document.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, clientY: toY, bubbles: true }))
+    })
+    await act(async () => {
+      document.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, clientY: toY + 1, bubbles: true }))
+    })
+    await act(async () => {
+      document.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, clientY: toY + 1, bubbles: true }))
+    })
+  }
+
+  const output = (id: string) => slopeItem(id, 'a', { provenance: slopeProvenance(id, 'a', { definition_id: 'flow-def', output_key: id }) })
+
+  beforeEach(() => {
+    lidarLibrary.value = library([sourceItem('a', 'Ground'), output('o1'), output('o2'), slopeItem('s', 'a'), sourceItem('b', 'Canopy')])
+    setDesign([
+      { kind: 'Source', id: 'a', order: 0 },
+      { kind: 'Derived', id: 'o1', order: 3 },
+      { kind: 'Derived', id: 'o2', order: 2 },
+      { kind: 'Derived', id: 's', order: 1 },
+      { kind: 'Source', id: 'b', order: 1 },
+    ])
+  })
+
+  it('drags a row past a whole analysis run among its siblings, reflowing live and writing one order on the drop', async () => {
+    mount()
+    expect(lines()).toEqual(['b', 'a', '  [analysis:flow-def]', '    o1', '    o2', '  s'])
+    rects(['b', 'a', 'o1', 'o2', 's'])
+    // The slope dropped over the run's first output lands before the whole run.
+    await drag(button('Reorder Ground · Slope', row('s')), 2 * 32 + 4)
+    expect(actions.moveReferenceTo).toHaveBeenCalledTimes(1)
+    expect(actions.moveReferenceTo).toHaveBeenCalledWith('s', 'o1')
+  })
+
+  it('keeps a run\'s output inside its run, and a top-level row among top-level rows', async () => {
+    mount()
+    rects(['b', 'a', 'o1', 'o2', 's'])
+    // Dragged far below the list, the second output stays the run's last.
+    await drag(button('Reorder Ground · Slope', row('o1')), 10 * 32)
+    expect(actions.moveReferenceTo).toHaveBeenCalledWith('o1', 'o2')
+    vi.clearAllMocks()
+    await drag(button('Reorder Ground'), 0)
+    expect(actions.moveReferenceTo).toHaveBeenCalledWith('a', 'b')
+  })
+
+  it('writes nothing for a drop where the row started', async () => {
+    mount()
+    rects(['b', 'a', 'o1', 'o2', 's'])
+    await drag(button('Reorder Canopy'), 4)
+    expect(actions.moveReferenceTo).not.toHaveBeenCalled()
+  })
+
+  it('moves a row with Alt ↑ and Alt ↓ on its grip or name, keeping focus on the control', async () => {
+    mount()
+    const frame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => { callback(0); return 0 })
+    const grip = button('Reorder Ground · Slope', row('s'))
+    grip.focus()
+    await key(grip, { key: 'ArrowUp', altKey: true })
+    expect(actions.moveReferenceTo).toHaveBeenCalledWith('s', 'o2')
+    expect(document.activeElement).toBe(button('Reorder Ground · Slope', row('s')))
+    await key(button('Canopy'), { key: 'ArrowDown', altKey: true })
+    expect(actions.moveReferenceTo).toHaveBeenCalledWith('b', 'a')
+    await key(button('Ground'), { key: 'ArrowDown', altKey: true })
+    expect(actions.moveReferenceTo).toHaveBeenCalledTimes(2)
+    frame.mockRestore()
+  })
+})
+
+describe('pending work, failures and the Site data eye', () => {
+  it('places an import at the top and a calculation under its source, with progress and Cancel', async () => {
+    const preparing: Partial<LibraryItemSummary> = { state: 'Preparing', generation_id: null }
+    lidarLibrary.value = library([
+      sourceItem('a', 'Ground'),
+      sourceItem('b', 'Canopy'),
+      sourceItem('n', 'North tiles', {
+        ...preparing,
+        import_job: { job_id: 'job-n', layer_id: 'n', state: 'Applying', message: null, progress: { phase: 'RenderingMap', percent: 42 } },
+      }),
+      slopeItem('r', 'a', { ...preparing, name: 'Terrace', run: { job_id: 'job-r', state: 'Preparing', message: null } }),
+    ])
+    ;(pending.attachments as Signal<unknown[]>).value = [
+      { key: 'import:n', kind: 'import', identity: designSessionStore.sessionIdentity.value, itemIds: ['n'] },
+      { key: 'r-def', kind: 'analysis', identity: designSessionStore.sessionIdentity.value, itemIds: ['r'] },
+      { key: 'import:other', kind: 'import', identity: { another: true }, itemIds: ['a'] },
+    ]
+    setDesign([{ kind: 'Source', id: 'a', order: 0 }, { kind: 'Source', id: 'b', order: 1 }])
+    mount()
+    expect(lines()).toEqual(['[pending:import:n]', 'b', 'a', '  [pending:r-def]'])
+    const importing = container.querySelector<HTMLElement>('[data-site-line="pending:import:n"]')!
+    expect(importing.textContent).toContain('Importing · 42%')
+    expect(importing.querySelector('progress')).not.toBeNull()
+    expect(importing.textContent).not.toContain('You can keep working.')
     await click(button('Cancel import', importing))
     expect(actions.cancelLibraryImport).toHaveBeenCalledWith('job-n')
-    const calculating = container.querySelector<HTMLElement>('[role="group"][aria-label="Terrace"]')!
+    const calculating = container.querySelector<HTMLElement>('[data-site-line="pending:r-def"]')!
+    expect(calculating.textContent).toContain('Calculating')
     await click(button('Cancel calculation', calculating))
     expect(actions.cancelAnalysisJob).toHaveBeenCalledWith(expect.objectContaining({ id: 'r' }))
-    expect(container.querySelectorAll('[role="group"]')).toHaveLength(2)
   })
 
   it('says when work started here could not join the Design', async () => {
@@ -350,117 +540,34 @@ describe('Layers site data', () => {
     expect(actions.dismissAttachmentFailure).toHaveBeenCalled()
     expect(dataDialog.value).toEqual({ kind: 'library', focusId: 'a' })
   })
+
+  it('says when the Layers eye hides all site data, with Show, and dims the rows keeping their eyes', async () => {
+    setDesign([{ kind: 'Source', id: 'a', order: 0 }], false)
+    mount()
+    expect(container.textContent).toContain('Site data is hidden from the map')
+    expect(row('a').dataset.hidden).toBe('true')
+    expect(button('Hide Ground')).toBeTruthy()
+    await click(button('Show'))
+    expect(actions.setSiteDataShown).toHaveBeenCalledWith(true)
+  })
 })
 
-describe('Layers site data details', () => {
-  beforeEach(() => {
-    locale.value = 'en'
-    vi.clearAllMocks()
-    dataDialog.value = null
-    lidarLibrary.value = library([
-      sourceItem('a', 'Ground'),
-      slopeItem('s', 'a', {
-        name: 'Steepness',
-        freshness: { state: 'Stale', reasons: [{ reason: 'InputUpdated', input_key: 'dem', item_id: 'a' }] },
-      }),
-    ])
-    container = document.createElement('div')
-    document.body.append(container)
-    siteDataDetails.value = 's'
-  })
-
-  afterEach(() => {
-    render(null, container)
-    container.remove()
-    siteDataDetails.value = null
-  })
-
-  it('shows provenance, staleness with Refresh, history and Run again with changes', async () => {
-    act(() => { render(<SiteDataDetails id="s" />, container) })
-    await act(async () => {})
-    expect(container.querySelector('h2')?.textContent).toBe('Steepness')
-    expect(container.textContent).toContain('Ground has changed since this was calculated.')
-    expect(container.querySelector('dl')?.textContent).toContain('Calculated fromGround')
-    expect(actions.fetchProcessingHistory).toHaveBeenCalledWith('s-def', null)
-
-    await click(button('Refresh Steepness'))
-    expect(actions.rerunAnalysis).toHaveBeenCalledWith('s-def')
-    await click(button('Run again with changes…'))
-    expect(dataDialog.value).toMatchObject({ kind: 'analyze', itemId: 'a', analysisId: 'terrain.slope', from: 's', attach: true })
-
-    await click(button(/^Ground$/))
-    expect(siteDataDetails.value).toBe('a')
-  })
-
-  it('renames in place and goes back to Layers', async () => {
-    act(() => { render(<SiteDataDetails id="s" />, container) })
-    await click(button('Rename…'))
-    const input = container.querySelector<HTMLInputElement>('input[name="name"]')!
-    await act(async () => {
-      input.value = 'Orchard slope'
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    await act(async () => {
-      container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-    })
-    expect(actions.renameLibraryItem).toHaveBeenCalledWith('s', 'Orchard slope')
-    await click(button('Back to Layers'))
-    expect(siteDataDetails.value).toBeNull()
-  })
-
-  it('refuses a rename to a name another library item uses', async () => {
-    act(() => { render(<SiteDataDetails id="s" />, container) })
-    await click(button('Rename…'))
-    const input = container.querySelector<HTMLInputElement>('input[name="name"]')!
-    await act(async () => {
-      input.value = 'ground'
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    expect(container.textContent).toContain('already has data named “ground”')
-    expect(container.textContent).toContain('“ground (2)”')
-    expect(button('Save name').disabled).toBe(true)
-    await act(async () => {
-      container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-    })
-    expect(actions.renameLibraryItem).not.toHaveBeenCalled()
-
-    // Changing only the case of its own name is allowed.
-    await act(async () => {
-      input.value = 'steepness'
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    expect(button('Save name').disabled).toBe(false)
-  })
-
-  it('opens the Data library for deleting', async () => {
-    act(() => { render(<SiteDataDetails id="s" />, container) })
-    await click(button('Open in the Data library'))
-    expect(dataDialog.value).toEqual({ kind: 'library', focusId: 's' })
-  })
-
-  it('the Site data panel holds the rows, Add data and the open row\'s settings under a header with Library and close', async () => {
-    siteDataDetails.value = null
+describe('the pinned point', () => {
+  it('shows the pin\'s coordinates with Unpin, and otherwise a hint while a row can show a value', async () => {
+    activePanel.value = 'canvas'
     setDesign([{ kind: 'Source', id: 'a', order: 0 }])
-    sidePanel.value = 'site-data'
-    act(() => { render(<SiteDataPanel importGeoJson={importGeoJson} />, container) })
-
-    expect(container.querySelector('aside')?.getAttribute('aria-label')).toBe('Site data')
-    expect(container.querySelector('h2')?.textContent).toBe('Site data')
-    expect(button('Add data')).toBeTruthy()
-    await click(button(/^Ground/))
-    expect(container.querySelector('[aria-label="Legend"]')).not.toBeNull()
-
-    await click(button('Data library'))
-    expect(dataDialog.value).toEqual({ kind: 'library', focusId: null })
-    await click(button('Close panel'))
-    expect(sidePanel.value).toBeNull()
+    mount()
+    expect(container.textContent).toContain('Point at the map to read values · click to pin')
+    await act(async () => { setPin({ lon: 2.35211, lat: 48.85123 }) })
+    expect(container.textContent).toContain('48.851230° N, 2.352110° E')
+    expect(container.textContent).not.toContain('Point at the map')
+    await click(button('Unpin'))
+    expect(pin.value).toBeNull()
   })
 
-  it('the Site data panel shows one item\'s details in place of its list', () => {
-    siteDataDetails.value = 's'
-    act(() => { render(<SiteDataPanel importGeoJson={importGeoJson} />, container) })
-
-    expect(button('Rename…')).toBeTruthy()
-    expect(container.querySelector('aside[aria-label="Site data"]')).toBeNull()
+  it('shows no hint without a row that can show a value', () => {
+    setDesign([{ kind: 'Source', id: 'a', order: 0, visible: false }])
+    mount()
+    expect(container.textContent).not.toContain('Point at the map')
   })
 })
