@@ -9,6 +9,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LidarSamplePointsRequest, LidarSampleSeries } from '../generated/contracts'
 import { librarySnapshot, sourceItem } from './support/library-fixtures'
 
+const plotting = vi.hoisted(() => ({ builds: 0 }))
+vi.mock('../app/lidar/profile-chart', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../app/lidar/profile-chart')>()
+  return {
+    ...actual,
+    buildProfilePlot: (input: Parameters<typeof actual.buildProfilePlot>[0]) => {
+      plotting.builds += 1
+      return actual.buildProfilePlot(input)
+    },
+  }
+})
+
 const sampling = vi.hoisted(() => ({
   answer: null as null | ((request: LidarSamplePointsRequest) => LidarSampleSeries[]),
   requests: [] as LidarSamplePointsRequest[],
@@ -180,6 +192,24 @@ describe('ProfileChart', () => {
       svg.dispatchEvent(new PointerEvent('pointerleave'))
     })
     expect(profileHover.value).toBeNull()
+  })
+
+  it('scrubbing redraws only what the cursor moves, never the curves', async () => {
+    await drawLine()
+    const svg = container.querySelector('section > svg')!
+    const paths = Array.from(svg.querySelectorAll('path')).map((path) => path.getAttribute('d'))
+    const builds = plotting.builds
+
+    for (const step of [1, 3, 5, 7, 9]) {
+      await act(async () => {
+        svg.dispatchEvent(new PointerEvent('pointermove', { clientX: 54 + (348 * step) / 10, bubbles: true }))
+      })
+    }
+
+    expect(plotting.builds).toBe(builds)
+    expect(Array.from(svg.querySelectorAll('path')).map((path) => path.getAttribute('d'))).toEqual(paths)
+    expect(container.querySelector('[role="status"]')?.textContent).toBe('At 9 m')
+    expect(legendLines()[0]).toBe('MNT · IGN101.50 m')
   })
 
   it('Steepest moves the cursor and the ring to the steepest spot', async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { JSX } from 'preact'
 import { buildProfilePlot, curveStyle, distanceTicks, indexAtX, type PlotArea } from '../../../app/lidar/profile-chart'
 import {
@@ -45,14 +45,12 @@ export function ProfileChart() {
   const profile = siteProfile.value
   if (profile.status === 'none') return null
   const language = locale.value
-  const cursor = profile.status === 'ready' ? profileCursor.value : null
-  const at = cursor === null || profile.status !== 'ready' ? null : profile.samples.distances[cursor]!
   return (
     <section className={styles.profile} aria-label={t('siteData.profile')}>
       <div className={styles.header}>
         <h3 className={styles.title}>{t('siteData.profile')}</h3>
         <span className={styles.length}>{formatLength(profile.lengthM, language)}</span>
-        <span className={styles.at} role="status">{at === null ? '' : t('siteData.chart.at', { distance: formatLength(at, language) })}</span>
+        <span className={styles.at} role="status">{profile.status === 'ready' ? <CursorDistance profile={profile} language={language} /> : null}</span>
         {profile.status === 'ready' ? <CopyValues profile={profile} /> : null}
         <button type="button" className={styles.iconButton} aria-label={t('siteData.chart.close')} onClick={clearProfile}>
           <ControlIcon name="close" size={16} />
@@ -60,10 +58,28 @@ export function ProfileChart() {
         </button>
       </div>
       {profile.status === 'ready'
-        ? <ReadyChart profile={profile} cursor={cursor} />
+        ? <ReadyChart profile={profile} language={language} />
         : <p className={styles.state}>{t(STATE_TEXT[profile.status])}</p>}
     </section>
   )
+}
+
+/** "At {distance}" while the cursor is on the chart. Only this, the cursor marks and the legend follow the cursor. */
+function CursorDistance({ profile, language }: { readonly profile: ReadyProfile; readonly language: string }) {
+  const cursor = profileCursor.value
+  return cursor === null ? null : <>{t('siteData.chart.at', { distance: formatLength(profile.samples.distances[cursor]!, language) })}</>
+}
+
+/** One formatter per locale and options: the legend re-renders at scrub rate. */
+const formatters = new Map<string, Intl.NumberFormat>()
+function numberFormat(language: string, options: Intl.NumberFormatOptions): Intl.NumberFormat {
+  const key = `${language}|${JSON.stringify(options)}`
+  let format = formatters.get(key)
+  if (!format) {
+    format = new Intl.NumberFormat(language, options)
+    formatters.set(key, format)
+  }
+  return format
 }
 
 const STATE_TEXT: Readonly<Record<'needs-layer' | 'reading' | 'no-values', string>> = {
@@ -112,8 +128,13 @@ interface PlotLayout {
   readonly curves: readonly { readonly curve: ProfileCurve; readonly index: number }[]
 }
 
-function ReadyChart({ profile, cursor }: { readonly profile: ReadyProfile; readonly cursor: number | null }) {
-  const language = locale.value
+interface DrawnPlot {
+  readonly plot: PlotLayout
+  readonly geometry: ReturnType<typeof buildProfilePlot>
+}
+
+/** The plots' layout and geometry, which depend on the profile alone. */
+function drawProfile(profile: ReadyProfile): { readonly drawn: readonly DrawnPlot[]; readonly bottom: number } {
   const indexed = profile.curves.map((curve, index) => ({ curve, index }))
   const plots: PlotLayout[] = []
   let top = 6
@@ -124,26 +145,63 @@ function ReadyChart({ profile, cursor }: { readonly profile: ReadyProfile; reado
     plots.push({ role, area: { x0: X0, x1: X1, top, bottom: top + height }, curves })
     top += height + PLOT_GAP
   }
-  const bottom = plots[plots.length - 1]!.area.bottom
+  const drawn = plots.map((plot) => ({
+    plot,
+    geometry: buildProfilePlot({
+      ...plot.area,
+      distances: profile.samples.distances,
+      series: plot.curves.map(({ curve }) => curve.values),
+      fromZero: plot.role === 'height',
+    }),
+  }))
+  return { drawn, bottom: plots[plots.length - 1]!.area.bottom }
+}
+
+/**
+ * The plots and legend. The curves, axes and ticks are drawn once per profile and locale; a pointer move re-renders
+ * only the cursor marks, the legend readings and "At …".
+ */
+function ReadyChart({ profile, language }: { readonly profile: ReadyProfile; readonly language: string }) {
+  const { drawn, bottom } = useMemo(() => drawProfile(profile), [profile])
   const { distances } = profile.samples
   const scrub = (event: JSX.TargetedPointerEvent<SVGSVGElement>) => {
     const rect = event.currentTarget.getBoundingClientRect()
     const scale = rect.width > 0 ? WIDTH / rect.width : 1
     setProfileCursor(indexAtX((event.clientX - rect.left) * scale, distances, { x0: X0, x1: X1 }))
   }
-  const drawn = plots.map((plot) => ({
-    plot,
-    geometry: buildProfilePlot({
-      ...plot.area,
-      distances,
-      series: plot.curves.map(({ curve }) => curve.values),
-      fromZero: plot.role === 'height',
-    }),
-  }))
   const x = drawn[0]!.geometry.x
   const axisLabel = (value: number | null, curve: ProfileCurve) => value === null
     ? ''
-    : `${new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(value)}${unitSuffix(curve.units)}`
+    : `${numberFormat(language, { maximumFractionDigits: 1 }).format(value)}${unitSuffix(curve.units)}`
+  const plots = useMemo(() => (
+    <>
+      {drawn.map(({ plot, geometry }) => (
+        <g key={plot.role}>
+          <line className={styles.baseline} x1={X0} x2={X1} y1={plot.area.bottom} y2={plot.area.bottom} />
+          <text className={styles.axisLabel} x={X0 - 6} y={plot.area.top + 9} text-anchor="end">{axisLabel(geometry.max, plot.curves[0]!.curve)}</text>
+          <text className={styles.axisLabel} x={X0 - 6} y={plot.area.bottom} text-anchor="end">{axisLabel(geometry.min, plot.curves[0]!.curve)}</text>
+          {plot.curves.map(({ curve, index }, position) => {
+            const style = curveStyle(index)
+            return (
+              <path
+                key={curve.id}
+                className={styles.curve}
+                data-curve={style.colour}
+                data-dashed={style.dashed ? 'true' : undefined}
+                d={geometry.paths[position]}
+              />
+            )
+          })}
+        </g>
+      ))}
+      {distanceTicks(profile.lengthM).map((tick) => (
+        <g key={tick}>
+          <line className={styles.baseline} x1={x(tick)} x2={x(tick)} y1={bottom} y2={bottom + 4} />
+          <text className={styles.axisLabel} x={x(tick)} y={bottom + 17} text-anchor={tick === 0 ? 'start' : 'middle'}>{formatLength(tick, language)}</text>
+        </g>
+      ))}
+    </>
+  ), [drawn, language])
   return (
     <>
       <svg
@@ -155,55 +213,47 @@ function ReadyChart({ profile, cursor }: { readonly profile: ReadyProfile; reado
         onPointerLeave={() => setProfileCursor(null)}
         onPointerCancel={() => setProfileCursor(null)}
       >
-        {drawn.map(({ plot, geometry }) => (
-          <g key={plot.role}>
-            <line className={styles.baseline} x1={X0} x2={X1} y1={plot.area.bottom} y2={plot.area.bottom} />
-            <text className={styles.axisLabel} x={X0 - 6} y={plot.area.top + 9} text-anchor="end">{axisLabel(geometry.max, plot.curves[0]!.curve)}</text>
-            <text className={styles.axisLabel} x={X0 - 6} y={plot.area.bottom} text-anchor="end">{axisLabel(geometry.min, plot.curves[0]!.curve)}</text>
-            {plot.curves.map(({ curve, index }, position) => {
-              const style = curveStyle(index)
-              return (
-                <path
-                  key={curve.id}
-                  className={styles.curve}
-                  data-curve={style.colour}
-                  data-dashed={style.dashed ? 'true' : undefined}
-                  d={geometry.paths[position]}
-                />
-              )
-            })}
-            {cursor !== null ? plot.curves.map(({ curve, index }) => {
-              const value = curve.values[cursor]
-              if (value === null || value === undefined) return null
-              return <circle key={curve.id} className={styles.cursorDot} data-curve={curveStyle(index).colour} cx={x(distances[cursor]!)} cy={geometry.y(value)} r={3.5} />
-            }) : null}
-          </g>
-        ))}
-        {distanceTicks(profile.lengthM).map((tick) => (
-          <g key={tick}>
-            <line className={styles.baseline} x1={x(tick)} x2={x(tick)} y1={bottom} y2={bottom + 4} />
-            <text className={styles.axisLabel} x={x(tick)} y={bottom + 17} text-anchor={tick === 0 ? 'start' : 'middle'}>{formatLength(tick, language)}</text>
-          </g>
-        ))}
-        {cursor !== null ? <line className={styles.cursor} x1={x(distances[cursor]!)} x2={x(distances[cursor]!)} y1={plots[0]!.area.top} y2={bottom} /> : null}
+        {plots}
+        <CursorMarks drawn={drawn} distances={distances} bottom={bottom} />
       </svg>
       <ul className={styles.legend}>
-        {indexed.map(({ curve, index }) => (
-          <LegendLine key={curve.id} curve={curve} index={index} cursor={cursor} />
+        {profile.curves.map((curve, index) => (
+          <LegendLine key={curve.id} curve={curve} index={index} language={language} />
         ))}
       </ul>
     </>
   )
 }
 
-function LegendLine({ curve, index, cursor }: {
+/** The cursor line and one dot per curve with a value under it. */
+function CursorMarks({ drawn, distances, bottom }: {
+  readonly drawn: readonly DrawnPlot[]
+  readonly distances: readonly number[]
+  readonly bottom: number
+}) {
+  const cursor = profileCursor.value
+  if (cursor === null) return null
+  const atX = drawn[0]!.geometry.x(distances[cursor]!)
+  return (
+    <>
+      {drawn.map(({ plot, geometry }) => plot.curves.map(({ curve, index }) => {
+        const value = curve.values[cursor]
+        if (value === null || value === undefined) return null
+        return <circle key={curve.id} className={styles.cursorDot} data-curve={curveStyle(index).colour} cx={atX} cy={geometry.y(value)} r={3.5} />
+      }))}
+      <line className={styles.cursor} x1={atX} x2={atX} y1={drawn[0]!.plot.area.top} y2={bottom} />
+    </>
+  )
+}
+
+function LegendLine({ curve, index, language }: {
   readonly curve: ProfileCurve
   readonly index: number
-  readonly cursor: number | null
+  readonly language: string
 }) {
-  const language = locale.value
+  const cursor = profileCursor.value
   const style = curveStyle(index)
-  const one = new Intl.NumberFormat(language, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+  const one = numberFormat(language, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
   let reading: JSX.Element
   if (cursor !== null) {
     const value = curve.values[cursor] ?? null
@@ -212,7 +262,7 @@ function LegendLine({ curve, index, cursor }: {
       : <span className={styles.reading}>{formatRowValue(value, curve.units, language)}</span>
   } else if (curve.stats.role === 'elevation') {
     const { rise, steepest } = curve.stats
-    const signed = new Intl.NumberFormat(language, { minimumFractionDigits: 1, maximumFractionDigits: 1, signDisplay: 'exceptZero' })
+    const signed = numberFormat(language, { minimumFractionDigits: 1, maximumFractionDigits: 1, signDisplay: 'exceptZero' })
     reading = (
       <span className={styles.reading}>
         {rise === null ? null : t('siteData.chart.rise', { value: `${signed.format(rise)}${unitSuffix(curve.units)}` })}
@@ -224,7 +274,7 @@ function LegendLine({ curve, index, cursor }: {
             onClick={() => setProfileCursor(steepest.index)}
           >
             {t('siteData.chart.steepest', {
-              percent: new Intl.NumberFormat(language, { style: 'percent', maximumFractionDigits: 0 }).format(steepest.percent / 100),
+              percent: numberFormat(language, { style: 'percent', maximumFractionDigits: 0 }).format(steepest.percent / 100),
             })}
           </button>
         ) : null}
