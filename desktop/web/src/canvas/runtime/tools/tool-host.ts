@@ -2,10 +2,10 @@
 //
 // Owns the ToolHost (spec §1.4, ADR 0018), the only code that builds ToolGestures. It converts the recogniser's screen
 // gestures to world points at event time, resolves modifiers (§2.3), applies the active tool's constraint and the grid
-// and guide snapping, and runs the interceptors (admission, handles, the inspection probe) before the tool; every raw
+// and guide snapping, and runs the interceptors (admission, the press's capture, handles) before the tool; every raw
 // press first commits the nudge series and, as today's pointerdown, closes the menu and moves focus to the map. A drag
 // starts at the press's world point, and every camera frame re-emits the live drag or the resting pointer, which a
-// pointer pan moves (plan §1, exception 1). It holds re-origin while a press, a tool transient or the text entry is
+// pointer pan moves (plan §1, exception 1); the settled frame republishes the resting pointer to subscribePointerWorld. It holds re-origin while a press, a tool transient or the text entry is
 // open, and a plane change with no pointer resting on the map hides the tool's draft until the next hover, so no tool
 // re-projects a world point it keeps (spec §4.19). The text entry's state is the chrome's, read live. It owns the passive hover, the selection decorations, the arrow-nudge series, transient history and the Esc
 // queries, and merges the tool's draft with its decorations and the drop preview for the renderer. One drop route
@@ -63,8 +63,9 @@ const NOTHING: GestureOutcome = Object.freeze({})
 const QUARANTINE: GestureOutcome = Object.freeze({ quarantine: true })
 /** A press the scene refused: quarantined, and its recogniser session ends with no gesture. */
 const REFUSED_PRESS: GestureOutcome = Object.freeze({ quarantine: true, rejectSession: true })
-/** A press the inspection probe sampled: nothing else happens until the next press. */
-const CLAIMED_PRESS: GestureOutcome = Object.freeze({ rejectSession: true })
+/** A press whose capture was lost while it was taken (a synchronous lostpointercapture): its recogniser session ends with
+ *  no gesture, and nothing else happens until the next press. */
+const LOST_CAPTURE_PRESS: GestureOutcome = Object.freeze({ rejectSession: true })
 const DROP_COPY: GestureOutcome = Object.freeze({ dropEffect: 'copy' })
 const DROP_NONE: GestureOutcome = Object.freeze({ dropEffect: 'none' })
 /** A dragover in overview or while the scene is busy: refused. */
@@ -86,7 +87,7 @@ const NUDGE_LARGE_STEP_M = 1
 const NUDGE_SERIES_IDLE_MS = 800
 /** The tools whose points Shift constrains (spec §2.3); of the handles, only the rotate handle (U36). */
 const SHIFT_CONSTRAINS: ReadonlySet<ToolId> = new Set<ToolId>([
-  'polygon', 'plant-spacing', 'line', 'measurement-guide', 'rectangle', 'ellipse',
+  'polygon', 'plant-spacing', 'line', 'measurement-guide', 'rectangle', 'ellipse', 'profile',
 ])
 /** The drawing tools whose draft chips replace the selected zone's. */
 const ZONE_DRAFT_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>(['line', 'rectangle', 'ellipse', 'polygon'])
@@ -210,6 +211,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let selectOnFault = false
   let invalidateNeeded = false
   let planeRevision = frame().view.planeRevision
+  let settledRevision = deps.frames.settledViewFrame.peek().revision
   let mode = frame().mode
   let publishedToolDraft: DraftPresentation | null = null
   let publishedDropPreview: readonly DraftShape[] | null = null
@@ -374,6 +376,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       },
       requestFocus() {
         if (owns()) deps.focus.focusMap()
+      },
+      finishProfile(points) {
+        if (owns()) deps.finishProfile?.(points)
       },
     }
     return {
@@ -583,8 +588,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   /** The pointer's world point at a screen point on the map; none off it. */
-  function publishPointerAt(at: ScreenPoint): void {
-    if (insideScreen(at, frame().view.screen)) publishPointer({ world: frame().view.screenToWorld(at), screen: at })
+  function publishPointerAt(at: ScreenPoint, pointer: PointerKind): void {
+    if (insideScreen(at, frame().view.screen)) publishPointer({ world: frame().view.screenToWorld(at), screen: at, pointerKind: pointer })
   }
 
   function clearPassiveHover(): void {
@@ -615,7 +620,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function hover(g: Extract<Gesture, { kind: 'hover' }>): GestureOutcome {
     // The lens hears only moves over the map: not over the canvas's own chrome (buttons, inputs, textareas,
     // contenteditable and [data-preserve-overlays]), nor off the map.
-    if (g.target.kind === 'surface') publishPointerAt(g.at)
+    if (g.target.kind === 'surface') publishPointerAt(g.at, g.pointer)
     // The pointer is back over the map after a panel drag: the tool's draft shows again.
     showDraftAfterDrop()
     const tool = activeTool
@@ -688,19 +693,20 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     lastHover = null
     // An overview press pans in the recogniser and never reaches the host (U36); nothing here samples or edits.
     if (frame().mode === 'overview') return NOTHING
-    let claimed = false
+    let lost = false
     const admitted = deps.admission.runWhenSettled(() => {
-      claimed = pressWhenSettled(g, commitsNote)
+      lost = pressWhenSettled(g, commitsNote)
       return true
     }, false)
     if (!admitted) return REFUSED_PRESS
-    return claimed ? CLAIMED_PRESS : NOTHING
+    return lost ? LOST_CAPTURE_PRESS : NOTHING
   }
 
-  /** Today's _pointerDownWhenSettled, in order: the press's capture, handles, the probe, the tool. Focus moved at the raw
-   *  press (rawPress), so an open text entry has committed. A capture lost while it is taken (a synchronous lostpointercapture)
-   *  ended the press: nothing else happens, as today's check after capture. A press that committed a new note (`commitsNote`)
-   *  ends where today's Text adapter took it: the tool hears none of it, nor its drag or release. */
+  /** Today's _pointerDownWhenSettled, in order: the press's capture, handles, the tool; true when the capture was lost.
+   *  Focus moved at the raw press (rawPress), so an open text entry has committed. A capture lost while it is taken (a
+   *  synchronous lostpointercapture) ended the press: nothing else happens, as today's check after capture. A press that
+   *  committed a new note (`commitsNote`) ends where today's Text adapter took it: the tool hears none of it, nor its drag
+   *  or release. No interceptor claims a press for site data: the pin follows the tap (pinAfterTap). */
   function pressWhenSettled(g: Extract<Gesture, { kind: 'press' }>, commitsNote: boolean): boolean {
     const tool = activeTool
     if (!deps.capturePress(g.id)) return true
@@ -713,9 +719,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       clearPassiveHoverForEdit()
       return false
     }
-    // Inspection owns the plain primary press, after handles and the pan check and before the tool; a Pan-tool press
-    // never samples (spec §3.8, fixture J10).
-    if (currentId !== 'hand' && deps.inspect?.(point.world)) return true
     if (commitsNote) return false
     const hit = hitAt(point.world)
     live = liveGesture(g, 'tool', point, hit)
@@ -827,7 +830,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const gesture = live
     // A finger never hovers: its tap publishes the pointer at the resolved press, the down point, as a mouse's hover before
     // its press did (A16); not on a handle, as a hover there publishes none. A finger's drag or pair publishes nothing.
-    if (g.pointer === 'touch' && gesture?.kind !== 'handle') publishPointerAt(g.at)
+    if (g.pointer === 'touch' && gesture?.kind !== 'handle') publishPointerAt(g.at, g.pointer)
     if (!gesture) {
       // A press the tool never heard (a new note's committing click): its release is none of the tool's.
       releasedOutsideTool()
@@ -845,12 +848,28 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
           }))
         } else {
           const point = pointAt(g.at, g.mods, g.pointer)
+          // The tool that hears the tap decides the pin, not the one it may arm (Profile requests Select as it finishes).
+          const heardBy = currentId
           callTool(() => tool.gesture({ kind: 'tap', point, hit: hitAt(point.world), clickCount: g.clickCount }))
+          pinAfterTap(heardBy, gesture, point.world)
         }
       } finally {
         endLive({ screen: g.at, mods: g.mods, pointer: g.pointer })
       }
     })
+  }
+
+  /**
+   * The Site data pin (spec §3.8, fixture J10; U49 Q17): a tap no tool uses pins its point once the tool has heard it, and
+   * claims nothing. That is a Select tap whose press hit nothing, not even a zone's fill (Select cleared the selection), or
+   * any Pan-tool tap; never another tool, a handle, a drag or overview. `heardBy` is the tool the tap reached, read before
+   * the tool ran. deps.pin is absent on Web and while the Site data panel is closed.
+   */
+  function pinAfterTap(heardBy: ToolId, gesture: LiveGesture, world: WorldPoint): void {
+    if (!deps.pin || frame().mode !== 'site') return
+    const pins = heardBy === 'hand'
+      || (heardBy === 'select' && gesture.startHit === null && deps.scene.hitAt(gesture.start.world, { fill: true }) === null)
+    if (pins) deps.pin(world)
   }
 
   // ── Drops ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -1088,6 +1107,18 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   /**
+   * After a camera change under a still pointer (a wheel zoom, a key pan, a flight), the settled frame republishes the
+   * resting pointer, so readouts such as the Site data row values and the zoom lens follow the ground (canopi-f47t.42,
+   * spec §1.4 "Hover"). Once per settle, not per camera frame; nothing with the pointer off the map or in overview.
+   */
+  function onSettledFrame(next: ViewFrame): void {
+    if (disposed || next.revision === settledRevision) return
+    settledRevision = next.revision
+    const still = restingPointer()
+    if (still) publishPointerAt(still.screen, still.pointer)
+  }
+
+  /**
    * The live drag or the last hover is re-emitted from its screen point, so a draft, a ghost or a preview stays on the
    * ground under a still pointer (plan §1, exception 1). With the pointer off the map the tool rebuilds its
    * scale-dependent draft instead, as today's refreshViewportDependent did on every camera change.
@@ -1298,6 +1329,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   // ── The host ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
   const unsubscribeFrames = deps.frames.onViewFrame('tools', onFrame)
+  // Listeners run untracked: a readout's own signal reads never become this subscription's dependencies.
+  const unsubscribeSettled = deps.frames.settledViewFrame.subscribe((next) => untracked(() => onSettledFrame(next)))
   activate(currentId, null)
 
   return {
@@ -1442,6 +1475,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       disposed = true
       runCanvasRuntimeCleanups([
         () => unsubscribeFrames(),
+        () => unsubscribeSettled(),
         () => endNudgeSeries(true),
         () => cancelLive('tool-change'),
         () => tool.cancelTransient('tool-change'),
@@ -1472,6 +1506,7 @@ function cursorForTool(tool: ToolId): string {
     case 'rectangle':
     case 'ellipse':
     case 'polygon':
+    case 'profile':
     case 'plant-stamp':
     case 'object-stamp':
     case 'plant-spacing': return 'crosshair'

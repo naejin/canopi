@@ -9,7 +9,7 @@ import {
   pendingAttachments,
   removeFromDesign,
   rerunAnalysis,
-  setLidarEntryOpacity,
+  setLidarEntryDisplay,
   setLidarEntryVisibility,
 } from '../../../app/lidar/actions'
 import { siteDataLines } from '../../../app/lidar/analysis-groups'
@@ -26,18 +26,19 @@ import {
   openSiteDataDetails,
   selectSiteRow,
 } from '../../../app/lidar/library-navigation'
-import { libraryItemName, lidarLibrary, readLidarPresentation, type LidarPresentationItem } from '../../../app/lidar/library-store'
+import { isMissing, libraryItemName, lidarLibrary, readCurrentLidarPresentation, type LidarPresentationItem } from '../../../app/lidar/library-store'
 import { canMoveReference, referenceRows, type ReferenceRow } from '../../../app/lidar/reference-tree'
 import { viewDesignLocation, viewLidarCoverage } from '../../../app/lidar/camera-request'
-import { beginInspection, endInspection, inspectionTarget } from '../../../app/lidar/inspection'
 import { locale } from '../../../app/settings/state'
 import type { LibraryItemSummary } from '../../../generated/contracts'
 import { t } from '../../../i18n'
-import { LayerVisibilityIcon } from '../../canvas/LayerPanel'
 import { ActionMenu, type ActionMenuEntry } from '../../shared/ActionMenu'
 import { ButtonTooltip } from '../../shared/ButtonTooltip'
 import { ControlIcon } from '../../shared/ControlIcon'
+import { LayerVisibilityIcon } from '../../shared/LayerVisibilityIcon'
+import layerRow from '../../shared/layer-row.module.css'
 import { Notice } from '../../shared/Notice'
+import { Slider } from '../../shared/Slider'
 import { staleReasonText } from '../analyze/analysis-text'
 import { unitWords } from './item-text'
 import styles from './site-data.module.css'
@@ -47,7 +48,7 @@ type SiteRow = ReferenceRow<LidarPresentationItem>
 
 /** The Design's site data rows in Layers: front first, results under their source. */
 function readSiteRows(): SiteRow[] {
-  return referenceRows(readLidarPresentation(currentDesign.value, lidarLibrary.value))
+  return referenceRows(readCurrentLidarPresentation())
 }
 
 function nameOfItem(id: string): string {
@@ -57,7 +58,7 @@ function nameOfItem(id: string): string {
 }
 
 function rowLabel(item: LidarPresentationItem): string {
-  return item.state === 'unavailable' ? t('canvas.lidar.library.unavailableItem') : item.name
+  return isMissing(item) ? t('canvas.lidar.library.unavailableItem') : item.name
 }
 
 /**
@@ -172,10 +173,10 @@ function AnalysisGroupRow({ members, depth }: { members: readonly SiteRow[]; dep
     t('canvas.lidar.layers.resultCount', { count: members.length }),
   ].filter(Boolean).join(' · ')
   return (
-    <li className={styles.row} data-hidden={!visible} data-depth={Math.min(depth, 3)} data-analysis-group>
+    <li className={`${layerRow.row} ${styles.row}`} data-hidden={!visible} data-depth={Math.min(depth, 3)} data-analysis-group>
       <button
         type="button"
-        className={styles.eye}
+        className={layerRow.eye}
         aria-pressed={visible}
         aria-label={visibilityLabel}
         onClick={() => { for (const member of members) setLidarEntryVisibility(member.id, !visible) }}
@@ -198,14 +199,13 @@ function SiteDataRow({ row, depth, grouped, active }: { row: SiteRow; depth: num
     : t('canvas.lidar.layers.show', { name: label })
   return (
     <li
-      className={styles.row}
-      data-active={active}
+      className={`${layerRow.row} ${styles.row}`}
       data-hidden={!row.visible}
       data-depth={Math.min(depth, 3)}
     >
       <button
         type="button"
-        className={styles.eye}
+        className={layerRow.eye}
         aria-pressed={row.visible}
         aria-label={visibilityLabel}
         onClick={() => setLidarEntryVisibility(row.id, !row.visible)}
@@ -215,8 +215,8 @@ function SiteDataRow({ row, depth, grouped, active }: { row: SiteRow; depth: num
       </button>
       <button
         type="button"
-        className={styles.name}
-        aria-current={active ? 'true' : undefined}
+        className={`${layerRow.name} ${styles.name}`}
+        aria-expanded={active}
         aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
         onClick={() => selectSiteRow(row.id)}
         onKeyDown={(event) => {
@@ -298,7 +298,9 @@ function refresh(item: LidarPresentationItem): void {
  * states follow.
  */
 function rowCaption(item: LidarPresentationItem, grouped: boolean): string {
-  if (item.state === 'unavailable' || !item.itemType) return t('canvas.lidar.library.dataUnavailable')
+  // A row whose library is still loading has no type yet; it is never captioned missing.
+  if (item.availability === 'loading') return ''
+  if (item.availability !== 'present' || !item.itemType) return t('canvas.lidar.library.dataUnavailable')
   const output = grouped && item.analysisId
     ? findAnalysis(item.analysisId)?.outputs.find((candidate) => candidate.key === item.outputKey)
     : undefined
@@ -309,16 +311,21 @@ function rowCaption(item: LidarPresentationItem, grouped: boolean): string {
     : [itemTypeLabel(item.itemType), item.displayRange ? formatRasterRange(item.displayRange, item.units, locale.value) : null]
       .filter(Boolean).join(' · ')
   if (item.state !== 'Ready') return `${what} · ${t('canvas.lidar.library.preparing')}`
-  const display = item.generationId ? readLidarDisplay(item.role, item.id, item.generationId) : null
-  if (item.visible && display?.state === 'Preparing') return `${what} · ${t('canvas.lidar.layers.preparingDisplay')}`
-  if (item.visible && display?.state === 'Failed') return `${what} · ${t('canvas.lidar.library.displayFailed')}`
+  const display = item.generationId ? readLidarDisplay(item.kind, item.id, item.generationId) : null
+  if (item.shown && display?.state === 'Preparing') return `${what} · ${t('canvas.lidar.layers.preparingDisplay')}`
+  if (item.shown && display?.state === 'Failed') return `${what} · ${t('canvas.lidar.library.displayFailed')}`
   return what
 }
 
+/** The inspector's type line: the item type, nothing while the library loads, else missing. */
+function inspectorCaption(item: LidarPresentationItem): string {
+  if (item.itemType) return itemTypeLabel(item.itemType)
+  return item.availability === 'loading' ? '' : t('canvas.lidar.library.dataUnavailable')
+}
+
 /**
- * The active site data row's settings, at the foot of Layers: legend,
- * opacity, Fit, Read values, Analyze (sources), Details, order and Remove from
- * Design. Removing only edits this Design; the library keeps the data.
+ * The active site data row's settings, at the foot of Site data: legend,
+ * opacity, Fit, Analyze (sources), Details, order and Remove from Design. Removing only edits this Design; the library keeps the data.
  */
 export function SiteDataInspector() {
   const id = activeSiteItemId()
@@ -328,16 +335,14 @@ export function SiteDataInspector() {
   if (!item) return null
   const label = rowLabel(item)
   const available = item.state === 'Ready'
-  const inspecting = inspectionTarget.value?.id === item.id
   const style = lidarDisplayStyle(item)
-  const percent = Math.round(item.opacity * 100)
   const moveFront = t('canvas.lidar.layers.moveUp', { name: label })
   const moveBack = t('canvas.lidar.layers.moveDown', { name: label })
   return (
     <section className={styles.inspector} aria-label={label}>
       <div className={styles.inspectorHead}>
         <h3>{label}</h3>
-        <span>{item.itemType ? itemTypeLabel(item.itemType) : t('canvas.lidar.library.dataUnavailable')}</span>
+        <span>{inspectorCaption(item)}</span>
       </div>
       {isStale(item) && item.freshness.state === 'Stale' && (
         <Notice
@@ -359,18 +364,15 @@ export function SiteDataInspector() {
           </div>
         </div>
       )}
-      <label className={styles.opacity}>
-        <span>{t('canvas.lidar.layers.opacity')}</span>
-        <output>{percent}%</output>
-        <input
-          type="range"
-          min="0"
-          max="100"
-          value={percent}
-          aria-label={`${t('canvas.lidar.layers.opacity')}: ${label}`}
-          onInput={(event) => setLidarEntryOpacity(item.id, Number(event.currentTarget.value) / 100)}
-        />
-      </label>
+      <Slider
+        label={t('canvas.lidar.layers.opacity')}
+        ariaLabel={`${t('canvas.lidar.layers.opacity')}: ${label}`}
+        min={0}
+        max={100}
+        value={Math.round(item.opacity * 100)}
+        format={(value) => new Intl.NumberFormat(locale.value, { style: 'percent' }).format(value / 100)}
+        onInput={(value) => setLidarEntryDisplay(item.id, { opacity: value / 100 })}
+      />
       <div className={styles.actions}>
         {focused
           ? <button type="button" onClick={() => { viewDesignLocation(); setFocused(false) }}>{t('canvas.lidar.layers.returnToDesign')}</button>
@@ -380,23 +382,12 @@ export function SiteDataInspector() {
               {t('canvas.lidar.layers.fit')}
             </button>
           )}
-        <button
-          type="button"
-          aria-pressed={inspecting}
-          disabled={!available || !item.visible}
-          onClick={() => {
-            if (inspecting) endInspection()
-            else beginInspection({ kind: item.kind, id: item.id, name: item.name })
-          }}
-        >
-          {t('canvas.lidar.layers.inspect')}
-        </button>
-        {item.role === 'Source' && available && (
+        {item.kind === 'Source' && available && (
           <button type="button" onClick={() => analyzeItem(item.id, { attach: true })}>
             {t('canvas.lidar.library.analyze')}
           </button>
         )}
-        {item.state !== 'unavailable' && (
+        {item.availability === 'present' && (
           <button type="button" onClick={() => openSiteDataDetails(item.id)}>{t('canvas.lidar.layers.details')}</button>
         )}
         <span className={styles.order}>

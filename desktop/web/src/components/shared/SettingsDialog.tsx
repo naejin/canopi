@@ -29,6 +29,7 @@ import { Dropdown, type DropdownItem } from './Dropdown'
 import { SegmentedControl } from './SegmentedControl'
 import { SettingsGoogleKeyField } from './SettingsGoogleKeyField'
 import { Switch } from './Switch'
+import { Slider } from './Slider'
 import { WorkspaceDialog } from './WorkspaceDialog'
 import styles from './SettingsDialog.module.css'
 
@@ -206,7 +207,6 @@ function setNewDesignDefault(change: Partial<NewDesignDefaults>, persist: Settin
 function NewDesignsSection() {
   const defaults = newDesignDefaults.value
   const sizePercent = Math.round(defaults.symbolScale * 100)
-  const sizeText = new Intl.NumberFormat(locale.value, { style: 'percent' }).format(sizePercent / 100)
   return <>
     <p className={styles.intro}>{t('settings.newDesignsIntro')}</p>
     <Switch
@@ -215,23 +215,16 @@ function NewDesignsSection() {
       checked={defaults.satellite}
       onChange={(satellite) => setNewDesignDefault({ satellite })}
     />
-    <label className={styles.field}>
-      <span className={styles.label}>
-        {t('speciesKey.symbolSize')}
-        <output className={styles.value}>{sizeText}</output>
-      </span>
-      <input
-        type="range"
-        className={styles.slider}
-        min={PLANT_SYMBOL_SCALE_MIN * 100}
-        max={PLANT_SYMBOL_SCALE_MAX * 100}
-        step={10}
-        value={sizePercent}
-        aria-valuetext={sizeText}
-        // Slider-driven, so persistence is queued rather than written per step.
-        onInput={(event) => setNewDesignDefault({ symbolScale: Number(event.currentTarget.value) / 100 }, 'queued')}
-      />
-    </label>
+    <Slider
+      label={t('speciesKey.symbolSize')}
+      min={PLANT_SYMBOL_SCALE_MIN * 100}
+      max={PLANT_SYMBOL_SCALE_MAX * 100}
+      step={10}
+      value={sizePercent}
+      format={(percent) => new Intl.NumberFormat(locale.value, { style: 'percent' }).format(percent / 100)}
+      // Slider-driven, so persistence is queued rather than written per step.
+      onInput={(percent) => setNewDesignDefault({ symbolScale: percent / 100 }, 'queued')}
+    />
     <div className={styles.field}>
       <span className={styles.label}>{t('speciesKey.labels')}</span>
       <SegmentedControl<PlantLabels>

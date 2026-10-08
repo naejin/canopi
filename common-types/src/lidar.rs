@@ -209,6 +209,45 @@ pub enum LidarSampleOutcome {
     },
 }
 
+/// The most targets one `lidar_sample_points` request may carry; the
+/// frontend splits longer lists into batches of this size.
+pub const LIDAR_SAMPLE_MAX_TARGETS: usize = 8;
+/// The most points one `lidar_sample_points` request may carry: a profile
+/// samples at most this many points along its line.
+pub const LIDAR_SAMPLE_MAX_POINTS: usize = 4096;
+
+// One sampler for the Site data row values, the pin and the profile: the
+// native cell under each WGS84 point (no interpolation) of each target, read
+// through the one CRS authority. A request carries at most
+// `LIDAR_SAMPLE_MAX_TARGETS` targets and `LIDAR_SAMPLE_MAX_POINTS` points and
+// is refused before any work beyond either.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct LidarSamplePointsRequest {
+    pub targets: Vec<LidarSampleTarget>,
+    /// WGS84 `[longitude, latitude]` in degrees, in the caller's order.
+    pub points: Vec<[f64; 2]>,
+}
+
+/// One item to sample, aimed at the generation the caller believes current.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct LidarSampleTarget {
+    pub kind: crate::library::LibraryItemRole,
+    /// Library item id, matching `kind`.
+    pub entity_id: String,
+    pub expected_generation_id: String,
+}
+
+/// One target's answer, in target order.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub enum LidarSampleSeries {
+    /// One value per point, in point order; `None` where the cell declares no
+    /// data or the point lies outside the generation.
+    Values { values: Vec<Option<f64>> },
+    Unavailable {
+        reason: LidarSampleUnavailableReason,
+    },
+}
+
 // Display derivatives: regenerable tiled COGs with overviews that the upstream
 // WASM renderer reads through the scoped asset protocol. They are never source
 // members, heads or results; numeric inspection and analysis keep reading the
@@ -279,6 +318,9 @@ pub struct LidarDisplayDescriptor {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 pub struct LidarPresentationSection {
     pub schema_version: u32,
+    // The Site data eye in Layers: an entry draws only while both this flag
+    // and its own `visible` are on, and each entry keeps its own eye.
+    pub visible: bool,
     pub entries: Vec<LidarPresentationEntry>,
 }
 
@@ -292,24 +334,89 @@ pub struct LidarImportCoverage {
 }
 
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
-pub enum LidarPresentationEntryKind {
-    Source,
-    // A derived library item (an analysis result).
-    Derived,
-}
-
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 pub struct LidarPresentationEntry {
-    pub kind: LidarPresentationEntryKind,
+    pub kind: crate::library::LibraryItemRole,
     // Stable library identity: source-layer ID or derived item ID.
     pub id: String,
+    // The library item's name, written on attach and refreshed from the
+    // library while the item exists, so a missing item still reads by name.
+    pub name: String,
     pub visible: bool,
     pub opacity: f32,
     // User-defined order inside the LiDAR band; lower renders further back.
     pub order: u32,
-    pub style: Option<String>,
+    // The colour ramp; `None` is the item kind's default.
+    pub ramp: Option<LidarRamp>,
+    pub reversed: bool,
+    // The value range the ramp spans; `None` is the item kind's default.
+    pub range: Option<LidarColourRange>,
+}
+
+// A colour ramp by Canopi's own name; the frontend maps each to a renderer
+// ramp, so a renderer rename never reaches files. A variant is added only
+// when an item kind that offers it ships. A ramp outside the item kind's list
+// draws with the kind's default.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub enum LidarRamp {
+    Terrain,
+    Earth,
+    Greens,
+    YellowRed,
+    Magma,
+    Gray,
+}
+
+// The value range a ramp spans: the data's own range, the data with its
+// outliers cut (the cut values are recomputed each session, never stored), or
+// the user's pair (finite, `min < max`).
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
+#[serde(tag = "mode")]
+pub enum LidarColourRange {
+    Data,
+    CutOutliers,
+    Custom { min: f64, max: f64 },
 }
 
 pub const LIDAR_PRESENTATION_SCHEMA_VERSION: u32 = 1;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn a_batched_sample_crosses_ipc_in_target_order() {
+        let request: LidarSamplePointsRequest = serde_json::from_value(json!({
+            "targets": [
+                { "kind": "Source", "entity_id": "ground", "expected_generation_id": "g1" },
+                { "kind": "Derived", "entity_id": "slope", "expected_generation_id": "g2" }
+            ],
+            "points": [[0.0338, 48.2202], [0.0339, 48.2203]]
+        }))
+        .expect("a sample request decodes");
+        assert_eq!(
+            request.targets[1].kind,
+            crate::library::LibraryItemRole::Derived
+        );
+        assert_eq!(request.points[1], [0.0339, 48.2203]);
+
+        let series = vec![
+            LidarSampleSeries::Values {
+                values: vec![Some(142.5), None],
+            },
+            LidarSampleSeries::Unavailable {
+                reason: LidarSampleUnavailableReason::StaleGeneration,
+            },
+        ];
+        assert_eq!(
+            serde_json::to_value(series).unwrap(),
+            json!([
+                { "Values": { "values": [142.5, null] } },
+                { "Unavailable": { "reason": "StaleGeneration" } }
+            ])
+        );
+    }
+}

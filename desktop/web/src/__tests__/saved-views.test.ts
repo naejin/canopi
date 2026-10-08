@@ -61,9 +61,10 @@ function design(views: SavedView[] = [], stories: Story[] = []): CanopiFile {
     budget_currency: 'EUR',
     lidar: {
       schema_version: 1,
+      visible: true,
       entries: [
-        { kind: 'Source', id: 'dtm-shown', visible: true, opacity: 1, order: 0, style: null },
-        { kind: 'Source', id: 'dtm-hidden', visible: false, opacity: 1, order: 1, style: null },
+        { kind: 'Source', id: 'dtm-shown', name: 'Shown terrain', visible: true, opacity: 1, order: 0, ramp: null, reversed: false, range: null },
+        { kind: 'Source', id: 'dtm-hidden', name: 'Hidden terrain', visible: false, opacity: 1, order: 1, ramp: null, reversed: false, range: null },
       ],
     },
     views,
@@ -188,6 +189,14 @@ describe('saving the current view', () => {
     expect(saved!.camera.ground_size_m!.height).toBeCloseTo(ground.height, 6)
     expect(Object.keys(saved!)).not.toContain('extent')
     expect(designSessionStore.designDirty.value).toBe(true)
+  })
+
+  it('captures no site data while the Site data eye is off, whatever each entry stores', () => {
+    const base = design()
+    replaceCurrentDesignState({ ...base, lidar: { ...base.lidar!, visible: false } }, null, 'Orchard')
+    mountCanvas()
+
+    expect(saveCurrentView({ name: 'Hedges' })?.visible_layers.site_data).toEqual([])
   })
 
   it('a thumbnail shows the framed area fitted into the image, whatever the workspace size', () => {

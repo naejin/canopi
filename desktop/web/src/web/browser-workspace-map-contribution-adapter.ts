@@ -4,8 +4,9 @@ import {
   type WorkspaceMapContributionAdapter,
 } from '../app/canvas-map-surface/workspace-map-contribution-adapter'
 
-/** The Web Edition holds no local data: no LiDAR layers and no terrain. */
+/** The Web Edition holds no local data: no LiDAR layers, no terrain and no Site data pin or line. */
 const WEB_CONTRIBUTIONS = Object.freeze({
+  site: null,
   lidar: [],
   terrain: {
     contoursVisible: false, contoursOpacity: 0, contourIntervalMeters: 1,

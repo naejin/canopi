@@ -10,7 +10,9 @@ import type {
   LidarImportReceipt,
   LidarLayerCollection,
   LidarSampleOutcome,
+  LidarSamplePointsRequest,
   LidarSampleRequest,
+  LidarSampleSeries,
   ProcessingHistoryPage,
   RasterQuantity,
 } from '../generated/contracts'
@@ -137,6 +139,17 @@ export async function lidarSamplePixel(
   request: LidarSampleRequest,
 ): Promise<LidarSampleOutcome> {
   return invoke('lidar_sample_pixel', { request })
+}
+
+/**
+ * Sample up to LIDAR_SAMPLE_MAX_TARGETS items at up to LIDAR_SAMPLE_MAX_POINTS
+ * WGS84 points in one request (canopi-f47t.42, spec §1.10): one series per
+ * target, in target order, each value the native cell under its point. Only
+ * `app/lidar/sampler.ts` calls it. Commit 0's stub: stream C adds the command.
+ */
+export async function lidarSamplePoints(request: LidarSamplePointsRequest): Promise<LidarSampleSeries[]> {
+  void request
+  throw new Error('lidar_sample_points is not built yet (canopi-f47t.42, stream C)')
 }
 
 /**

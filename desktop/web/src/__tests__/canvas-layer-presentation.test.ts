@@ -182,7 +182,7 @@ describe('Canvas Layer Presentation', () => {
       },
       {
         id: 'basemap',
-        label: 'Map',
+        label: 'Street map',
         authority: 'map-layers',
         active: true,
         visible: false,

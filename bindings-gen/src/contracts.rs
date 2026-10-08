@@ -57,6 +57,7 @@ pub(crate) fn render_typescript_contracts() -> Result<String, Box<dyn std::error
         .register::<common_types::library::RasterQuantity>()
         .register::<common_types::library::StaleReason>()
         .register::<common_types::library::ToolProvenance>()
+        .register::<common_types::lidar::LidarColourRange>()
         .register::<common_types::lidar::LidarDisplayAsset>()
         .register::<common_types::lidar::LidarDisplayDescriptor>()
         .register::<common_types::lidar::LidarDisplayRequest>()
@@ -69,11 +70,14 @@ pub(crate) fn render_typescript_contracts() -> Result<String, Box<dyn std::error
         .register::<common_types::lidar::LidarLayerCollection>()
         .register::<common_types::lidar::LidarLayerSource>()
         .register::<common_types::lidar::LidarPresentationEntry>()
-        .register::<common_types::lidar::LidarPresentationEntryKind>()
         .register::<common_types::lidar::LidarPresentationSection>()
+        .register::<common_types::lidar::LidarRamp>()
         .register::<common_types::lidar::LidarResultState>()
         .register::<common_types::lidar::LidarSampleOutcome>()
+        .register::<common_types::lidar::LidarSamplePointsRequest>()
         .register::<common_types::lidar::LidarSampleRequest>()
+        .register::<common_types::lidar::LidarSampleSeries>()
+        .register::<common_types::lidar::LidarSampleTarget>()
         .register::<common_types::lidar::LidarSampleUnavailableReason>()
         .register::<common_types::location::GeoResult>()
         .register::<common_types::saved_object_stamps::SavedObjectStamp>()
@@ -132,5 +136,28 @@ pub(crate) fn render_typescript_contracts() -> Result<String, Box<dyn std::error
         .collect::<Vec<_>>()
         .join("\n");
     normalized.push('\n');
+    // The sampler's caps: Rust refuses a request beyond either, so the
+    // frontend batches by the same numbers.
+    normalized.push_str(&format!(
+        "\nexport const LIDAR_SAMPLE_MAX_TARGETS = {}\nexport const LIDAR_SAMPLE_MAX_POINTS = {}\n",
+        common_types::lidar::LIDAR_SAMPLE_MAX_TARGETS,
+        common_types::lidar::LIDAR_SAMPLE_MAX_POINTS,
+    ));
     Ok(normalized)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_sample_caps_reach_typescript_from_rust() {
+        let rendered = super::render_typescript_contracts().expect("contracts render");
+        assert!(rendered.contains(&format!(
+            "export const LIDAR_SAMPLE_MAX_TARGETS = {}\n",
+            common_types::lidar::LIDAR_SAMPLE_MAX_TARGETS
+        )));
+        assert!(rendered.contains(&format!(
+            "export const LIDAR_SAMPLE_MAX_POINTS = {}\n",
+            common_types::lidar::LIDAR_SAMPLE_MAX_POINTS
+        )));
+    }
 }

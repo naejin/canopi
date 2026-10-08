@@ -16,6 +16,7 @@ export type CanvasToolId =
   | 'line'
   | 'text'
   | 'measurement-guide'
+  | 'profile'                     // Desktop: armed from Site data and the palette, not on the rail (canopi-f47t.42)
 
 /** Tool rail groups, top to bottom. Only `zones` carries a heading. */
 type CanvasToolGroupId = 'navigate' | 'plant' | 'zones' | 'annotate'

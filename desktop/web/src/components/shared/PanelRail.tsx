@@ -25,7 +25,7 @@ export interface PanelRailCommand {
 }
 
 /**
- * The floating panel rail on the right (Ctrl 1–8): one button per panel,
+ * The floating panel rail on the right (Ctrl 1–9): one button per panel,
  * groups separated by rules. Only one panel is open at a time. When the window
  * is too short for every panel above the chrome under the rail's column
  * (`panelRailRoom`), the last panels fold, in order, into a More menu at the

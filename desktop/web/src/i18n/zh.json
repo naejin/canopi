@@ -146,6 +146,7 @@
       "objectStamp": "放置图章",
       "plantSpacing": "种一行",
       "measurementGuide": "测量",
+      "profile": "剖面图",
       "zones": "区域",
       "plantStamp": "放置植物"
     },
@@ -167,7 +168,8 @@
       "placePlantsHere": "在此放置植物",
       "turnViewToEdge": "将视图旋转至此边",
       "finishShape": "完成形状",
-      "renameZone": "重命名区域…"
+      "renameZone": "重命名区域…",
+      "profileLine": "此线的剖面图"
     },
     "rotationHandle": {
       "label": "旋转"
@@ -296,9 +298,20 @@
       "design": "设计",
       "siteData": "场地数据",
       "background": "背景",
-      "backgroundMap": "地图",
+      "backgroundMap": "街道地图",
       "backgroundNone": "无",
-      "backgroundPlainPaper": "空白纸张"
+      "backgroundPlainPaper": "空白纸张",
+      "map": "地图",
+      "openSiteData": "打开场地数据",
+      "siteDataShown_one": "已显示 {{shown, number}} 项，共 {{count, number}} 项",
+      "siteDataShown_few": "已显示 {{shown, number}} 项，共 {{count, number}} 项",
+      "siteDataShown_many": "已显示 {{shown, number}} 项，共 {{count, number}} 项",
+      "siteDataShown_other": "已显示 {{shown, number}} 项，共 {{count, number}} 项",
+      "siteDataNone": "暂无",
+      "siteDataWeb_one": "此设计中有 {{count, number}} 个地形或高度图层 · 需要 Canopi Desktop",
+      "siteDataWeb_few": "此设计中有 {{count, number}} 个地形或高度图层 · 需要 Canopi Desktop",
+      "siteDataWeb_many": "此设计中有 {{count, number}} 个地形或高度图层 · 需要 Canopi Desktop",
+      "siteDataWeb_other": "此设计中有 {{count, number}} 个地形或高度图层 · 需要 Canopi Desktop"
     },
     "timeline": {
       "actionType": "任务类型",
@@ -596,7 +609,12 @@
         "renameEllipsis": "重命名…",
         "recovered": "Canopi 已根据其保留的文件重建了数据资料库。标记为失败的项目可以通过“重试”重新准备。",
         "refusedNewer": "数据资料库由较新版本的 Canopi 保存。请安装最新版 Canopi 以使用它；此版本不会更改它。",
-        "unavailable": "无法打开数据资料库。在 Canopi 重新启动之前，导入和更改均已关闭。"
+        "unavailable": "无法打开数据资料库。在 Canopi 重新启动之前，导入和更改均已关闭。",
+        "sortLabel": "排序",
+        "sortRecent": "最近添加",
+        "factAdded": "添加时间",
+        "deletedItem": "已删除的项目",
+        "importNeedsDesign": "打开一个设计以导入数据"
       },
       "layers": {
         "addData": "添加数据",
@@ -791,6 +809,8 @@
       "stampGroup": "组",
       "polygon": "点击添加角点。点击第一个角点、双击或按 Enter 完成。",
       "polygonKeys": "Backspace 删除最后一个角点 · Shift 保持 45° 角",
+      "profile": "点击添加点。双击或按 Enter 完成。",
+      "profileKeys": "Backspace 删除最后一个点 · Shift 保持 45° 角",
       "rectangle": "在地图上拖动以绘制矩形。",
       "rectangleKeys": "Shift 绘制正方形",
       "ellipse": "在地图上拖动以绘制椭圆。",
@@ -1092,7 +1112,7 @@
     "view.turnViewLeft": "向左旋转视图 15°",
     "view.turnViewRight": "向右旋转视图 15°",
     "file.new": "新建设计",
-    "view.backgroundMap": "地图",
+    "view.backgroundMap": "街道地图",
     "edit.findPlants": "查找植物…",
     "file.revert": "恢复到打开时的版本…",
     "tools": "工具",
@@ -1121,7 +1141,7 @@
     "view.labelsNames": "名称",
     "view.cycleLabels": "标签：无、代码、名称",
     "edit.rotate": "旋转…",
-    "file.addData": "添加数据…",
+    "file.addData": "导入地形或高度数据…",
     "file.exportBudgetCsv": "预算（CSV）…",
     "file.close": "关闭设计",
     "help.gettingStarted": "入门",
@@ -1635,7 +1655,8 @@
       "GridNotProjectedMetres": "需要以地面米为单位的投影格网，不能是 Web Mercator 或经纬度。",
       "EngineMissing": "不可用：缺少 GeoLibre 引擎。",
       "NeedsDesktop": "需要 Canopi Desktop。",
-      "AlreadyInLayers": "已在图层中。"
+      "AlreadyInLayers": "已在图层中。",
+      "AlreadyInSiteData": "已在场地数据中。"
     },
     "stale": {
       "InputUpdated": "自本次计算以来，{{input}} 已更改。",
@@ -1644,7 +1665,7 @@
       "ToolUpdated": "已安装不同版本的引擎（{{to}}）。"
     },
     "dialog": {
-      "title": "分析 {{name}}",
+      "title": "分析",
       "advanced": "高级设置",
       "outputs": "结果",
       "name": "结果名称",
@@ -1664,7 +1685,10 @@
         "noOutputs": "请至少选择一个结果。"
       },
       "introLayers": "来自{{name}}。结果会添加到图层中它的下方，并保存在您的数据资料库中。",
-      "introLibrary": "来自{{name}}。结果会保存到您的数据资料库；可添加到任何设计。"
+      "introLibrary": "来自{{name}}。结果会保存到您的数据资料库；可添加到任何设计。",
+      "source": "来源",
+      "intro": "结果会添加到场地数据中其来源的下方，并保存在您的资料库中。",
+      "showInSiteData": "在场地数据中显示"
     },
     "details": {
       "analysis": "分析",
@@ -1966,7 +1990,7 @@
     "shows": "此步骤显示",
     "showsView": "视图：{{name}}",
     "backgroundSatellite": "卫星",
-    "backgroundMap": "地图",
+    "backgroundMap": "街道地图",
     "backgroundNone": "无背景",
     "contours": "等高线",
     "hillshade": "山体阴影",
@@ -2006,5 +2030,63 @@
     "speciesPlants_few": "{{name}} · {{count, number}} 株",
     "speciesPlants_many": "{{name}} · {{count, number}} 株",
     "speciesPlants_other": "{{name}} · {{count, number}} 株"
+  },
+  "siteData": {
+    "unpin": "取消固定",
+    "hint": "指向地图读取数值 · 点击固定",
+    "hintTouch": "轻点地图以固定一个点",
+    "analyzeNeedsData": "请先添加地形或高度数据",
+    "profile": "剖面图",
+    "profileNeedsLayer": "显示高程或高度图层以绘制剖面图",
+    "hiddenFromMap": "场地数据已在地图上隐藏",
+    "show": "显示",
+    "filterLabel": "筛选场地数据",
+    "filterPlaceholder": "按名称筛选",
+    "reorder": "调整{{name}}的顺序",
+    "expand": "展开{{name}}",
+    "collapse": "折叠{{name}}",
+    "missing": "缺失",
+    "noData": "无数据",
+    "missingReason": {
+      "not-in-library": "不在这台电脑的数据资料库中",
+      "needs-newer-canopi": "数据资料库需要更新版本的 Canopi",
+      "library-unopened": "无法打开数据资料库。请重新启动 Canopi。"
+    },
+    "display": {
+      "colors": "颜色",
+      "ramp": {
+        "Terrain": "地形",
+        "Earth": "大地",
+        "Gray": "灰度",
+        "Greens": "绿色",
+        "Magma": "岩浆",
+        "YellowRed": "黄–红"
+      },
+      "reverse": "反转",
+      "range": "范围",
+      "dataRange": "数据范围",
+      "cutOutliers": "剔除极值",
+      "cutOutliersHint": "排除最低和最高 2% 的数值",
+      "custom": "自定义",
+      "minimum": "最小值",
+      "maximum": "最大值",
+      "reset": "重置"
+    },
+    "chart": {
+      "copyValues": "复制数值",
+      "close": "关闭剖面图",
+      "at": "位于 {{distance}}",
+      "rise": "高差 {{value}}",
+      "steepest": "2 米内最陡 {{percent}}",
+      "highest": "最高 {{value}}",
+      "reading": "正在读取数值…",
+      "noValues": "这条线上没有数值",
+      "needsLayer": "显示高程或高度图层以查看其剖面图",
+      "distance": "距离（米）",
+      "longitude": "经度",
+      "latitude": "纬度",
+      "copied": "已复制",
+      "copyFailed": "无法复制数值"
+    }
   }
 }

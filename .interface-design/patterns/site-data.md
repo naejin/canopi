@@ -6,7 +6,7 @@ Read the [design system](../system.md) first; ownership: [data library guide](..
 
 - Its own rail button under Layers (topographic rings, Ctrl 2), 440 px. Header: "Site data", Library (opens the Data library), close; a pinned point adds its coordinates and Unpin. Toolbar: Import…, Analyze…, Profile (pressed while armed).
 - Analyze… and Profile stay in place when unusable: disabled, with a tooltip naming what to add or show first.
-- View state (open item, collapsed sources, filter, scroll, pin) survives switching panels and clears with the Design.
+- View state (open item, collapsed sources, filter, scroll) survives switching panels and clears with the Design; the pin and the profile end whenever Site data stops being the open panel (switching panels, closing it, switching Design).
 - A filter appears above more than 8 items; it keeps a match's source visible and turns reordering off.
 - While the Layers eye hides all site data, a strip says "Site data is hidden from the map" with Show.
 - Empty: "No site data yet" with Import files… and Open the Data library; in Layers the row reads "None yet" and still opens the panel.
@@ -34,7 +34,7 @@ Read the [design system](../system.md) first; ownership: [data library guide](..
 
 ## Profile
 
-- Profile, or "Profile this line" on a Line zone's or Measure guide's menu, arms a line tool: click points; double-click, Enter or Finish shape ends; Backspace removes a point; Esc cancels. The tool returns to Select; the line stays until ×, Esc, a new line, or closing the panel. Never saved, printed or captured.
+- Profile, or "Profile this line" on a Line zone's or Measure guide's menu, arms a line tool: click points; double-click, Enter or Finish shape ends; Backspace removes a point; Esc cancels. The tool returns to Select; the line stays until ×, Esc, a new line, or Site data stops being the open panel. Never saved, printed or captured.
 - The chart is pinned under the rows: elevation curves above, height curves in their own strip, sharing distance and cursor; ink, ochre, green, plum, a fifth curve dashed; min and max labels, gaps for no data, the length.
 - Per curve: Rise (signed net change) and Steepest % over 2 m, which moves the cursor there; height curves give Highest. Hovering the chart moves a hollow ring on the line. Copy values copies tab-separated text with local decimals.
 

@@ -7,6 +7,8 @@ import type {
   LibraryDeleteImpact,
   LibraryItemRole,
   LibrarySnapshot,
+  LidarColourRange,
+  LidarRamp,
   ProcessingHistoryPage,
   RasterQuantity,
 } from '../../generated/contracts'
@@ -30,20 +32,27 @@ import {
 import { showAppFolder } from '../../ipc/settings'
 import {
   patchLidarEntryById,
+  reconcileLidarEntryNames,
+  sameColourRange,
   setLidarEntryOrders,
   removeLidarEntries,
+  setSiteDataVisible,
   upsertLidarEntry,
 } from '../design-edit/lidar'
 import {
   ensureLidarPolling,
+  libraryItemName,
+  lidarLibrary,
   lidarStatusMessage,
   readCurrentLidarPresentation,
   refreshLidarLibrary,
 } from './library-store'
-import { movedReferenceOrders } from './reference-tree'
+import { movedReferenceOrders, siblingMoveOrders } from './reference-tree'
+import { kindDisplayDefaults } from './item-types'
 import { designSessionStore } from '../document-session/store'
 import { isPresentableOutput } from '../analyses/registry'
 import { reconcileInspectionWithPresentation } from './inspection'
+import { isAdmittedColourRange, isAdmittedOpacity } from '../contracts/design-admission'
 
 /**
  * Leaf action module for the Data Library and the Layers data band: every UI
@@ -169,7 +178,9 @@ export async function fetchItemSources(layerId: string): Promise<LidarLayerColle
  * Design; the camera does not move.
  */
 export function addToDesign(role: LibraryItemRole, id: string): void {
-  upsertLidarEntry(role, id)
+  const library = lidarLibrary.peek()
+  const item = library?.items.find((candidate) => candidate.id === id && candidate.role === role)
+  upsertLidarEntry(role, id, item ? libraryItemName(item, library) : id)
 }
 
 /**
@@ -189,8 +200,43 @@ export function setLidarEntryVisibility(id: string, visible: boolean): void {
   reconcileInspectionWithPresentation()
 }
 
-export function setLidarEntryOpacity(id: string, opacity: number): void {
-  patchLidarEntryById(id, { opacity })
+/**
+ * The Site data eye (Layers' summary row and the panel's "hidden from the map"
+ * strip): shows or hides every entry at once, keeping each entry's own eye.
+ */
+export function setSiteDataShown(shown: boolean): void {
+  setSiteDataVisible(shown)
+  reconcileInspectionWithPresentation()
+}
+
+/** An entry's display settings; a field left out keeps its stored value. */
+export interface LidarEntryDisplay {
+  readonly ramp?: LidarRamp | null
+  readonly reversed?: boolean
+  readonly range?: LidarColourRange | null
+  readonly opacity?: number
+}
+
+/**
+ * Restyle one Site data entry: colours, Reverse, range and opacity. The one
+ * writer of display settings: a ramp or range equal to the item kind's default
+ * is stored as null, so `.canopi` files hold one encoding of each default and
+ * Reset's "differs from the default" is one comparison. A missing item's kind
+ * is unknown, so its settings are kept as written. A range or opacity the
+ * Design would be refused with on reopening (an inverted, empty or non-finite
+ * Custom range; an opacity outside [0, 1]) is never stored: that field is
+ * dropped and the rest of the patch kept.
+ */
+export function setLidarEntryDisplay(id: string, display: LidarEntryDisplay): void {
+  const item = readCurrentLidarPresentation().find((entry) => entry.id === id)
+  const defaults = item?.itemType ? kindDisplayDefaults(item.itemType, item.units) : null
+  const patch: { -readonly [K in keyof LidarEntryDisplay]: LidarEntryDisplay[K] } = { ...display }
+  if (patch.range !== undefined && !isAdmittedColourRange(patch.range)) delete patch.range
+  if (patch.opacity !== undefined && !isAdmittedOpacity(patch.opacity)) delete patch.opacity
+  if (Object.keys(patch).length === 0) return
+  if (defaults && patch.ramp === defaults.ramp) patch.ramp = null
+  if (defaults && patch.range && sameColourRange(patch.range, defaults.range)) patch.range = null
+  patchLidarEntryById(id, patch)
 }
 
 /**
@@ -201,6 +247,16 @@ export function setLidarEntryOpacity(id: string, opacity: number): void {
  */
 export function moveReference(id: string, towards: 'front' | 'back'): void {
   const orders = movedReferenceOrders(readCurrentLidarPresentation(), id, towards)
+  if (orders) setLidarEntryOrders(orders)
+}
+
+/**
+ * Move one reference to a sibling's place in Site data (a drop, or Alt ↑/↓
+ * to the neighbour), in one order write; nothing when the target is not a
+ * sibling. Display order only, like `moveReference`.
+ */
+export function moveReferenceTo(id: string, targetId: string): void {
+  const orders = siblingMoveOrders(readCurrentLidarPresentation(), id, targetId)
   if (orders) setLidarEntryOrders(orders)
 }
 
@@ -300,13 +356,25 @@ export function settleResultAttachments(snapshot: LibrarySnapshot | null): void 
     }
     for (const item of items) {
       if (pending.kind === 'import') {
-        upsertLidarEntry('Source', item!.id)
+        upsertLidarEntry('Source', item!.id, libraryItemName(item!, snapshot))
       } else if (item?.provenance && isPresentableOutput(item.provenance.analysis_id, item.provenance.output_key)) {
-        upsertLidarEntry('Derived', item.id)
+        upsertLidarEntry('Derived', item.id, libraryItemName(item, snapshot))
       }
     }
   }
   if (remaining.length !== pendingList.length) pendingAttachments.value = remaining
+}
+
+/**
+ * Refresh the open Design's stored entry names from a library snapshot, so a
+ * missing row later shows the name the library last had. A library rename is
+ * not a Design Edit: this never dirties the Design, and names already current
+ * leave it untouched. The Desktop workflow calls it on each snapshot and
+ * Design switch; nothing happens before the first snapshot.
+ */
+export function reconcileEntryNames(snapshot: LibrarySnapshot | null): void {
+  if (!snapshot) return
+  reconcileLidarEntryNames(new Map(snapshot.items.map((item) => [item.id, libraryItemName(item, snapshot)])))
 }
 
 /** Cancel the running job of one derived item; false when nothing runs. */

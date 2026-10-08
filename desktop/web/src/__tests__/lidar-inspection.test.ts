@@ -67,8 +67,9 @@ function designWithPresentedLayer(): Parameters<typeof replaceCurrentDesignState
     extra: {},
     lidar: {
       schema_version: 1,
+      visible: true,
       entries: [
-        { kind: 'Source', id: 'lyr-1', visible: true, opacity: 1, order: 0, style: null },
+        { kind: 'Source', id: 'lyr-1', name: 'Terrain', visible: true, opacity: 1, order: 0, ramp: null, reversed: false, range: null },
       ],
     },
   } as unknown as Parameters<typeof replaceCurrentDesignState>[0]
@@ -349,10 +350,13 @@ describe('numeric inspection session state', () => {
     design.lidar.entries.push({
       kind: 'Derived',
       id: 'adef-absent',
+      name: 'Absent',
       visible: true,
       opacity: 1,
       order: 1,
-      style: null,
+      ramp: null,
+      reversed: false,
+      range: null,
     })
     replaceCurrentDesignState(
       design as unknown as Parameters<typeof replaceCurrentDesignState>[0],
@@ -374,7 +378,7 @@ describe('numeric inspection session state', () => {
     const design = designWithPresentedLayer() as unknown as {
       lidar: { entries: Array<Record<string, unknown>> }
     }
-    design.lidar.entries.push({ kind: 'Derived', id: 'slope-1', visible: true, opacity: 1, order: 1, style: null })
+    design.lidar.entries.push({ kind: 'Derived', id: 'slope-1', name: 'Terrain · Slope', visible: true, opacity: 1, order: 1, ramp: null, reversed: false, range: null })
     replaceCurrentDesignState(design as unknown as Parameters<typeof replaceCurrentDesignState>[0], null, 'Inspect')
     lidarLibrary.value = librarySnapshot([
       sourceItem('lyr-1', 'Ground', { generation_id: 'gen-1' }),

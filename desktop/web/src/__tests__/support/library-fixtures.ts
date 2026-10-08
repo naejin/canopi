@@ -21,6 +21,7 @@ export function sourceItem(id: string, name: string, overrides: Partial<LibraryI
     run: null,
     offers: [{ analysis_id: 'terrain.slope', unavailable: null }],
     dependents: 0,
+    created_at: '1790000000000',
     ...overrides,
   }
 }

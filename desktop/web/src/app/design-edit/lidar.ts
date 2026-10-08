@@ -1,35 +1,45 @@
 import type {
+  LibraryItemRole,
+  LidarColourRange,
   LidarPresentationEntry,
-  LidarPresentationEntryKind,
   LidarPresentationSection,
+  LidarRamp,
 } from '../../generated/contracts'
 
 // Mirrors common_types::lidar::LIDAR_PRESENTATION_SCHEMA_VERSION (not part of
 // the generated type surface).
 const LIDAR_PRESENTATION_SCHEMA_VERSION = 1
 
-import { editCurrentDesign } from './core'
+import { editCurrentDesign, readCurrentDesign, reconcileCurrentDesign } from './core'
 
 function emptySection(): LidarPresentationSection {
-  return { schema_version: LIDAR_PRESENTATION_SCHEMA_VERSION, entries: [] }
+  return { schema_version: LIDAR_PRESENTATION_SCHEMA_VERSION, visible: true, entries: [] }
 }
 
-/** Immutable patch of one entry; entries are matched by stable library id. */
+/**
+ * Immutable patch of one entry; entries are matched by stable library id.
+ * A null `ramp` or `range` is the item kind's default.
+ */
 export interface LidarEntryPatch {
   visible?: boolean
   opacity?: number
   order?: number
-  style?: string | null
+  ramp?: LidarRamp | null
+  reversed?: boolean
+  range?: LidarColourRange | null
 }
 
 /**
  * Insert or update one presentation entry. Shared library mutations never
  * dirty a Design on their own — this seam is called from explicit user
  * actions (creating a layer or analysis, toggling visibility, restyling).
+ * A new entry stores the library item's `name` so a missing item still reads
+ * by name; an existing entry keeps its own (the name reconcile refreshes it).
  */
 export function upsertLidarEntry(
-  kind: LidarPresentationEntryKind,
+  kind: LibraryItemRole,
   id: string,
+  name: string,
   patch: LidarEntryPatch = {},
 ): void {
   editCurrentDesign((design) => {
@@ -55,10 +65,13 @@ export function upsertLidarEntry(
     const entry: LidarPresentationEntry = {
       kind,
       id,
+      name,
       visible: patch.visible ?? true,
       opacity: patch.opacity ?? 1,
       order: patch.order ?? nextOrder(section.entries),
-      style: patch.style ?? null,
+      ramp: null,
+      reversed: false,
+      range: null,
     }
     return {
       ...design,
@@ -119,17 +132,45 @@ function mergeEntry(
     visible: patch.visible ?? existing.visible,
     opacity: patch.opacity ?? existing.opacity,
     order: patch.order ?? existing.order,
-    style: patch.style === undefined ? existing.style : patch.style,
+    ramp: patch.ramp === undefined ? existing.ramp : patch.ramp,
+    reversed: patch.reversed ?? existing.reversed,
+    range: patch.range === undefined || sameColourRange(patch.range, existing.range) ? existing.range : patch.range,
   }
   if (
     next.visible === existing.visible &&
     next.opacity === existing.opacity &&
     next.order === existing.order &&
-    next.style === existing.style
+    next.ramp === existing.ramp &&
+    next.reversed === existing.reversed &&
+    next.range === existing.range
   ) {
     return existing
   }
   return next
+}
+
+/** Whether two stored colour ranges are the same choice. */
+export function sameColourRange(left: LidarColourRange | null, right: LidarColourRange | null): boolean {
+  if (left === null || right === null) return left === right
+  if (left.mode === 'Custom' && right.mode === 'Custom') {
+    return left.min === right.min && left.max === right.max
+  }
+  return left.mode === right.mode
+}
+
+/**
+ * The Site data eye in Layers: one flag folded with each entry's own eye, so
+ * hiding all site data keeps every row's own choice. A Design Edit with no
+ * undo, like every site-data Design Edit; nothing happens without a section.
+ */
+export function setSiteDataVisible(visible: boolean): void {
+  editCurrentDesign((design) => {
+    const section = design.lidar
+    if (!section || section.visible === visible) {
+      return design
+    }
+    return { ...design, lidar: { ...section, visible } }
+  })
 }
 
 function nextOrder(entries: LidarPresentationEntry[]): number {
@@ -159,5 +200,33 @@ export function setLidarEntryOrders(orders: ReadonlyMap<string, number>): void {
       return design
     }
     return { ...design, lidar: { ...section, entries: nextEntries } }
+  })
+}
+
+/**
+ * Refresh stored entry names from the library's names, keyed by item id. A
+ * library rename is not a Design Edit: like the consortium sync this
+ * reconciles the open Design without dirtying it, and the next save writes
+ * the new name. Names already current (and empty library names) leave the
+ * Design untouched, so the effect calling it settles after one pass.
+ */
+export function reconcileLidarEntryNames(names: ReadonlyMap<string, string>): void {
+  const renamed = (entry: LidarPresentationEntry): string | null => {
+    const name = names.get(entry.id)
+    return name !== undefined && name.trim() !== '' && name !== entry.name ? name : null
+  }
+  if (!readCurrentDesign()?.lidar?.entries.some((entry) => renamed(entry) !== null)) {
+    return
+  }
+  reconcileCurrentDesign((design) => {
+    const section = design.lidar
+    if (!section) {
+      return design
+    }
+    const entries = section.entries.map((entry) => {
+      const name = renamed(entry)
+      return name === null ? entry : { ...entry, name }
+    })
+    return { ...design, lidar: { ...section, entries } }
   })
 }

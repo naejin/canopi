@@ -17,12 +17,29 @@ import {
 } from '../../maplibre/terrain'
 import { mapErrorResourceId } from '../../maplibre/map-error-owner'
 import type { RasterDisplay, RasterDisplayLayer } from '../../maplibre/raster-display/adapter'
-import { clearCanvasMapSurfaceOverlays, syncCanvasMapSurfaceOverlays, type CanvasMapSurfaceOverlaySnapshot } from './overlays'
+import {
+  clearCanvasMapSurfaceOverlays,
+  clearCanvasMapSurfaceSiteHover,
+  clearCanvasMapSurfaceSiteOverlay,
+  syncCanvasMapSurfaceOverlays,
+  syncCanvasMapSurfaceSiteHover,
+  syncCanvasMapSurfaceSiteOverlay,
+  type CanvasMapSurfaceOverlaySnapshot,
+} from './overlays'
+import { siteMapOverlayIds, type SiteMapOverlay } from '../../maplibre/site-overlay'
 import { createMapLayerStackDescriptors, reconcileMapLayerStack } from '../map-layers/bands'
 import type { WorkspaceMapContributionAdapter, WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 
+/** The profile chart's hover point ([lon, lat]) as the composition reads it; a map's contributions follow it while attached. */
+export interface SiteHoverFeed {
+  current(): readonly [number, number] | null
+  subscribe(listener: (hover: readonly [number, number] | null) => void): () => void
+}
+
 export interface WorkspaceMapContributionsOptions {
   readonly onFailure: (error: unknown) => void
+  /** Desktop only: the chart hover, drawn by one setData outside the drain (architecture review finding 7). */
+  readonly siteHover?: SiteHoverFeed
   readonly loadTerrainSupport?: WorkspaceMapContributionAdapter['loadTerrainSupport']
   readonly createRasterDisplay?: WorkspaceMapContributionAdapter['createRasterDisplay']
   readonly onStateChange?: (state: MapLibreCanvasSurfaceState) => void
@@ -48,6 +65,11 @@ export class WorkspaceMapContributions {
   private disposed = false
   /** Target set whose overlay failed; skipped until the Targets change. */
   private skippedOverlayKey: string | null = null
+  /** Site data pin and line whose overlay failed; skipped until they change, so the panel highlights never go with them. */
+  private skippedSiteKey: string | null = null
+  /** The chart hover's ground point; never part of the snapshot, so it moves no revision. */
+  private siteHover: readonly [number, number] | null = null
+  private unsubscribeSiteHover: (() => void) | null = null
   private rasterSkipped = false
 
   constructor(private readonly options: WorkspaceMapContributionsOptions) {}
@@ -60,7 +82,25 @@ export class WorkspaceMapContributions {
     this.raster = this.options.createRasterDisplay?.(context.map, {
       onLayersChanged: () => this.reorderAfterRasterChange(),
     }) ?? null
+    this.siteHover = this.options.siteHover?.current() ?? null
+    this.unsubscribeSiteHover = this.options.siteHover?.subscribe((hover) => this.setSiteHover(hover)) ?? null
     this.publishState({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'loading' })
+  }
+
+  /**
+   * The profile chart's hover point, at scrub rate: one setData on the hover source, outside the drain, so it never re-runs
+   * the raster sync, the panel overlays or the order and never moves the revision or the terrain generation (GeoLibre
+   * `NativeProfileMap.setHover`). Each drain re-applies it after painting the site layers, which covers Retry.
+   */
+  setSiteHover(hover: readonly [number, number] | null): void {
+    if (this.disposed) return
+    this.siteHover = hover
+    if (!this.live() || !this.styleReady || this.draining || !this.snapshot) return
+    try {
+      this.syncSiteHover(this.guardedMap(this.revision))
+    } catch (error) {
+      if (error !== STALE_CONTRIBUTION) this.fail(error)
+    }
   }
 
   update(snapshot: WorkspaceMapContributionSnapshot | null): void {
@@ -108,6 +148,12 @@ export class WorkspaceMapContributions {
       this.terrainFailed(event)
       return true
     }
+    if (SITE_OVERLAY_IDS.has(id)) {
+      if (this.skippedSiteKey === null && this.snapshot) this.siteFailed(siteKey(this.snapshot.overlays.site ?? null), event)
+      this.dirty = true
+      this.drain()
+      return true
+    }
     if (id.startsWith(PANEL_TARGET_PREFIX)) {
       // MapLibre validation emits instead of throwing, often mid-sync; the
       // drain removes the partial overlay on its next pass.
@@ -128,6 +174,8 @@ export class WorkspaceMapContributions {
   dispose(error?: unknown): void {
     if (this.disposed) return
     this.disposed = true
+    this.unsubscribeSiteHover?.()
+    this.unsubscribeSiteHover = null
     this.revision += 1
     this.terrainGeneration += 1
     this.snapshot = null
@@ -166,6 +214,8 @@ export class WorkspaceMapContributions {
         try {
           this.syncRaster(map, snapshot.lidar)
           this.syncOverlays(map, snapshot.overlays)
+          this.syncSiteOverlay(map, snapshot.overlays.site ?? null)
+          this.syncSiteHover(map)
           this.reconcileOrder(map, snapshot)
           this.publishState({ ...this.state, status: 'ready', layerSkipped: this.layerSkipped() })
           if (!this.current(revision)) continue
@@ -226,8 +276,52 @@ export class WorkspaceMapContributions {
     this.log('Skipped a map overlay that failed to sync:', error)
   }
 
+  /**
+   * The Site data pin and line, on their own skip key: a failing sync is rolled back and skipped until they change, and the
+   * panel Target overlays stay drawn. A rollback that cannot remove the partial overlay escapes to the hard failure path.
+   */
+  private syncSiteOverlay(map: MapLibreMapInstance, site: SiteMapOverlay | null): void {
+    const key = siteKey(site)
+    if (this.skippedSiteKey !== null) {
+      if (this.skippedSiteKey === key) {
+        clearCanvasMapSurfaceSiteOverlay(map)
+        return
+      }
+      this.skippedSiteKey = null
+    }
+    try {
+      syncCanvasMapSurfaceSiteOverlay(map, site)
+    } catch (error) {
+      if (error === STALE_CONTRIBUTION) throw error
+      this.siteFailed(key, error)
+      clearCanvasMapSurfaceSiteOverlay(map)
+    }
+  }
+
+  /** The hover ring sits on the pin and line: it draws only while they draw, and its failure skips them with it. */
+  private syncSiteHover(map: MapLibreMapInstance): void {
+    const site = this.snapshot?.overlays.site ?? null
+    if (!site || this.skippedSiteKey !== null) {
+      clearCanvasMapSurfaceSiteHover(map)
+      return
+    }
+    try {
+      syncCanvasMapSurfaceSiteHover(map, this.siteHover)
+    } catch (error) {
+      if (error === STALE_CONTRIBUTION) throw error
+      this.siteFailed(siteKey(site), error)
+      clearCanvasMapSurfaceSiteOverlay(map)
+      this.publishState({ ...this.state, layerSkipped: this.layerSkipped() })
+    }
+  }
+
+  private siteFailed(key: string, error: unknown): void {
+    this.skippedSiteKey = key
+    this.log('Skipped the Site data map overlay that failed to sync:', error)
+  }
+
   private layerSkipped(): boolean {
-    return this.skippedOverlayKey !== null || this.rasterSkipped
+    return this.skippedOverlayKey !== null || this.skippedSiteKey !== null || this.rasterSkipped
   }
 
   /** The renderer changed map layers asynchronously; restore the semantic order. */
@@ -325,6 +419,7 @@ export class WorkspaceMapContributions {
     const map = this.context && this.guardedMap(revision, true)
     if (map) {
       this.attempt('Failed to clear map target overlays:', () => clearCanvasMapSurfaceOverlays(map))
+      this.attempt('Failed to clear the Site data map overlay:', () => clearCanvasMapSurfaceSiteOverlay(map))
       this.attempt('Failed to clear map terrain:', () => clearTerrain(map))
       this.attempt('Failed to clear map rasters:', () => this.raster?.sync([], undefined))
     }
@@ -375,6 +470,10 @@ const STALE_CONTRIBUTION = Symbol('stale-map-contribution')
 const PANEL_TARGET_PREFIX = 'panel-target-'
 const TERRAIN_DEM_IDS = new Set<string>([TERRAIN_DEM_SOURCE_ID, TERRAIN_HILLSHADE_LAYER_ID])
 const TERRAIN_CONTOUR_IDS = new Set<string>([TERRAIN_CONTOUR_SOURCE_ID, ...TERRAIN_CONTOUR_LAYER_IDS])
+const SITE_OVERLAY_IDS = (() => {
+  const ids = siteMapOverlayIds()
+  return new Set<string>([ids.sourceId, ...ids.layerIds, ids.hover.sourceId, ...ids.hover.layerIds])
+})()
 
 /** Late errors from a contribution this owner already removed stay passive. */
 function isContributionResource(id: string): boolean {
@@ -382,9 +481,15 @@ function isContributionResource(id: string): boolean {
     || TERRAIN_DEM_IDS.has(id)
     || TERRAIN_CONTOUR_IDS.has(id)
     || id.startsWith(PANEL_TARGET_PREFIX)
+    || SITE_OVERLAY_IDS.has(id)
 }
 
 /** Identity of the Target set an overlay draws; geometry is re-read on each sync. */
 function overlayKey(overlays: CanvasMapSurfaceOverlaySnapshot): string {
   return JSON.stringify([overlays.hoveredTargets, overlays.selectedTargets])
+}
+
+/** Identity of the pin and line a site overlay draws. */
+function siteKey(site: SiteMapOverlay | null): string {
+  return JSON.stringify(site)
 }

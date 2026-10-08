@@ -164,22 +164,29 @@
       "budget_currency": "EUR",
       "lidar": {
         "schema_version": 1,
+        "visible": true,
         "entries": [
           {
             "kind": "Source",
             "id": "lidar-dtm-1",
+            "name": "Terrain model",
             "visible": true,
             "opacity": 1.0,
             "order": 0,
-            "style": null
+            "ramp": null,
+            "reversed": false,
+            "range": null
           },
           {
             "kind": "Derived",
             "id": "slope-1",
+            "name": "Slope",
             "visible": true,
             "opacity": 0.5,
             "order": 1,
-            "style": "slope"
+            "ramp": null,
+            "reversed": false,
+            "range": null
           }
         ]
       },
@@ -566,6 +573,63 @@
       "created_at": "2026-09-25T00:00:00.000Z",
       "updated_at": "2026-09-25T00:00:00.000Z",
       "extra": {}
+    },
+    "lidar-display": {
+      "version": 9,
+      "name": "Conformance Garden",
+      "description": null,
+      "plant_species_colors": {},
+      "plant_species_symbols": {},
+      "plant_species_codes": {},
+      "layers": [],
+      "plants": [],
+      "zones": [],
+      "annotations": [],
+      "measurement_guides": [],
+      "consortiums": [],
+      "groups": [],
+      "timeline": [],
+      "budget": [],
+      "budget_currency": "EUR",
+      "lidar": {
+        "schema_version": 1,
+        "visible": false,
+        "entries": [
+          {
+            "kind": "Source",
+            "id": "dem-1",
+            "name": "Terrain model",
+            "visible": true,
+            "opacity": 1.0,
+            "order": 0,
+            "ramp": "Magma",
+            "reversed": true,
+            "range": {
+              "mode": "Custom",
+              "min": 120.5,
+              "max": 182.0
+            }
+          },
+          {
+            "kind": "Derived",
+            "id": "slope-1",
+            "name": "Slope",
+            "visible": true,
+            "opacity": 0.5,
+            "order": 1,
+            "ramp": "YellowRed",
+            "reversed": false,
+            "range": {
+              "mode": "CutOutliers"
+            }
+          }
+        ]
+      },
+      "views": [],
+      "stories": [],
+      "created_at": "2026-09-25T00:00:00.000Z",
+      "updated_at": "2026-09-25T00:00:00.000Z",
+      "extra": {}
     }
   },
   "cases": [
@@ -843,22 +907,29 @@
         "updated_at": "2026-09-25T00:00:00.000Z",
         "lidar": {
           "schema_version": 1,
+          "visible": true,
           "entries": [
             {
               "kind": "Source",
               "id": "lidar-dtm-1",
+              "name": "Terrain model",
               "visible": true,
               "opacity": 1.0,
               "order": 0,
-              "style": null
+              "ramp": null,
+              "reversed": false,
+              "range": null
             },
             {
               "kind": "Derived",
               "id": "slope-1",
+              "name": "Slope",
               "visible": true,
               "opacity": 0.5,
               "order": 1,
-              "style": "slope"
+              "ramp": null,
+              "reversed": false,
+              "range": null
             }
           ]
         }
@@ -1014,6 +1085,54 @@
       "accepted": "generated-ids-before-explicit-ids"
     },
     {
+      "id": "accept-lidar-display-settings",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "lidar": {
+          "schema_version": 1,
+          "visible": false,
+          "entries": [
+            {
+              "kind": "Source",
+              "id": "dem-1",
+              "name": "Terrain model",
+              "visible": true,
+              "opacity": 1.0,
+              "order": 0,
+              "ramp": "Magma",
+              "reversed": true,
+              "range": {
+                "mode": "Custom",
+                "min": 120.5,
+                "max": 182.0
+              }
+            },
+            {
+              "kind": "Derived",
+              "id": "slope-1",
+              "name": "Slope",
+              "visible": true,
+              "opacity": 0.5,
+              "order": 1,
+              "ramp": "YellowRed",
+              "reversed": false,
+              "range": {
+                "mode": "CutOutliers"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": "lidar-display"
+    },
+    {
       "id": "reject-v7-preview-as-older-version",
       "input": {
         "version": 7,
@@ -1133,22 +1252,29 @@
         ],
         "lidar": {
           "schema_version": 1,
+          "visible": true,
           "entries": [
             {
               "kind": "Analysis",
               "id": "slope-1",
+              "name": "Slope",
               "visible": true,
               "opacity": 1.0,
               "order": 0,
-              "style": null
+              "ramp": null,
+              "reversed": false,
+              "range": null
             },
             {
               "kind": "Source",
               "id": "dem-1",
+              "name": "Terrain model",
               "visible": true,
               "opacity": 0.5,
               "order": 1,
-              "style": null
+              "ramp": null,
+              "reversed": false,
+              "range": null
             }
           ]
         },
@@ -1665,14 +1791,18 @@
         "updated_at": "2026-09-25T00:00:00.000Z",
         "lidar": {
           "schema_version": 1,
+          "visible": true,
           "entries": [
             {
               "kind": "Analysis",
               "id": "slope-1",
+              "name": "Slope",
               "visible": true,
               "opacity": 1.0,
               "order": 0,
-              "style": null
+              "ramp": null,
+              "reversed": false,
+              "range": null
             }
           ]
         }
@@ -2115,22 +2245,29 @@
         "updated_at": "2026-09-25T00:00:00.000Z",
         "lidar": {
           "schema_version": 1,
+          "visible": true,
           "entries": [
             {
               "kind": "Source",
               "id": "lidar-dtm-1",
+              "name": "Terrain model",
               "visible": true,
               "opacity": 1.0,
               "order": 0,
-              "style": null
+              "ramp": null,
+              "reversed": false,
+              "range": null
             },
             {
               "kind": "Derived",
               "id": "slope-1",
+              "name": "Slope",
               "visible": true,
               "opacity": 0.5,
               "order": 1,
-              "style": "slope"
+              "ramp": null,
+              "reversed": false,
+              "range": null
             }
           ]
         }
@@ -2276,22 +2413,29 @@
         "updated_at": "2026-09-25T00:00:00.000Z",
         "lidar": {
           "schema_version": 1,
+          "visible": true,
           "entries": [
             {
               "kind": "Source",
               "id": "lidar-dtm-1",
+              "name": "Terrain model",
               "visible": true,
               "opacity": 1.0,
               "order": 0,
-              "style": null
+              "ramp": null,
+              "reversed": false,
+              "range": null
             },
             {
               "kind": "Derived",
               "id": "slope-1",
+              "name": "Slope",
               "visible": true,
               "opacity": 0.5,
               "order": 1,
-              "style": "slope"
+              "ramp": null,
+              "reversed": false,
+              "range": null
             }
           ]
         }
@@ -3683,6 +3827,7 @@
         "updated_at": "2026-09-25T00:00:00.000Z",
         "lidar": {
           "schema_version": 2,
+          "visible": true,
           "entries": []
         }
       },
@@ -3701,14 +3846,179 @@
         "updated_at": "2026-09-25T00:00:00.000Z",
         "lidar": {
           "schema_version": 1,
+          "visible": true,
+          "entries": [
+            {
+              "kind": "Source",
+              "id": "dem-1",
+              "name": "Terrain model",
+              "visible": true,
+              "opacity": 1.2,
+              "order": 0,
+              "ramp": null,
+              "reversed": false,
+              "range": null
+            }
+          ]
+        }
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-lidar-custom-range-min-not-below-max",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "lidar": {
+          "schema_version": 1,
+          "visible": true,
+          "entries": [
+            {
+              "kind": "Source",
+              "id": "dem-1",
+              "name": "Terrain model",
+              "visible": true,
+              "opacity": 1.0,
+              "order": 0,
+              "ramp": null,
+              "reversed": false,
+              "range": {
+                "mode": "Custom",
+                "min": 30.0,
+                "max": 30.0
+              }
+            }
+          ]
+        }
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-lidar-custom-range-non-finite-min",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "lidar": {
+          "schema_version": 1,
+          "visible": true,
+          "entries": [
+            {
+              "kind": "Source",
+              "id": "dem-1",
+              "name": "Terrain model",
+              "visible": true,
+              "opacity": 1.0,
+              "order": 0,
+              "ramp": null,
+              "reversed": false,
+              "range": {
+                "mode": "Custom",
+                "min": null,
+                "max": 30.0
+              }
+            }
+          ]
+        }
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-lidar-entry-empty-name",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "lidar": {
+          "schema_version": 1,
+          "visible": true,
+          "entries": [
+            {
+              "kind": "Source",
+              "id": "dem-1",
+              "name": "  ",
+              "visible": true,
+              "opacity": 1.0,
+              "order": 0,
+              "ramp": null,
+              "reversed": false,
+              "range": null
+            }
+          ]
+        }
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-lidar-entry-without-name",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "lidar": {
+          "schema_version": 1,
+          "visible": true,
           "entries": [
             {
               "kind": "Source",
               "id": "dem-1",
               "visible": true,
-              "opacity": 1.2,
+              "opacity": 1.0,
               "order": 0,
-              "style": null
+              "ramp": null,
+              "reversed": false,
+              "range": null
+            }
+          ]
+        }
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-lidar-section-without-visible",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "lidar": {
+          "schema_version": 1,
+          "entries": [
+            {
+              "kind": "Source",
+              "id": "dem-1",
+              "name": "Terrain model",
+              "visible": true,
+              "opacity": 1.0,
+              "order": 0,
+              "ramp": null,
+              "reversed": false,
+              "range": null
             }
           ]
         }
@@ -3897,22 +4207,29 @@
         "updated_at": "2026-09-25T00:00:00.000Z",
         "lidar": {
           "schema_version": 1,
+          "visible": true,
           "entries": [
             {
               "kind": "Source",
               "id": "lidar-dtm-1",
+              "name": "Terrain model",
               "visible": true,
               "opacity": 1.0,
               "order": 0,
-              "style": null
+              "ramp": null,
+              "reversed": false,
+              "range": null
             },
             {
               "kind": "Derived",
               "id": "slope-1",
+              "name": "Slope",
               "visible": true,
               "opacity": 0.5,
               "order": 1,
-              "style": "slope"
+              "ramp": null,
+              "reversed": false,
+              "range": null
             }
           ]
         }

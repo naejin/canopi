@@ -15,7 +15,7 @@ const actions = vi.hoisted(() => ({
   removeFromDesign: vi.fn(),
   renameLibraryItem: vi.fn().mockResolvedValue(undefined),
   rerunAnalysis: vi.fn().mockResolvedValue(undefined),
-  setLidarEntryOpacity: vi.fn(),
+  setLidarEntryDisplay: vi.fn(),
   setLidarEntryVisibility: vi.fn(),
 }))
 const pending = vi.hoisted(() => ({ attachments: null as unknown, failure: null as unknown }))
@@ -42,7 +42,9 @@ vi.mock('../app/document-session/store', async () => {
 
 import { AddDataMenu, SiteDataInspector, SiteDataRows } from '../components/panels/lidar/SiteData'
 import { SiteDataDetails } from '../components/panels/lidar/SiteDataDetails'
-import { lidarLibrary } from '../app/lidar/library-store'
+import { SiteDataPanel } from '../components/panels/lidar/SiteDataPanel'
+import { lidarLibrary, refreshLidarLibrary } from '../app/lidar/library-store'
+import { lidarListLibrary } from '../ipc/lidar'
 import { currentDesign } from '../app/document-session/store'
 import { dataDialog, selectSiteRow, siteDataDetails } from '../app/lidar/library-navigation'
 import { activeLayerName } from '../app/canvas-settings/signals'
@@ -57,7 +59,7 @@ const importGeoJson = vi.fn()
 
 function setDesign(entries: Array<{ kind: 'Source' | 'Derived'; id: string; order: number; visible?: boolean; opacity?: number }>): void {
   (currentDesign as unknown as { value: unknown }).value = {
-    lidar: { entries: entries.map((entry) => ({ visible: true, opacity: 1, style: null, ...entry })) },
+    lidar: { entries: entries.map((entry) => ({ name: entry.id, visible: true, opacity: 1, ramp: null, reversed: false, range: null, ...entry })) },
   }
 }
 
@@ -213,6 +215,9 @@ describe('Layers site data', () => {
     await click(button('Move Ground forward'))
     expect(actions.moveReference).toHaveBeenCalledWith('a', 'front')
 
+    // Values read on the rows now: the open row has no Read values button.
+    expect(() => button('Read values')).toThrow()
+
     await click(button(/^Analyze…$/))
     expect(dataDialog.value).toMatchObject({ kind: 'analyze', itemId: 'a', attach: true })
     await click(button(/^Details$/))
@@ -221,6 +226,18 @@ describe('Layers site data', () => {
     await click(button('Remove Ground from this Design'))
     expect(actions.removeFromDesign).toHaveBeenCalledWith('a')
     expect(container.textContent).toContain('Your library keeps the data.')
+  })
+
+  it('writes the open row\'s opacity through the one display writer', async () => {
+    setDesign([{ kind: 'Source', id: 'a', order: 0, opacity: 1 }])
+    mount()
+    await click(button(/^Ground/))
+    const slider = container.querySelector<HTMLInputElement>('input[aria-label="Opacity: Ground"]')!
+    await act(async () => {
+      slider.value = '40'
+      slider.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(actions.setLidarEntryDisplay).toHaveBeenCalledWith('a', { opacity: 0.4 })
   })
 
   it('moves a row with Alt and the arrow keys', async () => {
@@ -237,6 +254,34 @@ describe('Layers site data', () => {
     mount()
     expect(container.textContent).toContain('Unavailable data')
     expect(container.textContent).toContain('Data unavailable')
+  })
+
+  it('draws a reference as a normal row while the library loads, never captioned unavailable', async () => {
+    lidarLibrary.value = null
+    setDesign([{ kind: 'Source', id: 'ground', order: 0 }])
+    mount()
+    expect(container.querySelector('li strong')?.textContent).toBe('ground')
+    expect(container.textContent).not.toContain('Data unavailable')
+
+    await act(async () => { selectSiteRow('ground') })
+    expect(container.querySelector('section h3')?.textContent).toBe('ground')
+    expect(container.textContent).not.toContain('Data unavailable')
+  })
+
+  it('labels a reference unavailable once the library list cannot be read, not loading forever', async () => {
+    lidarLibrary.value = null
+    setDesign([{ kind: 'Source', id: 'gone', order: 0 }])
+    mount()
+    expect(container.textContent).not.toContain('Unavailable data')
+    expect(container.textContent).not.toContain('Data unavailable')
+
+    vi.mocked(lidarListLibrary).mockRejectedValueOnce(new Error('catalogue locked'))
+    await act(async () => {
+      await refreshLidarLibrary()
+    })
+
+    expect(container.textContent).toContain('Unavailable data')
+    expect(container.querySelector('li small')?.textContent).toBe('Data unavailable')
   })
 
   it('marks an out-of-date result, says why, and refreshes it in place', async () => {
@@ -391,5 +436,31 @@ describe('Layers site data details', () => {
     act(() => { render(<SiteDataDetails id="s" />, container) })
     await click(button('Open in the Data library'))
     expect(dataDialog.value).toEqual({ kind: 'library', focusId: 's' })
+  })
+
+  it('the Site data panel holds the rows, Add data and the open row\'s settings under a header with Library and close', async () => {
+    siteDataDetails.value = null
+    setDesign([{ kind: 'Source', id: 'a', order: 0 }])
+    sidePanel.value = 'site-data'
+    act(() => { render(<SiteDataPanel importGeoJson={importGeoJson} />, container) })
+
+    expect(container.querySelector('aside')?.getAttribute('aria-label')).toBe('Site data')
+    expect(container.querySelector('h2')?.textContent).toBe('Site data')
+    expect(button('Add data')).toBeTruthy()
+    await click(button(/^Ground/))
+    expect(container.querySelector('[aria-label="Legend"]')).not.toBeNull()
+
+    await click(button('Data library'))
+    expect(dataDialog.value).toEqual({ kind: 'library', focusId: null })
+    await click(button('Close panel'))
+    expect(sidePanel.value).toBeNull()
+  })
+
+  it('the Site data panel shows one item\'s details in place of its list', () => {
+    siteDataDetails.value = 's'
+    act(() => { render(<SiteDataPanel importGeoJson={importGeoJson} />, container) })
+
+    expect(button('Rename…')).toBeTruthy()
+    expect(container.querySelector('aside[aria-label="Site data"]')).toBeNull()
   })
 })

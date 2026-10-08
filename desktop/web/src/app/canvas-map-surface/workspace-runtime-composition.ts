@@ -33,6 +33,7 @@ import {
   type WorkspaceGenerationLifecycle,
 } from './workspace-generation-reconciler'
 import { WorkspaceMapControls } from './workspace-map-controls'
+import type { SiteHoverFeed } from './workspace-map-contributions'
 import { mapAttributionFolded } from '../shell/visible-map-area'
 import type { WorkspaceActivationMapControls, WorkspaceActivationSnapshot } from './workspace-activation'
 import type { WorkspaceMapContributionAdapter, WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
@@ -143,6 +144,7 @@ export function createWorkspaceRuntimeComposition(
     mapState = state
     options.onMapStateChange?.({ ...state, retryable: state.status === 'error' && workspace.canRetry() })
   }
+  const siteHover = options.mapContributions.readSiteHover ? createSiteHoverFeed() : null
   const controls = dependencies.createControls({
     container: options.container,
     // The map container's resizes reach the live camera driver's setScreen: the driver is the map's one resize owner (both maps
@@ -153,6 +155,7 @@ export function createWorkspaceRuntimeComposition(
     contributions: {
       loadTerrainSupport: options.mapContributions.loadTerrainSupport,
       createRasterDisplay: options.mapContributions.createRasterDisplay,
+      siteHover: siteHover ?? undefined,
       onStateChange: publishMapState,
     },
   })
@@ -198,6 +201,7 @@ export function createWorkspaceRuntimeComposition(
   let disposeResult: Promise<void> | null = null
   let disposePresentationEffect: (() => void) | null = null
   let disposeSettleEffect: (() => void) | null = null
+  let disposeSiteHoverEffect: (() => void) | null = null
   let settleTimer: ReturnType<typeof setTimeout> | null = null
   const clearSettleTimer = () => {
     if (settleTimer !== null) clearTimeout(settleTimer)
@@ -231,6 +235,11 @@ export function createWorkspaceRuntimeComposition(
               onViewSettled(geographicViewOfCamera(camera))
             }, WORKSPACE_VIEW_SETTLE_MS)
           })
+        }
+        // The chart hover changes at scrub rate: its own effect feeds the map's hover source, never the contributions read.
+        const readSiteHover = options.mapContributions.readSiteHover
+        if (siteHover && readSiteHover) {
+          disposeSiteHoverEffect = dependencies.installEffect(() => siteHover.publish(readSiteHover()))
         }
         disposePresentationEffect = dependencies.installEffect(() => {
           workspace.updateMapContributions(options.mapContributions.read(runtime.querySurface))
@@ -272,12 +281,14 @@ export function createWorkspaceRuntimeComposition(
       })
       const presentationEffect = disposePresentationEffect
       const settleEffect = disposeSettleEffect
+      const siteHoverEffect = disposeSiteHoverEffect
       disposePresentationEffect = null
       disposeSettleEffect = null
+      disposeSiteHoverEffect = null
       clearSettleTimer()
       void (async () => {
         const errors: unknown[] = []
-        for (const disposeEffect of [settleEffect, presentationEffect]) {
+        for (const disposeEffect of [settleEffect, siteHoverEffect, presentationEffect]) {
           try {
             disposeEffect?.()
           } catch (error) {
@@ -292,6 +303,23 @@ export function createWorkspaceRuntimeComposition(
         throwCanvasRuntimeCleanupErrors(errors, 'Shared workspace composition teardown failed')
       })().then(resolveDispose, rejectDispose)
       return disposeResult
+    },
+  }
+}
+
+/** The latest chart hover, handed to whichever map's contributions are attached (a Retry attaches new ones). */
+function createSiteHoverFeed(): SiteHoverFeed & { publish(hover: readonly [number, number] | null): void } {
+  let current: readonly [number, number] | null = null
+  const listeners = new Set<(hover: readonly [number, number] | null) => void>()
+  return {
+    current: () => current,
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+    publish(hover) {
+      current = hover
+      for (const listener of [...listeners]) listener(hover)
     },
   }
 }

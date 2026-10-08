@@ -28,7 +28,7 @@ interface SidebarResizeSession {
 
 /**
  * The floating dock beside the panel rail: one panel at a time, 380 px wide
- * (440 px for Budget and Consortium) until the user resizes it. Narrow
+ * (440 px for Site data, Budget, Consortium and Stories) until the user resizes it. Narrow
  * responsive editions turn it into a bottom sheet.
  */
 export function SidePanelDock({

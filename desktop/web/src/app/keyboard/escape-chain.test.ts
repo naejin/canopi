@@ -16,6 +16,7 @@ import type { ToolHost } from '../../canvas/runtime/interaction-ports'
 import type { ToolId } from '../../canvas/runtime/interaction-types'
 import { createCanvasKeyboardPort } from '../../canvas/runtime/keyboard-port'
 import type { CanvasEscapeLayer, CanvasKeyboardPort } from '../../canvas/runtime/runtime'
+import { ESCAPE_PRIORITY, registerEscapeLayer } from './escape-chain'
 import { installKeyRouter, type KeyRouterHandle } from './key-router'
 import { CANVAS_KEYMAP_ROWS } from './keymap'
 
@@ -224,6 +225,33 @@ describe('the Esc chain', () => {
     }
     expect(done).toEqual(['canvas.gesture', 'canvas.tool-transient', 'canvas.tool', 'canvas.selection', 'inspection'])
     expect(canvas).toEqual({ tool: 'select', transient: false, live: false, selected: false })
+  })
+
+  it('after the tool and the selection, an Esc clears the profile, and the next unpins the Site data point (canopi-f47t.42)', () => {
+    install()
+    const shown = { profile: true, 'site-pin': true }
+    const site: string[] = []
+    const releases = (['profile', 'site-pin'] as const).map((layer) => registerEscapeLayer({
+      priority: ESCAPE_PRIORITY[layer],
+      isActive: () => shown[layer],
+      escape: () => {
+        shown[layer] = false
+        site.push(layer)
+        return true
+      },
+    }))
+    canvas = { tool: 'profile', transient: true, live: false, selected: true }
+    host.focus()
+
+    const done: string[] = []
+    for (let press = 0; press < 5; press += 1) {
+      const before = ran.length
+      escape(host)
+      done.push(ran.length > before ? `canvas.${ran[ran.length - 1]}` : site.at(-1) ?? 'none')
+    }
+
+    expect(done).toEqual(['canvas.tool-transient', 'canvas.tool', 'canvas.selection', 'profile', 'site-pin'])
+    for (const release of releases) release()
   })
 
   it('an Esc that aborts a drag keeps the inspection lens open (I10)', () => {

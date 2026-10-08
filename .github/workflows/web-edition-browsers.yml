@@ -2,6 +2,7 @@ name: Web Edition browsers
 
 # Serves the built Web Edition and drives it in Chromium (stands in for WebView2) and
 # WebKit (stands in for WKWebView) with real input; canvas v2 plan section 3.2, canopi-9x95.
+# Then drives the UI gallery the same way (canopi-f47t.42, plan section 4).
 on:
   push:
     branches: [main, feature/geolibre-adoption]
@@ -63,6 +64,12 @@ jobs:
       - name: Drive the Web Edition in Chromium and WebKit
         if: ${{ !inputs.update_snapshots }}
         run: npx playwright test e2e/canvas --project=chromium --project=webkit
+
+      # The UI gallery (ui-gallery/, its dev server started by playwright.config.ts) over memory fixtures: the
+      # Desktop panels and the shared workspace, Desktop's raster renderer included; DOM and pixel assertions only.
+      - name: Drive the UI gallery in Chromium and WebKit
+        if: ${{ !inputs.update_snapshots }}
+        run: npx playwright test e2e/gallery --project=gallery-chromium --project=gallery-webkit
 
       - name: Record the screenshot baselines
         if: ${{ inputs.update_snapshots }}

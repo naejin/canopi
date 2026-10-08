@@ -48,9 +48,3 @@ export function setStoryPresentationHidesEditingAids(hidden: boolean): void {
 export function presentedMapLayers(): MapLayersState {
   return overrides.value?.mapLayers ?? mapLayers.value
 }
-
-/** Whether a site-data entry is drawn: as the presented step shows it, else as the Design stores it. */
-export function presentedSiteDataVisible(id: string, storedVisible: boolean): boolean {
-  const presented = overrides.value
-  return presented ? presented.siteDataIds.has(id) : storedVisible
-}

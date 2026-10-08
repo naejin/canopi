@@ -280,7 +280,7 @@ export function stubTool(id: ToolId, behaviour: StubToolBehaviour = {}): StubToo
 /** Every tool id: the record fails to type-check when ToolId gains or loses one. */
 const TOOL_IDS = Object.keys({
   select: true, hand: true, 'plant-stamp': true, text: true, line: true, 'measurement-guide': true, rectangle: true,
-  ellipse: true, polygon: true, 'object-stamp': true, 'saved-object-stamp': true, 'plant-spacing': true,
+  ellipse: true, polygon: true, 'object-stamp': true, 'saved-object-stamp': true, 'plant-spacing': true, profile: true,
 } satisfies Record<ToolId, true>) as ToolId[]
 
 /** Lists every tool id in the vi.mock'ed tools/registry.ts: each of `tools` returns its stub, and every other id a fresh
@@ -309,7 +309,10 @@ export interface ToolHarnessOptions {
   readonly admission?: SceneCommandAdmission
   /** Default: the scene's edit coordinator over the harness's history. */
   readonly edits?: SceneEditCoordinator
-  readonly inspect?: (world: WorldPoint) => boolean
+  /** ToolHostDeps.pin: the Site data pin, absent by default (Web, or the panel closed). */
+  readonly pin?: (world: WorldPoint) => void
+  /** ToolHostDeps.finishProfile: the Site data profile, absent by default (Web). */
+  readonly finishProfile?: (points: readonly WorldPoint[]) => void
   /** Default: a series over the edit coordinator, one Scene Edit until endNudge, as the runtime's. */
   readonly nudge?: ToolHostDeps['nudge']
   /**
@@ -568,7 +571,8 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       store.setHoveredTarget(target)
       record.hovers.push(target)
     },
-    ...(options.inspect ? { inspect: options.inspect } : {}),
+    ...(options.pin ? { pin: options.pin } : {}),
+    ...(options.finishProfile ? { finishProfile: options.finishProfile } : {}),
     capturePress(pointerId) {
       record.captures.push(pointerId)
       return options.capturePress?.(pointerId) ?? true

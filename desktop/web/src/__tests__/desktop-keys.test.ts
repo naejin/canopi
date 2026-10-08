@@ -135,12 +135,12 @@ describe('Desktop keys', () => {
   })
 
   it('keeps panel shortcuts aligned with the command registry mapping', () => {
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: '3', ctrlKey: true }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '4', ctrlKey: true }))
 
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe('plant-db')
 
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: '3', ctrlKey: true }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '4', ctrlKey: true }))
 
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe(null)

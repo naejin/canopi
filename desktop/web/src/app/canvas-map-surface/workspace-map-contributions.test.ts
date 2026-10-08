@@ -4,8 +4,46 @@ import type { MapLibreApi, MapLibreMapInstance } from '../../maplibre/loader'
 import { IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, type MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
 import type { TerrainProtocolSupport } from '../../maplibre/terrain'
 import { WorkspaceMapContributions } from './workspace-map-contributions'
+import { createDesktopWorkspaceMapContributionAdapter } from './desktop-workspace-map-contribution-adapter'
+import { createTestCanvasQuerySurface } from '../../__tests__/support/canvas-query-surface'
+import { designSessionStore } from '../document-session/store'
+import { activePanel, selectPanel, sidePanel } from '../shell/state'
+import { endSiteDataTransients, setPin, setProfileLine } from '../lidar/site-transients'
+import type { CanopiFile } from '../../types/design'
+import { signal } from '@preact/signals'
+import { createWorkspaceRuntimeComposition } from './workspace-runtime-composition'
+import { createDetachedCanvasRuntimeAppAdapter } from '../../canvas/runtime/app-adapter'
+import { createDetachedSceneRuntimePanelTargetAdapter } from '../../canvas/runtime/scene-runtime/panel-target-adapter'
+import { createTestCanvasRuntimeSurfaces } from '../../__tests__/support/canvas-runtime-surfaces'
+import type { SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
 import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import type { RasterDisplay, RasterDisplayLayer } from '../../maplibre/raster-display/adapter'
+import type { SiteMapOverlay } from '../../maplibre/site-overlay'
+
+// Stream C draws the pin and line; here a pin draws as one point in two layers, so the site route can be seen and broken.
+vi.mock('../../maplibre/site-overlay', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../maplibre/site-overlay')>()
+  const { sourceId } = actual.siteMapOverlayIds()
+  return {
+    ...actual,
+    siteMapOverlayContract: (site: SiteMapOverlay | null) => ({
+      source: {
+        id: sourceId, type: 'geojson',
+        data: { type: 'FeatureCollection', features: site?.pin ? [{ type: 'Feature', geometry: { type: 'Point', coordinates: site.pin }, properties: { role: 'pin' } }] : [] },
+      },
+      layers: ['site-pin-ring', 'site-pin-core'].map((id) => ({ id, source: sourceId, type: 'circle', filter: ['==', ['get', 'role'], 'pin'], paint: { 'circle-radius': 6 } })),
+      hasRenderableFeatures: Boolean(site?.pin),
+    }),
+    siteHoverOverlayContract: (hover: readonly [number, number] | null) => ({
+      source: {
+        id: actual.siteMapOverlayIds().hover.sourceId, type: 'geojson',
+        data: { type: 'FeatureCollection', features: hover ? [{ type: 'Feature', geometry: { type: 'Point', coordinates: hover }, properties: {} }] : [] },
+      },
+      layers: [{ id: 'site-hover-ring', source: actual.siteMapOverlayIds().hover.sourceId, type: 'circle', paint: { 'circle-radius': 5 } }],
+      hasRenderableFeatures: hover !== null,
+    }),
+  }
+})
 
 class ContributionMap implements MapLibreMapInstance {
   readonly sources = new Map<string, { setData(data: unknown): void }>()
@@ -70,12 +108,30 @@ function snapshot(identity: object, overrides: Partial<WorkspaceMapContributionS
     sessionIdentity: identity,
     lidar: [layer()],
     terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
-    overlays: { runtime: { getSceneSnapshot: () => scene }, location: { lat: 48, lon: 2 }, hoveredTargets: [{ kind: 'zone', zone_id: 'plot' }], selectedTargets: [] },
+    overlays: { runtime: { getSceneSnapshot: () => scene }, location: { lat: 48, lon: 2 }, hoveredTargets: [{ kind: 'zone', zone_id: 'plot' }], selectedTargets: [], site: null },
     ...overrides,
   }
 }
 
-function fixture(loadTerrainSupport = vi.fn(async () => terrainSupport)) {
+/** The composition's hover feed: the chart cursor's ground point, pushed at scrub rate. */
+function hoverFeed() {
+  let current: readonly [number, number] | null = null
+  const listeners = new Set<(hover: readonly [number, number] | null) => void>()
+  return {
+    current: () => current,
+    subscribe(listener: (hover: readonly [number, number] | null) => void) {
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+    push(hover: readonly [number, number] | null) {
+      current = hover
+      for (const listener of listeners) listener(hover)
+    },
+    listeners,
+  }
+}
+
+function fixture(loadTerrainSupport = vi.fn(async () => terrainSupport), siteHover = hoverFeed()) {
   const identity = {}
   const map = new ContributionMap()
   const states: MapLibreCanvasSurfaceState[] = []
@@ -84,11 +140,11 @@ function fixture(loadTerrainSupport = vi.fn(async () => terrainSupport)) {
   let active = true
   let raster!: FakeRasterDisplay
   const manager = new WorkspaceMapContributions({
-    onFailure: failure, loadTerrainSupport, onStateChange: (state) => states.push(state), logError,
+    onFailure: failure, loadTerrainSupport, onStateChange: (state) => states.push(state), logError, siteHover,
     createRasterDisplay: (_map, options) => { raster = new FakeRasterDisplay(map, options.onLayersChanged!); return raster },
   })
   manager.attach({ map, maplibre: {} as MapLibreApi, lifetime: { on() {}, off() {}, addCleanup() {} }, isCurrent: () => active })
-  return { identity, map, states, failure, manager, loadTerrainSupport, logError, raster, expire: () => { active = false } }
+  return { identity, map, states, failure, manager, loadTerrainSupport, logError, raster, siteHover, expire: () => { active = false } }
 }
 
 function deferred<T>() {
@@ -96,6 +152,10 @@ function deferred<T>() {
   let reject!: (error: unknown) => void
   const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no })
   return { promise, resolve, reject }
+}
+
+function withSite(input: WorkspaceMapContributionSnapshot, pin: readonly [number, number] | null): WorkspaceMapContributionSnapshot {
+  return { ...input, overlays: { ...input.overlays, site: { pin, profileLine: null } } }
 }
 
 async function flush() { await Promise.resolve(); await Promise.resolve() }
@@ -479,6 +539,61 @@ describe('WorkspaceMapContributions', () => {
       expect(f.states.at(-1)).toMatchObject({ status: 'ready', terrainStatus: 'error' })
     })
 
+    it('draws the Site data pin above the panel Targets in the interaction-overlay band', () => {
+      const f = fixture()
+      f.manager.update(withSite(snapshot(f.identity), [2.001, 48.001]))
+      f.manager.admitStyle()
+      expect(f.map.getSource('site-overlay-source')).toBeTruthy()
+      expect(f.map.order.indexOf('panel-target-hover-plants')).toBeLessThan(f.map.order.indexOf('site-pin-ring'))
+      expect(f.map.order.indexOf('site-pin-ring')).toBeLessThan(f.map.order.indexOf('site-pin-core'))
+      f.manager.update(withSite(snapshot(f.identity), null))
+      expect(f.map.getSource('site-overlay-source')).toBeUndefined()
+      expect(f.map.order.some((id) => id.startsWith('site-'))).toBe(false)
+    })
+
+    it('skips a failing site overlay on its own key: the selection highlight stays, and the pin is retried only when it moves', () => {
+      const f = fixture()
+      const add = f.map.addLayer.getMockImplementation()!
+      let broken = true
+      f.map.addLayer.mockImplementation((candidate) => {
+        if (broken && String(candidate.id).startsWith('site-')) throw new Error('site layer rejected')
+        add(candidate)
+      })
+      const selected = snapshot(f.identity)
+      const input = withSite({ ...selected, overlays: { ...selected.overlays, selectedTargets: [{ kind: 'zone', zone_id: 'plot' }] } }, [2.001, 48.001])
+      f.manager.update(input)
+      f.manager.admitStyle()
+      expect(f.failure).not.toHaveBeenCalled()
+      expect(f.map.getLayer('panel-target-selection-zones-line')).toBeTruthy()
+      expect(f.map.order.some((id) => id.startsWith('site-'))).toBe(false)
+      expect(f.states.at(-1)).toMatchObject({ status: 'ready', layerSkipped: true })
+      const attempts = f.map.addLayer.mock.calls.length
+      // A new panel hover is a new Target set but the same pin: the panel overlay redraws, the site is not retried.
+      f.manager.update({ ...input, overlays: { ...input.overlays, hoveredTargets: [] } })
+      expect(f.map.addLayer.mock.calls.slice(attempts).some(([candidate]) => String(candidate.id).startsWith('site-'))).toBe(false)
+      expect(f.map.getLayer('panel-target-selection-zones-line')).toBeTruthy()
+      expect(f.logError).toHaveBeenCalledOnce()
+      broken = false
+      f.manager.update(withSite(input, [2.002, 48.001]))
+      expect(f.map.getLayer('site-pin-core')).toBeTruthy()
+      expect(f.states.at(-1)).toMatchObject({ status: 'ready', layerSkipped: false })
+    })
+
+    it('routes a MapLibre error naming a site layer to the site key, leaving the selection highlight drawn', () => {
+      const f = fixture()
+      const selected = snapshot(f.identity)
+      f.manager.update(withSite({ ...selected, overlays: { ...selected.overlays, selectedTargets: [{ kind: 'zone', zone_id: 'plot' }] } }, [2.001, 48.001]))
+      f.manager.admitStyle()
+      expect(f.manager.handleMapError({ layer: { id: 'site-pin-core' }, error: new Error('site paint rejected') })).toBe(true)
+      expect(f.failure).not.toHaveBeenCalled()
+      expect(f.map.order.some((id) => id.startsWith('site-'))).toBe(false)
+      expect(f.map.getLayer('panel-target-selection-zones-line')).toBeTruthy()
+      expect(f.states.at(-1)).toMatchObject({ status: 'ready', layerSkipped: true })
+      // A late error from a site layer already removed stays passive.
+      f.manager.dispose()
+      expect(f.manager.handleMapError({ sourceId: 'site-overlay-source', error: new Error('late') })).toBe(true)
+    })
+
     it('leaves unowned and shared scene errors to the map owner', () => {
       const f = fixture()
       f.manager.update(snapshot(f.identity))
@@ -486,5 +601,135 @@ describe('WorkspaceMapContributions', () => {
       expect(f.manager.handleMapError({ error: new Error('map engine failed') })).toBe(false)
       expect(f.manager.handleMapError({ layer: { id: 'canopi-shared-scene' }, error: new Error('scene draw failed') })).toBe(false)
     })
+  })
+
+  describe('the profile chart hover (one setData, never the drain)', () => {
+    it('moves the hover ring without re-running the raster sync, the panel overlays or the order, and without a new revision', async () => {
+      const terrain = deferred<TerrainProtocolSupport>()
+      const f = fixture(vi.fn(() => terrain.promise))
+      const input = withSite(snapshot(f.identity, { terrain: { ...snapshot(f.identity).terrain, hillshadeVisible: true } }), [2.001, 48.001])
+      f.manager.update(input)
+      f.manager.admitStyle()
+      const rasterSyncs = f.raster.syncs.length
+      const orderReads = f.map.getLayersOrder.mock.calls.length
+      const panelSource = f.map.getSource('panel-target-hover-source')!
+      f.siteHover.push([2.0015, 48.001])
+      const hoverSource = f.map.getSource('site-hover-source')!
+      expect(hoverSource).toBeTruthy()
+      expect(f.map.getLayer('site-hover-ring')).toBeTruthy()
+      f.siteHover.push([2.0016, 48.001])
+      f.siteHover.push([2.0017, 48.001])
+      expect(hoverSource.setData).toHaveBeenCalledTimes(2)
+      expect(f.raster.syncs).toHaveLength(rasterSyncs)
+      expect(f.map.getLayersOrder).toHaveBeenCalledTimes(orderReads)
+      expect(panelSource.setData).not.toHaveBeenCalled()
+      // The terrain rebuild the drain started is still current: the hover moved no revision.
+      terrain.resolve(terrainSupport)
+      await flush()
+      expect(f.states.at(-1)).toMatchObject({ terrainStatus: 'ready' })
+      f.siteHover.push(null)
+      expect(f.map.getSource('site-hover-source')).toBeUndefined()
+    })
+
+    it('draws no hover ring without a pin or profile line, and re-applies it after the drain repaints the site', () => {
+      const f = fixture()
+      f.manager.update(snapshot(f.identity))
+      f.manager.admitStyle()
+      f.siteHover.push([2.0015, 48.001])
+      expect(f.map.getSource('site-hover-source')).toBeUndefined()
+      f.manager.update(withSite(snapshot(f.identity), [2.001, 48.001]))
+      expect(f.map.getSource('site-hover-source')).toBeTruthy()
+      expect(f.map.order.indexOf('site-pin-core')).toBeLessThan(f.map.order.indexOf('site-hover-ring'))
+    })
+
+    it('reaches the map from the composition\'s own effect, never through the contributions read', async () => {
+      const hover = signal<readonly [number, number] | null>(null)
+      const read = vi.fn(() => null)
+      const surfaces = createTestCanvasRuntimeSurfaces()
+      let feed: Parameters<typeof fixture>[1] | undefined
+      const composition = createWorkspaceRuntimeComposition({
+        container: document.createElement('div'),
+        appAdapter: createDetachedCanvasRuntimeAppAdapter(),
+        targetPresentation: createDetachedSceneRuntimePanelTargetAdapter(),
+        mapContributions: { read, readSiteHover: () => hover.value },
+        readSnapshot: () => null,
+      }, {
+        createRendererComposition: () => ({}) as SharedMapSceneRendererComposition,
+        createRuntime: () => ({
+          cameraHost: {} as never, commandSurface: surfaces.commands, querySurface: surfaces.queries,
+          documentSurface: surfaces.documents, init: vi.fn(), unmountRenderer: vi.fn(), remountRenderer: vi.fn(),
+          destroy: vi.fn(), connectRenderTarget: vi.fn(() => () => {}),
+        }) as never,
+        createControls: (options) => {
+          feed = options.contributions.siteHover as typeof feed
+          return { setAttributionCompact: vi.fn() } as never
+        },
+        createWorkspace: () => ({
+          requestGenerationDisconnect: vi.fn(async () => {}), activate: vi.fn(), teardown: vi.fn(async () => {}),
+          retry: vi.fn(() => false), canRetry: vi.fn(() => false), updateMapContributions: vi.fn(), updateBackgroundPresentation: vi.fn(),
+        }),
+      })
+      await composition.start()
+      const f = fixture(undefined, feed!)
+      f.manager.update(withSite(snapshot(f.identity), [2.001, 48.001]))
+      f.manager.admitStyle()
+      const reads = read.mock.calls.length
+      hover.value = [2.0015, 48.001]
+      expect(f.map.getSource('site-hover-source')).toBeTruthy()
+      expect(read).toHaveBeenCalledTimes(reads)
+      await composition.dispose()
+      hover.value = null
+      expect(f.map.getSource('site-hover-source')).toBeTruthy()
+    })
+
+    it('survives Retry: the next map\'s contributions draw the current hover, and a disposed one stops listening', () => {
+      const feed = hoverFeed()
+      const first = fixture(undefined, feed)
+      first.manager.update(withSite(snapshot(first.identity), [2.001, 48.001]))
+      first.manager.admitStyle()
+      feed.push([2.0015, 48.001])
+      first.manager.dispose()
+      expect(feed.listeners.size).toBe(0)
+      const retried = fixture(undefined, feed)
+      retried.manager.update(withSite(snapshot(retried.identity), [2.001, 48.001]))
+      retried.manager.admitStyle()
+      expect(retried.map.getSource('site-hover-source')).toBeTruthy()
+    })
+
+    it('a hover failure skips the site layers until the pin or line changes, and keeps the panel highlights', () => {
+      const f = fixture()
+      f.manager.update(withSite(snapshot(f.identity), [2.001, 48.001]))
+      f.manager.admitStyle()
+      const add = f.map.addSource.getMockImplementation()!
+      f.map.addSource.mockImplementation((id, source) => {
+        if (id === 'site-hover-source') throw new Error('hover source rejected')
+        add(id, source)
+      })
+      f.siteHover.push([2.0015, 48.001])
+      f.siteHover.push([2.0016, 48.001])
+      expect(f.failure).not.toHaveBeenCalled()
+      expect(f.logError).toHaveBeenCalledOnce()
+      expect(f.map.order.some((id) => id.startsWith('site-'))).toBe(false)
+      expect(f.map.getLayer('panel-target-hover-zones-fill')).toBeTruthy()
+    })
+  })
+
+  it('reads the Desktop pin and profile line into the snapshot in [lon, lat], and none in overview', () => {
+    designSessionStore.replaceCurrentDesignState({ name: 'Orchard' } as CanopiFile, null, 'Orchard')
+    selectPanel('site-data')
+    try {
+      const adapter = createDesktopWorkspaceMapContributionAdapter()
+      const runtime = createTestCanvasQuerySurface()
+      expect(adapter.read(runtime)?.overlays.site).toBeNull()
+      setPin({ lon: 2.35, lat: 48.85 })
+      setProfileLine([{ lon: 2.35, lat: 48.85 }, { lon: 2.36, lat: 48.86 }])
+      expect(adapter.read(runtime)?.overlays.site).toEqual({ pin: [2.35, 48.85], profileLine: [[2.35, 48.85], [2.36, 48.86]] })
+      runtime.setPlacement({ x: 0, y: 0, scale: 0.01 })
+      expect(adapter.read(runtime)?.overlays.site).toBeNull()
+    } finally {
+      endSiteDataTransients()
+      sidePanel.value = null
+      activePanel.value = 'canvas'
+    }
   })
 })

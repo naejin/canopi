@@ -175,13 +175,73 @@ export const CANOPI_FILE_SCHEMA = {
       ],
       "type": "object"
     },
+    "LibraryItemRole": {
+      "enum": [
+        "Source",
+        "Derived"
+      ],
+      "type": "string"
+    },
+    "LidarColourRange": {
+      "oneOf": [
+        {
+          "properties": {
+            "mode": {
+              "const": "Data",
+              "type": "string"
+            }
+          },
+          "required": [
+            "mode"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "mode": {
+              "const": "CutOutliers",
+              "type": "string"
+            }
+          },
+          "required": [
+            "mode"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "max": {
+              "format": "double",
+              "type": "number"
+            },
+            "min": {
+              "format": "double",
+              "type": "number"
+            },
+            "mode": {
+              "const": "Custom",
+              "type": "string"
+            }
+          },
+          "required": [
+            "mode",
+            "min",
+            "max"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "LidarPresentationEntry": {
       "properties": {
         "id": {
           "type": "string"
         },
         "kind": {
-          "$ref": "#/$defs/LidarPresentationEntryKind"
+          "$ref": "#/$defs/LibraryItemRole"
+        },
+        "name": {
+          "type": "string"
         },
         "opacity": {
           "format": "float",
@@ -192,11 +252,28 @@ export const CANOPI_FILE_SCHEMA = {
           "minimum": 0,
           "type": "integer"
         },
-        "style": {
-          "type": [
-            "string",
-            "null"
+        "ramp": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LidarRamp"
+            },
+            {
+              "type": "null"
+            }
           ]
+        },
+        "range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LidarColourRange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reversed": {
+          "type": "boolean"
         },
         "visible": {
           "type": "boolean"
@@ -205,18 +282,13 @@ export const CANOPI_FILE_SCHEMA = {
       "required": [
         "kind",
         "id",
+        "name",
         "visible",
         "opacity",
-        "order"
+        "order",
+        "reversed"
       ],
       "type": "object"
-    },
-    "LidarPresentationEntryKind": {
-      "enum": [
-        "Source",
-        "Derived"
-      ],
-      "type": "string"
     },
     "LidarPresentationSection": {
       "properties": {
@@ -230,13 +302,28 @@ export const CANOPI_FILE_SCHEMA = {
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "visible": {
+          "type": "boolean"
         }
       },
       "required": [
         "schema_version",
+        "visible",
         "entries"
       ],
       "type": "object"
+    },
+    "LidarRamp": {
+      "enum": [
+        "Terrain",
+        "Earth",
+        "Greens",
+        "YellowRed",
+        "Magma",
+        "Gray"
+      ],
+      "type": "string"
     },
     "MeasurementGuide": {
       "properties": {

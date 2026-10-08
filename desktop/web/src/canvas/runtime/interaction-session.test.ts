@@ -528,6 +528,31 @@ describe('the interaction session', () => {
     expect(session.keyboard.escapeLayers()).not.toContain('gesture')
   })
 
+  it('Profile\'s finished line and the Site data pin leave through the session deps (canopi-f47t.42)', () => {
+    const line = [{ x: 10, y: 20 }, { x: 60, y: 20 }]
+    const profile: StubTool = stubTool('profile', {
+      gesture: (g) => {
+        if (g.kind === 'tap') profile.ctx().effects.finishProfile(line)
+        return 'pass'
+      },
+    })
+    useStubTools(profile)
+    const finishProfile = vi.fn()
+    const pinAt = vi.fn()
+    const { session } = createSession({ finishProfile, pinAt })
+    session.setTool('profile')
+
+    events.pointerDown({ x: 60, y: 20 }, { button: 0, detail: 0 })
+    events.pointerUp({ x: 60, y: 20 }, { button: 0, detail: 0 })
+    expect(finishProfile).toHaveBeenCalledWith(line)
+    expect(pinAt).not.toHaveBeenCalled()
+
+    session.setTool('hand')
+    events.pointerDown({ x: 100, y: 100 }, { button: 0, detail: 0, timeStamp: 5000 })
+    events.pointerUp({ x: 100, y: 100 }, { button: 0, detail: 0, timeStamp: 5050 })
+    expect(pinAt).toHaveBeenCalledWith(testView.view().screenToWorld({ x: 100, y: 100 }))
+  })
+
   it('a move with a button held and no press on the map publishes no pointer world point', () => {
     const { session } = createSession()
     session.setTool('line')

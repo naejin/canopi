@@ -9,6 +9,7 @@ import { LayersPanel } from '../src/components/panels/LayersPanel'
 import { DesignNotebookPanel } from '../src/components/panels/DesignNotebookPanel'
 import { PlantDbPanel } from '../src/components/panels/PlantDbPanel'
 import { DataDialogs } from '../src/components/panels/lidar/DataDialogs'
+import { SiteDataPanel } from '../src/components/panels/lidar/SiteDataPanel'
 import { FavoritesPanel } from '../src/components/panels/FavoritesPanel'
 import { BudgetPanel } from '../src/components/panels/BudgetPanel'
 import { CalendarPanel } from '../src/components/panels/CalendarPanel'
@@ -31,10 +32,11 @@ import { plantSymbolMenuOpen } from '../src/canvas/plant-symbol-menu-state'
 import { plantDbStatus } from '../src/app/health/state'
 import { theme, locale } from '../src/app/settings/state'
 import { designFixture } from './fixtures'
-import { designSessionStore } from '../src/app/document-session/store'
+import { currentDesign, designSessionStore } from '../src/app/document-session/store'
 import { activity } from './memory-backend'
 import { attachmentFailure, pendingAttachments } from '../src/app/lidar/actions'
-import { closeSiteDataDetails, dataDialog, openSiteDataDetails, selectSiteRow } from '../src/app/lidar/library-navigation'
+import { dataDialog } from '../src/app/lidar/library-navigation'
+import { showInSiteData } from '../src/app/lidar/site-data-view'
 import { GalleryCanvasSurface } from './GalleryCanvasSurface'
 import { StampChooser } from '../src/components/canvas/StampChooser'
 import { PlantSymbolSheet } from './PlantSymbolSheet'
@@ -77,10 +79,13 @@ const fixtureState = params.get('state') ?? 'populated'
 const requestedPanelWidth = Number(params.get('panelWidth'))
 const edition = params.get('edition') === 'web' ? 'web' : 'desktop'
 const initial = parseGallerySurface(params.get('surface'))
+/** `open=<id>`: the Site data item opened under its row, or the item the Data library selects. */
+const openItem = params.get('open')
 const selectedSurface = signal<GallerySurface>(initial)
 const galleryCanvasReady = signal(false)
 const file = designFixture(fixtureState)
-if (initial !== 'start') designSessionStore.replaceCurrentDesignState(file, null, file.name)
+// `state=no-design`: no Design is open, as on the Start screen (the empty Data library's Import… is disabled).
+if (initial !== 'start' && fixtureState !== 'no-design') designSessionStore.replaceCurrentDesignState(file, null, file.name)
 // Layers-initiated work joining this Design, as its progress rows show it.
 if (fixtureState === 'lidar-progress') {
   const identity = designSessionStore.sessionIdentity.value
@@ -137,6 +142,7 @@ const workspaceSurfaces: WorkspaceSurfaces = edition === 'web'
       side: {
         'species-key': DesktopSpeciesKeyPanel,
         layers: GalleryLayersSurface,
+        'site-data': GallerySiteDataSurface,
         calendar: CalendarPanel,
         budget: BudgetPanel,
         consortium: ConsortiumPanel,
@@ -160,7 +166,7 @@ function Gallery() {
         .map(([key, label]) => <button data-panel={key === 'key' ? 'species-key' : key === 'notebook' ? 'design-notebook' : key} aria-pressed={selectedSurface.value === key} onClick={() => selectGallerySurface(key as GallerySurface)}>{label}</button>)}
       <span>Edition:</span>
       {(['desktop', 'web'] as const).map((nextEdition) => <a aria-current={edition === nextEdition ? 'page' : undefined} href={editionUrl(nextEdition)}>{nextEdition}</a>)}
-      <span>State:</span>{['populated', 'empty', 'mixed', 'long', 'located', 'dense', 'planting', 'zone', 'overview', 'max-zoom', 'lidar-progress', 'lidar-failure'].map(state => <a aria-current={fixtureState === state ? 'page' : undefined}
+      <span>State:</span>{['populated', 'empty', 'mixed', 'long', 'located', 'dense', 'planting', 'zone', 'overview', 'max-zoom', 'lidar-progress', 'lidar-failure', 'lidar-missing', 'lidar-long', 'lidar-raster', 'no-design'].map(state => <a aria-current={fixtureState === state ? 'page' : undefined}
         href={`?surface=${selectedSurface.value}&state=${state}&theme=${theme.value}&locale=${locale.value}${edition === 'web' ? '&edition=web' : ''}`}>{state}</a>)}
     </nav>
     {selectedSurface.value === 'workspace' && edition === 'desktop' ? <GalleryWorkspaceCommands panelProjection={panelProjection} /> : null}
@@ -315,22 +321,24 @@ function GalleryWorkspaceCommands({ panelProjection }: { readonly panelProjectio
   )
 }
 
-/** The data workflow surfaces: Layers with an active site row, its details, and the three dialogs. */
+/** The data workflow surfaces: Site data (with `open=<id>` opened under its row) and the three dialogs. */
 function showGalleryDataSurface(next: GallerySurface): void {
   dataDialog.value = next === 'library'
-    ? { kind: 'library', focusId: null }
+    ? { kind: 'library', focusId: openItem }
     : next === 'import'
       ? { kind: 'import', paths: ['/data/LHD_FXX_0470_6800_MNT_O_0M50_LAMB93_IGN69.tif', '/data/LHD_FXX_0470_6801_MNT_O_0M50_LAMB93_IGN69.tif'], attach: true, returnTo: null }
       : next === 'analyze'
         ? { kind: 'analyze', itemId: 'lidar-ground', analysisId: null, attach: true, from: null, returnTo: null }
         : null
-  if (next === 'site-details') openSiteDataDetails('lidar-slope-percent')
-  else closeSiteDataDetails()
-  if (next === 'layers' && edition === 'desktop' && fixtureState !== 'empty') selectSiteRow('lidar-ground')
+  if (next === 'site-data' && openItem && currentDesign.peek()) showInSiteData(openItem)
 }
 
 function GalleryLayersSurface() {
-  return <LayersPanel importGeoJson={() => { activity.value = 'Design objects from GeoJSON… runs File › Import GeoJSON.' }} />
+  return <LayersPanel />
+}
+
+function GallerySiteDataSurface() {
+  return <SiteDataPanel importGeoJson={() => { activity.value = 'Design objects from GeoJSON… runs File › Import GeoJSON.' }} />
 }
 
 function GalleryNotebookSurface() {

@@ -26,6 +26,7 @@ type ShellCommandIdByCapability = {
   readonly navigateCanvas: 'nav.canvas'
   readonly navigateTemplates: 'nav.templates'
   readonly navigateLayers: 'nav.layers'
+  readonly navigateSiteData: 'nav.siteData'
   readonly navigateSpeciesKey: 'nav.speciesKey'
   readonly navigatePlantDatabase: 'nav.plantDb'
   readonly navigateFavorites: 'nav.favorites'
@@ -34,6 +35,7 @@ type ShellCommandIdByCapability = {
   readonly navigateConsortium: 'nav.consortium'
   readonly navigateDesignNotebook: 'nav.designNotebook'
   readonly navigateStories: 'nav.stories'
+  readonly startProfile: 'siteData.profile'
   readonly saveCurrentView: 'view.saveCurrentView'
   readonly manageViews: 'view.manageViews'
   readonly toggleToolNames: 'view.toggleToolNames'
@@ -179,9 +181,10 @@ const SHELL_COMMAND_DESCRIPTORS: readonly ShellCommandDescriptor[] = [
   { capabilityId: 'saveDesignAs', id: 'file.saveAs', labelKey: 'menu.file.saveAs', shortcut: 'Ctrl+Shift+S', palette: true, menu: file(1) },
   { capabilityId: 'downloadCanopi', id: 'file.downloadCanopi', labelKey: 'webShell.downloadCanopi', shortcut: 'Ctrl+S', palette: true, menu: file(1) },
   { capabilityId: 'revertDesign', id: 'file.revert', labelKey: 'menu.file.revert', palette: true, menu: file(1) },
+  // File's imports, flat (U49 Q8): terrain or height data, GeoJSON, then the Data library.
   { capabilityId: 'addData', id: 'file.addData', labelKey: 'menu.file.addData', palette: true, menu: file(2) },
-  { capabilityId: 'openDataLibrary', id: 'file.dataLibrary', labelKey: 'canvas.lidar.layers.openLibrary', palette: true, menu: file(2) },
   { capabilityId: 'importGeoJson', id: 'file.importGeoJson', labelKey: 'geojson.import', palette: true, menu: file(2) },
+  { capabilityId: 'openDataLibrary', id: 'file.dataLibrary', labelKey: 'canvas.lidar.layers.openLibrary', palette: true, menu: file(2) },
   { capabilityId: 'exportCanvasPdf', id: 'file.exportCanvasPdf', labelKey: 'menu.file.exportPlantingPlan', shortcut: 'Ctrl+P', palette: true, menu: file(2, 'export') },
   { capabilityId: 'exportGeoJson', id: 'file.exportGeoJson', labelKey: 'menu.file.exportGeoJson', palette: true, menu: file(2, 'export') },
   { capabilityId: 'exportBudgetCsv', id: 'file.exportBudgetCsv', labelKey: 'menu.file.exportBudgetCsv', palette: true, menu: file(2, 'export') },
@@ -191,15 +194,19 @@ const SHELL_COMMAND_DESCRIPTORS: readonly ShellCommandDescriptor[] = [
   { capabilityId: 'exitApp', id: 'file.exit', labelKey: 'menu.file.exit', shortcut: 'Ctrl+Q', palette: false, menu: file(4) },
   { capabilityId: 'navigateCanvas', id: 'nav.canvas', labelKey: 'panelRail.canvas', palette: false, panel: panel('canvas', 'primary', 0) },
   { capabilityId: 'navigateTemplates', id: 'nav.templates', labelKey: 'worldMap.title', palette: false, panel: panel('templates', 'primary', 1) },
+  // Ctrl 1–9 in rail order; Site data (Desktop) takes Ctrl 2 under Layers and Stories has no digit (U49 Q1).
   { capabilityId: 'navigateLayers', id: 'nav.layers', labelKey: 'panelRail.layers', shortcut: 'Ctrl+1', palette: true, panel: panel('layers', 'design', 0) },
-  { capabilityId: 'navigateSpeciesKey', id: 'nav.speciesKey', labelKey: 'panelRail.plants', shortcut: 'Ctrl+2', palette: true, panel: panel('species-key', 'design', 2) },
-  { capabilityId: 'navigatePlantDatabase', id: 'nav.plantDb', labelKey: 'panelRail.catalog', shortcut: 'Ctrl+3', palette: true, panel: panel('plant-db', 'design', 3) },
-  { capabilityId: 'navigateFavorites', id: 'nav.favorites', labelKey: 'panelRail.favorites', shortcut: 'Ctrl+4', palette: true, panel: panel('favorites', 'design', 4) },
-  { capabilityId: 'navigateCalendar', id: 'nav.calendar', labelKey: 'panelRail.calendar', shortcut: 'Ctrl+5', palette: true, panel: panel('calendar', 'planning', 0) },
-  { capabilityId: 'navigateBudget', id: 'nav.budget', labelKey: 'panelRail.budget', shortcut: 'Ctrl+6', palette: true, panel: panel('budget', 'planning', 1) },
-  { capabilityId: 'navigateConsortium', id: 'nav.consortium', labelKey: 'panelRail.consortium', shortcut: 'Ctrl+7', palette: true, panel: panel('consortium', 'planning', 2) },
-  { capabilityId: 'navigateDesignNotebook', id: 'nav.designNotebook', labelKey: 'panelRail.notebook', shortcut: 'Ctrl+8', palette: true, panel: panel('design-notebook', 'planning', 3) },
-  { capabilityId: 'navigateStories', id: 'nav.stories', labelKey: 'panelRail.stories', shortcut: 'Ctrl+9', palette: true, panel: panel('stories', 'planning', 4) },
+  { capabilityId: 'navigateSiteData', id: 'nav.siteData', labelKey: 'canvas.layers.siteData', shortcut: 'Ctrl+2', palette: true, panel: panel('site-data', 'design', 1) },
+  { capabilityId: 'navigateSpeciesKey', id: 'nav.speciesKey', labelKey: 'panelRail.plants', shortcut: 'Ctrl+3', palette: true, panel: panel('species-key', 'design', 2) },
+  { capabilityId: 'navigatePlantDatabase', id: 'nav.plantDb', labelKey: 'panelRail.catalog', shortcut: 'Ctrl+4', palette: true, panel: panel('plant-db', 'design', 3) },
+  { capabilityId: 'navigateFavorites', id: 'nav.favorites', labelKey: 'panelRail.favorites', shortcut: 'Ctrl+5', palette: true, panel: panel('favorites', 'design', 4) },
+  { capabilityId: 'navigateCalendar', id: 'nav.calendar', labelKey: 'panelRail.calendar', shortcut: 'Ctrl+6', palette: true, panel: panel('calendar', 'planning', 0) },
+  { capabilityId: 'navigateBudget', id: 'nav.budget', labelKey: 'panelRail.budget', shortcut: 'Ctrl+7', palette: true, panel: panel('budget', 'planning', 1) },
+  { capabilityId: 'navigateConsortium', id: 'nav.consortium', labelKey: 'panelRail.consortium', shortcut: 'Ctrl+8', palette: true, panel: panel('consortium', 'planning', 2) },
+  { capabilityId: 'navigateDesignNotebook', id: 'nav.designNotebook', labelKey: 'panelRail.notebook', shortcut: 'Ctrl+9', palette: true, panel: panel('design-notebook', 'planning', 3) },
+  { capabilityId: 'navigateStories', id: 'nav.stories', labelKey: 'panelRail.stories', palette: true, panel: panel('stories', 'planning', 4) },
+  // Desktop's palette arms Profile; it has no shortcut and no menu or rail place (spec §1.10).
+  { capabilityId: 'startProfile', id: 'siteData.profile', labelKey: 'siteData.profile', palette: true },
   { capabilityId: 'saveCurrentView', id: 'view.saveCurrentView', labelKey: 'menu.view.saveCurrentView', palette: true, menu: { id: 'view', section: 2 } },
   { capabilityId: 'manageViews', id: 'view.manageViews', labelKey: 'menu.view.manageViews', palette: true, menu: { id: 'view', section: 2 } },
   { capabilityId: 'toggleToolNames', id: 'view.toggleToolNames', labelKey: 'menu.view.toolNames', palette: true, check: 'checkbox', menu: { id: 'view', section: 0 } },

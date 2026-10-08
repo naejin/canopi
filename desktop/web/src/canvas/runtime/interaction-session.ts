@@ -87,16 +87,10 @@ export interface SceneInteractionSessionDeps {
   sceneEdits: SceneEditCoordinator
   commandAdmission: SceneCommandAdmission
   settledReader: SettledSceneReader
-  /**
-   * Numeric inspection hook, absent unless a surface is inspecting.
-   *
-   * Returning `true` claims the left click, which is what suspends drawing and
-   * selection for the duration of inspection. It is consulted *after* shared
-   * pan and the UI overlays, so pan/zoom and every control keep working while
-   * inspecting — the contract requires navigation to survive inspection, and
-   * the alternative (a second gesture owner) is what it forbids.
-   */
-  tryInspectAt?: (world: ScenePoint) => boolean
+  /** The Site data pin (CanvasRuntimeAppAdapter.pinAt): ToolHostDeps.pin, called after a tap no tool uses. */
+  pinAt?: (world: ScenePoint) => void
+  /** The Site data profile (CanvasRuntimeAppAdapter.finishProfile): ToolHostDeps.finishProfile, Profile's finished line. */
+  finishProfile?: (points: readonly ScenePoint[]) => void
   getDesignObjectSelection: () => CanvasDesignObjectSelectionModel
   selectionCommands: CanvasContextMenuCommands
   contextualCommands?: {
@@ -323,7 +317,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         timers: { ...timers, clock },
         initialPointer: platform.os === 'ios' || platform.os === 'android' ? 'touch' : 'mouse',
         hover: (target) => _deps.setHoveredTarget(target),
-        inspect: _deps.tryInspectAt,
+        pin: _deps.pinAt,
+        finishProfile: _deps.finishProfile,
         capturePress: (pointerId) => this._capturePress(pointerId),
         transientHistoryChanged: () => _deps.notifyTransientHistoryChange(),
         dropped: (kind) => this._dropped(kind),

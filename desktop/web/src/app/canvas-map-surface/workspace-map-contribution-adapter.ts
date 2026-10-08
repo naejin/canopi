@@ -6,6 +6,7 @@ import type { MapLibreApi } from '../../maplibre/loader'
 import type { TerrainLayerState, TerrainProtocolSupport } from '../../maplibre/terrain'
 import type { RasterDisplay, RasterDisplayLayer, RasterDisplayMap, RasterDisplayOptions } from '../../maplibre/raster-display/adapter'
 import type { CanvasMapSurfaceOverlaySnapshot } from './overlays'
+import type { SiteMapOverlay } from '../../maplibre/site-overlay'
 
 export interface WorkspaceMapContributionSnapshot {
   readonly sessionIdentity: object
@@ -26,18 +27,28 @@ export interface WorkspaceMapContributionAdapter {
     map: RasterDisplayMap,
     options: Pick<RasterDisplayOptions, 'onLayersChanged'>,
   ) => RasterDisplay
+  /**
+   * Desktop only: the profile chart's hover point in [lon, lat]. It changes at scrub rate, so it is the one exception to
+   * the coarse rule below: it never rides `read`, and the composition feeds it straight to the map's hover source.
+   */
+  readonly readSiteHover?: () => readonly [number, number] | null
+}
+
+/** What an edition adds to the shared contributions: its LiDAR band and terrain, and Desktop's Site data pin and line. */
+interface WorkspaceMapEditionContributions extends Pick<WorkspaceMapContributionSnapshot, 'lidar' | 'terrain'> {
+  readonly site: SiteMapOverlay | null
 }
 
 /**
  * The contributions both editions read: null without a Design or a plane, else the panel Targets (none in overview) over the
  * edition's LiDAR layers and terrain. Coarse view signals only: the contributions re-read when the Scene changes, the camera
  * settles, the mode changes or the canvas paint changes (theme, backdrop: overlays already on the map repaint in its colours),
- * never on a camera frame alone.
+ * never on a camera frame alone. The one high-rate exception, the profile chart's hover, goes through `readSiteHover`.
  */
 export function readWorkspaceMapContributions(
   runtime: CanvasQuerySurface,
   store: Pick<DesignSessionStore, 'sessionIdentity' | 'hasCurrentDesign'>,
-  edition: () => Pick<WorkspaceMapContributionSnapshot, 'lidar' | 'terrain'>,
+  edition: () => WorkspaceMapEditionContributions,
 ): WorkspaceMapContributionSnapshot | null {
   const sessionIdentity = store.sessionIdentity.value
   if (!store.hasCurrentDesign()) return null
@@ -48,14 +59,16 @@ export function readWorkspaceMapContributions(
   void canvasPaintRevision.value
   const overview = runtime.view.mode.value === 'overview'
   const panelTargets = readPanelTargetOverlaySnapshot()
+  const { site, ...contributions } = edition()
   return {
     sessionIdentity,
-    ...edition(),
+    ...contributions,
     overlays: {
       runtime,
       location: { lat: plane.origin.lat, lon: plane.origin.lon },
       hoveredTargets: overview ? [] : panelTargets.hoveredTargets,
       selectedTargets: overview ? [] : panelTargets.selectedTargets,
+      site: overview ? null : site,
     },
   }
 }

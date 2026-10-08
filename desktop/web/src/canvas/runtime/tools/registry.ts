@@ -9,6 +9,7 @@ import { createPanTool } from './pan'
 import { createPlantRowTool } from './plant-row'
 import { createPlantStampTool } from './plant-stamp'
 import { createPolygonTool } from './polygon'
+import { createProfileLineTool } from './profile-line'
 import { createSavedObjectStampTool } from './saved-object-stamp'
 import { createSelectTool } from './select/select-tool'
 import { createTextNoteTool } from './text-note'
@@ -30,4 +31,5 @@ export const TOOL_REGISTRY: Readonly<Record<ToolId, ToolFactory>> = Object.freez
   ellipse: () => createZoneDragTool('ellipse'),
   polygon: createPolygonTool,
   'measurement-guide': createMeasurementGuideTool,
+  profile: createProfileLineTool,
 })

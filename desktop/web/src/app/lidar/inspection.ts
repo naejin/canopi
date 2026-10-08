@@ -1,5 +1,5 @@
 import { computed, effect, signal } from '@preact/signals'
-import type { LidarPresentationEntryKind, LidarSampleOutcome } from '../../generated/contracts'
+import type { LibraryItemRole, LidarSampleOutcome } from '../../generated/contracts'
 import { lidarCancelSamplePixel, lidarSamplePixel } from '../../ipc/lidar'
 import { currentDesign, designSessionStore } from '../document-session/store'
 import { activePanel } from '../shell/state'
@@ -26,7 +26,7 @@ export type InspectionSample =
 
 /** One inspected entity, or none. `kind` is the Design entry kind that presents it. */
 export interface InspectionTarget {
-  readonly kind: LidarPresentationEntryKind
+  readonly kind: LibraryItemRole
   readonly id: string
   readonly name: string
 }

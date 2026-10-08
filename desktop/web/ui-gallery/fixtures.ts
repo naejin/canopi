@@ -279,6 +279,53 @@ function storyFixture(origin: { lon: number; lat: number }, long: boolean): { vi
   }
 }
 
+/**
+ * `state=lidar-raster`: the Design sits on the 34 × 24 cell display COG the Rust engine wrote
+ * (src/maplibre/raster-display/fixtures/rust-display-cog.{tif,json}, near Delft), so the canvas draws it through
+ * Desktop's raster renderer.
+ */
+export const galleryRasterSite = {
+  origin: { lon: 4.36759, lat: 52.011435 },
+  bounds: [4.367580413818352, 52.011365324340304, 4.367762804031366, 52.01144456811651] as [number, number, number, number],
+  valueRange: [19.75, 90.25] as [number, number],
+}
+
+/** The Design's site, as the gallery states place it. */
+function designOrigin(state: string): { lon: number; lat: number } {
+  if (state === 'located') return { lon: 0.033854, lat: 48.220272 }
+  if (state === 'lidar-raster') return galleryRasterSite.origin
+  return { lon: 13, lat: 23 }
+}
+
+/** Site data entries: the three of every state, the nine more `lidar-long` lists, the two `lidar-missing` names. */
+function lidarEntries(state: string): NonNullable<CanopiFile['lidar']>['entries'] {
+  const entry = (kind: 'Source' | 'Derived', id: string, name: string, order: number, visible = true, opacity = 0.82) =>
+    ({ kind, id, name, visible, opacity, order, ramp: null, reversed: false, range: null })
+  const entries = [
+    entry('Source', 'lidar-ground', 'IGN LiDAR HD MNT', 0),
+    entry('Derived', 'lidar-slope', 'IGN LiDAR HD MNT · Slope', 1, true, 0.66),
+    entry('Derived', 'lidar-slope-percent', 'IGN LiDAR HD MNT · Slope (%)', 2, false, 0.66),
+  ]
+  if (state === 'lidar-long') {
+    entries.push(...galleryLongSiteDataNames.map((name, index) => entry('Source', `lidar-block-${index + 1}`, name, 3 + index)))
+  }
+  if (state === 'lidar-missing') {
+    // Two ids no library on this computer has, as a Design opened on another computer shows them.
+    entries.push(
+      entry('Source', 'lidar-gone-2021', 'IGN LiDAR HD MNT 2021', 3),
+      entry('Derived', 'lidar-gone-2021-slope', 'IGN LiDAR HD MNT 2021 · Slope', 4, true, 0.66),
+    )
+  }
+  return entries
+}
+
+/** `state=lidar-long`: nine more sources, so Site data lists twelve entries and shows its filter (above 8). */
+export const galleryLongSiteDataNames = [
+  'Survey block 1 · north meadow', 'Survey block 2 · orchard terraces', 'Survey block 3 · pond margin',
+  'Survey block 4 · hedge line', 'Survey block 5 · lower field', 'Survey block 6 · woodland edge',
+  'Canopy height 2024', 'Surface model 2024', 'Survey block 7 · access track',
+] as const
+
 export function designFixture(state = 'populated'): CanopiFile {
   const scene = createDefaultScenePersistedState()
   const plants = state === 'empty' || state === 'zone' ? [] : state === 'planting' ? symbolPlanting() : specimens.flatMap(([canonicalName, commonName], speciesIndex) =>
@@ -301,18 +348,13 @@ export function designFixture(state = 'populated'): CanopiFile {
       }] : [],
       plantSpeciesColors: Object.fromEntries(specimens.map(([name, , , color]) => [name, color])),
       plantSpeciesSymbols: Object.fromEntries(specimens.map(([name, , symbol]) => [name, symbol])),
-    }, createSessionPlane(state === 'located'
-      ? { lon: 0.033854, lat: 48.220272 }
-      : { lon: 13, lat: 23 }), { now: new Date('2026-01-01T00:00:00Z') }),
+    }, createSessionPlane(designOrigin(state)), { now: new Date('2026-01-01T00:00:00Z') }),
     name: 'Orchard notebook',
-    ...(state === 'empty' ? {} : storyFixture(state === 'located' ? { lon: 0.033854, lat: 48.220272 } : { lon: 13, lat: 23 }, state === 'long')),
+    ...(state === 'empty' ? {} : storyFixture(designOrigin(state), state === 'long')),
     lidar: state === 'empty' ? null : {
       schema_version: 1,
-      entries: [
-        { kind: 'Source', id: 'lidar-ground', visible: true, opacity: 0.82, order: 0, style: null },
-        { kind: 'Derived', id: 'lidar-slope', visible: true, opacity: 0.66, order: 1, style: null },
-        { kind: 'Derived', id: 'lidar-slope-percent', visible: false, opacity: 0.66, order: 2, style: null },
-      ],
+      visible: true,
+      entries: lidarEntries(state),
     },
     budget_currency: 'EUR',
     budget: activeSpecies.slice(0, 5).flatMap((canonicalName, index) => index === 4 ? [] : [{

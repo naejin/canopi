@@ -67,7 +67,8 @@ function commandFor(
     saveDesign: { execute },
     closeDesign: { execute },
     navigateLayers: { execute },
-    navigateSpeciesKey: { execute },
+    navigateSiteData: { execute },
+    navigateConsortium: { execute },
     navigateDesignNotebook: { execute },
   })
   const ran: string[] = []
@@ -105,9 +106,10 @@ describe('layouts (spec §5.8)', () => {
     ['H5 Russian single key', { key: 'м', code: 'KeyV' }, {}, 'canvas.tool.select'],
     ['H6 AZERTY Ctrl+1', { key: '&', code: 'Digit1', ctrlKey: true }, {}, 'nav.layers'],
     ['H7 AZERTY Ctrl+Shift+1', { key: '1', code: 'Digit1', ctrlKey: true, shiftKey: true }, {}, 'nav.layers'],
-    ['AZERTY Ctrl+é', { key: 'é', code: 'Digit2', ctrlKey: true }, {}, 'nav.speciesKey'],
+    ['AZERTY Ctrl+é', { key: 'é', code: 'Digit2', ctrlKey: true }, {}, 'nav.siteData'],
     ['AZERTY Ctrl+- keeps zoom out', { key: '-', code: 'Digit6', ctrlKey: true }, {}, 'view.zoomOut'],
-    ['AZERTY Ctrl+_ is Ctrl+8, not zoom out', { key: '_', code: 'Digit8', ctrlKey: true }, {}, 'nav.designNotebook'],
+    ['AZERTY Ctrl+_ is Ctrl+8, not zoom out', { key: '_', code: 'Digit8', ctrlKey: true }, {}, 'nav.consortium'],
+    ['AZERTY Ctrl+ç', { key: 'ç', code: 'Digit9', ctrlKey: true }, {}, 'nav.designNotebook'],
     ['Czech Ctrl++ keeps zoom in', { key: '+', code: 'Digit1', ctrlKey: true, shiftKey: true }, {}, 'view.zoomIn'],
     ['H8 AltGr', { key: '@', code: 'Digit0', ctrlKey: true, altKey: true }, {}, null],
     ['AltGr types a character', { key: '¶', code: 'KeyR', ctrlKey: true, altKey: true }, {}, null],

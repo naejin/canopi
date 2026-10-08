@@ -45,14 +45,6 @@ const GLOBAL_DESIGN_TOKEN_NAMES = collectGlobalDesignTokenNames(
 
 const STRUCTURAL_SPACING_EXCEPTIONS = [
   {
-    file: 'src/components/canvas/LayerPanel.module.css',
-    rule: '.mapSlider::-webkit-slider-thumb',
-    atRules: [],
-    property: 'margin-top',
-    value: 'calc((var(--slider-thumb-size) - var(--slider-track-size)) / -2)',
-    reason: 'WebKit requires the thumb to be offset by half the difference between thumb and track geometry.',
-  },
-  {
     file: 'src/components/panels/FavoritesPanel.module.css',
     rule: '.savedStampGripDots',
     atRules: [],
@@ -557,5 +549,31 @@ describe('CSS module structural integrity', () => {
         return dangleselectorLists(css).map((prelude) => `${path}: ${prelude}`)
       })
     expect(violations).toEqual([])
+  })
+})
+
+/** The Layers and Site data row files: one layer row look, shared (U49 Q7; architecture review finding 5). */
+const LAYER_ROW_FILES = [
+  { component: 'src/components/canvas/LayerPanel.tsx', module: 'src/components/canvas/LayerPanel.module.css' },
+  { component: 'src/components/panels/lidar/SiteData.tsx', module: 'src/components/panels/lidar/site-data.module.css' },
+] as const
+
+/** An inset bar drawn with box-shadow: the open-row marker the shared module owns. */
+const OPEN_BAR = /box-shadow:\s*inset\s/
+
+describe('one layer row look in Layers and Site data', () => {
+  it('both row files compose shared/layer-row.module.css and draw no open bar of their own', () => {
+    const violations = LAYER_ROW_FILES.flatMap(({ component, module }) => [
+      ...(/from '(?:\.\.\/)+(?:components\/)?shared\/layer-row\.module\.css'/.test(readFileSync(resolve(component), 'utf8'))
+        ? []
+        : [`${component} does not import shared/layer-row.module.css`]),
+      ...(OPEN_BAR.test(readFileSync(resolve(module), 'utf8')) ? [`${module} draws its own open bar`] : []),
+    ])
+
+    expect(violations).toEqual([])
+  })
+
+  it('the shared module draws the open bar', () => {
+    expect(OPEN_BAR.test(readFileSync(resolve('src/components/shared/layer-row.module.css'), 'utf8'))).toBe(true)
   })
 })

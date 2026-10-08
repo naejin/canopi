@@ -255,6 +255,18 @@ describe('Tool card', () => {
     expect(lines()[2]).toBe('Backspace removes the last corner · Shift keeps 45° angles · Esc to cancel')
   })
 
+  it('tells how to draw a profile line and switches the Esc meaning to cancel while one is drawn (canopi-f47t.42)', async () => {
+    await choose('profile')
+    expect(lines()).toEqual([
+      'Profile',
+      'Click to add points. Double-click or press Enter to finish.',
+      'Backspace removes the last point · Shift keeps 45° angles · Esc to go back to Select',
+    ])
+
+    await choose('profile', { gesture: true })
+    expect(lines()[2]).toBe('Backspace removes the last point · Shift keeps 45° angles · Esc to cancel')
+  })
+
   it.each([
     ['rectangle', 'Rectangle zone', 'Drag across the map to draw the rectangle.', 'Shift draws a square'],
     ['ellipse', 'Ellipse zone', 'Drag across the map to draw the ellipse.', 'Shift draws a circle'],

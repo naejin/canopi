@@ -185,6 +185,9 @@ export interface ToolEffects {
   requestTextEntry(request: TextEntryRequest, submit: (text: string) => 'close' | 'keep', onCancel?: () => void): void
   closeTextEntry(): void
   requestFocus(target: 'map'): void                         // ToolHostDeps.focus (CanvasFocusPort, §1.6), implemented by the FocusOwner
+  /** Profile only (canopi-f47t.42): hands the finished line (2+ points) to the Site data profile (ToolHostDeps.finishProfile);
+   *  the tool then requests Select. */
+  finishProfile(points: readonly WorldPoint[]): void
 }
 
 export interface ToolSettingsPort {

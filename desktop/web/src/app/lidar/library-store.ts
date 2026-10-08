@@ -6,12 +6,16 @@ import type {
   LibraryItemSummary,
   LibraryItemType,
   LibrarySnapshot,
-  LidarPresentationEntryKind,
+  LidarColourRange,
+  LidarLibraryStatus,
+  LidarPresentationEntry,
+  LidarRamp,
   LidarResultState,
 } from '../../generated/contracts'
 import { lidarListLibrary } from '../../ipc/lidar'
 import { derivedItemName } from '../analyses/registry'
 import { currentDesign } from '../document-session/store'
+import { lidarLibraryStatus } from '../health/state'
 import { referenceDrawOrder } from './reference-tree'
 
 const LIDAR_POLL_INTERVAL_MS = 1500
@@ -19,6 +23,8 @@ const LIDAR_POLL_INTERVAL_MS = 1500
 /** Library-side snapshot; null until the first successful read. */
 export const lidarLibrary = signal<LibrarySnapshot | null>(null)
 export const lidarStatusMessage = signal<string | null>(null)
+/** Whether the latest list read failed; with no snapshot yet, the library is unopened rather than loading. */
+const lidarLibraryReadFailed = signal(false)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let refreshInFlight: Promise<void> | null = null
@@ -44,6 +50,7 @@ async function readLibrarySnapshot(startSequence: number): Promise<LibrarySnapsh
     publishedReadSequence = startSequence
     lidarLibrary.value = snapshot
     lidarStatusMessage.value = null
+    lidarLibraryReadFailed.value = false
   }
   return snapshot
 }
@@ -63,6 +70,7 @@ export async function refreshLidarLibrary(): Promise<void> {
       await readLibrarySnapshot(startSequence)
     } catch (error) {
       lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
+      lidarLibraryReadFailed.value = true
     } finally {
       refreshInFlight = null
     }
@@ -117,20 +125,42 @@ export function installLidarLibraryObserver(): () => void {
   return () => {}
 }
 
+/** Why an entry has no library item; each reason names its fix. */
+export type LidarMissingReason = 'needs-newer-canopi' | 'library-unopened' | 'not-in-library'
+
+/**
+ * Whether an entry's library item is here: `present`, `loading` while the
+ * first snapshot is still on its way (drawn as a normal row, never as
+ * missing), or why it is missing.
+ */
+export type LidarAvailability = 'present' | 'loading' | LidarMissingReason
+
 export interface LidarPresentationItem {
-  /** The Design entry kind; the file format keeps `Analysis` for derived items. */
-  kind: LidarPresentationEntryKind
-  role: LibraryItemRole
+  kind: LibraryItemRole
   id: string
+  /** The library's name, or the name the Design stored while the item is missing. */
   name: string
+  availability: LidarAvailability
   /** `null` for a reference whose library item is gone. */
   itemType: LibraryItemType | null
   /** The item's own stored units, never an input's. */
   units: string
-  state: LidarResultState | 'unavailable'
+  /** The item's state; null unless `availability` is `present`. */
+  state: LidarResultState | null
+  /** The entry's own eye, which its row's eye button shows and writes. */
   visible: boolean
+  /**
+   * Whether the entry is shown: its own eye and the Site data eye both on.
+   * Captions, values, profile curves and preparing checks read this; the map
+   * adds a presented story step's choice through `mapShown` (display.ts).
+   */
+  shown: boolean
   opacity: number
   order: number
+  /** The entry's colour ramp and range; null is the item kind's default. */
+  ramp: LidarRamp | null
+  reversed: boolean
+  range: LidarColourRange | null
   bounds: [number, number, number, number] | null
   /** Current immutable generation; display and inspection aim at it. */
   generationId: string | null
@@ -167,28 +197,58 @@ export function libraryItemName(item: LibraryItemSummary, library: LibrarySnapsh
   return derivedItemName(input?.name, provenance.analysis_id)
 }
 
+/** Whether an entry's library item is missing, rather than present or still loading. */
+export function isMissing(item: Pick<LidarPresentationItem, 'availability'>): boolean {
+  return item.availability !== 'present' && item.availability !== 'loading'
+}
+
+/** Why an entry the library does not list is missing, from how the library opened. */
+function absentAvailability(library: LibrarySnapshot | null, status: LidarLibraryStatus): LidarAvailability {
+  if (status.kind === 'refused_newer') return 'needs-newer-canopi'
+  if (status.kind === 'unavailable') return 'library-unopened'
+  return library ? 'not-in-library' : 'loading'
+}
+
 /**
  * Join library identity/status with document presentation entries, in drawing
  * order (back to front): results draw over the item they come from
  * (`reference-tree.ts`). Unavailable references persist and are flagged
- * instead of dropped.
+ * with the reason instead of dropped.
+ *
+ * Effective visibility is folded here, once, before anything reads the
+ * entries: `shown` is the entry's own eye and the Site data eye together,
+ * and each entry keeps its own eye (GeoLibre `effectiveLayerRenderState`,
+ * packages/core/src/layer-groups.ts). Saved-view capture, which may not
+ * import this module, folds the same two stored flags itself.
  */
 export function readLidarPresentation(
   design: {
-    lidar?: { entries: LidarPresentationDocEntry[] } | null
+    lidar?: { visible: boolean; entries: readonly LidarPresentationEntry[] } | null
   } | null,
   library: LibrarySnapshot | null,
+  libraryStatus: LidarLibraryStatus = { kind: 'ready' },
 ): LidarPresentationItem[] {
   const entries = design?.lidar?.entries ?? []
+  const sectionVisible = design?.lidar?.visible ?? true
   const items: Omit<LidarPresentationItem, 'parentId' | 'depth'>[] = []
   for (const entry of entries) {
-    const role = entry.kind
-    const item = library?.items.find((candidate) => candidate.id === entry.id && candidate.role === role)
-    const presentation = { kind: entry.kind, role, id: entry.id, visible: entry.visible, opacity: entry.opacity, order: entry.order }
+    const item = library?.items.find((candidate) => candidate.id === entry.id && candidate.role === entry.kind)
+    const presentation = {
+      kind: entry.kind,
+      id: entry.id,
+      visible: entry.visible,
+      shown: entry.visible && sectionVisible,
+      opacity: entry.opacity,
+      order: entry.order,
+      ramp: entry.ramp,
+      reversed: entry.reversed,
+      range: entry.range,
+    }
     items.push(item
       ? {
           ...presentation,
           name: libraryItemName(item, library),
+          availability: 'present' as const,
           itemType: item.item_type,
           units: item.units,
           state: item.state,
@@ -204,10 +264,11 @@ export function readLidarPresentation(
         }
       : {
           ...presentation,
-          name: entry.id,
+          name: entry.name,
+          availability: absentAvailability(library, libraryStatus),
           itemType: null,
           units: '',
-          state: 'unavailable',
+          state: null,
           bounds: null,
           generationId: null,
           displayRange: null,
@@ -226,19 +287,15 @@ export function readLidarPresentation(
   })))
 }
 
-interface LidarPresentationDocEntry {
-  kind: LidarPresentationEntryKind
-  id: string
-  visible: boolean
-  opacity: number
-  order: number
-  style: string | null
-}
-
 /**
  * Presentation join for the current Design and the latest library snapshot;
  * this seam owns the design read so map snapshot code never bypasses it.
  */
 export function readCurrentLidarPresentation(): LidarPresentationItem[] {
-  return readLidarPresentation(currentDesign.value, lidarLibrary.value)
+  const library = lidarLibrary.value
+  // A library whose list cannot be read and that has no snapshot yet is unopened: its entries are missing, not loading.
+  const status: LidarLibraryStatus = library === null && lidarLibraryReadFailed.value
+    ? { kind: 'unavailable' }
+    : lidarLibraryStatus.value
+  return readLidarPresentation(currentDesign.value, library, status)
 }

@@ -10,14 +10,22 @@ const historyMock = vi.hoisted(() => vi.fn())
 const cancelAnalysisMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const createAnalysisMock = vi.hoisted(() => vi.fn())
 const upsertMock = vi.hoisted(() => vi.fn())
+const sectionEyeMock = vi.hoisted(() => vi.fn())
 const removeMock = vi.hoisted(() => vi.fn())
 const moveMock = vi.hoisted(() => vi.fn())
 const patchMock = vi.hoisted(() => vi.fn())
+const reconcileNamesMock = vi.hoisted(() => vi.fn())
 const refreshMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const ensurePollingMock = vi.hoisted(() => vi.fn())
 const reconcileInspectionMock = vi.hoisted(() => vi.fn())
 const sessionIdentity = vi.hoisted(() => ({ value: 'design-a' as string | null }))
-const presentation = vi.hoisted(() => ({ value: [] as Array<{ id: string; order: number; parentId: string | null }> }))
+const presentation = vi.hoisted(() => ({ value: [] as Array<{
+  id: string
+  order: number
+  parentId: string | null
+  itemType?: { kind: 'Raster'; quantity: RasterQuantity } | null
+  units?: string
+}> }))
 
 vi.mock('../ipc/lidar', () => ({
   lidarCancelAnalysisJob: cancelAnalysisMock,
@@ -34,10 +42,13 @@ vi.mock('../ipc/lidar', () => ({
   lidarRetryImport: retryImportMock,
 }))
 
-vi.mock('../app/design-edit/lidar', () => ({
+vi.mock('../app/design-edit/lidar', async (importOriginal) => ({
+  sameColourRange: (await importOriginal<typeof import('../app/design-edit/lidar')>()).sameColourRange,
   setLidarEntryOrders: moveMock,
   patchLidarEntryById: patchMock,
+  reconcileLidarEntryNames: reconcileNamesMock,
   removeLidarEntries: removeMock,
+  setSiteDataVisible: sectionEyeMock,
   upsertLidarEntry: upsertMock,
 }))
 
@@ -45,6 +56,8 @@ vi.mock('../app/lidar/library-store', async () => {
   const { signal: makeSignal } = await import('@preact/signals')
   return {
     ensureLidarPolling: ensurePollingMock,
+    libraryItemName: (item: { id: string; name: string | null }) => item.name ?? `${item.id} name`,
+    lidarLibrary: makeSignal(null),
     lidarStatusMessage: makeSignal<string | null>(null),
     readCurrentLidarPresentation: () => presentation.value,
     refreshLidarLibrary: refreshMock,
@@ -62,7 +75,7 @@ vi.mock('../app/document-session/store', () => ({
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }))
 
 import { open } from '@tauri-apps/plugin-dialog'
-import type { AnalysisRequest, LibraryItemSummary } from '../generated/contracts'
+import type { AnalysisRequest, LibraryItemSummary, RasterQuantity } from '../generated/contracts'
 import {
   addToDesign,
   cancelAnalysisJob,
@@ -72,15 +85,19 @@ import {
   fetchProcessingHistory,
   importLibraryItem,
   moveReference,
+  moveReferenceTo,
   removeFromDesign,
   renameLibraryItem,
   rerunAnalysis,
   retryLibraryImport,
   runAnalysis,
+  setLidarEntryDisplay,
   setLidarEntryVisibility,
+  setSiteDataShown,
   attachmentFailure,
   dismissAttachmentFailure,
   pendingAttachments,
+  reconcileEntryNames,
   settleResultAttachments,
 } from '../app/lidar/actions'
 import { lidarStatusMessage } from '../app/lidar/library-store'
@@ -133,7 +150,7 @@ describe('Data Library actions', () => {
     expect(upsertMock).not.toHaveBeenCalled()
 
     settleResultAttachments(librarySnapshot([sourceItem('layer-9', 'Ground')]))
-    expect(upsertMock).toHaveBeenCalledWith('Source', 'layer-9')
+    expect(upsertMock).toHaveBeenCalledWith('Source', 'layer-9', 'Ground')
   })
 
   it('reports an import from Layers that failed and never adds it', async () => {
@@ -180,6 +197,17 @@ describe('Data Library actions', () => {
     expect(renameItemMock).toHaveBeenCalledWith('analysis-1', 'Steepness')
     expect(retryImportMock).toHaveBeenCalledWith('layer-2')
     expect(dismissImportMock).toHaveBeenCalledWith('layer-3')
+    expect(designEdits()).toBe(0)
+  })
+
+  it('refreshes the open Design\'s stored names from the library\'s names, nothing before the first snapshot', () => {
+    reconcileEntryNames(null)
+    expect(reconcileNamesMock).not.toHaveBeenCalled()
+
+    reconcileEntryNames(librarySnapshot([sourceItem('a', 'Renamed ground'), slopeItem('s', 'a')]))
+    expect(reconcileNamesMock).toHaveBeenCalledTimes(1)
+    // An unnamed result is named the way it was stored: by its input and analysis.
+    expect(reconcileNamesMock).toHaveBeenCalledWith(new Map([['a', 'Renamed ground'], ['s', 's name']]))
     expect(designEdits()).toBe(0)
   })
 
@@ -246,7 +274,7 @@ describe('Design data references', () => {
     addToDesign('Derived', 'analysis-1')
     removeFromDesign('analysis-1')
 
-    expect(upsertMock).toHaveBeenCalledWith('Derived', 'analysis-1')
+    expect(upsertMock).toHaveBeenCalledWith('Derived', 'analysis-1', 'analysis-1')
     expect(removeMock).toHaveBeenCalledWith(['analysis-1'])
   })
 
@@ -254,6 +282,76 @@ describe('Design data references', () => {
     setLidarEntryVisibility('layer-1', false)
     expect(patchMock).toHaveBeenCalledWith('layer-1', { visible: false })
     expect(reconcileInspectionMock).toHaveBeenCalled()
+  })
+
+  it('the Site data eye shows or hides every entry at once and reconciles inspection in the same interaction', () => {
+    setSiteDataShown(false)
+    expect(sectionEyeMock).toHaveBeenCalledWith(false)
+    expect(reconcileInspectionMock).toHaveBeenCalled()
+    setSiteDataShown(true)
+    expect(sectionEyeMock).toHaveBeenLastCalledWith(true)
+  })
+
+  it("stores a kind's default range and ramp as null, so the default has one encoding", () => {
+    const entry = (id: string, quantity: RasterQuantity, units: string) =>
+      ({ id, order: 0, parentId: null, itemType: { kind: 'Raster' as const, quantity }, units })
+    presentation.value = [
+      entry('ground', 'GroundElevation', 'm'),
+      entry('surface', 'SurfaceElevation', 'm'),
+      entry('canopy', 'AboveGroundHeight', 'm'),
+      entry('other', 'OtherContinuous', 'kg'),
+      entry('slope', 'Slope', '°'),
+      entry('slope-percent', 'Slope', '%'),
+    ]
+    const stored = (id: string) => patchMock.mock.calls.find(([called]) => called === id)?.[1]
+
+    for (const id of ['ground', 'surface', 'canopy', 'other']) {
+      setLidarEntryDisplay(id, { range: { mode: 'Data' } })
+      expect(stored(id)).toEqual({ range: null })
+    }
+    setLidarEntryDisplay('slope', { range: { mode: 'Custom', min: 0, max: 30 } })
+    setLidarEntryDisplay('slope-percent', { range: { mode: 'Custom', min: 0, max: 57.7 } })
+    expect(stored('slope')).toEqual({ range: null })
+    expect(stored('slope-percent')).toEqual({ range: null })
+
+    // Anything else is the user's choice, kept as written.
+    patchMock.mockClear()
+    setLidarEntryDisplay('slope', { range: { mode: 'Data' } })
+    setLidarEntryDisplay('ground', { range: { mode: 'Custom', min: 0, max: 30 }, ramp: 'Gray', reversed: true, opacity: 0.4 })
+    expect(stored('slope')).toEqual({ range: { mode: 'Data' } })
+    expect(stored('ground')).toEqual({ range: { mode: 'Custom', min: 0, max: 30 }, ramp: 'Gray', reversed: true, opacity: 0.4 })
+
+    // The kind's first ramp is its default.
+    patchMock.mockClear()
+    setLidarEntryDisplay('ground', { ramp: 'Terrain' })
+    setLidarEntryDisplay('canopy', { ramp: 'Greens' })
+    setLidarEntryDisplay('slope', { ramp: 'YellowRed' })
+    setLidarEntryDisplay('other', { ramp: 'Magma' })
+    for (const id of ['ground', 'canopy', 'slope', 'other']) expect(stored(id)).toEqual({ ramp: null })
+  })
+
+  it('never stores a range or opacity the Design could not be reopened with, keeping the rest of the patch', () => {
+    presentation.value = [{ id: 'ground', order: 0, parentId: null, itemType: { kind: 'Raster' as const, quantity: 'GroundElevation' }, units: 'm' }]
+    const stored = () => patchMock.mock.calls.at(-1)?.[1]
+
+    for (const range of [
+      { mode: 'Custom' as const, min: 190, max: 182 },
+      { mode: 'Custom' as const, min: 182, max: 182 },
+      { mode: 'Custom' as const, min: Number.NaN, max: 182 },
+      { mode: 'Custom' as const, min: 120, max: Number.POSITIVE_INFINITY },
+    ]) {
+      patchMock.mockClear()
+      setLidarEntryDisplay('ground', { range, ramp: 'Gray' })
+      expect(stored(), JSON.stringify(range)).toEqual({ ramp: 'Gray' })
+    }
+    for (const opacity of [Number.NaN, -0.1, 1.5]) {
+      patchMock.mockClear()
+      setLidarEntryDisplay('ground', { opacity, reversed: true })
+      expect(stored(), String(opacity)).toEqual({ reversed: true })
+    }
+    patchMock.mockClear()
+    setLidarEntryDisplay('ground', { range: { mode: 'Custom', min: 190, max: 182 } })
+    expect(patchMock).not.toHaveBeenCalled()
   })
 
   it('moves a reference among its siblings and saves every order in one edit', () => {
@@ -269,6 +367,21 @@ describe('Design data references', () => {
     moveMock.mockClear()
     moveReference('canopy', 'front')
     moveReference('slope', 'back')
+    expect(moveMock).not.toHaveBeenCalled()
+  })
+
+  it('a drop moves a reference to a sibling\'s place in one order write, and a refused target writes nothing', () => {
+    presentation.value = [
+      { id: 'ground', order: 0, parentId: null },
+      { id: 'slope', order: 1, parentId: 'ground' },
+      { id: 'canopy', order: 2, parentId: null },
+    ]
+    moveReferenceTo('ground', 'canopy')
+    expect(moveMock).toHaveBeenCalledTimes(1)
+    expect([...moveMock.mock.calls[0]![0] as Map<string, number>]).toEqual([['canopy', 0], ['ground', 1], ['slope', 2]])
+
+    moveMock.mockClear()
+    moveReferenceTo('slope', 'canopy')
     expect(moveMock).not.toHaveBeenCalled()
   })
 })
@@ -318,7 +431,7 @@ describe('analysis runs', () => {
     settleResultAttachments(snapshotWith({ id, state: 'Ready', generation_id: 'agen-1' }))
     settleResultAttachments(snapshotWith({ id, state: 'Ready', generation_id: 'agen-1' }))
     expect(upsertMock).toHaveBeenCalledTimes(1)
-    expect(upsertMock).toHaveBeenCalledWith('Derived', id)
+    expect(upsertMock).toHaveBeenCalledWith('Derived', id, `${id} name`)
   })
 
   it('attaches every presentable output in order once all are published, never provenance-only ones', async () => {
@@ -334,7 +447,7 @@ describe('analysis runs', () => {
       { ...hidden, state: 'Ready', generation_id: 'g2' },
       { id: 'second', state: 'Ready', generation_id: 'g3' },
     ))
-    expect(upsertMock.mock.calls).toEqual([['Derived', 'first'], ['Derived', 'second']])
+    expect(upsertMock.mock.calls).toEqual([['Derived', 'first', 'first name'], ['Derived', 'second', 'second name']])
   })
 
   it('never adds the result to a Design opened while it was calculating', async () => {

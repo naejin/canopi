@@ -338,7 +338,6 @@ export type LibraryEngines = {
 	geolibre: LidarEngineStatus,
 };
 
-// Whether an item was imported or produced by an analysis.
 export type LibraryItemRole = "Source" | "Derived";
 
 // One Data Library item as the UI reads it.
@@ -373,6 +372,11 @@ export type LibraryItemSummary = {
 	offers: AnalysisOffer[],
 	// Derived items whose definitions use this item as an input.
 	dependents: number,
+	/**
+	 *  When the item was added to the library: its catalogue row's
+	 *  `created_at`, Unix milliseconds as text, for sorting by Recently added.
+	 */
+	created_at: string,
 };
 
 /**
@@ -387,6 +391,8 @@ export type LibrarySnapshot = {
 	items: LibraryItemSummary[],
 	engines: LibraryEngines,
 };
+
+export type LidarColourRange = { mode: "Data" } | { mode: "CutOutliers" } | { mode: "Custom"; min: number; max: number };
 
 // One display derivative file, in the entity's source-priority order.
 export type LidarDisplayAsset = {
@@ -562,20 +568,24 @@ export type LidarLibraryStatus = { kind: "ready" } |
 { kind: "unavailable" };
 
 export type LidarPresentationEntry = {
-	kind: LidarPresentationEntryKind,
+	kind: LibraryItemRole,
 	id: string,
+	name: string,
 	visible: boolean,
 	opacity: number,
 	order: number,
-	style: string | null,
+	ramp: LidarRamp | null,
+	reversed: boolean,
+	range: LidarColourRange | null,
 };
-
-export type LidarPresentationEntryKind = "Source" | "Derived";
 
 export type LidarPresentationSection = {
 	schema_version: number,
+	visible: boolean,
 	entries: LidarPresentationEntry[],
 };
+
+export type LidarRamp = "Terrain" | "Earth" | "Greens" | "YellowRed" | "Magma" | "Gray";
 
 // State of a library item: its operation while it runs, then a fixed result.
 export type LidarResultState = "Preparing" | "Ready" | "Failed";
@@ -590,6 +600,12 @@ export type LidarResultState = "Preparing" | "Ready" | "Failed";
 export type LidarSampleOutcome = { Value: { generation_id: string; value: number; units: string } } |
 // Inside the generation, but the containing pixel declares no data.
 { NoData: { generation_id: string } } | { Unavailable: { reason: LidarSampleUnavailableReason } };
+
+export type LidarSamplePointsRequest = {
+	targets: LidarSampleTarget[],
+	// WGS84 `[longitude, latitude]` in degrees, in the caller's order.
+	points: ([number, number])[],
+};
 
 export type LidarSampleRequest = {
 	kind: LibraryItemRole,
@@ -618,6 +634,22 @@ export type LidarSampleRequest = {
 	longitude: number,
 	// WGS84 latitude in degrees of the point to sample.
 	latitude: number,
+};
+
+// One target's answer, in target order.
+export type LidarSampleSeries =
+/**
+ *  One value per point, in point order; `None` where the cell declares no
+ *  data or the point lies outside the generation.
+ */
+{ Values: { values: (number | null)[] } } | { Unavailable: { reason: LidarSampleUnavailableReason } };
+
+// One item to sample, aimed at the generation the caller believes current.
+export type LidarSampleTarget = {
+	kind: LibraryItemRole,
+	// Library item id, matching `kind`.
+	entity_id: string,
+	expected_generation_id: string,
 };
 
 // Why a sample could not produce a physical value.
@@ -1284,3 +1316,6 @@ export type Zone = {
 	fill_color: string | null,
 	notes: string | null,
 };
+
+export const LIDAR_SAMPLE_MAX_TARGETS = 8
+export const LIDAR_SAMPLE_MAX_POINTS = 4096

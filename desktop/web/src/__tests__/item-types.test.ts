@@ -5,6 +5,7 @@ import {
   RASTER_QUANTITIES,
   itemTypeLabel,
   itemTypeStyle,
+  profileRole,
   unitSuffix,
 } from '../app/lidar/item-types'
 import { formatLegendValue, formatRasterMetres, formatRasterRange, formatRasterSample } from '../app/lidar/display-legend'
@@ -15,6 +16,14 @@ const raster = (quantity: RasterQuantity) => ({ kind: 'Raster' as const, quantit
 describe('library item types', () => {
   beforeEach(() => {
     locale.value = 'en'
+  })
+
+  it('profiles elevations on one axis and heights on another, and nothing else', () => {
+    expect(profileRole(raster('GroundElevation'))).toBe('elevation')
+    expect(profileRole(raster('SurfaceElevation'))).toBe('elevation')
+    expect(profileRole(raster('AboveGroundHeight'))).toBe('height')
+    expect(profileRole(raster('Slope'))).toBeNull()
+    expect(profileRole(raster('OtherContinuous'))).toBeNull()
   })
 
   it('colours elevation with schwarzwald over the display range, keeping blue for water', () => {

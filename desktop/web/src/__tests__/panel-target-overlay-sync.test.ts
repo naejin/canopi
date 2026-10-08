@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createPanelTargetMapOverlayContract } from '../maplibre/panel-target-overlays'
-import { syncPanelTargetMapOverlay } from '../maplibre/panel-target-overlay-sync'
+import { syncMapOverlay } from '../maplibre/panel-target-overlay-sync'
 import { canvasPaintRevision, getCanvasColor, refreshCanvasColorCache } from '../canvas/theme-refresh'
 import { setCanvasMapBackdrop } from '../canvas/runtime/scene-visuals'
 
@@ -34,7 +34,7 @@ describe('panel target overlay sync', () => {
       { type: 'Feature', geometry: { type: 'Point', coordinates: [1.5, 43.6] }, properties: { kind: 'plant' } },
     ] as never)
 
-    expect(() => syncPanelTargetMapOverlay(map as never, overlay)).not.toThrow()
+    expect(() => syncMapOverlay(map as never, overlay)).not.toThrow()
     expect(map.addSource).toHaveBeenCalledWith('panel-target-selection-source', {
       type: 'geojson',
       data: overlay.source.data,
@@ -58,7 +58,7 @@ describe('panel target overlay sync', () => {
       const contract = () => createPanelTargetMapOverlayContract('selection', [
         { type: 'Feature', geometry: { type: 'Point', coordinates: [1.5, 43.6] }, properties: { kind: 'plant' } },
       ] as never)
-      syncPanelTargetMapOverlay(map as never, contract())
+      syncMapOverlay(map as never, contract())
       expect(map.layers.get('panel-target-selection-plants')?.['circle-stroke-color']).toBe('#9C5A16')
       const added = map.addLayer.mock.calls.length
 
@@ -67,7 +67,7 @@ describe('panel target overlay sync', () => {
       expect(getCanvasColor('selection-stroke')).toBe('#E0A458')
       // The workspace re-syncs its overlays when this revision moves.
       expect(canvasPaintRevision.value).toBeGreaterThan(revision)
-      syncPanelTargetMapOverlay(map as never, contract())
+      syncMapOverlay(map as never, contract())
 
       expect(map.addLayer.mock.calls.length).toBe(added)
       expect(map.layers.get('panel-target-selection-plants')?.['circle-stroke-color']).toBe('#E0A458')

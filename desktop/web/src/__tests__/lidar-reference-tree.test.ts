@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   canMoveReference,
+  filterKeepingAncestors,
   movedReferenceOrders,
   referenceDrawOrder,
   referenceRows,
+  siblingMoveOrders,
+  treeRows,
 } from '../app/lidar/reference-tree'
 
 const node = (id: string, order: number, parentId: string | null = null) => ({ id, order, parentId })
@@ -68,5 +71,64 @@ describe('site data tree', () => {
     const orders = movedReferenceOrders(tied, 'b', 'front')!
     const moved = tied.map((entry) => ({ ...entry, order: orders.get(entry.id)! }))
     expect(referenceRows(moved).map((row) => row.id)).toEqual(['b', 'a'])
+  })
+})
+
+describe('one tree for the library and Site data (finding 9)', () => {
+  const item = (id: string, name: string, parentId: string | null = null) => ({ id, name, parentId })
+  const byName = (left: { name: string; id: string }, right: { name: string; id: string }) =>
+    left.name.localeCompare(right.name) || left.id.localeCompare(right.id)
+
+  it('nests children under their parent, siblings in the comparator\'s order', () => {
+    const rows = treeRows([item('b', 'Beta'), item('a2', 'Zed', 'a'), item('a', 'Alpha'), item('a1', 'Aa', 'a')], byName)
+
+    expect(rows.map((row) => [row.id, row.depth])).toEqual([['a', 0], ['a1', 1], ['a2', 1], ['b', 0]])
+  })
+
+  it('lists a row whose parent is missing, or is itself, at the top level', () => {
+    const rows = treeRows([item('orphan', 'Orphan', 'gone'), item('self', 'Self', 'self')], byName)
+
+    expect(rows.map((row) => [row.id, row.depth])).toEqual([['orphan', 0], ['self', 0]])
+  })
+
+  it('survives a cycle by listing its members once, at the top level', () => {
+    const rows = treeRows([item('x', 'X', 'y'), item('y', 'Y', 'x')], byName)
+
+    expect(rows.map((row) => [row.id, row.depth, row.parentId])).toEqual([['x', 0, null], ['y', 0, null]])
+  })
+
+  it('a match three deep keeps both its ancestors and drops everything else', () => {
+    const rows = treeRows([
+      item('ground', 'Ground'), item('slope', 'Slope', 'ground'), item('steep', 'Steep', 'slope'),
+      item('canopy', 'Canopy'), item('other', 'Other slope', 'ground'),
+    ], byName)
+
+    const kept = filterKeepingAncestors(rows, (row) => row.name === 'Steep')
+
+    expect(kept.map((row) => [row.id, row.depth])).toEqual([['ground', 0], ['slope', 1], ['steep', 2]])
+  })
+
+  it('keeps a match whose parent is not listed, alone', () => {
+    const rows = treeRows([item('orphan', 'Steep', 'gone'), item('canopy', 'Canopy')], byName)
+
+    expect(filterKeepingAncestors(rows, (row) => row.name === 'Steep').map((row) => row.id)).toEqual(['orphan'])
+  })
+})
+
+describe('moving a row to a sibling\'s place (drag and Alt arrows)', () => {
+  const nodes = [node('a', 2), node('b', 1), node('c', 0), node('r', 0, 'a')]
+
+  it('takes the target row\'s place among its siblings and renumbers densely in drawing order', () => {
+    // Front first: a, b, c. Dropping c on a lists c, a, b.
+    const orders = siblingMoveOrders(nodes, 'c', 'a')!
+
+    expect(referenceRows(nodes.map((n) => ({ ...n, order: orders.get(n.id)! }))).map((row) => row.id)).toEqual(['c', 'a', 'r', 'b'])
+    expect([...orders.values()].sort()).toEqual([0, 1, 2, 3])
+  })
+
+  it('refuses a target that is not a sibling, the row itself or unknown', () => {
+    expect(siblingMoveOrders(nodes, 'r', 'b')).toBeNull()
+    expect(siblingMoveOrders(nodes, 'b', 'b')).toBeNull()
+    expect(siblingMoveOrders(nodes, 'b', 'gone')).toBeNull()
   })
 })

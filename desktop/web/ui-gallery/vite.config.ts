@@ -20,6 +20,13 @@ export default defineConfig(({ command }) => {
       '#budget-export-platform': path('./budget-export.ts'),
       '#geocoding-transport': path('../src/app/geocoding/transport.browser.ts'),
     } },
+    // As the app's (vite.config.ts): `state=lidar-raster` draws through Desktop's raster renderer, whose WASM
+    // decoders resolve their .wasm beside their own module and whose TIFF codecs use top-level await.
+    optimizeDeps: {
+      exclude: ['cog-tiler-wasm', 'whitebox-wasm'],
+      esbuildOptions: { target: 'es2022' },
+    },
+    worker: { format: 'es' as const },
     server: { host: '127.0.0.1', port: 1422, strictPort: true, fs: { allow: [path('..')] } },
   }
 })

@@ -1,8 +1,11 @@
 import { designSessionStore } from '../document-session/store'
 import { mapTerrainStateOf } from '../map-layers/state'
-import { presentedMapLayers, presentedSiteDataVisible } from '../story-presentation/overrides'
+import { presentedMapLayers, storyPresentationOverrides } from '../story-presentation/overrides'
 import { readCurrentLidarPresentation } from '../lidar/library-store'
 import { lidarDisplayDescriptors, lidarDisplayLayers } from '../lidar/display'
+import { pin, profileLine } from '../lidar/site-transients'
+import { profileHover } from '../lidar/profile'
+import type { SiteMapOverlay } from '../../maplibre/site-overlay'
 import { theme } from '../settings/state'
 import { loadMapLibreTerrainSupport } from '../../maplibre/terrain-loader'
 import { createRasterDisplay } from '../../maplibre/raster-display/adapter'
@@ -12,12 +15,29 @@ export function createDesktopWorkspaceMapContributionAdapter(): WorkspaceMapCont
   return {
     loadTerrainSupport: loadMapLibreTerrainSupport,
     createRasterDisplay: (map, options) => createRasterDisplay(map, options),
+    readSiteHover: () => {
+      const hover = profileHover.value
+      return hover ? [hover.lon, hover.lat] : null
+    },
     read: (runtime) => readWorkspaceMapContributions(runtime, designSessionStore, () => ({
       lidar: lidarDisplayLayers(
-        readCurrentLidarPresentation().map((item) => ({ ...item, visible: presentedSiteDataVisible(item.id, item.visible) })),
+        readCurrentLidarPresentation(),
         lidarDisplayDescriptors.value,
+        storyPresentationOverrides.value?.siteDataIds ?? null,
       ),
       terrain: { ...mapTerrainStateOf(presentedMapLayers()), isDark: theme.value === 'dark' },
+      site: readSiteMapOverlay(),
     })),
+  }
+}
+
+/** The Site data pin and profile line in [lon, lat], or null with neither. */
+function readSiteMapOverlay(): SiteMapOverlay | null {
+  const point = pin.value
+  const line = profileLine.value
+  if (!point && !line) return null
+  return {
+    pin: point ? [point.lon, point.lat] : null,
+    profileLine: line ? line.map((vertex) => [vertex.lon, vertex.lat] as const) : null,
   }
 }

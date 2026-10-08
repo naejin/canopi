@@ -85,6 +85,7 @@ pub fn library_snapshot(
             run: None,
             offers: analyses::offers(&facts, geolibre),
             dependents: dependents(connection, &layer.id)?,
+            created_at: layer.created_at,
         });
     }
 
@@ -170,6 +171,7 @@ pub fn library_snapshot(
             }),
             offers: analyses::offers(&facts, geolibre),
             dependents: dependents(connection, &item.id)?,
+            created_at: item.created_at,
         });
     }
 
@@ -292,6 +294,65 @@ fn bounds_3857_to_wgs84(bounds: [f64; 4]) -> [f64; 4] {
 #[cfg(test)]
 mod tests {
     use super::bounds_3857_to_wgs84;
+    use crate::services::lidar::{LidarLibrary, analyses};
+
+    /// The library sheet sorts by Recently added: each item reports when it
+    /// was added, a source from its layer row and a result from its own row.
+    #[test]
+    fn every_item_reports_when_it_was_added() {
+        let root = crate::test_scratch::TestScratch::new("presentation-created-at");
+        let library = LidarLibrary::open(&root).unwrap();
+        let connection = library.catalogue().unwrap();
+        connection
+            .execute_batch(
+                "INSERT INTO lidar_source_layers
+                    (id, name, item_kind, quantity, units, created_at)
+                 VALUES ('ground', 'Ground', 'raster', 'ground-elevation', 'm',
+                         '1790000000000');",
+            )
+            .unwrap();
+        analyses::test_support::seed_published_slope(
+            &connection,
+            "ground",
+            "gen-ground",
+            "adef-slope",
+            "slope",
+            "dgen-slope",
+            None,
+        );
+        connection
+            .execute(
+                "UPDATE lidar_derived_items SET created_at = '1790000090000' WHERE id = 'slope'",
+                [],
+            )
+            .unwrap();
+
+        drop(connection);
+
+        let snapshot = library.library_snapshot().unwrap();
+        let created = |id: &str| {
+            snapshot
+                .items
+                .iter()
+                .find(|item| item.id == id)
+                .map(|item| item.created_at.clone())
+        };
+        assert_eq!(created("ground").as_deref(), Some("1790000000000"));
+        assert_eq!(created("slope").as_deref(), Some("1790000090000"));
+        let connection = library.catalogue().unwrap();
+        assert_eq!(
+            super::catalogue::get_layer(&connection, "ground")
+                .unwrap()
+                .map(|layer| layer.created_at),
+            Some("1790000000000".to_owned()),
+        );
+        assert_eq!(
+            super::catalogue::get_derived_item(&connection, "slope")
+                .unwrap()
+                .map(|item| item.created_at),
+            Some("1790000090000".to_owned()),
+        );
+    }
 
     #[test]
     fn map_bounds_are_projected_to_longitude_and_latitude() {

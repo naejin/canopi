@@ -468,7 +468,7 @@ pub fn validate_design_geometry(file: &CanopiFile) -> Result<(), String> {
 /// one that no other entry uses, wherever it appears; a duplicate explicit id
 /// is refused. Opacities, scales and font sizes must be
 /// finite and in range, and the LiDAR section must be the schema this build
-/// writes.
+/// writes, with named entries and any custom colour range a finite rising pair.
 pub fn admit_design_identities_and_ranges(file: &mut CanopiFile) -> Result<(), String> {
     let mut plant_ids = explicit_ids("plants", file.plants.iter().map(|plant| plant.id.as_str()))?;
     for (index, plant) in file.plants.iter_mut().enumerate() {
@@ -541,6 +541,18 @@ pub fn admit_design_identities_and_ranges(file: &mut CanopiFile) -> Result<(), S
             if !(entry.opacity.is_finite() && (0.0..=1.0).contains(&entry.opacity)) {
                 return Err(format!(
                     "$.lidar.entries[{index}].opacity: expected a number in [0, 1]"
+                ));
+            }
+            if entry.name.trim().is_empty() {
+                return Err(format!(
+                    "$.lidar.entries[{index}].name: expected a non-empty name"
+                ));
+            }
+            if let Some(crate::lidar::LidarColourRange::Custom { min, max }) = entry.range
+                && !(min.is_finite() && max.is_finite() && min < max)
+            {
+                return Err(format!(
+                    "$.lidar.entries[{index}].range: expected finite min and max with min below max"
                 ));
             }
         }
@@ -1313,20 +1325,54 @@ mod tests {
         );
         assert!(
             admitted(design_with(json!({
-                "lidar": { "schema_version": 2, "entries": [] }
+                "lidar": { "schema_version": 2, "visible": true, "entries": [] }
             })))
             .is_err()
         );
-        assert!(admitted(design_with(json!({
-            "lidar": { "schema_version": 1, "entries": [
-                { "kind": "Source", "id": "dem", "visible": true, "opacity": 1.2, "order": 0, "style": null }
-            ] }
-        }))).is_err());
-        assert!(admitted(design_with(json!({
-            "lidar": { "schema_version": 1, "entries": [
-                { "kind": "Derived", "id": "slope", "visible": true, "opacity": 0.4, "order": 0, "style": null }
-            ] }
-        }))).is_ok());
+        let lidar = |entry: serde_json::Value| {
+            design_with(json!({
+                "lidar": { "schema_version": 1, "visible": true, "entries": [entry] }
+            }))
+        };
+        let entry = |opacity: f64, name: &str, range: serde_json::Value| {
+            json!({
+                "kind": "Derived", "id": "slope", "name": name, "visible": true,
+                "opacity": opacity, "order": 0, "ramp": "YellowRed", "reversed": true,
+                "range": range
+            })
+        };
+        assert!(admitted(lidar(entry(1.2, "Slope", serde_json::Value::Null))).is_err());
+        assert!(admitted(lidar(entry(0.4, "Slope", serde_json::Value::Null))).is_ok());
+        assert_eq!(
+            admitted(lidar(entry(0.4, " ", serde_json::Value::Null))).unwrap_err(),
+            "$.lidar.entries[0].name: expected a non-empty name"
+        );
+        let custom = |min: f64, max: f64| json!({ "mode": "Custom", "min": min, "max": max });
+        assert!(admitted(lidar(entry(0.4, "Slope", custom(0.0, 30.0)))).is_ok());
+        assert_eq!(
+            admitted(lidar(entry(0.4, "Slope", custom(30.0, 30.0)))).unwrap_err(),
+            "$.lidar.entries[0].range: expected finite min and max with min below max"
+        );
+        assert!(admitted(lidar(entry(0.4, "Slope", custom(40.0, 30.0)))).is_err());
+    }
+
+    #[test]
+    fn a_custom_colour_range_must_be_finite_even_when_built_in_memory() {
+        // JSON cannot carry a non-finite number, but a Design built in memory
+        // can; admission refuses it before it is written.
+        let mut file: CanopiFile = serde_json::from_value(design_with(json!({
+            "lidar": { "schema_version": 1, "visible": true, "entries": [{
+                "kind": "Source", "id": "dem", "name": "Terrain model", "visible": true,
+                "opacity": 1.0, "order": 0, "ramp": null, "reversed": false, "range": null
+            }] }
+        })))
+        .expect("a Design with one LiDAR entry loads");
+        file.lidar.as_mut().expect("lidar section").entries[0].range =
+            Some(crate::lidar::LidarColourRange::Custom {
+                min: f64::NAN,
+                max: 30.0,
+            });
+        assert!(admit_design_identities_and_ranges(&mut file).is_err());
     }
 
     fn zone_file(zone: serde_json::Value) -> Result<CanopiFile, serde_json::Error> {

@@ -146,6 +146,7 @@
       "objectStamp": "スタンプを配置",
       "plantSpacing": "列に植える",
       "measurementGuide": "計測",
+      "profile": "断面図",
       "zones": "ゾーン",
       "plantStamp": "植物を配置"
     },
@@ -167,7 +168,8 @@
       "placePlantsHere": "ここに植物を配置",
       "turnViewToEdge": "この辺に合わせてビューを回転",
       "finishShape": "図形を完成",
-      "renameZone": "ゾーン名を変更…"
+      "renameZone": "ゾーン名を変更…",
+      "profileLine": "この線の断面図"
     },
     "rotationHandle": {
       "label": "回転"
@@ -296,9 +298,20 @@
       "design": "デザイン",
       "siteData": "敷地データ",
       "background": "背景",
-      "backgroundMap": "地図",
+      "backgroundMap": "道路地図",
       "backgroundNone": "なし",
-      "backgroundPlainPaper": "無地"
+      "backgroundPlainPaper": "無地",
+      "map": "地図",
+      "openSiteData": "敷地データを開く",
+      "siteDataShown_one": "{{count, number}} 件中 {{shown, number}} 件を表示",
+      "siteDataShown_few": "{{count, number}} 件中 {{shown, number}} 件を表示",
+      "siteDataShown_many": "{{count, number}} 件中 {{shown, number}} 件を表示",
+      "siteDataShown_other": "{{count, number}} 件中 {{shown, number}} 件を表示",
+      "siteDataNone": "まだありません",
+      "siteDataWeb_one": "このデザインに地形または高さのレイヤーが {{count, number}} 個 · Canopi Desktop が必要",
+      "siteDataWeb_few": "このデザインに地形または高さのレイヤーが {{count, number}} 個 · Canopi Desktop が必要",
+      "siteDataWeb_many": "このデザインに地形または高さのレイヤーが {{count, number}} 個 · Canopi Desktop が必要",
+      "siteDataWeb_other": "このデザインに地形または高さのレイヤーが {{count, number}} 個 · Canopi Desktop が必要"
     },
     "timeline": {
       "actionType": "作業の種類",
@@ -596,7 +609,12 @@
         "renameEllipsis": "名前を変更…",
         "recovered": "Canopi は保持しているファイルからデータライブラリを再構築しました。失敗と表示された項目は「再試行」で再度準備できます。",
         "refusedNewer": "データライブラリは新しいバージョンの Canopi で保存されています。使用するには最新の Canopi をインストールしてください。このバージョンはデータライブラリを変更しません。",
-        "unavailable": "データライブラリを開けませんでした。Canopi を再起動するまでインポートと変更は無効です。"
+        "unavailable": "データライブラリを開けませんでした。Canopi を再起動するまでインポートと変更は無効です。",
+        "sortLabel": "並べ替え",
+        "sortRecent": "最近追加した順",
+        "factAdded": "追加日",
+        "deletedItem": "削除された項目",
+        "importNeedsDesign": "データをインポートするにはデザインを開いてください"
       },
       "layers": {
         "addData": "データを追加",
@@ -791,6 +809,8 @@
       "stampGroup": "グループ",
       "polygon": "クリックで頂点を追加。最初の頂点をクリック、ダブルクリック、または Enter で完了。",
       "polygonKeys": "Backspace で最後の頂点を削除 · Shift で 45° に固定",
+      "profile": "クリックで点を追加。ダブルクリックまたは Enter で完了。",
+      "profileKeys": "Backspace で最後の点を削除 · Shift で 45° に固定",
       "rectangle": "地図上をドラッグして長方形を描きます。",
       "rectangleKeys": "Shift で正方形",
       "ellipse": "地図上をドラッグして楕円を描きます。",
@@ -1092,7 +1112,7 @@
     "view.turnViewLeft": "ビューを左に 15° 回転",
     "view.turnViewRight": "ビューを右に 15° 回転",
     "file.new": "新しいデザイン",
-    "view.backgroundMap": "地図",
+    "view.backgroundMap": "道路地図",
     "edit.findPlants": "植物を探す…",
     "file.revert": "開いたときのバージョンに戻す…",
     "tools": "ツール",
@@ -1121,7 +1141,7 @@
     "view.labelsNames": "名前",
     "view.cycleLabels": "ラベル：なし、コード、名前",
     "edit.rotate": "回転…",
-    "file.addData": "データを追加…",
+    "file.addData": "地形または高さのデータをインポート…",
     "file.exportBudgetCsv": "予算（CSV）…",
     "file.close": "デザインを閉じる",
     "help.gettingStarted": "はじめに",
@@ -1635,7 +1655,8 @@
       "GridNotProjectedMetres": "地上のメートル単位の投影グリッドが必要です。Web Mercator や経緯度は使えません。",
       "EngineMissing": "利用できません：GeoLibre エンジンがありません。",
       "NeedsDesktop": "Canopi Desktop が必要です。",
-      "AlreadyInLayers": "すでにレイヤーにあります。"
+      "AlreadyInLayers": "すでにレイヤーにあります。",
+      "AlreadyInSiteData": "すでに敷地データにあります。"
     },
     "stale": {
       "InputUpdated": "この計算以降に {{input}} が変更されました。",
@@ -1644,7 +1665,7 @@
       "ToolUpdated": "別のエンジンがインストールされています（{{to}}）。"
     },
     "dialog": {
-      "title": "{{name}} を解析",
+      "title": "解析",
       "advanced": "詳細設定",
       "outputs": "結果",
       "name": "結果の名前",
@@ -1664,7 +1685,10 @@
         "noOutputs": "少なくとも 1 つの結果を選択してください。"
       },
       "introLayers": "{{name}}から。結果はレイヤーでその下に追加され、ライブラリに保存されます。",
-      "introLibrary": "{{name}}から。結果はライブラリに保存されます。どのデザインにも追加できます。"
+      "introLibrary": "{{name}}から。結果はライブラリに保存されます。どのデザインにも追加できます。",
+      "source": "ソース",
+      "intro": "結果は敷地データで元データの下に追加され、ライブラリに保存されます。",
+      "showInSiteData": "敷地データで表示"
     },
     "details": {
       "analysis": "解析",
@@ -1966,7 +1990,7 @@
     "shows": "このステップの表示内容",
     "showsView": "ビュー：{{name}}",
     "backgroundSatellite": "衛星",
-    "backgroundMap": "地図",
+    "backgroundMap": "道路地図",
     "backgroundNone": "背景なし",
     "contours": "等高線",
     "hillshade": "陰影起伏",
@@ -2006,5 +2030,63 @@
     "speciesPlants_few": "{{name}} · {{count, number}} 株",
     "speciesPlants_many": "{{name}} · {{count, number}} 株",
     "speciesPlants_other": "{{name}} · {{count, number}} 株"
+  },
+  "siteData": {
+    "unpin": "固定を解除",
+    "hint": "地図を指すと値を表示 · クリックで固定",
+    "hintTouch": "地図をタップして地点を固定",
+    "analyzeNeedsData": "先に地形または高さのデータを追加してください",
+    "profile": "断面図",
+    "profileNeedsLayer": "断面図を描くには標高または高さのレイヤーを表示してください",
+    "hiddenFromMap": "敷地データは地図で非表示です",
+    "show": "表示",
+    "filterLabel": "敷地データを絞り込む",
+    "filterPlaceholder": "名前で絞り込む",
+    "reorder": "{{name}}の順序を変更",
+    "expand": "{{name}}を展開",
+    "collapse": "{{name}}を折りたたむ",
+    "missing": "見つかりません",
+    "noData": "データなし",
+    "missingReason": {
+      "not-in-library": "このコンピューターのデータライブラリにありません",
+      "needs-newer-canopi": "データライブラリには新しい Canopi が必要です",
+      "library-unopened": "データライブラリを開けませんでした。Canopi を再起動してください。"
+    },
+    "display": {
+      "colors": "色",
+      "ramp": {
+        "Terrain": "地形",
+        "Earth": "大地",
+        "Gray": "グレー",
+        "Greens": "緑",
+        "Magma": "マグマ",
+        "YellowRed": "黄–赤"
+      },
+      "reverse": "反転",
+      "range": "範囲",
+      "dataRange": "データ範囲",
+      "cutOutliers": "外れ値を除外",
+      "cutOutliersHint": "最も低い値と最も高い値の 2% を除外します",
+      "custom": "カスタム",
+      "minimum": "最小値",
+      "maximum": "最大値",
+      "reset": "リセット"
+    },
+    "chart": {
+      "copyValues": "値をコピー",
+      "close": "断面図を閉じる",
+      "at": "{{distance}} 地点",
+      "rise": "高低差 {{value}}",
+      "steepest": "2 m あたり最急 {{percent}}",
+      "highest": "最高 {{value}}",
+      "reading": "値を読み込んでいます…",
+      "noValues": "この線上に値がありません",
+      "needsLayer": "断面図を見るには標高または高さのレイヤーを表示してください",
+      "distance": "距離（m）",
+      "longitude": "経度",
+      "latitude": "緯度",
+      "copied": "コピーしました",
+      "copyFailed": "値をコピーできませんでした"
+    }
   }
 }

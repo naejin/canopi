@@ -26,7 +26,7 @@ import {
 import type { KeyRouterHandle } from '../app/keyboard/key-router'
 import { installDesktopKeys } from './support/desktop-key-router'
 import { pressKey } from './support/key-router'
-import type { AppCommandId } from '../commands/graph/catalog'
+import { isCatalogCommandDisabled, type AppCommandId } from '../commands/graph/catalog'
 import { flattenMenuActions } from '../app/shell-commands/menus'
 import { currentDesign } from '../app/document-session/store'
 import { designRenameRequest } from '../app/shell/requests'
@@ -246,11 +246,13 @@ describe('command registry canvas tool switching', () => {
   it('uses the shared shortcut definitions for panel navigation and tools', () => {
     expect(paletteCommands().some((command) => command.id === 'nav.canvas')).toBe(false)
     expect(getCommand('nav.layers').shortcut).toBe('Ctrl 1')
-    expect(getCommand('nav.speciesKey').shortcut).toBe('Ctrl 2')
-    expect(getCommand('nav.plantDb').shortcut).toBe('Ctrl 3')
-    expect(getCommand('nav.favorites').shortcut).toBe('Ctrl 4')
-    expect(getCommand('nav.calendar').shortcut).toBe('Ctrl 5')
-    expect(getCommand('nav.designNotebook').shortcut).toBe('Ctrl 8')
+    expect(getCommand('nav.siteData').shortcut).toBe('Ctrl 2')
+    expect(getCommand('nav.speciesKey').shortcut).toBe('Ctrl 3')
+    expect(getCommand('nav.plantDb').shortcut).toBe('Ctrl 4')
+    expect(getCommand('nav.favorites').shortcut).toBe('Ctrl 5')
+    expect(getCommand('nav.calendar').shortcut).toBe('Ctrl 6')
+    expect(getCommand('nav.designNotebook').shortcut).toBe('Ctrl 9')
+    expect(getCommand('nav.stories').shortcut).toBeUndefined()
     expect(getCommand('canvas.tool.select').shortcut).toBe('V')
     expect(getCommand('canvas.tool.line').shortcut).toBe('L')
     expect(getCommand('canvas.tool.text').shortcut).toBe('T')
@@ -720,7 +722,7 @@ describe('command registry canvas tool switching', () => {
     expect(Object.keys(byMenu)).toEqual(['file', 'edit', 'view', 'tools', 'help'])
     expect(byMenu.file).toEqual([
       'file.new', 'file.open', 'file.rename', 'file.save', 'file.saveAs', 'file.revert',
-      'file.addData', 'file.dataLibrary', 'file.importGeoJson', 'file.exportCanvasPdf', 'file.exportGeoJson', 'file.exportBudgetCsv',
+      'file.addData', 'file.importGeoJson', 'file.dataLibrary', 'file.exportCanvasPdf', 'file.exportGeoJson', 'file.exportBudgetCsv',
       'app.settings', 'file.close', 'file.exit',
     ])
     expect(byMenu.edit).toEqual([
@@ -737,7 +739,7 @@ describe('command registry canvas tool switching', () => {
       'view.saveCurrentView', 'view.manageViews',
       'canvas.toggleGrid', 'canvas.toggleSnapToGrid',
       'view.labels:none', 'view.labels:codes', 'view.labels:names', 'view.toggleToolNames',
-      'nav.layers', 'nav.speciesKey', 'nav.plantDb', 'nav.favorites',
+      'nav.layers', 'nav.siteData', 'nav.speciesKey', 'nav.plantDb', 'nav.favorites',
       'nav.calendar', 'nav.budget', 'nav.consortium', 'nav.designNotebook', 'nav.stories',
       'view.backgroundSatellite', 'view.backgroundMap', 'view.backgroundNone', 'view.toggleTheme',
     ])
@@ -846,7 +848,17 @@ describe('command registry canvas tool switching', () => {
     keyboardShortcutsDialogOpen.value = false
   })
 
-  it('opens panels with Ctrl 1–8 and never with a bare digit', () => {
+  it('offers Profile in the Desktop palette with no shortcut, disabled until an elevation or height layer is shown (U49 Q31)', () => {
+    designSessionFixture.file = { ...emptyDesign() }
+    const profile = getCommand('siteData.profile')
+
+    expect(profile.label()).toBe('Profile')
+    expect(profile.shortcut).toBeUndefined()
+    expect(isCatalogCommandDisabled('siteData.profile')).toBe(true)
+    expect(flattenMenuActions(menus()).some((item) => item.id === 'siteData.profile')).toBe(false)
+  })
+
+  it('opens panels with Ctrl 1–9 and never with a bare digit', () => {
     designSessionFixture.file = { ...emptyDesign() }
     const keyDown = (init: KeyboardEventInit) => pressKey(init).defaultPrevented
 
@@ -854,7 +866,9 @@ describe('command registry canvas tool switching', () => {
     expect(sidePanel.value).toBe(null)
     expect(keyDown({ key: '1', ctrlKey: true })).toBe(true)
     expect(sidePanel.value).toBe('layers')
-    expect(keyDown({ key: '6', ctrlKey: true })).toBe(true)
+    expect(keyDown({ key: '2', ctrlKey: true })).toBe(true)
+    expect(sidePanel.value).toBe('site-data')
+    expect(keyDown({ key: '7', ctrlKey: true })).toBe(true)
     expect(sidePanel.value).toBe('budget')
   })
 

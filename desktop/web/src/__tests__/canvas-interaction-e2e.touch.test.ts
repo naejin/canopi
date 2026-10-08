@@ -107,7 +107,7 @@ describe('SceneInteractionSession: touch', () => {
     session.dispose()
   })
 
-  it('A16 a finger\'s tap moves the inspection lens to the tap; a Pan-tool drag or a pinch moves it nowhere', () => {
+  it('A16 a finger\'s tap moves the inspection lens to the tap, as a touch publish; a Pan-tool drag or a pinch moves it nowhere', () => {
     const session = createTestSession(createInteractionDeps(container, store, testView))
     session.setTool('select')
     // The lens's consumer (InspectionLens): it samples at each published point and keeps its point on null.
@@ -116,11 +116,17 @@ describe('SceneInteractionSession: touch', () => {
     const published = () => points.filter((point): point is PointerWorld => point !== null)
 
     events.pointerMove({ x: 76, y: 30 }, { buttons: 0 })
+    expect(published().at(-1)?.pointerKind).toBe('mouse')
     // A rolling tap: the lens samples at the resolved press, the down point, as a mouse's hover before its press.
     touchDown({ x: 300, y: 250 })
     touchMove({ x: 303, y: 252 })
     touchUp({ x: 304, y: 253 })
-    expect(published().at(-1)).toEqual({ world: testView.view().screenToWorld({ x: 300, y: 250 }), screen: { x: 300, y: 250 } })
+    // Its kind says touch: Site data values read a finger through the pin, never as a hover (canopi-f47t.42).
+    expect(published().at(-1)).toEqual({
+      world: testView.view().screenToWorld({ x: 300, y: 250 }),
+      screen: { x: 300, y: 250 },
+      pointerKind: 'touch',
+    })
 
     // A finger dragging past its slop under the Pan tool pans the map; a pinch navigates: neither moves the lens.
     const before = published().length
@@ -161,6 +167,26 @@ describe('SceneInteractionSession: touch', () => {
 
     expect(draftCorners()).toBe(2)
     expect(store.persisted.zones).toHaveLength(0)
+    session.dispose()
+  })
+
+  it('a finger\'s double tap 20 px apart finishes a polygon with pointerdown detail 0, as Profile finishes (canopi-f47t.42 probe)', () => {
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('polygon')
+    // Each down sends detail 0, as WebKitGTK's and Chromium's touch pointerdowns do; the recogniser counts the clicks.
+    const tap = (at: ScenePoint, t: number) => {
+      events.pointerDown(at, { ...finger(1, t), button: 0, buttons: 1, detail: 0 })
+      events.pointerUp(at, { ...finger(1, t + 40), button: 0, buttons: 0, detail: 0 })
+    }
+    tap({ x: 20, y: 20 }, 0)
+    tap({ x: 120, y: 20 }, 1000)
+    tap({ x: 120, y: 100 }, 2000)
+    expect(draftCorners()).toBe(3)
+
+    tap({ x: 120, y: 120 }, 2300)
+
+    expect(store.persisted.zones).toHaveLength(1)
+    expect(store.persisted.zones[0]!.points).toEqual([{ x: 20, y: 20 }, { x: 120, y: 20 }, { x: 120, y: 100 }])
     session.dispose()
   })
 

@@ -2,6 +2,8 @@ import { useSignalEffect } from '@preact/signals'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { parseCoordinates, placeSearch as search, type PlaceSearchResult } from '../../app/geocoding/place-search-session'
 import { PLACE_SEARCH_ZOOM, placeSearchFocusRequest } from '../../app/geocoding/place-search-ui'
+import { formatCoordinates } from '../../app/geocoding/coordinates'
+import { locale } from '../../app/settings/state'
 import { currentCanvasViewportCommandSurface } from '../../canvas/session'
 import { siteLocateOpen } from '../../app/site-onboarding/state'
 import { formatShortcut } from '../../app/shell-commands/shortcut-text'
@@ -16,15 +18,8 @@ interface PlaceOption {
   readonly detail: string
 }
 
-/** "48.2201° N, 0.0351° E": the coordinates a result or the field names. */
-function formatCoordinates(lat: number, lon: number): string {
-  return t('canvas.placeSearch.coordinates', {
-    lat: Math.abs(lat).toFixed(4),
-    lon: Math.abs(lon).toFixed(4),
-    northSouth: t(lat < 0 ? 'canvas.placeSearch.south' : 'canvas.placeSearch.north'),
-    eastWest: t(lon < 0 ? 'canvas.placeSearch.west' : 'canvas.placeSearch.east'),
-  })
-}
+/** A place's coordinates to 4 decimals, about 10 m. */
+const PLACE_DECIMALS = 4
 
 interface PlaceComboboxProps {
   readonly variant: 'title-bar' | 'dialog'
@@ -74,7 +69,7 @@ export function PlaceCombobox({ variant, onPick, disabled = false, autoFocus = f
     options.push({
       id: `${optionPrefix}-coordinates`,
       result: { ...coordinates, label: query.trim(), detail: null, source: 'coordinates' },
-      label: formatCoordinates(coordinates.lat, coordinates.lon),
+      label: formatCoordinates(coordinates.lat, coordinates.lon, PLACE_DECIMALS, locale.value),
       detail: t('canvas.placeSearch.goStraightThere'),
     })
   } else if (status === 'results') {

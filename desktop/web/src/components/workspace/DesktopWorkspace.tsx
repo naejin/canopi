@@ -33,6 +33,11 @@ const LayersPanel = lazy(async () => {
   return { default: module.LayersPanel }
 })
 
+const SiteDataPanel = lazy(async () => {
+  const module = await import('../panels/lidar/SiteDataPanel')
+  return { default: module.SiteDataPanel }
+})
+
 const DataDialogs = lazy(async () => {
   const module = await import('../panels/lidar/DataDialogs')
   return { default: module.DataDialogs }
@@ -62,15 +67,15 @@ function DesignNotebookSurface() {
   return <DesignNotebookPanel />
 }
 
-/** Layers › Add data › Design objects from GeoJSON… runs File › Import GeoJSON. */
-function importGeoJsonFromLayers(): void {
+/** Site data's Add data › Design objects from GeoJSON… runs File › Import GeoJSON, until stream B replaces Add data. */
+function importGeoJsonFromSiteData(): void {
   const command = flattenMenuActions(appCommandGraphChromeProjection.peek().menus)
     .find((action) => action.id === 'file.importGeoJson')
   if (command && !command.disabled) command.action()
 }
 
-function LayersSurface() {
-  return <LayersPanel importGeoJson={importGeoJsonFromLayers} />
+function SiteDataSurface() {
+  return <SiteDataPanel importGeoJson={importGeoJsonFromSiteData} />
 }
 
 const DESKTOP_WORKSPACE_SURFACES: WorkspaceSurfaces = {
@@ -82,7 +87,8 @@ const DESKTOP_WORKSPACE_SURFACES: WorkspaceSurfaces = {
     favorites: FavoritesPanel,
     'design-notebook': DesignNotebookSurface,
     'species-key': SpeciesKeyPanel,
-    layers: LayersSurface,
+    layers: LayersPanel,
+    'site-data': SiteDataSurface,
     calendar: CalendarPanel,
     budget: BudgetPanel,
     consortium: ConsortiumPanel,
