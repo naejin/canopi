@@ -3,7 +3,6 @@ import type { RasterQuantity } from '../generated/contracts'
 import {
   IMPORTABLE_QUANTITIES,
   RASTER_QUANTITIES,
-  SLOPE_PERCENT_MAX,
   itemTypeLabel,
   itemTypeStyle,
   unitSuffix,
@@ -36,8 +35,7 @@ describe('library item types', () => {
     expect(itemTypeStyle(raster('Slope'), { units: '°', displayRange: [0, 12] }))
       .toEqual({ colormap: 'ylorrd', reversed: false, rescale: [0, 30], units: '°' })
     expect(itemTypeStyle(raster('Slope'), { units: '%', displayRange: [0, 12] }))
-      .toEqual({ colormap: 'ylorrd', reversed: false, rescale: [0, SLOPE_PERCENT_MAX], units: '%' })
-    expect(SLOPE_PERCENT_MAX).toBe(57.7)
+      .toEqual({ colormap: 'ylorrd', reversed: false, rescale: [0, 57.7], units: '%' })
   })
 
   it('imports only measured quantities; slope is derived only', () => {
