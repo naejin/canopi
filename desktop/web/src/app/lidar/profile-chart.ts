@@ -13,7 +13,7 @@ export interface PlotArea {
   readonly bottom: number
 }
 
-export interface ProfilePlotInput extends PlotArea {
+interface ProfilePlotInput extends PlotArea {
   /** Distance of each sample from the start, ascending, in metres. */
   readonly distances: readonly number[]
   /** One value list per curve, aligned with `distances`; null is no data. */
@@ -22,7 +22,7 @@ export interface ProfilePlotInput extends PlotArea {
   readonly fromZero?: boolean
 }
 
-export interface ProfilePlot {
+interface ProfilePlot {
   /** One SVG `d` per curve; empty for a curve with no two neighbouring values. */
   readonly paths: readonly string[]
   /** The axis' ends, labelled on the chart; null when no curve has a value. */

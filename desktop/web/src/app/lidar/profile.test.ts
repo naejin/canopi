@@ -15,7 +15,6 @@ import {
   profileLineMenu,
   type ProfileCurveSource,
   type SiteProfile,
-  type SiteProfileOwner,
 } from './profile'
 import type { SampleLane, SiteSampler } from './sampler'
 import { endSiteDataTransients, profileLine, type GeoPoint } from './site-transients'
@@ -103,7 +102,7 @@ function source(id: string, role: 'elevation' | 'height' = 'elevation', override
   return { id, kind: 'Source', name: id.toUpperCase(), units: 'm', role, generationId: `${id}-g1`, resolutionM: 0.025, ...overrides }
 }
 
-const owners: SiteProfileOwner[] = []
+const owners: ReturnType<typeof createSiteProfile>[] = []
 
 afterEach(() => {
   for (const owner of owners.splice(0)) owner.dispose()

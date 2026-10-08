@@ -231,7 +231,7 @@ interface SiteProfileDeps {
   readPlane(): SessionPlane | null
 }
 
-export interface SiteProfileOwner {
+interface SiteProfileOwner {
   readonly profile: ReadonlySignal<SiteProfile>
   /** The chart's cursor: a sample index, or null. A new key clears it. */
   readonly cursor: ReadonlySignal<number | null>
