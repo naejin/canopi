@@ -183,20 +183,35 @@ describe('the Site data panel', () => {
     expect(actions.chooseImportFiles).toHaveBeenCalledOnce()
   })
 
-  it('sends Analyze the open item, or the first item an analysis accepts, and Analyze picks the Source', async () => {
+  it('opens Analyze on the open item, else the open result\'s input, else the first item an analysis accepts', async () => {
     // A Web Mercator grid: an analysis accepts it, and Analyze names the grid problem rather than skipping it.
     lidarLibrary.value = library([
       sourceItem('t1', 'Ground one'),
       sourceItem('w', 'Web grid', { offers: [{ analysis_id: 'terrain.slope', unavailable: { reason: 'GridNotProjectedMetres' } }] }),
+      slopeItem('s', 'w'),
+      sourceItem('i', 'Preparing', { state: 'Preparing' }),
     ])
-    setDesign([{ kind: 'Source', id: 't1', order: 1 }, { kind: 'Source', id: 'w', order: 0 }])
+    setDesign([
+      { kind: 'Source', id: 't1', order: 1 },
+      { kind: 'Source', id: 'w', order: 0 },
+      { kind: 'Derived', id: 's', order: 0 },
+      { kind: 'Source', id: 'i', order: 2 },
+      { kind: 'Source', id: 'gone', order: 3 },
+    ])
     const view = siteDataViewFor(designSessionStore.sessionIdentity.peek())
     mount()
-    await click(button('Analyze…'))
-    expect(dataDialog.value).toMatchObject({ kind: 'analyze', itemId: 't1' })
-    await act(async () => { view.openItem.value = 'w' })
-    await click(button('Analyze…'))
-    expect(dataDialog.value).toMatchObject({ kind: 'analyze', itemId: 'w' })
+    const analyzeOn = async (open: string | null) => {
+      await act(async () => { view.openItem.value = open })
+      await click(button('Analyze…'))
+      return (dataDialog.value as { itemId?: string } | null)?.itemId
+    }
+    expect(await analyzeOn(null)).toBe('t1')
+    expect(await analyzeOn('w')).toBe('w')
+    // The slope result no analysis takes is open: its input, the Web grid, is the source.
+    expect(await analyzeOn('s')).toBe('w')
+    // An item still preparing, or one missing from the library, is not sent: the first eligible item is.
+    expect(await analyzeOn('i')).toBe('t1')
+    expect(await analyzeOn('gone')).toBe('t1')
   })
 
   it('keeps Analyze enabled when the only reason is a missing engine', async () => {

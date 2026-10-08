@@ -94,14 +94,18 @@ function PinLine() {
 function Toolbar({ view }: { readonly view: SiteDataView }) {
   const items = readCurrentLidarPresentation()
   const library = lidarLibrary.value
-  // A ready item in this Design that an analysis accepts, as Analyze's Source lists it (spec §1.10 "Toolbar"): an engine
-  // or grid problem still counts, and Analyze names it. Analyze picks the Source from the item it is sent.
+  // A ready item in this Design that an analysis accepts (spec §1.10 "Toolbar"): an engine or grid problem still counts,
+  // and Analyze names it. Analyze runs on the item it is sent, so the toolbar picks the source: the open item if
+  // eligible, else the open result's input, else the first eligible item.
   const eligible = referenceRows(items).filter((item) => {
     const summary = library?.items.find((candidate) => candidate.id === item.id)
     return summary?.state === 'Ready' && summary.offers.some((offer) =>
       offer.unavailable?.reason !== 'WrongInput' && offer.unavailable?.reason !== 'NotReady')
   })
-  const sourceId = eligible.length > 0 ? view.openItem.value ?? eligible[0]!.id : null
+  const open = items.find((item) => item.id === view.openItem.value)
+  const sourceId = (eligible.find((item) => item.id === open?.id)
+    ?? eligible.find((item) => open?.inputId != null && item.id === open.inputId)
+    ?? eligible[0])?.id ?? null
   const canProfile = profileAvailable.value
   const profiling = currentCanvasTool.value === 'profile'
   return (
