@@ -22,6 +22,10 @@ export interface LidarDisplayStyle {
 export interface RasterStyleInput {
   readonly units: string
   readonly displayRange: readonly [number, number] | null
+  /** The entry's Reverse; false for a library preview. */
+  readonly reversed?: boolean
+  /** The entry's range; null or absent is the kind's default. */
+  readonly range?: LidarColourRange | null
 }
 
 /**
@@ -54,9 +58,9 @@ function slopeDomainMax(units: string): number {
 
 function overDisplayRange(colormap: string) {
   return (item: RasterStyleInput): LidarDisplayStyle => {
-    const [min, max] = item.displayRange ?? [0, 1]
+    const [min, max] = item.range?.mode === 'Custom' ? [item.range.min, item.range.max] : item.displayRange ?? [0, 1]
     const rescale: [number, number] = max > min ? [min, max] : [min, min + 1]
-    return { colormap, reversed: false, rescale, units: item.units }
+    return { colormap, reversed: item.reversed ?? false, rescale, units: item.units }
   }
 }
 
