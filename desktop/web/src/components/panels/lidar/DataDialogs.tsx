@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { currentDesign } from '../../../app/document-session/store'
 import { addToDesign, runAnalysis } from '../../../app/lidar/actions'
 import {
@@ -76,9 +76,12 @@ function AnalyzeRequest({ request }: { readonly request: Extract<DataDialog, { k
   // "Run again with changes…" analyzes the result's input again; otherwise Source lists this Design's items in list order.
   const from = request.from ? byId.get(request.from) : undefined
   const fixedInput = from?.provenance ? byId.get(from.provenance.inputs[0]?.item_id ?? '') : undefined
-  const sources = from
+  const eligible = from
     ? (isSource(fixedInput) ? [fixedInput] : [])
     : design.map((entry) => byId.get(entry.id)).filter(isSource)
+  // With nothing eligible, the item asked for still opens alone, so Analyze says why each analysis cannot run.
+  const asked = from ? fixedInput : byId.get(request.itemId ?? '')
+  const sources = eligible.length > 0 ? eligible : asked?.status === 'ready' ? [asked] : []
   const sourceId = from
     ? sources[0]?.id ?? null
     : defaultAnalysisSource(sources, design.map((entry) => ({ id: entry.id, inputId: byId.get(entry.id)?.parentId ?? null })), request.itemId)
@@ -92,6 +95,10 @@ function AnalyzeRequest({ request }: { readonly request: Extract<DataDialog, { k
       .map((candidate) => candidate.provenance!.output_key)
     return formFromProvenance(entry, provenance, outputs, fixedInput.name, t(entry.titleKey), locale.value)
   })
+  // Nothing to analyze: the request closes rather than stay open unseen, which would leave the library under it inert.
+  useEffect(() => {
+    if (sourceId === null) closeDataDialog()
+  }, [sourceId])
   if (sourceId === null) return null
   return (
     <AnalyzeDialog

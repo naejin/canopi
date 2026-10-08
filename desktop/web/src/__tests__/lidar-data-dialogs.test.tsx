@@ -646,6 +646,29 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(dropdownTrigger(container, 'Source')?.textContent).toContain('Ground')
     })
 
+    it('opens on an item no analysis accepts and says why each cannot run', () => {
+      const refused = { reason: 'WrongInput' as const, expected: [{ kind: 'Raster' as const, quantity: 'GroundElevation' as const }] }
+      lidarLibrary.value = library([layer('d', 'Surface', {
+        item_type: { kind: 'Raster', quantity: 'SurfaceElevation' },
+        offers: [{ analysis_id: 'terrain.slope', unavailable: refused }],
+      })])
+      setDesign(design([{ kind: 'Source', id: 'd' }]))
+      openAnalyze('d')
+      expect(title()).toBe('Analyze')
+      expect(dropdownTrigger(container, 'Source')?.textContent).toContain('Surface')
+      expect(container.textContent).toContain('Needs Ground elevation (DTM).')
+      expect(button(/^Run$/).disabled).toBe(true)
+    })
+
+    it('closes when nothing can be analyzed, so the Data library opened next is live', () => {
+      lidarLibrary.value = library([layer('a', 'Ground')])
+      setDesign(design([]))
+      openAnalyze(null)
+      expect(dataDialog.value).toBeNull()
+      act(() => { openDataLibrary() })
+      expect(container.querySelector('[data-library-sheet]')?.hasAttribute('inert')).toBe(false)
+    })
+
     it('runs slope from a source once a unit is chosen, and closes', async () => {
       lidarLibrary.value = library([layer('a', 'Ground')])
       setDesign(design([{ kind: 'Source', id: 'a' }]))

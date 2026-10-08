@@ -34,7 +34,8 @@ import styles from './analyze-dialog.module.css'
  * The Analyze dialog, generated from the analysis registry.
  *
  * Source comes first: one of this Design's items an analysis accepts, in list
- * order (fixed for "Run again with changes…"); changing it recomputes the
+ * order (fixed for "Run again with changes…"; the item asked for alone when no
+ * item is accepted, so each entry says why); changing it recomputes the
  * analyses. Every entry is listed; one that cannot run says why by name. The
  * chosen entry's parameters render by type, advanced ones in a disclosure, and
  * a run that would duplicate a result this Design already shows becomes "Show
