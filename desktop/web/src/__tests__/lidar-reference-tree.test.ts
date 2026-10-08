@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  canMoveReference,
   filterKeepingAncestors,
   movedReferenceOrders,
   referenceDrawOrder,
@@ -60,11 +59,6 @@ describe('site data tree', () => {
     expect(movedReferenceOrders(nodes, 'canopy', 'front')).toBeNull()
     expect(movedReferenceOrders(nodes, 'slope', 'back')).toBeNull()
     expect(movedReferenceOrders(nodes, 'missing', 'back')).toBeNull()
-    const rows = referenceRows(nodes)
-    expect(canMoveReference(rows, 'canopy', 'front')).toBe(false)
-    expect(canMoveReference(rows, 'canopy', 'back')).toBe(true)
-    expect(canMoveReference(rows, 'percent', 'front')).toBe(false)
-    expect(canMoveReference(rows, 'percent', 'back')).toBe(true)
   })
 
   it('swaps siblings saved with the same order', () => {

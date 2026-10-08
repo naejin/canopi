@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { RasterQuantity } from '../generated/contracts'
+import type { LidarRamp, RasterQuantity } from '../generated/contracts'
 import {
   IMPORTABLE_QUANTITIES,
   RASTER_QUANTITIES,
@@ -8,7 +8,6 @@ import {
   kindDisplayDefaults,
   kindRamps,
   profileRole,
-  RAMP_COLORMAPS,
   unitSuffix,
 } from '../app/lidar/item-types'
 import { formatLegendValue, formatRasterMetres, formatRasterRange, formatRasterSample } from '../app/lidar/display-legend'
@@ -41,9 +40,9 @@ describe('library item types', () => {
   })
 
   it('draws each ramp with one renderer colormap', () => {
-    expect(RAMP_COLORMAPS).toEqual({
-      Terrain: 'schwarzwald', Earth: 'turbid', Greens: 'greens', YellowRed: 'ylorrd', Magma: 'magma', Gray: 'gray',
-    })
+    const colormap = (ramp: LidarRamp) => itemTypeStyle(raster('OtherContinuous'), { units: '', displayRange: null, ramp, reversed: false, range: null }).colormap
+    const ramps: LidarRamp[] = ['Terrain', 'Earth', 'Greens', 'YellowRed', 'Magma', 'Gray']
+    expect(ramps.map(colormap)).toEqual(['schwarzwald', 'turbid', 'greens', 'ylorrd', 'magma', 'gray'])
   })
 
   it('colours elevation with Terrain over the data range by default, keeping blue for water', () => {

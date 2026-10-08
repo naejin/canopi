@@ -55,7 +55,7 @@ interface RasterQuantityType {
 }
 
 /** The renderer's colormap for each ramp (`cog-tiler-wasm`'s built-in names). */
-export const RAMP_COLORMAPS: Readonly<Record<LidarRamp, string>> = {
+const RAMP_COLORMAPS: Readonly<Record<LidarRamp, string>> = {
   // Hypsometric without blue.
   Terrain: 'schwarzwald',
   Earth: 'turbid',

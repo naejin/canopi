@@ -1,17 +1,11 @@
 {
   "files": [
-    "src/app/lidar/sampler.ts",
-    "src/app/lidar/value-format.ts",
-    "src/components/panels/lidar/ProfileChart.tsx",
-    "src/components/panels/lidar/RasterDisplayControls.tsx"
+    "src/app/lidar/sampler.ts"
   ],
   "exports": [
     "src/app/lidar/inspection.ts#tryInspectAt",
     "src/app/lidar/profile.ts#setProfileHover",
-    "src/app/lidar/sampler.ts#createSiteSampler",
-    "src/app/lidar/site-values.ts#siteValues",
-    "src/components/panels/lidar/ProfileChart.tsx#ProfileChart",
-    "src/components/panels/lidar/RasterDisplayControls.tsx#RasterDisplayControls"
+    "src/app/lidar/sampler.ts#createSiteSampler"
   ],
   "typeExports": [
     "src/app/analyses/model.ts#AnalysisOptionGroup",
@@ -69,18 +63,15 @@
     "src/app/lidar/actions.ts#LidarEntryDisplay",
     "src/app/lidar/actions.ts#PendingAttachment",
     "src/app/lidar/analysis-groups.ts#GroupableNode",
-    "src/app/lidar/analysis-groups.ts#SiteDataLine",
     "src/app/lidar/import-coverage.ts#GroundBox",
     "src/app/lidar/inspection.ts#InspectionPoint",
     "src/app/lidar/inspection.ts#InspectionSample",
     "src/app/lidar/inspection.ts#InspectionTarget",
     "src/app/lidar/item-types.ts#ProfileRole",
-    "src/app/lidar/item-types.ts#RasterStyleInput",
     "src/app/lidar/reference-tree.ts#TreeNode",
     "src/app/lidar/reference-tree.ts#TreeRow",
     "src/app/lidar/sampler.ts#SampleLane",
     "src/app/lidar/sampler.ts#SiteSampler",
-    "src/app/lidar/site-data-view.ts#SiteDataView",
     "src/app/lidar/site-values.ts#SiteRowValue",
     "src/app/lidar/site-values.ts#SiteValues",
     "src/app/map-layers/bands.ts#MapLayerOrderMap",
@@ -214,7 +205,6 @@
     "src/web/reduced-species-catalog.ts#ReducedSpeciesCatalogAdapters"
   ],
   "testOnlyExports": [
-    "src/app/analyses/model.ts#parseLocaleNumber",
     "src/app/budget/workbench.ts#validateBudgetPriceDraft",
     "src/app/canvas-map-surface/workspace-runtime-composition.ts#WORKSPACE_VIEW_SETTLE_MS",
     "src/app/community/catalog.browser.ts#createStaticDesignTemplateCatalog",
@@ -240,9 +230,8 @@
     "src/app/geocoding/registry.ts#NOMINATIM_MIN_INTERVAL_MS",
     "src/app/geojson/codec.ts#GEOJSON_KIND_PROPERTY",
     "src/app/geojson/codec.ts#encodeDesignGeoJson",
-    "src/app/lidar/actions.ts#moveReferenceTo",
+    "src/app/lidar/actions.ts#moveReference",
     "src/app/lidar/actions.ts#reconcileEntryNames",
-    "src/app/lidar/actions.ts#setSiteDataShown",
     "src/app/lidar/camera-request.ts#lidarBoundsToLocalWorld",
     "src/app/lidar/display.ts#displayKey",
     "src/app/lidar/import-coverage.ts#compareCoverage",
@@ -251,12 +240,13 @@
     "src/app/lidar/inspection.ts#hasInspectionPointerHandlerForTests",
     "src/app/lidar/inspection.ts#interpretOutcome",
     "src/app/lidar/inspection.ts#sampleInspectionPoint",
+    "src/app/lidar/library-navigation.ts#activeSiteItemId",
+    "src/app/lidar/library-navigation.ts#closeSiteDataDetails",
+    "src/app/lidar/library-navigation.ts#openSiteDataDetails",
+    "src/app/lidar/library-navigation.ts#siteDataDetails",
     "src/app/lidar/library-store.ts#hasActiveLibraryWork",
-    "src/app/lidar/reference-tree.ts#filterKeepingAncestors",
     "src/app/lidar/site-transients.ts#clearProfile",
     "src/app/lidar/site-transients.ts#endSiteDataTransients",
-    "src/app/lidar/site-transients.ts#unpin",
-    "src/app/lidar/value-format.ts#formatRowValue",
     "src/app/map-layers/state.ts#createDefaultMapLayers",
     "src/app/map-selection/summary.ts#readMapSelectionSummary",
     "src/app/panel-targets/presentation.ts#getCanvasHoveredSpeciesCanonical",
@@ -356,7 +346,6 @@
     "src/app/document-session/store.ts#DesignSessionStoreTestFixture",
     "src/app/geojson/codec.ts#GeoJsonDesignObjects",
     "src/app/lidar/library-store.ts#LidarAvailability",
-    "src/app/lidar/library-store.ts#LidarMissingReason",
     "src/app/map-layers/bands.ts#MapLayerStackDescriptor",
     "src/app/plant-browser/index.ts#ActiveArrayChipField",
     "src/app/plant-browser/index.ts#ActiveBooleanChipField",

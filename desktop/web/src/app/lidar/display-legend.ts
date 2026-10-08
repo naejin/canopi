@@ -3,7 +3,7 @@ import { unitSuffix } from './item-types'
 
 /**
  * Legend stops for each ramp, as the upstream renderer paints its colormap
- * (`RAMP_COLORMAPS` in item-types.ts).
+ * (item-types.ts names each ramp's colormap).
  *
  * Stops are `colorize()` of the pinned `cog-tiler-wasm@0.4.0` at i/(n-1), with
  * as many stops (9, 17 or 65) as keep the gradient's straight-line blend within

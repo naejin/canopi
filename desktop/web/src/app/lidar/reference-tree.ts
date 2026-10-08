@@ -228,16 +228,3 @@ export function siblingNeighbour<T extends ReferenceNode>(
   if (!units || from < 0) return null
   return towards === 'front' ? units[from - 1]?.at(-1) ?? null : units[from + 1]?.[0] ?? null
 }
-
-/** Whether a row can move one place towards the front or back among its siblings. */
-export function canMoveReference<T extends ReferenceNode>(
-  rows: readonly ReferenceRow<T>[],
-  id: string,
-  towards: 'front' | 'back',
-): boolean {
-  const row = rows.find((candidate) => candidate.id === id)
-  if (!row) return false
-  const siblings = rows.filter((candidate) => candidate.parentId === row.parentId && candidate.depth === row.depth)
-  const index = siblings.findIndex((candidate) => candidate.id === id)
-  return towards === 'front' ? index > 0 : index < siblings.length - 1
-}

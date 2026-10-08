@@ -14,12 +14,19 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { colorize, colormap_names, initSync } from 'cog-tiler-wasm/wasm'
 import type { LidarRamp, RasterQuantity } from '../../generated/contracts'
 import { legendGradient } from './display-legend'
-import { kindRamps, RAMP_COLORMAPS, RASTER_QUANTITIES } from './item-types'
+import { itemTypeStyle, kindRamps, RASTER_QUANTITIES } from './item-types'
 
 const require = createRequire(import.meta.url)
 const wasmPath = join(dirname(require.resolve('cog-tiler-wasm/wasm')), 'cog_tiler_wasm_bg.wasm')
 
 const QUANTITIES = Object.keys(RASTER_QUANTITIES) as RasterQuantity[]
+
+/** The renderer colormap a ramp draws with, read through the style an entry gets. */
+function colormapOf(ramp: LidarRamp): string {
+  return itemTypeStyle({ kind: 'Raster', quantity: 'OtherContinuous' }, { units: '', displayRange: null, ramp, reversed: false, range: null }).colormap
+}
+
+const ALL_RAMPS: readonly LidarRamp[] = ['Terrain', 'Earth', 'Greens', 'YellowRed', 'Magma', 'Gray']
 
 /** Every ramp some kind offers, each once. */
 function listedRamps(): LidarRamp[] {
@@ -90,7 +97,7 @@ describe('LiDAR legend ramps against the real renderer', () => {
   it('keeps blue for water: no ramp a non-water kind offers has a blue sample', () => {
     // Every 2.0 kind is non-water; hydrology 2.1's water kinds will need at least 16 blue samples of 65.
     const blue = QUANTITIES.flatMap((quantity) => kindRamps({ kind: 'Raster', quantity })
-      .map((ramp) => ({ quantity, ramp, blue: wasmColours(RAMP_COLORMAPS[ramp], SAMPLES).filter(isBlue).length })))
+      .map((ramp) => ({ quantity, ramp, blue: wasmColours(colormapOf(ramp), SAMPLES).filter(isBlue).length })))
       .filter((entry) => entry.blue > 0)
     expect(blue).toEqual([])
   })
@@ -102,20 +109,20 @@ describe('LiDAR legend ramps against the real renderer', () => {
 
   it('draws every ramp with a colormap the wasm compiles in', () => {
     const known = new Set(JSON.parse(colormap_names()) as string[])
-    expect(Object.values(RAMP_COLORMAPS).filter((name) => !known.has(name))).toEqual([])
+    expect(ALL_RAMPS.map(colormapOf).filter((name) => !known.has(name))).toEqual([])
   })
 
   it.each(listedRamps())('shows the colours colorize() paints for %s at its stops within ±2', (ramp) => {
     const legend = legendStops(ramp)
     expect(legend.length).toBeGreaterThanOrEqual(2)
-    const wasm = wasmColours(RAMP_COLORMAPS[ramp], legend.map((_, i) => i / (legend.length - 1)))
+    const wasm = wasmColours(colormapOf(ramp), legend.map((_, i) => i / (legend.length - 1)))
     expect(worstGap(legend, wasm), `${ramp} legend ${JSON.stringify(legend)} vs wasm ${JSON.stringify(wasm)}`).toBeLessThanOrEqual(2)
   })
 
   it.each(listedRamps())('blends to within ±8 of colorize() between the stops of %s', (ramp) => {
     const stops = legendStops(ramp)
     const legend = FINE.map((position) => legendColour(stops, position))
-    const wasm = wasmColours(RAMP_COLORMAPS[ramp], FINE)
+    const wasm = wasmColours(colormapOf(ramp), FINE)
     const gaps = legend.map((rgb, k) => worstGap([rgb], [wasm[k]!]))
     const at = gaps.indexOf(Math.max(...gaps))
     expect(gaps[at], `${ramp} at ${FINE[at]}: legend ${legend[at]!.map(Math.round)} vs wasm ${wasm[at]}`).toBeLessThanOrEqual(8)
