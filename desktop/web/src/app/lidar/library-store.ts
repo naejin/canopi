@@ -23,6 +23,8 @@ const LIDAR_POLL_INTERVAL_MS = 1500
 /** Library-side snapshot; null until the first successful read. */
 export const lidarLibrary = signal<LibrarySnapshot | null>(null)
 export const lidarStatusMessage = signal<string | null>(null)
+/** Whether the latest list read failed; with no snapshot yet, the library is unopened rather than loading. */
+const lidarLibraryReadFailed = signal(false)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let refreshInFlight: Promise<void> | null = null
@@ -48,6 +50,7 @@ async function readLibrarySnapshot(startSequence: number): Promise<LibrarySnapsh
     publishedReadSequence = startSequence
     lidarLibrary.value = snapshot
     lidarStatusMessage.value = null
+    lidarLibraryReadFailed.value = false
   }
   return snapshot
 }
@@ -67,6 +70,7 @@ export async function refreshLidarLibrary(): Promise<void> {
       await readLibrarySnapshot(startSequence)
     } catch (error) {
       lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
+      lidarLibraryReadFailed.value = true
     } finally {
       refreshInFlight = null
     }
@@ -288,5 +292,10 @@ export function readLidarPresentation(
  * this seam owns the design read so map snapshot code never bypasses it.
  */
 export function readCurrentLidarPresentation(): LidarPresentationItem[] {
-  return readLidarPresentation(currentDesign.value, lidarLibrary.value, lidarLibraryStatus.value)
+  const library = lidarLibrary.value
+  // A library whose list cannot be read and that has no snapshot yet is unopened: its entries are missing, not loading.
+  const status: LidarLibraryStatus = library === null && lidarLibraryReadFailed.value
+    ? { kind: 'unavailable' }
+    : lidarLibraryStatus.value
+  return readLidarPresentation(currentDesign.value, library, status)
 }

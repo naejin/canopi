@@ -26,7 +26,7 @@ import {
   openSiteDataDetails,
   selectSiteRow,
 } from '../../../app/lidar/library-navigation'
-import { isMissing, libraryItemName, lidarLibrary, readLidarPresentation, type LidarPresentationItem } from '../../../app/lidar/library-store'
+import { isMissing, libraryItemName, lidarLibrary, readCurrentLidarPresentation, type LidarPresentationItem } from '../../../app/lidar/library-store'
 import { canMoveReference, referenceRows, type ReferenceRow } from '../../../app/lidar/reference-tree'
 import { viewDesignLocation, viewLidarCoverage } from '../../../app/lidar/camera-request'
 import { locale } from '../../../app/settings/state'
@@ -48,7 +48,7 @@ type SiteRow = ReferenceRow<LidarPresentationItem>
 
 /** The Design's site data rows in Layers: front first, results under their source. */
 function readSiteRows(): SiteRow[] {
-  return referenceRows(readLidarPresentation(currentDesign.value, lidarLibrary.value))
+  return referenceRows(readCurrentLidarPresentation())
 }
 
 function nameOfItem(id: string): string {

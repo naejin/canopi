@@ -43,7 +43,8 @@ vi.mock('../app/document-session/store', async () => {
 import { AddDataMenu, SiteDataInspector, SiteDataRows } from '../components/panels/lidar/SiteData'
 import { SiteDataDetails } from '../components/panels/lidar/SiteDataDetails'
 import { SiteDataPanel } from '../components/panels/lidar/SiteDataPanel'
-import { lidarLibrary } from '../app/lidar/library-store'
+import { lidarLibrary, refreshLidarLibrary } from '../app/lidar/library-store'
+import { lidarListLibrary } from '../ipc/lidar'
 import { currentDesign } from '../app/document-session/store'
 import { dataDialog, selectSiteRow, siteDataDetails } from '../app/lidar/library-navigation'
 import { activeLayerName } from '../app/canvas-settings/signals'
@@ -241,6 +242,20 @@ describe('Layers site data', () => {
     mount()
     expect(container.textContent).toContain('Unavailable data')
     expect(container.textContent).toContain('Data unavailable')
+  })
+
+  it('labels a reference unavailable once the library list cannot be read, not loading forever', async () => {
+    lidarLibrary.value = null
+    setDesign([{ kind: 'Source', id: 'gone', order: 0 }])
+    mount()
+    expect(container.textContent).not.toContain('Unavailable data')
+
+    vi.mocked(lidarListLibrary).mockRejectedValueOnce(new Error('catalogue locked'))
+    await act(async () => {
+      await refreshLidarLibrary()
+    })
+
+    expect(container.textContent).toContain('Unavailable data')
   })
 
   it('marks an out-of-date result, says why, and refreshes it in place', async () => {
