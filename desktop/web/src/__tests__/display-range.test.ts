@@ -1,0 +1,96 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RasterBandStatistics } from '../maplibre/raster-display/protocol'
+
+/** A fake pool: statistics answered per URL when the test says so. */
+const answers = new Map<string, (value: RasterBandStatistics | null) => void>()
+const asked: string[] = []
+let clients = 0
+vi.mock('../maplibre/raster-display/pool', () => ({
+  rasterWorkerPool: () => ({
+    acquire: () => {
+      clients += 1
+      return {
+        statistics: (url: string) => {
+          asked.push(url)
+          return new Promise<RasterBandStatistics | null>((resolve, reject) => {
+            answers.set(url, (value) => (value === undefined ? reject(new Error('lane failed')) : resolve(value)))
+          })
+        },
+        dispose: () => { clients -= 1 },
+      }
+    },
+  }),
+}))
+
+const { cutOutlierRange, requestCutOutlierRange, resetCutOutlierRanges } = await import('../app/lidar/display-range')
+
+function stats(min: number, max: number, percentile2: number, percentile98: number): RasterBandStatistics {
+  // 128 equal bins (cog-tiler's and maplibre-gl-raster's count), so the merged 2–98 % range is predictable.
+  return { min, max, percentile2, percentile98, histogram: Array.from({ length: 128 }, () => 10) }
+}
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+describe('Cut outliers ranges', () => {
+  beforeEach(() => {
+    resetCutOutlierRanges()
+    answers.clear()
+    asked.length = 0
+  })
+
+  it('reads one asset\'s 2–98 % range once per generation key, and releases its pool client', async () => {
+    expect(cutOutlierRange('Source/a/g1')).toBeNull()
+    requestCutOutlierRange('Source/a/g1', ['a.tif'])
+    requestCutOutlierRange('Source/a/g1', ['a.tif'])
+    expect(asked).toEqual(['a.tif'])
+    answers.get('a.tif')!(stats(100, 140, 102.5, 137.25))
+    await settle()
+    expect(cutOutlierRange('Source/a/g1')).toEqual([102.5, 137.25])
+    expect(clients).toBe(0)
+    requestCutOutlierRange('Source/a/g1', ['a.tif'])
+    expect(asked).toEqual(['a.tif'])
+    // A new generation is a new key: read again.
+    requestCutOutlierRange('Source/a/g2', ['a2.tif'])
+    expect(asked).toEqual(['a.tif', 'a2.tif'])
+    answers.get('a2.tif')!(stats(100, 141, 102, 138))
+    await settle()
+    expect(cutOutlierRange('Source/a/g2')).toEqual([102, 138])
+  })
+
+  it('merges a mosaic\'s assets before taking the 2–98 % range', async () => {
+    requestCutOutlierRange('Source/m/g1', ['west.tif', 'east.tif'])
+    await settle()
+    answers.get('west.tif')!(stats(0, 100, 2, 98))
+    await settle()
+    answers.get('east.tif')!(stats(100, 200, 102, 198))
+    await vi.waitFor(() => expect(cutOutlierRange('Source/m/g1')).not.toBeNull())
+    const [low, high] = cutOutlierRange('Source/m/g1')!
+    // Two equal halves of 0–200: the 2 % and 98 % points sit near 4 and 196.
+    expect(low).toBeGreaterThan(0)
+    expect(low).toBeLessThan(10)
+    expect(high).toBeGreaterThan(190)
+    expect(high).toBeLessThan(200)
+  })
+
+  it('keeps the data range for an asset with no valid pixel or a failed read, and does not ask again', async () => {
+    requestCutOutlierRange('Source/e/g1', ['empty.tif'])
+    answers.get('empty.tif')!(null)
+    await settle()
+    expect(cutOutlierRange('Source/e/g1')).toBeNull()
+    requestCutOutlierRange('Source/e/g1', ['empty.tif'])
+    expect(asked).toEqual(['empty.tif'])
+    requestCutOutlierRange('Source/f/g1', ['failing.tif'])
+    answers.get('failing.tif')!(undefined as never)
+    await settle()
+    expect(cutOutlierRange('Source/f/g1')).toBeNull()
+    expect(clients).toBe(0)
+  })
+
+  it('drops an answer that lands after a reset', async () => {
+    requestCutOutlierRange('Source/a/g1', ['a.tif'])
+    resetCutOutlierRanges()
+    answers.get('a.tif')!(stats(100, 140, 102.5, 137.25))
+    await settle()
+    expect(cutOutlierRange('Source/a/g1')).toBeNull()
+  })
+})

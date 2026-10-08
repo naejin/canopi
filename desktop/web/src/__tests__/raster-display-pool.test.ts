@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { RasterWorkerPool, type RasterWorkerLike } from '../maplibre/raster-display/pool'
 import type { RasterWorkerReply, RasterWorkerRequest } from '../maplibre/raster-display/protocol'
 
@@ -13,7 +13,7 @@ class FakeLane implements RasterWorkerLike {
     this.requests.push(message)
     // Control messages answer immediately; renders wait for `answer`.
     if (message.op === 'open') this.reply(message.id, { boundsLonLat: [0, 0, 1, 1] })
-    else if (message.op !== 'render' && message.op !== 'bbox') this.reply(message.id, true)
+    else if (message.op !== 'render' && message.op !== 'bbox' && message.op !== 'statistics') this.reply(message.id, true)
   }
 
   terminate(): void {
@@ -51,6 +51,22 @@ function pool(lanes = 1, maxInFlightPerLane = 1) {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 describe('raster display worker pool', () => {
+  it('reads one asset\'s statistics in a lane through a handle it closes afterwards', async () => {
+    const { instance, created } = pool(1, 1)
+    const client = instance.acquire()
+    const lane = created[0]!
+    const statistics = client.statistics('asset://localhost/a.tif')
+    await vi.waitFor(() => expect(lane.requests.some((request) => request.op === 'statistics')).toBe(true))
+    const request = lane.requests.find((candidate) => candidate.op === 'statistics')!
+    const answer = { min: 1, max: 9, percentile2: 1.5, percentile98: 8.5, histogram: [1, 2] }
+    lane.answer(request, answer)
+    expect(await statistics).toEqual(answer)
+    await settle()
+    const opened = lane.requests.find((candidate) => candidate.op === 'open')!
+    expect(opened).toMatchObject({ url: 'asset://localhost/a.tif' })
+    expect(lane.requests.at(-1)).toMatchObject({ op: 'close', handle: (opened as { handle: number }).handle })
+  })
+
   it('starts lanes with an even share of one aggregate decoded-block budget', () => {
     const { instance, created } = pool(2)
     instance.acquire()

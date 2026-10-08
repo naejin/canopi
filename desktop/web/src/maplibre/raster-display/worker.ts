@@ -18,7 +18,7 @@
  */
 import { init, openCog, rgbaToPng } from 'cog-tiler-wasm'
 import type { CogSource, RenderOptions } from 'cog-tiler-wasm'
-import type { RasterWorkerReply, RasterWorkerRequest, RasterSourceMetadata } from './protocol'
+import type { RasterBandStatistics, RasterWorkerReply, RasterWorkerRequest, RasterSourceMetadata } from './protocol'
 
 /** The dedicated worker scope, typed narrowly so the DOM program stays unchanged. */
 const scope = self as unknown as {
@@ -167,6 +167,10 @@ async function handle(request: RasterWorkerRequest): Promise<{ value: unknown; t
       const copy = new Uint8ClampedArray(image.rgba)
       return { value: copy, transfer: [copy.buffer] }
     }
+    case 'statistics': {
+      const source = await sourceFor(request.handle)
+      return { value: bandStatistics(await source.statistics()), transfer: [] }
+    }
     case 'encode': {
       const png = await rgbaToPng(request.rgba, request.width, request.height)
       return { value: png, transfer: [png.buffer] }
@@ -181,6 +185,26 @@ async function handle(request: RasterWorkerRequest): Promise<{ value: unknown; t
       }
       return { value: true, transfer: [] }
     }
+  }
+}
+
+/** Band 1 of cog-tiler's TiTiler-style statistics; null when it has no valid pixel. */
+function bandStatistics(statistics: Record<string, Record<string, unknown>>): RasterBandStatistics | null {
+  const band = statistics.b1 as {
+    count?: number
+    min?: number
+    max?: number
+    percentile_2?: number
+    percentile_98?: number
+    histogram?: [number[], number[]]
+  } | undefined
+  if (!band?.count) return null
+  return {
+    min: band.min!,
+    max: band.max!,
+    percentile2: band.percentile_2!,
+    percentile98: band.percentile_98!,
+    histogram: band.histogram![0],
   }
 }
 

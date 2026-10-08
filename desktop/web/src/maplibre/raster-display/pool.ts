@@ -18,6 +18,7 @@
  * client rejects its queued work and closes its sources in every lane.
  */
 import type {
+  RasterBandStatistics,
   RasterRenderOptions,
   RasterSourceMetadata,
   RasterWorkerReply,
@@ -76,6 +77,8 @@ export interface RasterPoolClient {
     size: { width: number; height: number },
     render: RasterRenderOptions,
   ): Promise<Uint8Array>
+  /** Band 1's statistics of one COG, read in a lane through a handle closed afterwards. */
+  statistics(url: string): Promise<RasterBandStatistics | null>
   /** Report whether a queued tile still matters; checked just before dispatch. */
   setRelevance(relevance: RasterTileRelevance | null): void
   dispose(): void
@@ -151,6 +154,7 @@ export class RasterWorkerPool {
           pool.post(lane, { id: 0, op: 'encode', rgba: copy, width, height }, [copy.buffer]))
       },
       renderPreview: (urls, bbox, size, render) => pool.renderPreview(state, urls, bbox, size, render),
+      statistics: (url) => pool.statistics(state, url),
       setRelevance(relevance) {
         state.relevance = relevance
       },
@@ -398,6 +402,21 @@ export class RasterWorkerPool {
         client.handles.delete(handle)
         this.closeHandle(handle)
       }
+    }
+  }
+
+  private async statistics(client: ClientState, url: string): Promise<RasterBandStatistics | null> {
+    const handle = ++this.handleSequence
+    this.urls.set(handle, url)
+    client.handles.add(handle)
+    try {
+      return await this.schedule<RasterBandStatistics | null>(client, 'control', undefined, undefined, async (lane) => {
+        await this.ensureOpen(lane, handle)
+        return this.post(lane, { id: 0, op: 'statistics', handle })
+      })
+    } finally {
+      client.handles.delete(handle)
+      this.closeHandle(handle)
     }
   }
 

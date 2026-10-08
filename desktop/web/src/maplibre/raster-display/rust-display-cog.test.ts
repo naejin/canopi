@@ -5,12 +5,14 @@
  * kept current by `display_cog::library_tests::the_web_display_fixture_is_what_the_engine_writes`)
  * opened by the pinned `cog-tiler-wasm`, its WebAssembly started in Node.
  * The lane opens it on cog-tiler's affine EPSG:3857 path, and at each probed
- * pixel centre cog-tiler reads the value native hover read there (A4).
+ * pixel centre cog-tiler reads the value native hover read there (A4). Cut
+ * outliers' 2–98 % range comes from the lane's `statistics` op and lies within
+ * 2 % of the span of the exact percentiles of every pixel.
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import type { RasterWorkerReply, RasterWorkerRequest } from './protocol'
+import type { RasterBandStatistics, RasterWorkerReply, RasterWorkerRequest } from './protocol'
 
 interface Fixture {
   bounds: [number, number, number, number]
@@ -84,5 +86,49 @@ describe('a display derivative the Rust engine wrote', () => {
       const empty = Number.isNaN(value) || value === fixture.nodata
       expect(empty ? null : value, `${probe.longitude}, ${probe.latitude}`).toBe(probe.value)
     }
+  })
+
+  it('gives Cut outliers a 2–98 % range within 2 % of the exact percentiles of every pixel', async () => {
+    const { init, openCog } = await import('cog-tiler-wasm')
+    await init()
+    const source = await openCog(tif)
+    // Every pixel centre on the 3857 grid the COG is written in.
+    const toMercY = (lat: number) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360))
+    const fromMercY = (y: number) => (Math.atan(Math.exp(y)) * 360) / Math.PI - 90
+    const [west, south, east, north] = fixture.bounds
+    const [top, bottom] = [toMercY(north), toMercY(south)]
+    const values: number[] = []
+    for (let row = 0; row < fixture.height; row += 1) {
+      for (let column = 0; column < fixture.width; column += 1) {
+        const lon = west + ((column + 0.5) / fixture.width) * (east - west)
+        const lat = fromMercY(top + ((row + 0.5) / fixture.height) * (bottom - top))
+        const value = (await source.point(lon, lat)).values[0]!
+        if (!Number.isNaN(value) && value !== fixture.nodata) values.push(value)
+      }
+    }
+    values.sort((a, b) => a - b)
+    const exact = (percent: number) => values[Math.min(values.length - 1, Math.floor((percent / 100) * values.length))]!
+    const span = values.at(-1)! - values[0]!
+
+    const replies: RasterWorkerReply[] = []
+    const scope: {
+      onmessage: ((event: MessageEvent<RasterWorkerRequest>) => void) | null
+      postMessage(message: RasterWorkerReply): void
+    } = { onmessage: null, postMessage: (message) => replies.push(message) }
+    vi.stubGlobal('self', scope)
+    vi.resetModules()
+    await import('./worker')
+    scope.onmessage?.({ data: { op: 'open', id: 1, handle: 7, url: ASSET } } as MessageEvent<RasterWorkerRequest>)
+    scope.onmessage?.({ data: { op: 'statistics', id: 2, handle: 7 } } as MessageEvent<RasterWorkerRequest>)
+    await vi.waitFor(() => expect(replies).toHaveLength(2), { timeout: 10_000 })
+    const reply = replies.find((candidate) => candidate.id === 2)!
+    if (!reply.ok) throw new Error(reply.error)
+    const statistics = reply.value as RasterBandStatistics
+    expect(Math.abs(statistics.percentile2 - exact(2))).toBeLessThanOrEqual(0.02 * span)
+    expect(Math.abs(statistics.percentile98 - exact(98))).toBeLessThanOrEqual(0.02 * span)
+    expect(statistics.min).toBe(values[0])
+    expect(statistics.max).toBe(values.at(-1))
+    expect(statistics.histogram).toHaveLength(128)
+    expect(statistics.histogram.reduce((sum, count) => sum + count, 0)).toBe(values.length)
   })
 })

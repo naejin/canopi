@@ -16,6 +16,19 @@ export interface RasterSourceMetadata {
   readonly boundsLonLat: number[]
 }
 
+/**
+ * Band 1's statistics over the COG's largest overview no wider than 1024 px:
+ * what Cut outliers draws (its 2–98 % range) and, for a mosaic, what merges.
+ */
+export interface RasterBandStatistics {
+  readonly min: number
+  readonly max: number
+  readonly percentile2: number
+  readonly percentile98: number
+  /** Counts in 128 equal bins over [min, max], the bin count maplibre-gl-raster's `mergeBandStats` reads. */
+  readonly histogram: readonly number[]
+}
+
 export type RasterWorkerRequest =
   | { readonly id: number; readonly op: 'init'; readonly budgetBytes: number }
   | { readonly id: number; readonly op: 'open'; readonly handle: number; readonly url: string }
@@ -39,6 +52,7 @@ export type RasterWorkerRequest =
     readonly render: RasterRenderOptions
   }
   | { readonly id: number; readonly op: 'encode'; readonly rgba: Uint8ClampedArray; readonly width: number; readonly height: number }
+  | { readonly id: number; readonly op: 'statistics'; readonly handle: number }
   | { readonly id: number; readonly op: 'close'; readonly handle: number }
 
 export type RasterWorkerReply =
