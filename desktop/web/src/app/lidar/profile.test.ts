@@ -6,15 +6,19 @@ import {
   type LidarSamplePointsRequest,
   type LidarSampleSeries,
 } from '../../generated/contracts'
+import { setCurrentCanvasSession } from '../../canvas/session'
+import type { CanvasRuntimeSurfaces } from '../../canvas/runtime/runtime'
+import { activePanel, sidePanel } from '../shell/state'
 import {
   createSiteProfile,
   profileCopyText,
+  profileLineMenu,
   type ProfileCurveSource,
   type SiteProfile,
   type SiteProfileOwner,
 } from './profile'
 import type { SampleLane, SiteSampler } from './sampler'
-import type { GeoPoint } from './site-transients'
+import { endSiteDataTransients, profileLine, type GeoPoint } from './site-transients'
 
 const PLANE = createSessionPlane({ lon: 2.35, lat: 48.85 })
 const at = (x: number, y: number): GeoPoint => PLANE.toGeo({ x, y })
@@ -307,5 +311,35 @@ describe('profileCopyText', () => {
     expect(lines[3]!.split('\t').slice(3)).toEqual(['', '3,46'])
     expect(lines).toHaveLength(5)
     expect(lines[4]).toBe('')
+  })
+})
+
+describe('Profile this line', () => {
+  afterEach(() => {
+    endSiteDataTransients()
+    setCurrentCanvasSession(null)
+    sidePanel.value = null
+  })
+
+  it('opens Site data and shows the profile of a Line zone or a Measure guide, in lon/lat', () => {
+    const scene = {
+      zones: [{ kind: 'zone', id: 'line-1', zoneType: 'line', points: [{ x: 0, y: 0 }, { x: 30, y: 40 }] }],
+      measurementGuides: [{ kind: 'measurement-guide', id: 'guide-1', start: { x: 5, y: 5 }, end: { x: 5, y: 25 } }],
+    }
+    setCurrentCanvasSession({
+      queries: { sessionPlane: signal(PLANE), view: { mode: signal('site') }, getSceneSnapshot: () => scene },
+    } as unknown as CanvasRuntimeSurfaces)
+    activePanel.value = 'canvas'
+    sidePanel.value = null
+
+    profileLineMenu.profile({ kind: 'zone', id: 'line-1' })
+    expect(sidePanel.value).toBe('site-data')
+    expect(profileLine.value).toEqual([PLANE.toGeo({ x: 0, y: 0 }), PLANE.toGeo({ x: 30, y: 40 })])
+
+    profileLineMenu.profile({ kind: 'measurement-guide', id: 'guide-1' })
+    expect(profileLine.value).toEqual([PLANE.toGeo({ x: 5, y: 5 }), PLANE.toGeo({ x: 5, y: 25 })])
+
+    profileLineMenu.profile({ kind: 'zone', id: 'gone' })
+    expect(profileLine.value).toEqual([PLANE.toGeo({ x: 5, y: 5 }), PLANE.toGeo({ x: 5, y: 25 })])
   })
 })

@@ -13,6 +13,7 @@
 
 import { computed, effect, signal, type ReadonlySignal } from '@preact/signals'
 import { currentCanvasQuerySurface } from '../../canvas/session'
+import type { CanvasContextMenuProfileLine } from '../canvas-context-menu/entries'
 import type { SessionPlane } from '../../canvas/session-plane'
 import type { LibraryItemRole, LibrarySnapshot, LidarSampleSeries, LidarSampleTarget } from '../../generated/contracts'
 import { lidarSamplePoints } from '../../ipc/lidar'
@@ -362,4 +363,26 @@ export const profileHover: ReadonlySignal<GeoPoint | null> = computed(() => {
 export function finishSiteProfile(points: readonly { readonly x: number; readonly y: number }[]): void {
   const plane = currentCanvasQuerySurface.peek()?.sessionPlane.peek()
   if (plane) setProfileLine(points.map((point) => plane.toGeo(point)))
+}
+
+/**
+ * Desktop's "Profile this line" on a Line zone's or Measure guide's canvas menu (U49 Q29): opens Site data and shows
+ * the profile along that object, as if it had been drawn with the Profile tool. Disabled like the Profile button.
+ */
+export const profileLineMenu: CanvasContextMenuProfileLine = {
+  get available() {
+    return profileAvailable.value
+  },
+  profile(target) {
+    const scene = currentCanvasQuerySurface.peek()?.getSceneSnapshot()
+    const points = target.kind === 'zone'
+      ? scene?.zones.find((zone) => zone.id === target.id && zone.zoneType === 'line')?.points
+      : (() => {
+          const guide = scene?.measurementGuides.find((candidate) => candidate.id === target.id)
+          return guide ? [guide.start, guide.end] : undefined
+        })()
+    if (!points || points.length < 2) return
+    if (sidePanel.peek() !== 'site-data') selectPanel('site-data')
+    finishSiteProfile(points)
+  },
 }
