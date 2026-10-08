@@ -4,9 +4,11 @@ import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import { contains, outlineSegments, type Segment } from '../app/canvas-pdf/field-geometry'
 import { pageFrame } from '../app/canvas-pdf/page-frame'
-import { zoneTop } from '../app/canvas-pdf/zone-labels'
+import { zoneLabels } from '../app/canvas-pdf/zone-labels'
+import { FieldSpace } from '../app/canvas-pdf/field-placement'
+import type { ZoneMeasurements } from '../app/canvas-pdf/zone-measurements'
 import type { PdfInput, PdfLabels, PdfPage, PdfSetup } from '../app/canvas-pdf/types'
-import type { PrintPoint, PrintZone } from '../canvas/print'
+import type { PrintBounds, PrintPoint, PrintZone } from '../canvas/print'
 import { englishPdfLabels } from '../../scripts/pdf-validation/fixtures'
 
 const MM = 72 / 25.4
@@ -83,6 +85,15 @@ it('prints each guide\'s M code beside its own guide in a turned chain of eight 
     guides.forEach((guide, i) => { if (i !== references.get(code)) expect(own, `${code} nearer guide ${i}`).toBeLessThan(toSegment(centre, guide)) })
   }
 })
+
+/** Where a zone's code is anchored: on an open field with ground metres as millimetres, its first slot sits centred 1 mm above the anchor. */
+function zoneTop(zone: PrintZone, ground: PrintBounds): PrintPoint | null {
+  const space = new FieldSpace({ x: -1000, y: -1000, width: 2000, height: 2000 }, text())
+  const op = zoneLabels([{ zone, reference: 'Z01' } as ZoneMeasurements], ground, p => p, space, false).find(o => o.kind === 'text')
+  if (op?.kind !== 'text') return null
+  const measured = space.measure('Z01', 7.5, Infinity, true), round = (n: number) => Math.round(n * 1e6) / 1e6 + 0
+  return { x: round(op.x / MM - measured.inset + measured.width / 2), y: round(op.y / MM - measured.baseline + measured.height + 1) }
+}
 
 it('tops a zone at its highest outline point inside the ground, or the middle of a level top edge', () => {
   const ground = { x: 0, y: 0, width: 10, height: 10 }

@@ -11,7 +11,7 @@ import { fieldDimensions } from './field-dimensions'
 import { appearanceKey, assignFieldIdentity, drawEnclosure, enclosureRadius, fieldIdentity } from './field-identity'
 import { directAnnotation } from './field-annotations'
 import type { ZoneMeasurements } from './zone-measurements'
-import { zoneLabels, zoneTop } from './zone-labels'
+import { zoneLabels } from './zone-labels'
 import { protectZoneInk } from './zone-ink'
 
 export interface FieldReferences {
@@ -31,7 +31,7 @@ export interface FieldNote {
   text: string
   position: PrintPoint
   species?: string
-  kind: 'annotation' | 'distance' | 'plants' | 'zone'
+  kind: 'annotation' | 'distance' | 'plants'
   plantIds?: readonly string[]
   location?: string
   continuation?: string
@@ -245,14 +245,7 @@ function layoutField(input: PdfInput, frame: PrintBounds, ground: PrintBounds, s
       d.segments.forEach(s => line(s, '#656058', .16, opacity('zones')))
       d.ticks.forEach(s => line(s, INK, .25, opacity('zones'))); labelText(d.label, opacity('zones'))
     }
-    const top = zoneTop(zone.zone, ground)
-    if (top && !page.summary?.length && dimensions.length + reused.size < zone.dimensions.length) {
-      const number = new Intl.NumberFormat(input.locale, { maximumFractionDigits: 2 })
-      notes.push({ id: `zone:${zone.reference}`, reference: zone.reference, kind: 'zone', position: top,
-      text: `${zone.diameter ? 'Ø ' : ''}${zone.lengths.map(n => number.format(n)).join(' / ')}${zone.widths.length ? ` × ${zone.widths.map(n => number.format(n)).join('–')}` : ''} m` })
-    }
   }
-  placeNotes()
 
   function placeDimensions(): void {
     for (const guide of canvas.measurements.filter(g => !nativeDimensionIds.has(g.id))) deferredMeasurement(guide)

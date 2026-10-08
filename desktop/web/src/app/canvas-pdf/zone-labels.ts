@@ -10,7 +10,7 @@ import { MM, pathOp, rectPath, textOp } from './page-drawing'
  * outline points inside the ground and the ground corners inside it), at the middle of a level top edge; null when it
  * misses the ground. Never the upright bounds, which at a turned angle sit over the neighbouring rows.
  */
-export function zoneTop(zone: PrintZone, ground: PrintBounds): PrintPoint | null {
+function zoneTop(zone: PrintZone, ground: PrintBounds): PrintPoint | null {
   const corners = [{ x: ground.x, y: ground.y }, { x: ground.x + ground.width, y: ground.y },
     { x: ground.x, y: ground.y + ground.height }, { x: ground.x + ground.width, y: ground.y + ground.height }]
   const points = [...outlineSegments(zone.path, p => p).flatMap(s => { const clipped = clipSegment(s, ground); return clipped ? [clipped.a, clipped.b] : [] }),
