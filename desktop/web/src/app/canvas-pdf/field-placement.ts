@@ -118,7 +118,7 @@ export class FieldSpace {
    * at most 2.5 mm from the segment whatever its width, and its centre nearer `s` than any of the `others` (the page's
    * other guides), so it never names the next guide; null when no spot is clear, so the caller keeps the code in the key.
    */
-  beside(measured: FieldMeasure, s: Segment, others: readonly Segment[] = []): Bounds | null {
+  beside(measured: FieldMeasure, s: Segment, others: readonly Segment[]): Bounds | null {
     const length = distance(s.a, s.b)
     if (length < 1e-8) return null
     const u = { x: (s.b.x - s.a.x) / length, y: (s.b.y - s.a.y) / length }, n = { x: -u.y, y: u.x }

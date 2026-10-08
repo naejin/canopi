@@ -154,7 +154,7 @@ it('places a continuing guide\'s wide M code beside its guide at any angle, keep
   const wide = space.measure('M3      000', 8)
   for (const degrees of [0, 30, 45, 60, 90]) {
     const angle = degrees * Math.PI / 180, guide = { a: { x: 0, y: 0 }, b: { x: 30 * Math.cos(angle), y: 30 * Math.sin(angle) } }
-    const box = space.beside(wide, guide)
+    const box = space.beside(wide, guide, [])
     expect(box, `${degrees}°`).not.toBeNull()
     // Its near edge stays within the widest gap of the guide.
     const corners = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([i, j]) => ({ x: box!.x + i! * box!.width, y: box!.y + j! * box!.height }))
