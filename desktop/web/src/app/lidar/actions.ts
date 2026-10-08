@@ -35,6 +35,7 @@ import {
   sameColourRange,
   setLidarEntryOrders,
   removeLidarEntries,
+  setSiteDataVisible,
   upsertLidarEntry,
 } from '../design-edit/lidar'
 import {
@@ -195,6 +196,15 @@ export function removeFromDesign(id: string): void {
 export function setLidarEntryVisibility(id: string, visible: boolean): void {
   patchLidarEntryById(id, { visible })
   // Hiding the inspected reference ends inspection in the same interaction.
+  reconcileInspectionWithPresentation()
+}
+
+/**
+ * The Site data eye (Layers' summary row and the panel's "hidden from the map"
+ * strip): shows or hides every entry at once, keeping each entry's own eye.
+ */
+export function setSiteDataShown(shown: boolean): void {
+  setSiteDataVisible(shown)
   reconcileInspectionWithPresentation()
 }
 

@@ -10,6 +10,7 @@ const historyMock = vi.hoisted(() => vi.fn())
 const cancelAnalysisMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const createAnalysisMock = vi.hoisted(() => vi.fn())
 const upsertMock = vi.hoisted(() => vi.fn())
+const sectionEyeMock = vi.hoisted(() => vi.fn())
 const removeMock = vi.hoisted(() => vi.fn())
 const moveMock = vi.hoisted(() => vi.fn())
 const patchMock = vi.hoisted(() => vi.fn())
@@ -45,6 +46,7 @@ vi.mock('../app/design-edit/lidar', async (importOriginal) => ({
   setLidarEntryOrders: moveMock,
   patchLidarEntryById: patchMock,
   removeLidarEntries: removeMock,
+  setSiteDataVisible: sectionEyeMock,
   upsertLidarEntry: upsertMock,
 }))
 
@@ -89,6 +91,7 @@ import {
   runAnalysis,
   setLidarEntryDisplay,
   setLidarEntryVisibility,
+  setSiteDataShown,
   attachmentFailure,
   dismissAttachmentFailure,
   pendingAttachments,
@@ -265,6 +268,14 @@ describe('Design data references', () => {
     setLidarEntryVisibility('layer-1', false)
     expect(patchMock).toHaveBeenCalledWith('layer-1', { visible: false })
     expect(reconcileInspectionMock).toHaveBeenCalled()
+  })
+
+  it('the Site data eye shows or hides every entry at once and reconciles inspection in the same interaction', () => {
+    setSiteDataShown(false)
+    expect(sectionEyeMock).toHaveBeenCalledWith(false)
+    expect(reconcileInspectionMock).toHaveBeenCalled()
+    setSiteDataShown(true)
+    expect(sectionEyeMock).toHaveBeenLastCalledWith(true)
   })
 
   it("stores a kind's default range and ramp as null, so the default has one encoding", () => {
