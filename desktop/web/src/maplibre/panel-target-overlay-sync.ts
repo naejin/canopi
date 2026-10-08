@@ -4,7 +4,7 @@ import type { PanelTargetMapOverlayVariant } from './panel-target-overlays'
  * A GeoJSON overlay the map draws in the interaction-overlay band: one source and its layers. The panel Targets, the Site data
  * pin and profile line, and the profile's hover ring each build one (architecture review, finding 7).
  */
-export interface MapOverlayContract {
+interface MapOverlayContract {
   readonly source: {
     readonly id: string
     readonly type: 'geojson'
@@ -15,7 +15,7 @@ export interface MapOverlayContract {
 }
 
 /** The ids an overlay owns, removed back to front when it clears. */
-export interface MapOverlayIds {
+interface MapOverlayIds {
   readonly sourceId: string
   readonly layerIds: readonly string[]
 }

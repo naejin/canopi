@@ -35,7 +35,7 @@ export interface WorkspaceMapContributionAdapter {
 }
 
 /** What an edition adds to the shared contributions: its LiDAR band and terrain, and Desktop's Site data pin and line. */
-export interface WorkspaceMapEditionContributions extends Pick<WorkspaceMapContributionSnapshot, 'lidar' | 'terrain'> {
+interface WorkspaceMapEditionContributions extends Pick<WorkspaceMapContributionSnapshot, 'lidar' | 'terrain'> {
   readonly site: SiteMapOverlay | null
 }
 
