@@ -47,6 +47,8 @@ const SELECTION_REST_MS = 120
 
 type Pane = 'list' | 'details'
 type DetailMode = 'details' | 'rename' | 'delete'
+/** Where focus goes after a change that hides or removes the focused control: the first of these that takes it. */
+type FocusTarget = 'row' | 'heading'
 
 /**
  * The Data library: terrain and height data shared by every Design, with the
@@ -80,7 +82,8 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
   const [busy, setBusy] = useState(false)
   const [diskUsage, setDiskUsage] = useState<number | null>(null)
   const listed = useRef<readonly LibraryItem[]>([])
-  const focusSelection = useRef(false)
+  const pendingFocus = useRef<readonly FocusTarget[]>([])
+  const root = useRef<HTMLDivElement>(null)
 
   // Measured again when the items change (an import, a result, a deletion).
   const itemsKey = items.map((row) => `${row.id}:${row.generationId ?? ''}`).join(',')
@@ -99,9 +102,10 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
     listed.current = visible
     if (selectedId !== requestedId) setRequestedId(selectedId)
     if (modeFor.mode !== 'details' && modeFor.itemId !== selectedId) setModeFor({ mode: 'details', itemId: null })
-    if (focusSelection.current && selectedId) {
-      focusSelection.current = false
-      document.getElementById(rowId(selectedId))?.focus()
+    if (pendingFocus.current.length > 0) {
+      const targets = pendingFocus.current
+      pendingFocus.current = []
+      focusFirst(root.current, targets, selectedId)
     }
   })
 
@@ -121,6 +125,15 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
     setError(null)
     if (show) setPane('details')
   }
+  // A provenance or result link can name an item the search or type filter hides: the filters clear to show it.
+  const openLinked = (id: string) => {
+    if (!visible.some((row) => row.id === id)) {
+      setQuery('')
+      setType('all')
+    }
+    pendingFocus.current = ['heading']
+    select(id, true)
+  }
   const moveSelection = (event: JSX.TargetedKeyboardEvent<HTMLElement>) => {
     const index = visible.findIndex((row) => row.id === selectedId)
     const next = event.key === 'ArrowDown' ? index + 1
@@ -137,7 +150,7 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
     event.preventDefault()
     const target = visible[Math.max(0, Math.min(visible.length - 1, next))]
     if (!target) return
-    focusSelection.current = true
+    pendingFocus.current = ['row']
     select(target.id, false)
   }
   const run = async (action: () => Promise<unknown>, after?: () => void) => {
@@ -281,7 +294,7 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
       </>}
     >
       {/* With nothing selected the list shows, with No match and Clear filters, whichever pane was asked for. */}
-      <div className={styles.library} data-pane={item ? pane : 'list'}>
+      <div ref={root} className={styles.library} data-pane={item ? pane : 'list'}>
         <div className={styles.sheetTop}>
           <LibraryOpenNotice />
           {(error || lidarStatusMessage.value) && mode === 'details' && (
@@ -337,7 +350,7 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
               <section className={styles.detailPane} aria-labelledby={headingId}>
                 <button type="button" className={styles.back} onClick={() => setPane('list')}>← {t('canvas.lidar.library.back')}</button>
                 <div className={styles.detailTitle}>
-                  <h3 id={headingId}>{item.name}</h3>
+                  <h3 id={headingId} tabIndex={-1} data-focus-target="heading">{item.name}</h3>
                   {item.status === 'ready' && mode !== 'rename' && (
                     <button type="button" className={styles.link} onClick={() => setMode('rename')}>
                       {t('canvas.lidar.library.renameEllipsis')}
@@ -355,7 +368,7 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
                   rested={restedId === item.id}
                   results={items.filter((candidate) => candidate.parentId === item.id)}
                   onRefresh={() => refresh(item)}
-                  onOpenInput={(id) => select(id, true)}
+                  onOpenInput={openLinked}
                   preview={<div className={styles.previewFrame}><LibraryPreview item={item} client={client} width={640} height={328} large /></div>}
                   actions={mode === 'delete'
                     ? (
@@ -382,6 +395,18 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
 
 function rowId(id: string): string {
   return `library-item-${id}`
+}
+
+/** Focuses the first target that takes focus: a control hidden by the narrow layout does not, so the next is tried. */
+function focusFirst(root: HTMLElement | null, targets: readonly FocusTarget[], selectedId: string | null): void {
+  for (const target of targets) {
+    const element = target === 'row'
+      ? (selectedId ? document.getElementById(rowId(selectedId)) : null)
+      : root?.querySelector<HTMLElement>(`[data-focus-target="${target}"]`) ?? null
+    if (!element) continue
+    element.focus()
+    if (document.activeElement === element) return
+  }
 }
 
 /**

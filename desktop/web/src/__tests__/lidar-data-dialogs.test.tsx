@@ -350,6 +350,19 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(actions.deleteLibraryItem).not.toHaveBeenCalled()
     })
 
+    it('follows a result link to an item the type filter hides, clearing the filter', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Canopy')], [slope('s', 'a', { name: 'Steepness' })])
+      mount()
+      await chooseFrom('Type', 'Imported data')
+      await selectRow('Ground')
+      await click(Array.from(container.querySelectorAll<HTMLButtonElement>('dl button')).find((node) => node.textContent === 'Steepness')!)
+      expect(selectedName()).toBe('Steepness')
+      expect(detailsHeading()).toBe('Steepness')
+      expect(dropdownTrigger(container, 'Type')?.textContent).toContain('All')
+      // Focus follows the link to the details it opened.
+      expect(document.activeElement).toBe(container.querySelector('section[aria-labelledby] h3'))
+    })
+
     it('closes Rename and Delete everywhere when a search moves the selection to another item', async () => {
       lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Hedge DSM')])
       actions.fetchDeleteImpact.mockResolvedValue({ dependent_item_ids: [] })
