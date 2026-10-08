@@ -208,10 +208,6 @@ export function setSiteDataShown(shown: boolean): void {
   reconcileInspectionWithPresentation()
 }
 
-export function setLidarEntryOpacity(id: string, opacity: number): void {
-  patchLidarEntryById(id, { opacity })
-}
-
 /** An entry's display settings; a field left out keeps its stored value. */
 export interface LidarEntryDisplay {
   readonly ramp?: LidarRamp | null

@@ -9,7 +9,7 @@ import {
   pendingAttachments,
   removeFromDesign,
   rerunAnalysis,
-  setLidarEntryOpacity,
+  setLidarEntryDisplay,
   setLidarEntryVisibility,
 } from '../../../app/lidar/actions'
 import { siteDataLines } from '../../../app/lidar/analysis-groups'
@@ -363,7 +363,7 @@ export function SiteDataInspector() {
         max={100}
         value={Math.round(item.opacity * 100)}
         format={(value) => new Intl.NumberFormat(locale.value, { style: 'percent' }).format(value / 100)}
-        onInput={(value) => setLidarEntryOpacity(item.id, value / 100)}
+        onInput={(value) => setLidarEntryDisplay(item.id, { opacity: value / 100 })}
       />
       <div className={styles.actions}>
         {focused

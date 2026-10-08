@@ -15,7 +15,7 @@ const actions = vi.hoisted(() => ({
   removeFromDesign: vi.fn(),
   renameLibraryItem: vi.fn().mockResolvedValue(undefined),
   rerunAnalysis: vi.fn().mockResolvedValue(undefined),
-  setLidarEntryOpacity: vi.fn(),
+  setLidarEntryDisplay: vi.fn(),
   setLidarEntryVisibility: vi.fn(),
 }))
 const pending = vi.hoisted(() => ({ attachments: null as unknown, failure: null as unknown }))
@@ -226,6 +226,18 @@ describe('Layers site data', () => {
     await click(button('Remove Ground from this Design'))
     expect(actions.removeFromDesign).toHaveBeenCalledWith('a')
     expect(container.textContent).toContain('Your library keeps the data.')
+  })
+
+  it('writes the open row\'s opacity through the one display writer', async () => {
+    setDesign([{ kind: 'Source', id: 'a', order: 0, opacity: 1 }])
+    mount()
+    await click(button(/^Ground/))
+    const slider = container.querySelector<HTMLInputElement>('input[aria-label="Opacity: Ground"]')!
+    await act(async () => {
+      slider.value = '40'
+      slider.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(actions.setLidarEntryDisplay).toHaveBeenCalledWith('a', { opacity: 0.4 })
   })
 
   it('moves a row with Alt and the arrow keys', async () => {
