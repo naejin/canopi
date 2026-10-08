@@ -134,7 +134,7 @@ function mergeEntry(
     order: patch.order ?? existing.order,
     ramp: patch.ramp === undefined ? existing.ramp : patch.ramp,
     reversed: patch.reversed ?? existing.reversed,
-    range: patch.range === undefined || sameRange(patch.range, existing.range) ? existing.range : patch.range,
+    range: patch.range === undefined || sameColourRange(patch.range, existing.range) ? existing.range : patch.range,
   }
   if (
     next.visible === existing.visible &&
@@ -149,7 +149,8 @@ function mergeEntry(
   return next
 }
 
-function sameRange(left: LidarColourRange | null, right: LidarColourRange | null): boolean {
+/** Whether two stored colour ranges are the same choice. */
+export function sameColourRange(left: LidarColourRange | null, right: LidarColourRange | null): boolean {
   if (left === null || right === null) return left === right
   if (left.mode === 'Custom' && right.mode === 'Custom') {
     return left.min === right.min && left.max === right.max

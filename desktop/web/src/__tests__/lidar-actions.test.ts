@@ -17,7 +17,13 @@ const refreshMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const ensurePollingMock = vi.hoisted(() => vi.fn())
 const reconcileInspectionMock = vi.hoisted(() => vi.fn())
 const sessionIdentity = vi.hoisted(() => ({ value: 'design-a' as string | null }))
-const presentation = vi.hoisted(() => ({ value: [] as Array<{ id: string; order: number; parentId: string | null }> }))
+const presentation = vi.hoisted(() => ({ value: [] as Array<{
+  id: string
+  order: number
+  parentId: string | null
+  itemType?: { kind: 'Raster'; quantity: RasterQuantity } | null
+  units?: string
+}> }))
 
 vi.mock('../ipc/lidar', () => ({
   lidarCancelAnalysisJob: cancelAnalysisMock,
@@ -34,7 +40,8 @@ vi.mock('../ipc/lidar', () => ({
   lidarRetryImport: retryImportMock,
 }))
 
-vi.mock('../app/design-edit/lidar', () => ({
+vi.mock('../app/design-edit/lidar', async (importOriginal) => ({
+  sameColourRange: (await importOriginal<typeof import('../app/design-edit/lidar')>()).sameColourRange,
   setLidarEntryOrders: moveMock,
   patchLidarEntryById: patchMock,
   removeLidarEntries: removeMock,
@@ -64,7 +71,7 @@ vi.mock('../app/document-session/store', () => ({
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }))
 
 import { open } from '@tauri-apps/plugin-dialog'
-import type { AnalysisRequest, LibraryItemSummary } from '../generated/contracts'
+import type { AnalysisRequest, LibraryItemSummary, RasterQuantity } from '../generated/contracts'
 import {
   addToDesign,
   cancelAnalysisJob,
@@ -79,6 +86,7 @@ import {
   rerunAnalysis,
   retryLibraryImport,
   runAnalysis,
+  setLidarEntryDisplay,
   setLidarEntryVisibility,
   attachmentFailure,
   dismissAttachmentFailure,
@@ -256,6 +264,44 @@ describe('Design data references', () => {
     setLidarEntryVisibility('layer-1', false)
     expect(patchMock).toHaveBeenCalledWith('layer-1', { visible: false })
     expect(reconcileInspectionMock).toHaveBeenCalled()
+  })
+
+  it("stores a kind's default range and ramp as null, so the default has one encoding", () => {
+    const entry = (id: string, quantity: RasterQuantity, units: string) =>
+      ({ id, order: 0, parentId: null, itemType: { kind: 'Raster' as const, quantity }, units })
+    presentation.value = [
+      entry('ground', 'GroundElevation', 'm'),
+      entry('surface', 'SurfaceElevation', 'm'),
+      entry('canopy', 'AboveGroundHeight', 'm'),
+      entry('other', 'OtherContinuous', 'kg'),
+      entry('slope', 'Slope', '°'),
+      entry('slope-percent', 'Slope', '%'),
+    ]
+    const stored = (id: string) => patchMock.mock.calls.find(([called]) => called === id)?.[1]
+
+    for (const id of ['ground', 'surface', 'canopy', 'other']) {
+      setLidarEntryDisplay(id, { range: { mode: 'Data' } })
+      expect(stored(id)).toEqual({ range: null })
+    }
+    setLidarEntryDisplay('slope', { range: { mode: 'Custom', min: 0, max: 30 } })
+    setLidarEntryDisplay('slope-percent', { range: { mode: 'Custom', min: 0, max: 57.7 } })
+    expect(stored('slope')).toEqual({ range: null })
+    expect(stored('slope-percent')).toEqual({ range: null })
+
+    // Anything else is the user's choice, kept as written.
+    patchMock.mockClear()
+    setLidarEntryDisplay('slope', { range: { mode: 'Data' } })
+    setLidarEntryDisplay('ground', { range: { mode: 'Custom', min: 0, max: 30 }, ramp: 'Gray', reversed: true, opacity: 0.4 })
+    expect(stored('slope')).toEqual({ range: { mode: 'Data' } })
+    expect(stored('ground')).toEqual({ range: { mode: 'Custom', min: 0, max: 30 }, ramp: 'Gray', reversed: true, opacity: 0.4 })
+
+    // The kind's first ramp is its default.
+    patchMock.mockClear()
+    setLidarEntryDisplay('ground', { ramp: 'Terrain' })
+    setLidarEntryDisplay('canopy', { ramp: 'Greens' })
+    setLidarEntryDisplay('slope', { ramp: 'YellowRed' })
+    setLidarEntryDisplay('other', { ramp: 'Magma' })
+    for (const id of ['ground', 'canopy', 'slope', 'other']) expect(stored(id)).toEqual({ ramp: null })
   })
 
   it('moves a reference among its siblings and saves every order in one edit', () => {

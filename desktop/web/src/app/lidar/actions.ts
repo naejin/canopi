@@ -7,6 +7,8 @@ import type {
   LibraryDeleteImpact,
   LibraryItemRole,
   LibrarySnapshot,
+  LidarColourRange,
+  LidarRamp,
   ProcessingHistoryPage,
   RasterQuantity,
 } from '../../generated/contracts'
@@ -30,6 +32,7 @@ import {
 import { showAppFolder } from '../../ipc/settings'
 import {
   patchLidarEntryById,
+  sameColourRange,
   setLidarEntryOrders,
   removeLidarEntries,
   upsertLidarEntry,
@@ -43,6 +46,7 @@ import {
   refreshLidarLibrary,
 } from './library-store'
 import { movedReferenceOrders } from './reference-tree'
+import { kindDisplayDefaults } from './item-types'
 import { designSessionStore } from '../document-session/store'
 import { isPresentableOutput } from '../analyses/registry'
 import { reconcileInspectionWithPresentation } from './inspection'
@@ -195,6 +199,30 @@ export function setLidarEntryVisibility(id: string, visible: boolean): void {
 
 export function setLidarEntryOpacity(id: string, opacity: number): void {
   patchLidarEntryById(id, { opacity })
+}
+
+/** An entry's display settings; a field left out keeps its stored value. */
+export interface LidarEntryDisplay {
+  readonly ramp?: LidarRamp | null
+  readonly reversed?: boolean
+  readonly range?: LidarColourRange | null
+  readonly opacity?: number
+}
+
+/**
+ * Restyle one Site data entry: colours, Reverse, range and opacity. The one
+ * writer of display settings: a ramp or range equal to the item kind's default
+ * is stored as null, so `.canopi` files hold one encoding of each default and
+ * Reset's "differs from the default" is one comparison. A missing item's kind
+ * is unknown, so its settings are kept as written.
+ */
+export function setLidarEntryDisplay(id: string, display: LidarEntryDisplay): void {
+  const item = readCurrentLidarPresentation().find((entry) => entry.id === id)
+  const defaults = item?.itemType ? kindDisplayDefaults(item.itemType, item.units) : null
+  const patch = { ...display }
+  if (defaults && patch.ramp === defaults.ramp) patch.ramp = null
+  if (defaults && patch.range && sameColourRange(patch.range, defaults.range)) patch.range = null
+  patchLidarEntryById(id, patch)
 }
 
 /**

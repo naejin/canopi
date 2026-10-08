@@ -1,4 +1,4 @@
-import type { LibraryItemType, RasterQuantity } from '../../generated/contracts'
+import type { LibraryItemType, LidarColourRange, LidarRamp, RasterQuantity } from '../../generated/contracts'
 import { t } from '../../i18n'
 
 /**
@@ -35,12 +35,22 @@ interface RasterQuantityType {
   /** Whether a source can be imported as this quantity; derived-only otherwise. */
   readonly importable: boolean
   readonly profile: ProfileRole | null
+  /** The ramp an entry with `ramp: null` draws with. */
+  readonly defaultRamp: LidarRamp
+  /** The range an entry with `range: null` spans, in the item's own units. */
+  defaultRange(units: string): LidarColourRange
   style(item: RasterStyleInput): LidarDisplayStyle
 }
+
+const DATA_RANGE = (): LidarColourRange => ({ mode: 'Data' })
 
 const SLOPE_DEGREES_MAX = 30
 /** The same 30° expressed in percent, so both units share one colour domain. */
 const SLOPE_PERCENT_MAX = Math.round(Math.tan((SLOPE_DEGREES_MAX * Math.PI) / 180) * 1000) / 10
+
+function slopeDomainMax(units: string): number {
+  return units === '%' ? SLOPE_PERCENT_MAX : SLOPE_DEGREES_MAX
+}
 
 function overDisplayRange(colormap: string) {
   return (item: RasterStyleInput): LidarDisplayStyle => {
@@ -55,6 +65,8 @@ export const RASTER_QUANTITIES: Readonly<Record<RasterQuantity, RasterQuantityTy
     labelKey: 'canvas.lidar.library.quantity.GroundElevation',
     importable: true,
     profile: 'elevation',
+    defaultRamp: 'Terrain',
+    defaultRange: DATA_RANGE,
     // Hypsometric without blue, so blue keeps one meaning on the map: water.
     style: overDisplayRange('schwarzwald'),
   },
@@ -62,30 +74,39 @@ export const RASTER_QUANTITIES: Readonly<Record<RasterQuantity, RasterQuantityTy
     labelKey: 'canvas.lidar.library.quantity.SurfaceElevation',
     importable: true,
     profile: 'elevation',
+    defaultRamp: 'Terrain',
+    defaultRange: DATA_RANGE,
     style: overDisplayRange('schwarzwald'),
   },
   AboveGroundHeight: {
     labelKey: 'canvas.lidar.library.quantity.AboveGroundHeight',
     importable: true,
     profile: 'height',
+    defaultRamp: 'Greens',
+    defaultRange: DATA_RANGE,
     style: overDisplayRange('greens'),
   },
   OtherContinuous: {
     labelKey: 'canvas.lidar.library.quantity.OtherContinuous',
     importable: true,
     profile: null,
+    defaultRamp: 'Magma',
+    defaultRange: DATA_RANGE,
     style: overDisplayRange('viridis'),
   },
   Slope: {
     labelKey: 'canvas.lidar.library.quantity.Slope',
     importable: false,
     profile: null,
+    defaultRamp: 'YellowRed',
+    // A fixed 0–30° (57.7 % for a percent result), so two slopes compare at a glance.
+    defaultRange: (units) => ({ mode: 'Custom', min: 0, max: slopeDomainMax(units) }),
     // A fixed domain in the result's own unit, so a percent result is never
     // coloured as degrees and two slopes compare at a glance.
     style: (item) => ({
       colormap: 'ylorrd',
       reversed: false,
-      rescale: [0, item.units === '%' ? SLOPE_PERCENT_MAX : SLOPE_DEGREES_MAX],
+      rescale: [0, slopeDomainMax(item.units)],
       units: item.units,
     }),
   },
@@ -105,6 +126,19 @@ export function itemTypeLabel(itemType: LibraryItemType): string {
  */
 export function profileRole(itemType: LibraryItemType): ProfileRole | null {
   return RASTER_QUANTITIES[itemType.quantity].profile
+}
+
+/**
+ * What `ramp: null` and `range: null` mean for an item type in its own units.
+ * The Site data writer stores a choice equal to these as null, so a default
+ * has one encoding and Reset compares once.
+ */
+export function kindDisplayDefaults(
+  itemType: LibraryItemType,
+  units: string,
+): { readonly ramp: LidarRamp; readonly range: LidarColourRange } {
+  const type = RASTER_QUANTITIES[itemType.quantity]
+  return { ramp: type.defaultRamp, range: type.defaultRange(units) }
 }
 
 export function itemTypeStyle(itemType: LibraryItemType, item: RasterStyleInput): LidarDisplayStyle {
