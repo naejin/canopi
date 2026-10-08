@@ -5,7 +5,7 @@
 // and guide snapping, and runs the interceptors (admission, the press's capture, handles) before the tool; every raw
 // press first commits the nudge series and, as today's pointerdown, closes the menu and moves focus to the map. A drag
 // starts at the press's world point, and every camera frame re-emits the live drag or the resting pointer, which a
-// pointer pan moves (plan §1, exception 1). It holds re-origin while a press, a tool transient or the text entry is
+// pointer pan moves (plan §1, exception 1); the settled frame republishes the resting pointer to subscribePointerWorld. It holds re-origin while a press, a tool transient or the text entry is
 // open, and a plane change with no pointer resting on the map hides the tool's draft until the next hover, so no tool
 // re-projects a world point it keeps (spec §4.19). The text entry's state is the chrome's, read live. It owns the passive hover, the selection decorations, the arrow-nudge series, transient history and the Esc
 // queries, and merges the tool's draft with its decorations and the drop preview for the renderer. One drop route
@@ -211,6 +211,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let selectOnFault = false
   let invalidateNeeded = false
   let planeRevision = frame().view.planeRevision
+  let settledRevision = deps.frames.settledViewFrame.peek().revision
   let mode = frame().mode
   let publishedToolDraft: DraftPresentation | null = null
   let publishedDropPreview: readonly DraftShape[] | null = null
@@ -1104,6 +1105,18 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   /**
+   * After a camera change under a still pointer (a wheel zoom, a key pan, a flight), the settled frame republishes the
+   * resting pointer, so readouts such as the Site data row values and the zoom lens follow the ground (canopi-f47t.42,
+   * spec §1.4 "Hover"). Once per settle, not per camera frame; nothing with the pointer off the map or in overview.
+   */
+  function onSettledFrame(next: ViewFrame): void {
+    if (disposed || next.revision === settledRevision) return
+    settledRevision = next.revision
+    const still = restingPointer()
+    if (still) publishPointerAt(still.screen, still.pointer)
+  }
+
+  /**
    * The live drag or the last hover is re-emitted from its screen point, so a draft, a ghost or a preview stays on the
    * ground under a still pointer (plan §1, exception 1). With the pointer off the map the tool rebuilds its
    * scale-dependent draft instead, as today's refreshViewportDependent did on every camera change.
@@ -1314,6 +1327,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   // ── The host ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
   const unsubscribeFrames = deps.frames.onViewFrame('tools', onFrame)
+  // Listeners run untracked: a readout's own signal reads never become this subscription's dependencies.
+  const unsubscribeSettled = deps.frames.settledViewFrame.subscribe((next) => untracked(() => onSettledFrame(next)))
   activate(currentId, null)
 
   return {
@@ -1458,6 +1473,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       disposed = true
       runCanvasRuntimeCleanups([
         () => unsubscribeFrames(),
+        () => unsubscribeSettled(),
         () => endNudgeSeries(true),
         () => cancelLive('tool-change'),
         () => tool.cancelTransient('tool-change'),

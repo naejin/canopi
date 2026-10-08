@@ -114,6 +114,48 @@ describe('SceneInteractionSession: the Site data pin', () => {
   })
 })
 
+describe('SceneInteractionSession: readouts under a still pointer', () => {
+  let container: HTMLDivElement
+  let testView: TestView
+  let store: SceneStore
+  let events: SceneInteractionEventHarness
+
+  const fixture = installSceneInteractionFixture(
+    (f) => {
+      ({ container, testView, store, events } = f)
+    },
+    () => ({ events }),
+  )
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('a camera move under a still mouse republishes the pointer once the camera settles, so row values follow the ground', () => {
+    vi.useFakeTimers()
+    const session = fixture.createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('select')
+    const points: unknown[] = []
+    session.subscribePointerWorld((point) => { points.push(point) })
+
+    events.pointerMove({ x: 120, y: 90 }, { buttons: 0 })
+    const before = testView.view().screenToWorld({ x: 120, y: 90 })
+    // A jump that moves the ground under the pointer (a saved view, a key pan): not at each frame, once settled.
+    testView.setViewport({ x: 30, y: 10, scale: 2 })
+    testView.setViewport({ x: 40, y: 10, scale: 2 })
+    expect(points).toHaveLength(1)
+    vi.advanceTimersByTime(150)
+
+    const after = testView.view().screenToWorld({ x: 120, y: 90 })
+    expect(after).not.toEqual(before)
+    expect(points).toEqual([
+      { world: before, screen: { x: 120, y: 90 }, pointerKind: 'mouse' },
+      { world: after, screen: { x: 120, y: 90 }, pointerKind: 'mouse' },
+    ])
+    session.dispose()
+  })
+})
+
 describe('the canvas runtime: the Site data pin', () => {
   const harnesses: SceneInteractionEventHarness[] = []
   const hosts: CanvasRuntimeHost[] = []

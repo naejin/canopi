@@ -243,7 +243,8 @@ export interface ToolHost {
   refreshTranslations(): void                                   // re-publishes guidance and handle labels
   /** Every hover whose target is the map (`surface`), before the overview and hover-suppression filters; null on hover-end:
    *  the pointer left the map, or moved over owned chrome, the text entry or a handle (U6), so the lens drops its point
-   *  there. A hover off the map publishes nothing (spec §1.4 "Hover", §2.2 "Hover"). A hover made with a button held is
+   *  there. A hover off the map publishes nothing (spec §1.4 "Hover", §2.2 "Hover"). After a camera change the settled
+   *  frame republishes a mouse or pen resting on the map, so readouts follow the ground. A hover made with a button held is
    *  published too: the interaction session's subscribePointerWorld drops it (its raw buttonMask), so the lens skips a
    *  move with any button held. For the inspection lens, the status line and, later, hover readouts over analysis results: the screen point lets a readout query the map there without projecting (R1, P2). */
   subscribePointerWorld(listener: (point: PointerWorld | null) => void): () => void

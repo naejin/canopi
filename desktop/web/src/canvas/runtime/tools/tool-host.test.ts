@@ -1033,6 +1033,40 @@ describe('ToolHost', () => {
       ])
     })
 
+    it('a camera change under a still pointer republishes it on the settled frame, so readouts follow the ground (canopi-f47t.42)', () => {
+      vi.useFakeTimers()
+      try {
+        useStubTools(stubTool('select'))
+        const h = harness()
+        const points: unknown[] = []
+        h.host.subscribePointerWorld((point) => { points.push(point) })
+        h.hover({ x: 100, y: 100 })
+        const before = h.world({ x: 100, y: 100 })
+
+        h.wheelZoom({ x: 200, y: 150 }, 2)
+        h.wheelZoom({ x: 200, y: 150 }, 2)
+        // Not at each camera frame: once the camera has settled.
+        expect(points).toHaveLength(1)
+        vi.advanceTimersByTime(150)
+
+        const after = h.world({ x: 100, y: 100 })
+        expect(after).not.toEqual(before)
+        expect(points).toEqual([
+          { world: before, screen: { x: 100, y: 100 }, pointerKind: 'mouse' },
+          { world: after, screen: { x: 100, y: 100 }, pointerKind: 'mouse' },
+        ])
+
+        // With the pointer off the map, a settled frame publishes nothing.
+        h.leave()
+        h.wheelZoom({ x: 200, y: 150 }, 0.5)
+        vi.advanceTimersByTime(150)
+        expect(points).toHaveLength(3)
+        expect(points.at(-1)).toBeNull()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('the lens is fed only over the map', () => {
       const stamp = stubTool('plant-stamp')
       useStubTools(stamp)
