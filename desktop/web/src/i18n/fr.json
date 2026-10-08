@@ -146,6 +146,7 @@
       "objectStamp": "Placer un tampon",
       "plantSpacing": "Planter une rangée",
       "measurementGuide": "Mesurer",
+      "profile": "Profil",
       "zones": "Zones",
       "plantStamp": "Placer des plantes"
     },
@@ -791,6 +792,8 @@
       "stampGroup": "Groupe",
       "polygon": "Cliquez pour ajouter des sommets. Cliquez sur le premier sommet, double-cliquez ou appuyez sur Entrée pour terminer.",
       "polygonKeys": "Retour arrière retire le dernier sommet · Maj garde des angles de 45°",
+      "profile": "Cliquez pour ajouter des points. Double-cliquez ou appuyez sur Entrée pour terminer.",
+      "profileKeys": "Retour arrière retire le dernier point · Maj garde des angles de 45°",
       "rectangle": "Faites glisser sur la carte pour tracer le rectangle.",
       "rectangleKeys": "Maj trace un carré",
       "ellipse": "Faites glisser sur la carte pour tracer l’ellipse.",

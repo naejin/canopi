@@ -208,6 +208,7 @@ export class SceneCanvasRuntime {
       commandAdmission: this._sceneCommands,
       settledReader: this._settledReader,
       pinAt: this._appAdapter.pinAt,
+      finishProfile: this._appAdapter.finishProfile,
       getDesignObjectSelection: () => this._querySurface.getDesignObjectSelection(),
       selectionCommands: this._commandSurface.sceneEdits,
       contextualCommands: this._appAdapter.savedObjectStamps

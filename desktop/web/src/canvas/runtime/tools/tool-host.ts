@@ -87,7 +87,7 @@ const NUDGE_LARGE_STEP_M = 1
 const NUDGE_SERIES_IDLE_MS = 800
 /** The tools whose points Shift constrains (spec §2.3); of the handles, only the rotate handle (U36). */
 const SHIFT_CONSTRAINS: ReadonlySet<ToolId> = new Set<ToolId>([
-  'polygon', 'plant-spacing', 'line', 'measurement-guide', 'rectangle', 'ellipse',
+  'polygon', 'plant-spacing', 'line', 'measurement-guide', 'rectangle', 'ellipse', 'profile',
 ])
 /** The drawing tools whose draft chips replace the selected zone's. */
 const ZONE_DRAFT_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>(['line', 'rectangle', 'ellipse', 'polygon'])
@@ -375,6 +375,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       },
       requestFocus() {
         if (owns()) deps.focus.focusMap()
+      },
+      finishProfile(points) {
+        if (owns()) deps.finishProfile?.(points)
       },
     }
     return {
@@ -1485,6 +1488,7 @@ function cursorForTool(tool: ToolId): string {
     case 'rectangle':
     case 'ellipse':
     case 'polygon':
+    case 'profile':
     case 'plant-stamp':
     case 'object-stamp':
     case 'plant-spacing': return 'crosshair'

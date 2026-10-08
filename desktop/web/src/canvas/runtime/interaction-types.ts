@@ -10,6 +10,7 @@ export type CancelReason = 'pointercancel' | 'lost-capture' | 'blur' | 'hidden' 
 export type ToolId =
   | 'select' | 'hand' | 'plant-stamp' | 'text' | 'line' | 'measurement-guide' | 'rectangle' | 'ellipse'
   | 'polygon' | 'object-stamp' | 'saved-object-stamp' | 'plant-spacing'
+  | 'profile'                                                   // Desktop, from canopi-f47t.42 (U49, spec §1.10): no key, not on the rail
 // 'hand' is the Pan tool (label "Pan", key H). It stays in every phase (user).
 /** 'rotate', 'vertex:<zone id>:<index>', 'rect-corner:<id>:ne', 'guide-end:<id>:a', 'edge-mid:<zone id>:<index>'. */
 export type ToolHandleId = string & { readonly __toolHandleId: true }

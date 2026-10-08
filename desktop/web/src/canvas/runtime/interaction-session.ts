@@ -89,6 +89,8 @@ export interface SceneInteractionSessionDeps {
   settledReader: SettledSceneReader
   /** The Site data pin (CanvasRuntimeAppAdapter.pinAt): ToolHostDeps.pin, called after a tap no tool uses. */
   pinAt?: (world: ScenePoint) => void
+  /** The Site data profile (CanvasRuntimeAppAdapter.finishProfile): ToolHostDeps.finishProfile, Profile's finished line. */
+  finishProfile?: (points: readonly ScenePoint[]) => void
   getDesignObjectSelection: () => CanvasDesignObjectSelectionModel
   selectionCommands: CanvasContextMenuCommands
   contextualCommands?: {
@@ -316,6 +318,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         initialPointer: platform.os === 'ios' || platform.os === 'android' ? 'touch' : 'mouse',
         hover: (target) => _deps.setHoveredTarget(target),
         pin: _deps.pinAt,
+        finishProfile: _deps.finishProfile,
         capturePress: (pointerId) => this._capturePress(pointerId),
         transientHistoryChanged: () => _deps.notifyTransientHistoryChange(),
         dropped: (kind) => this._dropped(kind),

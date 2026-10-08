@@ -137,6 +137,9 @@ export interface ToolHostDeps {
    *  the tap still reaches the tool (Select clears the selection). Absent on Web and while the Site data panel is closed
    *  (CanvasRuntimeAppAdapter.pinAt, passed by scene-runtime.ts). */
   readonly pin?: (world: WorldPoint) => void
+  /** The Site data profile (canopi-f47t.42, spec §1.10): ToolEffects.finishProfile's line, 2 or more points. Absent on Web
+   *  (CanvasRuntimeAppAdapter.finishProfile, passed by scene-runtime.ts). */
+  readonly finishProfile?: (points: readonly WorldPoint[]) => void
   /**
    * Takes an admitted press's pointer capture (the recogniser's, which the session holds back until the host admits the
    * press), before handles and the tool; a refused press takes none.

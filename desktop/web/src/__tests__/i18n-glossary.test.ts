@@ -55,6 +55,7 @@ const NAMES: Record<string, Terms> = {
   'Zones': terms('Zones', 'Zonas', 'Zonas', 'Zone', 'Zonen', 'Zones', 'Зоны', '区域', 'ゾーン', '구역'),
   'Text note': terms('Note texte', 'Nota de texto', 'Nota de texto', 'Nota di testo', 'Textnotiz', 'Tekstnotitie', 'Текстовая заметка', '文本注释', 'テキストメモ', '텍스트 메모'),
   'Measure': terms('Mesurer', 'Medir', 'Medir', 'Misura', 'Messen', 'Meten', 'Измерить', '测量', '計測', '측정'),
+  'Profile': terms('Profil', 'Perfil', 'Perfil', 'Profilo', 'Profil', 'Profiel', 'Профиль', '剖面图', '断面図', '단면도'),
   'Layers': terms('Calques', 'Capas', 'Camadas', 'Livelli', 'Ebenen', 'Lagen', 'Слои', '图层', 'レイヤー', '레이어'),
   'Plants in this Design': terms('Plantes de ce Design', 'Plantas de este diseño', 'Plantas deste design', 'Piante di questo progetto', 'Pflanzen in diesem Design', 'Planten in dit ontwerp', 'Растения в этом проекте', '此设计中的植物', 'このデザインの植物', '이 디자인의 식물'),
   'Favorites and stamps': terms('Favoris et tampons', 'Favoritos y sellos', 'Favoritos e carimbos', 'Preferiti e timbri', 'Favoriten und Stempel', 'Favorieten en stempels', 'Избранное и штампы', '收藏与图章', 'お気に入りとスタンプ', '즐겨찾기와 스탬프'),

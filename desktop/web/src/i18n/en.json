@@ -146,6 +146,7 @@
       "objectStamp": "Place a stamp",
       "plantSpacing": "Plant a row",
       "measurementGuide": "Measure",
+      "profile": "Profile",
       "zones": "Zones",
       "plantStamp": "Place plants"
     },
@@ -791,6 +792,8 @@
       "stampGroup": "Group",
       "polygon": "Click to add corners. Click the first corner, double-click or press Enter to finish.",
       "polygonKeys": "Backspace removes the last corner · Shift keeps 45° angles",
+      "profile": "Click to add points. Double-click or press Enter to finish.",
+      "profileKeys": "Backspace removes the last point · Shift keeps 45° angles",
       "rectangle": "Drag across the map to draw the rectangle.",
       "rectangleKeys": "Shift draws a square",
       "ellipse": "Drag across the map to draw the ellipse.",

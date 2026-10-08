@@ -146,6 +146,7 @@
       "objectStamp": "Stempel plaatsen",
       "plantSpacing": "Een rij planten",
       "measurementGuide": "Meten",
+      "profile": "Profiel",
       "zones": "Zones",
       "plantStamp": "Planten plaatsen"
     },
@@ -791,6 +792,8 @@
       "stampGroup": "Groep",
       "polygon": "Klik om hoeken toe te voegen. Klik op de eerste hoek, dubbelklik of druk op Enter om te voltooien.",
       "polygonKeys": "Backspace verwijdert de laatste hoek · Shift houdt hoeken van 45°",
+      "profile": "Klik om punten toe te voegen. Dubbelklik of druk op Enter om te voltooien.",
+      "profileKeys": "Backspace verwijdert het laatste punt · Shift houdt hoeken van 45°",
       "rectangle": "Sleep over de kaart om de rechthoek te tekenen.",
       "rectangleKeys": "Shift tekent een vierkant",
       "ellipse": "Sleep over de kaart om de ellips te tekenen.",

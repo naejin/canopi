@@ -146,6 +146,7 @@
       "objectStamp": "Colocar un sello",
       "plantSpacing": "Plantar una fila",
       "measurementGuide": "Medir",
+      "profile": "Perfil",
       "zones": "Zonas",
       "plantStamp": "Colocar plantas"
     },
@@ -791,6 +792,8 @@
       "stampGroup": "Grupo",
       "polygon": "Haz clic para añadir vértices. Haz clic en el primer vértice, haz doble clic o pulsa Intro para terminar.",
       "polygonKeys": "Retroceso quita el último vértice · Mayús mantiene ángulos de 45°",
+      "profile": "Haz clic para añadir puntos. Haz doble clic o pulsa Intro para terminar.",
+      "profileKeys": "Retroceso quita el último punto · Mayús mantiene ángulos de 45°",
       "rectangle": "Arrastra sobre el mapa para dibujar el rectángulo.",
       "rectangleKeys": "Mayús dibuja un cuadrado",
       "ellipse": "Arrastra sobre el mapa para dibujar la elipse.",

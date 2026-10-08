@@ -146,6 +146,7 @@
       "objectStamp": "Colloca un timbro",
       "plantSpacing": "Pianta un filare",
       "measurementGuide": "Misura",
+      "profile": "Profilo",
       "zones": "Zone",
       "plantStamp": "Colloca piante"
     },
@@ -791,6 +792,8 @@
       "stampGroup": "Gruppo",
       "polygon": "Fai clic per aggiungere vertici. Fai clic sul primo vertice, fai doppio clic o premi Invio per finire.",
       "polygonKeys": "Backspace rimuove l’ultimo vertice · Maiusc mantiene angoli di 45°",
+      "profile": "Fai clic per aggiungere punti. Fai doppio clic o premi Invio per finire.",
+      "profileKeys": "Backspace rimuove l’ultimo punto · Maiusc mantiene angoli di 45°",
       "rectangle": "Trascina sulla mappa per disegnare il rettangolo.",
       "rectangleKeys": "Maiusc disegna un quadrato",
       "ellipse": "Trascina sulla mappa per disegnare l’ellisse.",

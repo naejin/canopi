@@ -146,6 +146,7 @@
       "objectStamp": "放置图章",
       "plantSpacing": "种一行",
       "measurementGuide": "测量",
+      "profile": "剖面图",
       "zones": "区域",
       "plantStamp": "放置植物"
     },
@@ -791,6 +792,8 @@
       "stampGroup": "组",
       "polygon": "点击添加角点。点击第一个角点、双击或按 Enter 完成。",
       "polygonKeys": "Backspace 删除最后一个角点 · Shift 保持 45° 角",
+      "profile": "点击添加点。双击或按 Enter 完成。",
+      "profileKeys": "Backspace 删除最后一个点 · Shift 保持 45° 角",
       "rectangle": "在地图上拖动以绘制矩形。",
       "rectangleKeys": "Shift 绘制正方形",
       "ellipse": "在地图上拖动以绘制椭圆。",

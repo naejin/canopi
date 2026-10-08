@@ -60,6 +60,7 @@ const TITLE_KEYS: Readonly<Record<string, string>> = {
   line: 'canvas.tools.line',
   text: 'canvas.tools.text',
   'measurement-guide': 'canvas.tools.measurementGuide',
+  profile: 'canvas.tools.profile',
 }
 
 const PLACING_TOOLS = new Set(['plant-stamp', 'object-stamp', 'saved-object-stamp'])
@@ -141,6 +142,8 @@ export function toolCardContent(input: ToolCardInput): ToolCardContent | null {
         : card(null, translate('canvas.toolCard.textPlace'))
     case 'measurement-guide':
       return card(null, translate('canvas.toolCard.measure'), hints('canvas.toolCard.lineKeys'))
+    case 'profile':
+      return card(null, translate('canvas.toolCard.profile'), hints('canvas.toolCard.profileKeys'))
     default:
       return null
   }

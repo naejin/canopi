@@ -543,6 +543,30 @@ describe('ToolHost', () => {
       expect(pin).not.toHaveBeenCalled()
     })
 
+    it('Profile hands its finished line to the Site data profile, never pins, constrains with Shift and shows the crosshair', () => {
+      const line = [{ x: 1, y: 2 }, { x: 30, y: 40 }]
+      const profile: StubTool = stubTool('profile', {
+        gesture: (g) => {
+          if (g.kind === 'tap' && g.clickCount === 2) profile.ctx().effects.finishProfile(line)
+          return 'pass'
+        },
+      })
+      useStubTools(profile)
+      const pin = vi.fn()
+      const finishProfile = vi.fn()
+      const h = harness({ tool: 'profile', pin, finishProfile })
+      expect(h.chrome.cursor).toBe('crosshair')
+
+      h.hover({ x: 50, y: 50 }, { shift: true })
+      expect(profile.last('hover')!.point.modifiers.constrain).toBe(true)
+      h.click({ x: 300, y: 100 })
+      expect(finishProfile).not.toHaveBeenCalled()
+      h.click({ x: 300, y: 100 }, { clickCount: 2 })
+
+      expect(finishProfile).toHaveBeenCalledWith(line)
+      expect(pin).not.toHaveBeenCalled()
+    })
+
     it('J10: a finger\'s Select tap on empty ground pins at the down point', () => {
       useStubTools(stubTool('select'))
       const pin = vi.fn()

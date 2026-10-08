@@ -146,6 +146,7 @@
       "objectStamp": "Stempel setzen",
       "plantSpacing": "Eine Reihe pflanzen",
       "measurementGuide": "Messen",
+      "profile": "Profil",
       "zones": "Zonen",
       "plantStamp": "Pflanzen setzen"
     },
@@ -791,6 +792,8 @@
       "stampGroup": "Gruppe",
       "polygon": "Klicken Sie, um Ecken hinzuzufügen. Klicken Sie auf die erste Ecke, doppelklicken Sie oder drücken Sie Eingabe, um abzuschließen.",
       "polygonKeys": "Rücktaste entfernt die letzte Ecke · Umschalt hält 45°-Winkel",
+      "profile": "Klicken Sie, um Punkte hinzuzufügen. Doppelklicken Sie oder drücken Sie Eingabe, um abzuschließen.",
+      "profileKeys": "Rücktaste entfernt den letzten Punkt · Umschalt hält 45°-Winkel",
       "rectangle": "Ziehen Sie über die Karte, um das Rechteck zu zeichnen.",
       "rectangleKeys": "Umschalt zeichnet ein Quadrat",
       "ellipse": "Ziehen Sie über die Karte, um die Ellipse zu zeichnen.",

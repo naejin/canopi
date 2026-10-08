@@ -35,6 +35,8 @@ export interface CanvasRuntimeAppCapabilities {
    * which the architecture guard forbids: Web has no raster capability.
    */
   readonly pinAt?: (point: { readonly x: number; readonly y: number }) => void
+  /** The Site data profile, supplied by the edition that has Site data (Desktop), for the same reason. */
+  readonly finishProfile?: (points: readonly { readonly x: number; readonly y: number }[]) => void
 }
 
 export function createAppCanvasRuntimeAppAdapter(
@@ -49,6 +51,7 @@ export function createAppCanvasRuntimeAppAdapter(
     // Called per tap, so opening or closing the Site data panel needs no runtime
     // rebuild; undefined in an edition that has no raster capability.
     pinAt: capabilities.pinAt,
+    finishProfile: capabilities.finishProfile,
     savedObjectStamps: capabilities.savedObjectStamps,
     presentationData: capabilities.presentationData,
     plantDisplay: {

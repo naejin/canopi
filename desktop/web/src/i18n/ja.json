@@ -146,6 +146,7 @@
       "objectStamp": "スタンプを配置",
       "plantSpacing": "列に植える",
       "measurementGuide": "計測",
+      "profile": "断面図",
       "zones": "ゾーン",
       "plantStamp": "植物を配置"
     },
@@ -791,6 +792,8 @@
       "stampGroup": "グループ",
       "polygon": "クリックで頂点を追加。最初の頂点をクリック、ダブルクリック、または Enter で完了。",
       "polygonKeys": "Backspace で最後の頂点を削除 · Shift で 45° に固定",
+      "profile": "クリックで点を追加。ダブルクリックまたは Enter で完了。",
+      "profileKeys": "Backspace で最後の点を削除 · Shift で 45° に固定",
       "rectangle": "地図上をドラッグして長方形を描きます。",
       "rectangleKeys": "Shift で正方形",
       "ellipse": "地図上をドラッグして楕円を描きます。",

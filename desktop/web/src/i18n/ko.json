@@ -146,6 +146,7 @@
       "objectStamp": "스탬프 배치",
       "plantSpacing": "한 줄 심기",
       "measurementGuide": "측정",
+      "profile": "단면도",
       "zones": "구역",
       "plantStamp": "식물 배치"
     },
@@ -791,6 +792,8 @@
       "stampGroup": "그룹",
       "polygon": "클릭해 꼭짓점을 추가합니다. 첫 꼭짓점을 클릭하거나, 두 번 클릭하거나, Enter를 눌러 마칩니다.",
       "polygonKeys": "Backspace로 마지막 꼭짓점 제거 · Shift로 45° 유지",
+      "profile": "클릭해 점을 추가합니다. 두 번 클릭하거나 Enter를 눌러 마칩니다.",
+      "profileKeys": "Backspace로 마지막 점 제거 · Shift로 45° 유지",
       "rectangle": "지도 위를 드래그해 사각형을 그립니다.",
       "rectangleKeys": "Shift로 정사각형",
       "ellipse": "지도 위를 드래그해 타원을 그립니다.",

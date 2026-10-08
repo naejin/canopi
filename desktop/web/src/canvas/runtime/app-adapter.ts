@@ -191,6 +191,9 @@ export interface CanvasRuntimeAppAdapter {
    * independent of the LiDAR feature; the edition decides per call whether the Site data panel is open. Absent on Web.
    */
   readonly pinAt?: (point: { readonly x: number; readonly y: number }) => void
+  /** The Site data profile (canopi-f47t.42, spec §1.10): the Profile tool's finished line, in Scene points (ToolHostDeps
+   *  .finishProfile). Absent on Web. */
+  readonly finishProfile?: (points: readonly { readonly x: number; readonly y: number }[]) => void
   readonly presentationData?: CanvasRuntimePresentationDataAdapter
   /** Absent in a detached runtime, which draws the default display. */
   readonly plantDisplay?: CanvasRuntimePlantDisplayAdapter

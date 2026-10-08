@@ -146,6 +146,7 @@
       "objectStamp": "Colocar um carimbo",
       "plantSpacing": "Plantar uma fileira",
       "measurementGuide": "Medir",
+      "profile": "Perfil",
       "zones": "Zonas",
       "plantStamp": "Colocar plantas"
     },
@@ -791,6 +792,8 @@
       "stampGroup": "Grupo",
       "polygon": "Clique para adicionar vértices. Clique no primeiro vértice, clique duas vezes ou pressione Enter para terminar.",
       "polygonKeys": "Backspace remove o último vértice · Shift mantém ângulos de 45°",
+      "profile": "Clique para adicionar pontos. Clique duas vezes ou pressione Enter para terminar.",
+      "profileKeys": "Backspace remove o último ponto · Shift mantém ângulos de 45°",
       "rectangle": "Arraste no mapa para desenhar o retângulo.",
       "rectangleKeys": "Shift desenha um quadrado",
       "ellipse": "Arraste no mapa para desenhar a elipse.",

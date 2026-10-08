@@ -16,6 +16,7 @@ export type ToolIconName =
   | 'line'
   | 'text'
   | 'measurement-guide'
+  | 'profile'
   | 'undo'
   | 'redo'
 
@@ -31,6 +32,8 @@ const TOOL_ICON_PATHS: Record<ToolIconName, string> = {
   line: 'M4 16L16 4',
   text: 'M4.5 6V4.5h11V6M10 4.5v11M7.5 15.5h5',
   'measurement-guide': 'M3 13.5L13.5 3l3.5 3.5L6.5 17zM6.5 10l1.6 1.6M9 7.5l1.6 1.6M11.5 5l1.6 1.6',
+  // A terrain section over its baseline: the Site data toolbar's Profile.
+  profile: 'M2.5 16.5h15M2.5 13l3.5-4.5 3 3L12.5 5l5 7',
   undo: 'M7.5 12L3.5 8l4-4M3.5 8h8.5a4.5 4.5 0 0 1 0 9H9',
   redo: 'M12.5 12l4-4-4-4M16.5 8H8a4.5 4.5 0 0 0 0 9h3',
 }
