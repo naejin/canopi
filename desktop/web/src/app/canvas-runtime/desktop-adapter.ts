@@ -2,6 +2,8 @@ import type { CanvasRuntimeAppAdapter } from '../../canvas/runtime/app-adapter'
 import { CanvasPlantLabelResolver } from '../../canvas/runtime/plant-labels'
 import { CanvasSpeciesCache } from '../../canvas/runtime/species-cache'
 import { speciesCatalogWorkbench } from '../plant-browser'
+import { finishSiteProfile } from '../lidar/profile'
+import { pinSiteDataPoint } from '../lidar/site-values'
 import { savedObjectStampWorkbench } from '../saved-object-stamps'
 import { createAppCanvasRuntimeAppAdapter } from './app-adapter'
 
@@ -15,5 +17,8 @@ export function createDesktopCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter 
     savedObjectStamps: {
       saveCurrentSelection: (capture) => savedObjectStampWorkbench.saveSelection(capture),
     },
+    // Site data is Desktop's: a tap no tool uses pins, and Profile's finished line is profiled.
+    pinAt: pinSiteDataPoint,
+    finishProfile: finishSiteProfile,
   })
 }

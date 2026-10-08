@@ -15,6 +15,10 @@ import { currentCanvasSelection } from '../canvas/session-state'
 import type { ScenePoint, SceneStore } from '../canvas/runtime/scene'
 import type { SceneInteractionSession, SceneInteractionSessionDeps } from '../canvas/runtime/interaction-session'
 import { createAppCanvasRuntimeAppAdapter } from '../app/canvas-runtime/app-adapter'
+import { createDesktopCanvasRuntimeAppAdapter } from '../app/canvas-runtime/desktop-adapter'
+import { endSiteDataTransients, pin, profileLine } from '../app/lidar/site-transients'
+import { selectPanel, sidePanel } from '../app/shell/state'
+import { setCurrentCanvasSession } from '../canvas/session'
 import {
   createSceneInteractionEventHarness,
   type SceneInteractionEventHarness,
@@ -192,5 +196,70 @@ describe('the canvas runtime: the Site data pin', () => {
     const [point] = pinAt.mock.calls[0]! as [ScenePoint]
     expect(point.x).toBeCloseTo(expected.x, 9)
     expect(point.y).toBeCloseTo(expected.y, 9)
+  })
+})
+
+describe('Desktop: the pin and profile hand-offs reach Site data in lon/lat', () => {
+  const harnesses: SceneInteractionEventHarness[] = []
+  const hosts: CanvasRuntimeHost[] = []
+
+  afterEach(async () => {
+    endSiteDataTransients()
+    setCurrentCanvasSession(null)
+    sidePanel.value = null
+    for (const harness of harnesses.splice(0)) harness.dispose()
+    for (const host of hosts.splice(0)) await host.destroy()
+    document.body.replaceChildren()
+  })
+
+  async function desktopRuntime() {
+    const appAdapter = createDesktopCanvasRuntimeAppAdapter()
+    const host = createLiveTestCanvasRuntimeHost({ screen: { width: 400, height: 300 }, appAdapter })
+    hosts.push(host)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
+    await host.init(container)
+    setCurrentCanvasSession(host.surfaces)
+    const events = createSceneInteractionEventHarness(container)
+    harnesses.push(events)
+    const plane = host.surfaces.queries.sessionPlane.peek()!
+    placeOnHost(host.cameraHost, plane, { x: 0, y: 0, scale: 1 })
+    return { appAdapter, host, events, plane }
+  }
+
+  it('a Select tap on empty ground with Site data open pins the ground it shows, and entering overview unpins', async () => {
+    const { host, events, plane } = await desktopRuntime()
+    selectPanel('site-data')
+
+    events.pointerDown({ x: 100, y: 80 }, { button: 0, buttons: 1, detail: 0 })
+    events.pointerUp({ x: 100, y: 80 }, { button: 0, buttons: 0, detail: 0 })
+
+    const expected = plane.toGeo(host.cameraHost.frames.viewFrame.peek().view.screenToWorld({ x: 100, y: 80 }))
+    expect(pin.value?.lon).toBeCloseTo(expected.lon, 9)
+    expect(pin.value?.lat).toBeCloseTo(expected.lat, 9)
+
+    placeOnHost(host.cameraHost, plane, { x: 0, y: 0, scale: 0.0001 })
+    expect(host.cameraHost.frames.viewFrame.peek().mode).toBe('overview')
+    expect(pin.value).toBeNull()
+  })
+
+  it('the same tap with Site data closed pins nothing', async () => {
+    const { events } = await desktopRuntime()
+
+    events.pointerDown({ x: 100, y: 80 }, { button: 0, buttons: 1, detail: 0 })
+    events.pointerUp({ x: 100, y: 80 }, { button: 0, buttons: 0, detail: 0 })
+
+    expect(pin.value).toBeNull()
+  })
+
+  it('a finished profile line becomes the Site data profile in lon/lat', async () => {
+    const { appAdapter, plane } = await desktopRuntime()
+    selectPanel('site-data')
+
+    appAdapter.finishProfile!([{ x: 0, y: 0 }, { x: 30, y: 40 }])
+
+    expect(profileLine.value).toEqual([plane.toGeo({ x: 0, y: 0 }), plane.toGeo({ x: 30, y: 40 })])
   })
 })
