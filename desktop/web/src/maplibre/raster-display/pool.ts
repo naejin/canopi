@@ -68,7 +68,6 @@ export interface RasterPoolClient {
    * layers calls this once no remaining layer reads the URL.
    */
   releaseSources(urls: readonly string[]): void
-  colormaps(): string[]
   rgbaToPng(rgba: Uint8Array | Uint8ClampedArray, width?: number, height?: number): Promise<Uint8Array>
   /** Render several COGs over one WGS84 box, first listed on top, as PNG bytes. */
   renderPreview(
@@ -81,9 +80,6 @@ export interface RasterPoolClient {
   setRelevance(relevance: RasterTileRelevance | null): void
   dispose(): void
 }
-
-/** Built-in single-band colormaps of the pinned `cog-tiler-wasm@0.4.0`. */
-const COLORMAPS = ['viridis', 'magma', 'plasma', 'inferno', 'cividis', 'turbo', 'terrain', 'blues', 'greens', 'reds', 'rdylgn', 'spectral', 'gray']
 
 type TaskKind = 'control' | 'tile'
 
@@ -149,7 +145,6 @@ export class RasterWorkerPool {
       },
       openCog: (url) => pool.openSource(state, url),
       releaseSources: (urls) => pool.releaseSources(state, urls),
-      colormaps: () => [...COLORMAPS],
       rgbaToPng: (rgba, width = 256, height = 256) => {
         const copy = new Uint8ClampedArray(rgba)
         return pool.schedule<Uint8Array>(state, 'control', undefined, undefined, (lane) =>
