@@ -9,6 +9,7 @@ import {
   MAPLIBRE_SATELLITE_LAYER_ID,
 } from '../../maplibre/config'
 import { MAPLIBRE_SHARED_SCENE_LAYER_ID } from '../../maplibre/shared-scene-layer'
+import { siteHoverOverlayContract, siteMapOverlayContract } from '../../maplibre/site-overlay'
 
 class FakeOrderMap {
   readonly moveLayer = vi.fn((id: string, beforeId?: string) => {
@@ -103,5 +104,34 @@ describe('Map layer stack reconciliation', () => {
       { id: 'base', band: 'basemap' },
     ])).toThrow('semantic band order')
     expect(map.moveLayer).not.toHaveBeenCalled()
+  })
+
+  it('draws the Site data line, pin and chart hover above the panel highlights, in the contracts\' order', () => {
+    const descriptors = createMapLayerStackDescriptors(['lidar-first'])
+    const site = siteMapOverlayContract({ pin: [2.35, 48.85], profileLine: [[2.35, 48.85], [2.36, 48.86]] })
+      .layers.map((layer) => layer.id)
+    const hover = siteHoverOverlayContract([2.35, 48.85]).layers.map((layer) => layer.id)
+    const interaction = descriptors.filter((descriptor) => descriptor.band === 'interaction-overlay').map((descriptor) => descriptor.id)
+    expect(interaction.slice(-(site.length + hover.length))).toEqual([...site, ...hover])
+    expect(interaction.indexOf(site[0]!)).toBeGreaterThan(interaction.indexOf('panel-target-hover-plants'))
+
+    // A pin added late (below the highlights and the scene) is moved back on top.
+    const map = new FakeOrderMap([
+      'site-pin-core',
+      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+      MAPLIBRE_SHARED_SCENE_LAYER_ID,
+      'panel-target-hover-plants',
+      'site-hover-ring',
+      'site-profile-line',
+    ])
+    reconcileMapLayerStack(map, descriptors)
+    expect(map.order).toEqual([
+      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+      MAPLIBRE_SHARED_SCENE_LAYER_ID,
+      'panel-target-hover-plants',
+      'site-profile-line',
+      'site-pin-core',
+      'site-hover-ring',
+    ])
   })
 })

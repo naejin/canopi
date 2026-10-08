@@ -3,9 +3,12 @@ import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import {
   clearCanvasMapSurfaceOverlays,
   syncCanvasMapSurfaceOverlays,
+  syncCanvasMapSurfaceSiteHover,
+  syncCanvasMapSurfaceSiteOverlay,
   type CanvasMapSurfaceOverlaySnapshot,
 } from '../app/canvas-map-surface/overlays'
 import type { MapLibreOverlayMap } from '../maplibre/panel-target-overlay-sync'
+import { siteMapOverlayIds } from '../maplibre/site-overlay'
 
 class FakeOverlayMap implements MapLibreOverlayMap {
   readonly addSource = vi.fn((id: string, source: Record<string, unknown>) => {
@@ -119,5 +122,30 @@ describe('canvas map surface overlay sync', () => {
 
     expect(map.removeSource).toHaveBeenCalledWith('panel-target-hover-source')
     expect(map.removeSource).toHaveBeenCalledWith('panel-target-selection-source')
+  })
+
+  it('paints the Site data pin and line through their contract, again on the map a Retry rebuilds, and clears with neither', () => {
+    const ids = siteMapOverlayIds()
+    const site = { pin: [2.35, 48.85] as const, profileLine: [[2.35, 48.85], [2.36, 48.86]] as const }
+    const map = new FakeOverlayMap()
+    syncCanvasMapSurfaceSiteOverlay(map, site)
+    syncCanvasMapSurfaceSiteHover(map, [2.355, 48.855])
+
+    expect([...map.layers]).toEqual([...ids.layerIds, ...ids.hover.layerIds])
+    expect(map.sources.get(ids.sourceId)?.source).toMatchObject({ type: 'geojson' })
+    // The same pin again changes nothing on the map.
+    map.addLayer.mockClear()
+    syncCanvasMapSurfaceSiteOverlay(map, site)
+    expect(map.addLayer).not.toHaveBeenCalled()
+    expect(map.sources.get(ids.sourceId)?.setData).not.toHaveBeenCalled()
+
+    // Retry builds a new map: the next drain paints the same pin there.
+    const rebuilt = new FakeOverlayMap()
+    syncCanvasMapSurfaceSiteOverlay(rebuilt, site)
+    expect([...rebuilt.layers]).toEqual([...ids.layerIds])
+
+    syncCanvasMapSurfaceSiteOverlay(map, { pin: null, profileLine: null })
+    expect(map.layers.size).toBe(0)
+    expect(map.sources.size).toBe(0)
   })
 })
