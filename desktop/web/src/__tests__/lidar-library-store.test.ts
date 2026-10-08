@@ -136,13 +136,13 @@ describe('LiDAR presentation join', () => {
       }),
     ])
     const design = { lidar: { entries: [
-      { kind: 'Derived' as const, id: 'slope', name: 'Ground · Slope', visible: true, opacity: 0.5, order: 1, ramp: null, reversed: false, range: null },
+      { kind: 'Derived' as const, id: 'slope', name: 'Ground · Slope', visible: true, opacity: 0.5, order: 1, ramp: 'Magma' as const, reversed: true, range: { mode: 'Custom' as const, min: 0, max: 30 } },
       { kind: 'Source' as const, id: 'ground', name: 'Ground', visible: false, opacity: 1, order: 0, ramp: null, reversed: false, range: null },
       { kind: 'Derived' as const, id: 'gone', name: 'Old terrain', visible: true, opacity: 1, order: 2, ramp: null, reversed: false, range: null },
     ] } }
 
     const [ground, slope, gone] = readLidarPresentation(design, library)
-    expect(ground).toMatchObject({ kind: 'Source', role: 'Source', name: 'Ground', units: 'm', displayRange: [100, 180], definitionId: null })
+    expect(ground).toMatchObject({ kind: 'Source', role: 'Source', name: 'Ground', units: 'm', displayRange: [100, 180], definitionId: null, missing: null })
     expect(slope).toMatchObject({
       kind: 'Derived',
       role: 'Derived',
@@ -151,8 +151,12 @@ describe('LiDAR presentation join', () => {
       units: '%',
       definitionId: 'slope-def',
       freshness: { state: 'Stale' },
+      ramp: 'Magma',
+      reversed: true,
+      range: { mode: 'Custom', min: 0, max: 30 },
     })
-    expect(gone).toMatchObject({ role: 'Derived', state: 'unavailable', itemType: null, name: 'gone' })
+    // A missing item reads by the name the Design stored, with the reason.
+    expect(gone).toMatchObject({ role: 'Derived', state: 'unavailable', itemType: null, name: 'Old terrain', missing: 'not-in-library' })
   })
 
   it('never joins an entry to an item of the other role', () => {
@@ -162,5 +166,20 @@ describe('LiDAR presentation join', () => {
       library,
     )
     expect(entry?.state).toBe('unavailable')
+  })
+
+  it('says why an item is missing, and that nothing is missing while the library loads', () => {
+    const design = { lidar: { entries: [
+      { kind: 'Source' as const, id: 'ground', name: 'Ground', visible: true, opacity: 1, order: 0, ramp: null, reversed: false, range: null },
+    ] } }
+    const missing = (library: LibrarySnapshot | null, status: Parameters<typeof readLidarPresentation>[2]) =>
+      readLidarPresentation(design, library, status)[0]?.missing
+
+    expect(missing(null, { kind: 'ready' })).toBe('loading')
+    expect(missing(emptyLibrary, { kind: 'ready' })).toBe('not-in-library')
+    expect(missing(emptyLibrary, { kind: 'recovered', items: 1, generated: 0 })).toBe('not-in-library')
+    expect(missing(null, { kind: 'refused_newer' })).toBe('needs-newer-canopi')
+    expect(missing(null, { kind: 'unavailable' })).toBe('library-unopened')
+    expect(missing(librarySnapshot([sourceItem('ground', 'Ground')]), { kind: 'ready' })).toBeNull()
   })
 })

@@ -6,13 +6,17 @@ import type {
   LibraryItemSummary,
   LibraryItemType,
   LibrarySnapshot,
+  LidarColourRange,
+  LidarLibraryStatus,
   LidarPresentationEntry,
   LidarPresentationEntryKind,
+  LidarRamp,
   LidarResultState,
 } from '../../generated/contracts'
 import { lidarListLibrary } from '../../ipc/lidar'
 import { derivedItemName } from '../analyses/registry'
 import { currentDesign } from '../document-session/store'
+import { lidarLibraryStatus } from '../health/state'
 import { referenceDrawOrder } from './reference-tree'
 
 const LIDAR_POLL_INTERVAL_MS = 1500
@@ -118,12 +122,22 @@ export function installLidarLibraryObserver(): () => void {
   return () => {}
 }
 
+/**
+ * Why an entry has no library item: `loading` while the first snapshot is
+ * still on its way (drawn as a normal row, never as missing); otherwise the
+ * reason names its fix.
+ */
+export type LidarMissingReason = 'loading' | 'needs-newer-canopi' | 'library-unopened' | 'not-in-library'
+
 export interface LidarPresentationItem {
   /** The Design entry kind; the file format keeps `Analysis` for derived items. */
   kind: LidarPresentationEntryKind
   role: LibraryItemRole
   id: string
+  /** The library's name, or the name the Design stored while the item is missing. */
   name: string
+  /** Null when the library lists the item. */
+  missing: LidarMissingReason | null
   /** `null` for a reference whose library item is gone. */
   itemType: LibraryItemType | null
   /** The item's own stored units, never an input's. */
@@ -132,6 +146,10 @@ export interface LidarPresentationItem {
   visible: boolean
   opacity: number
   order: number
+  /** The entry's colour ramp and range; null is the item kind's default. */
+  ramp: LidarRamp | null
+  reversed: boolean
+  range: LidarColourRange | null
   bounds: [number, number, number, number] | null
   /** Current immutable generation; display and inspection aim at it. */
   generationId: string | null
@@ -168,28 +186,47 @@ export function libraryItemName(item: LibraryItemSummary, library: LibrarySnapsh
   return derivedItemName(input?.name, provenance.analysis_id)
 }
 
+/** Why an entry the library does not list is missing, from how the library opened. */
+function missingReason(library: LibrarySnapshot | null, status: LidarLibraryStatus): LidarMissingReason {
+  if (status.kind === 'refused_newer') return 'needs-newer-canopi'
+  if (status.kind === 'unavailable') return 'library-unopened'
+  return library ? 'not-in-library' : 'loading'
+}
+
 /**
  * Join library identity/status with document presentation entries, in drawing
  * order (back to front): results draw over the item they come from
  * (`reference-tree.ts`). Unavailable references persist and are flagged
- * instead of dropped.
+ * with the reason instead of dropped.
  */
 export function readLidarPresentation(
   design: {
     lidar?: { entries: readonly LidarPresentationEntry[] } | null
   } | null,
   library: LibrarySnapshot | null,
+  libraryStatus: LidarLibraryStatus = { kind: 'ready' },
 ): LidarPresentationItem[] {
   const entries = design?.lidar?.entries ?? []
   const items: Omit<LidarPresentationItem, 'parentId' | 'depth'>[] = []
   for (const entry of entries) {
     const role = entry.kind
     const item = library?.items.find((candidate) => candidate.id === entry.id && candidate.role === role)
-    const presentation = { kind: entry.kind, role, id: entry.id, visible: entry.visible, opacity: entry.opacity, order: entry.order }
+    const presentation = {
+      kind: entry.kind,
+      role,
+      id: entry.id,
+      visible: entry.visible,
+      opacity: entry.opacity,
+      order: entry.order,
+      ramp: entry.ramp,
+      reversed: entry.reversed,
+      range: entry.range,
+    }
     items.push(item
       ? {
           ...presentation,
           name: libraryItemName(item, library),
+          missing: null,
           itemType: item.item_type,
           units: item.units,
           state: item.state,
@@ -205,7 +242,8 @@ export function readLidarPresentation(
         }
       : {
           ...presentation,
-          name: entry.id,
+          name: entry.name,
+          missing: missingReason(library, libraryStatus),
           itemType: null,
           units: '',
           state: 'unavailable',
@@ -232,5 +270,5 @@ export function readLidarPresentation(
  * this seam owns the design read so map snapshot code never bypasses it.
  */
 export function readCurrentLidarPresentation(): LidarPresentationItem[] {
-  return readLidarPresentation(currentDesign.value, lidarLibrary.value)
+  return readLidarPresentation(currentDesign.value, lidarLibrary.value, lidarLibraryStatus.value)
 }
