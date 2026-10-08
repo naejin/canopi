@@ -1,7 +1,9 @@
 // The Data library sheet (canopi-f47t.42, plan section 4, gallery g6; pattern site-data.md "Dialogs and library").
 // A large sheet of fixed height over the dimmed workspace: the item list and the selected item's details scroll on
-// their own, the footer stays inside the sheet, and below 760 px one pane shows at a time with Back. Run in Chromium
-// and WebKit (projects gallery-chromium and gallery-webkit); DOM assertions only, no baselines.
+// their own, the footer stays inside the sheet, and below 760 px one pane shows at a time with Back. ↑/↓ select, Show in
+// Site data closes the sheet on the item, Esc returns focus to the opener, Analyze opened over the sheet returns to it
+// with its search and selection, and with no Design open the empty library's Import… says why it is off. Run in
+// Chromium and WebKit (projects gallery-chromium and gallery-webkit); DOM assertions only, no baselines.
 import type { Locator, Page } from '@playwright/test'
 import { expect, openGallery, test } from '../support/gallery'
 
@@ -96,5 +98,57 @@ test.describe('the Data library sheet', () => {
     await sheet(page).getByRole('button', { name: 'Back' }).click()
     await expect(details).toBeHidden()
     await expect(list).toBeVisible()
+  })
+
+  test('↑ and ↓ select rows, and Show in Site data closes the sheet on the item', async ({ page }) => {
+    await page.setViewportSize(WIDE)
+    await openGallery(page, { surface: 'library', state: 'long' })
+    const list = itemList(page)
+    const first = list.getByRole('option').first()
+    await expect(first).toHaveAttribute('aria-selected', 'true')
+    await first.focus()
+    await page.keyboard.press('ArrowDown')
+    const second = list.getByRole('option').nth(1)
+    await expect(second).toHaveAttribute('aria-selected', 'true')
+    await expect(second).toBeFocused()
+    await page.keyboard.press('ArrowUp')
+    await expect(first).toHaveAttribute('aria-selected', 'true')
+    // The first row is this Design's ground elevation.
+    await sheet(page).getByRole('button', { name: 'Show in Site data' }).click()
+    await expect(sheet(page)).toBeHidden()
+    await expect(page.getByRole('complementary', { name: 'Site data' })).toBeVisible()
+  })
+
+  test('Esc closes the sheet and returns focus to the Site data Library button', async ({ page }) => {
+    await openGallery(page, { surface: 'site-data' })
+    const opener = page.getByRole('complementary', { name: 'Site data' }).getByRole('button', { name: 'Data library', exact: true })
+    await opener.click()
+    await expect(sheet(page)).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(sheet(page)).toBeHidden()
+    await expect(opener).toBeFocused()
+  })
+
+  test('Run again with changes opens Analyze over the sheet, which returns with its search and selection', async ({ page }) => {
+    await page.setViewportSize(WIDE)
+    await openGallery(page, { surface: 'library' })
+    await sheet(page).getByRole('searchbox', { name: 'Search data' }).fill('gradient')
+    await itemList(page).getByRole('option', { name: /^Orchard gradient/ }).click()
+    await sheet(page).getByRole('button', { name: 'Run again with changes…' }).click()
+    const analyze = page.getByRole('dialog', { name: 'Analyze' })
+    await expect(analyze).toBeVisible()
+    await expect(analyze.locator(':focus'), 'focus moved into Analyze').toHaveCount(1)
+    await page.keyboard.press('Escape')
+    await expect(analyze).toBeHidden()
+    await expect(sheet(page).getByRole('searchbox', { name: 'Search data' })).toHaveValue('gradient')
+    await expect(itemList(page).getByRole('option', { name: /^Orchard gradient/ })).toHaveAttribute('aria-selected', 'true')
+    await expect(sheet(page).getByRole('button', { name: 'Run again with changes…' })).toBeFocused()
+  })
+
+  test('with no Design open, the empty library\'s Import… is off and says why', async ({ page }) => {
+    await openGallery(page, { surface: 'library', state: 'no-design' })
+    const importButton = sheet(page).getByRole('button', { name: /^Import…/ })
+    await expect(importButton).toBeDisabled()
+    await expect(importButton).toContainText('Open a Design to import data')
   })
 })

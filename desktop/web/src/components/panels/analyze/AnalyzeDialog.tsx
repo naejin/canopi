@@ -23,6 +23,7 @@ import {
 } from '../../../app/analyses/model'
 import { locale } from '../../../app/settings/state'
 import { t } from '../../../i18n'
+import { Dropdown } from '../../shared/Dropdown'
 import { Notice } from '../../shared/Notice'
 import { Switch } from '../../shared/Switch'
 import { WorkspaceDialog } from '../../shared/WorkspaceDialog'
@@ -30,17 +31,20 @@ import { paramErrorText, unavailableText } from './analysis-text'
 import styles from './analyze-dialog.module.css'
 
 /**
- * The Analyze dialog, generated from the analysis registry for one item.
+ * The Analyze dialog, generated from the analysis registry.
  *
- * Every entry is listed; one that cannot run says why by name. The chosen
- * entry's parameters render by type, advanced ones in a disclosure, and a run
- * that would duplicate a result this Design already shows becomes "Show in
- * Layers". The model mirrors native validation for inline errors only.
+ * Source comes first: one of this Design's items an analysis accepts, in list
+ * order (fixed for "Run again with changes…"); changing it recomputes the
+ * analyses. Every entry is listed; one that cannot run says why by name. The
+ * chosen entry's parameters render by type, advanced ones in a disclosure, and
+ * a run that would duplicate a result this Design already shows becomes "Show
+ * in Site data". The model mirrors native validation for inline errors only.
  */
 export function AnalyzeDialog({
-  item,
+  sources,
+  sourceId,
+  sourceFixed = false,
   context,
-  attach,
   canAddToDesign,
   initialAnalysisId = null,
   prefill = null,
@@ -48,15 +52,18 @@ export function AnalyzeDialog({
   error,
   onCancel,
   onRun,
-  onShowInLayers,
+  onShowInSiteData,
   onAddExisting,
   registry = ANALYSIS_REGISTRY,
   groups = ANALYSIS_GROUPS,
 }: {
-  item: AnalysisSubject
+  /** The items Analyze can start from, in Site data's list order. */
+  sources: readonly AnalysisSubject[]
+  /** The Source the dialog opens with (`defaultAnalysisSource`). */
+  sourceId: string
+  /** "Run again with changes…": the source is the result's input and cannot change. */
+  sourceFixed?: boolean
   context: AnalysisContext
-  /** Whether the results join the current Design when published. */
-  attach: boolean
   /** Whether a Design is open to add an existing result to. */
   canAddToDesign: boolean
   initialAnalysisId?: string | null
@@ -66,7 +73,7 @@ export function AnalyzeDialog({
   error: string | null
   onCancel(): void
   onRun(request: AnalysisRequest): void
-  onShowInLayers(itemId: string): void
+  onShowInSiteData(itemId: string): void
   onAddExisting(itemId: string): void
   registry?: readonly AnalysisEntry[]
   groups?: readonly { readonly key: AnalysisGroup; readonly labelKey: string }[]
@@ -75,16 +82,20 @@ export function AnalyzeDialog({
   const titleId = useId()
   const formId = `${titleId}-form`
   const root = useRef<HTMLFormElement>(null)
+  const [currentSourceId, setCurrentSourceId] = useState(sourceId)
+  const item = sources.find((source) => source.id === currentSourceId) ?? sources[0]!
   const options = useMemo(
     () => analysisOptions(item, context, language, registry, groups),
     [item, context, language, registry, groups],
   )
   const flat = options.flatMap((group) => group.options)
-  const [selectedId, setSelectedId] = useState<string | null>(() =>
-    flat.find((option) => option.entry.id === initialAnalysisId)?.entry.id
+  const firstChoice = (preferred: string | null) =>
+    flat.find((option) => option.entry.id === preferred && option.unavailable === null)?.entry.id
+    ?? flat.find((option) => option.entry.id === preferred)?.entry.id
     ?? flat.find((option) => option.unavailable === null)?.entry.id
     ?? flat[0]?.entry.id
-    ?? null)
+    ?? null
+  const [selectedId, setSelectedId] = useState<string | null>(() => firstChoice(initialAnalysisId))
   const [forms, setForms] = useState<Readonly<Record<string, AnalysisForm>>>(() =>
     initialAnalysisId && prefill ? { [initialAnalysisId]: prefill } : {})
   const [touched, setTouched] = useState<ReadonlySet<string>>(new Set())
@@ -94,10 +105,20 @@ export function AnalyzeDialog({
     root.current?.querySelector<HTMLElement>('[data-autofocus="true"]')?.focus()
   }, [])
 
+  // A new Source starts the forms afresh (their names follow it) and keeps the chosen analysis when it can run.
+  useEffect(() => {
+    if (currentSourceId === sourceId) return
+    setForms({})
+    setTouched(new Set())
+    setAttempted(false)
+    setSelectedId((previous) =>
+      flat.find((option) => option.entry.id === previous && option.unavailable === null)?.entry.id ?? firstChoice(null))
+  }, [currentSourceId])
+
   const entry = flat.find((option) => option.entry.id === selectedId)?.entry ?? null
   const form = entry ? forms[entry.id] ?? initialForm(entry, item.name, t(entry.titleKey), language) : null
   const unavailable = entry && form ? entryAvailability(entry, item, context, form, language) : null
-  const blocked = unavailable !== null && unavailable.reason !== 'AlreadyInLayers'
+  const blocked = unavailable !== null && unavailable.reason !== 'AlreadyInSiteData'
   const validation = entry && form ? validateForm(entry, form, language) : null
   const existing = entry && form ? findExistingResult(entry, item.id, form, context, language) : null
 
@@ -117,7 +138,7 @@ export function AnalyzeDialog({
   const submit = () => {
     if (!entry || !form || busy || blocked) return
     if (existing?.inDesign) {
-      onShowInLayers(existing.id)
+      onShowInSiteData(existing.id)
       return
     }
     const request = buildAnalysisRequest(entry, item, form, language)
@@ -155,7 +176,7 @@ export function AnalyzeDialog({
       footer={<>
         <button type="button" className={styles.button} onClick={onCancel}>{t('canvas.lidar.library.cancel')}</button>
         {existing?.inDesign
-          ? <button type="submit" form={formId} className={`${styles.button} ${styles.primary}`}>{t('analyses.dialog.showInLayers')}</button>
+          ? <button type="submit" form={formId} className={`${styles.button} ${styles.primary}`}>{t('analyses.dialog.showInSiteData')}</button>
           : (
             <button type="submit" form={formId} className={`${styles.button} ${styles.primary}`} disabled={busy || !entry || blocked}>
               {existing ? t('analyses.dialog.runAgain') : t('analyses.dialog.run')}
@@ -170,9 +191,26 @@ export function AnalyzeDialog({
       noValidate
       onSubmit={(event) => { event.preventDefault(); submit() }}
     >
-      <p className={styles.intro}>
-        {t(attach ? 'analyses.dialog.introLayers' : 'analyses.dialog.introLibrary', { name: item.name })}
-      </p>
+      {sourceFixed
+        ? (
+          <div className={styles.field} data-analysis-source>
+            <span className={styles.label} aria-hidden="true">{t('analyses.dialog.source')}</span>
+            <span>{item.name}</span>
+          </div>
+        )
+        : (
+          <div className={styles.field}>
+            <span className={styles.label} aria-hidden="true">{t('analyses.dialog.source')}</span>
+            <Dropdown<string>
+              ariaLabel={t('analyses.dialog.source')}
+              trigger={item.name}
+              items={sources.map((source) => ({ value: source.id, label: source.name }))}
+              value={item.id}
+              onChange={setCurrentSourceId}
+            />
+          </div>
+        )}
+      <p className={styles.intro}>{t('analyses.dialog.intro')}</p>
       {options.map((group) => (
         <fieldset key={group.key} className={styles.entries}>
           <legend>{t(group.labelKey)}</legend>
@@ -235,7 +273,7 @@ export function AnalyzeDialog({
           <input value={form.name} onInput={(event) => update({ ...form, name: event.currentTarget.value })} />
         </label>
         {existing?.inDesign
-          ? <Notice tone="info">{t('analyses.unavailable.AlreadyInLayers')}</Notice>
+          ? <Notice tone="info">{t('analyses.unavailable.AlreadyInSiteData')}</Notice>
           : existing && (
             <Notice
               tone="info"

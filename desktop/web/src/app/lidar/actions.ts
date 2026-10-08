@@ -82,22 +82,19 @@ export async function chooseImportFiles(title: string, filterName: string): Prom
  *
  * The listed order is the item's source priority: the first listed valid
  * value wins where files overlap. The item is saved to the library and never
- * moves the camera. Started from Layers, it also joins the Design session
- * that asked once it is published, like a Layers-initiated analysis; a
- * Design switch, failure or cancel drops that attachment.
+ * moves the camera. An import always joins the Design session that asked once
+ * it is published (the one attach rule); a Design switch, failure or cancel
+ * drops that attachment.
  */
 export async function importLibraryItem(
   paths: string[],
   name: string,
   quantity: RasterQuantity,
   unit: { label: string | null; unknown: boolean },
-  attachToDesign = false,
 ): Promise<LidarImportReceipt> {
   const identity = designSessionStore.sessionIdentity.value
   const receipt = await withLidarError(() => lidarImportItem(name, quantity, unit, paths))
-  if (attachToDesign) {
-    requestAttachment({ key: `import:${receipt.layer_id}`, kind: 'import', identity, itemIds: [receipt.layer_id] })
-  }
+  requestAttachment({ key: `import:${receipt.layer_id}`, kind: 'import', identity, itemIds: [receipt.layer_id] })
   await refreshLidarLibrary()
   ensureLidarPolling()
   return receipt
@@ -264,12 +261,16 @@ export function moveReferenceTo(id: string, targetId: string): void {
  * Run one registered analysis as a new definition, saved to the library.
  *
  * Inputs and earlier results never change, and a second run with the same
- * settings is a second definition. When asked from Layers, the finished
- * results join only the Design session that asked: switching Designs while it
- * runs leaves them in the library, never in the replacement Design.
+ * settings is a second definition. The one attach rule: the finished results
+ * join the open Design when that Design shows the input, wherever the run was
+ * started (Analyze, Run again with changes…), and only the Design session that
+ * asked: switching Designs while it runs leaves them in the library, never in
+ * the replacement Design.
  */
-export async function runAnalysis(request: AnalysisRequest, attachToDesign: boolean): Promise<AnalysisReceipt> {
+export async function runAnalysis(request: AnalysisRequest): Promise<AnalysisReceipt> {
   const identity = designSessionStore.sessionIdentity.value
+  const shown = new Set(readCurrentLidarPresentation().map((entry) => entry.id))
+  const attachToDesign = request.inputs.some((input) => shown.has(input.item_id))
   const receipt = await withLidarError(() => lidarCreateAnalysis(request))
   if (attachToDesign) {
     requestAttachment({ key: receipt.definition_id, kind: 'analysis', identity, itemIds: receipt.item_ids })
@@ -292,7 +293,7 @@ export async function rerunAnalysis(definitionId: string): Promise<AnalysisRecei
   return receipt
 }
 
-/** Library work started from Layers, waiting to join the Design session that asked. */
+/** Library work waiting to join the Design session that asked. */
 export interface PendingAttachment {
   /** The analysis definition, or `import:<item id>`. */
   readonly key: string
@@ -302,15 +303,14 @@ export interface PendingAttachment {
 }
 
 /**
- * Pending attachments, read by Layers to show their progress under Site data.
+ * Pending attachments, read by Site data to show their progress in its list.
  * Settled or dropped requests leave the list.
  */
 export const pendingAttachments = signal<readonly PendingAttachment[]>([])
 
 /**
- * The last Layers-initiated import or analysis that failed before it could
- * join its Design, so Layers can say so; a cancel is the user's own choice
- * and is not reported.
+ * The last import or analysis that failed before it could join its Design, so
+ * Site data can say so; a cancel is the user's own choice and is not reported.
  */
 export const attachmentFailure = signal<{ readonly itemId: string; readonly message: string | null } | null>(null)
 
@@ -323,7 +323,7 @@ function requestAttachment(pending: PendingAttachment): void {
 }
 
 /**
- * Attach finished Layers-initiated work to its originating Design session,
+ * Attach finished work to its originating Design session,
  * and drop requests whose session ended or whose work failed or was cancelled.
  *
  * An import joins once it is published. Every presentable output of an

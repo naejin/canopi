@@ -14,31 +14,38 @@ import { isRunning, isStale, itemStatusLabel } from './item-text'
 import styles from './data-library.module.css'
 
 /**
- * One library item's details, shared by the Data library and Layers: whether
- * a result is out of date (with Refresh), its facts and provenance, the
- * caller's actions, its source files, and a derived item's processing history.
+ * One library item's details: whether a result is out of date (with Refresh),
+ * its facts (when it was added, and for a source its saved results) and
+ * provenance, the caller's actions, its source files, and a derived item's
+ * processing history. The source files and history are fetched only once
+ * `rested` says the selection has settled, so moving through a list does not
+ * fetch for every row it passes.
  */
-export function ItemDetails({ item, nameOf, onOpenInput, onRefresh, busy, preview, actions, operation }: {
+export function ItemDetails({ item, nameOf, onOpenInput, onRefresh, busy, preview, actions, operation, results = [], rested = true }: {
   item: LibraryItem
   nameOf(id: string): string
-  /** Open an input the result was calculated from; omitted where inputs are plain text. */
+  /** Open another item: an input the result was calculated from, or a saved result; omitted where they are plain text. */
   onOpenInput?(id: string): void
   onRefresh(): void
   busy: boolean
   preview?: ComponentChildren
   actions?: ComponentChildren
   operation?: ComponentChildren
+  /** The results saved from this item, listed as links. */
+  results?: readonly LibraryItem[]
+  /** Whether the selection has rested, so the details may fetch. */
+  rested?: boolean
 }) {
   const [files, setFiles] = useState<string[] | null>(null)
   useEffect(() => {
     setFiles(null)
-    if (item.role !== 'Source' || item.status !== 'ready') return
+    if (!rested || item.role !== 'Source' || item.status !== 'ready') return
     let current = true
     void fetchItemSources(item.id)
       .then((page) => { if (current) setFiles(page.sources.map((source) => source.filename)) })
       .catch(() => { if (current) setFiles([]) })
     return () => { current = false }
-  }, [item.id, item.status])
+  }, [item.id, item.status, rested])
   return (
     <div className={styles.details}>
       {preview}
@@ -72,10 +79,16 @@ export function ItemDetails({ item, nameOf, onOpenInput, onRefresh, busy, previe
         </>}
         <dt>{t('canvas.lidar.library.factStatus')}</dt>
         <dd>{item.status === 'ready' ? t('canvas.lidar.library.ready') : itemStatusLabel(item)}</dd>
+        <dt>{t('canvas.lidar.library.factAdded')}</dt>
+        <dd>{formatTimestamp(item.createdAt, locale.value)}</dd>
         {item.provenance && <ProvenanceFacts provenance={item.provenance} nameOf={nameOf} onOpenInput={onOpenInput} />}
-        {item.dependents > 0 && <>
+        {results.length > 0 && <>
           <dt>{t('canvas.lidar.library.factResults')}</dt>
-          <dd>{new Intl.NumberFormat(locale.value).format(item.dependents)}</dd>
+          <dd className={styles.links}>
+            {results.map((result) => onOpenInput
+              ? <button key={result.id} type="button" className={styles.link} onClick={() => onOpenInput(result.id)}>{result.name}</button>
+              : <span key={result.id}>{result.name}</span>)}
+          </dd>
         </>}
       </dl>
       {actions && <div className={styles.detailActions}>{actions}</div>}
@@ -86,7 +99,7 @@ export function ItemDetails({ item, nameOf, onOpenInput, onRefresh, busy, previe
           <ol className={styles.files}>{files.map((file, index) => <li key={`${index}-${file}`} className={styles.filename}>{file}</li>)}</ol>
         </details>
       )}
-      {item.provenance && <ProcessingHistory key={item.provenance.definition_id} definitionId={item.provenance.definition_id} />}
+      {item.provenance && rested && <ProcessingHistory key={item.provenance.definition_id} definitionId={item.provenance.definition_id} />}
       {item.provenance && <p className={styles.muted}>{t('analyses.details.refreshNote')}</p>}
     </div>
   )

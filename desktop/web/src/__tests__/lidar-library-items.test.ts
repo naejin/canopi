@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { filterLibraryItems, libraryItems, suggestedItemName } from '../app/lidar/library-items'
+import { filterLibraryItems, libraryItems, selectionAfter, suggestedItemName } from '../app/lidar/library-items'
 import { locale } from '../app/settings/state'
 import { librarySnapshot as snapshot, slopeItem, sourceItem } from './support/library-fixtures'
 
@@ -64,14 +64,45 @@ describe('Data Library items', () => {
       slopeItem('r', 'a', { name: 'Running', generation_id: null, state: 'Preparing', run: { job_id: 'j', state: 'Preparing', message: null } }),
     ]))
 
-    expect(filterLibraryItems(items, 'ground', 'terrain').map((item) => item.id)).toEqual(['s', 'r', 'x'])
-    expect(filterLibraryItems(items, 'zzz', 'all').map((item) => item.id)).toEqual(['r', 'x'])
+    // A kept result keeps its source above it.
+    expect(filterLibraryItems(items, 'ground', 'terrain').map((item) => item.id)).toEqual(['a', 's', 'r', 'x'])
+    expect(filterLibraryItems(items, 'zzz', 'all').map((item) => item.id)).toEqual(['a', 'r', 'x'])
     expect(filterLibraryItems(items, '', 'sources').map((item) => item.id)).toEqual(['a', 'r', 'x'])
   })
 
-  it('narrows to the results calculated from one item', () => {
-    const items = libraryItems(snapshot([sourceItem('a', 'A'), sourceItem('b', 'B'), slopeItem('s1', 'a'), slopeItem('s2', 'b')]))
-    expect(filterLibraryItems(items, '', 'all', 'a').map((item) => item.id)).toEqual(['s1'])
+  it('keeps the sources of a search match three levels deep above it', () => {
+    const items = libraryItems(snapshot([
+      sourceItem('a', 'Ground'),
+      sourceItem('b', 'Other'),
+      slopeItem('s', 'a', { name: 'Slope' }),
+      slopeItem('t', 's', { name: 'Steepest band' }),
+    ]))
+    expect(filterLibraryItems(items, 'steepest', 'all').map((item) => [item.id, item.depth])).toEqual([['a', 0], ['s', 1], ['t', 2]])
+  })
+
+  it('sorts by name or most recently added, results staying under their source', () => {
+    const library = snapshot([
+      sourceItem('old', 'Alpha', { created_at: '1000' }),
+      sourceItem('new', 'Beta', { created_at: '3000' }),
+      slopeItem('s-old', 'new', { name: 'Older slope', created_at: '1500' }),
+      slopeItem('s-new', 'new', { name: 'Newer slope', created_at: '2500' }),
+    ])
+    expect(libraryItems(library).map((item) => item.id)).toEqual(['old', 'new', 's-new', 's-old'])
+    expect(libraryItems(library, 'recent').map((item) => item.id)).toEqual(['new', 's-new', 's-old', 'old'])
+    expect(libraryItems(library, 'recent')[0]?.createdAt).toBe('3000')
+  })
+
+  it('keeps the selection while its row is listed, else selects the row that took its place', () => {
+    const rows = (...ids: string[]) => ids.map((id) => ({ id }))
+    expect(selectionAfter(rows('a', 'b', 'c'), rows('a', 'b', 'c'), 'b')).toBe('b')
+    // The selected item went: the next row moves up into its place.
+    expect(selectionAfter(rows('a', 'b', 'c'), rows('a', 'c'), 'b')).toBe('c')
+    // The last row went: the row above it.
+    expect(selectionAfter(rows('a', 'b', 'c'), rows('a', 'b'), 'c')).toBe('b')
+    // Nothing selected yet, or the selection was never listed: the first row.
+    expect(selectionAfter([], rows('a', 'b'), null)).toBe('a')
+    expect(selectionAfter(rows('a'), rows('b'), 'gone')).toBe('b')
+    expect(selectionAfter(rows('a'), [], 'a')).toBeNull()
   })
 
   it('suggests a name from the shared stem of the chosen files', () => {

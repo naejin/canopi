@@ -31,7 +31,7 @@ type Edition = 'desktop' | 'web'
 export type AnalysisAvailability =
   | AnalysisUnavailable
   | { readonly reason: 'NeedsDesktop' }
-  | { readonly reason: 'AlreadyInLayers'; readonly itemId: string }
+  | { readonly reason: 'AlreadyInSiteData'; readonly itemId: string }
 
 /** What the model reads from the item the dialog analyses. */
 export interface AnalysisSubject {
@@ -119,7 +119,7 @@ export function analysisOptions(
  *
  * The edition comes first (nothing runs on Web), then the native offer; a run
  * that would duplicate a result the Design already shows is refused last, as
- * "Show in Layers" rather than a second identical calculation.
+ * "Show in Site data" rather than a second identical calculation.
  */
 export function entryAvailability(
   entry: AnalysisEntry,
@@ -134,8 +134,34 @@ export function entryAvailability(
   if (!offer) return { reason: 'NotReady' }
   if (offer.unavailable) return offer.unavailable
   const existing = findExistingResult(entry, subject.id, form, context, locale)
-  if (existing?.inDesign) return { reason: 'AlreadyInLayers', itemId: existing.id }
+  if (existing?.inDesign) return { reason: 'AlreadyInSiteData', itemId: existing.id }
   return null
+}
+
+/**
+ * Whether an analysis accepts this item as its input: some offer is not
+ * refused for the item's kind or readiness. Analyze lists these items as its
+ * Source; an engine or grid problem still shows its reason there.
+ */
+export function acceptsAnalysis(subject: Pick<AnalysisSubject, 'offers'>): boolean {
+  return subject.offers.some((offer) => offer.unavailable?.reason !== 'WrongInput' && offer.unavailable?.reason !== 'NotReady')
+}
+
+/**
+ * The Source Analyze opens with: the open item when an analysis accepts it,
+ * else the open result's input, else the first eligible item in list order.
+ * `sources` are the eligible items; `items` every item, with a result's input.
+ */
+export function defaultAnalysisSource(
+  sources: readonly { readonly id: string }[],
+  items: readonly { readonly id: string; readonly inputId: string | null }[],
+  openId: string | null,
+): string | null {
+  const eligible = new Set(sources.map((source) => source.id))
+  if (openId !== null && eligible.has(openId)) return openId
+  const input = items.find((item) => item.id === openId)?.inputId ?? null
+  if (input !== null && eligible.has(input)) return input
+  return sources[0]?.id ?? null
 }
 
 /** The form an entry opens with: registry defaults and the default outputs. */

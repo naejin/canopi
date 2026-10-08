@@ -107,3 +107,8 @@
 .fileButton:hover:not(:disabled) { background: var(--color-control-hover); }
 .fileButton:disabled { opacity: 0.4; cursor: default; }
 .flip { transform: rotate(180deg); }
+.links { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
+.withTooltip { position: relative; }
+/* Delete everywhere, confirmed in place of the actions. */
+.confirm { display: flex; flex: 1 1 100%; flex-direction: column; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--color-danger); border-radius: var(--radius-md); }
+.confirmTitle { font-weight: 600; }

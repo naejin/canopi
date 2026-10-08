@@ -21,12 +21,11 @@ import styles from './data-library.module.css'
  * the library already uses is refused with a free one suggested), what the
  * values measure, the files in priority order, and whether they cover the
  * open Design's site. The files were chosen in the native picker first, so
- * cancelling here creates nothing.
+ * cancelling here creates nothing. The item joins this Design once it is
+ * published, wherever the import was started (the one attach rule).
  */
-export function ImportDataDialog({ paths, attach, onClose }: {
+export function ImportDataDialog({ paths, onClose }: {
   readonly paths: readonly string[]
-  /** Whether the item joins this Design once published (started from Layers). */
-  readonly attach: boolean
   onClose(): void
 }) {
   const formId = useId()
@@ -67,7 +66,7 @@ export function ImportDataDialog({ paths, attach, onClose }: {
     try {
       await importLibraryItem([...files], trimmed, quantity, quantity === 'OtherContinuous'
         ? { label: unitUnknown ? null : unitLabel.trim(), unknown: unitUnknown }
-        : { label: null, unknown: false }, attach)
+        : { label: null, unknown: false })
       onClose()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -150,7 +149,7 @@ export function ImportDataDialog({ paths, attach, onClose }: {
           {files.length > 1 && <span className={styles.fieldHint}>{t('canvas.lidar.library.priorityNote')}</span>}
         </div>
         {coverage && <CoverageNotice coverage={coverage} />}
-        <p className={styles.fieldHint}>{attach ? t('canvas.lidar.import.toDesign') : t('canvas.lidar.import.toLibrary')}</p>
+        <p className={styles.fieldHint}>{t('canvas.lidar.import.toDesign')}</p>
         {error && <p className={styles.error} role="alert">{error}</p>}
       </form>
     </WorkspaceDialog>

@@ -1,15 +1,21 @@
-import { useMemo, useState } from 'preact/hooks'
+import { useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { currentDesign } from '../../../app/document-session/store'
 import { addToDesign, runAnalysis } from '../../../app/lidar/actions'
-import { formFromProvenance, type AnalysisContext, type AnalysisForm } from '../../../app/analyses/model'
-import { findAnalysis } from '../../../app/analyses/registry'
-import { libraryItems } from '../../../app/lidar/library-items'
-import { lidarLibrary } from '../../../app/lidar/library-store'
 import {
+  acceptsAnalysis,
+  defaultAnalysisSource,
+  formFromProvenance,
+  type AnalysisContext,
+  type AnalysisForm,
+} from '../../../app/analyses/model'
+import { findAnalysis } from '../../../app/analyses/registry'
+import { libraryItems, type LibraryItem } from '../../../app/lidar/library-items'
+import { lidarLibrary, readCurrentLidarPresentation } from '../../../app/lidar/library-store'
+import {
+  closeDataDialog,
   dataDialog,
-  leaveDataDialog,
-  selectSiteRow,
-  showInLayers,
+  libraryView,
+  revealInSiteData,
   type DataDialog,
 } from '../../../app/lidar/library-navigation'
 import { locale } from '../../../app/settings/state'
@@ -19,73 +25,96 @@ import { DataLibraryView } from './DataLibraryView'
 import { ImportDataDialog } from './ImportDataDialog'
 
 /**
- * The Desktop data workflow's modal slot: the Data library, Import or
- * Analyze, one at a time. Import and Analyze opened from the library return
- * to it; opened from Layers or a menu they close back to the workspace.
+ * The Desktop data workflow's modal surfaces: the Data library sheet, and
+ * Import or Analyze over it. While a dialog is open the sheet under it is
+ * inert, and it returns unchanged (search, filter, scroll, selection) when the
+ * dialog closes; focus goes back to what opened the dialog.
  */
 export function DataDialogs() {
+  const library = libraryView.value
   const dialog = dataDialog.value
-  if (!dialog) return null
-  switch (dialog.kind) {
-    case 'library':
-      return <DataLibraryView key={`library-${dialog.focusId ?? ''}`} focusId={dialog.focusId} />
-    case 'import':
-      return <ImportDataDialog paths={dialog.paths} attach={dialog.attach} onClose={leaveDataDialog} />
-    case 'analyze':
-      return <AnalyzeRequest key={`${dialog.itemId}-${dialog.from ?? ''}`} request={dialog} />
-  }
+  const covered = library !== null && dialog !== null
+  // The sheet turns inert as the dialog mounts, and the browser drops focus from it before the dialog can read its
+  // opener, so the opener is read here, while rendering, and focused again once the sheet is live.
+  const opener = useRef<HTMLElement | null>(null)
+  if (covered && opener.current === null && document.activeElement instanceof HTMLElement) opener.current = document.activeElement
+  useLayoutEffect(() => {
+    if (covered) return
+    if (opener.current?.isConnected) opener.current.focus()
+    opener.current = null
+  }, [covered])
+  return <>
+    {library && (
+      <div inert={covered ? true : undefined} data-library-sheet="true">
+        <DataLibraryView key={`library-${library.focusId ?? ''}`} focusId={library.focusId} />
+      </div>
+    )}
+    {dialog?.kind === 'import' && <ImportDataDialog paths={dialog.paths} onClose={closeDataDialog} />}
+    {dialog?.kind === 'analyze' && <AnalyzeRequest key={`${dialog.itemId ?? ''}-${dialog.from ?? ''}`} request={dialog} />}
+  </>
+}
+
+/** A ready item an analysis accepts, as Analyze's Source lists it. */
+function isSource(item: LibraryItem | undefined): item is LibraryItem {
+  return item !== undefined && item.status === 'ready' && acceptsAnalysis(item)
 }
 
 function AnalyzeRequest({ request }: { readonly request: Extract<DataDialog, { kind: 'analyze' }> }) {
   const snapshot = lidarLibrary.value
   const items = useMemo(() => libraryItems(snapshot), [snapshot, locale.value])
-  const references = currentDesign.value?.lidar?.entries ?? []
+  const design = readCurrentLidarPresentation()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const context = useMemo<AnalysisContext>(() => ({
     edition: 'desktop',
     results: items.filter((candidate) => candidate.role === 'Derived'),
-    inDesign: new Set(references.map((entry) => entry.id)),
-  }), [items, references])
-  const item = items.find((candidate) => candidate.id === request.itemId) ?? null
-  // "Run again with changes" starts from the settings and outputs of the run
-  // that produced the result.
-  const prefill = useMemo((): AnalysisForm | null => {
-    const from = request.from ? items.find((candidate) => candidate.id === request.from) : undefined
+    inDesign: new Set(design.map((entry) => entry.id)),
+  }), [items, design.map((entry) => entry.id).join(',')])
+  const byId = new Map(items.map((item) => [item.id, item]))
+  // "Run again with changes…" analyzes the result's input again; otherwise Source lists this Design's items in list order.
+  const from = request.from ? byId.get(request.from) : undefined
+  const fixedInput = from?.provenance ? byId.get(from.provenance.inputs[0]?.item_id ?? '') : undefined
+  const sources = from
+    ? (isSource(fixedInput) ? [fixedInput] : [])
+    : design.map((entry) => byId.get(entry.id)).filter(isSource)
+  const sourceId = from
+    ? sources[0]?.id ?? null
+    : defaultAnalysisSource(sources, design.map((entry) => ({ id: entry.id, inputId: byId.get(entry.id)?.parentId ?? null })), request.itemId)
+  // The prefill is read once, when the dialog opens: the settings and outputs of the run that produced the result.
+  const [prefill] = useState((): AnalysisForm | null => {
     const provenance = from?.provenance
     const entry = provenance ? findAnalysis(provenance.analysis_id) : null
-    if (!provenance || !entry || !item) return null
+    if (!provenance || !entry || !fixedInput) return null
     const outputs = items
       .filter((candidate) => candidate.provenance?.definition_id === provenance.definition_id)
       .map((candidate) => candidate.provenance!.output_key)
-    return formFromProvenance(entry, provenance, outputs, item.name, t(entry.titleKey), locale.value)
-    // The prefill is read once, when the dialog opens.
-  }, [])
-  if (!item) return null
+    return formFromProvenance(entry, provenance, outputs, fixedInput.name, t(entry.titleKey), locale.value)
+  })
+  if (sourceId === null) return null
   return (
     <AnalyzeDialog
-      item={item}
+      sources={sources}
+      sourceId={sourceId}
+      sourceFixed={from !== undefined}
       context={context}
-      attach={request.attach}
       canAddToDesign={currentDesign.value !== null}
       initialAnalysisId={request.analysisId}
       prefill={prefill}
       busy={busy}
       error={error}
-      onCancel={leaveDataDialog}
+      onCancel={closeDataDialog}
       onRun={(analysis) => {
         setBusy(true)
         setError(null)
-        void runAnalysis(analysis, request.attach)
-          .then(() => leaveDataDialog())
+        void runAnalysis(analysis)
+          .then(() => closeDataDialog())
           .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))
           .finally(() => setBusy(false))
       }}
-      onShowInLayers={showInLayers}
+      onShowInSiteData={revealInSiteData}
       onAddExisting={(id) => {
         addToDesign('Derived', id)
-        selectSiteRow(id)
-        leaveDataDialog()
+        revealInSiteData(id)
       }}
     />
   )

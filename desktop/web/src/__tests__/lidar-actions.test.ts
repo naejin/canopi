@@ -139,9 +139,9 @@ describe('Data Library actions', () => {
     }))
   })
 
-  it('adds an import started from Layers to the asking Design once it is published', async () => {
+  it('adds an import to the Design that asked once it is published, wherever it was started', async () => {
     importItemMock.mockResolvedValue({ layer_id: 'layer-9', job_id: 'job-9' })
-    await importLibraryItem(['/a.tif'], 'Ground', 'GroundElevation', { label: null, unknown: false }, true)
+    await importLibraryItem(['/a.tif'], 'Ground', 'GroundElevation', { label: null, unknown: false })
     const importing = librarySnapshot([sourceItem('layer-9', 'Ground', {
       state: 'Preparing', generation_id: null,
       import_job: { job_id: 'job-9', layer_id: 'layer-9', state: 'Staging', message: null, progress: null },
@@ -153,10 +153,10 @@ describe('Data Library actions', () => {
     expect(upsertMock).toHaveBeenCalledWith('Source', 'layer-9', 'Ground')
   })
 
-  it('reports an import from Layers that failed and never adds it', async () => {
+  it('reports an import that failed and never adds it', async () => {
     dismissAttachmentFailure()
     importItemMock.mockResolvedValue({ layer_id: 'layer-8', job_id: 'job-8' })
-    await importLibraryItem(['/a.tif'], 'Ground', 'GroundElevation', { label: null, unknown: false }, true)
+    await importLibraryItem(['/a.tif'], 'Ground', 'GroundElevation', { label: null, unknown: false })
     settleResultAttachments(librarySnapshot([sourceItem('layer-8', 'Ground', {
       state: 'Failed', generation_id: null,
       import_job: { job_id: 'job-8', layer_id: 'layer-8', state: 'Failed', message: 'not a raster', progress: null },
@@ -165,10 +165,10 @@ describe('Data Library actions', () => {
     expect(upsertMock).not.toHaveBeenCalled()
   })
 
-  it('drops an import from Layers whose item left the library before it was published', async () => {
+  it('drops an import whose item left the library before it was published', async () => {
     dismissAttachmentFailure()
     importItemMock.mockResolvedValue({ layer_id: 'layer-7', job_id: 'job-7' })
-    await importLibraryItem(['/a.tif'], 'Ground', 'GroundElevation', { label: null, unknown: false }, true)
+    await importLibraryItem(['/a.tif'], 'Ground', 'GroundElevation', { label: null, unknown: false })
     expect(pendingAttachments.value.map((entry) => entry.itemIds)).toContainEqual(['layer-7'])
 
     // Cancelled, then dismissed: the library no longer lists the item at all.
@@ -178,13 +178,14 @@ describe('Data Library actions', () => {
     expect(upsertMock).not.toHaveBeenCalled()
   })
 
-  it('imports into the library only, in the listed priority order', async () => {
+  it('imports in the listed priority order, and edits the Design only once the item is published', async () => {
     importItemMock.mockResolvedValue({ layer_id: 'layer-1', job_id: 'job-1' })
     await importLibraryItem(['/b.tif', '/a.tif'], 'Ground', 'GroundElevation', { label: 'm', unknown: false })
 
     expect(importItemMock).toHaveBeenCalledWith('Ground', 'GroundElevation', { label: 'm', unknown: false }, ['/b.tif', '/a.tif'])
     expect(ensurePollingMock).toHaveBeenCalled()
     expect(designEdits()).toBe(0)
+    expect(pendingAttachments.value.map((entry) => entry.itemIds)).toContainEqual(['layer-1'])
   })
 
   it('never edits the Design for rename, retry or dismiss', async () => {
@@ -404,6 +405,8 @@ describe('analysis runs', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     sessionIdentity.value = 'design-a'
+    // The Design shows the analysis input (layer-1), so its results join it (the one attach rule).
+    presentation.value = [{ id: 'layer-1', order: 0, parentId: null }]
     let sequence = 0
     createAnalysisMock.mockImplementation(async () => {
       sequence += 1
@@ -411,9 +414,10 @@ describe('analysis runs', () => {
     })
   })
 
-  it('creates a separate definition each time, saved to the library only', async () => {
-    const first = await runAnalysis(SLOPE_REQUEST, false)
-    const second = await runAnalysis(SLOPE_REQUEST, false)
+  it('creates a separate definition each time, saved to the library only when the Design does not show the input', async () => {
+    presentation.value = [{ id: 'other', order: 0, parentId: null }]
+    const first = await runAnalysis(SLOPE_REQUEST)
+    const second = await runAnalysis(SLOPE_REQUEST)
 
     expect(first.definition_id).not.toBe(second.definition_id)
     expect(createAnalysisMock).toHaveBeenCalledWith(SLOPE_REQUEST)
@@ -422,8 +426,8 @@ describe('analysis runs', () => {
     expect(designEdits()).toBe(0)
   })
 
-  it('adds a Layers-initiated result to the asking Design once it is published', async () => {
-    const receipt = await runAnalysis(SLOPE_REQUEST, true)
+  it('adds the result to the asking Design once it is published, when that Design shows the input', async () => {
+    const receipt = await runAnalysis(SLOPE_REQUEST)
     const id = receipt.item_ids[0]!
     settleResultAttachments(snapshotWith({ id }))
     expect(upsertMock).not.toHaveBeenCalled()
@@ -436,7 +440,7 @@ describe('analysis runs', () => {
 
   it('attaches every presentable output in order once all are published, never provenance-only ones', async () => {
     createAnalysisMock.mockResolvedValueOnce({ definition_id: 'multi', job_id: 'job', item_ids: ['first', 'hidden', 'second'] })
-    await runAnalysis(SLOPE_REQUEST, true)
+    await runAnalysis(SLOPE_REQUEST)
     const hidden = { id: 'hidden', provenance: { ...slopeItem('hidden', 'layer-1').provenance!, output_key: 'not-presentable' } }
 
     settleResultAttachments(snapshotWith({ id: 'first', state: 'Ready', generation_id: 'g1' }, hidden, { id: 'second' }))
@@ -451,7 +455,7 @@ describe('analysis runs', () => {
   })
 
   it('never adds the result to a Design opened while it was calculating', async () => {
-    const { item_ids: [id] } = await runAnalysis(SLOPE_REQUEST, true)
+    const { item_ids: [id] } = await runAnalysis(SLOPE_REQUEST)
     sessionIdentity.value = 'design-b'
     settleResultAttachments(snapshotWith({ id: id!, state: 'Ready', generation_id: 'agen-1' }))
     sessionIdentity.value = 'design-a'
@@ -460,11 +464,11 @@ describe('analysis runs', () => {
   })
 
   it('drops the request when the run fails or is cancelled', async () => {
-    const { item_ids: [failed] } = await runAnalysis(SLOPE_REQUEST, true)
+    const { item_ids: [failed] } = await runAnalysis(SLOPE_REQUEST)
     settleResultAttachments(snapshotWith({ id: failed!, state: 'Failed', run: { job_id: 'j', state: 'Failed', message: 'engine stopped' } }))
     settleResultAttachments(snapshotWith({ id: failed!, state: 'Ready', generation_id: 'agen-9' }))
 
-    const { item_ids: [cancelled] } = await runAnalysis(SLOPE_REQUEST, true)
+    const { item_ids: [cancelled] } = await runAnalysis(SLOPE_REQUEST)
     settleResultAttachments(snapshotWith({ id: cancelled!, state: 'Failed', run: { job_id: 'j', state: 'Cancelled', message: null } }))
     settleResultAttachments(snapshotWith({ id: cancelled!, state: 'Ready', generation_id: 'agen-9' }))
     expect(upsertMock).not.toHaveBeenCalled()
@@ -472,14 +476,14 @@ describe('analysis runs', () => {
 
   it('lists work waiting to join the Design and reports a failure, never a cancel', async () => {
     dismissAttachmentFailure()
-    const { item_ids: [failed] } = await runAnalysis(SLOPE_REQUEST, true)
+    const { item_ids: [failed] } = await runAnalysis(SLOPE_REQUEST)
     expect(pendingAttachments.value.map((entry) => entry.itemIds)).toContainEqual([failed])
     settleResultAttachments(snapshotWith({ id: failed!, state: 'Failed', run: { job_id: 'j', state: 'Failed', message: 'engine stopped' } }))
     expect(pendingAttachments.value).toEqual([])
     expect(attachmentFailure.value).toEqual({ itemId: failed, message: 'engine stopped' })
 
     dismissAttachmentFailure()
-    const { item_ids: [cancelled] } = await runAnalysis(SLOPE_REQUEST, true)
+    const { item_ids: [cancelled] } = await runAnalysis(SLOPE_REQUEST)
     settleResultAttachments(snapshotWith({ id: cancelled!, state: 'Failed', run: { job_id: 'j', state: 'Cancelled', message: null } }))
     expect(attachmentFailure.value).toBeNull()
   })
@@ -495,7 +499,7 @@ describe('analysis runs', () => {
 
   it('publishes a refused run through the shared status', async () => {
     createAnalysisMock.mockRejectedValueOnce(new Error('unit is required'))
-    await expect(runAnalysis(SLOPE_REQUEST, true)).rejects.toThrow('unit is required')
+    await expect(runAnalysis(SLOPE_REQUEST)).rejects.toThrow('unit is required')
     expect(lidarStatusMessage.value).toBe('unit is required')
   })
 })

@@ -35,7 +35,7 @@ import { designFixture } from './fixtures'
 import { currentDesign, designSessionStore } from '../src/app/document-session/store'
 import { activity } from './memory-backend'
 import { attachmentFailure, pendingAttachments } from '../src/app/lidar/actions'
-import { dataDialog } from '../src/app/lidar/library-navigation'
+import { analyzeItem, dataDialog, libraryView, openDataLibrary } from '../src/app/lidar/library-navigation'
 import { showInSiteData } from '../src/app/lidar/site-data-view'
 import { GalleryCanvasSurface } from './GalleryCanvasSurface'
 import { StampChooser } from '../src/components/canvas/StampChooser'
@@ -321,15 +321,15 @@ function GalleryWorkspaceCommands({ panelProjection }: { readonly panelProjectio
   )
 }
 
-/** The data workflow surfaces: Site data (with `open=<id>` opened under its row) and the three dialogs. */
+/** The data workflow surfaces: Site data (with `open=<id>` opened under its row), the Data library sheet, Import and Analyze. */
 function showGalleryDataSurface(next: GallerySurface): void {
-  dataDialog.value = next === 'library'
-    ? { kind: 'library', focusId: openItem }
-    : next === 'import'
-      ? { kind: 'import', paths: ['/data/LHD_FXX_0470_6800_MNT_O_0M50_LAMB93_IGN69.tif', '/data/LHD_FXX_0470_6801_MNT_O_0M50_LAMB93_IGN69.tif'], attach: true, returnTo: null }
-      : next === 'analyze'
-        ? { kind: 'analyze', itemId: 'lidar-ground', analysisId: null, attach: true, from: null, returnTo: null }
-        : null
+  libraryView.value = null
+  dataDialog.value = null
+  if (next === 'library') openDataLibrary(openItem)
+  if (next === 'import') {
+    dataDialog.value = { kind: 'import', paths: ['/data/LHD_FXX_0470_6800_MNT_O_0M50_LAMB93_IGN69.tif', '/data/LHD_FXX_0470_6801_MNT_O_0M50_LAMB93_IGN69.tif'] }
+  }
+  if (next === 'analyze') analyzeItem('lidar-ground')
   if (next === 'site-data' && openItem && currentDesign.peek()) showInSiteData(openItem)
 }
 

@@ -48,6 +48,9 @@ vi.mock('../app/document-session/store', async () => {
   return { currentDesign: signal<unknown>(null) }
 })
 
+const siteDataView = vi.hoisted(() => ({ showInSiteData: vi.fn() }))
+vi.mock('../app/lidar/site-data-view', () => siteDataView)
+
 vi.mock('../components/panels/lidar/LibraryPreview', () => ({
   usePreviewClient: () => null,
   LibraryPreview: () => <span data-preview="true" />,
@@ -56,9 +59,7 @@ vi.mock('../components/panels/lidar/LibraryPreview', () => ({
 import { DataDialogs } from '../components/panels/lidar/DataDialogs'
 import { lidarLibrary } from '../app/lidar/library-store'
 import { currentDesign } from '../app/document-session/store'
-import { analyzeItem, dataDialog, openDataLibrary } from '../app/lidar/library-navigation'
-import { openLayerRow } from '../app/canvas-layer-presentation/open-row'
-import { sidePanel } from '../app/shell/state'
+import { analyzeItem, dataDialog, libraryView, openDataLibrary } from '../app/lidar/library-navigation'
 import { locale } from '../app/settings/state'
 import { dropdownTrigger } from './support/dropdown-trigger'
 import { formatDiskSize } from '../components/panels/lidar/item-text'
@@ -76,7 +77,13 @@ function library(layers: LibraryItemSummary[], analyses: LibraryItemSummary[] = 
 }
 
 function design(entries: { kind: 'Source' | 'Derived'; id: string }[]) {
-  return { lidar: { entries: entries.map((entry, order) => ({ ...entry, order, visible: true, opacity: 1 })) } }
+  return {
+    lidar: {
+      schema_version: 1,
+      visible: true,
+      entries: entries.map((entry, order) => ({ ...entry, name: entry.id, order, visible: true, opacity: 1, ramp: null, reversed: false, range: null })),
+    },
+  }
 }
 
 let container: HTMLDivElement
@@ -134,6 +141,27 @@ async function focusItem(id: string): Promise<void> {
   await act(async () => { openDataLibrary(id) })
 }
 
+function selectedName(): string | null | undefined {
+  return container.querySelector('[role="option"][aria-selected="true"] strong')?.textContent
+}
+
+function detailsHeading(): string | null | undefined {
+  return container.querySelector('section[aria-labelledby] h3')?.textContent
+}
+
+async function key(target: Element, name: string, options: KeyboardEventInit = {}): Promise<void> {
+  await act(async () => {
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true, ...options }))
+  })
+}
+
+async function type(input: HTMLInputElement, value: string): Promise<void> {
+  await act(async () => {
+    input.value = value
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+}
+
 function title(): string | null | undefined {
   return container.querySelector('h2')?.textContent
 }
@@ -149,443 +177,572 @@ describe('Data library, Import and Analyze dialogs', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     render(null, container)
     container.remove()
     dataDialog.value = null
+    libraryView.value = null
   })
 
-  it('offers import from an empty library and creates nothing when the chooser is cancelled', async () => {
-    actions.chooseImportFiles.mockResolvedValue(null)
-    mount()
-    expect(container.textContent).toContain('No data yet')
-    expect(container.textContent).toContain('IGN LiDAR HD')
-    await click(button(/^Import…$/))
-
-    expect(actions.chooseImportFiles).toHaveBeenCalledTimes(1)
-    expect(actions.importLibraryItem).not.toHaveBeenCalled()
-    expect(dataDialog.value?.kind).toBe('library')
-  })
-
-  it('requires a measurement, then imports the files in order into the library only', async () => {
-    actions.chooseImportFiles.mockResolvedValue(['/d/tile_02.tif', '/d/tile_01.tif'])
-    mount()
-    await click(button(/^Import…$/))
-
-    expect(title()).toBe('Import terrain or height data')
-    expect(container.textContent).toContain('Single-band GeoTIFF rasters.')
-    const submit = button('Import 2 files')
-    expect(submit.disabled).toBe(true)
-    expect(container.textContent).toContain('the first file in the list wins')
-    await click(button('Move tile_01.tif up'))
-    expect(Array.from(container.querySelectorAll('ol li > span:first-child')).map((row) => row.textContent)).toEqual(['tile_01.tif', 'tile_02.tif'])
-    expect(container.querySelector('select')).toBeNull()
-    expect(dropdownTrigger(container, 'What the values measure')?.textContent).toContain('Choose a measurement')
-    await chooseFrom('What the values measure', 'Ground elevation (DTM)')
-    expect(submit.disabled).toBe(false)
-    await act(async () => {
-      container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+  describe('the Data library sheet', () => {
+    it('selects the first row on open, and ↑ and ↓ move the selection and focus', async () => {
+      lidarLibrary.value = library([layer('a', 'Alpha'), layer('b', 'Beta'), layer('c', 'Gamma')])
+      mount()
+      expect(selectedName()).toBe('Alpha')
+      expect(detailsHeading()).toBe('Alpha')
+      const list = container.querySelector('[role="listbox"]')!
+      // One tab stop: the selected row.
+      expect(Array.from(list.querySelectorAll('[role="option"]')).map((row) => row.getAttribute('tabindex'))).toEqual(['0', '-1', '-1'])
+      await key(rowNamed('Alpha'), 'ArrowDown')
+      expect(selectedName()).toBe('Beta')
+      expect(document.activeElement).toBe(rowNamed('Beta'))
+      await key(rowNamed('Beta'), 'End')
+      expect(selectedName()).toBe('Gamma')
+      await key(rowNamed('Gamma'), 'ArrowUp')
+      expect(selectedName()).toBe('Beta')
+      expect(detailsHeading()).toBe('Beta')
     })
 
-    expect(actions.importLibraryItem).toHaveBeenCalledWith(
-      ['/d/tile_01.tif', '/d/tile_02.tif'], 'tile_0', 'GroundElevation', { label: null, unknown: false }, false)
-    expect(actions.addToDesign).not.toHaveBeenCalled()
-    // Started from the library, Import returns to it.
-    expect(dataDialog.value).toEqual({ kind: 'library', focusId: null })
-  })
-
-  it('says whether the chosen files cover the Design before import', async () => {
-    coverage.check.mockResolvedValueOnce({ kind: 'covers', widthM: 2000, heightM: 1000 })
-    await act(async () => {
-      dataDialog.value = { kind: 'import', paths: ['/d/one.tif', '/d/two.tif'], attach: true, returnTo: null }
-      render(<DataDialogs />, container)
+    it('opens on the item it was asked for', async () => {
+      lidarLibrary.value = library([layer('a', 'Alpha'), layer('b', 'Beta')])
+      act(() => {
+        openDataLibrary('b')
+        render(<DataDialogs />, container)
+      })
+      expect(selectedName()).toBe('Beta')
     })
-    await act(async () => { await Promise.resolve() })
-    expect(coverage.check).toHaveBeenCalledWith(['/d/one.tif', '/d/two.tif'])
-    expect(container.textContent).toContain('Covers your site. The files span 2 km × 1 km.')
 
-    // Removing a file checks again; files away from the Design warn.
-    coverage.check.mockResolvedValueOnce({ kind: 'apart', distanceM: 12_400.4 })
-    await click(button('Remove two.tif'))
-    await act(async () => { await Promise.resolve() })
-    expect(coverage.check).toHaveBeenLastCalledWith(['/d/one.tif'])
-    const warning = container.querySelector('[data-notice-tone="warning"]')!
-    expect(warning.textContent).toContain('These files don’t cover your site. They lie 12 km from this Design.')
-    // The import itself stays possible.
-    await chooseFrom('What the values measure', 'Ground elevation (DTM)')
-    expect(button('Import 1 file').disabled).toBe(false)
-  })
-
-  it('says when the files cover only part of the Design', async () => {
-    coverage.check.mockResolvedValueOnce({ kind: 'partial', widthM: 800, heightM: 450 })
-    await act(async () => {
-      dataDialog.value = { kind: 'import', paths: ['/d/one.tif'], attach: true, returnTo: null }
-      render(<DataDialogs />, container)
+    it('selects the row that took its place when the selected item leaves the library', async () => {
+      lidarLibrary.value = library([layer('a', 'Alpha'), layer('b', 'Beta'), layer('c', 'Gamma')])
+      mount()
+      await selectRow('Beta')
+      await act(async () => { lidarLibrary.value = library([layer('a', 'Alpha'), layer('c', 'Gamma')]) })
+      expect(selectedName()).toBe('Gamma')
     })
-    await act(async () => { await Promise.resolve() })
-    expect(container.textContent).toContain('Covers part of your site. The files span 800 m × 450 m. Part of this Design lies outside the files.')
-  })
 
-  it('counts the library, says its size on this computer and shows its folder', async () => {
-    lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Canopy')])
-    mount()
-    await act(async () => { await Promise.resolve() })
-    expect(container.textContent).toContain('2 items · 1.2 GB on this computer')
-    await click(button(/^Show in folder$/))
-    expect(actions.showDataLibraryFolder).toHaveBeenCalledOnce()
-  })
-
-  it('refuses a name the library already uses and suggests a free one', async () => {
-    lidarLibrary.value = library([layer('a', 'Terrain')])
-    act(() => {
-      dataDialog.value = { kind: 'import', paths: ['/d/one.tif'], attach: true, returnTo: null }
-      render(<DataDialogs />, container)
+    it('sorts by name or most recently added, keeping results under their source', async () => {
+      lidarLibrary.value = library(
+        [layer('old', 'Alpha', { created_at: '1000' }), layer('new', 'Beta', { created_at: '3000' })],
+        [slope('s', 'old', { name: 'Steepness', created_at: '2000' })],
+      )
+      mount()
+      const names = () => Array.from(container.querySelectorAll('[role="option"] strong')).map((node) => node.textContent)
+      expect(names()).toEqual(['Alpha', 'Steepness', 'Beta'])
+      expect(dropdownTrigger(container, 'Sort')?.textContent).toContain('Name')
+      await chooseFrom('Sort', 'Recently added')
+      expect(names()).toEqual(['Beta', 'Alpha', 'Steepness'])
     })
-    const name = container.querySelector<HTMLInputElement>('input[required]')!
-    await act(async () => {
-      name.value = 'terrain'
-      name.dispatchEvent(new Event('input', { bubbles: true }))
+
+    it('keeps a matching result\'s source in the list while searching', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Canopy')], [slope('s', 'a', { name: 'Steepness' })])
+      mount()
+      await type(container.querySelector<HTMLInputElement>('input[type="search"]')!, 'steep')
+      expect(Array.from(container.querySelectorAll('[role="option"] strong')).map((node) => node.textContent)).toEqual(['Ground', 'Steepness'])
     })
-    await chooseFrom('What the values measure', 'Ground elevation (DTM)')
-    expect(container.textContent).toContain('already has data named “terrain”')
-    expect(container.textContent).toContain('“terrain (2)”')
-    expect(button('Import 1 file').disabled).toBe(true)
-    expect(container.textContent).toContain('added to this Design when it is ready')
-  })
 
-  it('refuses a rename to a name another library item uses', async () => {
-    lidarLibrary.value = library([layer('a', 'Elevation'), layer('b', 'Terrain')])
-    mount()
-    await selectRow('Terrain')
-    await click(button('Actions for Terrain'))
-    await click(Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menu"] button'))
-      .find((candidate) => candidate.textContent?.includes('Rename'))!)
-    const name = container.querySelector<HTMLInputElement>('form input')!
-    await act(async () => {
-      name.value = 'elevation'
-      name.dispatchEvent(new Event('input', { bubbles: true }))
+    it('starts the selection\'s fetches once it has rested for 120 ms', async () => {
+      vi.useFakeTimers()
+      lidarLibrary.value = library([layer('a', 'Alpha'), layer('b', 'Beta'), layer('c', 'Gamma'), layer('d', 'Delta')])
+      mount()
+      await act(async () => { vi.advanceTimersByTime(120) })
+      expect(actions.fetchItemSources.mock.calls.map(([id]) => id)).toEqual(['a'])
+      actions.fetchItemSources.mockClear()
+      // Holding ↓ over three rows, 40 ms apart, fetches only for the row it rests on.
+      for (const name of ['Alpha', 'Beta', 'Delta']) {
+        await key(rowNamed(name), 'ArrowDown')
+        await act(async () => { vi.advanceTimersByTime(40) })
+      }
+      expect(actions.fetchItemSources).not.toHaveBeenCalled()
+      await act(async () => { vi.advanceTimersByTime(120) })
+      expect(actions.fetchItemSources.mock.calls.map(([id]) => id)).toEqual(['c'])
     })
-    expect(container.textContent).toContain('already has data named “elevation”')
-    expect(button('Save name').disabled).toBe(true)
-    await act(async () => {
-      container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+
+    it('counts the library, says its size on this computer and shows its folder, with no Done', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Canopy')])
+      mount()
+      await act(async () => { await Promise.resolve() })
+      expect(container.querySelector('footer')?.textContent).toContain('2 items · 1.2 GB on this computer')
+      expect(() => button(/^Done$/)).toThrow()
+      await click(button(/^Show in folder$/))
+      expect(actions.showDataLibraryFolder).toHaveBeenCalledOnce()
     })
-    expect(actions.renameLibraryItem).not.toHaveBeenCalled()
 
-    await act(async () => {
-      name.value = 'Terrain model'
-      name.dispatchEvent(new Event('input', { bubbles: true }))
+    it('says when an item was added', () => {
+      lidarLibrary.value = library([layer('a', 'Ground', { created_at: String(Date.UTC(2026, 8, 11, 9, 30)) })])
+      mount()
+      const facts = container.querySelector('dl')!.textContent
+      expect(facts).toMatch(/Added.*2026/)
     })
-    expect(container.textContent).not.toContain('already has data named')
-    expect(button('Save name').disabled).toBe(false)
-  })
 
-  it('adds a ready item to the Design and marks items the Design already uses', async () => {
-    lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Canopy')])
-    setDesign(design([{ kind: 'Source', id: 'b' }]))
-    mount()
+    it('adds a ready item to the Design, and shows an item the Design has in Site data', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Canopy')])
+      setDesign(design([{ kind: 'Source', id: 'b' }]))
+      mount()
+      // The rows already show how many items there are; the header carries no bare count.
+      expect(container.querySelector('header')?.textContent).not.toMatch(/\d/)
+      expect(rowNamed('Canopy').textContent).toContain('In this Design')
 
-    // The rows already show how many items there are; the header carries no bare count.
-    expect(container.querySelector('header')?.textContent).not.toMatch(/\d/)
-    expect(container.querySelector('footer')?.textContent).toContain('2 items')
+      await selectRow('Canopy')
+      expect(() => button('Add Canopy to this Design')).toThrow()
+      await click(button(/^Show in Site data$/))
+      expect(siteDataView.showInSiteData).toHaveBeenCalledWith('b')
+      expect(libraryView.value).toBeNull()
 
-    await selectRow('Canopy')
-    const details = container.querySelector('section[aria-labelledby]')!
-    expect(details.textContent).toContain('In this Design')
-    expect(details.querySelector('[aria-label="Add Canopy to this Design"]')).toBeNull()
-    await selectRow('Ground')
-    await click(button('Add Ground to this Design'))
-    expect(actions.addToDesign).toHaveBeenCalledWith('Source', 'a')
-  })
-
-  it('offers Retry and Dismiss for a failed import', async () => {
-    lidarLibrary.value = library([layer('x', 'Broken', {
-      generation_id: null, state: 'Failed',
-      import_job: { job_id: 'job-x', layer_id: 'x', state: 'Failed', message: 'unreadable file', progress: null },
-    })])
-    mount()
-
-    expect(container.textContent).toContain('unreadable file')
-    await click(button('Retry'))
-    await click(button('Dismiss'))
-    expect(actions.retryLibraryImport).toHaveBeenCalledWith('x')
-    expect(actions.dismissLibraryImport).toHaveBeenCalledWith('x')
-  })
-
-  it('nests results under the data they were calculated from', () => {
-    lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Canopy')], [slope('s', 'a')])
-    mount()
-    const rows = Array.from(container.querySelectorAll('li')).map((row) => [row.querySelector('strong')?.textContent, row.dataset.nested])
-    expect(rows).toEqual([['Canopy', 'false'], ['Ground', 'false'], ['Ground · Slope', 'true']])
-  })
-
-  it('filters by analysis group from the registry', async () => {
-    lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a')])
-    mount()
-    expect(container.querySelector('select')).toBeNull()
-    await click(dropdownTrigger(container, 'Type')!)
-    expect(Array.from(container.querySelectorAll('[role="listbox"]:not([aria-label="Data library"]) [role="option"]')).map((option) => option.textContent))
-      .toEqual(['All types', 'Imported data', 'Terrain'])
-    await click(dropdownTrigger(container, 'Type')!)
-    await chooseFrom('Type', 'Terrain')
-    expect(dropdownTrigger(container, 'Type')?.textContent).toContain('Terrain')
-    expect(Array.from(container.querySelectorAll('li strong')).map((node) => node.textContent)).toEqual(['Ground · Slope'])
-  })
-
-  it('refuses to delete an item other results use and can show those results', async () => {
-    lidarLibrary.value = library([layer('a', 'Ground', { dependents: 1 }), layer('b', 'Canopy')], [slope('s', 'a')])
-    actions.fetchDeleteImpact.mockResolvedValue({ dependent_item_ids: ['s'] })
-    mount()
-    await selectRow('Ground')
-    await click(button('Actions for Ground'))
-    await click(document.querySelector<HTMLButtonElement>('[role="menu"] [aria-label="Delete from library"]')!)
-
-    expect(actions.fetchDeleteImpact).toHaveBeenCalledWith('a')
-    expect(container.textContent).toContain('Saved results depend on this data (1)')
-    expect(() => button(/^Delete everywhere$/)).toThrow()
-    await click(button('Show results'))
-
-    const names = Array.from(container.querySelectorAll('li strong')).map((node) => node.textContent)
-    expect(names).toEqual(['Ground · Slope'])
-    expect(actions.deleteLibraryItem).not.toHaveBeenCalled()
-  })
-
-  it('deletes a result by its item id', async () => {
-    lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', { name: 'Steepness' })])
-    actions.fetchDeleteImpact.mockResolvedValue({ dependent_item_ids: [] })
-    mount()
-    await selectRow('Steepness')
-    await click(button('Actions for Steepness'))
-    await click(document.querySelector<HTMLButtonElement>('[role="menu"] [aria-label="Delete from library"]')!)
-    // The library does not know which other Designs use an item, and says so.
-    expect(container.textContent).toContain('Canopi doesn’t keep track of which other Designs use it.')
-    await click(button(/^Delete everywhere$/))
-    expect(actions.deleteLibraryItem).toHaveBeenCalledWith('s')
-  })
-
-  it('retries a failed calculation by rerunning its definition', async () => {
-    lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', {
-      generation_id: null, state: 'Failed', name: 'Steepness', run: { job_id: 'j', state: 'Failed', message: 'engine stopped' },
-    })])
-    mount()
-    await focusItem('s')
-
-    expect(container.querySelector('h3')?.textContent).toBe('Steepness')
-    expect(container.textContent).toContain('engine stopped')
-    await click(button(/^Retry$/))
-    expect(actions.rerunAnalysis).toHaveBeenCalledWith('s-def')
-  })
-
-  async function openAnalyze(name: string): Promise<void> {
-    await selectRow(name)
-    await click(button(`Actions for ${name}`))
-    await click(document.querySelector<HTMLButtonElement>('[role="menu"] [aria-label="Analyze…"]')!)
-  }
-
-  async function choose(label: string): Promise<void> {
-    const input = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]'))
-      .find((candidate) => candidate.closest('label')?.textContent?.includes(label))!
-    await act(async () => { input.click() })
-  }
-
-  async function submit(): Promise<void> {
-    await act(async () => {
-      container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      act(() => { openDataLibrary() })
+      await selectRow('Ground')
+      await click(button('Add Ground to this Design'))
+      expect(actions.addToDesign).toHaveBeenCalledWith('Source', 'a')
     })
-  }
 
-  it('runs slope from a source as a new library result, once a unit is chosen', async () => {
-    lidarLibrary.value = library([layer('a', 'Ground')])
-    mount()
-    await openAnalyze('Ground')
+    it('renames in place, and Esc cancels only the rename', async () => {
+      lidarLibrary.value = library([layer('a', 'Elevation'), layer('b', 'Terrain')])
+      mount()
+      await selectRow('Terrain')
+      await click(button(/^Rename…$/))
+      const name = container.querySelector<HTMLInputElement>('section[aria-labelledby] form input')!
+      expect(document.activeElement).toBe(name)
+      await type(name, 'elevation')
+      expect(container.textContent).toContain('already has data named “elevation”')
+      expect(button('Save name').disabled).toBe(true)
+      await key(name, 'Escape')
+      expect(libraryView.value).not.toBeNull()
+      expect(container.querySelector('section[aria-labelledby] form')).toBeNull()
+      expect(detailsHeading()).toBe('Terrain')
 
-    expect(title()).toBe('Analyze')
-    expect(container.textContent).toContain('saved to your library')
-    const name = container.querySelector<HTMLInputElement>('form input:not([type])')!
-    expect(name.value).toBe('Ground · Slope')
-    await submit()
-    expect(actions.runAnalysis).not.toHaveBeenCalled()
-    expect(container.textContent).toContain('Choose an option.')
-
-    await choose('Percent')
-    await submit()
-    expect(actions.runAnalysis).toHaveBeenCalledWith({
-      analysis_id: 'terrain.slope',
-      inputs: [{ key: 'dem', item_id: 'a' }],
-      parameters: [{ key: 'unit', value: { Choice: 'percent' } }],
-      outputs: ['slope'],
-      name: 'Ground · Slope',
-    }, false)
-    await act(async () => {})
-    expect(dataDialog.value).toEqual({ kind: 'library', focusId: null })
-  })
-
-  it('explains by name why an analysis cannot run', async () => {
-    lidarLibrary.value = library([
-      layer('s', 'Canopy', {
-        item_type: { kind: 'Raster', quantity: 'SurfaceElevation' },
-        offers: [{ analysis_id: 'terrain.slope', unavailable: { reason: 'WrongInput', expected: [{ kind: 'Raster', quantity: 'GroundElevation' }] } }],
-      }),
-      layer('g', 'Ground', { offers: [{ analysis_id: 'terrain.slope', unavailable: { reason: 'EngineMissing', detail: 'not installed' } }] }),
-    ])
-    mount()
-    await openAnalyze('Canopy')
-    expect(container.textContent).toContain('Needs Ground elevation (DTM).')
-    expect(button(/^Run$/).disabled).toBe(true)
-
-    await click(button(/^Cancel$/))
-    await openAnalyze('Ground')
-    expect(container.textContent).toContain('Unavailable: the GeoLibre engine is missing. (not installed)')
-    expect(button(/^Run$/).disabled).toBe(true)
-    expect(actions.runAnalysis).not.toHaveBeenCalled()
-  })
-
-  it('attaches a Layers-initiated analysis to the asking Design', async () => {
-    lidarLibrary.value = library([layer('a', 'Ground')])
-    mount()
-    await act(async () => { analyzeItem('a', { attach: true, analysisId: 'terrain.slope' }) })
-    expect(container.textContent).toContain('added under it in Layers')
-    await choose('Degrees')
-    await submit()
-    expect(actions.runAnalysis).toHaveBeenCalledWith(expect.objectContaining({ analysis_id: 'terrain.slope' }), true)
-  })
-
-  it('shows a result the Design already has in Layers instead of calculating it again', async () => {
-    lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a')])
-    setDesign(design([{ kind: 'Derived', id: 's' }]))
-    mount()
-    await openAnalyze('Ground')
-    await choose('Degrees')
-    expect(container.textContent).toContain('Already in Layers.')
-    await click(button('Show in Layers'))
-    expect(sidePanel.value).toBe('layers')
-    expect(openLayerRow.value).toBe('site:s')
-    expect(dataDialog.value).toBeNull()
-    expect(actions.runAnalysis).not.toHaveBeenCalled()
-  })
-
-  it('offers an existing library result before calculating a duplicate', async () => {
-    lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a')])
-    mount()
-    await openAnalyze('Ground')
-    await choose('Degrees')
-    expect(container.textContent).toContain('already in the library')
-    await click(button('Add existing'))
-    expect(actions.addToDesign).toHaveBeenCalledWith('Derived', 's')
-    expect(actions.runAnalysis).not.toHaveBeenCalled()
-  })
-
-  it('runs a result again with changes as a new analysis prefilled from its provenance', async () => {
-    lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', { name: 'Steepness' })])
-    mount()
-    await selectRow('Steepness')
-    await click(button('Actions for Steepness'))
-    await click(document.querySelector<HTMLButtonElement>('[role="menu"] [aria-label="Run again with changes…"]')!)
-
-    expect(title()).toBe('Analyze')
-    const degrees = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]'))
-      .find((candidate) => candidate.closest('label')?.textContent === 'Degrees')!
-    expect(degrees.checked).toBe(true)
-    // The same settings are still a new calculation, never a refresh.
-    await choose('Percent')
-    await submit()
-    expect(actions.runAnalysis).toHaveBeenCalledWith({
-      analysis_id: 'terrain.slope',
-      inputs: [{ key: 'dem', item_id: 'a' }],
-      parameters: [{ key: 'unit', value: { Choice: 'percent' } }],
-      outputs: ['slope'],
-      name: 'Ground · Slope',
-    }, false)
-    expect(actions.rerunAnalysis).not.toHaveBeenCalled()
-  })
-
-  it('offers no run with changes once the input is gone', async () => {
-    lidarLibrary.value = library([], [slope('s', 'a', { name: 'Steepness' })])
-    mount()
-    await selectRow('Steepness')
-    await click(button('Actions for Steepness'))
-    expect(document.querySelector('[role="menu"] [aria-label="Run again with changes…"]')).toBeNull()
-  })
-
-  it('describes a result by its provenance', async () => {
-    lidarLibrary.value = library([layer('a', 'Ground')], [slope('new', 'a', { name: 'New' })])
-    mount()
-    await focusItem('new')
-    const facts = container.querySelector('dl')!.textContent
-    expect(facts).toContain('AnalysisSlope · Version 1')
-    expect(facts).toContain('UnitDegrees')
-    expect(facts).toContain('Calculated fromGround')
-    expect(facts).toContain('geolibre-cli 1.5.3 (aac2b7439786)')
-    await click(button(/^Ground$/))
-    expect(container.querySelector('h3')?.textContent).toBe('Ground')
-  })
-
-  it('marks an out-of-date result with its reasons and refreshes it', async () => {
-    lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', {
-      name: 'Steepness',
-      freshness: { state: 'Stale', reasons: [
-        { reason: 'InputUpdated', input_key: 'dem', item_id: 'a' },
-        { reason: 'ToolUpdated', from: 'geolibre-cli 1.5.2', to: 'geolibre-cli 1.5.3' },
-      ] },
-    })])
-    mount()
-    expect(rowNamed('Steepness').textContent).toContain('Out of date')
-    await selectRow('Steepness')
-    await click(button('Refresh Steepness'))
-    expect(actions.rerunAnalysis).toHaveBeenCalledWith('s-def')
-
-    await focusItem('s')
-    expect(container.textContent).toContain('Ground has changed since this was calculated.')
-    expect(container.textContent).toContain('A different engine build is installed (geolibre-cli 1.5.3).')
-  })
-
-  it('shows processing history with a result and pages it', async () => {
-    const run = (job: string) => ({
-      job_id: job, state: 'Complete' as const, message: null, recipe_version: 1, tool: null, inputs: [],
-      created_at: '1790000000000', finished_at: null, outputs: [{ item_id: 's', generation_id: 'g', coverage_cells: '1200' }],
+      await click(button(/^Rename…$/))
+      await type(container.querySelector<HTMLInputElement>('section[aria-labelledby] form input')!, 'Terrain model')
+      await act(async () => {
+        container.querySelector('section[aria-labelledby] form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      })
+      expect(actions.renameLibraryItem).toHaveBeenCalledWith('b', 'Terrain model')
     })
-    actions.fetchProcessingHistory
-      .mockResolvedValueOnce({ definition_id: 's-def', runs: [run('j2')], next_cursor: 'c1' })
-      .mockResolvedValueOnce({ definition_id: 's-def', runs: [{ ...run('j1'), state: 'Failed', message: 'engine stopped', outputs: [] }], next_cursor: null })
-    lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', { name: 'Steepness' })])
-    mount()
-    await focusItem('s')
-    await act(async () => {})
-    expect(actions.fetchProcessingHistory).toHaveBeenCalledWith('s-def', null)
-    const history = container.querySelector('section[aria-label="Processing history"]')!
-    expect(history.textContent).toContain('Completed')
-    expect(history.textContent).toContain('1,200 cells published')
-    await act(async () => {})
 
-    await click(button('Show more'))
-    await act(async () => {})
-    expect(actions.fetchProcessingHistory).toHaveBeenLastCalledWith('s-def', 'c1')
-    expect(history.querySelectorAll('li')).toHaveLength(2)
-    expect(history.textContent).toContain('engine stopped')
-    expect(history.textContent).toContain('Nothing published')
-    expect(() => button('Show more')).toThrow()
+    it('confirms Delete everywhere in place of the actions', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', { name: 'Steepness' })])
+      actions.fetchDeleteImpact.mockResolvedValue({ dependent_item_ids: [] })
+      mount()
+      await selectRow('Steepness')
+      await click(button(/^Delete everywhere$/))
+      // The library does not know which other Designs use an item, and says so.
+      expect(container.textContent).toContain('Canopi doesn’t keep track of which other Designs use it.')
+      expect(() => button(/^Rename…$/)).not.toThrow()
+      await click(button(/^Keep$/))
+      expect(actions.deleteLibraryItem).not.toHaveBeenCalled()
+      await click(button(/^Delete everywhere$/))
+      await click(button(/^Delete everywhere$/))
+      expect(actions.deleteLibraryItem).toHaveBeenCalledWith('s')
+    })
+
+    it('refuses to delete an item other results use, and lists those results as links', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground', { dependents: 1 }), layer('b', 'Canopy')], [slope('s', 'a', { name: 'Steepness' })])
+      actions.fetchDeleteImpact.mockResolvedValue({ dependent_item_ids: ['s'] })
+      mount()
+      await selectRow('Ground')
+      const facts = container.querySelector('dl')!
+      expect(facts.textContent).toContain('Saved results')
+      await click(button(/^Delete everywhere$/))
+      await act(async () => { await Promise.resolve() })
+      expect(container.textContent).toContain('Saved results depend on this data (1)')
+      expect(Array.from(container.querySelectorAll('section[aria-labelledby] button')).some((node) => node.textContent === 'Delete everywhere')).toBe(false)
+      await click(button(/^Keep$/))
+      await click(Array.from(container.querySelectorAll<HTMLButtonElement>('dl button')).find((node) => node.textContent === 'Steepness')!)
+      expect(selectedName()).toBe('Steepness')
+      expect(actions.deleteLibraryItem).not.toHaveBeenCalled()
+    })
+
+    it('names an input that left the library Deleted item', () => {
+      lidarLibrary.value = library([], [slope('s', 'gone', { name: 'Orphan' })])
+      mount()
+      expect(container.querySelector('dl')!.textContent).toContain('Calculated fromDeleted item')
+    })
+
+    it('opens Run again with changes over the library, which comes back with its search and selection', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Canopy')], [slope('s', 'a', { name: 'Steepness' })])
+      mount()
+      await type(container.querySelector<HTMLInputElement>('input[type="search"]')!, 'steep')
+      await selectRow('Steepness')
+      await click(button(/^Run again with changes…$/))
+      expect(dataDialog.value).toEqual({ kind: 'analyze', itemId: 'a', analysisId: 'terrain.slope', from: 's' })
+      expect(container.querySelector('[data-library-sheet]')?.hasAttribute('inert')).toBe(true)
+      expect(Array.from(container.querySelectorAll('h2')).map((node) => node.textContent)).toEqual(['Data library', 'Analyze'])
+      expect(container.querySelector('[data-analysis-source]')?.textContent).toBe('SourceGround')
+      await click(button(/^Cancel$/))
+      expect(dataDialog.value).toBeNull()
+      expect(container.querySelector('[data-library-sheet]')?.hasAttribute('inert')).toBe(false)
+      expect(container.querySelector<HTMLInputElement>('input[type="search"]')!.value).toBe('steep')
+      expect(selectedName()).toBe('Steepness')
+    })
+
+    it('offers Import only in the empty library, disabled with the reason when no Design is open', async () => {
+      setDesign(null)
+      mount()
+      expect(container.textContent).toContain('No data yet')
+      const importButton = button(/^Import…/)
+      expect(importButton.disabled).toBe(true)
+      expect(importButton.textContent).toContain('Open a Design to import data')
+
+      setDesign(design([]))
+      render(null, container)
+      mount()
+      actions.chooseImportFiles.mockResolvedValue(null)
+      await click(button(/^Import…/))
+      expect(actions.chooseImportFiles).toHaveBeenCalledTimes(1)
+      expect(actions.importLibraryItem).not.toHaveBeenCalled()
+      expect(libraryView.value).not.toBeNull()
+    })
+
+    it('offers no Import, Analyze or row menu once the library has items', () => {
+      lidarLibrary.value = library([layer('a', 'Ground')])
+      mount()
+      expect(() => button(/^Import…/)).toThrow()
+      expect(() => button(/^Analyze…/)).toThrow()
+      expect(container.querySelector('[aria-haspopup="menu"]')).toBeNull()
+    })
+
+    it('offers Retry and Dismiss for a failed import', async () => {
+      lidarLibrary.value = library([layer('x', 'Broken', {
+        generation_id: null, state: 'Failed',
+        import_job: { job_id: 'job-x', layer_id: 'x', state: 'Failed', message: 'unreadable file', progress: null },
+      })])
+      mount()
+
+      expect(container.textContent).toContain('unreadable file')
+      await click(button('Retry'))
+      await click(button('Dismiss'))
+      expect(actions.retryLibraryImport).toHaveBeenCalledWith('x')
+      expect(actions.dismissLibraryImport).toHaveBeenCalledWith('x')
+    })
+
+    it('nests results under the data they were calculated from', () => {
+      lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Canopy')], [slope('s', 'a')])
+      mount()
+      const rows = Array.from(container.querySelectorAll('[role="option"]')).map((row) => [row.querySelector('strong')?.textContent, (row as HTMLElement).dataset.nested])
+      expect(rows).toEqual([['Canopy', 'false'], ['Ground', 'false'], ['Ground · Slope', 'true']])
+    })
+
+    it('filters by analysis group from the registry', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a')])
+      mount()
+      expect(container.querySelector('select')).toBeNull()
+      await click(dropdownTrigger(container, 'Type')!)
+      expect(Array.from(container.querySelectorAll('[role="listbox"]:not([aria-label="Data library"]) [role="option"]')).map((option) => option.textContent))
+        .toEqual(['All types', 'Imported data', 'Terrain'])
+      await click(dropdownTrigger(container, 'Type')!)
+      await chooseFrom('Type', 'Terrain')
+      expect(dropdownTrigger(container, 'Type')?.textContent).toContain('Terrain')
+      // The result's source stays above it.
+      expect(Array.from(container.querySelectorAll('[role="option"] strong')).map((node) => node.textContent)).toEqual(['Ground', 'Ground · Slope'])
+    })
+
+    it('retries a failed calculation by rerunning its definition', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', {
+        generation_id: null, state: 'Failed', name: 'Steepness', run: { job_id: 'j', state: 'Failed', message: 'engine stopped' },
+      })])
+      mount()
+      await focusItem('s')
+
+      expect(detailsHeading()).toBe('Steepness')
+      expect(container.textContent).toContain('engine stopped')
+      await click(button(/^Retry$/))
+      expect(actions.rerunAnalysis).toHaveBeenCalledWith('s-def')
+    })
+
+    it('describes a result by its provenance, whose input selects it', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground')], [slope('new', 'a', { name: 'New' })])
+      mount()
+      await focusItem('new')
+      const facts = container.querySelector('dl')!.textContent
+      expect(facts).toContain('AnalysisSlope · Version 1')
+      expect(facts).toContain('UnitDegrees')
+      expect(facts).toContain('Calculated fromGround')
+      expect(facts).toContain('geolibre-cli 1.5.3 (aac2b7439786)')
+      await click(Array.from(container.querySelectorAll<HTMLButtonElement>('dl button')).find((node) => node.textContent === 'Ground')!)
+      expect(detailsHeading()).toBe('Ground')
+    })
+
+    it('marks an out-of-date result with its reasons and refreshes it', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', {
+        name: 'Steepness',
+        freshness: { state: 'Stale', reasons: [
+          { reason: 'InputUpdated', input_key: 'dem', item_id: 'a' },
+          { reason: 'ToolUpdated', from: 'geolibre-cli 1.5.2', to: 'geolibre-cli 1.5.3' },
+        ] },
+      })])
+      mount()
+      expect(rowNamed('Steepness').textContent).toContain('Out of date')
+      await selectRow('Steepness')
+      expect(container.textContent).toContain('Ground has changed since this was calculated.')
+      expect(container.textContent).toContain('A different engine build is installed (geolibre-cli 1.5.3).')
+      await click(button('Refresh Steepness'))
+      expect(actions.rerunAnalysis).toHaveBeenCalledWith('s-def')
+    })
+
+    it('shows processing history with a result and pages it', async () => {
+      const run = (job: string) => ({
+        job_id: job, state: 'Complete' as const, message: null, recipe_version: 1, tool: null, inputs: [],
+        created_at: '1790000000000', finished_at: null, outputs: [{ item_id: 's', generation_id: 'g', coverage_cells: '1200' }],
+      })
+      actions.fetchProcessingHistory
+        .mockResolvedValueOnce({ definition_id: 's-def', runs: [run('j2')], next_cursor: 'c1' })
+        .mockResolvedValueOnce({ definition_id: 's-def', runs: [{ ...run('j1'), state: 'Failed', message: 'engine stopped', outputs: [] }], next_cursor: null })
+      lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', { name: 'Steepness' })])
+      act(() => {
+        openDataLibrary('s')
+        render(<DataDialogs />, container)
+      })
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 130)) })
+      await act(async () => {})
+      expect(actions.fetchProcessingHistory).toHaveBeenCalledWith('s-def', null)
+      const history = container.querySelector('section[aria-label="Processing history"]')!
+      expect(history.textContent).toContain('Completed')
+      expect(history.textContent).toContain('1,200 cells published')
+      await act(async () => {})
+
+      await click(button('Show more'))
+      await act(async () => {})
+      expect(actions.fetchProcessingHistory).toHaveBeenLastCalledWith('s-def', 'c1')
+      expect(history.querySelectorAll('li')).toHaveLength(2)
+      expect(history.textContent).toContain('engine stopped')
+      expect(history.textContent).toContain('Nothing published')
+      expect(() => button('Show more')).toThrow()
+    })
+
+    it('offers Cancel for a running calculation and cancels its job', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', {
+        generation_id: null, state: 'Preparing', name: 'Pending', run: { job_id: 'job-1', state: 'Preparing', message: null },
+      })])
+      mount()
+      await selectRow('Pending')
+      expect(container.textContent).toContain('Calculating')
+      await click(button(/^Cancel calculation$/))
+      expect(actions.cancelAnalysisJob).toHaveBeenCalledWith(expect.objectContaining({ id: 's', run: expect.objectContaining({ job_id: 'job-1' }) }))
+    })
+
+    it('labels a cancelled calculation as cancelled, not failed', () => {
+      lidarLibrary.value = library([layer('a', 'Ground')], [
+        slope('c', 'a', { generation_id: null, state: 'Failed', name: 'Stopped', run: { job_id: 'j', state: 'Cancelled', message: null } }),
+      ])
+      mount()
+      const row = rowNamed('Stopped')
+      expect(row.textContent).toContain('Cancelled')
+      expect(row.textContent).not.toContain('Calculation failed')
+    })
   })
 
-  it('offers Cancel for a running calculation and cancels its job', async () => {
-    lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', {
-      generation_id: null, state: 'Preparing', name: 'Pending', run: { job_id: 'job-1', state: 'Preparing', message: null },
-    })])
-    mount()
-    await selectRow('Pending')
-    expect(container.textContent).toContain('Calculating')
-    await click(button(/^Cancel calculation$/))
-    expect(actions.cancelAnalysisJob).toHaveBeenCalledWith(expect.objectContaining({ id: 's', run: expect.objectContaining({ job_id: 'job-1' }) }))
+  describe('Import', () => {
+    it('requires a measurement, then imports the files in order, joining this Design', async () => {
+      await act(async () => {
+        dataDialog.value = { kind: 'import', paths: ['/d/tile_02.tif', '/d/tile_01.tif'] }
+        render(<DataDialogs />, container)
+      })
+
+      expect(title()).toBe('Import terrain or height data')
+      expect(container.textContent).toContain('Single-band GeoTIFF rasters.')
+      expect(container.textContent).toContain('added to this Design when it is ready')
+      const submit = button('Import 2 files')
+      expect(submit.disabled).toBe(true)
+      expect(container.textContent).toContain('the first file in the list wins')
+      await click(button('Move tile_01.tif up'))
+      expect(Array.from(container.querySelectorAll('ol li > span:first-child')).map((row) => row.textContent)).toEqual(['tile_01.tif', 'tile_02.tif'])
+      expect(container.querySelector('select')).toBeNull()
+      expect(dropdownTrigger(container, 'What the values measure')?.textContent).toContain('Choose a measurement')
+      await chooseFrom('What the values measure', 'Ground elevation (DTM)')
+      expect(submit.disabled).toBe(false)
+      await act(async () => {
+        container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      })
+
+      expect(actions.importLibraryItem).toHaveBeenCalledWith(
+        ['/d/tile_01.tif', '/d/tile_02.tif'], 'tile_0', 'GroundElevation', { label: null, unknown: false })
+      expect(actions.addToDesign).not.toHaveBeenCalled()
+      expect(dataDialog.value).toBeNull()
+    })
+
+    it('says whether the chosen files cover the Design before import', async () => {
+      coverage.check.mockResolvedValueOnce({ kind: 'covers', widthM: 2000, heightM: 1000 })
+      await act(async () => {
+        dataDialog.value = { kind: 'import', paths: ['/d/one.tif', '/d/two.tif'] }
+        render(<DataDialogs />, container)
+      })
+      await act(async () => { await Promise.resolve() })
+      expect(coverage.check).toHaveBeenCalledWith(['/d/one.tif', '/d/two.tif'])
+      expect(container.textContent).toContain('Covers your site. The files span 2 km × 1 km.')
+
+      // Removing a file checks again; files away from the Design warn.
+      coverage.check.mockResolvedValueOnce({ kind: 'apart', distanceM: 12_400.4 })
+      await click(button('Remove two.tif'))
+      await act(async () => { await Promise.resolve() })
+      expect(coverage.check).toHaveBeenLastCalledWith(['/d/one.tif'])
+      const warning = container.querySelector('[data-notice-tone="warning"]')!
+      expect(warning.textContent).toContain('These files don’t cover your site. They lie 12 km from this Design.')
+      // The import itself stays possible.
+      await chooseFrom('What the values measure', 'Ground elevation (DTM)')
+      expect(button('Import 1 file').disabled).toBe(false)
+    })
+
+    it('says when the files cover only part of the Design', async () => {
+      coverage.check.mockResolvedValueOnce({ kind: 'partial', widthM: 800, heightM: 450 })
+      await act(async () => {
+        dataDialog.value = { kind: 'import', paths: ['/d/one.tif'] }
+        render(<DataDialogs />, container)
+      })
+      await act(async () => { await Promise.resolve() })
+      expect(container.textContent).toContain('Covers part of your site. The files span 800 m × 450 m. Part of this Design lies outside the files.')
+    })
+
+    it('refuses a name the library already uses and suggests a free one', async () => {
+      lidarLibrary.value = library([layer('a', 'Terrain')])
+      act(() => {
+        dataDialog.value = { kind: 'import', paths: ['/d/one.tif'] }
+        render(<DataDialogs />, container)
+      })
+      const name = container.querySelector<HTMLInputElement>('input[required]')!
+      await type(name, 'terrain')
+      await chooseFrom('What the values measure', 'Ground elevation (DTM)')
+      expect(container.textContent).toContain('already has data named “terrain”')
+      expect(container.textContent).toContain('“terrain (2)”')
+      expect(button('Import 1 file').disabled).toBe(true)
+    })
   })
 
-  it('labels a cancelled calculation as cancelled, not failed', () => {
-    lidarLibrary.value = library([layer('a', 'Ground')], [
-      slope('c', 'a', { generation_id: null, state: 'Failed', name: 'Stopped', run: { job_id: 'j', state: 'Cancelled', message: null } }),
-    ])
-    mount()
-    const row = rowNamed('Stopped')
-    expect(row.textContent).toContain('Cancelled')
-    expect(row.textContent).not.toContain('Calculation failed')
+  describe('Analyze', () => {
+    function choose(label: string): Promise<void> {
+      const input = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]'))
+        .find((candidate) => candidate.closest('label')?.textContent?.includes(label))!
+      return act(async () => { input.click() })
+    }
+
+    async function submit(): Promise<void> {
+      await act(async () => {
+        container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      })
+    }
+
+    function openAnalyze(itemId: string | null, options: Parameters<typeof analyzeItem>[1] = {}): void {
+      act(() => {
+        analyzeItem(itemId, options)
+        render(<DataDialogs />, container)
+      })
+    }
+
+    it('starts from the open item and lists this Design\'s eligible items as Source, in list order', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Surface')], [slope('s', 'a')])
+      setDesign(design([{ kind: 'Source', id: 'b' }, { kind: 'Source', id: 'a' }, { kind: 'Derived', id: 's' }]))
+      openAnalyze('a')
+      expect(title()).toBe('Analyze')
+      expect(dropdownTrigger(container, 'Source')?.textContent).toContain('Ground')
+      await click(dropdownTrigger(container, 'Source')!)
+      expect(Array.from(document.querySelectorAll('[role="option"]')).map((option) => option.textContent)).toEqual(['Surface', 'Ground'])
+    })
+
+    it('starts from the open result\'s input, else from the first eligible item', () => {
+      lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Surface')], [slope('s', 'a')])
+      setDesign(design([{ kind: 'Source', id: 'b' }, { kind: 'Source', id: 'a' }, { kind: 'Derived', id: 's' }]))
+      openAnalyze('s')
+      expect(dropdownTrigger(container, 'Source')?.textContent).toContain('Ground')
+      render(null, container)
+      openAnalyze(null)
+      expect(dropdownTrigger(container, 'Source')?.textContent).toContain('Surface')
+    })
+
+    it('runs slope from a source once a unit is chosen, and closes', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground')])
+      setDesign(design([{ kind: 'Source', id: 'a' }]))
+      openAnalyze('a')
+      expect(container.textContent).toContain('Results are added under their source in Site data and kept in your library.')
+      const name = container.querySelector<HTMLInputElement>('form input:not([type])')!
+      expect(name.value).toBe('Ground · Slope')
+      await submit()
+      expect(actions.runAnalysis).not.toHaveBeenCalled()
+      expect(container.textContent).toContain('Choose an option.')
+
+      await choose('Percent')
+      await submit()
+      expect(actions.runAnalysis).toHaveBeenCalledWith({
+        analysis_id: 'terrain.slope',
+        inputs: [{ key: 'dem', item_id: 'a' }],
+        parameters: [{ key: 'unit', value: { Choice: 'percent' } }],
+        outputs: ['slope'],
+        name: 'Ground · Slope',
+      })
+      await act(async () => {})
+      expect(dataDialog.value).toBeNull()
+    })
+
+    it('explains by name why an analysis cannot run', async () => {
+      lidarLibrary.value = library([
+        layer('g', 'Ground', { offers: [{ analysis_id: 'terrain.slope', unavailable: { reason: 'EngineMissing', detail: 'not installed' } }] }),
+      ])
+      setDesign(design([{ kind: 'Source', id: 'g' }]))
+      openAnalyze('g')
+      expect(container.textContent).toContain('Unavailable: the GeoLibre engine is missing. (not installed)')
+      expect(button(/^Run$/).disabled).toBe(true)
+      expect(actions.runAnalysis).not.toHaveBeenCalled()
+    })
+
+    it('shows a result the Design already has in Site data instead of calculating it again', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a')])
+      setDesign(design([{ kind: 'Source', id: 'a' }, { kind: 'Derived', id: 's' }]))
+      openAnalyze('a')
+      await choose('Degrees')
+      expect(container.textContent).toContain('Already in Site data.')
+      await click(button('Show in Site data'))
+      expect(siteDataView.showInSiteData).toHaveBeenCalledWith('s')
+      expect(dataDialog.value).toBeNull()
+      expect(actions.runAnalysis).not.toHaveBeenCalled()
+    })
+
+    it('offers an existing library result before calculating a duplicate', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a')])
+      setDesign(design([{ kind: 'Source', id: 'a' }]))
+      openAnalyze('a')
+      await choose('Degrees')
+      expect(container.textContent).toContain('already in the library')
+      await click(button('Add existing'))
+      expect(actions.addToDesign).toHaveBeenCalledWith('Derived', 's')
+      expect(siteDataView.showInSiteData).toHaveBeenCalledWith('s')
+      expect(actions.runAnalysis).not.toHaveBeenCalled()
+    })
+
+    it('runs a result again with changes as a new analysis prefilled from its provenance', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', { name: 'Steepness' })])
+      mount()
+      await selectRow('Steepness')
+      await click(button(/^Run again with changes…$/))
+
+      expect(Array.from(container.querySelectorAll('h2')).map((node) => node.textContent)).toContain('Analyze')
+      const degrees = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]'))
+        .find((candidate) => candidate.closest('label')?.textContent === 'Degrees')!
+      expect(degrees.checked).toBe(true)
+      // The same settings are still a new calculation, never a refresh.
+      await choose('Percent')
+      await act(async () => {
+        container.querySelector('form#' + CSS_ESCAPE(container.querySelector('button[type="submit"][form]')!.getAttribute('form')!))!
+          .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      })
+      expect(actions.runAnalysis).toHaveBeenCalledWith({
+        analysis_id: 'terrain.slope',
+        inputs: [{ key: 'dem', item_id: 'a' }],
+        parameters: [{ key: 'unit', value: { Choice: 'percent' } }],
+        outputs: ['slope'],
+        name: 'Ground · Slope',
+      })
+      expect(actions.rerunAnalysis).not.toHaveBeenCalled()
+    })
+
+    it('offers no run with changes once the input is gone', async () => {
+      lidarLibrary.value = library([], [slope('s', 'a', { name: 'Steepness' })])
+      mount()
+      await selectRow('Steepness')
+      expect(() => button(/^Run again with changes…$/)).toThrow()
+    })
   })
 })
+
+/** An id usable in a selector. */
+function CSS_ESCAPE(id: string): string {
+  return id.replace(/[^a-zA-Z0-9_-]/g, (character) => `\\${character}`)
+}
 
 describe('Data library size', () => {
   it('reads as kilobytes, megabytes or gigabytes', () => {
