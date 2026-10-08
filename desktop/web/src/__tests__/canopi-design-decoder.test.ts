@@ -308,6 +308,7 @@ describe('Design ingestion outcomes and typed load failures', () => {
   it('maps every load error to a kind and a Start-screen string, never "invalid" for an older file', () => {
     expect(designLoadFailureOf({ kind: 'older_version', message: 'too old' })).toEqual({ kind: 'older_version', message: 'too old' })
     expect(designLoadFailureOf({ kind: 'bogus', message: 'x' })).toBeNull()
+    expect(designLoadFailureOf({ kind: 'toString', message: 'x' })).toBeNull()
     expect(designLoadFailureOf(new Error('Dialog cancelled'))).toBeNull()
     expect(designLoadFailureOf('Dialog cancelled')).toBeNull()
     const tooOld = (() => { try { decodeCanopiDesign(currentDesign({ version: 8 })) } catch (error) { return error } })()
