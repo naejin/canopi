@@ -506,3 +506,277 @@ mod tests {
         assert_eq!(containing_pixel(&broken, 1.0, 1.0), None);
     }
 }
+
+/// Stream C's latency probe (canopi-f47t.42): row values sample every shown
+/// row at one point, so one hover is one point over 6–8 targets.
+///
+/// Budget: p95 ≤ 50 ms per 6-target point when idle and ≤ 150 ms during an
+/// import. Run with the two IGN 0.5 m MNT tiles of the live-check master
+/// (copied, never read in place) and the pinned GeoLibre CLI:
+/// `CANOPI_LIDAR_SAMPLER_FIXTURE_DIR=<dir> CANOPI_GEOLIBRE_BIN=<geolibre>
+/// cargo test -p canopi-desktop --lib --release -- --ignored sampler_latency --nocapture`
+#[cfg(test)]
+mod latency_probe {
+    use super::super::{LidarLibrary, analyses, import};
+    use super::*;
+    use std::path::{Path, PathBuf};
+    use std::sync::Arc;
+    use std::sync::atomic::Ordering;
+    use std::time::{Duration, Instant};
+
+    const POINTS: usize = 500;
+
+    /// The fixture tiles, copied into `work` so the master stays untouched.
+    fn copied_tiles(work: &Path) -> Vec<PathBuf> {
+        let dir = std::env::var_os("CANOPI_LIDAR_SAMPLER_FIXTURE_DIR")
+            .map(PathBuf::from)
+            .expect("CANOPI_LIDAR_SAMPLER_FIXTURE_DIR names the IGN MNT tiles");
+        let mut tiles: Vec<PathBuf> = std::fs::read_dir(&dir)
+            .expect("the fixture dir reads")
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "tif"))
+            .collect();
+        tiles.sort();
+        assert!(tiles.len() >= 2, "two adjacent tiles are needed");
+        let copies = work.join("tiles");
+        std::fs::create_dir_all(&copies).unwrap();
+        tiles
+            .iter()
+            .take(2)
+            .map(|tile| {
+                let copy = copies.join(tile.file_name().unwrap());
+                std::fs::copy(tile, &copy).expect("the tile copies");
+                copy
+            })
+            .collect()
+    }
+
+    /// Splits one tile into its west and east halves, so two tiles make a
+    /// 4-member collection with real member boundaries to cross.
+    fn halves(engine: &dyn RasterEngine, tile: &Path, out: &Path) -> [PathBuf; 2] {
+        let cancel = AtomicBool::new(false);
+        let probe = engine.probe(tile, &cancel).expect("the tile probes");
+        let values = engine
+            .read_f32(tile, probe.width, probe.height, &cancel)
+            .expect("the tile reads");
+        let half = probe.width / 2;
+        let stem = tile.file_stem().unwrap().to_string_lossy().to_string();
+        let nodata = probe.nodata.unwrap_or(-99_999.0);
+        [(0, half), (half, probe.width - half)].map(|(x0, width)| {
+            let mut part = Vec::with_capacity((width * probe.height) as usize);
+            for row in 0..probe.height {
+                let start = (row * probe.width + x0) as usize;
+                part.extend_from_slice(&values[start..start + width as usize]);
+            }
+            let mut geotransform = probe.geotransform;
+            geotransform[0] += f64::from(x0) * geotransform[1];
+            let grid = RasterGrid {
+                width,
+                height: probe.height,
+                geotransform,
+            };
+            let path = out.join(format!("{stem}-{x0}.tif"));
+            engine
+                .write_geotiff(
+                    &path,
+                    super::super::engine::RasterGeoref {
+                        grid: &grid,
+                        crs: &probe.crs_ref,
+                    },
+                    nodata,
+                    &part,
+                    &cancel,
+                )
+                .expect("the half writes");
+            path
+        })
+    }
+
+    fn import_source(library: &LidarLibrary, name: &str, paths: &[PathBuf]) -> String {
+        let layer = library
+            .create_layer(
+                name,
+                common_types::library::RasterQuantity::GroundElevation,
+                None,
+                false,
+            )
+            .expect("layer created");
+        let job = library.record_import_job(&layer).expect("job recorded");
+        import::stage_and_publish(library, &job, &layer, paths, &AtomicBool::new(false))
+            .expect("the source publishes");
+        library.finish_import_sources(&job, Ok(()));
+        layer
+    }
+
+    fn head(library: &LidarLibrary, kind: LibraryItemRole, id: &str) -> String {
+        let connection = library.catalogue().unwrap();
+        match kind {
+            LibraryItemRole::Source => catalogue::head_generation(&connection, id)
+                .unwrap()
+                .map(|row| row.id),
+            LibraryItemRole::Derived => catalogue::derived_head(&connection, id)
+                .unwrap()
+                .map(|row| row.id),
+        }
+        .expect("the item is published")
+    }
+
+    /// `POINTS` deterministic points over the two tiles, in WGS84.
+    fn points(engine: &dyn RasterEngine, tile: &Path) -> Vec<(f64, f64)> {
+        let cancel = AtomicBool::new(false);
+        let probe = engine.probe(tile, &cancel).unwrap();
+        let gt = probe.geotransform;
+        let (width, height) = (
+            2.0 * f64::from(probe.width) * gt[1],
+            f64::from(probe.height) * gt[5].abs(),
+        );
+        let mut state = 0x2545_f491_4f6c_dd1d_u64;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state >> 11) as f64 / (1u64 << 53) as f64
+        };
+        let projected: Vec<(f64, f64)> = (0..POINTS)
+            .map(|_| (gt[0] + next() * width, gt[3] - next() * height))
+            .collect();
+        engine
+            .transform_points(&probe.crs_ref, "EPSG:4326", &projected, &cancel)
+            .unwrap()
+            .into_iter()
+            .map(|point| point.expect("every fixture point places"))
+            .collect()
+    }
+
+    fn percentile(sorted: &[Duration], p: f64) -> Duration {
+        let index = ((sorted.len() as f64 - 1.0) * p).round() as usize;
+        sorted[index]
+    }
+
+    /// One 6-target point per entry, timed; returns the sorted durations and
+    /// how many values were found.
+    fn sample_all(
+        library: &LidarLibrary,
+        targets: &[(LibraryItemRole, String, String)],
+        points: &[(f64, f64)],
+    ) -> (Vec<Duration>, usize) {
+        let cancel = AtomicBool::new(false);
+        let mut found = 0;
+        let mut durations: Vec<Duration> = points
+            .iter()
+            .enumerate()
+            .map(|(index, &(longitude, latitude))| {
+                let started = Instant::now();
+                for (kind, entity_id, generation) in targets {
+                    let outcome = sample(
+                        library,
+                        library.inner.engine.as_ref(),
+                        &cancel,
+                        &LidarSampleRequest {
+                            kind: *kind,
+                            entity_id: entity_id.clone(),
+                            expected_generation_id: generation.clone(),
+                            request_id: format!("probe-{index}"),
+                            longitude,
+                            latitude,
+                        },
+                    )
+                    .expect("the sample reads");
+                    if matches!(outcome, LidarSampleOutcome::Value { .. }) {
+                        found += 1;
+                    }
+                }
+                started.elapsed()
+            })
+            .collect();
+        durations.sort();
+        (durations, found)
+    }
+
+    fn report(label: &str, durations: &[Duration], found: usize) -> Duration {
+        let p95 = percentile(durations, 0.95);
+        println!(
+            "{label}: {} points x 6 targets, {found} values; p50 {:?}, p95 {p95:?}, max {:?}",
+            durations.len(),
+            percentile(durations, 0.5),
+            durations.last().unwrap()
+        );
+        p95
+    }
+
+    #[test]
+    #[ignore = "requires the IGN MNT tiles (CANOPI_LIDAR_SAMPLER_FIXTURE_DIR) and the pinned GeoLibre CLI"]
+    fn sampler_latency_over_six_targets_idle_and_during_an_import() {
+        let work = crate::test_scratch::TestScratch::new("lidar-sampler-latency");
+        let tiles = copied_tiles(&work);
+        let library = LidarLibrary::open(&work.join("app")).expect("library opens");
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
+        let parts = work.join("parts");
+        std::fs::create_dir_all(&parts).unwrap();
+        let members: Vec<PathBuf> = tiles
+            .iter()
+            .flat_map(|tile| halves(&engine, tile, &parts))
+            .collect();
+
+        let collection = import_source(&library, "four members", &members);
+        let pair = import_source(&library, "two tiles", &tiles);
+        let west = import_source(&library, "west tile", &tiles[..1]);
+        let east = import_source(&library, "east tile", &tiles[1..]);
+        let slope_collection =
+            analyses::test_support::run_slope(&library, &collection, "degrees", None).item_ids[0]
+                .clone();
+        let slope_west =
+            analyses::test_support::run_slope(&library, &west, "degrees", None).item_ids[0].clone();
+        let targets: Vec<(LibraryItemRole, String, String)> = [
+            (LibraryItemRole::Source, collection),
+            (LibraryItemRole::Source, pair),
+            (LibraryItemRole::Source, west),
+            (LibraryItemRole::Source, east),
+            (LibraryItemRole::Derived, slope_collection),
+            (LibraryItemRole::Derived, slope_west),
+        ]
+        .into_iter()
+        .map(|(kind, id)| {
+            let generation = head(&library, kind, &id);
+            (kind, id, generation)
+        })
+        .collect();
+        let points = points(&engine, &tiles[0]);
+
+        let (idle, found) = sample_all(&library, &targets, &points);
+        let idle_p95 = report("idle", &idle, found);
+
+        // The same points again while an import of both tiles runs, over and
+        // over, until the sampling ends.
+        let stop = Arc::new(AtomicBool::new(false));
+        let importer = {
+            let library = library.clone();
+            let tiles = tiles.clone();
+            let stop = stop.clone();
+            std::thread::spawn(move || {
+                let mut imports = 0;
+                while !stop.load(Ordering::Relaxed) {
+                    import_source(&library, "busy import", &tiles);
+                    imports += 1;
+                }
+                imports
+            })
+        };
+        // Let the import reach its heavy phase first.
+        std::thread::sleep(Duration::from_millis(500));
+        let (busy, found) = sample_all(&library, &targets, &points);
+        stop.store(true, Ordering::Relaxed);
+        let imports = importer.join().expect("the importer finishes");
+        let busy_p95 = report(&format!("during {imports} import(s)"), &busy, found);
+
+        assert!(
+            idle_p95 <= Duration::from_millis(50),
+            "idle p95 {idle_p95:?} is over the 50 ms budget"
+        );
+        assert!(
+            busy_p95 <= Duration::from_millis(150),
+            "p95 during an import {busy_p95:?} is over the 150 ms budget"
+        );
+    }
+}
