@@ -29,8 +29,8 @@ const CLOSE_DISTANCE_PX: Readonly<Record<PointerKind, number>> = Object.freeze({
 const SAME_CORNER_M = 0.0001
 /** The corners' fill carries no stroke: the rubber band draws the edges. */
 const FILL_ONLY: DraftStroke = Object.freeze({ token: 'draft', widthPx: 0 })
-/** A light disc of radius 3.5 px on a 1 px casing ring (plan §1, exception 2). */
-const CORNER_MARKER = Object.freeze({ radiusPx: 1.75, style: Object.freeze({ token: 'draft', widthPx: 3.5 }) as DraftStroke })
+/** A light disc of radius 3.5 px on a 1 px casing ring (plan §1, exception 2), at each point of a vertex path. */
+export const VERTEX_MARKER = Object.freeze({ radiusPx: 1.75, style: Object.freeze({ token: 'draft', widthPx: 3.5 }) as DraftStroke })
 
 /** What one vertex-path tool needs beyond the shared grammar. */
 export interface VertexPathSpec {
@@ -256,7 +256,7 @@ function polygonDraftShapes(corners: readonly WorldPoint[], active: WorldPoint |
   if (corners.length >= 3) shapes.push({ kind: 'polygon', points: corners, style: FILL_ONLY, fill: ZONE_DRAFT_FILL })
   const band = active ? [...corners, active] : corners
   if (band.length >= 2) shapes.push({ kind: 'polyline', points: band, style: DRAFT_STROKE })
-  for (const center of corners) shapes.push({ kind: 'circle-px', center, ...CORNER_MARKER })
+  for (const center of corners) shapes.push({ kind: 'circle-px', center, ...VERTEX_MARKER })
   const chips = createPolygonalZoneDraftMeasurements(corners, active)
   shapes.push(...measureLabelShapes(chips, (a, b) => view.screenDistance(a, b)))
   return shapes
