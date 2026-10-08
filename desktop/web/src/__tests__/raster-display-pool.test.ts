@@ -93,6 +93,33 @@ describe('raster display worker pool', () => {
     await expect(reads.at(-1)).resolves.toMatchObject({ name: 'AbortError' })
   })
 
+  it('never runs two statistics in one lane, even when the other lane is busier with tiles', async () => {
+    const { instance, created } = pool(2, 4)
+    const map = instance.acquire()
+    const ranges = instance.acquire()
+    const source = await map.openCog('asset://localhost/tile.tif')
+    const [laneA, laneB] = created as [FakeLane, FakeLane]
+    await settle()
+    const tiles = Array.from({ length: 6 }, (_, index) =>
+      source.renderTilePNG(10, index, 1).catch((error: unknown) => error))
+    await settle()
+    // Free lane A, so lane B holds three tiles and lane A none.
+    for (const render of laneA.renders()) laneA.answer(render)
+    await Promise.all(laneA.renders().map((render) => tiles[render.x]))
+    await settle()
+    expect(laneA.renders()).toHaveLength(3)
+    expect(laneB.renders()).toHaveLength(3)
+    const reads = Array.from({ length: 2 }, (_, index) =>
+      ranges.statistics(`asset://localhost/part-${index}.tif`).catch((error: unknown) => error))
+    await settle()
+    const statistics = (lane: FakeLane) => lane.requests.filter((request) => request.op === 'statistics')
+    expect(statistics(laneA)).toHaveLength(1)
+    expect(statistics(laneB)).toHaveLength(1)
+    ranges.dispose()
+    map.dispose()
+    await Promise.all(reads)
+  })
+
   it('starts lanes with an even share of one aggregate decoded-block budget', () => {
     const { instance, created } = pool(2)
     instance.acquire()

@@ -105,6 +105,8 @@ interface Lane {
   readonly worker: RasterWorkerLike
   readonly pending: Map<number, { resolve(value: unknown): void; reject(error: unknown): void }>
   inFlight: number
+  /** Statistics running here; at most one, so a lane always has room for tiles. */
+  background: number
   broken: Error | null
 }
 
@@ -128,7 +130,6 @@ export class RasterWorkerPool {
   private clients = 0
   private requestSequence = 0
   private handleSequence = 0
-  private backgroundInFlight = 0
   /** Lanes each handle is opened in, keyed by handle. */
   private readonly openedIn = new Map<number, Map<number, Promise<unknown>>>()
   private readonly urls = new Map<number, string>()
@@ -174,7 +175,7 @@ export class RasterWorkerPool {
 
   private createLane(index: number): Lane {
     const worker = this.options.createWorker()
-    const lane: Lane = { index, worker, pending: new Map(), inFlight: 0, broken: null }
+    const lane: Lane = { index, worker, pending: new Map(), inFlight: 0, background: 0, broken: null }
     worker.onmessage = (event) => {
       const reply = event.data
       const waiter = lane.pending.get(reply.id)
@@ -239,9 +240,9 @@ export class RasterWorkerPool {
       if (!task) return
       const lane = task.lane !== undefined
         ? this.lanes[task.lane]!
-        : this.leastLoadedLane()!
+        : this.leastLoadedLane(task.kind === 'background')!
       lane.inFlight += 1
-      if (task.kind === 'background') this.backgroundInFlight += 1
+      if (task.kind === 'background') lane.background += 1
       const started = performance.now()
       const label = task.tile ? `${task.tile.z}/${task.tile.x}/${task.tile.y}` : undefined
       task.run(lane).then((value) => {
@@ -252,7 +253,7 @@ export class RasterWorkerPool {
         task.reject(error)
       }).finally(() => {
         lane.inFlight -= 1
-        if (task.kind === 'background') this.backgroundInFlight -= 1
+        if (task.kind === 'background') lane.background -= 1
         this.dispatch()
       })
     }
@@ -298,16 +299,18 @@ export class RasterWorkerPool {
       return task
     }
     // Background work, oldest first, once no tile waits: one per lane.
-    if (this.backgroundInFlight >= this.lanes.length) return null
+    if (!this.leastLoadedLane(true)) return null
     const index = this.queue.findIndex((task) => task.kind === 'background')
     if (index < 0) return null
     return this.queue.splice(index, 1)[0]!
   }
 
-  private leastLoadedLane(): Lane | null {
+  /** The lane with most room; for background work, only a lane running none. */
+  private leastLoadedLane(background = false): Lane | null {
     let best: Lane | null = null
     for (const lane of this.lanes) {
       if (lane.inFlight >= this.options.maxInFlightPerLane) continue
+      if (background && lane.background > 0) continue
       if (!best || lane.inFlight < best.inFlight) best = lane
     }
     return best
