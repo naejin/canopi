@@ -103,10 +103,12 @@ function AnalyzeRequest({ request }: { readonly request: Extract<DataDialog, { k
       .map((candidate) => candidate.provenance!.output_key)
     return formFromProvenance(entry, provenance, outputs, fixedInput.name, t(entry.titleKey), locale.value)
   })
-  // Nothing to analyze: the request closes rather than stay open unseen, which would leave the library under it inert.
+  // Nothing to analyze once the library has loaded: the request closes rather than stay open unseen, which would leave
+  // the library under it inert. Before the first snapshot it waits.
+  const nothingToAnalyze = sourceId === null && snapshot !== null
   useEffect(() => {
-    if (sourceId === null) closeDataDialog()
-  }, [sourceId])
+    if (nothingToAnalyze) closeDataDialog()
+  }, [nothingToAnalyze])
   if (sourceId === null) return null
   return (
     <AnalyzeDialog

@@ -757,6 +757,15 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(button(/^Run$/).disabled).toBe(true)
     })
 
+    it('waits for the library to load before deciding there is nothing to analyze', () => {
+      lidarLibrary.value = null
+      setDesign(design([{ kind: 'Source', id: 'a' }]))
+      openAnalyze('a')
+      expect(dataDialog.value).not.toBeNull()
+      act(() => { lidarLibrary.value = library([layer('a', 'Ground')]) })
+      expect(title()).toBe('Analyze')
+    })
+
     it('closes when nothing can be analyzed, so the Data library opened next is live', () => {
       lidarLibrary.value = library([layer('a', 'Ground')])
       setDesign(design([]))
