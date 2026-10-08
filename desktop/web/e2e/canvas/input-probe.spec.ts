@@ -5,7 +5,7 @@
 // in Chromium and WebKit, the paths the pin and Profile use (Select's tap on empty ground, Polygon's double-click and
 // double tap) reach their handlers; each test records the engine's `detail` as an annotation. Measured 2026-10-08:
 // Chromium sends detail 0 for mouse and touch, like WebKitGTK; Playwright's WebKit sends 1 then 2 for a double-click
-// and 0 for touch. The Web build has no pin or Profile (Desktop only): jsdom drives them through the real pipeline
+// and 0 for touch. WebKit's double tap is not asserted (no timestamped touch input; see that test). The Web build has no pin or Profile (Desktop only): jsdom drives them through the real pipeline
 // (src/__tests__/canvas-interaction-e2e.*.test.ts), and the native WebKitGTK double-click with Profile armed is the live
 // check n4. DOM assertions only, no baselines.
 import { fileURLToPath } from 'node:url'
@@ -117,26 +117,34 @@ test('a mouse click on empty ground reaches Select, and a double-click finishes 
 test.describe('touchscreen', () => {
   test.use({ hasTouch: true })
 
-  test('a finger\'s tap on empty ground reaches Select, and a double tap finishes a polygon', async ({ page, browserName }) => {
+  test('a finger\'s tap on empty ground reaches Select', async ({ page }) => {
     await openBaseFixture(page)
-    // Playwright's touchscreen.tap takes up to 450 ms in Chromium, near the 500 ms double-tap window, so Chromium sends
-    // CDP touch events at once; WebKit has only touchscreen.tap.
-    const cdp = browserName === 'chromium' ? await page.context().newCDPSession(page) : null
-    const tap = async (at: Point) => {
-      if (!cdp) return page.touchscreen.tap(at.x, at.y)
-      // Both sent before either answers: CDP keeps their order.
-      await Promise.all([
-        cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 0, x: at.x, y: at.y, radiusX: 4, radiusY: 4, force: 1 }] }),
-        cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }),
-      ])
+    await expectGroundTapClears(page, (at) => page.touchscreen.tap(at.x, at.y))
+    expect(await recordPointerDowns(page, 'two taps'), 'touch pointerdowns send detail 0').toEqual(['touch:0', 'touch:0'])
+  })
+
+  test('a finger\'s double tap 20 px apart finishes a polygon', async ({ page, browserName }) => {
+    // A double tap is two taps within the recogniser's 500 ms, and a busy page (two cores, the corner just drawn) answers
+    // a tap late. Chromium's CDP touch events carry their own time, so the taps are stamped 200 ms apart; WebKit's
+    // touchscreen.tap carries none, and at two cores its taps land 80 to 470 ms apart, too near the window to assert.
+    // jsdom counts a finger's double tap through the real pipeline (canvas-interaction-e2e.touch.test.ts); the native
+    // WebKitGTK check is n4.
+    test.skip(browserName !== 'chromium', 'WebKit has no timestamped touch input')
+    await openBaseFixture(page)
+    const cdp = await page.context().newCDPSession(page)
+    const taps = async (...points: Point[]) => {
+      const start = Date.now() / 1000
+      // Sent together, never one after the other's answer.
+      await Promise.all(points.flatMap((at, index) => {
+        const timestamp = start + index * 0.2
+        return [
+          cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 0, x: at.x, y: at.y, radiusX: 4, radiusY: 4, force: 1 }], timestamp }),
+          cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [], timestamp: timestamp + 0.05 }),
+        ]
+      }))
     }
 
-    await expectGroundTapClears(page, tap)
-    await expectDoubleFinishes(page, tap, async (at) => {
-      await tap(at)
-      await tap({ x: at.x, y: at.y + 20 })
-    })
-    const downs = await recordPointerDowns(page, 'taps and a double tap')
-    expect(downs.map((down) => down.split(':')[0]), 'touch pointerdowns').toEqual(Array(6).fill('touch'))
+    await expectDoubleFinishes(page, (at) => taps(at), (at) => taps(at, { x: at.x, y: at.y + 20 }))
+    expect(await recordPointerDowns(page, 'taps and a double tap'), 'touch pointerdowns send detail 0').toEqual(Array(4).fill('touch:0'))
   })
 })
