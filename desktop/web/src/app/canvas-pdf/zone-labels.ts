@@ -6,14 +6,17 @@ import { insideZone, type ZoneMeasurements } from './zone-measurements'
 import { MM, pathOp, rectPath, textOp } from './page-drawing'
 
 /**
- * A zone's own top on the page frame, in ground metres: its highest outline point inside the ground, or the middle of a
- * level top edge; a zone that holds the whole ground tops it at the ground's top middle; null when it misses the ground.
- * Never the upright bounds, which at a turned angle sit over the neighbouring rows.
+ * A zone's own top on the page frame, in ground metres: the highest point of the zone's part inside the ground (its
+ * outline points inside the ground and the ground corners inside it), at the middle of a level top edge; null when it
+ * misses the ground. Never the upright bounds, which at a turned angle sit over the neighbouring rows.
  */
 export function zoneTop(zone: PrintZone, ground: PrintBounds): PrintPoint | null {
-  const ends = outlineSegments(zone.path, p => p).flatMap(s => { const clipped = clipSegment(s, ground); return clipped ? [clipped.a, clipped.b] : [] })
-  if (!ends.length) return insideZone(zone, { x: ground.x + ground.width / 2, y: ground.y + ground.height / 2 }) ? { x: ground.x + ground.width / 2, y: ground.y } : null
-  const y = Math.min(...ends.map(p => p.y)), level = ends.filter(p => p.y - y < 1e-6).map(p => p.x)
+  const corners = [{ x: ground.x, y: ground.y }, { x: ground.x + ground.width, y: ground.y },
+    { x: ground.x, y: ground.y + ground.height }, { x: ground.x + ground.width, y: ground.y + ground.height }]
+  const points = [...outlineSegments(zone.path, p => p).flatMap(s => { const clipped = clipSegment(s, ground); return clipped ? [clipped.a, clipped.b] : [] }),
+    ...corners.filter(p => insideZone(zone, p))]
+  if (!points.length) return null
+  const y = Math.min(...points.map(p => p.y)), level = points.filter(p => p.y - y < 1e-6).map(p => p.x)
   return { x: (Math.min(...level) + Math.max(...level)) / 2, y }
 }
 

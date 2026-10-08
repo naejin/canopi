@@ -90,9 +90,38 @@ it('tops a zone at its highest outline point inside the ground, or the middle of
     geometry: { kind: 'polygon', points: [{ x: 5, y: 1 }, { x: 8, y: 4 }, { x: 5, y: 7 }, { x: 2, y: 4 }] } }
   expect(zoneTop(diamond, ground)).toEqual({ x: 5, y: 1 })
   expect(zoneTop(row(2), ground)).toEqual({ x: 5, y: 2 })
-  // Cropped by the page, the top is where the zone enters the ground, never off it.
-  expect(zoneTop(diamond, { x: 0, y: 3, width: 4, height: 5 })).toEqual({ x: 3, y: 3 })
+  // Cropped by the page, the top is the level edge where the zone enters the ground, never off it.
+  expect(zoneTop(diamond, { x: 0, y: 3, width: 4, height: 5 })).toEqual({ x: 3.5, y: 3 })
   expect(zoneTop(row(20), ground)).toBeNull()
   const field: PrintZone = { ...row(-5), path: 'M-5 -5 L15 -5 L15 15 L-5 15 Z', geometry: { kind: 'rect', points: [{ x: -5, y: -5 }, { x: 15, y: -5 }, { x: 15, y: 15 }, { x: -5, y: 15 }] } }
   expect(zoneTop(field, ground)).toEqual({ x: 5, y: 0 })
+})
+
+const rect = (x: number, y: number, width: number, height: number): PrintZone => ({ name: null, path: `M${x} ${y} L${x + width} ${y} L${x + width} ${y + height} L${x} ${y + height} Z`,
+  fill: null, bounds: { x, y, width, height }, geometry: { kind: 'rect', points: [{ x, y }, { x: x + width, y }, { x: x + width, y: y + height }, { x, y: y + height }] } })
+
+it('tops a zone that covers the page\'s top band at the page top, not on its own lower edge', () => {
+  const ground = { x: -5, y: 0, width: 30, height: 15 }
+  // Its top edge is above the page and its sides past both page edges: the ground's top is its top.
+  expect(zoneTop(rect(-50, -50, 120, 55), ground)).toEqual({ x: 10, y: 0 })
+  // Only one top corner of the ground inside: the top runs from that corner to where the outline crosses the top edge.
+  expect(zoneTop(rect(-50, -50, 60, 55), ground)).toEqual({ x: 2.5, y: 0 })
+})
+
+it('prints a band zone\'s code at its own top, above its neighbour\'s, whatever the drawing order', () => {
+  const band = rect(-50, -50, 120, 55), neighbour = rect(0, 5, 20, 1)
+  const area: PdfSetup = { ...setup, areas: [{ id: 'band', name: 'Band', bounds: { x: -5, y: 0, width: 30, height: 15 } }] }
+  const placed = [[neighbour, band], [band, neighbour]].map(zones => {
+    const page = buildPdfPlan({ ...design({ zones }), viewBearingDeg: 0 }, area, text(), labels).pages.find(p => p.kind === 'detail')!
+    const at = onPage(page, 0), centre = (zone: PrintZone) => codes(page, new RegExp(`^Z0${zones.indexOf(zone) + 1}$`))[0]!.centre
+    const bandOutline = outlineSegments(band.path, at), neighbourOutline = outlineSegments(neighbour.path, at)
+    const pageTop = at({ x: 0, y: 0 }).y, sharedEdge = at({ x: 0, y: 5 }).y
+    // The band's code sits in the band at the page top, never at the shared edge where it would name the neighbour.
+    expect(inside(centre(band), bandOutline)).toBe(true)
+    expect(inside(centre(band), neighbourOutline)).toBe(false)
+    expect(Math.abs(centre(band).y - pageTop)).toBeLessThan(Math.abs(centre(band).y - sharedEdge))
+    expect(away(centre(neighbour), neighbourOutline) / MM).toBeLessThanOrEqual(6)
+    return [centre(band), centre(neighbour)]
+  })
+  expect(placed[0]).toEqual(placed[1])
 })
