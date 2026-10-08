@@ -548,12 +548,12 @@ pub fn admit_design_identities_and_ranges(file: &mut CanopiFile) -> Result<(), S
                     "$.lidar.entries[{index}].name: expected a non-empty name"
                 ));
             }
-            if let Some(crate::lidar::LidarColourRange::Custom { min, max }) = entry.range {
-                if !(min.is_finite() && max.is_finite() && min < max) {
-                    return Err(format!(
-                        "$.lidar.entries[{index}].range: expected finite min and max with min below max"
-                    ));
-                }
+            if let Some(crate::lidar::LidarColourRange::Custom { min, max }) = entry.range
+                && !(min.is_finite() && max.is_finite() && min < max)
+            {
+                return Err(format!(
+                    "$.lidar.entries[{index}].range: expected finite min and max with min below max"
+                ));
             }
         }
     }
