@@ -11,6 +11,7 @@ import {
 import { findAnalysis } from '../../../app/analyses/registry'
 import { libraryItems, type LibraryItem } from '../../../app/lidar/library-items'
 import { lidarLibrary, readCurrentLidarPresentation } from '../../../app/lidar/library-store'
+import { referenceRows } from '../../../app/lidar/reference-tree'
 import {
   closeDataDialog,
   dataDialog,
@@ -62,7 +63,8 @@ function isSource(item: LibraryItem | undefined): item is LibraryItem {
 function AnalyzeRequest({ request }: { readonly request: Extract<DataDialog, { kind: 'analyze' }> }) {
   const snapshot = lidarLibrary.value
   const items = useMemo(() => libraryItems(snapshot), [snapshot, locale.value])
-  const design = readCurrentLidarPresentation()
+  // Site data's list order, front first (the presentation itself is in drawing order).
+  const design = referenceRows(readCurrentLidarPresentation())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const context = useMemo<AnalysisContext>(() => ({

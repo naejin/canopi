@@ -632,17 +632,18 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(title()).toBe('Analyze')
       expect(dropdownTrigger(container, 'Source')?.textContent).toContain('Ground')
       await click(dropdownTrigger(container, 'Source')!)
-      expect(Array.from(document.querySelectorAll('[role="option"]')).map((option) => option.textContent)).toEqual(['Surface', 'Ground'])
+      // Site data lists the front item (Ground, order 1) first.
+      expect(Array.from(document.querySelectorAll('[role="option"]')).map((option) => option.textContent)).toEqual(['Ground', 'Surface'])
     })
 
-    it('starts from the open result\'s input, else from the first eligible item', () => {
-      lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Surface')], [slope('s', 'a')])
+    it('starts from the open result\'s input, else from the first eligible item in list order', () => {
+      lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Surface')], [slope('s', 'b')])
       setDesign(design([{ kind: 'Source', id: 'b' }, { kind: 'Source', id: 'a' }, { kind: 'Derived', id: 's' }]))
       openAnalyze('s')
-      expect(dropdownTrigger(container, 'Source')?.textContent).toContain('Ground')
+      expect(dropdownTrigger(container, 'Source')?.textContent).toContain('Surface')
       render(null, container)
       openAnalyze(null)
-      expect(dropdownTrigger(container, 'Source')?.textContent).toContain('Surface')
+      expect(dropdownTrigger(container, 'Source')?.textContent).toContain('Ground')
     })
 
     it('runs slope from a source once a unit is chosen, and closes', async () => {
