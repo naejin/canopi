@@ -4,9 +4,14 @@ import {
   patchLidarEntryById,
   removeLidarEntries,
   setLidarEntryOrders,
+  setSiteDataVisible,
 } from '../app/design-edit/lidar'
 import { currentDesign, designSessionStore } from '../app/document-session/store'
-import { replaceCurrentDesignState } from './support/design-session-state'
+import {
+  designSessionFixture,
+  nonCanvasRevision,
+  replaceCurrentDesignState,
+} from './support/design-session-state'
 import type { CanopiFile } from '../types/design'
 
 function design(name: string): CanopiFile {
@@ -129,5 +134,46 @@ describe('LiDAR presentation entries through the Design Edit seam', () => {
     const before = currentDesign.value
     setLidarEntryOrders(new Map([['lyr-absent', 3]]))
     expect(currentDesign.value).toBe(before)
+  })
+
+  it('stores display settings, comparing a range by value', () => {
+    replaceCurrentDesignState(design('Display'), null, 'Display')
+    upsertLidarEntry('Derived', 'slope', 'Slope')
+
+    patchLidarEntryById('slope', { ramp: 'Magma', reversed: true, range: { mode: 'Custom', min: 0, max: 30 } })
+    const styled = currentDesign.value
+    expect(readLidarEntries(styled as CanopiFile)[0]).toMatchObject({
+      ramp: 'Magma', reversed: true, range: { mode: 'Custom', min: 0, max: 30 },
+    })
+
+    // The same choice again, as a fresh object, is no edit.
+    patchLidarEntryById('slope', { ramp: 'Magma', range: { mode: 'Custom', min: 0, max: 30 } })
+    expect(currentDesign.value).toBe(styled)
+
+    // Back to the kind's defaults: null ramp and range.
+    patchLidarEntryById('slope', { ramp: null, reversed: false, range: null })
+    expect(readLidarEntries(currentDesign.value as CanopiFile)[0]).toMatchObject({
+      ramp: null, reversed: false, range: null,
+    })
+  })
+
+  it('folds the Site data eye into the section and keeps each entry eye', () => {
+    replaceCurrentDesignState(design('Eye'), null, 'Eye')
+    setSiteDataVisible(false)
+    expect(currentDesign.value?.lidar ?? null).toBeNull()
+
+    upsertLidarEntry('Source', 'lyr-eye', 'Terrain')
+    expect(currentDesign.value?.lidar?.visible).toBe(true)
+    designSessionFixture.nonCanvasSavedRevision = nonCanvasRevision.value
+    expect(designSessionStore.designDirty.value).toBe(false)
+
+    setSiteDataVisible(false)
+    expect(currentDesign.value?.lidar?.visible).toBe(false)
+    expect(readLidarEntries(currentDesign.value as CanopiFile)[0]?.visible).toBe(true)
+    expect(designSessionStore.designDirty.value).toBe(true)
+
+    const hidden = currentDesign.value
+    setSiteDataVisible(false)
+    expect(currentDesign.value).toBe(hidden)
   })
 })

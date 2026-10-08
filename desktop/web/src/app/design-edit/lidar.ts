@@ -1,7 +1,9 @@
 import type {
+  LidarColourRange,
   LidarPresentationEntry,
   LidarPresentationEntryKind,
   LidarPresentationSection,
+  LidarRamp,
 } from '../../generated/contracts'
 
 // Mirrors common_types::lidar::LIDAR_PRESENTATION_SCHEMA_VERSION (not part of
@@ -14,11 +16,17 @@ function emptySection(): LidarPresentationSection {
   return { schema_version: LIDAR_PRESENTATION_SCHEMA_VERSION, visible: true, entries: [] }
 }
 
-/** Immutable patch of one entry; entries are matched by stable library id. */
+/**
+ * Immutable patch of one entry; entries are matched by stable library id.
+ * A null `ramp` or `range` is the item kind's default.
+ */
 export interface LidarEntryPatch {
   visible?: boolean
   opacity?: number
   order?: number
+  ramp?: LidarRamp | null
+  reversed?: boolean
+  range?: LidarColourRange | null
 }
 
 /**
@@ -124,15 +132,44 @@ function mergeEntry(
     visible: patch.visible ?? existing.visible,
     opacity: patch.opacity ?? existing.opacity,
     order: patch.order ?? existing.order,
+    ramp: patch.ramp === undefined ? existing.ramp : patch.ramp,
+    reversed: patch.reversed ?? existing.reversed,
+    range: patch.range === undefined || sameRange(patch.range, existing.range) ? existing.range : patch.range,
   }
   if (
     next.visible === existing.visible &&
     next.opacity === existing.opacity &&
-    next.order === existing.order
+    next.order === existing.order &&
+    next.ramp === existing.ramp &&
+    next.reversed === existing.reversed &&
+    next.range === existing.range
   ) {
     return existing
   }
   return next
+}
+
+function sameRange(left: LidarColourRange | null, right: LidarColourRange | null): boolean {
+  if (left === null || right === null) return left === right
+  if (left.mode === 'Custom' && right.mode === 'Custom') {
+    return left.min === right.min && left.max === right.max
+  }
+  return left.mode === right.mode
+}
+
+/**
+ * The Site data eye in Layers: one flag folded with each entry's own eye, so
+ * hiding all site data keeps every row's own choice. A Design Edit with no
+ * undo, like every site-data Design Edit; nothing happens without a section.
+ */
+export function setSiteDataVisible(visible: boolean): void {
+  editCurrentDesign((design) => {
+    const section = design.lidar
+    if (!section || section.visible === visible) {
+      return design
+    }
+    return { ...design, lidar: { ...section, visible } }
+  })
 }
 
 function nextOrder(entries: LidarPresentationEntry[]): number {
