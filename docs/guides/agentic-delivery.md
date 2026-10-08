@@ -14,7 +14,7 @@ Paths are relative to `/home/daylon/projects/canopi`; use them absolute in comma
 
 ## Gates
 
-- **Affected**, after a build or fix agent's last commit: `BASE=<branch it builds on> /home/daylon/projects/canopi/.rq-scratch/tools/quiet-gates.sh <worktree> affected` (tsc, `check:ui`, `vitest related` on the changed files). Every agent running the whole suite took about 60 % of phase R's single-slot build. **Quick** (the whole suite) is for a worktree with no base.
+- **Affected**, after a build or fix agent's last commit: `BASE=<branch it builds on> /home/daylon/projects/canopi/.rq-scratch/tools/quiet-gates.sh <worktree> affected` (tsc, `check:ui`, `vitest related` on the changed files, the locale tests when locale JSON changed, and the policy tests, which relate to no file). Agents' whole-suite runs fell from 168 to 10 minutes between phase R and the polish batch. **Quick** (the whole suite) is for a worktree with no base.
 - **Slots**: build agents per `free -g` available, one per 6 GiB above a 4 GiB reserve, at most 4 (8 CPUs), re-checked as each slot is taken; under 8 GiB, `VITEST_WORKERS=2`. The user's apps often hold most of the memory at launch and release it later.
 - **Full**, at each merge and before a push: `/home/daylon/projects/canopi/.rq-scratch/tools/quiet-gates.sh <worktree> full`, the Frontend row of `AGENTS.md` (tsc, coverage as the suite, the policy tests, check:ui, both builds, docs). Add the Rust and shared-contract rows of `AGENTS.md` when those areas change.
 - **Web check** on any merge touching the renderer, camera, input or map: `cd desktop/web && npm run build:web`, then from the worktree root `docker run --rm --ipc=host -v "$PWD":/work -w /work/desktop/web --user $(id -u):$(id -g) -e HOME=/tmp mcr.microsoft.com/playwright:v1.63.0-noble npx playwright test e2e/canvas --reporter=line`.
@@ -35,6 +35,8 @@ Phase 2's audit said P3, P8 and P27 changed nothing visible, and its plan had th
 
 ## Review lenses
 
+A stream gets a second full review round when it changes a seam the tests fake (renderer, map, input) or stored data; any other stream only after a blocker or major in round one.
+
 Known seams that streams share, each reviewed once after the streams on both sides merge: the scene render target (`scene-runtime/render-scheduler.ts`, `maplibre/shared-scene-layer.ts`, `maplibre/shared-scene-renderer.ts`, `app/canvas-map-surface/workspace-activation.ts`), whose create, connect, dispose and Design-switch orders reached the pre-push review twice in phase R.
 
 
@@ -46,7 +48,8 @@ A stored-format version (the LiDAR catalogue, the user DB, `.canopi`) bumps once
 
 ## Live check
 
-- Launch once, then drive each scenario group with a fresh agent against the same instance; assert with `webview_execute_js` values, save screenshots to `.rq-scratch/screenshots/<step>/` and open them only to judge visuals (phase R's one long live-check agent used 30 % of the phase's input tokens).
+- A scenario the Web build can show (labels, colours, panels, menus) is a Playwright test or a gallery entry; the native instance covers only native paths (file dialogs, LiDAR import, PDF save, WebKitGTK fit). The live check was still 31 % of the polish batch's input.
+- Launch once, then drive each scenario group with a fresh agent against the same instance; assert with `webview_execute_js` values, save screenshots to `.rq-scratch/screenshots/<step>/` and open them only to judge visuals (phase R's one long agent used 30 % of its input).
 - Frame times are evidence only from a production build (`cargo tauri build`) or the Web build traced in Playwright: the DEV build freezes every Scene write and the bridge's frame loop runs near 30 Hz, so phase R's DEV numbers could not close canopi-p32r.
 - From a detached worktree nobody edits: `git -C /home/daylon/projects/canopi worktree add --detach /home/daylon/projects/canopi/.rq-scratch/canvas-v2-live <commit>` (with `npm ci`, the fonts and the catalog copy), removed afterwards.
 - Profile `R=/home/daylon/projects/canopi/.rq-scratch/reference/<step>`, then `mkdir -p $R/{config,data,cache}` (XDG ignores relative values and would fall back to the user's profile); copy the read-only master `/home/daylon/projects/canopi/.rq-scratch/reference/orchard.canopi` into it (never open the master or the user's files) and turn the basemap off once.
@@ -64,4 +67,4 @@ Opus at high effort for design checks, complex code, bug reviews, verification a
 
 ## Tools
 
-In `.rq-scratch/tools/`: `mkwt.sh`, `quiet-gates.sh`, `journal.py <run-id> [--full LABEL]` (summarise a workflow journal), `imgdiff.py` (pixel diff), `x11-dialog.py`, and `wf-1.js` (phase 1's workflow: build cap, serial merges, verified reviews).
+In `.rq-scratch/tools/`: `mkwt.sh`, `quiet-gates.sh`, `journal.py <run-id> [--full LABEL]` (read a workflow's results by label instead of its whole output), `wf-usage.py <run-id>...` (measured cost per stage from the transcripts, for receipts), `imgdiff.py` (pixel diff), `x11-dialog.py`, and `wf-1.js` (phase 1's workflow: build cap, serial merges, verified reviews).
