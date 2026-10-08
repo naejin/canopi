@@ -1,7 +1,7 @@
 import type { PrintBounds as Bounds, PrintPoint as Point } from '../../canvas/print'
 import type { PdfTextEngine, TextLine } from './text'
 import { MM } from './print-style'
-import { PaperIndex, contains, crossing, distance, edge, fits, hits, inflate, overlaps, segmentBounds, type Segment } from './field-geometry'
+import { PaperIndex, contains, crossing, distance, distanceToSegment, edge, fits, hits, inflate, overlaps, segmentBounds, type Segment } from './field-geometry'
 
 export interface FieldLabel {
   opacity?: number
@@ -127,8 +127,8 @@ export class FieldSpace {
       const offset = side * (across + gap)
       const centre = { x: s.a.x + u.x * t * length + n.x * offset, y: s.a.y + u.y * t * length + n.y * offset }
       const bounds = { x: centre.x - measured.width / 2, y: centre.y - measured.height / 2, width: measured.width, height: measured.height }
-      const own = toSegment(centre, s)
-      if (this.clear(bounds) && others.every(o => own < toSegment(centre, o))) return bounds
+      const own = distanceToSegment(centre, s)
+      if (this.clear(bounds) && others.every(o => own < distanceToSegment(centre, o))) return bounds
     }
     return null
   }
@@ -137,17 +137,11 @@ export class FieldSpace {
     this.labels.push(label); this.reserve(label.bounds); this.addSegments(label.route, true)
     if (!guide) return
     const centre = { x: label.bounds.x + label.bounds.width / 2, y: label.bounds.y + label.bounds.height / 2 }
-    this.besideCodes.push({ centre, reach: toSegment(centre, guide) })
+    this.besideCodes.push({ centre, reach: distanceToSegment(centre, guide) })
   }
   /** Whether ink drawn after the guide codes leaves each code nearer its own guide than `segments`, so a dimension
    *  placed later never takes a code's reading (Q16). */
   keepsCodesBeside(segments: readonly Segment[]): boolean {
-    return this.besideCodes.every(code => segments.every(s => toSegment(code.centre, s) > code.reach))
+    return this.besideCodes.every(code => segments.every(s => distanceToSegment(code.centre, s) > code.reach))
   }
-}
-
-function toSegment(p: Point, s: Segment): number {
-  const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y, squared = dx * dx + dy * dy
-  const t = squared ? Math.max(0, Math.min(1, ((p.x - s.a.x) * dx + (p.y - s.a.y) * dy) / squared)) : 0
-  return Math.hypot(p.x - s.a.x - t * dx, p.y - s.a.y - t * dy)
 }
