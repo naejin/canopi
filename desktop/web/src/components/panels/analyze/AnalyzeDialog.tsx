@@ -150,7 +150,7 @@ export function AnalyzeDialog({
 
   return (
     <WorkspaceDialog
-      title={t('analyses.dialog.title', { name: item.name })}
+      title={t('analyses.dialog.title')}
       onClose={onCancel}
       footer={<>
         <button type="button" className={styles.button} onClick={onCancel}>{t('canvas.lidar.library.cancel')}</button>
