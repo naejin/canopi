@@ -31,7 +31,7 @@ const PROFILE_MAX_POINTS = 4096
 const STEEPEST_RUN_M = 2
 
 /** One item a profile plots: a shown, ready elevation or height item. */
-export interface ProfileCurveSource {
+interface ProfileCurveSource {
   readonly id: string
   readonly kind: LibraryItemRole
   readonly name: string

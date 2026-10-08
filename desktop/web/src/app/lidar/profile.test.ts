@@ -13,11 +13,14 @@ import {
   createSiteProfile,
   profileCopyText,
   profileLineMenu,
-  type ProfileCurveSource,
   type SiteProfile,
 } from './profile'
-import type { SampleLane, SiteSampler } from './sampler'
+import type { SiteSampler } from './sampler'
 import { endSiteDataTransients, profileLine, type GeoPoint } from './site-transients'
+
+type SampleLane = Parameters<SiteSampler['request']>[0]
+/** An item a profile plots, as the profile's owner reads it. */
+type ProfileCurveSource = ReturnType<Parameters<typeof createSiteProfile>[0]['readCurves']>[number]
 
 const PLANE = createSessionPlane({ lon: 2.35, lat: 48.85 })
 const at = (x: number, y: number): GeoPoint => PLANE.toGeo({ x, y })
