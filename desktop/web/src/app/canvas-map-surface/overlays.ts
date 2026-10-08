@@ -2,7 +2,7 @@ import type { CanvasQuerySurface } from '../../canvas/runtime/runtime'
 import { createPanelTargetMapOverlayContract } from '../../maplibre/panel-target-overlays'
 import {
   clearPanelTargetMapOverlay,
-  syncPanelTargetMapOverlay,
+  syncMapOverlay,
   type MapLibreOverlayMap,
 } from '../../maplibre/panel-target-overlay-sync'
 import { projectTargetsToMapFeatures } from '../../target'
@@ -29,11 +29,11 @@ export function syncCanvasMapSurfaceOverlays(map: MapLibreOverlayMap, snapshot: 
     return
   }
   const scene = snapshot.runtime.getSceneSnapshot()
-  syncPanelTargetMapOverlay(map, createPanelTargetMapOverlayContract(
+  syncMapOverlay(map, createPanelTargetMapOverlayContract(
     'selection',
     projectTargetsToMapFeatures(selectedTargets, scene, location),
   ))
-  syncPanelTargetMapOverlay(map, createPanelTargetMapOverlayContract(
+  syncMapOverlay(map, createPanelTargetMapOverlayContract(
     'hover',
     projectTargetsToMapFeatures(hoveredTargets, scene, location),
   ))
