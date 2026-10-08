@@ -31,7 +31,7 @@ const RAMPS: Readonly<Record<string, readonly string[]>> = {
 }
 
 export function legendGradient(colormap: string, reversed: boolean): string {
-  const stops = [...(RAMPS[colormap] ?? RAMPS.viridis!)]
+  const stops = [...RAMPS[colormap]!]
   if (reversed) stops.reverse()
   return `linear-gradient(90deg, ${stops.join(', ')})`
 }
