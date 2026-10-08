@@ -39,19 +39,24 @@ export interface SiteMapOverlayContract {
   readonly hasRenderableFeatures: boolean
 }
 
-/** The source and layer ids the map seam registers in the interaction-overlay band, back to front. */
+/**
+ * The ids the map seam registers in the interaction-overlay band, back to front: the pin and line's source and layers, then
+ * the chart hover's own source and ring (one setData per scrub, never the snapshot).
+ */
 export function siteMapOverlayIds() {
   return {
     sourceId: 'site-overlay-source',
-    hoverSourceId: 'site-hover-source',
     layerIds: [
       'site-profile-casing',
       'site-profile-line',
       'site-profile-vertices',
       'site-pin-ring',
       'site-pin-core',
-      'site-hover-ring',
     ] as const,
+    hover: {
+      sourceId: 'site-hover-source',
+      layerIds: ['site-hover-ring'] as const,
+    },
   }
 }
 

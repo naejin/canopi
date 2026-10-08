@@ -4,8 +4,32 @@ import type { MapLibreApi, MapLibreMapInstance } from '../../maplibre/loader'
 import { IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, type MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
 import type { TerrainProtocolSupport } from '../../maplibre/terrain'
 import { WorkspaceMapContributions } from './workspace-map-contributions'
+import { createDesktopWorkspaceMapContributionAdapter } from './desktop-workspace-map-contribution-adapter'
+import { createTestCanvasQuerySurface } from '../../__tests__/support/canvas-query-surface'
+import { designSessionStore } from '../document-session/store'
+import { activePanel, selectPanel, sidePanel } from '../shell/state'
+import { endSiteDataTransients, setPin, setProfileLine } from '../lidar/site-transients'
+import type { CanopiFile } from '../../types/design'
 import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import type { RasterDisplay, RasterDisplayLayer } from '../../maplibre/raster-display/adapter'
+import type { SiteMapOverlay } from '../../maplibre/site-overlay'
+
+// Stream C draws the pin and line; here a pin draws as one point in two layers, so the site route can be seen and broken.
+vi.mock('../../maplibre/site-overlay', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../maplibre/site-overlay')>()
+  const { sourceId } = actual.siteMapOverlayIds()
+  return {
+    ...actual,
+    siteMapOverlayContract: (site: SiteMapOverlay | null) => ({
+      source: {
+        id: sourceId, type: 'geojson',
+        data: { type: 'FeatureCollection', features: site?.pin ? [{ type: 'Feature', geometry: { type: 'Point', coordinates: site.pin }, properties: { role: 'pin' } }] : [] },
+      },
+      layers: ['site-pin-ring', 'site-pin-core'].map((id) => ({ id, source: sourceId, type: 'circle', filter: ['==', ['get', 'role'], 'pin'], paint: { 'circle-radius': 6 } })),
+      hasRenderableFeatures: Boolean(site?.pin),
+    }),
+  }
+})
 
 class ContributionMap implements MapLibreMapInstance {
   readonly sources = new Map<string, { setData(data: unknown): void }>()
@@ -70,7 +94,7 @@ function snapshot(identity: object, overrides: Partial<WorkspaceMapContributionS
     sessionIdentity: identity,
     lidar: [layer()],
     terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
-    overlays: { runtime: { getSceneSnapshot: () => scene }, location: { lat: 48, lon: 2 }, hoveredTargets: [{ kind: 'zone', zone_id: 'plot' }], selectedTargets: [] },
+    overlays: { runtime: { getSceneSnapshot: () => scene }, location: { lat: 48, lon: 2 }, hoveredTargets: [{ kind: 'zone', zone_id: 'plot' }], selectedTargets: [], site: null },
     ...overrides,
   }
 }
@@ -96,6 +120,10 @@ function deferred<T>() {
   let reject!: (error: unknown) => void
   const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no })
   return { promise, resolve, reject }
+}
+
+function withSite(input: WorkspaceMapContributionSnapshot, pin: readonly [number, number] | null): WorkspaceMapContributionSnapshot {
+  return { ...input, overlays: { ...input.overlays, site: { pin, profileLine: null } } }
 }
 
 async function flush() { await Promise.resolve(); await Promise.resolve() }
@@ -479,6 +507,61 @@ describe('WorkspaceMapContributions', () => {
       expect(f.states.at(-1)).toMatchObject({ status: 'ready', terrainStatus: 'error' })
     })
 
+    it('draws the Site data pin above the panel Targets in the interaction-overlay band', () => {
+      const f = fixture()
+      f.manager.update(withSite(snapshot(f.identity), [2.001, 48.001]))
+      f.manager.admitStyle()
+      expect(f.map.getSource('site-overlay-source')).toBeTruthy()
+      expect(f.map.order.indexOf('panel-target-hover-plants')).toBeLessThan(f.map.order.indexOf('site-pin-ring'))
+      expect(f.map.order.indexOf('site-pin-ring')).toBeLessThan(f.map.order.indexOf('site-pin-core'))
+      f.manager.update(withSite(snapshot(f.identity), null))
+      expect(f.map.getSource('site-overlay-source')).toBeUndefined()
+      expect(f.map.order.some((id) => id.startsWith('site-'))).toBe(false)
+    })
+
+    it('skips a failing site overlay on its own key: the selection highlight stays, and the pin is retried only when it moves', () => {
+      const f = fixture()
+      const add = f.map.addLayer.getMockImplementation()!
+      let broken = true
+      f.map.addLayer.mockImplementation((candidate) => {
+        if (broken && String(candidate.id).startsWith('site-')) throw new Error('site layer rejected')
+        add(candidate)
+      })
+      const selected = snapshot(f.identity)
+      const input = withSite({ ...selected, overlays: { ...selected.overlays, selectedTargets: [{ kind: 'zone', zone_id: 'plot' }] } }, [2.001, 48.001])
+      f.manager.update(input)
+      f.manager.admitStyle()
+      expect(f.failure).not.toHaveBeenCalled()
+      expect(f.map.getLayer('panel-target-selection-zones-line')).toBeTruthy()
+      expect(f.map.order.some((id) => id.startsWith('site-'))).toBe(false)
+      expect(f.states.at(-1)).toMatchObject({ status: 'ready', layerSkipped: true })
+      const attempts = f.map.addLayer.mock.calls.length
+      // A new panel hover is a new Target set but the same pin: the panel overlay redraws, the site is not retried.
+      f.manager.update({ ...input, overlays: { ...input.overlays, hoveredTargets: [] } })
+      expect(f.map.addLayer.mock.calls.slice(attempts).some(([candidate]) => String(candidate.id).startsWith('site-'))).toBe(false)
+      expect(f.map.getLayer('panel-target-selection-zones-line')).toBeTruthy()
+      expect(f.logError).toHaveBeenCalledOnce()
+      broken = false
+      f.manager.update(withSite(input, [2.002, 48.001]))
+      expect(f.map.getLayer('site-pin-core')).toBeTruthy()
+      expect(f.states.at(-1)).toMatchObject({ status: 'ready', layerSkipped: false })
+    })
+
+    it('routes a MapLibre error naming a site layer to the site key, leaving the selection highlight drawn', () => {
+      const f = fixture()
+      const selected = snapshot(f.identity)
+      f.manager.update(withSite({ ...selected, overlays: { ...selected.overlays, selectedTargets: [{ kind: 'zone', zone_id: 'plot' }] } }, [2.001, 48.001]))
+      f.manager.admitStyle()
+      expect(f.manager.handleMapError({ layer: { id: 'site-pin-core' }, error: new Error('site paint rejected') })).toBe(true)
+      expect(f.failure).not.toHaveBeenCalled()
+      expect(f.map.order.some((id) => id.startsWith('site-'))).toBe(false)
+      expect(f.map.getLayer('panel-target-selection-zones-line')).toBeTruthy()
+      expect(f.states.at(-1)).toMatchObject({ status: 'ready', layerSkipped: true })
+      // A late error from a site layer already removed stays passive.
+      f.manager.dispose()
+      expect(f.manager.handleMapError({ sourceId: 'site-overlay-source', error: new Error('late') })).toBe(true)
+    })
+
     it('leaves unowned and shared scene errors to the map owner', () => {
       const f = fixture()
       f.manager.update(snapshot(f.identity))
@@ -486,5 +569,24 @@ describe('WorkspaceMapContributions', () => {
       expect(f.manager.handleMapError({ error: new Error('map engine failed') })).toBe(false)
       expect(f.manager.handleMapError({ layer: { id: 'canopi-shared-scene' }, error: new Error('scene draw failed') })).toBe(false)
     })
+  })
+
+  it('reads the Desktop pin and profile line into the snapshot in [lon, lat], and none in overview', () => {
+    designSessionStore.replaceCurrentDesignState({ name: 'Orchard' } as CanopiFile, null, 'Orchard')
+    selectPanel('site-data')
+    try {
+      const adapter = createDesktopWorkspaceMapContributionAdapter()
+      const runtime = createTestCanvasQuerySurface()
+      expect(adapter.read(runtime)?.overlays.site).toBeNull()
+      setPin({ lon: 2.35, lat: 48.85 })
+      setProfileLine([{ lon: 2.35, lat: 48.85 }, { lon: 2.36, lat: 48.86 }])
+      expect(adapter.read(runtime)?.overlays.site).toEqual({ pin: [2.35, 48.85], profileLine: [[2.35, 48.85], [2.36, 48.86]] })
+      runtime.setPlacement({ x: 0, y: 0, scale: 0.01 })
+      expect(adapter.read(runtime)?.overlays.site).toBeNull()
+    } finally {
+      endSiteDataTransients()
+      sidePanel.value = null
+      activePanel.value = 'canvas'
+    }
   })
 })

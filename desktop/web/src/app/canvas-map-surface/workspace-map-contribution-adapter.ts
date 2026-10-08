@@ -6,6 +6,7 @@ import type { MapLibreApi } from '../../maplibre/loader'
 import type { TerrainLayerState, TerrainProtocolSupport } from '../../maplibre/terrain'
 import type { RasterDisplay, RasterDisplayLayer, RasterDisplayMap, RasterDisplayOptions } from '../../maplibre/raster-display/adapter'
 import type { CanvasMapSurfaceOverlaySnapshot } from './overlays'
+import type { SiteMapOverlay } from '../../maplibre/site-overlay'
 
 export interface WorkspaceMapContributionSnapshot {
   readonly sessionIdentity: object
@@ -28,6 +29,11 @@ export interface WorkspaceMapContributionAdapter {
   ) => RasterDisplay
 }
 
+/** What an edition adds to the shared contributions: its LiDAR band and terrain, and Desktop's Site data pin and line. */
+export interface WorkspaceMapEditionContributions extends Pick<WorkspaceMapContributionSnapshot, 'lidar' | 'terrain'> {
+  readonly site: SiteMapOverlay | null
+}
+
 /**
  * The contributions both editions read: null without a Design or a plane, else the panel Targets (none in overview) over the
  * edition's LiDAR layers and terrain. Coarse view signals only: the contributions re-read when the Scene changes, the camera
@@ -37,7 +43,7 @@ export interface WorkspaceMapContributionAdapter {
 export function readWorkspaceMapContributions(
   runtime: CanvasQuerySurface,
   store: Pick<DesignSessionStore, 'sessionIdentity' | 'hasCurrentDesign'>,
-  edition: () => Pick<WorkspaceMapContributionSnapshot, 'lidar' | 'terrain'>,
+  edition: () => WorkspaceMapEditionContributions,
 ): WorkspaceMapContributionSnapshot | null {
   const sessionIdentity = store.sessionIdentity.value
   if (!store.hasCurrentDesign()) return null
@@ -48,14 +54,16 @@ export function readWorkspaceMapContributions(
   void canvasPaintRevision.value
   const overview = runtime.view.mode.value === 'overview'
   const panelTargets = readPanelTargetOverlaySnapshot()
+  const { site, ...contributions } = edition()
   return {
     sessionIdentity,
-    ...edition(),
+    ...contributions,
     overlays: {
       runtime,
       location: { lat: plane.origin.lat, lon: plane.origin.lon },
       hoveredTargets: overview ? [] : panelTargets.hoveredTargets,
       selectedTargets: overview ? [] : panelTargets.selectedTargets,
+      site: overview ? null : site,
     },
   }
 }
