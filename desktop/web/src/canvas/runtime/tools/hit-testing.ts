@@ -17,6 +17,7 @@ import type {
 } from '../scene'
 import {
   getSceneGroupedMemberKeys,
+  includesSceneDesignObjectTarget,
   isSceneLayerEditable,
   resolveSceneObjectGroupMembers,
   sceneObjectGroupMemberLayerName,
@@ -148,13 +149,13 @@ function hitTestTopLevelWithLayerFilter(
 /**
  * The topmost filled zone (a polygon, rectangle or ellipse, not a line) whose fill contains `point`, on an interactive
  * layer, as its top-level target: the zone, or its group when the zone is a group member. Object-locked zones count (the
- * caller rejects them). Select's fill click (spec §3.2, HitFilter.fill). With `accept`, the topmost such target that
- * `accept` takes, looking past the fills above it (the menu's selected fill, Q4).
+ * caller rejects them). Select's fill click (spec §3.2, HitFilter.fill). With `selected`, the topmost such target in
+ * that selection, looking past the fills above it (the menu's selected fill, Q4).
  */
 export function hitTestZoneFill(
   scene: ScenePersistedState,
   point: ScenePoint,
-  accept?: (target: SceneDesignObjectTarget) => boolean,
+  selected?: SceneDesignObjectSelection,
 ): SceneDesignObjectTarget | null {
   if (!isSceneLayerEditable(scene, 'zones')) return null
   for (let i = scene.zones.length - 1; i >= 0; i -= 1) {
@@ -162,8 +163,8 @@ export function hitTestZoneFill(
     const outline = zoneFillOutline(zone)
     if (!outline || !pointInOrOnPolygon(point, outline)) continue
     const target = zoneFillTarget(scene, zone)
-    if (!accept) return target
-    if (target && accept(target)) return target
+    if (!selected) return target
+    if (target && includesSceneDesignObjectTarget(selected, target)) return target
   }
   return null
 }
