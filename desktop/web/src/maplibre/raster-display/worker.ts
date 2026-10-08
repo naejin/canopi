@@ -169,7 +169,9 @@ async function handle(request: RasterWorkerRequest): Promise<{ value: unknown; t
     }
     case 'statistics': {
       const source = await sourceFor(request.handle)
-      return { value: bandStatistics(await source.statistics({ maxSize: statisticsWidth(source.levels) })), transfer: [] }
+      const level = statisticsLevel(source.levels)
+      const statistics = await source.statistics({ maxSize: level.width })
+      return { value: bandStatistics(statistics, level.width * level.height), transfer: [] }
     }
     case 'encode': {
       const png = await rgbaToPng(request.rgba, request.width, request.height)
@@ -192,18 +194,17 @@ async function handle(request: RasterWorkerRequest): Promise<{ value: unknown; t
 const STATISTICS_SAMPLES = 512 * 512
 
 /**
- * The `maxSize` that makes cog-tiler's `statistics` read the finest level of
- * at most `STATISTICS_SAMPLES` pixels. cog-tiler picks the first level no
- * wider than `maxSize` and ignores height, so a tall narrow raster would
- * otherwise be read whole; levels are finest first, so widths fall.
+ * The finest level of at most `STATISTICS_SAMPLES` pixels, whose width as
+ * `maxSize` makes cog-tiler's `statistics` read it. cog-tiler picks the first
+ * level no wider than `maxSize` and ignores height, so a tall narrow raster
+ * would otherwise be read whole; levels are finest first, so widths fall.
  */
-function statisticsWidth(levels: readonly { readonly width: number; readonly height: number }[]): number {
-  const level = levels.find(({ width, height }) => width * height <= STATISTICS_SAMPLES) ?? levels.at(-1)!
-  return level.width
+function statisticsLevel<Level extends { readonly width: number; readonly height: number }>(levels: readonly Level[]): Level {
+  return levels.find(({ width, height }) => width * height <= STATISTICS_SAMPLES) ?? levels.at(-1)!
 }
 
-/** Band 1 of cog-tiler's TiTiler-style statistics; null when it has no valid pixel. */
-function bandStatistics(statistics: Record<string, Record<string, unknown>>): RasterBandStatistics | null {
+/** Band 1 of cog-tiler's TiTiler-style statistics over `pixels` read; null when it has no valid pixel. */
+function bandStatistics(statistics: Record<string, Record<string, unknown>>, pixels: number): RasterBandStatistics | null {
   const band = statistics.b1 as {
     count?: number
     min?: number
@@ -219,6 +220,7 @@ function bandStatistics(statistics: Record<string, Record<string, unknown>>): Ra
     percentile2: band.percentile_2!,
     percentile98: band.percentile_98!,
     histogram: band.histogram![0],
+    pixels,
   }
 }
 

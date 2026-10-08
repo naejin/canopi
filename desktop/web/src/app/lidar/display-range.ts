@@ -2,8 +2,10 @@
 //
 // Owns the ranges Cut outliers draws (canopi-f47t.42, spec §1.10 "Open item"): the 2–98 % range of one displayed
 // generation, read once per display key from its display COGs in the shared raster worker lanes (`pool.ts`). One asset
-// uses cog-tiler's own percentiles; a mosaic takes the same 2–98 % points (GeoLibre's `autoRangeFor` rule) of its
-// assets' pooled distribution (`mosaicRange`). Never stored: a reopened Design reads it again. Until it lands, or when it
+// uses cog-tiler's own percentiles; a mosaic takes the same 2–98 % points (GeoLibre's `autoRangeFor` rule) of the
+// distribution the map draws (`mosaicRange`): each asset counts for the ground it shows by its bounds, so a small part
+// read at a finer overview does not outweigh a large one, a member higher ones hide entirely is not read, and one they
+// hide in part counts for its visible share. Never stored: a reopened Design reads it again. Until it lands, or when it
 // cannot be read, the entry draws its data range. An asset whose read fails (a lane restart, an asset error) is read
 // again up to `READ_ATTEMPTS` times; past that the key keeps its data range until the store resets (a new generation is
 // a new key), since the display effect asks again on every Design edit and would reread the whole mosaic each time.
@@ -13,6 +15,13 @@ import { rasterWorkerPool } from '../../maplibre/raster-display/pool'
 import type { RasterBandStatistics } from '../../maplibre/raster-display/protocol'
 
 type Range = readonly [number, number]
+type Bounds = readonly [number, number, number, number]
+
+/** One display COG of a generation, as the map draws it: first listed on top where assets overlap. */
+export interface CutOutlierAsset {
+  readonly url: string
+  readonly bbox: Bounds
+}
 
 const MAX_ENTRIES = 256
 const READ_ATTEMPTS = 3
@@ -28,11 +37,11 @@ export function cutOutlierRange(key: string): Range | null {
 }
 
 /** Reads the 2–98 % range of one displayed generation from its display COGs, once per key. */
-export function requestCutOutlierRange(key: string, urls: readonly string[]): void {
-  if (asked.has(key) || urls.length === 0) return
+export function requestCutOutlierRange(key: string, assets: readonly CutOutlierAsset[]): void {
+  if (asked.has(key) || assets.length === 0) return
   asked.add(key)
   const generation = owner
-  void readRange(urls).then((range) => {
+  void readRange(assets).then((range) => {
     if (generation !== owner || !range) return
     const next = new Map(ranges.value)
     next.set(key, range)
@@ -48,20 +57,31 @@ export function resetCutOutlierRanges(): void {
   ranges.value = new Map()
 }
 
-async function readRange(urls: readonly string[]): Promise<Range | null> {
+async function readRange(assets: readonly CutOutlierAsset[]): Promise<Range | null> {
+  // The ground each asset shows; one that higher assets hide entirely is not read.
+  const shown = new Map<string, number>()
+  assets.forEach((asset, index) => {
+    if (shown.has(asset.url)) return
+    const area = visibleArea(asset.bbox, assets.slice(0, index).map((above) => above.bbox))
+    if (area > 0) shown.set(asset.url, area)
+  })
+  const urls = [...shown.keys()]
+  if (urls.length === 0) return null
   const client = rasterWorkerPool().acquire()
   try {
-    const assets = [...new Set(urls)]
     const read = new Map<string, RasterBandStatistics | null>()
-    for (let attempt = 1; read.size < assets.length; attempt += 1) {
-      const pending = assets.filter((url) => !read.has(url))
+    for (let attempt = 1; read.size < urls.length; attempt += 1) {
+      const pending = urls.filter((url) => !read.has(url))
       const settled = await Promise.allSettled(pending.map((url) => client.statistics(url)))
       settled.forEach((result, index) => { if (result.status === 'fulfilled') read.set(pending[index]!, result.value) })
-      if (read.size < assets.length && attempt === READ_ATTEMPTS) throw new Error('Cut outliers could not read every asset')
+      if (read.size < urls.length && attempt === READ_ATTEMPTS) throw new Error('Cut outliers could not read every asset')
     }
-    const statistics = [...read.values()].filter((entry): entry is RasterBandStatistics => entry !== null)
+    const statistics = urls.flatMap((url) => {
+      const entry = read.get(url)
+      return entry ? [{ statistics: entry, groundPerSample: shown.get(url)! / entry.pixels }] : []
+    })
     if (statistics.length === 0) return null
-    if (statistics.length === 1) return [statistics[0]!.percentile2, statistics[0]!.percentile98]
+    if (statistics.length === 1) return [statistics[0]!.statistics.percentile2, statistics[0]!.statistics.percentile98]
     return mosaicRange(statistics)
   } finally {
     client.dispose()
@@ -69,21 +89,46 @@ async function readRange(urls: readonly string[]): Promise<Range | null> {
 }
 
 /**
- * The 2–98 % range of several assets pooled. Each asset keeps its own resolution: its cumulative count is known at
- * its bin edges, its 2 % and 98 % points and its ends, and runs linearly between them. maplibre-gl-raster's
+ * The area of `bbox` that none of `above` covers, in the bounds' own units. The cells of a grid on every edge inside
+ * `bbox` are each wholly covered or not; an asset's valid pixels are taken to fill its bounds.
+ */
+function visibleArea(bbox: Bounds, above: readonly Bounds[]): number {
+  const [west, south, east, north] = bbox
+  const covering = above
+    .map(([w, s, e, n]): Bounds => [Math.max(w, west), Math.max(s, south), Math.min(e, east), Math.min(n, north)])
+    .filter(([w, s, e, n]) => w < e && s < n)
+  const edges = (low: number, high: number, cut: (box: Bounds) => number[]) =>
+    [...new Set([low, high, ...covering.flatMap(cut)])].sort((a, b) => a - b)
+  const xs = edges(west, east, ([w, , e]) => [w, e])
+  const ys = edges(south, north, ([, s, , n]) => [s, n])
+  let area = 0
+  for (let i = 1; i < xs.length; i += 1) {
+    for (let j = 1; j < ys.length; j += 1) {
+      const [x, y] = [(xs[i - 1]! + xs[i]!) / 2, (ys[j - 1]! + ys[j]!) / 2]
+      if (!covering.some(([w, s, e, n]) => x > w && x < e && y > s && y < n)) area += (xs[i]! - xs[i - 1]!) * (ys[j]! - ys[j - 1]!)
+    }
+  }
+  return area
+}
+
+/**
+ * The 2–98 % range of several assets pooled, each sample counting for the ground it covers (`groundPerSample`: the
+ * ground the asset shows over the pixels of the overview read), so an asset of 512² pixels or more weighs by its
+ * size, not by the 512² samples every such read holds. Each asset keeps its own resolution: its cumulative count is
+ * known at its bin edges, its 2 % and 98 % points and its ends, and runs linearly between them. maplibre-gl-raster's
  * `mergeBandStats` rebins every asset onto 128 bins over the union instead, so one spike in one asset coarsens every
  * asset to 1/128 of the spike's span.
  */
-function mosaicRange(statistics: readonly RasterBandStatistics[]): Range {
-  const curves = statistics.map(cumulativeCurve)
-  const total = curves.reduce((sum, curve) => sum + curve.total, 0)
-  const low = Math.min(...statistics.map(({ min }) => min))
-  const high = Math.max(...statistics.map(({ max }) => max))
+function mosaicRange(assets: readonly { statistics: RasterBandStatistics, groundPerSample: number }[]): Range {
+  const curves = assets.map(({ statistics, groundPerSample }) => ({ curve: cumulativeCurve(statistics), weight: groundPerSample }))
+  const total = curves.reduce((sum, { curve, weight }) => sum + weight * curve.total, 0)
+  const low = Math.min(...assets.map(({ statistics }) => statistics.min))
+  const high = Math.max(...assets.map(({ statistics }) => statistics.max))
   const quantile = (fraction: number): number => {
     let [below, above] = [low, high]
     for (let step = 0; step < 64 && below < above; step += 1) {
       const middle = (below + above) / 2
-      if (curves.reduce((sum, curve) => sum + curve.at(middle), 0) < fraction * total) below = middle
+      if (curves.reduce((sum, { curve, weight }) => sum + weight * curve.at(middle), 0) < fraction * total) below = middle
       else above = middle
     }
     return above

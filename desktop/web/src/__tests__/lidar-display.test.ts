@@ -230,7 +230,10 @@ describe('LiDAR display descriptor requests', () => {
       // requestCutOutlierRange reads a key once; the effect may ask again as descriptors land.
       expect([...new Set(requestCutOutlierRange.mock.calls.map((call) => JSON.stringify(call)))].map((call) => JSON.parse(call))).toEqual([[
         display.displayKey('Source', 'lyr-1', 'gen-2'),
-        ['served:/data/lidar/display-cog/asset-top.tif', 'served:/data/lidar/display-cog/asset under.tif'],
+        [
+          { url: 'served:/data/lidar/display-cog/asset-top.tif', bbox: [0, 0, 0.6, 1] },
+          { url: 'served:/data/lidar/display-cog/asset under.tif', bbox: [0.4, -0.1, 1, 1] },
+        ],
       ]])
       cutRanges.set(display.displayKey('Source', 'lyr-1', 'gen-2'), [106, 129])
       expect(display.lidarDisplayStyle(item({ range: { mode: 'CutOutliers' } }))?.rescale).toEqual([106, 129])

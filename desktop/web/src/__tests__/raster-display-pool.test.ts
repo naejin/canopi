@@ -58,7 +58,7 @@ describe('raster display worker pool', () => {
     const statistics = client.statistics('asset://localhost/a.tif')
     await vi.waitFor(() => expect(lane.requests.some((request) => request.op === 'statistics')).toBe(true))
     const request = lane.requests.find((candidate) => candidate.op === 'statistics')!
-    const answer = { min: 1, max: 9, percentile2: 1.5, percentile98: 8.5, histogram: [1, 2] }
+    const answer = { min: 1, max: 9, percentile2: 1.5, percentile98: 8.5, histogram: [1, 2], pixels: 4 }
     lane.answer(request, answer)
     expect(await statistics).toEqual(answer)
     await settle()

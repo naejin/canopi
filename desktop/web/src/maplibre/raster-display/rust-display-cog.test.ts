@@ -130,6 +130,9 @@ describe('a display derivative the Rust engine wrote', () => {
     expect(statistics.max).toBe(values.at(-1))
     expect(statistics.histogram).toHaveLength(128)
     expect(statistics.histogram.reduce((sum, count) => sum + count, 0)).toBe(values.length)
+    // The fixture is under 512² pixels: its full-resolution level is read, every pixel, valid or not.
+    expect(fixture.width * fixture.height).toBeLessThanOrEqual(512 * 512)
+    expect(statistics.pixels).toBe(fixture.width * fixture.height)
   })
 })
 
@@ -168,5 +171,33 @@ describe('the lane\'s statistics read', () => {
     await vi.waitFor(() => expect(replies).toHaveLength(4))
     expect(replies.every((reply) => reply.ok)).toBe(true)
     expect(statistics.mock.calls).toEqual([[{ maxSize: 57 }], [{ maxSize: 512 }]])
+  })
+
+  it('reports the pixels of the overview it read, so a mosaic weighs each sample by the ground it covers', async () => {
+    const band = { count: 3, min: 1, max: 9, percentile_2: 1, percentile_98: 9, histogram: [[1, 1, 1], [1, 4, 7, 9]] }
+    vi.doMock('cog-tiler-wasm', () => ({
+      init: async () => {},
+      rgbaToPng: async () => new Uint8Array(0),
+      openCog: async () => ({
+        boundsLonLat: [0, 0, 1, 1],
+        tileCache: new Map(),
+        levels: [{ width: 4096, height: 1024 }, { width: 2048, height: 512 }, { width: 1024, height: 256 }],
+        statistics: async () => ({ b1: band }),
+      }),
+    }))
+    const replies: RasterWorkerReply[] = []
+    const scope: {
+      onmessage: ((event: MessageEvent<RasterWorkerRequest>) => void) | null
+      postMessage(message: RasterWorkerReply): void
+    } = { onmessage: null, postMessage: (message) => replies.push(message) }
+    vi.stubGlobal('self', scope)
+    vi.resetModules()
+    await import('./worker')
+    scope.onmessage?.({ data: { op: 'open', id: 1, handle: 1, url: 'asset://localhost/strip.tif' } } as MessageEvent<RasterWorkerRequest>)
+    scope.onmessage?.({ data: { op: 'statistics', id: 2, handle: 1 } } as MessageEvent<RasterWorkerRequest>)
+    await vi.waitFor(() => expect(replies).toHaveLength(2))
+    const reply = replies.find((candidate) => candidate.id === 2)!
+    if (!reply.ok) throw new Error(reply.error)
+    expect((reply.value as RasterBandStatistics).pixels).toBe(1024 * 256)
   })
 })

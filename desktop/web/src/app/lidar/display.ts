@@ -134,7 +134,7 @@ export function installLidarDisplayDescriptors(toAssetUrl: (path: string) => str
       const key = displayKey(item.kind, item.id, item.generationId)
       const descriptor = descriptors.get(key)
       if (descriptor?.state === 'Ready' && descriptor.generation_id === item.generationId) {
-        requestCutOutlierRange(key, descriptor.assets.map((asset) => toAssetUrl(asset.path)))
+        requestCutOutlierRange(key, descriptor.assets.map((asset) => ({ url: toAssetUrl(asset.path), bbox: asset.bounds })))
       }
     }
   })

@@ -27,6 +27,8 @@ export interface RasterBandStatistics {
   readonly percentile98: number
   /** Counts in 128 equal bins over [min, max] (cog-tiler's), which a mosaic's pooled range reads. */
   readonly histogram: readonly number[]
+  /** Pixels of the overview read, valid or not: a mosaic weighs each sample by the ground its asset shows over them. */
+  readonly pixels: number
 }
 
 export type RasterWorkerRequest =
