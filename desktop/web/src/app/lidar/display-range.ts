@@ -5,7 +5,8 @@
 // uses cog-tiler's own percentiles; a mosaic takes the same 2–98 % points (GeoLibre's `autoRangeFor` rule) of its
 // assets' pooled distribution (`mosaicRange`). Never stored: a reopened Design reads it again. Until it lands, or when it
 // cannot be read, the entry draws its data range. An asset whose read fails (a lane restart, an asset error) is read
-// again up to `READ_ATTEMPTS` times; past that the key is forgotten, so a later request reads it again.
+// again up to `READ_ATTEMPTS` times; past that the key keeps its data range until the store resets (a new generation is
+// a new key), since the display effect asks again on every Design edit and would reread the whole mosaic each time.
 
 import { signal } from '@preact/signals'
 import { rasterWorkerPool } from '../../maplibre/raster-display/pool'
@@ -17,7 +18,7 @@ const MAX_ENTRIES = 256
 const READ_ATTEMPTS = 3
 
 const ranges = signal<ReadonlyMap<string, Range>>(new Map())
-/** Keys asked for, answered or not, so a key is read once. */
+/** Keys asked for, answered, failed or not, so a key is read once per session. */
 const asked = new Set<string>()
 let owner = 0
 
@@ -37,9 +38,7 @@ export function requestCutOutlierRange(key: string, urls: readonly string[]): vo
     next.set(key, range)
     while (next.size > MAX_ENTRIES) next.delete(next.keys().next().value!)
     ranges.value = next
-  }, () => {
-    if (generation === owner) asked.delete(key)
-  })
+  }, () => { /* The key stays asked: it keeps its data range until the store resets. */ })
 }
 
 /** Forgets every range and drops answers still on their way (the display store's dispose). */

@@ -117,7 +117,9 @@ describe('Cut outliers ranges', () => {
     expect(clients).toBe(0)
   })
 
-  it('after three failed reads keeps the data range, and a later request reads again', async () => {
+  // The display effect asks again on every Design edit and descriptor poll: a key that keeps failing must not reread the
+  // whole mosaic in the lanes each time.
+  it('after three failed reads keeps the data range for the session, and only a reset reads it again', async () => {
     requestCutOutlierRange('Source/f/g1', ['west.tif', 'failing.tif'])
     answers.get('west.tif')!(stats(0, 100, 2, 98))
     for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -127,6 +129,9 @@ describe('Cut outliers ranges', () => {
     await settle()
     expect(cutOutlierRange('Source/f/g1')).toBeNull()
     expect(clients).toBe(0)
+    for (let run = 0; run < 5; run += 1) requestCutOutlierRange('Source/f/g1', ['west.tif', 'failing.tif'])
+    expect(asked).toEqual(['west.tif', 'failing.tif', 'failing.tif', 'failing.tif'])
+    resetCutOutlierRanges()
     requestCutOutlierRange('Source/f/g1', ['west.tif', 'failing.tif'])
     expect(asked.filter((url) => url === 'failing.tif')).toHaveLength(4)
   })
