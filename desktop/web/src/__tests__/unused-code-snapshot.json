@@ -10,7 +10,6 @@
     "src/app/lidar/profile.ts#setProfileHover",
     "src/app/lidar/sampler.ts#createSiteSampler",
     "src/app/lidar/site-values.ts#siteValues",
-    "src/app/story-presentation/overrides.ts#presentedSiteDataVisible",
     "src/components/panels/lidar/ProfileChart.tsx#ProfileChart",
     "src/components/panels/lidar/RasterDisplayControls.tsx#RasterDisplayControls"
   ],
