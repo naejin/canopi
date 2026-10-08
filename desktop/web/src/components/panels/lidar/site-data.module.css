@@ -49,9 +49,6 @@
 .legend { display: flex; flex-direction: column; gap: var(--space-1); }
 .ramp { height: 10px; border: 1px solid var(--color-border); border-radius: var(--radius-full); }
 .legendLabels { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; color: var(--color-text-muted); }
-.opacity { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-1) var(--space-2); }
-.opacity output { font-variant-numeric: tabular-nums; }
-.opacity input { width: 100%; accent-color: var(--color-accent); }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1-5); }
 .actions button[aria-pressed='true'] { background: var(--color-accent-soft); border-color: var(--color-accent); color: var(--color-accent-ink); }
 .actions button:disabled { opacity: 0.55; cursor: default; color: var(--color-text-muted); }

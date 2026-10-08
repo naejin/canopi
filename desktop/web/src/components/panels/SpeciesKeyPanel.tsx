@@ -33,6 +33,7 @@ import { PanelIcon } from '../shared/PanelIcon'
 import { PlantFinder, StratumFormFilters, finderHighlight, finderSummary } from '../shared/PlantFinder'
 import { SegmentedControl } from '../shared/SegmentedControl'
 import { Switch } from '../shared/Switch'
+import { Slider } from '../shared/Slider'
 import {
   PLANT_SYMBOL_SCALE_MAX,
   PLANT_SYMBOL_SCALE_MIN,
@@ -259,23 +260,16 @@ function DisplayOnMap() {
             </label>
           )}
           {display.colorBy === 'stratum' && <StratumLegend display={display} />}
-          <label className={styles.field}>
-            <span className={styles.fieldLabel}>
-              {t('speciesKey.symbolSize')}
-              <output className={styles.fieldValue}>{formatPercent(sizePercent)}</output>
-            </span>
-            <input
-              type="range"
-              className={styles.slider}
-              min={PLANT_SYMBOL_SCALE_MIN * 100}
-              max={PLANT_SYMBOL_SCALE_MAX * 100}
-              step={10}
-              value={sizePercent}
-              disabled={!hasDesign}
-              aria-valuetext={formatPercent(sizePercent)}
-              onInput={(event) => setPlantDisplayOptions({ symbolScale: Number(event.currentTarget.value) / 100 })}
-            />
-          </label>
+          <Slider
+            label={t('speciesKey.symbolSize')}
+            min={PLANT_SYMBOL_SCALE_MIN * 100}
+            max={PLANT_SYMBOL_SCALE_MAX * 100}
+            step={10}
+            value={sizePercent}
+            disabled={!hasDesign}
+            format={formatPercent}
+            onInput={(percent) => setPlantDisplayOptions({ symbolScale: percent / 100 })}
+          />
           <Switch
             label={t('speciesKey.outline')}
             checked={display.outline}

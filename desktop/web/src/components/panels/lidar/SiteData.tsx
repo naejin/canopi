@@ -38,6 +38,7 @@ import { ActionMenu, type ActionMenuEntry } from '../../shared/ActionMenu'
 import { ButtonTooltip } from '../../shared/ButtonTooltip'
 import { ControlIcon } from '../../shared/ControlIcon'
 import { Notice } from '../../shared/Notice'
+import { Slider } from '../../shared/Slider'
 import { staleReasonText } from '../analyze/analysis-text'
 import { unitWords } from './item-text'
 import styles from './site-data.module.css'
@@ -330,7 +331,6 @@ export function SiteDataInspector() {
   const available = item.state === 'Ready'
   const inspecting = inspectionTarget.value?.id === item.id
   const style = lidarDisplayStyle(item)
-  const percent = Math.round(item.opacity * 100)
   const moveFront = t('canvas.lidar.layers.moveUp', { name: label })
   const moveBack = t('canvas.lidar.layers.moveDown', { name: label })
   return (
@@ -359,18 +359,15 @@ export function SiteDataInspector() {
           </div>
         </div>
       )}
-      <label className={styles.opacity}>
-        <span>{t('canvas.lidar.layers.opacity')}</span>
-        <output>{percent}%</output>
-        <input
-          type="range"
-          min="0"
-          max="100"
-          value={percent}
-          aria-label={`${t('canvas.lidar.layers.opacity')}: ${label}`}
-          onInput={(event) => setLidarEntryOpacity(item.id, Number(event.currentTarget.value) / 100)}
-        />
-      </label>
+      <Slider
+        label={t('canvas.lidar.layers.opacity')}
+        ariaLabel={`${t('canvas.lidar.layers.opacity')}: ${label}`}
+        min={0}
+        max={100}
+        value={Math.round(item.opacity * 100)}
+        format={(value) => new Intl.NumberFormat(locale.value, { style: 'percent' }).format(value / 100)}
+        onInput={(value) => setLidarEntryOpacity(item.id, value / 100)}
+      />
       <div className={styles.actions}>
         {focused
           ? <button type="button" onClick={() => { viewDesignLocation(); setFocused(false) }}>{t('canvas.lidar.layers.returnToDesign')}</button>

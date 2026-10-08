@@ -39,8 +39,7 @@
 
 .toggleBtn:focus-visible,
 .lockBtn:focus-visible,
-.layerName:focus-visible,
-.mapSlider:focus-visible {
+.layerName:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
@@ -176,33 +175,6 @@
   gap: var(--space-2);
 }
 
-.mapSlider {
-  width: 100%;
-  -webkit-appearance: none;
-  appearance: none;
-  height: var(--slider-track-size);
-  background: var(--color-border-strong);
-  border-radius: var(--radius-full);
-  outline: none;
-}
-
-.mapSlider:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.mapSlider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: var(--slider-thumb-size);
-  height: var(--slider-thumb-size);
-  border-radius: var(--radius-full);
-  background: var(--color-primary);
-  border: 1px solid var(--color-primary);
-  cursor: pointer;
-  margin-top: calc((var(--slider-thumb-size) - var(--slider-track-size)) / -2);
-}
-
 .numericInput {
   width: 100%;
   border: 1px solid var(--color-border);
@@ -220,7 +192,6 @@
   outline-offset: 2px;
 }
 
-.opacityValue { font-variant-numeric: tabular-nums; color: var(--color-text); font-size: var(--text-xs); }
 
 .layerRow[data-active="true"] .layerName { color: var(--color-primary); }
 

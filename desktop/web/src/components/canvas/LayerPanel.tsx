@@ -9,6 +9,7 @@ import { useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import type { BasemapStyle } from '../../generated/contracts'
 import type { MapBackground } from '../../app/map-layers/state'
+import { Slider } from '../shared/Slider'
 import { Switch } from '../shared/Switch'
 import styles from './LayerPanel.module.css'
 
@@ -441,24 +442,15 @@ function SceneLayerDetail({ row, actions }: { row: CanvasLayerPresentationRow; a
 }
 
 function OpacitySlider({ row, actions, label }: { row: CanvasLayerPresentationRow; actions: LayerPanelActions; label?: string }) {
-  const opacity = Math.round(row.opacity * 100)
   return (
-    <div className={styles.controlRow}>
-      <span className={styles.controlLabel}>
-        {label ?? t('canvas.layers.opacity')}
-        <output className={styles.opacityValue}>{opacity}%</output>
-      </span>
-      <input
-        type="range"
-        className={styles.mapSlider}
-        min="0"
-        max="100"
-        value={opacity}
-        aria-label={label ?? `${t('canvas.layers.opacity')}: ${row.label}`}
-        onInput={(event) => {
-          actions.opacity(row.id, Number((event.target as HTMLInputElement).value) / 100)
-        }}
-      />
-    </div>
+    <Slider
+      label={label ?? t('canvas.layers.opacity')}
+      ariaLabel={label ?? `${t('canvas.layers.opacity')}: ${row.label}`}
+      min={0}
+      max={100}
+      value={Math.round(row.opacity * 100)}
+      format={(percent) => new Intl.NumberFormat(locale.value, { style: 'percent' }).format(percent / 100)}
+      onInput={(percent) => actions.opacity(row.id, percent / 100)}
+    />
   )
 }

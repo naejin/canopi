@@ -45,14 +45,6 @@ const GLOBAL_DESIGN_TOKEN_NAMES = collectGlobalDesignTokenNames(
 
 const STRUCTURAL_SPACING_EXCEPTIONS = [
   {
-    file: 'src/components/canvas/LayerPanel.module.css',
-    rule: '.mapSlider::-webkit-slider-thumb',
-    atRules: [],
-    property: 'margin-top',
-    value: 'calc((var(--slider-thumb-size) - var(--slider-track-size)) / -2)',
-    reason: 'WebKit requires the thumb to be offset by half the difference between thumb and track geometry.',
-  },
-  {
     file: 'src/components/panels/FavoritesPanel.module.css',
     rule: '.savedStampGripDots',
     atRules: [],
