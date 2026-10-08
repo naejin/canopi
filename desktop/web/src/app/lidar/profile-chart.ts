@@ -3,7 +3,8 @@
 // The profile chart's pure geometry (canopi-f47t.42, spec §1.10 "Profile"), adapted from GeoLibre's
 // `packages/plugins/src/plugins/elevation-profile/chart/profileChart.ts` (MIT; THIRD_PARTY_NOTICES.md): scales, SVG
 // paths and the pointer-to-sample lookup, with no DOM. Canopi's changes: several curves share one axis, no data breaks a
-// path into runs, a height plot starts at zero, round distance ticks, and a curve style per draw-order index.
+// path into runs (a lone value is a short dash), a height plot starts at zero, round distance ticks, and a curve style
+// per draw-order index.
 
 /** Where a plot draws, in SVG pixels: x0 to x1 across, top to bottom down. */
 export interface PlotArea {
@@ -23,7 +24,7 @@ interface ProfilePlotInput extends PlotArea {
 }
 
 interface ProfilePlot {
-  /** One SVG `d` per curve; empty for a curve with no two neighbouring values. */
+  /** One SVG `d` per curve; empty for a curve with no value. */
   readonly paths: readonly string[]
   /** The axis' ends, labelled on the chart; null when no curve has a value. */
   readonly min: number | null
@@ -33,6 +34,8 @@ interface ProfilePlot {
 }
 
 const px = (value: number) => value.toFixed(2)
+/** A value with no data on both sides is a level dash this wide either side of it, so every value counted is drawn. */
+const LONE_HALF_WIDTH = 1.5
 
 export function buildProfilePlot(input: ProfilePlotInput): ProfilePlot {
   const present = input.series.flatMap((values) => values.filter((value): value is number => value !== null))
@@ -47,9 +50,16 @@ export function buildProfilePlot(input: ProfilePlotInput): ProfilePlot {
   }
   const paths = input.series.map((values) => {
     let path = ''
-    let run: string[] = []
+    let run: { readonly x: number; readonly y: number }[] = []
     const flush = () => {
-      if (run.length >= 2) path += run.join('')
+      if (run.length === 1) {
+        const { x: atX, y: atY } = run[0]!
+        path += `M${px(atX - LONE_HALF_WIDTH)} ${px(atY)}L${px(atX + LONE_HALF_WIDTH)} ${px(atY)}`
+      } else {
+        run.forEach((point, index) => {
+          path += `${index === 0 ? 'M' : 'L'}${px(point.x)} ${px(point.y)}`
+        })
+      }
       run = []
     }
     values.forEach((value, index) => {
@@ -57,7 +67,7 @@ export function buildProfilePlot(input: ProfilePlotInput): ProfilePlot {
         flush()
         return
       }
-      run.push(`${run.length === 0 ? 'M' : 'L'}${px(x(input.distances[index]!))} ${px(y(value))}`)
+      run.push({ x: x(input.distances[index]!), y: y(value) })
     })
     flush()
     return path

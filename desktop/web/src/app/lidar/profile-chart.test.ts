@@ -14,10 +14,17 @@ describe('profile chart geometry', () => {
     ])
   })
 
-  it('no data breaks the path: a gap starts a new run, and a lone point between gaps draws nothing', () => {
+  it('no data breaks the path: a gap starts a new run, and a lone point between gaps is a short level dash', () => {
     const plot = buildProfilePlot({ ...AREA, distances: [0, 25, 50, 75, 100, 125, 150, 175, 200], series: [[1, 2, null, 3, null, 4, 5, null, null]] })
 
-    expect(plot.paths).toEqual(['M50.00 110.00L75.00 85.00M175.00 35.00L200.00 10.00'])
+    expect(plot.paths).toEqual(['M50.00 110.00L75.00 85.00M123.50 60.00L126.50 60.00M175.00 35.00L200.00 10.00'])
+  })
+
+  it('a value alone among no data is drawn where it sets the axis', () => {
+    const plot = buildProfilePlot({ ...AREA, distances: [0, 50, 100, 150, 200], series: [[null, null, 12.3, null, null]], fromZero: true })
+
+    expect(plot.max).toBe(12.3)
+    expect(plot.paths).toEqual(['M148.50 10.00L151.50 10.00'])
   })
 
   it('a flat series sits in the middle, and a series with no value draws nothing', () => {
