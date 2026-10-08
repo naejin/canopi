@@ -121,25 +121,28 @@ export function installLidarLibraryObserver(): () => void {
   return () => {}
 }
 
+/** Why an entry has no library item; each reason names its fix. */
+export type LidarMissingReason = 'needs-newer-canopi' | 'library-unopened' | 'not-in-library'
+
 /**
- * Why an entry has no library item: `loading` while the first snapshot is
- * still on its way (drawn as a normal row, never as missing); otherwise the
- * reason names its fix.
+ * Whether an entry's library item is here: `present`, `loading` while the
+ * first snapshot is still on its way (drawn as a normal row, never as
+ * missing), or why it is missing.
  */
-export type LidarMissingReason = 'loading' | 'needs-newer-canopi' | 'library-unopened' | 'not-in-library'
+export type LidarAvailability = 'present' | 'loading' | LidarMissingReason
 
 export interface LidarPresentationItem {
   kind: LibraryItemRole
   id: string
   /** The library's name, or the name the Design stored while the item is missing. */
   name: string
-  /** Null when the library lists the item. */
-  missing: LidarMissingReason | null
+  availability: LidarAvailability
   /** `null` for a reference whose library item is gone. */
   itemType: LibraryItemType | null
   /** The item's own stored units, never an input's. */
   units: string
-  state: LidarResultState | 'unavailable'
+  /** The item's state; null unless `availability` is `present`. */
+  state: LidarResultState | null
   visible: boolean
   opacity: number
   order: number
@@ -183,8 +186,13 @@ export function libraryItemName(item: LibraryItemSummary, library: LibrarySnapsh
   return derivedItemName(input?.name, provenance.analysis_id)
 }
 
+/** Whether an entry's library item is missing, rather than present or still loading. */
+export function isMissing(item: Pick<LidarPresentationItem, 'availability'>): boolean {
+  return item.availability !== 'present' && item.availability !== 'loading'
+}
+
 /** Why an entry the library does not list is missing, from how the library opened. */
-function missingReason(library: LibrarySnapshot | null, status: LidarLibraryStatus): LidarMissingReason {
+function absentAvailability(library: LibrarySnapshot | null, status: LidarLibraryStatus): LidarAvailability {
   if (status.kind === 'refused_newer') return 'needs-newer-canopi'
   if (status.kind === 'unavailable') return 'library-unopened'
   return library ? 'not-in-library' : 'loading'
@@ -221,7 +229,7 @@ export function readLidarPresentation(
       ? {
           ...presentation,
           name: libraryItemName(item, library),
-          missing: null,
+          availability: 'present' as const,
           itemType: item.item_type,
           units: item.units,
           state: item.state,
@@ -238,10 +246,10 @@ export function readLidarPresentation(
       : {
           ...presentation,
           name: entry.name,
-          missing: missingReason(library, libraryStatus),
+          availability: absentAvailability(library, libraryStatus),
           itemType: null,
           units: '',
-          state: 'unavailable',
+          state: null,
           bounds: null,
           generationId: null,
           displayRange: null,

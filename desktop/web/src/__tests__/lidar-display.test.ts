@@ -12,7 +12,7 @@ function item(overrides: Partial<LidarPresentationItem> = {}): LidarPresentation
     kind: 'Source',
     id: 'lyr-1',
     name: 'Orchard terrain',
-    missing: null,
+    availability: 'present',
     itemType: { kind: 'Raster', quantity: 'GroundElevation' },
     units: 'm',
     state: 'Ready',
@@ -82,7 +82,7 @@ describe('LiDAR display projection', () => {
     ])
     expect(display.lidarDisplayLayers([
       item({ visible: false }),
-      item({ id: 'lyr-2', state: 'unavailable' }),
+      item({ id: 'lyr-2', availability: 'not-in-library', state: null }),
       item({ id: 'lyr-3', generationId: 'gen-9' }),
       item({ generationId: 'gen-3' }),
     ], descriptors)).toEqual([])
@@ -92,7 +92,7 @@ describe('LiDAR display projection', () => {
     const slope = { kind: 'Derived' as const, itemType: { kind: 'Raster' as const, quantity: 'Slope' as const } }
     expect(display.lidarDisplayStyle(item({ ...slope, units: '%' })))
       .toMatchObject({ colormap: 'ylorrd', reversed: false, rescale: [0, 57.7], units: '%' })
-    expect(display.lidarDisplayStyle(item({ itemType: null, state: 'unavailable', units: '' })))
+    expect(display.lidarDisplayStyle(item({ itemType: null, availability: 'not-in-library', state: null, units: '' })))
       .toMatchObject({ colormap: 'viridis', rescale: [0, 1] })
   })
 

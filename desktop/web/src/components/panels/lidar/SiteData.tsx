@@ -26,7 +26,7 @@ import {
   openSiteDataDetails,
   selectSiteRow,
 } from '../../../app/lidar/library-navigation'
-import { libraryItemName, lidarLibrary, readLidarPresentation, type LidarPresentationItem } from '../../../app/lidar/library-store'
+import { isMissing, libraryItemName, lidarLibrary, readLidarPresentation, type LidarPresentationItem } from '../../../app/lidar/library-store'
 import { canMoveReference, referenceRows, type ReferenceRow } from '../../../app/lidar/reference-tree'
 import { viewDesignLocation, viewLidarCoverage } from '../../../app/lidar/camera-request'
 import { beginInspection, endInspection, inspectionTarget } from '../../../app/lidar/inspection'
@@ -57,7 +57,7 @@ function nameOfItem(id: string): string {
 }
 
 function rowLabel(item: LidarPresentationItem): string {
-  return item.state === 'unavailable' ? t('canvas.lidar.library.unavailableItem') : item.name
+  return isMissing(item) ? t('canvas.lidar.library.unavailableItem') : item.name
 }
 
 /**
@@ -298,7 +298,7 @@ function refresh(item: LidarPresentationItem): void {
  * states follow.
  */
 function rowCaption(item: LidarPresentationItem, grouped: boolean): string {
-  if (item.state === 'unavailable' || !item.itemType) return t('canvas.lidar.library.dataUnavailable')
+  if (item.availability !== 'present' || !item.itemType) return t('canvas.lidar.library.dataUnavailable')
   const output = grouped && item.analysisId
     ? findAnalysis(item.analysisId)?.outputs.find((candidate) => candidate.key === item.outputKey)
     : undefined
@@ -396,7 +396,7 @@ export function SiteDataInspector() {
             {t('canvas.lidar.library.analyze')}
           </button>
         )}
-        {item.state !== 'unavailable' && (
+        {item.availability === 'present' && (
           <button type="button" onClick={() => openSiteDataDetails(item.id)}>{t('canvas.lidar.layers.details')}</button>
         )}
         <span className={styles.order}>

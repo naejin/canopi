@@ -106,7 +106,7 @@ export function installLidarDisplayDescriptors(): void {
   disposeLidarDisplayDescriptors()
   displayDisposer = effect(() => {
     for (const item of readCurrentLidarPresentation()) {
-      if (!item.visible || item.state === 'unavailable' || !item.generationId) continue
+      if (!item.visible || item.availability !== 'present' || !item.generationId) continue
       requestLidarDisplay(item.kind, item.id, item.generationId)
     }
   })
@@ -154,7 +154,7 @@ export function lidarDisplayLayers(
 ): RasterDisplayLayer[] {
   const layers: RasterDisplayLayer[] = []
   for (const item of items) {
-    if (!item.visible || item.state === 'unavailable' || !item.generationId) continue
+    if (!item.visible || item.availability !== 'present' || !item.generationId) continue
     const descriptor = descriptors.get(displayKey(item.kind, item.id, item.generationId))
     if (!descriptor || descriptor.state !== 'Ready' || descriptor.generation_id !== item.generationId) continue
     if (descriptor.assets.length === 0) continue
