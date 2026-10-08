@@ -13,7 +13,7 @@ Every tool id and parameter below was checked with `geolibre manifest <id>` on t
 Beads:
 - Seams: `canopi-h90p.9` (P1).
 - Hydrology: `canopi-5ys2.1` (P3, depends on h90p.9).
-- Where the UI lives in Layers: `canopi-h90p.2`.
+- Where the UI lives: Desktop's Site data panel (`canopi-f47t.42`, spec §1.10), which replaced the Layers placement of `canopi-h90p.2`.
 
 ---
 
@@ -570,7 +570,7 @@ pub struct LibrarySnapshot { pub items: Vec<LibraryItemSummary>, pub engines: En
 - `LidarSampleEntityKind` and `LidarDisplayRequest.kind` become `{Source, Derived}`.
 
 **Where each unavailable reason is computed**
-- The frontend adds "needs Desktop" (Web edition) and "already in Layers" (Design references), §3.5.
+- The frontend adds "needs Desktop" (Web edition) and "already in Site data" (Design references), §3.5.
 - Everything that needs the catalogue, raster probe facts or the engine is computed natively into `offers`. That gives eligibility one authority (Rust) and deletes `slopeIneligibility`.
 
 **Grid facts without a raster read in the poll path**
@@ -740,7 +740,7 @@ lidar_generation_vectors(generation_id PK, asset_sha256 REFERENCES lidar_vector_
 - Heads are upserted:
   - Designs keep the same item ids and show the new generation.
   - Display descriptor keys include the generation, so no stale URL is drawn.
-  - Inspection returns `StaleGeneration` and re-aims, as today.
+  - Sampling (`lidar_sample_points`) answers `StaleGeneration` for a moved head, and the caller re-aims.
 - "Run again with changes" is different: it opens the Analyze dialog prefilled from the provenance and creates a new definition with new items.
 
 **Stale detection** (in the snapshot builder, catalogue reads only). For each derived head, compare with its job:
@@ -775,7 +775,7 @@ Sources are immutable, so in v2 `InputUpdated` only happens for derived inputs t
 - Vector items get a display descriptor too:
   - the asset is copied, staged and then renamed, into `$APPDATA/lidar/display-vector/<sha>.geojson`;
   - the Tauri asset scope gains exactly `$APPDATA/lidar/display-vector/*.geojson`.
-- `inspection.rs` reports the derived item's stored `units`, and `result_units` is deleted. Vector items are not sampled natively.
+- `lidar_sample_points` reads a derived item in its stored `units`, and `result_units` is deleted. Vector items are not sampled natively.
 
 ### 3.5 Frontend
 
@@ -785,7 +785,8 @@ Sources are immutable, so in v2 `InputUpdated` only happens for derived inputs t
   - `VECTOR_FEATURES: Record<VectorFeature, {labelKey, layers(item)}>`
 - Raster styles:
   - Ground and surface elevation: schwarzwald over the display range (no blue: blue means water).
-  - Above-ground height: greens. Other continuous: viridis.
+  - Above-ground height: greens. Other continuous: magma.
+  - Each kind offers three ramps, stored per entry with Reverse and a range (spec §1.10); blue ramps belong to the water kinds below, and `display-legend.test.ts` holds that rule.
   - Slope: ylorrd over a fixed 0–30° (0–57.7 %) domain chosen by units.
   - Hillshade: gray over the value range.
   - Upslope area: blues with `stretch: 'log'`, rescaled over `[cell area, max]`.
@@ -805,10 +806,9 @@ Sources are immutable, so in v2 `InputUpdated` only happens for derived inputs t
 - Its layer ids join the lidar band through `bands.ts`, and it is torn down with the map (resource-ownership rule).
 - The contribution snapshot gains `lidarVectors`; Web stays `[]`.
 
-**Inspection**
-- Raster items keep the native read.
-- Vector items read the feature under the pointer with `queryRenderedFeatures` on that item's layers, and show "Stream, order 3", "Catchment, 2.4 ha" or "Contour 132 m".
-- `InspectionTarget` gains the item type.
+**Values on Site data rows**
+- Raster items keep the native read through `app/lidar/sampler.ts` (`lidar_sample_points`): under the pointer, at the pin and along a profile.
+- Vector items read the feature under the pointer or the pin with `queryRenderedFeatures` on that item's layers, and their row shows "Stream, order 3", "Catchment, 2.4 ha" or "Contour 132 m".
 
 **Analyze dialog** — `components/panels/analyze/AnalyzeDialog.tsx` plus `app/analyses/model.ts`.
 - Entries:
@@ -819,14 +819,14 @@ Sources are immutable, so in v2 `InputUpdated` only happens for derived inputs t
   - the native `item.offers`;
   - plus frontend reasons:
     - `NeedsDesktop` on Web;
-    - `AlreadyInLayers` when the Design already references a derived item with the same analysis, inputs and parameters, shown with "Show in Layers" instead of Run;
+    - `AlreadyInSiteData` when the Design already references a derived item with the same analysis, inputs and parameters, shown with "Show in Site data" instead of Run;
     - if the duplicate is only in the library, "Add existing".
 - Controls by parameter type:
   - `choice`: segmented control or radio.
   - `number`: field with a unit suffix, min/max/step, locale formatting via `Intl`.
   - `integer`.
   - `boolean`: checkbox.
-  - `points`: "Pick on map" through the pointer-handler registry inspection already uses, shown as a removable list; Escape cancels.
+  - `points`: "Pick on map" through the tool host's tap path the Site data pin uses, shown as a removable list; Escape cancels.
 - Layout rules:
   - `advanced` parameters go in a disclosure;
   - `visible_when` is honoured;
@@ -843,14 +843,14 @@ Sources are immutable, so in v2 `InputUpdated` only happens for derived inputs t
 - `calculateSlopeInLibrary` becomes `analyzeInLibrary(itemId, analysisId?)`.
 - Deleted: `slopeIneligibility`, `CalculateSlopeForm`, the `INELIGIBLE` table and `methodLabel`.
 
-**Library and Layers**
+**Library and Site data**
 - The type filter becomes All / Sources / Terrain / Water.
 - Derived rows nest under their first input (`provenance.inputs[0].item_id`).
 - An "Out of date: <reason>" badge with Refresh sits beside a stale item.
 - Details show:
   - the provenance: analysis, method version, parameters with units, inputs by name, tool version and GeoLibre revision, creation date;
   - a "Processing history" disclosure that pages `lidar_processing_history`.
-- Moving this into Layers is `canopi-h90p.2`; the seam only has to work in the current panels.
+- Site data (`canopi-f47t.42`) hosts the rows: hydrology only adds rows, their blue ramps and the analysis group line.
 
 **i18n**
 - New keys, in all 11 locales:
@@ -978,13 +978,13 @@ Doing contours before hydrology keeps each review small. Bead 3 proves the globa
 
 **Frontend tests**
 - The dialog generated from a registry fixture: every parameter type, advanced disclosure, `visible_when`, optional outputs.
-- Unavailable reasons shown by name, including NeedsDesktop and AlreadyInLayers.
+- Unavailable reasons shown by name, including NeedsDesktop and AlreadyInSiteData.
 - Point picking, including the keyboard path and Escape.
 - `runAnalysis`, `rerunAnalysis` and `settleResultAttachments` fenced to their Design session.
 - Stale badge and Refresh.
 - Kind-table styles and legends (log stretch, gray, blues).
 - Vector adapter lifecycle: create, sync, teardown, HMR.
-- Vector inspection readout.
+- Vector values on Site data rows.
 - i18n completeness across 11 locales.
 - The Web build boundary still excludes raster engines.
 
