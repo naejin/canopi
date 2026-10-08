@@ -116,7 +116,7 @@ describe('keymap', () => {
     }
 
     expect(press(search, { key: 'P', ctrlKey: true, shiftKey: true })).toBe(true)
-    expect(press(slider, { key: '3', code: 'Digit3', ctrlKey: true })).toBe(true)
+    expect(press(slider, { key: '4', code: 'Digit4', ctrlKey: true })).toBe(true)
     expect(press(search, { key: 'o', ctrlKey: true })).toBe(true)
     expect(press(notes, { key: 'n', ctrlKey: true })).toBe(true)
     expect(press(search, { key: ',', ctrlKey: true })).toBe(true)
@@ -396,9 +396,9 @@ describe('keymap', () => {
     const command = (press: KeyboardEventLike) => rowsFor(rows, press).map((row) => row.command)
 
     expect(command(keyLike('S', { ctrlKey: true, shiftKey: true }))).toEqual(['file.saveAs'])
-    expect(command(keyLike('3', { ctrlKey: true }))).toEqual(['nav.plantDb'])
-    expect(command(keyLike('2', { ctrlKey: true }))).toEqual([])
-    expect(command(keyLike('3', { ctrlKey: true, altKey: true }))).toEqual([])
+    expect(command(keyLike('4', { ctrlKey: true }))).toEqual(['nav.plantDb'])
+    expect(command(keyLike('3', { ctrlKey: true }))).toEqual([])
+    expect(command(keyLike('4', { ctrlKey: true, altKey: true }))).toEqual([])
     expect(command(keyLike('s', { ctrlKey: true, metaKey: true }))).toEqual([])
     expect(command(keyLike('3'))).toEqual([])
     expect(rows.find((row) => row.command === 'file.rename')?.scope).toBe('command')
