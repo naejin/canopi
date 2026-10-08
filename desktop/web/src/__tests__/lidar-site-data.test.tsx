@@ -183,6 +183,23 @@ describe('the Site data panel', () => {
     expect(actions.chooseImportFiles).toHaveBeenCalledOnce()
   })
 
+  it('opens Analyze on the open item, else the open result\'s input, else the first eligible item', async () => {
+    lidarLibrary.value = library([sourceItem('t1', 'Ground one'), sourceItem('t2', 'Ground two'), slopeItem('s', 't2')])
+    setDesign([{ kind: 'Source', id: 't1', order: 1 }, { kind: 'Source', id: 't2', order: 0 }, { kind: 'Derived', id: 's', order: 0 }])
+    const view = siteDataViewFor(designSessionStore.sessionIdentity.peek())
+    mount()
+    expect(lines()).toEqual(['t1', 't2', '  s'])
+    await click(button('Analyze…'))
+    expect(dataDialog.value).toMatchObject({ kind: 'analyze', itemId: 't1' })
+    // The slope result no analysis takes is open: its input, the second terrain, is the source.
+    await act(async () => { view.openItem.value = 's' })
+    await click(button('Analyze…'))
+    expect(dataDialog.value).toMatchObject({ kind: 'analyze', itemId: 't2' })
+    await act(async () => { view.openItem.value = 't1' })
+    await click(button('Analyze…'))
+    expect(dataDialog.value).toMatchObject({ kind: 'analyze', itemId: 't1' })
+  })
+
   it('says why Analyze and Profile are disabled', () => {
     lidarLibrary.value = library([sourceItem('a', 'Ground', { offers: [] }), slopeItem('s', 'a')])
     setDesign([{ kind: 'Derived', id: 's', order: 0 }])

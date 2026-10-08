@@ -5,7 +5,7 @@ import { formatCoordinates } from '../../../app/geocoding/coordinates'
 import { analyzeItem, beginDataImport, openDataLibrary } from '../../../app/lidar/library-navigation'
 import { installLidarLibraryObserver, lidarLibrary, readCurrentLidarPresentation } from '../../../app/lidar/library-store'
 import { armProfile, profileAvailable } from '../../../app/lidar/profile'
-import { siteDataViewFor, type SiteDataView } from '../../../app/lidar/site-data-view'
+import { defaultAnalyzeSource, siteDataViewFor, type SiteDataView } from '../../../app/lidar/site-data-view'
 import { pin, unpin } from '../../../app/lidar/site-transients'
 import { siteValues } from '../../../app/lidar/site-values'
 import { referenceRows } from '../../../app/lidar/reference-tree'
@@ -94,10 +94,10 @@ function PinLine() {
 function Toolbar({ view }: { readonly view: SiteDataView }) {
   const items = readCurrentLidarPresentation()
   const library = lidarLibrary.value
-  // A ready item in this Design that some registered analysis can take, the open item first (spec §1.10 "Toolbar").
+  // A ready item in this Design that some registered analysis can take (spec §1.10 "Toolbar").
   const eligible = referenceRows(items).filter((item) => item.availability === 'present' && item.state === 'Ready'
     && library?.items.find((candidate) => candidate.id === item.id)?.offers.some((offer) => !offer.unavailable))
-  const source = eligible.find((item) => item.id === view.openItem.value) ?? eligible[0] ?? null
+  const source = defaultAnalyzeSource(eligible, items.find((item) => item.id === view.openItem.value) ?? null)
   const canProfile = profileAvailable.value
   const profiling = currentCanvasTool.value === 'profile'
   return (
