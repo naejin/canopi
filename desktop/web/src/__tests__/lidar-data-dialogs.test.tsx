@@ -9,7 +9,7 @@ const actions = vi.hoisted(() => ({
   runAnalysis: vi.fn().mockResolvedValue({ definition_id: 'adef-new', job_id: 'job', item_ids: ['new'] }),
   rerunAnalysis: vi.fn().mockResolvedValue({ definition_id: 'adef', job_id: 'job', item_ids: [] }),
   cancelAnalysisJob: vi.fn().mockResolvedValue(true),
-  fetchProcessingHistory: vi.fn(),
+  fetchProcessingHistory: vi.fn().mockResolvedValue({ definition_id: 'def', runs: [], next_cursor: null }),
   cancelLibraryImport: vi.fn().mockResolvedValue(undefined),
   chooseImportFiles: vi.fn(),
   deleteLibraryItem: vi.fn().mockResolvedValue(undefined),
@@ -115,6 +115,19 @@ function mount(): void {
     openDataLibrary()
     render(<DataDialogs />, container)
   })
+}
+
+/** The library row named `name`. */
+function rowNamed(name: string): HTMLElement {
+  const row = Array.from(container.querySelectorAll<HTMLElement>('[role="option"]'))
+    .find((candidate) => candidate.querySelector('strong')?.textContent === name)
+  if (!row) throw new Error(`no row ${name}`)
+  return row
+}
+
+/** Selects the library row named `name`; its details and actions show beside the list. */
+async function selectRow(name: string): Promise<void> {
+  await click(rowNamed(name))
 }
 
 async function focusItem(id: string): Promise<void> {
@@ -242,6 +255,7 @@ describe('Data library, Import and Analyze dialogs', () => {
   it('refuses a rename to a name another library item uses', async () => {
     lidarLibrary.value = library([layer('a', 'Elevation'), layer('b', 'Terrain')])
     mount()
+    await selectRow('Terrain')
     await click(button('Actions for Terrain'))
     await click(Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menu"] button'))
       .find((candidate) => candidate.textContent?.includes('Rename'))!)
@@ -274,9 +288,11 @@ describe('Data library, Import and Analyze dialogs', () => {
     expect(container.querySelector('header')?.textContent).not.toMatch(/\d/)
     expect(container.querySelector('footer')?.textContent).toContain('2 items')
 
-    const canopy = button('Canopy').closest('li')!
-    expect(canopy.textContent).toContain('In this Design')
-    expect(canopy.querySelector('[aria-label="Add Canopy to this Design"]')).toBeNull()
+    await selectRow('Canopy')
+    const details = container.querySelector('section[aria-labelledby]')!
+    expect(details.textContent).toContain('In this Design')
+    expect(details.querySelector('[aria-label="Add Canopy to this Design"]')).toBeNull()
+    await selectRow('Ground')
     await click(button('Add Ground to this Design'))
     expect(actions.addToDesign).toHaveBeenCalledWith('Source', 'a')
   })
@@ -307,7 +323,7 @@ describe('Data library, Import and Analyze dialogs', () => {
     mount()
     expect(container.querySelector('select')).toBeNull()
     await click(dropdownTrigger(container, 'Type')!)
-    expect(Array.from(container.querySelectorAll('[role="option"]')).map((option) => option.textContent))
+    expect(Array.from(container.querySelectorAll('[role="listbox"]:not([aria-label="Data library"]) [role="option"]')).map((option) => option.textContent))
       .toEqual(['All types', 'Imported data', 'Terrain'])
     await click(dropdownTrigger(container, 'Type')!)
     await chooseFrom('Type', 'Terrain')
@@ -319,6 +335,7 @@ describe('Data library, Import and Analyze dialogs', () => {
     lidarLibrary.value = library([layer('a', 'Ground', { dependents: 1 }), layer('b', 'Canopy')], [slope('s', 'a')])
     actions.fetchDeleteImpact.mockResolvedValue({ dependent_item_ids: ['s'] })
     mount()
+    await selectRow('Ground')
     await click(button('Actions for Ground'))
     await click(document.querySelector<HTMLButtonElement>('[role="menu"] [aria-label="Delete from library"]')!)
 
@@ -336,6 +353,7 @@ describe('Data library, Import and Analyze dialogs', () => {
     lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', { name: 'Steepness' })])
     actions.fetchDeleteImpact.mockResolvedValue({ dependent_item_ids: [] })
     mount()
+    await selectRow('Steepness')
     await click(button('Actions for Steepness'))
     await click(document.querySelector<HTMLButtonElement>('[role="menu"] [aria-label="Delete from library"]')!)
     // The library does not know which other Designs use an item, and says so.
@@ -358,6 +376,7 @@ describe('Data library, Import and Analyze dialogs', () => {
   })
 
   async function openAnalyze(name: string): Promise<void> {
+    await selectRow(name)
     await click(button(`Actions for ${name}`))
     await click(document.querySelector<HTMLButtonElement>('[role="menu"] [aria-label="Analyze…"]')!)
   }
@@ -458,6 +477,7 @@ describe('Data library, Import and Analyze dialogs', () => {
   it('runs a result again with changes as a new analysis prefilled from its provenance', async () => {
     lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', { name: 'Steepness' })])
     mount()
+    await selectRow('Steepness')
     await click(button('Actions for Steepness'))
     await click(document.querySelector<HTMLButtonElement>('[role="menu"] [aria-label="Run again with changes…"]')!)
 
@@ -481,6 +501,7 @@ describe('Data library, Import and Analyze dialogs', () => {
   it('offers no run with changes once the input is gone', async () => {
     lidarLibrary.value = library([], [slope('s', 'a', { name: 'Steepness' })])
     mount()
+    await selectRow('Steepness')
     await click(button('Actions for Steepness'))
     expect(document.querySelector('[role="menu"] [aria-label="Run again with changes…"]')).toBeNull()
   })
@@ -507,8 +528,8 @@ describe('Data library, Import and Analyze dialogs', () => {
       ] },
     })])
     mount()
-    const row = button('Steepness').closest('li')!
-    expect(row.textContent).toContain('Out of date')
+    expect(rowNamed('Steepness').textContent).toContain('Out of date')
+    await selectRow('Steepness')
     await click(button('Refresh Steepness'))
     expect(actions.rerunAnalysis).toHaveBeenCalledWith('s-def')
 
@@ -549,6 +570,7 @@ describe('Data library, Import and Analyze dialogs', () => {
       generation_id: null, state: 'Preparing', name: 'Pending', run: { job_id: 'job-1', state: 'Preparing', message: null },
     })])
     mount()
+    await selectRow('Pending')
     expect(container.textContent).toContain('Calculating')
     await click(button(/^Cancel calculation$/))
     expect(actions.cancelAnalysisJob).toHaveBeenCalledWith(expect.objectContaining({ id: 's', run: expect.objectContaining({ job_id: 'job-1' }) }))
@@ -559,7 +581,7 @@ describe('Data library, Import and Analyze dialogs', () => {
       slope('c', 'a', { generation_id: null, state: 'Failed', name: 'Stopped', run: { job_id: 'j', state: 'Cancelled', message: null } }),
     ])
     mount()
-    const row = button('Stopped').closest('li')!
+    const row = rowNamed('Stopped')
     expect(row.textContent).toContain('Cancelled')
     expect(row.textContent).not.toContain('Calculation failed')
   })

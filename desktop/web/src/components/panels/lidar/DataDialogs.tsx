@@ -15,7 +15,7 @@ import {
 import { locale } from '../../../app/settings/state'
 import { t } from '../../../i18n'
 import { AnalyzeDialog } from '../analyze/AnalyzeDialog'
-import { DataLibraryDialog } from './DataLibraryDialog'
+import { DataLibraryView } from './DataLibraryView'
 import { ImportDataDialog } from './ImportDataDialog'
 
 /**
@@ -28,7 +28,7 @@ export function DataDialogs() {
   if (!dialog) return null
   switch (dialog.kind) {
     case 'library':
-      return <DataLibraryDialog key={`library-${dialog.focusId ?? ''}`} focusId={dialog.focusId} />
+      return <DataLibraryView key={`library-${dialog.focusId ?? ''}`} focusId={dialog.focusId} />
     case 'import':
       return <ImportDataDialog paths={dialog.paths} attach={dialog.attach} onClose={leaveDataDialog} />
     case 'analyze':

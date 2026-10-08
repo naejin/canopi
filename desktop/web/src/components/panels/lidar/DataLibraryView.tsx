@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks'
+import { useEffect, useMemo, useState } from 'preact/hooks'
 import { currentDesign } from '../../../app/document-session/store'
 import {
   addToDesign,
@@ -39,37 +39,36 @@ import { LibraryPreview, usePreviewClient } from './LibraryPreview'
 import { LibraryItemNameField, isItemNameTaken } from './LibraryItemNameField'
 import styles from './data-library.module.css'
 
-type View =
-  | { readonly kind: 'list' }
-  | { readonly kind: 'details' | 'rename' | 'delete'; readonly id: string }
+type Pane = 'list' | 'details'
+type DetailView = 'details' | 'rename' | 'delete'
 
 /**
  * The Data library: terrain and height data shared by every Design, with the
- * results calculated from it. Import creates library items; Add to Design is
- * the attachment step from here. Search, filter, scroll and detail navigation
- * are session view state and never enter a Design. Library work keeps running
- * when the dialog closes or the Design changes; only an explicit Cancel stops
- * it. Deleting here removes an item from every Design; removing it from a
- * Design (in Layers) never deletes it. The footer counts the items, says how
- * much space the library takes on this computer and opens its folder.
+ * results calculated from it, as a large sheet over the workspace. The item
+ * list and the selected item's details are two panes that scroll on their
+ * own; below 760 px one pane shows at a time, with Back. Search, filter,
+ * scroll and selection are session view state and never enter a Design.
+ * Library work keeps running when the sheet closes or the Design changes;
+ * only an explicit Cancel stops it. Deleting here removes an item from every
+ * Design; removing it from a Design (in Site data) never deletes it. The
+ * footer counts the items, says how much space the library takes on this
+ * computer and opens its folder.
  */
-export function DataLibraryDialog({ focusId }: { readonly focusId: string | null }) {
+export function DataLibraryView({ focusId }: { readonly focusId: string | null }) {
   useEffect(() => installLidarLibraryObserver(), [])
   const client = usePreviewClient()
   const snapshot = lidarLibrary.value
   const items = useMemo(() => libraryItems(snapshot), [snapshot, locale.value])
   const references = currentDesign.value?.lidar?.entries ?? []
-  const [view, setView] = useState<View>(() => focusId ? { kind: 'details', id: focusId } : { kind: 'list' })
+  const [selectedId, setSelectedId] = useState<string | null>(focusId)
+  const [pane, setPane] = useState<Pane>(focusId ? 'details' : 'list')
+  const [detailView, setDetailView] = useState<DetailView>('details')
   const [query, setQuery] = useState('')
   const [type, setType] = useState<LibraryTypeFilter>('all')
   const [relatedTo, setRelatedTo] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [diskUsage, setDiskUsage] = useState<number | null>(null)
-  const body = useRef<HTMLDivElement>(null)
-  const savedScroll = useRef(0)
-  const restoreFocusId = useRef<string | null>(null)
-  const restoringList = useRef(false)
 
   // Measured again when the items change (an import, a result, a deletion).
   const itemsKey = items.map((row) => `${row.id}:${row.generationId ?? ''}`).join(',')
@@ -80,35 +79,16 @@ export function DataLibraryDialog({ focusId }: { readonly focusId: string | null
   }, [itemsKey])
 
   const visible = filterLibraryItems(items, query, type, relatedTo)
-  const item = 'id' in view ? items.find((candidate) => candidate.id === view.id) ?? null : null
+  // The first row is selected until another is chosen.
+  const item = items.find((candidate) => candidate.id === selectedId) ?? visible[0] ?? null
   const isAdded = (row: LibraryItem) => references.some((entry) => entry.id === row.id)
   const nameOf = (id: string) => items.find((candidate) => candidate.id === id)?.name ?? t('canvas.lidar.library.dataUnavailable')
 
-  useLayoutEffect(() => {
-    const scroller = body.current?.closest<HTMLElement>('[role="dialog"] > div') ?? null
-    if (view.kind === 'list' && restoringList.current) {
-      restoringList.current = false
-      if (scroller) scroller.scrollTop = savedScroll.current
-      const target = restoreFocusId.current
-        ? document.getElementById(`library-item-${restoreFocusId.current}`)
-        : null
-      ;(target ?? body.current?.querySelector<HTMLElement>('input'))?.focus({ preventScroll: true })
-    } else if (view.kind !== 'list') {
-      body.current?.querySelector<HTMLElement>('[data-autofocus="true"]')?.focus()
-    }
-  }, [view])
-
-  const open = (next: View) => {
-    const scroller = body.current?.closest<HTMLElement>('[role="dialog"] > div') ?? null
-    if (view.kind === 'list') savedScroll.current = scroller?.scrollTop ?? 0
-    if ('id' in next) restoreFocusId.current = next.id
+  const select = (id: string, show: boolean) => {
+    setSelectedId(id)
+    setDetailView('details')
     setError(null)
-    setView(next)
-  }
-  const back = () => {
-    restoringList.current = true
-    setError(null)
-    setView({ kind: 'list' })
+    if (show) setPane('details')
   }
   const run = async (action: () => Promise<unknown>, after?: () => void) => {
     setBusy(true)
@@ -149,22 +129,12 @@ export function DataLibraryDialog({ focusId }: { readonly focusId: string | null
         {t('canvas.lidar.library.addToDesign')}
       </button>
     )
-  const refreshButton = (row: LibraryItem) => isStale(row) && !isRunning(row) && (
-    <button
-      type="button"
-      disabled={busy}
-      aria-label={t('analyses.details.refreshAria', { name: row.name })}
-      onClick={() => refresh(row)}
-    >
-      {t('analyses.details.refresh')}
-    </button>
-  )
   const menu = (row: LibraryItem) => (
     <ActionMenu label={t('canvas.lidar.library.actionsFor', { name: row.name })} items={[
       ...(row.status === 'ready'
         ? [
             { label: t('canvas.lidar.library.analyze'), opensDialog: true, run: () => analyzeItem(row.id, { attach: false, returnTo: 'library' }) },
-            { label: t('canvas.lidar.library.rename'), run: () => open({ kind: 'rename', id: row.id }) },
+            { label: t('canvas.lidar.library.rename'), run: () => setDetailView('rename') },
           ]
         : []),
       ...(rerunSubject(row)
@@ -180,7 +150,7 @@ export function DataLibraryDialog({ focusId }: { readonly focusId: string | null
           }]
         : []),
       ...(row.status === 'ready' || row.role === 'Derived'
-        ? [{ label: t('canvas.lidar.library.deleteFromLibrary'), danger: true, run: () => open({ kind: 'delete', id: row.id }) }]
+        ? [{ label: t('canvas.lidar.library.deleteFromLibrary'), danger: true, run: () => setDetailView('delete') }]
         : []),
     ]} />
   )
@@ -248,11 +218,12 @@ export function DataLibraryDialog({ focusId }: { readonly focusId: string | null
   }
 
   const count = items.length
+  const headingId = 'library-details-heading'
   return (
     <WorkspaceDialog
       title={t('canvas.lidar.library.title')}
       onClose={closeDataDialog}
-      wide
+      large
       footer={<>
         <span className={styles.footerNote}>
           {t('canvas.lidar.library.itemCount', { count })}
@@ -261,15 +232,14 @@ export function DataLibraryDialog({ focusId }: { readonly focusId: string | null
         <button type="button" className={`${styles.dialogButton} ${styles.ghost}`} onClick={() => void run(showDataLibraryFolder)}>
           {t('canvas.lidar.library.showInFolder')}
         </button>
-        <button type="button" className={styles.dialogButton} onClick={closeDataDialog}>{t('canvas.lidar.library.done')}</button>
       </>}
     >
-      <div className={styles.library} ref={body}>
-        <LibraryOpenNotice />
-        {(error || lidarStatusMessage.value) && view.kind === 'list' && (
-          <p className={styles.error} role="alert">{error ?? lidarStatusMessage.value}</p>
-        )}
-        {view.kind === 'list' && <>
+      <div className={styles.library} data-pane={pane}>
+        <div className={styles.sheetTop}>
+          <LibraryOpenNotice />
+          {(error || lidarStatusMessage.value) && detailView === 'details' && (
+            <p className={styles.error} role="alert">{error ?? lidarStatusMessage.value}</p>
+          )}
           <div className={styles.filters}>
             <div className={styles.search}>
               <SurfaceSearch value={query} onChange={(value) => { setQuery(value); setRelatedTo(null) }} label={t('canvas.lidar.library.searchLabel')} />
@@ -279,30 +249,35 @@ export function DataLibraryDialog({ focusId }: { readonly focusId: string | null
               {t('canvas.lidar.library.import')}
             </button>
           </div>
-          {relatedTo !== null && (
-            <button type="button" className={styles.link} onClick={() => setRelatedTo(null)}>
-              {t('canvas.lidar.library.showAll')}
-            </button>
-          )}
-          {count === 0 ? (
-            <div className={styles.empty}>
-              <h3>{t('canvas.lidar.library.emptyTitle')}</h3>
-              <p>{t('canvas.lidar.library.emptyBody')}</p>
-              <p className={styles.muted}>{t('canvas.lidar.import.supported')}</p>
-              <button type="button" className={styles.dialogButton} onClick={beginImport}>{t('canvas.lidar.library.emptyAction')}</button>
-            </div>
-          ) : (
-            <ul className={styles.list}>
-              {visible.map((row) => (
-                <li className={styles.item} key={row.id} data-nested={row.depth > 0}>
-                  <button
-                    type="button"
+        </div>
+        {count === 0 ? (
+          <div className={styles.empty}>
+            <h3>{t('canvas.lidar.library.emptyTitle')}</h3>
+            <p>{t('canvas.lidar.library.emptyBody')}</p>
+            <p className={styles.muted}>{t('canvas.lidar.import.supported')}</p>
+            <button type="button" className={styles.dialogButton} onClick={beginImport}>{t('canvas.lidar.library.emptyAction')}</button>
+          </div>
+        ) : (
+          <div className={styles.panes}>
+            <div className={styles.listPane}>
+              {relatedTo !== null && (
+                <button type="button" className={styles.link} onClick={() => setRelatedTo(null)}>
+                  {t('canvas.lidar.library.showAll')}
+                </button>
+              )}
+              <ul className={styles.list} role="listbox" aria-label={t('canvas.lidar.library.title')}>
+                {visible.map((row) => (
+                  <li
+                    key={row.id}
                     id={`library-item-${row.id}`}
-                    className={styles.identity}
-                    onClick={() => open({ kind: 'details', id: row.id })}
+                    role="option"
+                    aria-selected={row.id === item?.id}
+                    className={styles.item}
+                    data-nested={row.depth > 0}
+                    onClick={() => select(row.id, true)}
                   >
-                    <LibraryPreview item={row} client={client} width={104} height={84} />
-                    <span>
+                    <LibraryPreview item={row} client={client} width={56} height={42} />
+                    <span className={styles.itemText}>
                       <strong>{row.name}</strong>
                       <small>{itemSummary(row)}</small>
                       {row.status !== 'ready' && (
@@ -310,67 +285,60 @@ export function DataLibraryDialog({ focusId }: { readonly focusId: string | null
                       )}
                       {isStale(row) && <small className={styles.stale}>{t('analyses.details.outOfDate')}</small>}
                     </span>
+                  </li>
+                ))}
+              </ul>
+              {visible.length === 0 && (
+                <div className={styles.empty}>
+                  <p role="status">{t('canvas.lidar.library.noMatch')}</p>
+                  <button type="button" className={styles.dialogButton} onClick={() => { setQuery(''); setType('all'); setRelatedTo(null) }}>
+                    {t('canvas.lidar.library.clearFilters')}
                   </button>
-                  <div className={styles.rowActions}>
-                    {refreshButton(row)}
-                    {row.status === 'ready' && addButton(row)}
-                    {menu(row)}
-                  </div>
-                  {operation(row)}
-                </li>
-              ))}
-            </ul>
-          )}
-          {count > 0 && visible.length === 0 && (
-            <div className={styles.empty}>
-              <p role="status">{t('canvas.lidar.library.noMatch')}</p>
-              <button type="button" className={styles.dialogButton} onClick={() => { setQuery(''); setType('all'); setRelatedTo(null) }}>
-                {t('canvas.lidar.library.clearFilters')}
-              </button>
+                </div>
+              )}
             </div>
-          )}
-          <p className={styles.muted}>{t('canvas.lidar.library.removeHint')}</p>
-        </>}
-
-        {view.kind !== 'list' && (
-          <button type="button" className={styles.back} onClick={back}>← {t('canvas.lidar.library.back')}</button>
-        )}
-        {view.kind === 'details' && item && <>
-          <div className={styles.detailTitle}>
-            <h3 tabIndex={-1} data-autofocus="true">{item.name}</h3>
-            {menu(item)}
+            {item && (
+              <section className={styles.detailPane} aria-labelledby={headingId}>
+                <button type="button" className={styles.back} onClick={() => setPane('list')}>← {t('canvas.lidar.library.back')}</button>
+                <div className={styles.detailTitle}>
+                  <h3 id={headingId}>{item.name}</h3>
+                  {menu(item)}
+                </div>
+                {detailView === 'details' && (
+                  <ItemDetails
+                    item={item}
+                    nameOf={nameOf}
+                    busy={busy}
+                    onRefresh={() => refresh(item)}
+                    onOpenInput={(id) => select(id, true)}
+                    preview={<div className={styles.previewFrame}><LibraryPreview item={item} client={client} width={640} height={328} large /></div>}
+                    actions={item.status === 'ready' && <>
+                      {addButton(item)}
+                      <button type="button" onClick={() => analyzeItem(item.id, { attach: false, returnTo: 'library' })}>
+                        {t('canvas.lidar.library.analyze')}
+                      </button>
+                    </>}
+                    operation={operation(item)}
+                  />
+                )}
+                {detailView === 'rename' && (
+                  <RenameForm item={item} busy={busy} error={error} onCancel={() => setDetailView('details')}
+                    onSubmit={(name) => void run(() => renameLibraryItem(item.id, name), () => setDetailView('details'))} />
+                )}
+                {detailView === 'delete' && (
+                  <DeleteConfirmation
+                    item={item}
+                    inCurrentDesign={isAdded(item)}
+                    busy={busy}
+                    error={error}
+                    onKeep={() => setDetailView('details')}
+                    onShowResults={() => { setRelatedTo(item.id); setQuery(''); setType('all'); setDetailView('details'); setPane('list') }}
+                    onDelete={() => void run(() => deleteLibraryItem(item.id), () => { setSelectedId(null); setDetailView('details') })}
+                  />
+                )}
+              </section>
+            )}
           </div>
-          <ItemDetails
-            item={item}
-            nameOf={nameOf}
-            busy={busy}
-            onRefresh={() => refresh(item)}
-            onOpenInput={(id) => open({ kind: 'details', id })}
-            preview={<div className={styles.previewFrame}><LibraryPreview item={item} client={client} width={640} height={328} large /></div>}
-            actions={item.status === 'ready' && <>
-              {addButton(item)}
-              <button type="button" onClick={() => analyzeItem(item.id, { attach: false, returnTo: 'library' })}>
-                {t('canvas.lidar.library.analyze')}
-              </button>
-            </>}
-            operation={operation(item)}
-          />
-        </>}
-        {view.kind !== 'list' && !item && <p className={styles.muted}>{t('canvas.lidar.library.itemGone')}</p>}
-        {view.kind === 'rename' && item && (
-          <RenameForm item={item} busy={busy} error={error} onCancel={back}
-            onSubmit={(name) => void run(() => renameLibraryItem(item.id, name), back)} />
-        )}
-        {view.kind === 'delete' && item && (
-          <DeleteConfirmation
-            item={item}
-            inCurrentDesign={isAdded(item)}
-            busy={busy}
-            error={error}
-            onKeep={back}
-            onShowResults={() => { setRelatedTo(item.id); setQuery(''); setType('all'); back() }}
-            onDelete={() => void run(() => deleteLibraryItem(item.id), () => { restoreFocusId.current = null; back() })}
-          />
         )}
       </div>
     </WorkspaceDialog>

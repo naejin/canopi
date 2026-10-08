@@ -25,6 +25,19 @@
   width: min(900px, 100%);
 }
 
+/* A sheet of fixed size inside the overlay's 24 px padding; its panes scroll, never the body. */
+.large {
+  width: min(1200px, 100%);
+  height: min(860px, 100%);
+}
+
+.large > .body {
+  flex: 1 1 auto;
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
 .header {
   display: flex;
   align-items: flex-start;
