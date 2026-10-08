@@ -49,6 +49,7 @@ function gallerySource(id: string, name: string, quantity: RasterQuantity, overr
     generation_id: `${id}-g1`, bounds: lidarBounds, value_range: [131.2, 287.8],
     display_range: { min: 131.2, max: 287.8, basis: 'Exact' }, resolution_m: 0.5, coverage_cells: '4000000',
     import_job: null, provenance: null, freshness: { state: 'Current' }, run: null, offers: [], dependents: 0,
+    created_at: galleryCreatedAt,
     ...overrides,
   }
   return { ...item, offers: galleryOffers(item) }
@@ -66,6 +67,7 @@ function gallerySlope(id: string, input: string, unit: 'degrees' | 'percent', ov
       tool: galleryTool, job_id: `${id}-job`, created_at: galleryCreatedAt,
     },
     freshness: { state: 'Current' }, run: { job_id: `${id}-job`, state: 'Complete', message: null }, offers: [], dependents: 0,
+    created_at: galleryCreatedAt,
     ...overrides,
   }
   return { ...item, offers: galleryOffers(item) }

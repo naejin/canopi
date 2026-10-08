@@ -373,6 +373,11 @@ export type LibraryItemSummary = {
 	offers: AnalysisOffer[],
 	// Derived items whose definitions use this item as an input.
 	dependents: number,
+	/**
+	 *  When the item was added to the library: its catalogue row's
+	 *  `created_at`, Unix milliseconds as text, for sorting by Recently added.
+	 */
+	created_at: string,
 };
 
 /**

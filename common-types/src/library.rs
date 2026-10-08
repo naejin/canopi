@@ -278,6 +278,9 @@ pub struct LibraryItemSummary {
     pub offers: Vec<AnalysisOffer>,
     /// Derived items whose definitions use this item as an input.
     pub dependents: u32,
+    /// When the item was added to the library: its catalogue row's
+    /// `created_at`, Unix milliseconds as text, for sorting by Recently added.
+    pub created_at: String,
 }
 
 /// The engines library work depends on.

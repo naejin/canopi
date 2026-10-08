@@ -363,6 +363,7 @@ pub struct LayerRow {
     /// `RasterQuantity::key` of an importable quantity.
     pub quantity: String,
     pub units: String,
+    pub created_at: String,
 }
 
 #[derive(Debug, Clone)]
@@ -406,6 +407,7 @@ pub struct DerivedItemRow {
     pub quantity: String,
     pub units: String,
     pub name: Option<String>,
+    pub created_at: String,
 }
 
 #[derive(Debug, Clone)]
@@ -448,21 +450,26 @@ pub struct ImportJobRow {
 // Queries
 // ---------------------------------------------------------------------------
 
+fn map_layer(row: &rusqlite::Row<'_>) -> rusqlite::Result<LayerRow> {
+    Ok(LayerRow {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        quantity: row.get(2)?,
+        units: row.get(3)?,
+        created_at: row.get(4)?,
+    })
+}
+
+const LAYER_COLUMNS: &str = "id, name, quantity, units, created_at";
+
 pub fn list_layers(connection: &Connection) -> Result<Vec<LayerRow>, String> {
     let mut statement = connection
-        .prepare(
-            "SELECT id, name, quantity, units FROM lidar_source_layers ORDER BY created_at, id",
-        )
+        .prepare(&format!(
+            "SELECT {LAYER_COLUMNS} FROM lidar_source_layers ORDER BY created_at, id"
+        ))
         .map_err(|e| e.to_string())?;
     let rows = statement
-        .query_map([], |row| {
-            Ok(LayerRow {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                quantity: row.get(2)?,
-                units: row.get(3)?,
-            })
-        })
+        .query_map([], map_layer)
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
@@ -472,16 +479,9 @@ pub fn list_layers(connection: &Connection) -> Result<Vec<LayerRow>, String> {
 pub fn get_layer(connection: &Connection, layer_id: &str) -> Result<Option<LayerRow>, String> {
     connection
         .query_row(
-            "SELECT id, name, quantity, units FROM lidar_source_layers WHERE id = ?1",
+            &format!("SELECT {LAYER_COLUMNS} FROM lidar_source_layers WHERE id = ?1"),
             [layer_id],
-            |row| {
-                Ok(LayerRow {
-                    id: row.get(0)?,
-                    name: row.get(1)?,
-                    quantity: row.get(2)?,
-                    units: row.get(3)?,
-                })
-            },
+            map_layer,
         )
         .optional()
         .map_err(|e| e.to_string())
@@ -598,10 +598,12 @@ fn map_derived_item(row: &rusqlite::Row<'_>) -> rusqlite::Result<DerivedItemRow>
         quantity: row.get(3)?,
         units: row.get(4)?,
         name: row.get(5)?,
+        created_at: row.get(6)?,
     })
 }
 
-const DERIVED_ITEM_COLUMNS: &str = "id, definition_id, output_key, quantity, units, name";
+const DERIVED_ITEM_COLUMNS: &str =
+    "id, definition_id, output_key, quantity, units, name, created_at";
 
 pub fn list_derived_items(connection: &Connection) -> Result<Vec<DerivedItemRow>, String> {
     let mut statement = connection
