@@ -242,4 +242,36 @@ describe('LiDAR display descriptor requests', () => {
       lidarLibrary.value = null
     }
   })
+
+  // A hidden entry set to Cut outliers still shows its range in its fields and legend, and Custom starts from it.
+  it('reads Cut outliers\' range of an entry the map hides, and only for that mode', async () => {
+    requestCutOutlierRange.mockClear()
+    invoke.mockImplementation(async (_command: string, args: { request: { entity_id: string, expected_generation_id: string } }) =>
+      descriptor({ entity_id: args.request.entity_id, generation_id: args.request.expected_generation_id }))
+    lidarLibrary.value = librarySnapshot([
+      sourceItem('lyr-1', 'Orchard terrain', { generation_id: 'gen-2' }),
+      sourceItem('lyr-2', 'Canopy', { generation_id: 'gen-5' }),
+    ])
+    const entry = (id: string, range: unknown) => ({ kind: 'Source', id, name: id, visible: false, opacity: 1, order: 0, ramp: null, reversed: false, range })
+    designSessionFixture.file = {
+      version: 9, name: 'Orchard', description: null,
+      plant_species_colors: {}, plant_species_symbols: {}, plant_species_codes: {},
+      layers: [], plants: [], zones: [], annotations: [], measurement_guides: [],
+      consortiums: [], groups: [], timeline: [], budget: [], budget_currency: 'EUR',
+      lidar: { schema_version: 1, visible: true, entries: [entry('lyr-1', { mode: 'CutOutliers' }), entry('lyr-2', null)] as never },
+      created_at: '', updated_at: '', extra: {},
+    }
+    try {
+      display.installLidarDisplayDescriptors((path) => `served:${path}`)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(invoke.mock.calls.map(([, args]) => (args as { request: { entity_id: string } }).request.entity_id)).toEqual(['lyr-1'])
+      expect(requestCutOutlierRange).toHaveBeenCalledWith(display.displayKey('Source', 'lyr-1', 'gen-2'), expect.any(Array))
+      expect(display.lidarDisplayLayers([item({ visible: false, shown: false, range: { mode: 'CutOutliers' } })], display.lidarDisplayDescriptors.value, null)).toEqual([])
+    } finally {
+      display.disposeLidarDisplayDescriptors()
+      invoke.mockReset()
+      designSessionFixture.file = null
+      lidarLibrary.value = null
+    }
+  })
 })

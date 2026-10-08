@@ -12,8 +12,9 @@ import { readCurrentLidarPresentation, refreshLidarLibrary, type LidarPresentati
  * Display descriptors of library entities, keyed by entity and generation.
  *
  * The library owns derivative preparation; this store only asks for the
- * descriptor of each generation something wants to draw (a visible Design
- * reference or a library preview) and polls while it is preparing. Entries are
+ * descriptor of each generation something wants to draw or measure (a visible
+ * Design reference, a library preview, or an entry set to Cut outliers) and
+ * polls while it is preparing. Entries are
  * identity-keyed, so a descriptor of an older generation can never be used for
  * a newer one.
  */
@@ -114,8 +115,9 @@ let displayDisposer: (() => void) | null = null
 
 /**
  * Keep descriptors current for every reference the map draws, a presented
- * story step's included, and read Cut outliers' range of every entry set to
- * it once its display is ready (`toAssetUrl` serves the display COGs).
+ * story step's included, and for every entry set to Cut outliers, shown or
+ * not, and read that entry's range once its display is ready (`toAssetUrl`
+ * serves the display COGs).
  * Installed for the Desktop workspace lifetime next to the library workflow.
  */
 export function installLidarDisplayDescriptors(toAssetUrl: (path: string) => string = lidarAssetUrl): void {
@@ -125,8 +127,10 @@ export function installLidarDisplayDescriptors(toAssetUrl: (path: string) => str
     const descriptors = lidarDisplayDescriptors.value
     for (const item of readCurrentLidarPresentation()) {
       if (item.availability !== 'present' || !item.generationId) continue
-      if (mapShown(item, presentedIds)) requestLidarDisplay(item.kind, item.id, item.generationId)
-      if (item.range?.mode !== 'CutOutliers') continue
+      const cutOutliers = item.range?.mode === 'CutOutliers'
+      // A hidden entry set to Cut outliers still reads its range: its fields and legend show it, and Custom starts from it.
+      if (mapShown(item, presentedIds) || cutOutliers) requestLidarDisplay(item.kind, item.id, item.generationId)
+      if (!cutOutliers) continue
       const key = displayKey(item.kind, item.id, item.generationId)
       const descriptor = descriptors.get(key)
       if (descriptor?.state === 'Ready' && descriptor.generation_id === item.generationId) {
