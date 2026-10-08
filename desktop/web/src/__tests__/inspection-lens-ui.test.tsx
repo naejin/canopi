@@ -39,7 +39,7 @@ it('opens the optional lens, identifies plants and releases the view on Escape',
   expect(root.textContent).toContain('Menthe verte')
   expect(root.textContent).not.toContain('Hold view')
   expect(root.textContent).not.toContain('Follow pointer')
-  await act(async () => { queries.emitPointerWorld({ world: { x: 100, y: 100 }, screen: { x: 300, y: 250 } }) })
+  await act(async () => { queries.emitPointerWorld({ world: { x: 100, y: 100 }, screen: { x: 300, y: 250 }, pointerKind: 'mouse' }) })
   expect(view.inspectAtWorldPoint).toHaveBeenLastCalledWith({ x: 100, y: 100 })
   // Leaving the map (or moving over the canvas's own buttons, which publish nothing) keeps the lens where it is.
   queries.emitPointerWorld(null)
@@ -59,7 +59,7 @@ it('opens the optional lens, identifies plants and releases the view on Escape',
   await act(async () => { pointer(frame, 'pointerdown', 100); pointer(document, 'pointermove', 80) })
   expect(view.panByScreen).toHaveBeenLastCalledWith({ x: 20, y: 0 })
   // While the lens's own view is dragged, the map pointer does not move it.
-  queries.emitPointerWorld({ world: { x: 7, y: 7 }, screen: { x: 207, y: 157 } })
+  queries.emitPointerWorld({ world: { x: 7, y: 7 }, screen: { x: 207, y: 157 }, pointerKind: 'mouse' })
   expect(view.inspectAtWorldPoint).toHaveBeenCalledTimes(1)
   const calls = vi.mocked(view.panByScreen).mock.calls.length
   await act(async () => { window.dispatchEvent(new Event('blur')); pointer(document, 'pointermove', 60) })
@@ -94,7 +94,7 @@ it('opens the optional lens, identifies plants and releases the view on Escape',
   expect(view.panByScreen).toHaveBeenCalledTimes(calls)
   expect(view.dispose).toHaveBeenCalledTimes(1)
   expect(host.querySelector('[data-inspection-source]')).toBeNull()
-  queries.emitPointerWorld({ world: { x: 200, y: 0 }, screen: { x: 400, y: 150 } })
+  queries.emitPointerWorld({ world: { x: 200, y: 0 }, screen: { x: 400, y: 150 }, pointerKind: 'mouse' })
   expect(view.inspectAtWorldPoint).toHaveBeenCalledTimes(1)
   host.remove()
   expect(root.querySelector('button[aria-expanded="false"]')).not.toBeNull()

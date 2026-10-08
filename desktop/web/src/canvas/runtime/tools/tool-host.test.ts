@@ -956,7 +956,7 @@ describe('ToolHost', () => {
       expect(overview.record.pointerWorld.at(-1)).toBeNull()
     })
 
-    it('the pointer is published with its screen point, so a readout can query the map there (R1)', () => {
+    it('the pointer is published with its screen point and its kind, so a readout can query the map there (R1) and read a finger through the pin', () => {
       useStubTools(stubTool('plant-stamp'))
       const h = harness({ tool: 'plant-stamp', viewport: { x: 10, y: -20, scale: 2 } })
       const points: unknown[] = []
@@ -964,8 +964,13 @@ describe('ToolHost', () => {
 
       h.hover({ x: 50, y: 60 })
       h.leave()
+      h.click({ x: 70, y: 80 }, { pointer: 'touch' })
 
-      expect(points).toEqual([{ world: h.world({ x: 50, y: 60 }), screen: { x: 50, y: 60 } }, null])
+      expect(points).toEqual([
+        { world: h.world({ x: 50, y: 60 }), screen: { x: 50, y: 60 }, pointerKind: 'mouse' },
+        null,
+        { world: h.world({ x: 70, y: 80 }), screen: { x: 70, y: 80 }, pointerKind: 'touch' },
+      ])
     })
 
     it('the lens is fed only over the map', () => {

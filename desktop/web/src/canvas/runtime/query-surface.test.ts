@@ -49,6 +49,7 @@ describe('the runtime query surface', () => {
     expect(points[0]!.world.x).toBeCloseTo(expected!.x, 9)
     expect(points[0]!.world.y).toBeCloseTo(expected!.y, 9)
     expect(points[0]!.screen).toEqual({ x: 100, y: 80 })
+    expect(points[0]!.pointerKind).toBe('mouse')
     events.pointerLeave({ x: 100, y: 80 })
     expect(points.at(-1)).toBeNull()
 

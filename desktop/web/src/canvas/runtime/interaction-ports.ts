@@ -244,5 +244,6 @@ export interface ToolHost {
   dispose(): void
 }
 
-/** The pointer over the map: its Scene point and its map-host screen point. */
-export interface PointerWorld { readonly world: WorldPoint; readonly screen: ScreenPoint }
+/** The pointer over the map: its Scene point, its map-host screen point and its kind. Site data values ignore a touch
+ *  publish for hover and read a finger through the pin (canopi-f47t.42). */
+export interface PointerWorld { readonly world: WorldPoint; readonly screen: ScreenPoint; readonly pointerKind: PointerKind }

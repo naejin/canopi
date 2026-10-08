@@ -583,8 +583,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   /** The pointer's world point at a screen point on the map; none off it. */
-  function publishPointerAt(at: ScreenPoint): void {
-    if (insideScreen(at, frame().view.screen)) publishPointer({ world: frame().view.screenToWorld(at), screen: at })
+  function publishPointerAt(at: ScreenPoint, pointer: PointerKind): void {
+    if (insideScreen(at, frame().view.screen)) publishPointer({ world: frame().view.screenToWorld(at), screen: at, pointerKind: pointer })
   }
 
   function clearPassiveHover(): void {
@@ -615,7 +615,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function hover(g: Extract<Gesture, { kind: 'hover' }>): GestureOutcome {
     // The lens hears only moves over the map: not over the canvas's own chrome (buttons, inputs, textareas,
     // contenteditable and [data-preserve-overlays]), nor off the map.
-    if (g.target.kind === 'surface') publishPointerAt(g.at)
+    if (g.target.kind === 'surface') publishPointerAt(g.at, g.pointer)
     // The pointer is back over the map after a panel drag: the tool's draft shows again.
     showDraftAfterDrop()
     const tool = activeTool
@@ -827,7 +827,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const gesture = live
     // A finger never hovers: its tap publishes the pointer at the resolved press, the down point, as a mouse's hover before
     // its press did (A16); not on a handle, as a hover there publishes none. A finger's drag or pair publishes nothing.
-    if (g.pointer === 'touch' && gesture?.kind !== 'handle') publishPointerAt(g.at)
+    if (g.pointer === 'touch' && gesture?.kind !== 'handle') publishPointerAt(g.at, g.pointer)
     if (!gesture) {
       // A press the tool never heard (a new note's committing click): its release is none of the tool's.
       releasedOutsideTool()
