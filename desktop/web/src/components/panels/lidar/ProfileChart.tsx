@@ -1,9 +1,248 @@
+import { useEffect, useRef, useState } from 'preact/hooks'
+import type { JSX } from 'preact'
+import { buildProfilePlot, curveStyle, distanceTicks, indexAtX, type PlotArea } from '../../../app/lidar/profile-chart'
+import {
+  profileCopyText,
+  profileCursor,
+  setProfileCursor,
+  siteProfile,
+  type ProfileCurve,
+  type SiteProfile,
+} from '../../../app/lidar/profile'
+import { unitSuffix } from '../../../app/lidar/item-types'
+import { formatRowValue } from '../../../app/lidar/value-format'
+import { clearProfile } from '../../../app/lidar/site-transients'
+import { formatLength } from '../../../app/map-selection/zone-label'
+import { locale } from '../../../app/settings/state'
+import { t } from '../../../i18n'
+import { ButtonTooltip } from '../../shared/ButtonTooltip'
+import { ControlIcon } from '../../shared/ControlIcon'
+import styles from './profile.module.css'
+
+type ReadyProfile = Extract<SiteProfile, { status: 'ready' }>
+
+/** The chart's drawing width in SVG units; it scales to the panel. */
+const WIDTH = 408
+/** The first plot (elevation, or height alone) and the height strip under elevation, in SVG units. */
+const MAIN_PLOT = 106
+const STRIP_PLOT = 48
+const PLOT_GAP = 12
+const AXIS = 22
+const X0 = 54
+const X1 = WIDTH - 6
+/** How long "Copied" or the copy error shows. */
+const COPY_FEEDBACK_MS = 2000
+
 /**
- * The Site data profile chart (canopi-f47t.42, spec §1.10 "Profile"; stream D
- * builds it), pinned to the bottom of the Site data panel, which mounts it
- * with no props: it reads the profile itself and draws nothing while no
- * profile is shown. Commit 0's stub with the final signature.
+ * The Site data profile chart (canopi-f47t.42, spec §1.10 "Profile"), pinned to the bottom of the Site data panel, which
+ * mounts it with no props: it reads the profile itself and draws nothing while no profile is shown. Header: "Profile",
+ * the length, "At {distance}" while the cursor is on the chart, Copy values and ×. Elevation curves share the first plot
+ * and height curves a strip under it, sharing distance and cursor; hovering or scrubbing moves the cursor, which the map
+ * shows as a ring on the line. The legend gives each curve's value at the cursor, otherwise Rise and Steepest (a button
+ * that moves the cursor there) or Highest.
  */
 export function ProfileChart() {
-  return null
+  const profile = siteProfile.value
+  if (profile.status === 'none') return null
+  const language = locale.value
+  const cursor = profile.status === 'ready' ? profileCursor.value : null
+  const at = cursor === null || profile.status !== 'ready' ? null : profile.samples.distances[cursor]!
+  return (
+    <section className={styles.profile} aria-label={t('siteData.profile')}>
+      <div className={styles.header}>
+        <h3 className={styles.title}>{t('siteData.profile')}</h3>
+        <span className={styles.length}>{formatLength(profile.lengthM, language)}</span>
+        <span className={styles.at} role="status">{at === null ? '' : t('siteData.chart.at', { distance: formatLength(at, language) })}</span>
+        {profile.status === 'ready' ? <CopyValues profile={profile} /> : null}
+        <button type="button" className={styles.iconButton} aria-label={t('siteData.chart.close')} onClick={clearProfile}>
+          <ControlIcon name="close" size={16} />
+          <ButtonTooltip label={t('siteData.chart.close')} side="top" />
+        </button>
+      </div>
+      {profile.status === 'ready'
+        ? <ReadyChart profile={profile} cursor={cursor} />
+        : <p className={styles.state}>{t(STATE_TEXT[profile.status])}</p>}
+    </section>
+  )
+}
+
+const STATE_TEXT: Readonly<Record<'needs-layer' | 'reading' | 'no-values', string>> = {
+  'needs-layer': 'siteData.chart.needsLayer',
+  reading: 'siteData.chart.reading',
+  'no-values': 'siteData.chart.noValues',
+}
+
+/** Copy values: the text is built and written inside the click, the user's activation; "Copied" or the error for 2 s. */
+function CopyValues({ profile }: { readonly profile: ReadyProfile }) {
+  const [feedback, setFeedback] = useState<'copied' | 'failed' | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current)
+  }, [])
+  const show = (next: 'copied' | 'failed') => {
+    setFeedback(next)
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => setFeedback(null), COPY_FEEDBACK_MS)
+  }
+  const copy = () => {
+    const text = profileCopyText(profile, locale.peek(), t)
+    let written: Promise<void>
+    try {
+      written = navigator.clipboard.writeText(text)
+    } catch (error) {
+      written = Promise.reject(error)
+    }
+    written.then(() => show('copied'), () => show('failed'))
+  }
+  return (
+    <>
+      {feedback ? (
+        <span className={feedback === 'failed' ? styles.copyFailed : styles.copied} role="status">
+          {t(feedback === 'failed' ? 'siteData.chart.copyFailed' : 'siteData.chart.copied')}
+        </span>
+      ) : null}
+      <button type="button" className={styles.textButton} onClick={copy}>{t('siteData.chart.copyValues')}</button>
+    </>
+  )
+}
+
+interface PlotLayout {
+  readonly role: 'elevation' | 'height'
+  readonly area: PlotArea
+  readonly curves: readonly { readonly curve: ProfileCurve; readonly index: number }[]
+}
+
+function ReadyChart({ profile, cursor }: { readonly profile: ReadyProfile; readonly cursor: number | null }) {
+  const language = locale.value
+  const indexed = profile.curves.map((curve, index) => ({ curve, index }))
+  const plots: PlotLayout[] = []
+  let top = 6
+  for (const role of ['elevation', 'height'] as const) {
+    const curves = indexed.filter(({ curve }) => curve.role === role)
+    if (curves.length === 0) continue
+    const height = plots.length === 0 ? MAIN_PLOT : STRIP_PLOT
+    plots.push({ role, area: { x0: X0, x1: X1, top, bottom: top + height }, curves })
+    top += height + PLOT_GAP
+  }
+  const bottom = plots[plots.length - 1]!.area.bottom
+  const { distances } = profile.samples
+  const scrub = (event: JSX.TargetedPointerEvent<SVGSVGElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const scale = rect.width > 0 ? WIDTH / rect.width : 1
+    setProfileCursor(indexAtX((event.clientX - rect.left) * scale, distances, { x0: X0, x1: X1 }))
+  }
+  const drawn = plots.map((plot) => ({
+    plot,
+    geometry: buildProfilePlot({
+      ...plot.area,
+      distances,
+      series: plot.curves.map(({ curve }) => curve.values),
+      fromZero: plot.role === 'height',
+    }),
+  }))
+  const x = drawn[0]!.geometry.x
+  const axisLabel = (value: number | null, curve: ProfileCurve) => value === null
+    ? ''
+    : `${new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(value)}${unitSuffix(curve.units)}`
+  return (
+    <>
+      <svg
+        className={styles.plot}
+        viewBox={`0 0 ${WIDTH} ${bottom + AXIS}`}
+        aria-hidden="true"
+        onPointerMove={scrub}
+        onPointerDown={scrub}
+        onPointerLeave={() => setProfileCursor(null)}
+        onPointerCancel={() => setProfileCursor(null)}
+      >
+        {drawn.map(({ plot, geometry }) => (
+          <g key={plot.role}>
+            <line className={styles.baseline} x1={X0} x2={X1} y1={plot.area.bottom} y2={plot.area.bottom} />
+            <text className={styles.axisLabel} x={X0 - 6} y={plot.area.top + 9} text-anchor="end">{axisLabel(geometry.max, plot.curves[0]!.curve)}</text>
+            <text className={styles.axisLabel} x={X0 - 6} y={plot.area.bottom} text-anchor="end">{axisLabel(geometry.min, plot.curves[0]!.curve)}</text>
+            {plot.curves.map(({ curve, index }, position) => {
+              const style = curveStyle(index)
+              return (
+                <path
+                  key={curve.id}
+                  className={styles.curve}
+                  data-curve={style.colour}
+                  data-dashed={style.dashed ? 'true' : undefined}
+                  d={geometry.paths[position]}
+                />
+              )
+            })}
+            {cursor !== null ? plot.curves.map(({ curve, index }) => {
+              const value = curve.values[cursor]
+              if (value === null || value === undefined) return null
+              return <circle key={curve.id} className={styles.cursorDot} data-curve={curveStyle(index).colour} cx={x(distances[cursor]!)} cy={geometry.y(value)} r={3.5} />
+            }) : null}
+          </g>
+        ))}
+        {distanceTicks(profile.lengthM).map((tick) => (
+          <g key={tick}>
+            <line className={styles.baseline} x1={x(tick)} x2={x(tick)} y1={bottom} y2={bottom + 4} />
+            <text className={styles.axisLabel} x={x(tick)} y={bottom + 17} text-anchor={tick === 0 ? 'start' : 'middle'}>{formatLength(tick, language)}</text>
+          </g>
+        ))}
+        {cursor !== null ? <line className={styles.cursor} x1={x(distances[cursor]!)} x2={x(distances[cursor]!)} y1={plots[0]!.area.top} y2={bottom} /> : null}
+      </svg>
+      <ul className={styles.legend}>
+        {indexed.map(({ curve, index }) => (
+          <LegendLine key={curve.id} curve={curve} index={index} cursor={cursor} />
+        ))}
+      </ul>
+    </>
+  )
+}
+
+function LegendLine({ curve, index, cursor }: {
+  readonly curve: ProfileCurve
+  readonly index: number
+  readonly cursor: number | null
+}) {
+  const language = locale.value
+  const style = curveStyle(index)
+  const one = new Intl.NumberFormat(language, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+  let reading: JSX.Element
+  if (cursor !== null) {
+    const value = curve.values[cursor] ?? null
+    reading = value === null
+      ? <span className={styles.reading} aria-label={t('siteData.noData')}>—</span>
+      : <span className={styles.reading}>{formatRowValue(value, curve.units, language)}</span>
+  } else if (curve.stats.role === 'elevation') {
+    const { rise, steepest } = curve.stats
+    const signed = new Intl.NumberFormat(language, { minimumFractionDigits: 1, maximumFractionDigits: 1, signDisplay: 'exceptZero' })
+    reading = (
+      <span className={styles.reading}>
+        {rise === null ? null : t('siteData.chart.rise', { value: `${signed.format(rise)}${unitSuffix(curve.units)}` })}
+        {rise !== null && steepest ? ' · ' : null}
+        {steepest ? (
+          <button
+            type="button"
+            className={styles.linkButton}
+            onClick={() => setProfileCursor(steepest.index)}
+          >
+            {t('siteData.chart.steepest', {
+              percent: new Intl.NumberFormat(language, { style: 'percent', maximumFractionDigits: 0 }).format(steepest.percent / 100),
+            })}
+          </button>
+        ) : null}
+      </span>
+    )
+  } else {
+    const { highest } = curve.stats
+    reading = (
+      <span className={styles.reading}>
+        {highest === null ? null : t('siteData.chart.highest', { value: `${one.format(highest)}${unitSuffix(curve.units)}` })}
+      </span>
+    )
+  }
+  return (
+    <li className={styles.legendLine}>
+      <span className={styles.swatch} data-curve={style.colour} data-dashed={style.dashed ? 'true' : undefined} aria-hidden="true" />
+      <span className={styles.name} title={curve.name}>{curve.name}</span>
+      {reading}
+    </li>
+  )
 }

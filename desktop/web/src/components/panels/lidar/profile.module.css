@@ -1,0 +1,64 @@
+/* The Site data profile chart, pinned to the bottom of the panel: header, the plots, the legend (canopi-f47t.42).
+   Curves: ink, ochre, green, plum (two tokens per theme each); a fifth and later curve reuses them dashed. */
+.profile {
+  --curve-1: var(--color-text);
+  --curve-2: var(--color-accent);
+  --curve-3: var(--color-profile-green);
+  --curve-4: var(--color-profile-plum);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3) var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.header { display: flex; align-items: center; gap: var(--space-2); min-height: var(--control-size-md); }
+.title { margin: 0; font-size: var(--text-sm); font-weight: 600; }
+.length, .at { font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.length { color: var(--color-text-muted); }
+.at { flex: 1 1 auto; min-width: 0; color: var(--color-text-secondary); }
+.copied, .copyFailed { font-size: var(--text-xs); }
+.copied { color: var(--color-text-secondary); }
+.copyFailed { color: var(--color-danger); }
+
+.textButton, .iconButton, .linkButton { font: inherit; cursor: pointer; border: 0; background: transparent; color: var(--color-text); }
+.textButton { min-height: var(--control-size-sm); padding: 0 var(--space-2); border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); font-size: var(--text-xs); }
+.iconButton { position: relative; display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: var(--control-size-sm); height: var(--control-size-sm); padding: 0; border-radius: var(--radius-md); color: var(--color-text-secondary); }
+.textButton:hover, .iconButton:hover, .linkButton:hover { background: var(--color-control-hover); }
+.linkButton { padding: 0 var(--space-0-5); border-radius: var(--radius-sm); font-size: var(--text-xs); color: var(--color-accent-ink); text-decoration: underline; text-underline-offset: 2px; }
+.textButton:focus-visible, .iconButton:focus-visible, .linkButton:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+
+.state { margin: 0; padding: var(--space-2) 0; font-size: var(--text-xs); color: var(--color-text-muted); }
+
+.plot { display: block; width: 100%; height: auto; touch-action: none; cursor: crosshair; user-select: none; }
+.baseline { stroke: var(--color-border-strong); stroke-width: 1; }
+.axisLabel { fill: var(--color-text-muted); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.curve { fill: none; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.cursor { stroke: var(--color-text-secondary); stroke-width: 1; }
+.cursorDot { stroke: var(--color-surface); stroke-width: 1.5; }
+.curve[data-curve='1'] { stroke: var(--curve-1); }
+.curve[data-curve='2'] { stroke: var(--curve-2); }
+.curve[data-curve='3'] { stroke: var(--curve-3); }
+.curve[data-curve='4'] { stroke: var(--curve-4); }
+.curve[data-dashed='true'] { stroke-dasharray: 5 3; }
+.cursorDot[data-curve='1'] { fill: var(--curve-1); }
+.cursorDot[data-curve='2'] { fill: var(--curve-2); }
+.cursorDot[data-curve='3'] { fill: var(--curve-3); }
+.cursorDot[data-curve='4'] { fill: var(--curve-4); }
+
+.legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.legendLine { display: flex; align-items: center; gap: var(--space-2); min-height: var(--control-size-sm); font-size: var(--text-xs); }
+.swatch { flex-shrink: 0; width: 16px; height: 3px; border-radius: var(--radius-sm); }
+.swatch[data-curve='1'] { background: var(--curve-1); }
+.swatch[data-curve='2'] { background: var(--curve-2); }
+.swatch[data-curve='3'] { background: var(--curve-3); }
+.swatch[data-curve='4'] { background: var(--curve-4); }
+.swatch[data-dashed='true'] { background: repeating-linear-gradient(90deg, var(--swatch-ink) 0 5px, transparent 5px 8px); }
+.swatch[data-dashed='true'][data-curve='1'] { --swatch-ink: var(--curve-1); }
+.swatch[data-dashed='true'][data-curve='2'] { --swatch-ink: var(--curve-2); }
+.swatch[data-dashed='true'][data-curve='3'] { --swatch-ink: var(--curve-3); }
+.swatch[data-dashed='true'][data-curve='4'] { --swatch-ink: var(--curve-4); }
+.name { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.reading { flex-shrink: 0; display: inline-flex; align-items: center; color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
