@@ -232,7 +232,7 @@ test.describe('Profile (g5)', () => {
     })
     expect(clipped).toEqual({ overflow: 'visible', outside: [] })
 
-    const plot =await profile.locator(':scope > svg').boundingBox()
+    const plot = await profile.locator(':scope > svg').boundingBox()
     if (!plot) throw new Error('no plot')
     await page.mouse.move(plot.x + plot.width * 0.5, plot.y + plot.height * 0.3)
     await expect(profile.getByText(/^At \d/)).toBeVisible()
