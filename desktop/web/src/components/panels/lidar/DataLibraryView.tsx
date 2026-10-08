@@ -48,7 +48,7 @@ const SELECTION_REST_MS = 120
 type Pane = 'list' | 'details'
 type DetailMode = 'details' | 'rename' | 'delete'
 /** Where focus goes after a change that hides or removes the focused control: the first of these that takes it. */
-type FocusTarget = 'row' | 'heading'
+type FocusTarget = 'row' | 'heading' | 'back' | 'rename' | 'delete'
 
 /**
  * The Data library: terrain and height data shared by every Design, with the
@@ -125,6 +125,20 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
     setError(null)
     if (show) setPane('details')
   }
+  // Below 760 px the details pane replaces the list, hiding the focused row: focus moves to Back (hidden, so refused, when wide).
+  const showDetails = () => {
+    pendingFocus.current = ['back']
+    setPane('details')
+  }
+  const showList = () => {
+    pendingFocus.current = ['row']
+    setPane('list')
+  }
+  // Rename and Delete everywhere give focus back to their trigger; after a deletion, to the row that took the item's place.
+  const endMode = (focus: readonly FocusTarget[]) => {
+    pendingFocus.current = focus
+    setMode('details')
+  }
   // A provenance or result link can name an item the search or type filter hides: the filters clear to show it.
   const openLinked = (id: string) => {
     if (!visible.some((row) => row.id === id)) {
@@ -143,7 +157,7 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
             : null
     if (event.key === 'Enter' && selectedId) {
       event.preventDefault()
-      setPane('details')
+      showDetails()
       return
     }
     if (next === null) return
@@ -207,7 +221,7 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
         </button>
       )}
       {canDelete && (
-        <button type="button" className={styles.danger} onClick={() => setMode('delete')}>
+        <button type="button" className={styles.danger} data-focus-target="delete" onClick={() => setMode('delete')}>
           {t('canvas.lidar.library.deleteEverywhere')}
         </button>
       )}
@@ -323,7 +337,10 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
                     aria-selected={row.id === selectedId}
                     className={styles.item}
                     data-nested={row.depth > 0}
-                    onClick={() => select(row.id, true)}
+                    onClick={() => {
+                      select(row.id, false)
+                      showDetails()
+                    }}
                   >
                     <LibraryPreview item={row} client={client} width={56} height={42} />
                     <span className={styles.itemText}>
@@ -348,18 +365,18 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
             </div>
             {item && (
               <section className={styles.detailPane} aria-labelledby={headingId}>
-                <button type="button" className={styles.back} onClick={() => setPane('list')}>← {t('canvas.lidar.library.back')}</button>
+                <button type="button" className={styles.back} data-focus-target="back" onClick={showList}>← {t('canvas.lidar.library.back')}</button>
                 <div className={styles.detailTitle}>
                   <h3 id={headingId} tabIndex={-1} data-focus-target="heading">{item.name}</h3>
                   {item.status === 'ready' && mode !== 'rename' && (
-                    <button type="button" className={styles.link} onClick={() => setMode('rename')}>
+                    <button type="button" className={styles.link} data-focus-target="rename" onClick={() => setMode('rename')}>
                       {t('canvas.lidar.library.renameEllipsis')}
                     </button>
                   )}
                 </div>
                 {mode === 'rename' && (
-                  <RenameForm item={item} busy={busy} error={error} onCancel={() => setMode('details')}
-                    onSubmit={(name) => void run(() => renameLibraryItem(item.id, name), () => setMode('details'))} />
+                  <RenameForm item={item} busy={busy} error={error} onCancel={() => endMode(['rename'])}
+                    onSubmit={(name) => void run(() => renameLibraryItem(item.id, name), () => endMode(['rename']))} />
                 )}
                 <ItemDetails
                   item={item}
@@ -377,8 +394,8 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
                         inCurrentDesign={isAdded(item)}
                         busy={busy}
                         error={error}
-                        onKeep={() => setMode('details')}
-                        onDelete={() => void run(() => deleteLibraryItem(item.id), () => setMode('details'))}
+                        onKeep={() => endMode(['delete'])}
+                        onDelete={() => void run(() => deleteLibraryItem(item.id), () => endMode(['row', 'back']))}
                       />
                     )
                     : actionsFor(item)}

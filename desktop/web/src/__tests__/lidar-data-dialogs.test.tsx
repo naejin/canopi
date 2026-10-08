@@ -397,6 +397,28 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(container.textContent).toContain('No data matches this search.')
     })
 
+    it('keeps focus in the sheet when Rename, Delete everywhere or a pane closes under it', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Canopy')])
+      actions.fetchDeleteImpact.mockResolvedValue({ dependent_item_ids: [] })
+      mount()
+      await selectRow('Ground')
+      // A row opens the details pane; below 760 px only Back is shown there.
+      expect(document.activeElement?.textContent).toContain('Back')
+      await click(button(/Back$/))
+      expect(document.activeElement).toBe(rowNamed('Ground'))
+
+      await click(button(/^Rename…$/))
+      await key(container.querySelector('section[aria-labelledby] form input')!, 'Escape')
+      expect(document.activeElement).toBe(button(/^Rename…$/))
+      await click(button(/^Rename…$/))
+      await click(button(/^Cancel$/))
+      expect(document.activeElement).toBe(button(/^Rename…$/))
+
+      await click(button(/^Delete everywhere$/))
+      await click(button(/^Keep$/))
+      expect(document.activeElement).toBe(button(/^Delete everywhere$/))
+    })
+
     it('names an input that left the library Deleted item', () => {
       lidarLibrary.value = library([], [slope('s', 'gone', { name: 'Orphan' })])
       mount()
