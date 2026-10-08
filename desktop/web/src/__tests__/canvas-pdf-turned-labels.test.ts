@@ -6,7 +6,7 @@ import { contains, outlineSegments, type Segment } from '../app/canvas-pdf/field
 import { pageFrame } from '../app/canvas-pdf/page-frame'
 import { zoneLabels } from '../app/canvas-pdf/zone-labels'
 import { FieldSpace } from '../app/canvas-pdf/field-placement'
-import { drawField, type FieldReferences } from '../app/canvas-pdf/field-layout'
+import { drawField } from '../app/canvas-pdf/field-layout'
 import type { ZoneMeasurements } from '../app/canvas-pdf/zone-measurements'
 import type { PdfInput, PdfLabels, PdfPage, PdfSetup } from '../app/canvas-pdf/types'
 import type { PrintBounds, PrintPoint, PrintZone } from '../canvas/print'
@@ -144,7 +144,7 @@ it('prints a band zone\'s code at its own top, above its neighbour\'s, whatever 
  */
 function guidePage(measurements: PdfInput['canvas']['measurements'], reserved: readonly PrintBounds[], homes?: ReadonlyMap<string, string>) {
   const input = { ...design({ measurements }), viewBearingDeg: 0 }
-  const references: FieldReferences = { species: new Map(), notes: new Map(), plants: new Map(), zones: [], measurementHomes: homes,
+  const references: Parameters<typeof drawField>[6] = { species: new Map(), notes: new Map(), plants: new Map(), zones: [], measurementHomes: homes,
     measurements: new Map(measurements.map((g, i) => [g.id, `M${i + 1}`])) }
   const toPoints = (r: PrintBounds) => ({ x: r.x * MM, y: r.y * MM, width: r.width * MM, height: r.height * MM })
   return drawField(input, { x: 10 * MM, y: 30 * MM, width: 180 * MM, height: 240 * MM }, { x: 0, y: 0, width: 18, height: 24 }, 10 * MM,
