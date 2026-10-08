@@ -14,6 +14,7 @@ const sectionEyeMock = vi.hoisted(() => vi.fn())
 const removeMock = vi.hoisted(() => vi.fn())
 const moveMock = vi.hoisted(() => vi.fn())
 const patchMock = vi.hoisted(() => vi.fn())
+const reconcileNamesMock = vi.hoisted(() => vi.fn())
 const refreshMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const ensurePollingMock = vi.hoisted(() => vi.fn())
 const reconcileInspectionMock = vi.hoisted(() => vi.fn())
@@ -45,6 +46,7 @@ vi.mock('../app/design-edit/lidar', async (importOriginal) => ({
   sameColourRange: (await importOriginal<typeof import('../app/design-edit/lidar')>()).sameColourRange,
   setLidarEntryOrders: moveMock,
   patchLidarEntryById: patchMock,
+  reconcileLidarEntryNames: reconcileNamesMock,
   removeLidarEntries: removeMock,
   setSiteDataVisible: sectionEyeMock,
   upsertLidarEntry: upsertMock,
@@ -95,6 +97,7 @@ import {
   attachmentFailure,
   dismissAttachmentFailure,
   pendingAttachments,
+  reconcileEntryNames,
   settleResultAttachments,
 } from '../app/lidar/actions'
 import { lidarStatusMessage } from '../app/lidar/library-store'
@@ -194,6 +197,17 @@ describe('Data Library actions', () => {
     expect(renameItemMock).toHaveBeenCalledWith('analysis-1', 'Steepness')
     expect(retryImportMock).toHaveBeenCalledWith('layer-2')
     expect(dismissImportMock).toHaveBeenCalledWith('layer-3')
+    expect(designEdits()).toBe(0)
+  })
+
+  it('refreshes the open Design\'s stored names from the library\'s names, nothing before the first snapshot', () => {
+    reconcileEntryNames(null)
+    expect(reconcileNamesMock).not.toHaveBeenCalled()
+
+    reconcileEntryNames(librarySnapshot([sourceItem('a', 'Renamed ground'), slopeItem('s', 'a')]))
+    expect(reconcileNamesMock).toHaveBeenCalledTimes(1)
+    // An unnamed result is named the way it was stored: by its input and analysis.
+    expect(reconcileNamesMock).toHaveBeenCalledWith(new Map([['a', 'Renamed ground'], ['s', 's name']]))
     expect(designEdits()).toBe(0)
   })
 

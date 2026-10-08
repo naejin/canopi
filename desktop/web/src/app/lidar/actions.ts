@@ -32,6 +32,7 @@ import {
 import { showAppFolder } from '../../ipc/settings'
 import {
   patchLidarEntryById,
+  reconcileLidarEntryNames,
   sameColourRange,
   setLidarEntryOrders,
   removeLidarEntries,
@@ -362,6 +363,18 @@ export function settleResultAttachments(snapshot: LibrarySnapshot | null): void 
     }
   }
   if (remaining.length !== pendingList.length) pendingAttachments.value = remaining
+}
+
+/**
+ * Refresh the open Design's stored entry names from a library snapshot, so a
+ * missing row later shows the name the library last had. A library rename is
+ * not a Design Edit: this never dirties the Design, and names already current
+ * leave it untouched. The Desktop workflow calls it on each snapshot and
+ * Design switch; nothing happens before the first snapshot.
+ */
+export function reconcileEntryNames(snapshot: LibrarySnapshot | null): void {
+  if (!snapshot) return
+  reconcileLidarEntryNames(new Map(snapshot.items.map((item) => [item.id, libraryItemName(item, snapshot)])))
 }
 
 /** Cancel the running job of one derived item; false when nothing runs. */
