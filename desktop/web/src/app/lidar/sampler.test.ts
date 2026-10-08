@@ -142,6 +142,23 @@ describe('the Site data sampler', () => {
     expect(native.calls).toHaveLength(1)
   })
 
+  it('never runs or publishes a key queued under a Design session that closed before it ran', async () => {
+    const native = fakeNative()
+    let design = { name: 'orchard' }
+    const sampler = createSiteSampler({ sample: native.sample, designIdentity: () => design })
+    const landed: string[] = []
+    const running = sampler.request('values', 'k1', targets(1), [[1, 1]], () => landed.push('k1'))
+    const queued = sampler.request('values', 'k2', targets(1), [[2, 2]], () => landed.push('k2'))
+    await settle()
+    design = { name: 'other' }
+    await answerNext(native, 0)
+
+    expect(await running).toBe('superseded')
+    expect(await queued).toBe('superseded')
+    expect(landed).toEqual([])
+    expect(native.calls).toHaveLength(1)
+  })
+
   it('a failed batch rejects its request and the lane goes on with the newest key', async () => {
     const native = fakeNative()
     const sampler = createSiteSampler({ sample: native.sample, designIdentity: () => 'design' })

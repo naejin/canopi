@@ -8,8 +8,9 @@
 //   (at most LIDAR_SAMPLE_MAX_POINTS), sent one after another;
 // - a newer key replaces the lane's queued key, but never cuts short the running key's remaining batches, so a row past
 //   the first batch gets its value while the pointer moves;
-// - an answer is published only while the Design session it was asked for is open, and each target names the generation
-//   it expects, so a moved head answers Unavailable rather than newer data;
+// - an answer is published only while the Design session it was asked for (at `request`, not when it runs) is open, and
+//   a key whose session closed while it was queued never runs; each target names the generation it expects, so a moved
+//   head answers Unavailable rather than newer data;
 // - a failed batch rejects its request; the lane goes on with its queued key.
 
 import {
@@ -45,6 +46,8 @@ interface Asked {
   readonly key: string
   readonly targets: readonly LidarSampleTarget[]
   readonly points: Points
+  /** The Design session's identity when the key was asked. */
+  readonly identity: unknown
   readonly onBatch: (firstTarget: number, series: readonly LidarSampleSeries[]) => void
   settle(outcome: 'done' | 'superseded'): void
   fail(error: unknown): void
@@ -66,13 +69,17 @@ export function createSiteSampler(deps: {
   }
 
   async function run(asked: Asked): Promise<void> {
-    const identity = deps.designIdentity()
     const points = asked.points.map(([lon, lat]) => [lon, lat] as [number, number])
+    const closed = () => deps.designIdentity() !== asked.identity
     try {
       for (let first = 0; first < asked.targets.length; first += LIDAR_SAMPLE_MAX_TARGETS) {
+        if (closed()) {
+          asked.settle('superseded')
+          return
+        }
         const targets = asked.targets.slice(first, first + LIDAR_SAMPLE_MAX_TARGETS)
         const series = await deps.sample({ targets, points })
-        if (deps.designIdentity() !== identity) {
+        if (closed()) {
           asked.settle('superseded')
           return
         }
@@ -102,7 +109,8 @@ export function createSiteSampler(deps: {
       return new Promise((resolve, reject) => {
         const state = lanes[lane]
         state.queued?.settle('superseded')
-        state.queued = { key, targets, points, onBatch, settle: resolve, fail: reject }
+        const identity = deps.designIdentity()
+        state.queued = { key, targets, points, identity, onBatch, settle: resolve, fail: reject }
         if (!state.running) void drain(state)
       })
     },
