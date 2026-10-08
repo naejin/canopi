@@ -171,9 +171,15 @@ function Range({ item, mode, values }: {
   )
 }
 
-/** A range end as its field shows it: two decimals at most (centimetres, hundredths of a degree), no grouping, so an f32 raster's range fits. */
+/**
+ * A range end as its field shows it, with no grouping so an f32 raster's range fits: two decimals (centimetres,
+ * hundredths of a degree), or three significant digits where that is finer, since other values take any units and a
+ * range of 0.0012–0.0087 would otherwise read 0–0.01.
+ */
 function fieldNumber(value: number, localeTag: string): string {
-  return new Intl.NumberFormat(localeTag, { useGrouping: false, maximumFractionDigits: 2 }).format(value)
+  const magnitude = Number.isFinite(value) && value !== 0 ? Math.floor(Math.log10(Math.abs(value))) : 0
+  const digits = Math.min(20, Math.max(2, 2 - magnitude))
+  return new Intl.NumberFormat(localeTag, { useGrouping: false, maximumFractionDigits: digits }).format(value)
 }
 
 /**

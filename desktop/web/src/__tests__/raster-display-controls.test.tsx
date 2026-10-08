@@ -125,6 +125,18 @@ describe('an open item\'s Range', () => {
     expect((named('Maximum') as HTMLInputElement).value).toBe('67,83')
   })
 
+  it('shows a small-valued range to three significant digits, and a typed end as it is stored', async () => {
+    locale.value = 'fr'
+    const other = { itemType: { kind: 'Raster' as const, quantity: 'OtherContinuous' as const }, units: 'mg/kg' }
+    mount(item({ ...other, displayRange: [0.0012, 0.008712345] }))
+    expect((named('Minimum') as HTMLInputElement).value).toBe('0,0012')
+    expect((named('Maximum') as HTMLInputElement).value).toBe('0,00871')
+    const maximum = named('Maximum') as HTMLInputElement
+    await type(maximum, '0,005', 'Enter')
+    expect(setLidarEntryDisplay).toHaveBeenCalledWith('a', { range: { mode: 'Custom', min: 0.0012, max: 0.005 } })
+    expect(maximum.value).toBe('0,005')
+  })
+
   it('shows a slope\'s default 0–30° as Custom, with no Reset', () => {
     mount(item(slope))
     expect(radios('Range').find((radio) => radio.getAttribute('aria-checked') === 'true')?.textContent).toBe('Custom')
