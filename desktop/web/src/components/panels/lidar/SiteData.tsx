@@ -298,6 +298,8 @@ function refresh(item: LidarPresentationItem): void {
  * states follow.
  */
 function rowCaption(item: LidarPresentationItem, grouped: boolean): string {
+  // A row whose library is still loading has no type yet; it is never captioned missing.
+  if (item.availability === 'loading') return ''
   if (item.availability !== 'present' || !item.itemType) return t('canvas.lidar.library.dataUnavailable')
   const output = grouped && item.analysisId
     ? findAnalysis(item.analysisId)?.outputs.find((candidate) => candidate.key === item.outputKey)
@@ -313,6 +315,12 @@ function rowCaption(item: LidarPresentationItem, grouped: boolean): string {
   if (item.shown && display?.state === 'Preparing') return `${what} · ${t('canvas.lidar.layers.preparingDisplay')}`
   if (item.shown && display?.state === 'Failed') return `${what} · ${t('canvas.lidar.library.displayFailed')}`
   return what
+}
+
+/** The inspector's type line: the item type, nothing while the library loads, else missing. */
+function inspectorCaption(item: LidarPresentationItem): string {
+  if (item.itemType) return itemTypeLabel(item.itemType)
+  return item.availability === 'loading' ? '' : t('canvas.lidar.library.dataUnavailable')
 }
 
 /**
@@ -334,7 +342,7 @@ export function SiteDataInspector() {
     <section className={styles.inspector} aria-label={label}>
       <div className={styles.inspectorHead}>
         <h3>{label}</h3>
-        <span>{item.itemType ? itemTypeLabel(item.itemType) : t('canvas.lidar.library.dataUnavailable')}</span>
+        <span>{inspectorCaption(item)}</span>
       </div>
       {isStale(item) && item.freshness.state === 'Stale' && (
         <Notice

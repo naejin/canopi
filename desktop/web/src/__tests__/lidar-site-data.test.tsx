@@ -256,11 +256,24 @@ describe('Layers site data', () => {
     expect(container.textContent).toContain('Data unavailable')
   })
 
+  it('draws a reference as a normal row while the library loads, never captioned unavailable', async () => {
+    lidarLibrary.value = null
+    setDesign([{ kind: 'Source', id: 'ground', order: 0 }])
+    mount()
+    expect(container.querySelector('li strong')?.textContent).toBe('ground')
+    expect(container.textContent).not.toContain('Data unavailable')
+
+    await act(async () => { selectSiteRow('ground') })
+    expect(container.querySelector('section h3')?.textContent).toBe('ground')
+    expect(container.textContent).not.toContain('Data unavailable')
+  })
+
   it('labels a reference unavailable once the library list cannot be read, not loading forever', async () => {
     lidarLibrary.value = null
     setDesign([{ kind: 'Source', id: 'gone', order: 0 }])
     mount()
     expect(container.textContent).not.toContain('Unavailable data')
+    expect(container.textContent).not.toContain('Data unavailable')
 
     vi.mocked(lidarListLibrary).mockRejectedValueOnce(new Error('catalogue locked'))
     await act(async () => {
@@ -268,6 +281,7 @@ describe('Layers site data', () => {
     })
 
     expect(container.textContent).toContain('Unavailable data')
+    expect(container.querySelector('li small')?.textContent).toBe('Data unavailable')
   })
 
   it('marks an out-of-date result, says why, and refreshes it in place', async () => {
