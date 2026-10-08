@@ -218,8 +218,21 @@ test.describe('Profile (g5)', () => {
     // One path per curve.
     await expect(profile.locator(':scope > svg path')).toHaveCount(await legend.count())
     await expect(legend.first()).toContainText(/Rise [+−-]?\d/)
+    // Every axis label shows whole: none is cut by the SVG's box, and none leaves the chart.
+    const clipped = await profile.evaluate((section) => {
+      const svg = section.querySelector(':scope > svg')!
+      const box = section.getBoundingClientRect()
+      return {
+        overflow: getComputedStyle(svg).overflow,
+        outside: Array.from(svg.querySelectorAll('text')).filter((text) => {
+          const rect = text.getBoundingClientRect()
+          return rect.left < box.left || rect.right > box.right
+        }).map((text) => text.textContent),
+      }
+    })
+    expect(clipped).toEqual({ overflow: 'visible', outside: [] })
 
-    const plot = await profile.locator(':scope > svg').boundingBox()
+    const plot =await profile.locator(':scope > svg').boundingBox()
     if (!plot) throw new Error('no plot')
     await page.mouse.move(plot.x + plot.width * 0.5, plot.y + plot.height * 0.3)
     await expect(profile.getByText(/^At \d/)).toBeVisible()

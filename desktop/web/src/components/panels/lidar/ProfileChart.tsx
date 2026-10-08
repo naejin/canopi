@@ -28,8 +28,14 @@ const MAIN_PLOT = 106
 const STRIP_PLOT = 48
 const PLOT_GAP = 12
 const AXIS = 22
-const X0 = 54
+/**
+ * The value labels end 6 units left of the plot: the gutter fits "1,234.5 m" (50.3 units in Source Sans 3 at
+ * --text-xs), and the SVG lets anything wider show into the panel's padding rather than cut it.
+ */
+const X0 = 60
 const X1 = WIDTH - 6
+/** Half the widest distance label ("12,345 m"): a tick nearer the right edge than this ends its label on the tick. */
+const TICK_LABEL_HALF = 26
 /** How long "Copied" or the copy error shows. */
 const COPY_FEEDBACK_MS = 2000
 
@@ -197,7 +203,7 @@ function ReadyChart({ profile, language }: { readonly profile: ReadyProfile; rea
       {distanceTicks(profile.lengthM).map((tick) => (
         <g key={tick}>
           <line className={styles.baseline} x1={x(tick)} x2={x(tick)} y1={bottom} y2={bottom + 4} />
-          <text className={styles.axisLabel} x={x(tick)} y={bottom + 17} text-anchor={tick === 0 ? 'start' : 'middle'}>{formatLength(tick, language)}</text>
+          <text className={styles.axisLabel} x={x(tick)} y={bottom + 17} text-anchor={tickAnchor(tick, x(tick))}>{formatLength(tick, language)}</text>
         </g>
       ))}
     </>
@@ -223,6 +229,12 @@ function ReadyChart({ profile, language }: { readonly profile: ReadyProfile; rea
       </ul>
     </>
   )
+}
+
+/** The first distance starts at the plot's left end; one whose centred label would pass the right edge ends there. */
+function tickAnchor(tick: number, atX: number): 'start' | 'middle' | 'end' {
+  if (tick === 0) return 'start'
+  return atX + TICK_LABEL_HALF > WIDTH ? 'end' : 'middle'
 }
 
 /** The cursor line and one dot per curve with a value under it. */

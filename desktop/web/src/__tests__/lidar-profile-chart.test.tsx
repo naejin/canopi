@@ -178,9 +178,9 @@ describe('ProfileChart', () => {
     const profile = siteProfile.value
     if (profile.status !== 'ready') throw new Error('not ready')
 
-    // jsdom lays nothing out, so the pointer's x is in the chart's own units: 54 (start) to 402 (10 m).
+    // jsdom lays nothing out, so the pointer's x is in the chart's own units: 60 (start) to 402 (10 m).
     await act(async () => {
-      svg.dispatchEvent(new PointerEvent('pointermove', { clientX: 54 + (348 * 9) / 10, bubbles: true }))
+      svg.dispatchEvent(new PointerEvent('pointermove', { clientX: 60 + (342 * 9) / 10, bubbles: true }))
     })
 
     expect(profileHover.value).toEqual(profile.samples.points[18])
@@ -194,6 +194,21 @@ describe('ProfileChart', () => {
     expect(profileHover.value).toBeNull()
   })
 
+  it('the axis labels stay inside the chart: the last distance ends at the right edge, the value labels fit their gutter', async () => {
+    await drawLine()
+    const labels = Array.from(container.querySelectorAll('section > svg text'))
+    const viewBoxWidth = Number(container.querySelector('section > svg')!.getAttribute('viewBox')!.split(' ')[2])
+    const last = labels.at(-1)!
+    // 10 m: ticks 0, 5 and 10, the last on the plot's right end, so a centred "10 m" would run past the chart's edge.
+    expect(last.textContent).toBe('10 m')
+    expect(last.getAttribute('text-anchor')).toBe('end')
+    expect(Number(last.getAttribute('x'))).toBeLessThanOrEqual(viewBoxWidth)
+    // "1,234.5 m" measures 50.3 units in Source Sans 3 at --text-xs (Chromium): the value labels end at least that far in.
+    const valueLabels = labels.filter((label) => label.getAttribute('text-anchor') === 'end' && label !== last)
+    expect(valueLabels.length).toBeGreaterThan(0)
+    for (const label of valueLabels) expect(Number(label.getAttribute('x'))).toBeGreaterThanOrEqual(52)
+  })
+
   it('scrubbing redraws only what the cursor moves, never the curves', async () => {
     await drawLine()
     const svg = container.querySelector('section > svg')!
@@ -202,7 +217,7 @@ describe('ProfileChart', () => {
 
     for (const step of [1, 3, 5, 7, 9]) {
       await act(async () => {
-        svg.dispatchEvent(new PointerEvent('pointermove', { clientX: 54 + (348 * step) / 10, bubbles: true }))
+        svg.dispatchEvent(new PointerEvent('pointermove', { clientX: 60 + (342 * step) / 10, bubbles: true }))
       })
     }
 
