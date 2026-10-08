@@ -252,7 +252,6 @@
     "src/app/lidar/inspection.ts#interpretOutcome",
     "src/app/lidar/inspection.ts#sampleInspectionPoint",
     "src/app/lidar/library-store.ts#hasActiveLibraryWork",
-    "src/app/lidar/reference-tree.ts#filterKeepingAncestors",
     "src/app/lidar/site-transients.ts#clearProfile",
     "src/app/lidar/site-transients.ts#endSiteDataTransients",
     "src/app/lidar/site-transients.ts#unpin",
