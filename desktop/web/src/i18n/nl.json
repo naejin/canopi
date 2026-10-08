@@ -2077,7 +2077,7 @@
       "close": "Profiel sluiten",
       "at": "Op {{distance}}",
       "rise": "Stijging {{value}}",
-      "steepest": "Steilst {{percent}} over 2 m",
+      "steepest": "Steilst {{percent}} over {{run}}",
       "highest": "Hoogste {{value}}",
       "reading": "Waarden lezen…",
       "noValues": "Geen waarden langs deze lijn",

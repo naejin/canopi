@@ -2077,7 +2077,7 @@
       "close": "关闭剖面图",
       "at": "位于 {{distance}}",
       "rise": "高差 {{value}}",
-      "steepest": "2 米内最陡 {{percent}}",
+      "steepest": "{{run}} 内最陡 {{percent}}",
       "highest": "最高 {{value}}",
       "reading": "正在读取数值…",
       "noValues": "这条线上没有数值",

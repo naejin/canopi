@@ -2077,7 +2077,7 @@
       "close": "Profil schließen",
       "at": "Bei {{distance}}",
       "rise": "Anstieg {{value}}",
-      "steepest": "Steilste {{percent}} auf 2 m",
+      "steepest": "Steilste {{percent}} auf {{run}}",
       "highest": "Höchster {{value}}",
       "reading": "Werte werden gelesen…",
       "noValues": "Keine Werte entlang dieser Linie",

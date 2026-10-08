@@ -180,17 +180,28 @@ describe('profile statistics', () => {
     expect(await curveStats('elevation', [null, 10, 10, 10, 10.2, 10.5, 10.6, 10.6, null])).toEqual({
       role: 'elevation',
       rise: expect.closeTo(0.6, 9),
-      steepest: { percent: expect.closeTo(30, 6), index: 4 },
+      steepest: { percent: expect.closeTo(30, 6), index: 4, runM: expect.closeTo(2, 6) },
     })
     expect(await curveStats('elevation', [null, 130.5, null, null, null, null, null, null, 127.25])).toEqual({
       role: 'elevation', rise: expect.closeTo(-3.25, 9), steepest: null,
     })
   })
 
-  it('Steepest uses adjacent points when they are more than 2 m apart', async () => {
+  it('Steepest uses adjacent points when they are more than 2 m apart, and says so in its run', async () => {
     const { calls, owner } = profileOf([at(0, 0), at(10, 0)], [source('c', 'elevation', { resolutionM: 5 })])
     await calls[0]!.answer(() => values(0, 1, 4))
-    expect(ready(owner.profile.value).curves[0]!.stats).toEqual({ role: 'elevation', rise: 4, steepest: { percent: expect.closeTo(60, 6), index: 2 } })
+    expect(ready(owner.profile.value).curves[0]!.stats).toEqual({
+      role: 'elevation', rise: 4, steepest: { percent: expect.closeTo(60, 6), index: 2, runM: expect.closeTo(5, 6) },
+    })
+  })
+
+  it('Steepest on a line longer than 8,190 m is measured over the sampling step, its run', async () => {
+    // 12 km at 4,096 points: 2.93 m between points over a 0.5 m DEM.
+    const { calls, owner } = profileOf([at(0, 0), at(12_000, 0)], [source('c', 'elevation', { resolutionM: 0.5 })])
+    await calls[0]!.answer(() => values(...Array.from({ length: 4096 }, (_, index) => (index === 4095 ? 1 : 0))))
+    const stats = ready(owner.profile.value).curves[0]!.stats
+    if (stats.role !== 'elevation' || !stats.steepest) throw new Error('no steepest')
+    expect(stats.steepest.runM).toBeCloseTo(12_000 / 4095, 6)
   })
 
   it('Steepest is never measured over less than 2 m near the line\'s end', async () => {
@@ -198,7 +209,7 @@ describe('profile statistics', () => {
     const { calls, owner } = profileOf([at(0, 0), at(10, 0)], [source('c', 'elevation', { resolutionM: 0.5 })])
     await calls[0]!.answer(() => values(...Array.from({ length: 20 }, () => 100), 100.1))
     expect(ready(owner.profile.value).curves[0]!.stats).toEqual({
-      role: 'elevation', rise: expect.closeTo(0.1, 9), steepest: { percent: expect.closeTo(5, 6), index: 18 },
+      role: 'elevation', rise: expect.closeTo(0.1, 9), steepest: { percent: expect.closeTo(5, 6), index: 18, runM: expect.closeTo(2, 6) },
     })
   })
 
@@ -206,7 +217,7 @@ describe('profile statistics', () => {
     const { calls, owner } = profileOf([at(0, 0), at(1, 0)], [source('c', 'elevation', { resolutionM: 0.5 })])
     await calls[0]!.answer(() => values(10, 10, 10.1))
     expect(ready(owner.profile.value).curves[0]!.stats).toEqual({
-      role: 'elevation', rise: expect.closeTo(0.1, 9), steepest: { percent: expect.closeTo(10, 6), index: 1 },
+      role: 'elevation', rise: expect.closeTo(0.1, 9), steepest: { percent: expect.closeTo(10, 6), index: 1, runM: expect.closeTo(1, 6) },
     })
   })
 

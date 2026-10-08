@@ -2077,7 +2077,7 @@
       "close": "단면도 닫기",
       "at": "{{distance}} 지점",
       "rise": "고도차 {{value}}",
-      "steepest": "2m 구간 최대 경사 {{percent}}",
+      "steepest": "{{run}} 구간 최대 경사 {{percent}}",
       "highest": "최고 {{value}}",
       "reading": "값을 읽는 중…",
       "noValues": "이 선을 따라 값이 없습니다",

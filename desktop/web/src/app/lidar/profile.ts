@@ -49,11 +49,20 @@ interface ProfileSamples {
   readonly points: readonly GeoPoint[]
 }
 
-/** An elevation curve's statistics: Rise (the signed net change) and Steepest (percent over 2 m, at a point). */
+/**
+ * An elevation curve's statistics: Rise (the signed net change) and Steepest (percent over about 2 m, at a point, with
+ * the run it was measured over, which the legend names: longer than 2 m when the points are further apart).
+ */
 interface ElevationStats {
   readonly role: 'elevation'
   readonly rise: number | null
-  readonly steepest: { readonly percent: number; readonly index: number } | null
+  readonly steepest: ProfileSteepest | null
+}
+
+interface ProfileSteepest {
+  readonly percent: number
+  readonly index: number
+  readonly runM: number
 }
 
 /** A height curve's statistic: Highest. */
@@ -146,14 +155,14 @@ function profileRise(values: readonly (number | null)[]): number | null {
 
 /**
  * Steepest: the largest slope, in percent, between two points about 2 m apart (adjacent points when they are further
- * apart than that), and the point midway between them; null with no such pair. A start too near the line's end to
+ * apart than that), the point midway between them and the run between them; null with no such pair. A start too near the line's end to
  * reach 2 m is skipped, since a shorter run magnifies cell noise; a line shorter than 2 m is measured end to end.
  */
 function profileSteepest(
   values: readonly (number | null)[],
   distances: readonly number[],
-): { readonly percent: number; readonly index: number } | null {
-  let best: { percent: number; index: number } | null = null
+): ProfileSteepest | null {
+  let best: ProfileSteepest | null = null
   const last = values.length - 1
   let end = 0
   for (let start = 0; start < last; start += 1) {
@@ -165,7 +174,7 @@ function profileSteepest(
     if (run < STEEPEST_RUN_M - 1e-9 && start > 0) break
     if (a === null || a === undefined || b === null || b === undefined || run <= 0) continue
     const percent = (Math.abs(b - a) / run) * 100
-    if (!best || percent > best.percent) best = { percent, index: Math.round((start + end) / 2) }
+    if (!best || percent > best.percent) best = { percent, index: Math.round((start + end) / 2), runM: run }
   }
   return best
 }

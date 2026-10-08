@@ -287,6 +287,7 @@ function LegendLine({ curve, index, language }: {
           >
             {t('siteData.chart.steepest', {
               percent: numberFormat(language, { style: 'percent', maximumFractionDigits: 0 }).format(steepest.percent / 100),
+              run: formatLength(steepest.runM, language),
             })}
           </button>
         ) : null}

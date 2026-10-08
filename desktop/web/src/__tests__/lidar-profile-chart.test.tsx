@@ -172,6 +172,25 @@ describe('ProfileChart', () => {
     ])
   })
 
+  it('Steepest names the run it was measured over when the samples are further apart than 2 m', async () => {
+    lidarLibrary.value = librarySnapshot([
+      sourceItem('mnt', 'MNT · IGN', { resolution_m: 5 }),
+      sourceItem('mns', 'MNS · IGN', { resolution_m: 5, item_type: { kind: 'Raster', quantity: 'SurfaceElevation' } }),
+      sourceItem('chm', 'MNH · IGN', { resolution_m: 5, item_type: { kind: 'Raster', quantity: 'AboveGroundHeight' } }),
+    ])
+    await act(async () => {
+      setProfileLine([at(0, 0), at(30, 0)])
+    })
+    await settle()
+
+    // Ground every 5 m: 100 at 0 m, 101.1 at 5 m (the 0.6 m step at 4 m), so 22 % over 5 m.
+    expect(legendLines()).toEqual([
+      'MNT · IGNRise +3.6 m · Steepest 22% over 5 m',
+      'MNS · IGNRise +1.1 m · Steepest 22% over 5 m',
+      'MNH · IGNHighest 9.0 m',
+    ])
+  })
+
   it('hovering the chart moves the cursor and the map\'s ring, says where, and gives each curve\'s value; leaving clears it', async () => {
     await drawLine()
     const svg = container.querySelector('section > svg')!
