@@ -132,3 +132,41 @@ describe('a display derivative the Rust engine wrote', () => {
     expect(statistics.histogram.reduce((sum, count) => sum + count, 0)).toBe(values.length)
   })
 })
+
+describe('the lane\'s statistics read', () => {
+  afterAll(() => {
+    vi.doUnmock('cog-tiler-wasm')
+    vi.resetModules()
+  })
+
+  it('picks the overview by its pixel count, so a tall narrow raster is never read whole', async () => {
+    const statistics = vi.fn(async (_options: { maxSize: number }) => ({ b1: { count: 0 } }))
+    const levels = (sizes: [number, number][]) => sizes.map(([width, height]) => ({ width, height }))
+    const opened = [
+      // A corridor DTM: every level is under 1024 px wide; only the fifth holds at most 512² samples.
+      levels([[900, 20000], [450, 10000], [225, 5000], [113, 2500], [57, 1250]]),
+      levels([[2048, 2048], [1024, 1024], [512, 512], [256, 256]]),
+    ]
+    vi.doMock('cog-tiler-wasm', () => ({
+      init: async () => {},
+      rgbaToPng: async () => new Uint8Array(0),
+      openCog: async () => ({ boundsLonLat: [0, 0, 1, 1], tileCache: new Map(), levels: opened.shift(), statistics }),
+    }))
+    const replies: RasterWorkerReply[] = []
+    const scope: {
+      onmessage: ((event: MessageEvent<RasterWorkerRequest>) => void) | null
+      postMessage(message: RasterWorkerReply): void
+    } = { onmessage: null, postMessage: (message) => replies.push(message) }
+    vi.stubGlobal('self', scope)
+    vi.resetModules()
+    await import('./worker')
+    const send = (request: RasterWorkerRequest) => scope.onmessage?.({ data: request } as MessageEvent<RasterWorkerRequest>)
+    send({ op: 'open', id: 1, handle: 1, url: 'asset://localhost/corridor.tif' })
+    send({ op: 'statistics', id: 2, handle: 1 })
+    send({ op: 'open', id: 3, handle: 2, url: 'asset://localhost/square.tif' })
+    send({ op: 'statistics', id: 4, handle: 2 })
+    await vi.waitFor(() => expect(replies).toHaveLength(4))
+    expect(replies.every((reply) => reply.ok)).toBe(true)
+    expect(statistics.mock.calls).toEqual([[{ maxSize: 57 }], [{ maxSize: 512 }]])
+  })
+})

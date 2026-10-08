@@ -169,7 +169,7 @@ async function handle(request: RasterWorkerRequest): Promise<{ value: unknown; t
     }
     case 'statistics': {
       const source = await sourceFor(request.handle)
-      return { value: bandStatistics(await source.statistics()), transfer: [] }
+      return { value: bandStatistics(await source.statistics({ maxSize: statisticsWidth(source.levels) })), transfer: [] }
     }
     case 'encode': {
       const png = await rgbaToPng(request.rgba, request.width, request.height)
@@ -186,6 +186,20 @@ async function handle(request: RasterWorkerRequest): Promise<{ value: unknown; t
       return { value: true, transfer: [] }
     }
   }
+}
+
+/** Samples one statistics read may hold: it decodes a whole level and sorts its values in this lane. */
+const STATISTICS_SAMPLES = 512 * 512
+
+/**
+ * The `maxSize` that makes cog-tiler's `statistics` read the finest level of
+ * at most `STATISTICS_SAMPLES` pixels. cog-tiler picks the first level no
+ * wider than `maxSize` and ignores height, so a tall narrow raster would
+ * otherwise be read whole; levels are finest first, so widths fall.
+ */
+function statisticsWidth(levels: readonly { readonly width: number; readonly height: number }[]): number {
+  const level = levels.find(({ width, height }) => width * height <= STATISTICS_SAMPLES) ?? levels.at(-1)!
+  return level.width
 }
 
 /** Band 1 of cog-tiler's TiTiler-style statistics; null when it has no valid pixel. */
