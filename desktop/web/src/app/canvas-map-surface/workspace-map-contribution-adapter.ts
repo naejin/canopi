@@ -27,6 +27,11 @@ export interface WorkspaceMapContributionAdapter {
     map: RasterDisplayMap,
     options: Pick<RasterDisplayOptions, 'onLayersChanged'>,
   ) => RasterDisplay
+  /**
+   * Desktop only: the profile chart's hover point in [lon, lat]. It changes at scrub rate, so it is the one exception to
+   * the coarse rule below: it never rides `read`, and the composition feeds it straight to the map's hover source.
+   */
+  readonly readSiteHover?: () => readonly [number, number] | null
 }
 
 /** What an edition adds to the shared contributions: its LiDAR band and terrain, and Desktop's Site data pin and line. */
@@ -38,7 +43,7 @@ export interface WorkspaceMapEditionContributions extends Pick<WorkspaceMapContr
  * The contributions both editions read: null without a Design or a plane, else the panel Targets (none in overview) over the
  * edition's LiDAR layers and terrain. Coarse view signals only: the contributions re-read when the Scene changes, the camera
  * settles, the mode changes or the canvas paint changes (theme, backdrop: overlays already on the map repaint in its colours),
- * never on a camera frame alone.
+ * never on a camera frame alone. The one high-rate exception, the profile chart's hover, goes through `readSiteHover`.
  */
 export function readWorkspaceMapContributions(
   runtime: CanvasQuerySurface,

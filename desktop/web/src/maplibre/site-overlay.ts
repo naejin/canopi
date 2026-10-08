@@ -68,3 +68,26 @@ export function siteMapOverlayContract(site: SiteMapOverlay | null): SiteMapOver
     hasRenderableFeatures: false,
   }
 }
+
+export interface SiteHoverOverlayContract {
+  readonly source: {
+    readonly id: string
+    readonly type: 'geojson'
+    readonly data: { readonly type: 'FeatureCollection'; readonly features: readonly SiteMapOverlayFeature[] }
+  }
+  readonly layers: readonly SiteMapOverlayLayer[]
+  readonly hasRenderableFeatures: boolean
+}
+
+/**
+ * The profile chart's hover point ([lon, lat]) as a hollow two-tone ring on its own source, so a scrub is one setData
+ * (GeoLibre `NativeProfileMap.setHover`); null draws nothing.
+ */
+export function siteHoverOverlayContract(hover: readonly [number, number] | null): SiteHoverOverlayContract {
+  void hover
+  return {
+    source: { id: siteMapOverlayIds().hover.sourceId, type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+    layers: [],
+    hasRenderableFeatures: false,
+  }
+}

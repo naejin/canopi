@@ -4,6 +4,7 @@ import { presentedMapLayers, storyPresentationOverrides } from '../story-present
 import { readCurrentLidarPresentation } from '../lidar/library-store'
 import { lidarDisplayDescriptors, lidarDisplayLayers } from '../lidar/display'
 import { pin, profileLine } from '../lidar/site-transients'
+import { profileHover } from '../lidar/profile'
 import type { SiteMapOverlay } from '../../maplibre/site-overlay'
 import { theme } from '../settings/state'
 import { loadMapLibreTerrainSupport } from '../../maplibre/terrain-loader'
@@ -14,6 +15,10 @@ export function createDesktopWorkspaceMapContributionAdapter(): WorkspaceMapCont
   return {
     loadTerrainSupport: loadMapLibreTerrainSupport,
     createRasterDisplay: (map, options) => createRasterDisplay(map, options),
+    readSiteHover: () => {
+      const hover = profileHover.value
+      return hover ? [hover.lon, hover.lat] : null
+    },
     read: (runtime) => readWorkspaceMapContributions(runtime, designSessionStore, () => ({
       lidar: lidarDisplayLayers(
         readCurrentLidarPresentation(),

@@ -6,7 +6,12 @@ import {
   syncMapOverlay,
   type MapLibreOverlayMap,
 } from '../../maplibre/panel-target-overlay-sync'
-import { siteMapOverlayContract, siteMapOverlayIds, type SiteMapOverlay } from '../../maplibre/site-overlay'
+import {
+  siteHoverOverlayContract,
+  siteMapOverlayContract,
+  siteMapOverlayIds,
+  type SiteMapOverlay,
+} from '../../maplibre/site-overlay'
 import { projectTargetsToMapFeatures } from '../../target'
 import type { PanelTarget } from '../../types/design'
 
@@ -59,6 +64,21 @@ export function syncCanvasMapSurfaceSiteOverlay(map: MapLibreOverlayMap, site: S
   const contract = siteMapOverlayContract(site)
   if (!contract.hasRenderableFeatures) {
     clearCanvasMapSurfaceSiteOverlay(map)
+    return
+  }
+  syncMapOverlay(map, contract)
+}
+
+/** Clears the profile chart's hover ring. */
+export function clearCanvasMapSurfaceSiteHover(map: MapLibreOverlayMap): void {
+  clearMapOverlay(map, siteMapOverlayIds().hover)
+}
+
+/** Moves the profile chart's hover ring ([lon, lat]) with one setData on its own source; null clears it. */
+export function syncCanvasMapSurfaceSiteHover(map: MapLibreOverlayMap, hover: readonly [number, number] | null): void {
+  const contract = siteHoverOverlayContract(hover)
+  if (!contract.hasRenderableFeatures) {
+    clearCanvasMapSurfaceSiteHover(map)
     return
   }
   syncMapOverlay(map, contract)
