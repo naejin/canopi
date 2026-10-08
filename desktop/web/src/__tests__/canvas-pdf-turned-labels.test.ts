@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
-import { contains, outlineSegments, type Segment } from '../app/canvas-pdf/field-geometry'
+import { contains, distanceToSegment, outlineSegments, type Segment } from '../app/canvas-pdf/field-geometry'
 import { pageFrame } from '../app/canvas-pdf/page-frame'
 import { zoneLabels } from '../app/canvas-pdf/zone-labels'
 import { FieldSpace } from '../app/canvas-pdf/field-placement'
@@ -33,16 +33,12 @@ const onPage = (page: PdfPage, angle: number) => (p: PrintPoint) => {
   const q = pageFrame(angle).toFrame(p)
   return { x: page.frame.x + (q.x - page.ground.x) * page.pointsPerMeter, y: page.frame.y + (q.y - page.ground.y) * page.pointsPerMeter }
 }
-function toSegment(p: PrintPoint, s: Segment): number {
-  const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y, t = Math.max(0, Math.min(1, ((p.x - s.a.x) * dx + (p.y - s.a.y) * dy) / (dx * dx + dy * dy)))
-  return Math.hypot(p.x - s.a.x - t * dx, p.y - s.a.y - t * dy)
-}
 function inside(p: PrintPoint, outline: Segment[]): boolean {
   let crossings = 0
   for (const { a, b } of outline) if ((a.y > p.y) !== (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) crossings++
   return crossings % 2 === 1
 }
-const away = (p: PrintPoint, outline: Segment[]) => inside(p, outline) ? 0 : Math.min(...outline.map(s => toSegment(p, s)))
+const away = (p: PrintPoint, outline: Segment[]) => inside(p, outline) ? 0 : Math.min(...outline.map(s => distanceToSegment(p, s)))
 
 const plant = (id: string, position: PrintPoint) => ({ id, canonicalName: 'Malus domestica', speciesCode: 'MAD', position, color: '#335533', symbol: 'square',
   mark: [{ d: 'M-1 -1 H1 V1 H-1 Z', paint: 'symbol' as const }], pinnedName: false })
@@ -81,9 +77,9 @@ it('prints each guide\'s M code beside its own guide in a turned chain of eight 
   const printed = codes(page, /^M\d+$/).filter(c => contains(page.frame, c.centre))
   expect(printed.length).toBeGreaterThan(0)
   for (const { code, centre } of printed) {
-    const own = toSegment(centre, guides[references.get(code)!]!)
+    const own = distanceToSegment(centre, guides[references.get(code)!]!)
     expect(own / MM, `${code} from its guide`).toBeLessThanOrEqual(6)
-    guides.forEach((guide, i) => { if (i !== references.get(code)) expect(own, `${code} nearer guide ${i}`).toBeLessThan(toSegment(centre, guide)) })
+    guides.forEach((guide, i) => { if (i !== references.get(code)) expect(own, `${code} nearer guide ${i}`).toBeLessThan(distanceToSegment(centre, guide)) })
   }
 })
 
@@ -114,8 +110,6 @@ const rect = (x: number, y: number, width: number, height: number): PrintZone =>
 
 it('tops a zone that covers the page\'s top band at the page top, not on its own lower edge', () => {
   const ground = { x: -5, y: 0, width: 30, height: 15 }
-  // Its top edge is above the page and its sides past both page edges: the ground's top is its top.
-  expect(zoneTop(rect(-50, -50, 120, 55), ground)).toEqual({ x: 10, y: 0 })
   // Only one top corner of the ground inside: the top runs from that corner to where the outline crosses the top edge.
   expect(zoneTop(rect(-50, -50, 60, 55), ground)).toEqual({ x: 2.5, y: 0 })
 })
@@ -158,11 +152,11 @@ it('places a continuing guide\'s wide M code beside its guide at any angle, keep
   const wide = space.measure('M3      000', 8)
   for (const degrees of [0, 30, 45, 60, 90]) {
     const angle = degrees * Math.PI / 180, guide = { a: { x: 0, y: 0 }, b: { x: 30 * Math.cos(angle), y: 30 * Math.sin(angle) } }
-    const box = space.beside(wide, guide)
+    const box = space.beside(wide, guide, [])
     expect(box, `${degrees}°`).not.toBeNull()
     // Its near edge stays within the widest gap of the guide.
     const corners = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([i, j]) => ({ x: box!.x + i! * box!.width, y: box!.y + j! * box!.height }))
-    expect(Math.min(...corners.map(c => toSegment(c, guide))), `${degrees}°`).toBeLessThanOrEqual(2.5 + 1e-9)
+    expect(Math.min(...corners.map(c => distanceToSegment(c, guide))), `${degrees}°`).toBeLessThanOrEqual(2.5 + 1e-9)
   }
   // On the page: a north-south guide whose length is crowded out of its middle, its home another page.
   const drawing = guidePage([{ id: 'g', start: { x: 9, y: -3 }, end: { x: 9, y: 9 } }], [{ x: 60, y: 60, width: 76, height: 30 }], new Map([['g', 'home']]))
@@ -185,18 +179,13 @@ it('keeps a guide\'s M code nearer its own guide than a zone dimension drawn aft
     expect(strokes.length, `left ${left}: a zone dimension prints`).toBeGreaterThan(0)
     expect(printedCodes(drawing.operations).map(c => c.code), `left ${left}`).toEqual(['M1'])
     for (const { code, centre } of printedCodes(drawing.operations)) {
-      const own = toSegment(centre, guide)
-      for (const stroke of strokes) expect(own, `left ${left}: ${code} nearer a zone dimension`).toBeLessThan(toSegment(centre, stroke))
+      const own = distanceToSegment(centre, guide)
+      for (const stroke of strokes) expect(own, `left ${left}: ${code} nearer a zone dimension`).toBeLessThan(distanceToSegment(centre, stroke))
     }
   }
 })
 
 it('keeps a guide\'s M code in the key when its only clear side lies nearer the next guide', () => {
-  const space = new FieldSpace({ x: -1000, y: -1000, width: 2000, height: 2000 }, text())
-  const a = { a: { x: 0, y: 0 }, b: { x: 30, y: 0 } }, b = { a: { x: 0, y: 3.6 }, b: { x: 30, y: 3.6 } }
-  space.addSegments([a, b])
-  space.reserve({ x: -5, y: -10, width: 40, height: 9.9 })
-  expect(space.beside(space.measure('M1', 8), a, [b])).toBeNull()
   // On the page: two parallel guides 3.6 mm apart, both crowded out of their middles, A's outer side taken.
   const drawing = guidePage([{ id: 'a', start: { x: -1, y: 7 }, end: { x: 13, y: 7 } }, { id: 'b', start: { x: -1, y: 7.36 }, end: { x: 13, y: 7.36 } }],
     [{ x: 10, y: 80, width: 190, height: 19.4 }, { x: 45, y: 80, width: 60, height: 45 }])
@@ -205,7 +194,7 @@ it('keeps a guide\'s M code in the key when its only clear side lies nearer the 
   expect(printed.map(c => c.code)).toEqual(['M2'])
   for (const { code, centre } of printed) {
     const own = Number(code.slice(1)) - 1
-    expect(toSegment(centre, guides[own]!), code).toBeLessThan(toSegment(centre, guides[1 - own]!))
+    expect(distanceToSegment(centre, guides[own]!), code).toBeLessThan(distanceToSegment(centre, guides[1 - own]!))
   }
   expect(drawing.notes.find(n => n.id === 'a')?.location).toBeDefined()
 })

@@ -12,7 +12,6 @@
 
 import type { ToolSceneSource } from '../interaction-ports'
 import { buildPlantPresentationEntries, type PlantPresentationContext } from '../plant-presentation'
-import { includesSceneDesignObjectTarget, type SceneDesignObjectTarget } from '../scene/design-object-targets'
 import type { ScenePersistedState, ScenePlantEntity } from '../scene/types'
 import type { WorldPoint, WorldQuad } from '../view/types'
 import { hitTestTopLevel, hitTestVisibleTopLevel, hitTestZoneFill, hitZoneEdge, queryQuadTopLevel } from './hit-testing'
@@ -44,10 +43,8 @@ export function createToolScene(source: ToolSceneSource): ToolScene {
         source.selection(),
         source.store.session.hoveredTarget,
       )
-      const accept = filter?.fill === 'selected'
-        ? (fill: SceneDesignObjectTarget) => includesSceneDesignObjectTarget(source.selection(), fill)
-        : undefined
-      const target = hit ?? (filter?.fill ? hitTestZoneFill(persisted(), world, accept) : null)
+      const target = hit
+        ?? (filter?.fill ? hitTestZoneFill(persisted(), world, filter.fill === 'selected' ? source.selection() : undefined) : null)
       return target ? { kind: 'object', target } : null
     },
     hitInQuad(quad: WorldQuad): readonly HitTarget[] {

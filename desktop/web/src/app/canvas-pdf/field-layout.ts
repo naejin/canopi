@@ -174,12 +174,10 @@ function layoutField(input: PdfInput, frame: PrintBounds, ground: PrintBounds, s
       space.admit(label)
       return
     }
-    guideInkOnPage.set(guide.id, projected)
     notes.push({ id: guide.id, reference: references.measurements.get(guide.id)!, text: value, position, kind: 'distance',
       continuation: references.measurementHomes?.get(guide.id) === page.id ? undefined : references.measurementHomes?.get(guide.id) })
   }
   const pageReferences: PdfPageReference[] = []
-  const guideInkOnPage = new Map<string, Segment>()
   const processedNotes = new Set<string>()
   const locations = new Map<string, PrintPlant[]>()
   for (const p of canvas.plants) {
@@ -266,7 +264,7 @@ function layoutField(input: PdfInput, frame: PrintBounds, ground: PrintBounds, s
       const isDistance = note.kind === 'annotation' && /^\(?\s*\d+(?:[,.]\d+)?\s*(?:cm|m)\s*\)?$/u.test(note.text.trim())
       const value = note.reference + (isDistance ? ` · ${note.text}` : '')
       const reservedValue = value + (note.continuation ? '      000' : '')
-      const measured = space.measure(reservedValue, isDistance ? 9.5 : 8), guide = guideInkOnPage.get(note.id)
+      const measured = space.measure(reservedValue, isDistance ? 9.5 : 8), guide = note.kind === 'distance' ? guideLines.get(note.id)?.[0] : undefined
       // A guide's code sits beside its own guide, nearer it than any other guide, or stays in the key (Q16).
       const beside = guide && !note.location ? space.beside(measured, guide, [...guideLines].flatMap(([id, ink]) => id === note.id ? [] : ink)) : null
       const label = note.location ? null : guide ? beside && { ...measured, bounds: beside, route: [], ids: [note.id], target: `${page.id}:note:${note.reference}`, color: OCHRE, boxed: true }
@@ -280,7 +278,7 @@ function layoutField(input: PdfInput, frame: PrintBounds, ground: PrintBounds, s
           label.target = ''
         }
         label.route = []
-        space.admit(label, guide && beside ? guide : undefined)
+        space.admit(label, guide)
         if (note.plantIds) identifiedPlants.push({ ids: note.plantIds, reference: note.reference, bounds: paper(label.bounds) })
       } else {
         note.location = coordinates(note.position)

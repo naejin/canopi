@@ -7,6 +7,11 @@ export const overlaps = (a: Bounds, b: Bounds) => a.x < b.x + b.width && a.x + a
 export const contains = (r: Bounds, p: Point) => p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height
 export const fits = (frame: Bounds, r: Bounds) => contains(frame, r) && contains(frame, { x: r.x + r.width, y: r.y + r.height })
 export const edge = (r: Bounds, p: Point): Point => ({ x: Math.max(r.x, Math.min(p.x, r.x + r.width)), y: Math.max(r.y, Math.min(p.y, r.y + r.height)) })
+export function distanceToSegment(p: Point, s: Segment): number {
+  const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y, squared = dx * dx + dy * dy
+  const t = squared ? Math.max(0, Math.min(1, ((p.x - s.a.x) * dx + (p.y - s.a.y) * dy) / squared)) : 0
+  return Math.hypot(p.x - s.a.x - t * dx, p.y - s.a.y - t * dy)
+}
 export const segmentBounds = (s: Segment): Bounds => ({ x: Math.min(s.a.x, s.b.x), y: Math.min(s.a.y, s.b.y), width: Math.abs(s.b.x - s.a.x), height: Math.abs(s.b.y - s.a.y) })
 
 export function rotatedBounds(bounds: Bounds, rotation: number, origin: Point): Bounds {

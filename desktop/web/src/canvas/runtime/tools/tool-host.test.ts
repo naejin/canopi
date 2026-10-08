@@ -2173,6 +2173,23 @@ describe('ToolHost', () => {
   })
 
   describe('menus', () => {
+    /** The real menu port over a store, recording every request it opens. */
+    function menuPortFor(store: ReturnType<typeof sceneStoreWith>) {
+      const source = createToolSceneSource(store)
+      const opened: CanvasContextMenuRequest[] = []
+      const view = createTestView()
+      const port = createContextMenuPort({
+        container: document.createElement('div'),
+        view: view.view,
+        adapter: { open: (request) => opened.push(request), close: () => {} },
+        commands: {} as never,
+        returnFocus: () => {},
+        scene: createToolScene(source),
+        selectionModel: source.selectionModel,
+      })
+      return { port, opened, view, source }
+    }
+
     it('a right-click retargets the selection to the object under it and opens the menu there', () => {
       useStubTools(stubTool('select'))
       const h = harness({ scene: { plants: [appleAt({ x: 50, y: 50 })] } })
@@ -2297,18 +2314,7 @@ describe('ToolHost', () => {
       store.updateSession((session) => {
         session.selectedTargets = [P1]
       })
-      const source = createToolSceneSource(store)
-      const opened: CanvasContextMenuRequest[] = []
-      const view = createTestView()
-      const port = createContextMenuPort({
-        container: document.createElement('div'),
-        view: view.view,
-        adapter: { open: (request) => opened.push(request), close: () => {} },
-        commands: {} as never,
-        returnFocus: () => {},
-        scene: createToolScene(source),
-        selectionModel: source.selectionModel,
-      })
+      const { port, opened, view, source } = menuPortFor(store)
 
       port.open({ at: { x: 50, y: 50 }, screen: { x: 50, y: 50 } })
       expect(opened.at(-1)!.selection?.editableTargets).toEqual([P1])
@@ -2344,18 +2350,7 @@ describe('ToolHost', () => {
         zones: [rectZone('z1', [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }])],
         plants: [appleAt({ x: 50, y: 50 })],
       })
-      const source = createToolSceneSource(store)
-      const opened: CanvasContextMenuRequest[] = []
-      const view = createTestView()
-      const port = createContextMenuPort({
-        container: document.createElement('div'),
-        view: view.view,
-        adapter: { open: (request) => opened.push(request), close: () => {} },
-        commands: {} as never,
-        returnFocus: () => {},
-        scene: createToolScene(source),
-        selectionModel: source.selectionModel,
-      })
+      const { port, opened, view } = menuPortFor(store)
 
       // Unselected: the empty map's menu, with Place plants here.
       port.open({ at: { x: 30, y: 70 }, screen: null })
@@ -2381,18 +2376,7 @@ describe('ToolHost', () => {
       const Z2: SceneDesignObjectTarget = { kind: 'zone', id: 'z2' }
       for (const [zones, selected] of [[[bed, inner], Z1], [[inner, bed], Z2]] as const) {
         const store = sceneStoreWith({ zones: [...zones] })
-        const source = createToolSceneSource(store)
-        const opened: CanvasContextMenuRequest[] = []
-        const view = createTestView()
-        const port = createContextMenuPort({
-          container: document.createElement('div'),
-          view: view.view,
-          adapter: { open: (request) => opened.push(request), close: () => {} },
-          commands: {} as never,
-          returnFocus: () => {},
-          scene: createToolScene(source),
-          selectionModel: source.selectionModel,
-        })
+        const { port, opened, view } = menuPortFor(store)
         store.updateSession((session) => { session.selectedTargets = [selected] })
 
         // Inside both fills: the selected zone's menu, whichever zone is drawn on top.

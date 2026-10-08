@@ -33,7 +33,7 @@ interface RasterQuantityType {
 
 const SLOPE_DEGREES_MAX = 30
 /** The same 30° expressed in percent, so both units share one colour domain. */
-export const SLOPE_PERCENT_MAX = Math.round(Math.tan((SLOPE_DEGREES_MAX * Math.PI) / 180) * 1000) / 10
+const SLOPE_PERCENT_MAX = Math.round(Math.tan((SLOPE_DEGREES_MAX * Math.PI) / 180) * 1000) / 10
 
 function overDisplayRange(colormap: string) {
   return (item: RasterStyleInput): LidarDisplayStyle => {

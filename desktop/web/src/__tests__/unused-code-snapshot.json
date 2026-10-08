@@ -225,7 +225,6 @@
     "src/app/lidar/inspection.ts#hasInspectionPointerHandlerForTests",
     "src/app/lidar/inspection.ts#interpretOutcome",
     "src/app/lidar/inspection.ts#sampleInspectionPoint",
-    "src/app/lidar/item-types.ts#SLOPE_PERCENT_MAX",
     "src/app/lidar/library-store.ts#hasActiveLibraryWork",
     "src/app/map-layers/state.ts#createDefaultMapLayers",
     "src/app/map-selection/summary.ts#readMapSelectionSummary",
