@@ -66,6 +66,14 @@ function lidarProblem(file: CanopiFile): string | null {
     if (!(Number.isFinite(entry.opacity) && entry.opacity >= 0 && entry.opacity <= 1)) {
       return `$.lidar.entries[${index}].opacity: expected a number in [0, 1]`
     }
+    if (entry.name.trim() === '') {
+      return `$.lidar.entries[${index}].name: expected a non-empty name`
+    }
+    const range = entry.range
+    if (range?.mode === 'Custom'
+      && !(Number.isFinite(range.min) && Number.isFinite(range.max) && range.min < range.max)) {
+      return `$.lidar.entries[${index}].range: expected finite min and max with min below max`
+    }
   }
   return null
 }

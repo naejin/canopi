@@ -6,6 +6,7 @@ import type {
   LibraryItemSummary,
   LibraryItemType,
   LibrarySnapshot,
+  LidarPresentationEntry,
   LidarPresentationEntryKind,
   LidarResultState,
 } from '../../generated/contracts'
@@ -175,7 +176,7 @@ export function libraryItemName(item: LibraryItemSummary, library: LibrarySnapsh
  */
 export function readLidarPresentation(
   design: {
-    lidar?: { entries: LidarPresentationDocEntry[] } | null
+    lidar?: { entries: readonly LidarPresentationEntry[] } | null
   } | null,
   library: LibrarySnapshot | null,
 ): LidarPresentationItem[] {
@@ -224,15 +225,6 @@ export function readLidarPresentation(
     ...item,
     parentId: item.inputId !== null && present.has(item.inputId) ? item.inputId : null,
   })))
-}
-
-interface LidarPresentationDocEntry {
-  kind: LidarPresentationEntryKind
-  id: string
-  visible: boolean
-  opacity: number
-  order: number
-  style: string | null
 }
 
 /**

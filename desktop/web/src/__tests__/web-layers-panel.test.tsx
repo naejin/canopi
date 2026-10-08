@@ -50,9 +50,10 @@ describe('Web Layers', () => {
   it('counts the terrain layers a Design keeps for Desktop', () => {
     mount({
       schema_version: 1,
+      visible: true,
       entries: [
-        { kind: 'Source', id: 'a', visible: true, opacity: 1, order: 0, style: null },
-        { kind: 'Derived', id: 's', visible: true, opacity: 1, order: 1, style: null },
+        { kind: 'Source', id: 'a', name: 'Ground', visible: true, opacity: 1, order: 0, ramp: null, reversed: false, range: null },
+        { kind: 'Derived', id: 's', name: 'Slope', visible: true, opacity: 1, order: 1, ramp: null, reversed: false, range: null },
       ],
     })
     expect(container.textContent).toContain('This Design has 2 terrain or height layers.')

@@ -45,6 +45,8 @@ vi.mock('../app/lidar/library-store', async () => {
   const { signal: makeSignal } = await import('@preact/signals')
   return {
     ensureLidarPolling: ensurePollingMock,
+    libraryItemName: (item: { id: string; name: string | null }) => item.name ?? `${item.id} name`,
+    lidarLibrary: makeSignal(null),
     lidarStatusMessage: makeSignal<string | null>(null),
     readCurrentLidarPresentation: () => presentation.value,
     refreshLidarLibrary: refreshMock,
@@ -133,7 +135,7 @@ describe('Data Library actions', () => {
     expect(upsertMock).not.toHaveBeenCalled()
 
     settleResultAttachments(librarySnapshot([sourceItem('layer-9', 'Ground')]))
-    expect(upsertMock).toHaveBeenCalledWith('Source', 'layer-9')
+    expect(upsertMock).toHaveBeenCalledWith('Source', 'layer-9', 'Ground')
   })
 
   it('reports an import from Layers that failed and never adds it', async () => {
@@ -246,7 +248,7 @@ describe('Design data references', () => {
     addToDesign('Derived', 'analysis-1')
     removeFromDesign('analysis-1')
 
-    expect(upsertMock).toHaveBeenCalledWith('Derived', 'analysis-1')
+    expect(upsertMock).toHaveBeenCalledWith('Derived', 'analysis-1', 'analysis-1')
     expect(removeMock).toHaveBeenCalledWith(['analysis-1'])
   })
 
@@ -318,7 +320,7 @@ describe('analysis runs', () => {
     settleResultAttachments(snapshotWith({ id, state: 'Ready', generation_id: 'agen-1' }))
     settleResultAttachments(snapshotWith({ id, state: 'Ready', generation_id: 'agen-1' }))
     expect(upsertMock).toHaveBeenCalledTimes(1)
-    expect(upsertMock).toHaveBeenCalledWith('Derived', id)
+    expect(upsertMock).toHaveBeenCalledWith('Derived', id, `${id} name`)
   })
 
   it('attaches every presentable output in order once all are published, never provenance-only ones', async () => {
@@ -334,7 +336,7 @@ describe('analysis runs', () => {
       { ...hidden, state: 'Ready', generation_id: 'g2' },
       { id: 'second', state: 'Ready', generation_id: 'g3' },
     ))
-    expect(upsertMock.mock.calls).toEqual([['Derived', 'first'], ['Derived', 'second']])
+    expect(upsertMock.mock.calls).toEqual([['Derived', 'first', 'first name'], ['Derived', 'second', 'second name']])
   })
 
   it('never adds the result to a Design opened while it was calculating', async () => {

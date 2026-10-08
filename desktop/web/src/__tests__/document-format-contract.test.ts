@@ -113,13 +113,17 @@ describe('document format contract', () => {
       budget_currency: 'USD',
       lidar: {
         schema_version: 1,
+        visible: true,
         entries: [{
           kind: 'Source',
           id: 'document-lidar',
+          name: 'Document terrain',
           visible: true,
           opacity: 0.65,
           order: 0,
-          style: null,
+          ramp: null,
+          reversed: false,
+          range: null,
         }],
       },
       views: [savedView('document-view')],
@@ -380,13 +384,17 @@ describe('document format contract', () => {
       budget_currency: 'USD',
       lidar: {
         schema_version: 1,
+        visible: true,
         entries: [{
           kind: 'Source',
           id: 'saved-lidar',
+          name: 'Saved terrain',
           visible: true,
           opacity: 0.8,
           order: 0,
-          style: null,
+          ramp: null,
+          reversed: false,
+          range: null,
         }],
       },
       extra: {

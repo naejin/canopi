@@ -11,7 +11,7 @@ const LIDAR_PRESENTATION_SCHEMA_VERSION = 1
 import { editCurrentDesign } from './core'
 
 function emptySection(): LidarPresentationSection {
-  return { schema_version: LIDAR_PRESENTATION_SCHEMA_VERSION, entries: [] }
+  return { schema_version: LIDAR_PRESENTATION_SCHEMA_VERSION, visible: true, entries: [] }
 }
 
 /** Immutable patch of one entry; entries are matched by stable library id. */
@@ -19,17 +19,19 @@ export interface LidarEntryPatch {
   visible?: boolean
   opacity?: number
   order?: number
-  style?: string | null
 }
 
 /**
  * Insert or update one presentation entry. Shared library mutations never
  * dirty a Design on their own — this seam is called from explicit user
  * actions (creating a layer or analysis, toggling visibility, restyling).
+ * A new entry stores the library item's `name` so a missing item still reads
+ * by name; an existing entry keeps its own (the name reconcile refreshes it).
  */
 export function upsertLidarEntry(
   kind: LidarPresentationEntryKind,
   id: string,
+  name: string,
   patch: LidarEntryPatch = {},
 ): void {
   editCurrentDesign((design) => {
@@ -55,10 +57,13 @@ export function upsertLidarEntry(
     const entry: LidarPresentationEntry = {
       kind,
       id,
+      name,
       visible: patch.visible ?? true,
       opacity: patch.opacity ?? 1,
       order: patch.order ?? nextOrder(section.entries),
-      style: patch.style ?? null,
+      ramp: null,
+      reversed: false,
+      range: null,
     }
     return {
       ...design,
@@ -119,13 +124,11 @@ function mergeEntry(
     visible: patch.visible ?? existing.visible,
     opacity: patch.opacity ?? existing.opacity,
     order: patch.order ?? existing.order,
-    style: patch.style === undefined ? existing.style : patch.style,
   }
   if (
     next.visible === existing.visible &&
     next.opacity === existing.opacity &&
-    next.order === existing.order &&
-    next.style === existing.style
+    next.order === existing.order
   ) {
     return existing
   }

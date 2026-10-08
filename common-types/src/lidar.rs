@@ -279,6 +279,9 @@ pub struct LidarDisplayDescriptor {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 pub struct LidarPresentationSection {
     pub schema_version: u32,
+    // The Site data eye in Layers: an entry draws only while both this flag
+    // and its own `visible` are on, and each entry keeps its own eye.
+    pub visible: bool,
     pub entries: Vec<LidarPresentationEntry>,
 }
 
@@ -305,11 +308,45 @@ pub struct LidarPresentationEntry {
     pub kind: LidarPresentationEntryKind,
     // Stable library identity: source-layer ID or derived item ID.
     pub id: String,
+    // The library item's name, written on attach and refreshed from the
+    // library while the item exists, so a missing item still reads by name.
+    pub name: String,
     pub visible: bool,
     pub opacity: f32,
     // User-defined order inside the LiDAR band; lower renders further back.
     pub order: u32,
-    pub style: Option<String>,
+    // The colour ramp; `None` is the item kind's default.
+    pub ramp: Option<LidarRamp>,
+    pub reversed: bool,
+    // The value range the ramp spans; `None` is the item kind's default.
+    pub range: Option<LidarColourRange>,
+}
+
+// A colour ramp by Canopi's own name; the frontend maps each to a renderer
+// ramp, so a renderer rename never reaches files. A variant is added only
+// when an item kind that offers it ships. A ramp outside the item kind's list
+// draws with the kind's default.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub enum LidarRamp {
+    Terrain,
+    Earth,
+    Greens,
+    YellowRed,
+    Magma,
+    Gray,
+}
+
+// The value range a ramp spans: the data's own range, the data with its
+// outliers cut (the cut values are recomputed each session, never stored), or
+// the user's pair (finite, `min < max`).
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
+#[serde(tag = "mode")]
+pub enum LidarColourRange {
+    Data,
+    CutOutliers,
+    Custom { min: f64, max: f64 },
 }
 
 pub const LIDAR_PRESENTATION_SCHEMA_VERSION: u32 = 1;

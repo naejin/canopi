@@ -388,6 +388,8 @@ export type LibrarySnapshot = {
 	engines: LibraryEngines,
 };
 
+export type LidarColourRange = { mode: "Data" } | { mode: "CutOutliers" } | { mode: "Custom"; min: number; max: number };
+
 // One display derivative file, in the entity's source-priority order.
 export type LidarDisplayAsset = {
 	/**
@@ -564,18 +566,24 @@ export type LidarLibraryStatus = { kind: "ready" } |
 export type LidarPresentationEntry = {
 	kind: LidarPresentationEntryKind,
 	id: string,
+	name: string,
 	visible: boolean,
 	opacity: number,
 	order: number,
-	style: string | null,
+	ramp: LidarRamp | null,
+	reversed: boolean,
+	range: LidarColourRange | null,
 };
 
 export type LidarPresentationEntryKind = "Source" | "Derived";
 
 export type LidarPresentationSection = {
 	schema_version: number,
+	visible: boolean,
 	entries: LidarPresentationEntry[],
 };
+
+export type LidarRamp = "Terrain" | "Earth" | "Greens" | "YellowRed" | "Magma" | "Gray";
 
 // State of a library item: its operation while it runs, then a fixed result.
 export type LidarResultState = "Preparing" | "Ready" | "Failed";

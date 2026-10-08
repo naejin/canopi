@@ -308,10 +308,11 @@ export function designFixture(state = 'populated'): CanopiFile {
     ...(state === 'empty' ? {} : storyFixture(state === 'located' ? { lon: 0.033854, lat: 48.220272 } : { lon: 13, lat: 23 }, state === 'long')),
     lidar: state === 'empty' ? null : {
       schema_version: 1,
+      visible: true,
       entries: [
-        { kind: 'Source', id: 'lidar-ground', visible: true, opacity: 0.82, order: 0, style: null },
-        { kind: 'Derived', id: 'lidar-slope', visible: true, opacity: 0.66, order: 1, style: null },
-        { kind: 'Derived', id: 'lidar-slope-percent', visible: false, opacity: 0.66, order: 2, style: null },
+        { kind: 'Source', id: 'lidar-ground', name: 'IGN LiDAR HD MNT', visible: true, opacity: 0.82, order: 0, ramp: null, reversed: false, range: null },
+        { kind: 'Derived', id: 'lidar-slope', name: 'IGN LiDAR HD MNT · Slope', visible: true, opacity: 0.66, order: 1, ramp: null, reversed: false, range: null },
+        { kind: 'Derived', id: 'lidar-slope-percent', name: 'IGN LiDAR HD MNT · Slope (%)', visible: false, opacity: 0.66, order: 2, ramp: null, reversed: false, range: null },
       ],
     },
     budget_currency: 'EUR',

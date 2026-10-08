@@ -36,6 +36,8 @@ import {
 } from '../design-edit/lidar'
 import {
   ensureLidarPolling,
+  libraryItemName,
+  lidarLibrary,
   lidarStatusMessage,
   readCurrentLidarPresentation,
   refreshLidarLibrary,
@@ -169,7 +171,9 @@ export async function fetchItemSources(layerId: string): Promise<LidarLayerColle
  * Design; the camera does not move.
  */
 export function addToDesign(role: LibraryItemRole, id: string): void {
-  upsertLidarEntry(role, id)
+  const library = lidarLibrary.peek()
+  const item = library?.items.find((candidate) => candidate.id === id && candidate.role === role)
+  upsertLidarEntry(role, id, item ? libraryItemName(item, library) : id)
 }
 
 /**
@@ -300,9 +304,9 @@ export function settleResultAttachments(snapshot: LibrarySnapshot | null): void 
     }
     for (const item of items) {
       if (pending.kind === 'import') {
-        upsertLidarEntry('Source', item!.id)
+        upsertLidarEntry('Source', item!.id, libraryItemName(item!, snapshot))
       } else if (item?.provenance && isPresentableOutput(item.provenance.analysis_id, item.provenance.output_key)) {
-        upsertLidarEntry('Derived', item.id)
+        upsertLidarEntry('Derived', item.id, libraryItemName(item, snapshot))
       }
     }
   }

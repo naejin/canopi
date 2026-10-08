@@ -136,9 +136,9 @@ describe('LiDAR presentation join', () => {
       }),
     ])
     const design = { lidar: { entries: [
-      { kind: 'Derived' as const, id: 'slope', visible: true, opacity: 0.5, order: 1, style: null },
-      { kind: 'Source' as const, id: 'ground', visible: false, opacity: 1, order: 0, style: null },
-      { kind: 'Derived' as const, id: 'gone', visible: true, opacity: 1, order: 2, style: null },
+      { kind: 'Derived' as const, id: 'slope', name: 'Ground · Slope', visible: true, opacity: 0.5, order: 1, ramp: null, reversed: false, range: null },
+      { kind: 'Source' as const, id: 'ground', name: 'Ground', visible: false, opacity: 1, order: 0, ramp: null, reversed: false, range: null },
+      { kind: 'Derived' as const, id: 'gone', name: 'Old terrain', visible: true, opacity: 1, order: 2, ramp: null, reversed: false, range: null },
     ] } }
 
     const [ground, slope, gone] = readLidarPresentation(design, library)
@@ -158,7 +158,7 @@ describe('LiDAR presentation join', () => {
   it('never joins an entry to an item of the other role', () => {
     const library = librarySnapshot([sourceItem('same', 'Ground')])
     const [entry] = readLidarPresentation(
-      { lidar: { entries: [{ kind: 'Derived', id: 'same', visible: true, opacity: 1, order: 0, style: null }] } },
+      { lidar: { entries: [{ kind: 'Derived', id: 'same', name: 'Ground', visible: true, opacity: 1, order: 0, ramp: null, reversed: false, range: null }] } },
       library,
     )
     expect(entry?.state).toBe('unavailable')

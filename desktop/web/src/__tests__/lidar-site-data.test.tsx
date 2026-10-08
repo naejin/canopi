@@ -57,7 +57,7 @@ const importGeoJson = vi.fn()
 
 function setDesign(entries: Array<{ kind: 'Source' | 'Derived'; id: string; order: number; visible?: boolean; opacity?: number }>): void {
   (currentDesign as unknown as { value: unknown }).value = {
-    lidar: { entries: entries.map((entry) => ({ visible: true, opacity: 1, style: null, ...entry })) },
+    lidar: { entries: entries.map((entry) => ({ name: entry.id, visible: true, opacity: 1, ramp: null, reversed: false, range: null, ...entry })) },
   }
 }
 
