@@ -170,3 +170,22 @@ it('places a continuing guide\'s wide M code beside its guide at any angle, keep
   expect(drawing.links.map(l => l.target)).toContain('page:home')
   expect(drawing.pageReferences.map(r => r.target)).toEqual(['home'])
 })
+
+it('keeps a guide\'s M code in the key when its only clear side lies nearer the next guide', () => {
+  const space = new FieldSpace({ x: -1000, y: -1000, width: 2000, height: 2000 }, text())
+  const a = { a: { x: 0, y: 0 }, b: { x: 30, y: 0 } }, b = { a: { x: 0, y: 3.6 }, b: { x: 30, y: 3.6 } }
+  space.addSegments([a, b])
+  space.reserve({ x: -5, y: -10, width: 40, height: 9.9 })
+  expect(space.beside(space.measure('M1', 8), a, [b])).toBeNull()
+  // On the page: two parallel guides 3.6 mm apart, both crowded out of their middles, A's outer side taken.
+  const drawing = guidePage([{ id: 'a', start: { x: -1, y: 7 }, end: { x: 13, y: 7 } }, { id: 'b', start: { x: -1, y: 7.36 }, end: { x: 13, y: 7.36 } }],
+    [{ x: 10, y: 80, width: 190, height: 19.4 }, { x: 45, y: 80, width: 60, height: 45 }])
+  const guides = [{ a: { x: 10 * MM, y: 100 * MM }, b: { x: 140 * MM, y: 100 * MM } }, { a: { x: 10 * MM, y: 103.6 * MM }, b: { x: 140 * MM, y: 103.6 * MM } }]
+  const printed = printedCodes(drawing.operations)
+  expect(printed.map(c => c.code)).toEqual(['M2'])
+  for (const { code, centre } of printed) {
+    const own = Number(code.slice(1)) - 1
+    expect(toSegment(centre, guides[own]!), code).toBeLessThan(toSegment(centre, guides[1 - own]!))
+  }
+  expect(drawing.notes.find(n => n.id === 'a')?.location).toBeDefined()
+})

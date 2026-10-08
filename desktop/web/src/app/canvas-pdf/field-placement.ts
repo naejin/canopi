@@ -113,9 +113,10 @@ export class FieldSpace {
   }
   /**
    * A box beside segment `s` (the `fieldDimensions` frame): offset along its normal, positioned along it, its near edge
-   * at most 2.5 mm from the segment whatever its width; null when no spot is clear, so the caller keeps the code in the key.
+   * at most 2.5 mm from the segment whatever its width, and its centre nearer `s` than any of the `others` (the page's
+   * other guides), so it never names the next guide; null when no spot is clear, so the caller keeps the code in the key.
    */
-  beside(measured: FieldMeasure, s: Segment): Bounds | null {
+  beside(measured: FieldMeasure, s: Segment, others: readonly Segment[] = []): Bounds | null {
     const length = distance(s.a, s.b)
     if (length < 1e-8) return null
     const u = { x: (s.b.x - s.a.x) / length, y: (s.b.y - s.a.y) / length }, n = { x: -u.y, y: u.x }
@@ -124,9 +125,16 @@ export class FieldSpace {
       const offset = side * (across + gap)
       const centre = { x: s.a.x + u.x * t * length + n.x * offset, y: s.a.y + u.y * t * length + n.y * offset }
       const bounds = { x: centre.x - measured.width / 2, y: centre.y - measured.height / 2, width: measured.width, height: measured.height }
-      if (this.clear(bounds)) return bounds
+      const own = toSegment(centre, s)
+      if (this.clear(bounds) && others.every(o => own < toSegment(centre, o))) return bounds
     }
     return null
   }
   admit(label: FieldLabel): void { this.labels.push(label); this.reserve(label.bounds); this.addSegments(label.route, true) }
+}
+
+function toSegment(p: Point, s: Segment): number {
+  const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y, squared = dx * dx + dy * dy
+  const t = squared ? Math.max(0, Math.min(1, ((p.x - s.a.x) * dx + (p.y - s.a.y) * dy) / squared)) : 0
+  return Math.hypot(p.x - s.a.x - t * dx, p.y - s.a.y - t * dy)
 }
