@@ -1,6 +1,10 @@
-// Web Edition browser checks (canopi-9x95, canvas v2 plan section 3.2).
+// Web Edition browser checks (canopi-9x95, canvas v2 plan section 3.2), and the UI gallery's
+// (canopi-f47t.42, plan section 4 "Surfaces and checks").
 // The built Web Edition (`npm run build:web`, `dist-web/`) is served by `vite preview`
 // and driven in Chromium (stands in for WebView2) and WebKit (stands in for WKWebView).
+// The UI gallery (`ui-gallery/`, its dev server on 1422) mounts the Desktop panels and the
+// shared workspace over memory fixtures; `e2e/gallery` drives it in both engines too
+// (projects gallery-chromium and gallery-webkit), with DOM and pixel assertions only.
 // Baselines are made only in the pinned image mcr.microsoft.com/playwright:v1.63.0-noble,
 // the CI job's container; screenshots from the host's own browsers are never committed.
 // After recording, run the suite in that image on fewer cores than the hosted runner's four
@@ -9,6 +13,7 @@
 import { defineConfig } from '@playwright/test'
 
 const PORT = 4174
+const GALLERY_PORT = 1422
 const isCI = Boolean(process.env.CI)
 
 export default defineConfig({
@@ -54,14 +59,28 @@ export default defineConfig({
   // No device descriptors: they would change the user agent (Desktop Safari claims macOS,
   // which switches the app to Command shortcuts); both engines keep the host platform.
   projects: [
-    { name: 'chromium', use: { browserName: 'chromium' } },
-    { name: 'webkit', use: { browserName: 'webkit' } },
+    { name: 'chromium', testIgnore: 'gallery/**', use: { browserName: 'chromium' } },
+    { name: 'webkit', testIgnore: 'gallery/**', use: { browserName: 'webkit' } },
+    { name: 'gallery-chromium', testMatch: 'gallery/**/*.spec.ts', use: { browserName: 'chromium', baseURL: `http://127.0.0.1:${GALLERY_PORT}/` } },
+    { name: 'gallery-webkit', testMatch: 'gallery/**/*.spec.ts', use: { browserName: 'webkit', baseURL: `http://127.0.0.1:${GALLERY_PORT}/` } },
   ],
-  webServer: {
-    // Web mode supplies the /app/ base and dist-web; build first with `npm run build:web`.
-    command: `npx vite preview --mode web --port ${PORT} --strictPort`,
-    url: `http://localhost:${PORT}/app/web.html`,
-    reuseExistingServer: !isCI,
-    timeout: 60_000,
-  },
+  webServer: [
+    {
+      // Web mode supplies the /app/ base and dist-web; build first with `npm run build:web`.
+      command: `npx vite preview --mode web --port ${PORT} --strictPort`,
+      url: `http://localhost:${PORT}/app/web.html`,
+      reuseExistingServer: !isCI,
+      timeout: 60_000,
+    },
+    {
+      // The UI gallery's dev server (ui-gallery/vite.config.ts, strict port). From a cold dependency cache
+      // (node_modules/.vite-ui-gallery removed) Vite optimised every dependency before the first page
+      // answered and reloaded no page: 24 passed with --repeat-each=3 in both engines in the pinned image
+      // (2026-10-08), so ui-gallery/vite.config.ts needs no optimizeDeps.include.
+      command: 'npx vite --config ui-gallery/vite.config.ts',
+      url: `http://127.0.0.1:${GALLERY_PORT}/`,
+      reuseExistingServer: !isCI,
+      timeout: 120_000,
+    },
+  ],
 })

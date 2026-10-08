@@ -14,19 +14,25 @@ The canvas is the production shared workspace (MapLibre and its Pixi scene layer
 
 - `workspace` (the real edition command projection and shared workspace composition), `start`
 - `color`, `symbol`, `symbols` (the plant symbol sheet), `key`, `menu-plant`, `menu-mixed`, `menu-empty`
-- `layers` (Desktop, with the ground elevation row active), `site-details`, `library`, `import`, `analyze` (the data workflow dialogs over Layers)
+- `layers`, `site-data` (Desktop), `library`, `import`, `analyze` (the data workflow dialogs)
 - `calendar`, `calendar-expanded`, `budget`, `consortium`, `favorites`, `notebook` (Desktop only)
 - `stories` (the Stories panel on its third step; `state=empty` has no story, `state=long` a long step title; `present=1` presents the story from that step, flying there unless the browser prefers reduced motion, so captures emulate `prefers-reduced-motion: reduce`)
 - `lens`, `snapshots` (off-screen saved-view snapshots with their timings, flags and attribution; offline unless `tiles=1`)
 
 ## Parameters
 
-- `state=populated|empty|mixed|long|located|dense|planting|zone|overview|max-zoom|lidar-progress`. `surface=start&state=empty` is the first run; `lidar-progress` shows imports and calculations in the library and under Site data; `dense` is for Inspection Lens review; `planting` shows every plant symbol in a dense planting; `zone` shows the selection chip on one unnamed rectangle zone.
+- `state=populated|empty|mixed|long|located|dense|planting|zone|overview|max-zoom|lidar-progress|lidar-failure|lidar-missing|lidar-long|lidar-raster|no-design`. `surface=start&state=empty` is the first run; `long` gives long names and a 40-item Data library; `lidar-progress` shows imports and calculations in the library and in Site data; `lidar-missing` adds two Site data entries no library here has; `lidar-long` lists twelve entries (the filter shows above 8); `lidar-raster` places the Design on the Rust engine's display COG (`src/maplibre/raster-display/fixtures/`) and draws it with Desktop's raster renderer; `no-design` opens no Design; `dense` is for Inspection Lens review; `planting` shows every plant symbol in a dense planting; `zone` shows the selection chip on one unnamed rectangle zone.
+- `open=<id>`: on `site-data`, the Site data item opened under its row; on `library`, the selected item.
+- `sampleDelay=<ms>`: each `lidar_sample_points` answer waits this long. The memory backend samples an analytic site (ground elevation 140 + 30·sin, the surface 6 m above, a canopy 6 ± 4 m, slope from the ground's gradient; no data outside an item's bounds, which cover the west of the fixture Design) and refuses a request over `LIDAR_SAMPLE_MAX_TARGETS` or `LIDAR_SAMPLE_MAX_POINTS`, as Rust does.
 - `plantDb=corrupt|missing` (the plant database notice), `theme=dark`, `locale=fr`, `panelWidth=320|352|480|800`.
 - `platform=mac|linux`: F1's gesture rows as on a Mac with trackpad gestures (Control-click, the twist), or on Linux with Desktop's pinch note (Desktop only). Only F1 reads it; press F1 on the workspace.
 - `edition=web` uses browser-safe registrations. In a phone-sized window (390×844 or 844×390) it shows the phone layout; between 640 and 760 px the stacked dock. Edition links reload the page so two canvas owners never mount together.
 
 Calendar fixtures use September 2026 so visual reviews are deterministic. Settings › Files and data shows memory folder paths; Show in folder and the Recent Designs More menu only report in the activity line. Export and import use memory fixtures; the Web catalog is memory data. File › Export › Planting plan (PDF) opens the real print workspace, served the prepared fonts from `../public` (`npm run prepare:pdf-fonts`); the memory backend supplies catalog habits, so the key shows its habit groups.
+
+## Browser checks
+
+`e2e/gallery/*.spec.ts` drive the gallery in Chromium and WebKit (Playwright projects `gallery-chromium` and `gallery-webkit`; `playwright.config.ts` starts this server). Specs import `test` from `e2e/support/gallery.ts`, which keeps the page offline, fails on console errors and stubs the clipboard; `openGallery` waits for `data-gallery-ready`. WebKit runs in the pinned image: from the worktree root, `docker run --rm --ipc=host -v "$PWD":/work -w /work/desktop/web --user $(id -u):$(id -g) -e HOME=/tmp mcr.microsoft.com/playwright:v1.63.0-noble npx playwright test e2e/gallery --project=gallery-chromium --project=gallery-webkit`.
 
 ## Limits
 
