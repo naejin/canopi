@@ -1280,6 +1280,55 @@ fn one_batch_answers_mixed_targets_in_order() {
     );
 }
 
+/// A target that cannot be read answers `Unavailable` on its own row instead of
+/// failing the batch: a result whose chunk file is corrupt on disk and one whose
+/// CRS the engine rejects sit between healthy targets that still read values.
+#[test]
+fn an_unreadable_target_answers_unavailable_and_the_batch_still_reads() {
+    let root = scratch_root("batch-unreadable");
+    let library = LidarLibrary::open(&root).unwrap();
+    let plane = plane_layer(&library, &root, 16, 16);
+    let plane_generation = source_head(&library, &plane);
+    let healthy = chunk_result(&library, &plane, "item-healthy");
+    let cells: Vec<f32> = (0..16).map(|index| 100.0 + index as f32).collect();
+    generation::publish_test_chunk(&library, &healthy, 0, 0, 4, 4, &cells);
+    let corrupt = chunk_result(&library, &plane, "item-corrupt");
+    // Other values than the healthy chunk's, since chunk files are content addressed.
+    let other: Vec<f32> = cells.iter().map(|value| value + 1.0).collect();
+    let asset = generation::publish_test_chunk(&library, &corrupt, 0, 0, 4, 4, &other);
+    std::fs::write(&asset.path, b"not a tiff").unwrap();
+    let foreign = chunk_result(&library, &plane, "item-foreign-crs");
+    library
+        .catalogue()
+        .unwrap()
+        .execute(
+            "UPDATE lidar_derived_generations SET manifest_json = replace(manifest_json, 'EPSG:32631', 'not-a-crs') WHERE id = ?1",
+            [&foreign],
+        )
+        .unwrap();
+
+    let series = sample(
+        &library,
+        vec![
+            target(LibraryItemRole::Source, &plane, &plane_generation),
+            target(LibraryItemRole::Derived, "item-corrupt", &corrupt),
+            target(LibraryItemRole::Derived, "item-foreign-crs", &foreign),
+            target(LibraryItemRole::Derived, "item-healthy", &healthy),
+        ],
+        vec![point(5.5, 10.5), point(1.5, -2.5)],
+    );
+    assert_eq!(values(&series[0]), vec![Some(5.0), None]);
+    assert_eq!(
+        series[1],
+        unavailable(LidarSampleUnavailableReason::UnsupportedInput)
+    );
+    assert_eq!(
+        series[2],
+        unavailable(LidarSampleUnavailableReason::TransformFailed)
+    );
+    assert_eq!(values(&series[3]), vec![None, Some(109.0)]);
+}
+
 /// N points in one request equal N one-point requests and the analytic plane:
 /// the cell's column inside the plane, `None` in its NoData hole, outside it
 /// and at a point that is not a number.

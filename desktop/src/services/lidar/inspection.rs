@@ -194,7 +194,10 @@ pub(super) fn check_sample_caps(request: &LidarSamplePointsRequest) -> Result<()
 /// at, before or after the read, answers `StaleGeneration`, so a late answer is
 /// never presented as current; an item that is gone answers
 /// `MissingGeneration`. A point off the data reads `None`: out of coverage is
-/// no data, not an error.
+/// no data, not an error. A target that cannot be read (a CRS the engine
+/// rejects, a manifest or raster that does not parse) answers `Unavailable` on
+/// its own row, so one broken item never blanks the others; only the caps fail
+/// the whole batch.
 pub(super) fn sample_points(
     library: &LidarLibrary,
     engine: &dyn RasterEngine,
@@ -206,11 +209,22 @@ pub(super) fn sample_points(
     // Nothing cancels a sample: one batch is bounded by the caps, and the
     // frontend keeps one request in flight per lane.
     let cancel = AtomicBool::new(false);
-    request
+    Ok(request
         .targets
         .iter()
-        .map(|target| sample_target(library, engine, &cancel, target, &request.points))
-        .collect()
+        .map(|target| {
+            sample_target(library, engine, &cancel, target, &request.points).unwrap_or_else(
+                |error| {
+                    tracing::warn!(
+                        entity_id = %target.entity_id,
+                        %error,
+                        "a LiDAR sample target could not be read"
+                    );
+                    unavailable(LidarSampleUnavailableReason::UnsupportedInput)
+                },
+            )
+        })
+        .collect())
 }
 
 fn unavailable(reason: LidarSampleUnavailableReason) -> LidarSampleSeries {
@@ -234,7 +248,9 @@ fn sample_target(
     }
     #[cfg(test)]
     super::acceptance_hooks::after_target(library);
-    let Some(projected) = transform_points(engine, cancel, &resolved.crs_ref, points)? else {
+    // A CRS the generation does not declare, or one the engine rejects, cannot
+    // place the points.
+    let Ok(Some(projected)) = transform_points(engine, cancel, &resolved.crs_ref, points) else {
         return Ok(unavailable(LidarSampleUnavailableReason::TransformFailed));
     };
     let cells: Vec<Option<(i64, i64)>> = projected
