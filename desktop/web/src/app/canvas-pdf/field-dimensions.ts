@@ -33,7 +33,7 @@ export function fieldDimensions(guides: readonly Guide[], point: (p: Point) => P
           b: { x: end!.x + n.x * Math.sign(offset) * .6, y: end!.y + n.y * Math.sign(offset) * .6 },
         })
         const ticks = [oa, ob].map(p => ({ a: { x: p.x - (u.x + n.x) * .55, y: p.y - (u.y + n.y) * .55 }, b: { x: p.x + (u.x + n.x) * .55, y: p.y + (u.y + n.y) * .55 } }))
-        if (!space.pathClear([...segments, ...ticks], ignored)) continue
+        if (!space.pathClear([...segments, ...ticks], ignored) || !space.keepsCodesBeside([...segments, ...ticks])) continue
         // A long dimension must not sit on an existing shorter measurement.
         if (space.segments.some(s => {
           const l = distance(s.a, s.b)

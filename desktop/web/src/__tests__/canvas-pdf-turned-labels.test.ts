@@ -142,9 +142,10 @@ it('prints a band zone\'s code at its own top, above its neighbour\'s, whatever 
  * One detail page, frame 10 mm right and 30 mm down, ground metres at 10 mm each: plan (X, Y) prints at
  * (10 + 10X, 30 + 10Y) mm. Reserved rectangles are in millimetres; guides start off the ground so none is a dimension.
  */
-function guidePage(measurements: PdfInput['canvas']['measurements'], reserved: readonly PrintBounds[], homes?: ReadonlyMap<string, string>) {
-  const input = { ...design({ measurements }), viewBearingDeg: 0 }
-  const references: Parameters<typeof drawField>[6] = { species: new Map(), notes: new Map(), plants: new Map(), zones: [], measurementHomes: homes,
+function guidePage(measurements: PdfInput['canvas']['measurements'], reserved: readonly PrintBounds[], homes?: ReadonlyMap<string, string>,
+  zones: readonly ZoneMeasurements[] = []) {
+  const input = { ...design({ measurements, zones: zones.map(z => z.zone) }), viewBearingDeg: 0 }
+  const references: Parameters<typeof drawField>[6] = { species: new Map(), notes: new Map(), plants: new Map(), zones: [...zones], measurementHomes: homes,
     measurements: new Map(measurements.map((g, i) => [g.id, `M${i + 1}`])) }
   const toPoints = (r: PrintBounds) => ({ x: r.x * MM, y: r.y * MM, width: r.width * MM, height: r.height * MM })
   return drawField(input, { x: 10 * MM, y: 30 * MM, width: 180 * MM, height: 240 * MM }, { x: 0, y: 0, width: 18, height: 24 }, 10 * MM,
@@ -169,6 +170,25 @@ it('places a continuing guide\'s wide M code beside its guide at any angle, keep
   expect(printedCodes(drawing.operations).map(c => c.code)).toEqual(['M1'])
   expect(drawing.links.map(l => l.target)).toContain('page:home')
   expect(drawing.pageReferences.map(r => r.target)).toEqual(['home'])
+})
+
+it('keeps a guide\'s M code nearer its own guide than a zone dimension drawn after it', () => {
+  // The guide's middle is crowded, so M1 sits beside it near y 57 mm; a narrow zone's left-edge dimension would then
+  // print about 2.6 mm from M1's centre, nearer than M1's own guide (3.3 mm), for any of these left edges.
+  const guide = { a: { x: 100 * MM, y: 0 }, b: { x: 100 * MM, y: 120 * MM } }
+  for (const left of [9.84, 9.86, 9.88, 9.9]) {
+    const zone = rect(left, 1, 10.14 - left, 2.3)
+    const drawing = guidePage([{ id: 'g', start: { x: 9, y: -3 }, end: { x: 9, y: 9 } }], [{ x: 60, y: 64, width: 76, height: 22 }], undefined,
+      [{ zone, reference: 'Z01', lengths: [], widths: [], diameter: false, dimensions: [{ id: 'left', start: { x: left, y: 1 }, end: { x: left, y: 3.3 }, metres: 2.3 }] }])
+    const strokes = drawing.operations.flatMap(op => op.kind === 'path' && op.stroke === '#656058'
+      ? [op.d.match(/^M(\S+) (\S+) L(\S+) (\S+)$/)!.slice(1).map(Number)].map(([ax, ay, bx, by]) => ({ a: { x: ax!, y: ay! }, b: { x: bx!, y: by! } })) : [])
+    expect(strokes.length, `left ${left}: a zone dimension prints`).toBeGreaterThan(0)
+    expect(printedCodes(drawing.operations).map(c => c.code), `left ${left}`).toEqual(['M1'])
+    for (const { code, centre } of printedCodes(drawing.operations)) {
+      const own = toSegment(centre, guide)
+      for (const stroke of strokes) expect(own, `left ${left}: ${code} nearer a zone dimension`).toBeLessThan(toSegment(centre, stroke))
+    }
+  }
 })
 
 it('keeps a guide\'s M code in the key when its only clear side lies nearer the next guide', () => {

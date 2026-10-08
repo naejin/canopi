@@ -953,10 +953,11 @@ export type HitTarget =
  *  (selected or hovered) note, and object-locked objects, which the caller rejects itself (Select selects them; Unlock is in the canvas menu and Edit, U33). */
 export interface HitFilter {
   /** When nothing else hits, the topmost zone whose fill contains the point (pointInPolygon; rectangle and ellipse
-   *  polygons). Read by Select (phase 2, canopi-f47t.2) and by the canvas menu's target: a right-click inside an already
-   *  selected zone's fill opens the zone's menu, inside an unselected zone the empty map's (Place plants here; Q4,
+   *  polygons). Read by Select (phase 2, canopi-f47t.2). `'selected'`: the topmost selected one, past unselected fills
+   *  above it, read by the canvas menu's target: a right-click inside an already selected zone's fill opens the zone's
+   *  menu even under an overlapping zone, inside an unselected zone the empty map's (Place plants here; Q4,
    *  canopi-f47t.40). Other hitAt callers (stamp pick, hover) keep outline hits. */
-  readonly fill?: true
+  readonly fill?: true | 'selected
   /** hitAt: also locked layers that are visible (hitTestVisibleTopLevel, the host's hover). hitInQuad throws a clear error
    *  (the band select skips locked layers). */
   readonly includeLocked?: boolean

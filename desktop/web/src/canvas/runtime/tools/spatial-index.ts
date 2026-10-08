@@ -5,13 +5,14 @@
 // later work. hitAt without a filter is hitTestTopLevel exactly, object locks included (the tool rejects them);
 // `includeLocked` is hitTestVisibleTopLevel (the host's hover); with `toleranceScreenPx` it answers only the nearest
 // zone edge within that many pixels (hitZoneEdge, "Turn view to this edge"); `fill` falls back to the topmost zone whose
-// fill holds the point (hit-testing.ts). hitInQuad tests the band's world quad as a
+// fill holds the point (hit-testing.ts), and `fill: 'selected'` to the topmost selected one, past unselected fills above it. hitInQuad tests the band's world quad as a
 // polygon, never its world box. nearestPlant is today's Place plants scan (today's (a4c86d39)
 // interaction/plant-placement-preview.ts): the first plant in scene order wins a tie.
 // tools/tool-host.ts re-exports the factory.
 
 import type { ToolSceneSource } from '../interaction-ports'
 import { buildPlantPresentationEntries, type PlantPresentationContext } from '../plant-presentation'
+import { includesSceneDesignObjectTarget, type SceneDesignObjectTarget } from '../scene/design-object-targets'
 import type { ScenePersistedState, ScenePlantEntity } from '../scene/types'
 import type { WorldPoint, WorldQuad } from '../view/types'
 import { hitTestTopLevel, hitTestVisibleTopLevel, hitTestZoneFill, hitZoneEdge, queryQuadTopLevel } from './hit-testing'
@@ -43,7 +44,10 @@ export function createToolScene(source: ToolSceneSource): ToolScene {
         source.selection(),
         source.store.session.hoveredTarget,
       )
-      const target = hit ?? (filter?.fill ? hitTestZoneFill(persisted(), world) : null)
+      const accept = filter?.fill === 'selected'
+        ? (fill: SceneDesignObjectTarget) => includesSceneDesignObjectTarget(source.selection(), fill)
+        : undefined
+      const target = hit ?? (filter?.fill ? hitTestZoneFill(persisted(), world, accept) : null)
       return target ? { kind: 'object', target } : null
     },
     hitInQuad(quad: WorldQuad): readonly HitTarget[] {

@@ -32,6 +32,8 @@ export class FieldSpace {
   private rectangles = new PaperIndex<Bounds>()
   private paths = new PaperIndex<Segment>()
   private crossingPaths = new Set<Segment>()
+  /** Each guide code placed `beside` its guide: its centre and its distance to that guide (Q16). */
+  private besideCodes: { centre: Point; reach: number }[] = []
   constructor(readonly frame: Bounds, readonly text: PdfTextEngine) {}
 
   reserve(bounds: Bounds): void { this.rectangles.add(bounds, bounds) }
@@ -130,7 +132,18 @@ export class FieldSpace {
     }
     return null
   }
-  admit(label: FieldLabel): void { this.labels.push(label); this.reserve(label.bounds); this.addSegments(label.route, true) }
+  /** `guide`: the label is a code placed `beside` that guide, which later ink must not come nearer (`keepsCodesBeside`). */
+  admit(label: FieldLabel, guide?: Segment): void {
+    this.labels.push(label); this.reserve(label.bounds); this.addSegments(label.route, true)
+    if (!guide) return
+    const centre = { x: label.bounds.x + label.bounds.width / 2, y: label.bounds.y + label.bounds.height / 2 }
+    this.besideCodes.push({ centre, reach: toSegment(centre, guide) })
+  }
+  /** Whether ink drawn after the guide codes leaves each code nearer its own guide than `segments`, so a dimension
+   *  placed later never takes a code's reading (Q16). */
+  keepsCodesBeside(segments: readonly Segment[]): boolean {
+    return this.besideCodes.every(code => segments.every(s => toSegment(code.centre, s) > code.reach))
+  }
 }
 
 function toSegment(p: Point, s: Segment): number {

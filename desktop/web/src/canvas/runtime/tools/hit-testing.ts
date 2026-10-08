@@ -148,26 +148,34 @@ function hitTestTopLevelWithLayerFilter(
 /**
  * The topmost filled zone (a polygon, rectangle or ellipse, not a line) whose fill contains `point`, on an interactive
  * layer, as its top-level target: the zone, or its group when the zone is a group member. Object-locked zones count (the
- * caller rejects them). Select's fill click (spec §3.2, HitFilter.fill).
+ * caller rejects them). Select's fill click (spec §3.2, HitFilter.fill). With `accept`, the topmost such target that
+ * `accept` takes, looking past the fills above it (the menu's selected fill, Q4).
  */
 export function hitTestZoneFill(
   scene: ScenePersistedState,
   point: ScenePoint,
+  accept?: (target: SceneDesignObjectTarget) => boolean,
 ): SceneDesignObjectTarget | null {
   if (!isSceneLayerEditable(scene, 'zones')) return null
   for (let i = scene.zones.length - 1; i >= 0; i -= 1) {
     const zone = scene.zones[i]!
     const outline = zoneFillOutline(zone)
     if (!outline || !pointInOrOnPolygon(point, outline)) continue
-    const target = { kind: 'zone', id: zone.id } as const
-    const group = scene.groups.find((entry) =>
-      resolveSceneObjectGroupMembers(scene, entry).some((member) => sceneTargetKey(member) === sceneTargetKey(target)))
-    if (!group) return target
-    return isGroupLayerHitEligible(scene, isSceneLayerEditable, resolveSceneObjectGroupMembers(scene, group))
-      ? { kind: 'group', id: group.id }
-      : null
+    const target = zoneFillTarget(scene, zone)
+    if (!accept) return target
+    if (target && accept(target)) return target
   }
   return null
+}
+
+function zoneFillTarget(scene: ScenePersistedState, zone: SceneZoneEntity): SceneDesignObjectTarget | null {
+  const target = { kind: 'zone', id: zone.id } as const
+  const group = scene.groups.find((entry) =>
+    resolveSceneObjectGroupMembers(scene, entry).some((member) => sceneTargetKey(member) === sceneTargetKey(target)))
+  if (!group) return target
+  return isGroupLayerHitEligible(scene, isSceneLayerEditable, resolveSceneObjectGroupMembers(scene, group))
+    ? { kind: 'group', id: group.id }
+    : null
 }
 
 function zoneFillOutline(zone: SceneZoneEntity): readonly ScenePoint[] | null {
