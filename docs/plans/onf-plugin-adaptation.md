@@ -539,8 +539,8 @@ Registry type additions:
 ### 5.6 Display in Layers and on the map
 
 - Rasters (DTM, DSM, CHM, smoothed CHM, gap depth, structure) use the existing display COG path. Styles through the `item-types.ts` table:
-  - DTM and DSM: `terrain`;
-  - CHM: `viridis` (unchanged);
+  - DTM and DSM: `schwarzwald`;
+  - CHM: `greens` (canvas v2 plan, U47);
   - gap depth: sequential light ramp over `[0, max]` m;
   - cover %: fixed 0–100;
   - stratum density: fixed 0–100 %.
