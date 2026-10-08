@@ -49,3 +49,35 @@ impl Drop for Guard {
         super::paths::capacity_probe::set(None);
     }
 }
+
+/// A hook run as each batch of sampling work starts on the executor, for one
+/// library only (tests run in parallel, and executor work is not on the
+/// test's thread).
+type WorkHook = std::sync::Arc<dyn Fn() + Send + Sync>;
+static SAMPLE_WORK: std::sync::Mutex<Vec<(std::path::PathBuf, WorkHook)>> =
+    std::sync::Mutex::new(Vec::new());
+pub(super) fn on_sample_work(library: &LidarLibrary, hook: WorkHook) -> SampleWorkGuard {
+    let root = library.inner.paths.root().to_path_buf();
+    SAMPLE_WORK.lock().unwrap().push((root.clone(), hook));
+    SampleWorkGuard(root)
+}
+pub(super) fn sample_work_started(library: &LidarLibrary) {
+    let root = library.inner.paths.root();
+    let hook = SAMPLE_WORK
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|(owner, _)| owner == root)
+        .map(|(_, hook)| hook.clone());
+    if let Some(hook) = hook {
+        hook();
+    }
+}
+pub(super) struct SampleWorkGuard(std::path::PathBuf);
+impl Drop for SampleWorkGuard {
+    fn drop(&mut self) {
+        if let Ok(mut hooks) = SAMPLE_WORK.lock() {
+            hooks.retain(|(owner, _)| owner != &self.0);
+        }
+    }
+}

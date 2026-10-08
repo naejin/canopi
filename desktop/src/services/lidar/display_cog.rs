@@ -1320,37 +1320,38 @@ mod library_tests {
         generation_id: &str,
         points: &[(f64, f64)],
     ) -> Vec<(f64, f64, Option<f64>)> {
-        use common_types::lidar::{LidarSampleOutcome, LidarSampleRequest};
+        use common_types::lidar::{LidarSamplePointsRequest, LidarSampleSeries, LidarSampleTarget};
         let engine = library.inner.engine.as_ref();
         let cancel = AtomicBool::new(false);
-        let placed = engine
+        let placed: Vec<(f64, f64)> = engine
             .transform_points("EPSG:3857", "EPSG:4326", points, &cancel)
-            .unwrap();
+            .unwrap()
+            .into_iter()
+            .map(|point| point.expect("a pixel centre places in WGS84"))
+            .collect();
+        let series = super::super::inspection::sample_points(
+            library,
+            engine,
+            &LidarSamplePointsRequest {
+                targets: vec![LidarSampleTarget {
+                    kind: LibraryItemRole::Source,
+                    entity_id: layer_id.to_string(),
+                    expected_generation_id: generation_id.to_string(),
+                }],
+                points: placed
+                    .iter()
+                    .map(|&(longitude, latitude)| [longitude, latitude])
+                    .collect(),
+            },
+        )
+        .unwrap();
+        let LidarSampleSeries::Values { values } = &series[0] else {
+            panic!("hover over {layer_id}: {series:?}");
+        };
         placed
             .into_iter()
-            .map(|point| {
-                let (longitude, latitude) = point.expect("a pixel centre places in WGS84");
-                let outcome = super::super::inspection::sample(
-                    library,
-                    engine,
-                    &cancel,
-                    &LidarSampleRequest {
-                        kind: LibraryItemRole::Source,
-                        entity_id: layer_id.to_string(),
-                        expected_generation_id: generation_id.to_string(),
-                        request_id: "pixel-centre".to_string(),
-                        longitude,
-                        latitude,
-                    },
-                )
-                .unwrap();
-                let value = match outcome {
-                    LidarSampleOutcome::Value { value, .. } => Some(value),
-                    LidarSampleOutcome::NoData { .. } => None,
-                    other => panic!("hover at ({longitude}, {latitude}): {other:?}"),
-                };
-                (longitude, latitude, value)
-            })
+            .zip(values)
+            .map(|((longitude, latitude), value)| (longitude, latitude, *value))
             .collect()
     }
 

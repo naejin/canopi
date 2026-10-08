@@ -1,23 +1,28 @@
-//! One bounded numeric lookup for pixel inspection.
+//! The one sampler behind Site data row values, the pin and the profile
+//! (canopi-f47t.42, spec §1.10).
 //!
-//! Inspection answers "what is the physical value here?" without going through
-//! the display path: it transforms the requested WGS84 point into the
-//! generation's own grid, picks the containing native pixel, and reads the
-//! composed value through the same resolver display and analysis use. It never
-//! decodes a colourised tile, never interpolates between pixels, and never
-//! returns a value from a generation the caller did not ask for.
+//! It answers "what is the physical value here?" without going through the
+//! display path: each target's points are transformed into the generation's own
+//! grid in one call, each point picks its containing native pixel, and the
+//! composed values are read through the same resolver display and analysis use,
+//! one bounded window per run of nearby cells. It never decodes a colourised
+//! tile, never interpolates between pixels, and never returns a value from a
+//! generation the caller did not ask for.
 //!
 //! Sources and derived items are different storage contracts, so they are
 //! resolved separately: a source is an ordered collection described by
-//! `import::GenerationManifest`, while a derived item is described by
-//! `analyses::DerivedManifest` and always reads through resolved chunks. Units
-//! come from the item that owns the bytes: a derived item reports the units its
-//! analysis recorded (a slope in percent is not an elevation in metres).
+//! `import::GenerationManifest` and binds its reader within the cells' bounds,
+//! while a derived item is described by `analyses::DerivedManifest` and always
+//! reads through its published chunks. What a number means (its units) is the
+//! item's, which the caller already holds.
 
 use std::sync::atomic::AtomicBool;
 
 use common_types::library::LibraryItemRole;
-use common_types::lidar::{LidarSampleOutcome, LidarSampleRequest, LidarSampleUnavailableReason};
+use common_types::lidar::{
+    LIDAR_SAMPLE_MAX_POINTS, LIDAR_SAMPLE_MAX_TARGETS, LidarSamplePointsRequest, LidarSampleSeries,
+    LidarSampleTarget, LidarSampleUnavailableReason,
+};
 
 use super::analyses;
 use super::engine::RasterEngine;
@@ -32,54 +37,46 @@ enum TargetRead {
     Collection(Box<import::GenerationManifest>),
 }
 
-/// The generation a request's entity currently resolves to, with everything a
+/// The generation a target's entity currently resolves to, with everything a
 /// bounded read needs and nothing that opens a raster yet.
 struct SampleTarget {
     generation_id: String,
     /// The lattice the target's cells are addressed in.
     grid: RasterGrid,
     crs_ref: String,
-    /// What one returned number means, in the target's own terms.
-    units: String,
     read: TargetRead,
 }
 
-/// Resolve the requested entity's current head.
+/// Resolve the target entity's current head.
 ///
-/// Source and result targets share only the currency rule; their manifests, unit
-/// sources and readers differ, so each is resolved on its own contract rather
-/// than being forced through one shape.
+/// Source and result targets share only the currency rule; their manifests and
+/// readers differ, so each is resolved on its own contract rather than being
+/// forced through one shape.
 fn resolve_target(
     library: &LidarLibrary,
-    request: &LidarSampleRequest,
+    target: &LidarSampleTarget,
 ) -> Result<Option<SampleTarget>, String> {
     let connection = library.catalogue()?;
-    match request.kind {
+    match target.kind {
         LibraryItemRole::Source => {
-            let Some(row) = catalogue::head_generation(&connection, &request.entity_id)? else {
+            let Some(row) = catalogue::head_generation(&connection, &target.entity_id)? else {
                 return Ok(None);
             };
-            // A source layer's own declared unit is what its numbers mean.
-            let units = catalogue::get_layer(&connection, &request.entity_id)?
-                .map(|layer| layer.units)
-                .unwrap_or_default();
             let manifest = import::read_generation_manifest(&row.manifest_json)?;
-            let read = TargetRead::Collection(Box::new(manifest.clone()));
             Ok(Some(SampleTarget {
                 generation_id: row.id,
                 grid: manifest.grid.clone(),
                 crs_ref: manifest.crs_ref.clone(),
-                units,
-                read,
+                read: TargetRead::Collection(Box::new(manifest)),
             }))
         }
         LibraryItemRole::Derived => {
             // The item owns its result, so an item that no longer exists has no
             // generation to sample even if a row survived.
-            let Some(item) = catalogue::get_derived_item(&connection, &request.entity_id)? else {
+            if catalogue::get_derived_item(&connection, &target.entity_id)?.is_none() {
                 return Ok(None);
-            };
-            let Some(row) = catalogue::derived_head(&connection, &request.entity_id)? else {
+            }
+            let Some(row) = catalogue::derived_head(&connection, &target.entity_id)? else {
                 return Ok(None);
             };
             let manifest = analyses::read_derived_manifest(&row.manifest_json)?;
@@ -87,32 +84,47 @@ fn resolve_target(
                 generation_id: row.id,
                 grid: manifest.grid,
                 crs_ref: manifest.crs_ref,
-                units: item.units,
                 read: TargetRead::Chunks,
             }))
         }
     }
 }
 
-/// Transform one WGS84 point into the generation's CRS through the engine.
-///
-/// A point the transform cannot place is `None`, which the caller reports as
-/// a failed transform rather than an error.
-fn transform_point(
+/// Each point projected into a generation's CRS, or `None` where it cannot be.
+type Projected = Vec<Option<(f64, f64)>>;
+
+/// Transform WGS84 `[longitude, latitude]` points into the generation's CRS
+/// in one engine call. A point that is not finite, or that the transform cannot
+/// place, is `None`; `Ok(None)` means the generation declares no CRS.
+fn transform_points(
     engine: &dyn RasterEngine,
     cancel: &AtomicBool,
     crs_ref: &str,
-    longitude: f64,
-    latitude: f64,
-) -> Result<Option<(f64, f64)>, String> {
+    points: &[[f64; 2]],
+) -> Result<Option<Projected>, String> {
     if crs_ref.trim().is_empty() {
         return Ok(None);
     }
-    Ok(engine
-        .transform_points("EPSG:4326", crs_ref, &[(longitude, latitude)], cancel)?
-        .into_iter()
-        .next()
-        .flatten())
+    let finite: Vec<(usize, (f64, f64))> = points
+        .iter()
+        .enumerate()
+        .filter(|(_, [longitude, latitude])| longitude.is_finite() && latitude.is_finite())
+        .map(|(index, [longitude, latitude])| (index, (*longitude, *latitude)))
+        .collect();
+    let mut projected = vec![None; points.len()];
+    if finite.is_empty() {
+        return Ok(Some(projected));
+    }
+    let placed = engine.transform_points(
+        "EPSG:4326",
+        crs_ref,
+        &finite.iter().map(|(_, point)| *point).collect::<Vec<_>>(),
+        cancel,
+    )?;
+    for ((index, _), point) in finite.iter().zip(placed) {
+        projected[*index] = point;
+    }
+    Ok(Some(projected))
 }
 
 /// The largest lattice index this read will carry into a window.
@@ -154,205 +166,206 @@ fn containing_pixel(grid: &RasterGrid, x: f64, y: f64) -> Option<(i64, i64)> {
     Some((pixel_x as i64, pixel_y as i64))
 }
 
-/// Bind the reader that owns one target's numbers, limited to one cell.
+/// The most cells one run's window spans on each side, so a window holds at
+/// most 256 × 256 values (about 320 KB with validity).
+const RUN_SIDE: i64 = 256;
+
+/// Refuses a request over the generated caps before any work.
+pub(super) fn check_sample_caps(request: &LidarSamplePointsRequest) -> Result<(), String> {
+    if request.targets.len() > LIDAR_SAMPLE_MAX_TARGETS
+        || request.points.len() > LIDAR_SAMPLE_MAX_POINTS
+    {
+        return Err(format!(
+            "a sample request carries at most {LIDAR_SAMPLE_MAX_TARGETS} targets and \
+             {LIDAR_SAMPLE_MAX_POINTS} points (got {} and {})",
+            request.targets.len(),
+            request.points.len()
+        ));
+    }
+    Ok(())
+}
+
+/// Sample every target at every point (spec §1.10): the native cell under each
+/// WGS84 point, in target and point order.
 ///
-/// A source item resolves only the ordered members that can reach the cell; a
-/// result reads its published chunks.
-fn read_one_cell(
+/// Each target is resolved once, its points transformed in one call, its
+/// reader bound once over the cells' bounds, and its cells read one bounded
+/// window per run. A target whose head is not the generation the caller aimed
+/// at, before or after the read, answers `StaleGeneration`, so a late answer is
+/// never presented as current; an item that is gone answers
+/// `MissingGeneration`. A point off the data reads `None`: out of coverage is
+/// no data, not an error.
+pub(super) fn sample_points(
+    library: &LidarLibrary,
+    engine: &dyn RasterEngine,
+    request: &LidarSamplePointsRequest,
+) -> Result<Vec<LidarSampleSeries>, String> {
+    check_sample_caps(request)?;
+    #[cfg(test)]
+    super::acceptance_hooks::sample_work_started(library);
+    // Nothing cancels a sample: one batch is bounded by the caps, and the
+    // frontend keeps one request in flight per lane.
+    let cancel = AtomicBool::new(false);
+    request
+        .targets
+        .iter()
+        .map(|target| sample_target(library, engine, &cancel, target, &request.points))
+        .collect()
+}
+
+fn unavailable(reason: LidarSampleUnavailableReason) -> LidarSampleSeries {
+    LidarSampleSeries::Unavailable { reason }
+}
+
+fn sample_target(
+    library: &LidarLibrary,
+    engine: &dyn RasterEngine,
+    cancel: &AtomicBool,
+    target: &LidarSampleTarget,
+    points: &[[f64; 2]],
+) -> Result<LidarSampleSeries, String> {
+    let Some(resolved) = resolve_target(library, target)? else {
+        return Ok(unavailable(LidarSampleUnavailableReason::MissingGeneration));
+    };
+    // Currency is checked against the generation the read will actually use,
+    // not against a cached head.
+    if resolved.generation_id != target.expected_generation_id {
+        return Ok(unavailable(LidarSampleUnavailableReason::StaleGeneration));
+    }
+    #[cfg(test)]
+    super::acceptance_hooks::after_target(library);
+    let Some(projected) = transform_points(engine, cancel, &resolved.crs_ref, points)? else {
+        return Ok(unavailable(LidarSampleUnavailableReason::TransformFailed));
+    };
+    let cells: Vec<Option<(i64, i64)>> = projected
+        .iter()
+        .map(|point| point.and_then(|(x, y)| containing_pixel(&resolved.grid, x, y)))
+        .collect();
+    let values = read_cells(library, &resolved, &cells, cancel)?;
+    #[cfg(test)]
+    super::acceptance_hooks::after_read(library);
+    // Recheck currency once after the reads without holding the catalogue
+    // across them: a head that moved makes the values stale before delivery,
+    // and a target that disappeared is missing rather than a stale success.
+    Ok(match resolve_target(library, target)? {
+        None => unavailable(LidarSampleUnavailableReason::MissingGeneration),
+        Some(current) if current.generation_id != resolved.generation_id => {
+            unavailable(LidarSampleUnavailableReason::StaleGeneration)
+        }
+        Some(_) => LidarSampleSeries::Values { values },
+    })
+}
+
+/// Read every cell, one bounded window per run; a point with no cell, an
+/// invalid sample or a non-finite one is `None`.
+fn read_cells(
     library: &LidarLibrary,
     target: &SampleTarget,
-    pixel: (i64, i64),
+    cells: &[Option<(i64, i64)>],
     cancel: &AtomicBool,
-) -> Result<Option<generation::GenerationReader>, String> {
-    let window = cell_window(pixel)?;
-    match &target.read {
-        TargetRead::Chunks => Ok(Some(generation::GenerationReader::Chunks(
+) -> Result<Vec<Option<f64>>, String> {
+    let mut values = vec![None; cells.len()];
+    let placed: Vec<(i64, i64)> = cells.iter().flatten().copied().collect();
+    let Some(&(first_x, first_y)) = placed.first() else {
+        return Ok(values);
+    };
+    let reader = match &target.read {
+        TargetRead::Chunks => generation::GenerationReader::Chunks(
             generation::GenerationChunkReader::new(&target.generation_id, generation::RESULT_ROLE),
-        ))),
+        ),
         TargetRead::Collection(manifest) => {
-            let bounds = collection::ReadBounds {
-                x0: window.x,
-                y0: window.y,
-                x1: window
-                    .x
-                    .checked_add(1)
-                    .ok_or_else(|| "inspection window overflows".to_string())?,
-                y1: window
-                    .y
-                    .checked_add(1)
-                    .ok_or_else(|| "inspection window overflows".to_string())?,
-            };
-            let reader = collection::load_reader_within(
+            // One binding for the whole target: only members that can reach a
+            // sampled cell are resolved. Every index is within
+            // `MAX_LATTICE_INDEX`, so the exclusive ends cannot overflow.
+            let bounds = placed.iter().fold(
+                collection::ReadBounds {
+                    x0: first_x,
+                    y0: first_y,
+                    x1: first_x + 1,
+                    y1: first_y + 1,
+                },
+                |bounds, &(x, y)| collection::ReadBounds {
+                    x0: bounds.x0.min(x),
+                    y0: bounds.y0.min(y),
+                    x1: bounds.x1.max(x + 1),
+                    y1: bounds.y1.max(y + 1),
+                },
+            );
+            generation::GenerationReader::Collection(Box::new(collection::load_reader_within(
                 library,
                 &target.generation_id,
                 manifest,
                 Some(bounds),
                 cancel,
-            )?;
-            Ok(Some(generation::GenerationReader::Collection(Box::new(
-                reader,
-            ))))
+            )?))
         }
-    }
-}
-
-/// A one-cell window at a signed lattice coordinate.
-fn cell_window(pixel: (i64, i64)) -> Result<generation::LatticeWindow, String> {
-    // Reject the two coordinates whose own successor is not representable, so
-    // the half-open window below can never wrap.
-    if pixel.0 == i64::MAX || pixel.1 == i64::MAX {
-        return Err("inspection coordinate is not representable".to_string());
-    }
-    Ok(generation::LatticeWindow {
-        x: pixel.0,
-        y: pixel.1,
-        width: 1,
-        height: 1,
-    })
-}
-
-/// Sample one physical value for inspection.
-///
-/// Returns `Unavailable(StaleGeneration)` when the entity's head is not the
-/// generation the caller aimed at, so a late answer can never be presented as
-/// current. A point that reaches no valid member reads as `NoData`, matching the
-/// product rule that out-of-coverage is no data rather than an error.
-pub(super) fn sample(
-    library: &LidarLibrary,
-    engine: &dyn RasterEngine,
-    cancel: &AtomicBool,
-    request: &LidarSampleRequest,
-) -> Result<LidarSampleOutcome, String> {
-    if !request.longitude.is_finite() || !request.latitude.is_finite() {
-        return Ok(LidarSampleOutcome::Unavailable {
-            reason: LidarSampleUnavailableReason::TransformFailed,
-        });
-    }
-    let Some(target) = resolve_target(library, request)? else {
-        return Ok(LidarSampleOutcome::Unavailable {
-            reason: LidarSampleUnavailableReason::MissingGeneration,
-        });
     };
-    // Currency is checked against the generation the read will actually use, not
-    // against a cached head: a head that changed (or went away) between aim and
-    // answer makes the answer stale rather than wrong.
-    if target.generation_id != request.expected_generation_id {
-        return Ok(LidarSampleOutcome::Unavailable {
-            reason: LidarSampleUnavailableReason::StaleGeneration,
-        });
-    }
-    #[cfg(test)]
-    super::acceptance_hooks::after_target(library);
-    let Some((x, y)) = transform_point(
-        engine,
-        cancel,
-        &target.crs_ref,
-        request.longitude,
-        request.latitude,
-    )?
-    else {
-        return Ok(LidarSampleOutcome::Unavailable {
-            reason: LidarSampleUnavailableReason::TransformFailed,
-        });
-    };
-    // Out of every member's coverage is NoData, not an error: the point simply
-    // holds nothing. The reader decides that, not the lattice rectangle.
-    let Some(pixel) = containing_pixel(&target.grid, x, y) else {
-        // Every successful Value/NoData exit rechecks currency, including this
-        // early unrepresentable-index branch after the slow transform.
-        return finish_sample_outcome(
-            library,
-            request,
-            &target.generation_id,
-            LidarSampleOutcome::NoData {
-                generation_id: target.generation_id.clone(),
-            },
-        );
-    };
-    let window = cell_window(pixel)?;
-    let Some(reader) = read_one_cell(library, &target, pixel, cancel)? else {
-        return Ok(LidarSampleOutcome::Unavailable {
-            reason: LidarSampleUnavailableReason::MissingGeneration,
-        });
-    };
-    let resolved = reader.read_window(library, &target.grid, window, cancel)?;
-    #[cfg(test)]
-    super::acceptance_hooks::after_read(library);
-    // Recheck currency after the slow read without holding the catalogue
-    // across it: a concurrent head change makes Value/NoData stale before
-    // delivery, and a disappeared target is missing rather than a stale success.
-    match resolve_target(library, request)? {
-        None => {
-            return Ok(LidarSampleOutcome::Unavailable {
-                reason: LidarSampleUnavailableReason::MissingGeneration,
-            });
-        }
-        Some(current) => {
-            if current.generation_id != request.expected_generation_id
-                || current.generation_id != target.generation_id
-            {
-                return Ok(LidarSampleOutcome::Unavailable {
-                    reason: LidarSampleUnavailableReason::StaleGeneration,
-                });
+    for run in cell_runs(cells) {
+        let window = reader.read_window(library, &target.grid, run.window, cancel)?;
+        for index in run.points {
+            let Some((x, y)) = cells[index] else {
+                continue;
+            };
+            let offset = usize::try_from(
+                (y - run.window.y) * i64::from(run.window.width) + (x - run.window.x),
+            )
+            .map_err(|_| "a sampled cell lies outside its run".to_string())?;
+            if window.valid.get(offset).copied().unwrap_or(0) == 0 {
+                continue;
             }
+            let value = f64::from(window.samples.get(offset).copied().unwrap_or(f32::NAN));
+            values[index] = value.is_finite().then_some(value);
         }
     }
-    if resolved.valid.first().copied().unwrap_or(0) == 0 {
-        return finish_sample_outcome(
-            library,
-            request,
-            &target.generation_id,
-            LidarSampleOutcome::NoData {
-                generation_id: target.generation_id.clone(),
-            },
-        );
-    }
-    let value = f64::from(resolved.samples.first().copied().unwrap_or(f32::NAN));
-    if !value.is_finite() {
-        return finish_sample_outcome(
-            library,
-            request,
-            &target.generation_id,
-            LidarSampleOutcome::NoData {
-                generation_id: target.generation_id.clone(),
-            },
-        );
-    }
-    finish_sample_outcome(
-        library,
-        request,
-        &target.generation_id,
-        LidarSampleOutcome::Value {
-            generation_id: target.generation_id.clone(),
-            value,
-            units: target.units.clone(),
+    Ok(values)
+}
+
+/// One window of consecutive cells and the points it answers.
+#[derive(Debug, PartialEq)]
+struct CellRun {
+    window: generation::LatticeWindow,
+    /// Indices into the point list whose cell lies in `window`.
+    points: Vec<usize>,
+}
+
+/// Groups the cells, in point order, into runs whose bounding box stays
+/// within `RUN_SIDE` cells on each side; a point without a cell joins none.
+fn cell_runs(cells: &[Option<(i64, i64)>]) -> Vec<CellRun> {
+    // A run's box as inclusive cell bounds: x0, y0, x1, y1.
+    type Bounds = (i64, i64, i64, i64);
+    let close = |(x0, y0, x1, y1): Bounds, points: Vec<usize>| CellRun {
+        window: generation::LatticeWindow {
+            x: x0,
+            y: y0,
+            width: (x1 - x0 + 1) as u32,
+            height: (y1 - y0 + 1) as u32,
         },
-    )
-}
-
-/// Recheck currency before any successful Value/NoData delivery.
-fn finish_sample_outcome(
-    library: &LidarLibrary,
-    request: &LidarSampleRequest,
-    read_generation_id: &str,
-    outcome: LidarSampleOutcome,
-) -> Result<LidarSampleOutcome, String> {
-    match resolve_target(library, request)? {
-        None => Ok(LidarSampleOutcome::Unavailable {
-            reason: LidarSampleUnavailableReason::MissingGeneration,
-        }),
-        Some(current) => {
-            if current.generation_id != request.expected_generation_id
-                || current.generation_id != read_generation_id
-            {
-                Ok(LidarSampleOutcome::Unavailable {
-                    reason: LidarSampleUnavailableReason::StaleGeneration,
-                })
-            } else {
-                Ok(outcome)
+        points,
+    };
+    let mut runs = Vec::new();
+    let mut open: Option<(Bounds, Vec<usize>)> = None;
+    for (index, cell) in cells.iter().enumerate() {
+        let Some((x, y)) = *cell else {
+            continue;
+        };
+        open = Some(match open.take() {
+            Some(((x0, y0, x1, y1), mut points)) => {
+                let grown = (x0.min(x), y0.min(y), x1.max(x), y1.max(y));
+                if grown.2 - grown.0 < RUN_SIDE && grown.3 - grown.1 < RUN_SIDE {
+                    points.push(index);
+                    (grown, points)
+                } else {
+                    runs.push(close((x0, y0, x1, y1), points));
+                    ((x, y, x, y), vec![index])
+                }
             }
-        }
+            None => ((x, y, x, y), vec![index]),
+        });
     }
+    if let Some((bounds, points)) = open {
+        runs.push(close(bounds, points));
+    }
+    runs
 }
 
 #[cfg(test)]
@@ -419,9 +432,11 @@ mod tests {
                 "the fixture must place ({longitude}, {latitude}) inside the grid"
             );
 
-            let projected = transform_point(&engine, &cancel, "EPSG:3857", longitude, latitude)
-                .expect("the transform runs")
-                .expect("a finite WGS84 point projects");
+            let projected =
+                transform_points(&engine, &cancel, "EPSG:3857", &[[longitude, latitude]])
+                    .expect("the transform runs")
+                    .expect("the CRS is declared")[0]
+                    .expect("a finite WGS84 point projects");
             // A metre is far below the assertions that follow, and the two
             // implementations differ only by floating-point rounding.
             assert!(
@@ -492,8 +507,82 @@ mod tests {
         assert_eq!(containing_pixel(&grid, 0.0, -1.0e18), None);
         // Just inside the guard still yields a usable signed coordinate.
         assert!(containing_pixel(&grid, 1.0e15, 5.0).is_some());
-        assert!(cell_window((i64::MAX, 0)).is_err());
-        assert!(cell_window((i64::MIN, i64::MIN)).is_ok());
+    }
+
+    fn run(x: i64, y: i64, width: u32, height: u32, points: &[usize]) -> CellRun {
+        CellRun {
+            window: generation::LatticeWindow {
+                x,
+                y,
+                width,
+                height,
+            },
+            points: points.to_vec(),
+        }
+    }
+
+    /// Consecutive cells share one window while its box stays within 256 cells
+    /// a side; the 257th column starts the next run, and a point with no cell
+    /// joins none.
+    #[test]
+    fn a_run_splits_where_its_box_would_pass_256_cells() {
+        let mut cells: Vec<Option<(i64, i64)>> = (0..300).map(|x| Some((x, 7))).collect();
+        cells.insert(10, None);
+        let runs = cell_runs(&cells);
+        let first: Vec<usize> = (0..10).chain(11..257).collect();
+        let second: Vec<usize> = (257..301).collect();
+        assert_eq!(
+            runs,
+            vec![run(0, 7, 256, 1, &first), run(256, 7, 44, 1, &second)]
+        );
+    }
+
+    /// A diagonal line's box grows on both sides, so it splits at 256 too, and
+    /// a run going back over its own cells stays one window.
+    #[test]
+    fn a_diagonal_splits_on_its_box_and_a_point_revisited_stays_in_its_run() {
+        let cells: Vec<Option<(i64, i64)>> = (0..300)
+            .map(|step| Some((-100 + step, 50 - step)))
+            .chain([Some((-100, 50))])
+            .collect();
+        let runs = cell_runs(&cells);
+        assert_eq!(runs.len(), 3);
+        assert_eq!(runs[0].window, run(-100, -205, 256, 256, &[]).window);
+        assert_eq!(runs[0].points, (0..256).collect::<Vec<_>>());
+        assert_eq!(runs[1].window, run(156, -249, 44, 44, &[]).window);
+        // Back to the start: far outside the second run's box.
+        assert_eq!(runs[2], run(-100, 50, 1, 1, &[300]));
+        assert_eq!(
+            cell_runs(&[Some((3, 3)), Some((4, 3)), Some((3, 3))]),
+            vec![run(3, 3, 2, 1, &[0, 1, 2])]
+        );
+        assert!(cell_runs(&[None, None]).is_empty());
+    }
+
+    /// Over either generated cap is refused, before any target is resolved.
+    #[test]
+    fn requests_over_the_caps_are_refused() {
+        let target = LidarSampleTarget {
+            kind: LibraryItemRole::Source,
+            entity_id: "absent".to_string(),
+            expected_generation_id: "g".to_string(),
+        };
+        let at_caps = LidarSamplePointsRequest {
+            targets: vec![target.clone(); LIDAR_SAMPLE_MAX_TARGETS],
+            points: vec![[0.0, 0.0]; LIDAR_SAMPLE_MAX_POINTS],
+        };
+        assert_eq!(check_sample_caps(&at_caps), Ok(()));
+        let mut targets = at_caps.clone();
+        targets.targets.push(target);
+        let mut points = at_caps;
+        points.points.push([0.0, 0.0]);
+        for over in [targets, points] {
+            let error = check_sample_caps(&over).unwrap_err();
+            assert!(
+                error.contains("at most 8 targets and 4096 points"),
+                "{error}"
+            );
+        }
     }
 
     #[test]
@@ -654,40 +743,32 @@ mod latency_probe {
         sorted[index]
     }
 
-    /// One 6-target point per entry, timed; returns the sorted durations and
-    /// how many values were found.
+    /// One 6-target request per point, timed; returns the sorted durations
+    /// and how many values were found.
     fn sample_all(
         library: &LidarLibrary,
-        targets: &[(LibraryItemRole, String, String)],
+        targets: &[LidarSampleTarget],
         points: &[(f64, f64)],
     ) -> (Vec<Duration>, usize) {
-        let cancel = AtomicBool::new(false);
         let mut found = 0;
         let mut durations: Vec<Duration> = points
             .iter()
-            .enumerate()
-            .map(|(index, &(longitude, latitude))| {
+            .map(|&(longitude, latitude)| {
                 let started = Instant::now();
-                for (kind, entity_id, generation) in targets {
-                    let outcome = sample(
-                        library,
-                        library.inner.engine.as_ref(),
-                        &cancel,
-                        &LidarSampleRequest {
-                            kind: *kind,
-                            entity_id: entity_id.clone(),
-                            expected_generation_id: generation.clone(),
-                            request_id: format!("probe-{index}"),
-                            longitude,
-                            latitude,
-                        },
-                    )
-                    .expect("the sample reads");
-                    if matches!(outcome, LidarSampleOutcome::Value { .. }) {
-                        found += 1;
-                    }
-                }
-                started.elapsed()
+                let series = library
+                    .sample_points(&LidarSamplePointsRequest {
+                        targets: targets.to_vec(),
+                        points: vec![[longitude, latitude]],
+                    })
+                    .expect("the batch samples");
+                let elapsed = started.elapsed();
+                found += series
+                    .iter()
+                    .filter(|one| {
+                        matches!(one, LidarSampleSeries::Values { values } if values[0].is_some())
+                    })
+                    .count();
+                elapsed
             })
             .collect();
         durations.sort();
@@ -728,7 +809,7 @@ mod latency_probe {
                 .clone();
         let slope_west =
             analyses::test_support::run_slope(&library, &west, "degrees", None).item_ids[0].clone();
-        let targets: Vec<(LibraryItemRole, String, String)> = [
+        let targets: Vec<LidarSampleTarget> = [
             (LibraryItemRole::Source, collection),
             (LibraryItemRole::Source, pair),
             (LibraryItemRole::Source, west),
@@ -737,9 +818,10 @@ mod latency_probe {
             (LibraryItemRole::Derived, slope_west),
         ]
         .into_iter()
-        .map(|(kind, id)| {
-            let generation = head(&library, kind, &id);
-            (kind, id, generation)
+        .map(|(kind, entity_id)| LidarSampleTarget {
+            kind,
+            expected_generation_id: head(&library, kind, &entity_id),
+            entity_id,
         })
         .collect();
         let points = points(&engine, &tiles[0]);

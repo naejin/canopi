@@ -165,48 +165,34 @@ pub async fn lidar_layer_collection(
         .await
 }
 
-/// Read one physical value for inspection through the shared display admission.
+/// Site data's one sampler (spec §1.10): the native cell under each WGS84
+/// point of each target, in target and point order, for row values, the pin
+/// and a profile alike.
 ///
-/// Inspection reuses the same bounded read admission, cancellation and queue
-/// budget the raster display path owns, instead of passing a local flag that
-/// nothing could ever set: a superseded lookup then stops at its next bounded
-/// read, and a burst of abandoned lookups cannot outrun the active-request
-/// budget. The admission name is scoped to the inspection surface, so a caller
-/// can only ever cancel its own lookup. The read opens raster files, so it
+/// A request over the generated caps is refused before anything waits. Then
+/// sampling is serialised library-wide by one permit, taken before the Local
+/// slot, so the sampler never holds more than one of Local's running slots and
+/// a save is always admitted beside it. The read opens raster files, so it
 /// belongs to the `Local` class, never to `UserData`.
 #[tauri::command]
-pub async fn lidar_sample_pixel(
+pub async fn lidar_sample_points(
     library: State<'_, LidarLibrary>,
     executor: State<'_, NativeOperationExecutor>,
-    request: common_types::lidar::LidarSampleRequest,
-) -> Result<common_types::lidar::LidarSampleOutcome, String> {
+    request: common_types::lidar::LidarSamplePointsRequest,
+) -> Result<Vec<common_types::lidar::LidarSampleSeries>, String> {
     let library = library.inner().clone();
-    let mut ticket = library.admit_sample_request(&request.request_id)?;
-    // Wait for a slot without holding an executor permit, so an inspection
-    // read can never sit in front of a heavy raster job.
-    ticket.activate().await?;
-    let cancel = ticket.cancel_flag();
+    let turn = library.sampling_turn(&request).await?;
     executor
         .run(
             crate::native_operation::NativeOperationClass::Local,
-            "lidar sample pixel",
+            "lidar sample points",
             move || {
-                // The ticket is held for the whole read and released with it,
-                // so a cancelled or finished lookup never keeps a slot.
-                let _slot = ticket;
-                library.sample(&request, &cancel)
+                // The turn is held for the whole read and released with it.
+                let _turn = turn;
+                library.sample_points(&request)
             },
         )
         .await
-}
-
-/// Stop waiting for, or stop reading, one inspection lookup.
-///
-/// Synchronous by design: it only signals bounded in-memory state, and the
-/// reader checks the flag between bounded reads.
-#[tauri::command]
-pub fn lidar_cancel_sample_pixel(library: State<'_, LidarLibrary>, request_id: String) {
-    library.cancel_sample_request(&request_id);
 }
 
 /// Describe the display derivatives of one entity's current generation.

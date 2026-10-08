@@ -1,5 +1,5 @@
 // The Esc chain through the key router (spec §3.7, §1.6 steps 4 and 8; fixtures I8, I10): the canvas port's layers, a
-// popover and the raster inspection, each an Esc layer, and one Esc runs one of them.
+// popover and the Site data pin, each an Esc layer, and one Esc runs one of them.
 import { signal } from '@preact/signals'
 import { h, render, type ComponentChild } from 'preact'
 import { act } from 'preact/test-utils'
@@ -8,7 +8,6 @@ import { TEST_KEY_PLATFORM } from '../../__tests__/support/key-router'
 import { createTestCanvasQuerySurface } from '../../__tests__/support/canvas-query-surface'
 import { createTestCanvasRuntimeSurfaces } from '../../__tests__/support/canvas-runtime-surfaces'
 import { PlantColorMenu } from '../../components/canvas/PlantColorMenu'
-import { InspectionStatus } from '../../components/canvas/InspectionStatus'
 import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
 import { setCurrentCanvasSession } from '../../canvas/session'
 import { currentCanvasSelection } from '../../canvas/session-state'
@@ -20,17 +19,11 @@ import { ESCAPE_PRIORITY, registerEscapeLayer } from './escape-chain'
 import { installKeyRouter, type KeyRouterHandle } from './key-router'
 import { CANVAS_KEYMAP_ROWS } from './keymap'
 
-const inspection = vi.hoisted(() => ({ endInspection: vi.fn() }))
-vi.mock('../lidar/inspection', async () => {
-  const { signal: inspectionSignal } = await import('@preact/signals')
-  return {
-    inspectionTarget: inspectionSignal<{ name: string } | null>({ name: 'Slope' }),
-    inspectionSample: inspectionSignal({ kind: 'idle' }),
-    inspectionLocation: inspectionSignal(null),
-    endInspection: inspection.endInspection,
-    sampleInspectionCentre: vi.fn(),
-  }
-})
+/** A shown Site data pin as its Esc layer (site-transients.ts registers the real one); `unpin` records each Esc. */
+const unpin = vi.fn()
+function pinLayer(): () => void {
+  return registerEscapeLayer({ priority: ESCAPE_PRIORITY['site-pin'], isActive: () => true, escape: () => { unpin(); return true } })
+}
 
 /** The canvas as the keyboard port sees it: the armed tool, its draft or row source, a live drag, the selection. */
 interface CanvasState {
@@ -135,7 +128,7 @@ beforeEach(() => {
   mounts = []
   port = canvasPort()
   router = null
-  inspection.endInspection.mockClear()
+  unpin.mockClear()
 })
 
 afterEach(() => {
@@ -212,21 +205,6 @@ describe('the Esc chain', () => {
     expect(ran).toEqual(['tool', 'selection'])
   })
 
-  it('each Esc runs the next layer in order: the drag, the draft, the tool, the selection, then inspecting', () => {
-    install()
-    mount(h(InspectionStatus, {}))
-    canvas = { tool: 'polygon', transient: true, live: true, selected: true }
-    host.focus()
-    const done: string[] = []
-    for (let press = 0; press < 5; press += 1) {
-      const before = ran.length
-      escape(host)
-      done.push(ran.length > before ? `canvas.${ran[ran.length - 1]}` : inspection.endInspection.mock.calls.length > 0 ? 'inspection' : 'none')
-    }
-    expect(done).toEqual(['canvas.gesture', 'canvas.tool-transient', 'canvas.tool', 'canvas.selection', 'inspection'])
-    expect(canvas).toEqual({ tool: 'select', transient: false, live: false, selected: false })
-  })
-
   it('after the tool and the selection, an Esc clears the profile, and the next unpins the Site data point (canopi-f47t.42)', () => {
     install()
     const shown = { profile: true, 'site-pin': true }
@@ -281,42 +259,31 @@ describe('the Esc chain', () => {
     expect(ran).toEqual(['gesture'])
   })
 
-  it('Esc after the selection ends inspecting', () => {
+  it('Esc in overview with nothing live unpins, from the map or a control', () => {
     install()
-    mount(h(InspectionStatus, {}))
-    canvas = { tool: 'select', transient: false, live: false, selected: true }
-    host.focus()
-
-    escape(host)
-    expect(canvas.selected).toBe(false)
-    expect(inspection.endInspection).not.toHaveBeenCalled()
-    expect(escape(host).defaultPrevented).toBe(true)
-    expect(inspection.endInspection).toHaveBeenCalledOnce()
-  })
-
-  it('Esc in overview with nothing live ends inspecting, from the map or a control', () => {
-    install()
-    mount(h(InspectionStatus, {}))
+    const release = pinLayer()
     canvas = { tool: 'polygon', transient: false, live: false, selected: false, overview: true }
     host.focus()
 
     expect(escape(host).defaultPrevented).toBe(true)
-    expect(inspection.endInspection).toHaveBeenCalledOnce()
+    expect(unpin).toHaveBeenCalledOnce()
     expect(escape(outside('button')).defaultPrevented).toBe(true)
-    expect(inspection.endInspection).toHaveBeenCalledTimes(2)
+    expect(unpin).toHaveBeenCalledTimes(2)
     expect(ran).toEqual([])
     expect(canvas.tool).toBe('polygon')
+    release()
   })
 
-  it('Esc in overview with a pan live ends the pan and keeps inspecting', () => {
+  it('Esc in overview with a pan live ends the pan and keeps the pin', () => {
     install()
-    mount(h(InspectionStatus, {}))
+    const release = pinLayer()
     canvas = { tool: 'select', transient: false, live: true, selected: false, overview: true }
     host.focus()
 
     expect(escape(host).defaultPrevented).toBe(true)
     expect(ran).toEqual(['gesture'])
     expect(canvas.live).toBe(false)
-    expect(inspection.endInspection).not.toHaveBeenCalled()
+    expect(unpin).not.toHaveBeenCalled()
+    release()
   })
 })

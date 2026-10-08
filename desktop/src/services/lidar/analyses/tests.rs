@@ -13,7 +13,8 @@ use common_types::library::{
     AnalysisInputBinding, LibraryItemRole, LibraryItemSummary, ParamValue,
 };
 use common_types::lidar::{
-    LidarResultState, LidarSampleOutcome, LidarSampleRequest, LidarSampleUnavailableReason,
+    LidarResultState, LidarSamplePointsRequest, LidarSampleSeries, LidarSampleTarget,
+    LidarSampleUnavailableReason,
 };
 use std::path::PathBuf;
 
@@ -1180,47 +1181,304 @@ fn lon_lat(easting: f64, northing: f64) -> (f64, f64) {
         .unwrap()
 }
 
-/// A published slope is readable through inspection in the units it was
+/// One target as the frontend aims it.
+fn target(kind: LibraryItemRole, entity_id: &str, generation_id: &str) -> LidarSampleTarget {
+    LidarSampleTarget {
+        kind,
+        entity_id: entity_id.to_string(),
+        expected_generation_id: generation_id.to_string(),
+    }
+}
+
+/// The WGS84 point of a fixture cell centre, as the sampler takes it.
+fn point(easting: f64, northing: f64) -> [f64; 2] {
+    let (longitude, latitude) = lon_lat(easting, northing);
+    [longitude, latitude]
+}
+
+/// Sample through the batched sampler and return each target's series.
+fn sample(
+    library: &LidarLibrary,
+    targets: Vec<LidarSampleTarget>,
+    points: Vec<[f64; 2]>,
+) -> Vec<LidarSampleSeries> {
+    library
+        .sample_points(&LidarSamplePointsRequest { targets, points })
+        .expect("the batch samples")
+}
+
+/// One target's values, or a panic naming what came back instead.
+fn values(series: &LidarSampleSeries) -> Vec<Option<f64>> {
+    match series {
+        LidarSampleSeries::Values { values } => values.clone(),
+        other => panic!("expected values, got {other:?}"),
+    }
+}
+
+fn unavailable(reason: LidarSampleUnavailableReason) -> LidarSampleSeries {
+    LidarSampleSeries::Unavailable { reason }
+}
+
+fn source_head(library: &LidarLibrary, layer_id: &str) -> String {
+    catalogue::head_generation(&library.catalogue().unwrap(), layer_id)
+        .unwrap()
+        .unwrap()
+        .id
+}
+
+/// A published result over `source_layer` whose chunks the caller writes.
+fn chunk_result(library: &LidarLibrary, source_layer: &str, item_id: &str) -> String {
+    let generation_id = format!("dgen-{item_id}");
+    let source_generation = source_head(library, source_layer);
+    seed_published_slope(
+        &library.catalogue().unwrap(),
+        source_layer,
+        &source_generation,
+        &format!("adef-{item_id}"),
+        item_id,
+        &generation_id,
+        None,
+    );
+    generation_id
+}
+
+/// One request answers mixed targets in target order: a source and a result
+/// read their own cells, a head that moved answers stale and an absent item
+/// missing, and a point off a target's data reads `None` for that target only.
+#[test]
+fn one_batch_answers_mixed_targets_in_order() {
+    let root = scratch_root("batch-mixed");
+    let library = LidarLibrary::open(&root).unwrap();
+    let plane = plane_layer(&library, &root, 16, 16);
+    let plane_generation = source_head(&library, &plane);
+    let result = chunk_result(&library, &plane, "item-chunks");
+    // The result's lattice starts at (0, 0) with 1 m cells running south.
+    let cells: Vec<f32> = (0..16).map(|index| 100.0 + index as f32).collect();
+    generation::publish_test_chunk(&library, &result, 0, 0, 4, 4, &cells);
+
+    let series = sample(
+        &library,
+        vec![
+            target(LibraryItemRole::Source, &plane, &plane_generation),
+            target(LibraryItemRole::Derived, "item-chunks", &result),
+            target(LibraryItemRole::Source, &plane, "gen-before"),
+            target(LibraryItemRole::Derived, "item-gone", "dgen-gone"),
+        ],
+        vec![point(5.5, 10.5), point(1.5, -2.5), point(500.5, 500.5)],
+    );
+    assert_eq!(series.len(), 4);
+    assert_eq!(values(&series[0]), vec![Some(5.0), None, None]);
+    // Cell (1, 2) of the 4 × 4 chunk.
+    assert_eq!(values(&series[1]), vec![None, Some(109.0), None]);
+    assert_eq!(
+        series[2],
+        unavailable(LidarSampleUnavailableReason::StaleGeneration)
+    );
+    assert_eq!(
+        series[3],
+        unavailable(LidarSampleUnavailableReason::MissingGeneration)
+    );
+}
+
+/// N points in one request equal N one-point requests and the analytic plane:
+/// the cell's column inside the plane, `None` in its NoData hole, outside it
+/// and at a point that is not a number.
+#[test]
+fn n_points_equal_n_single_samples_and_the_analytic_plane() {
+    let root = scratch_root("batch-single");
+    let library = LidarLibrary::open(&root).unwrap();
+    let plane = plane_layer(&library, &root, 16, 16);
+    let aimed = target(
+        LibraryItemRole::Source,
+        &plane,
+        &source_head(&library, &plane),
+    );
+    let mut points = Vec::new();
+    let mut expected = Vec::new();
+    for row in -1..17 {
+        for column in -1..17 {
+            points.push(point(f64::from(column) + 0.5, 16.0 - f64::from(row) - 0.5));
+            let inside = (0..16).contains(&column) && (0..16).contains(&row);
+            let hole = (8..10).contains(&column) && (6..8).contains(&row);
+            expected.push((inside && !hole).then_some(f64::from(column)));
+        }
+    }
+    points.push([f64::NAN, 0.0]);
+    expected.push(None);
+
+    let batch = values(&sample(&library, vec![aimed.clone()], points.clone())[0]);
+    assert_eq!(batch, expected);
+    let singles: Vec<Option<f64>> = points
+        .iter()
+        .map(|single| values(&sample(&library, vec![aimed.clone()], vec![*single])[0])[0])
+        .collect();
+    assert_eq!(singles, batch);
+}
+
+/// The backend serialises sampling (architecture review finding 3): three
+/// concurrent `lidar_sample_points` calls through the real command and
+/// executor take at most one of Local's two running slots, so a save on Local
+/// is admitted and runs while sampling is held, and every call then answers.
+#[test]
+fn concurrent_samples_take_one_local_slot_and_a_save_still_runs() {
+    use crate::native_operation::{NativeOperationClass, NativeOperationExecutor};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Condvar, Mutex};
+    use std::time::{Duration, Instant};
+    use tauri::Manager;
+
+    let root = scratch_root("sampling-turn");
+    let library = LidarLibrary::open(&root).unwrap();
+    let plane = plane_layer(&library, &root, 16, 16);
+    let aimed = target(
+        LibraryItemRole::Source,
+        &plane,
+        &source_head(&library, &plane),
+    );
+    let executor = NativeOperationExecutor::production();
+    let app = tauri::test::mock_builder()
+        .manage(library.clone())
+        .manage(executor.clone())
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+
+    let running = Arc::new(AtomicUsize::new(0));
+    let most = Arc::new(AtomicUsize::new(0));
+    let released = Arc::new((Mutex::new(false), Condvar::new()));
+    let _gate = acceptance_hooks::on_sample_work(&library, {
+        let (running, most, released) = (running.clone(), most.clone(), released.clone());
+        Arc::new(move || {
+            let now = running.fetch_add(1, Ordering::SeqCst) + 1;
+            most.fetch_max(now, Ordering::SeqCst);
+            let (lock, wake) = &*released;
+            let mut open = lock.lock().unwrap();
+            while !*open {
+                open = wake.wait(open).unwrap();
+            }
+            running.fetch_sub(1, Ordering::SeqCst);
+        })
+    });
+    let calls: Vec<_> = (0..3)
+        .map(|_| {
+            let handle = app.handle().clone();
+            let request = LidarSamplePointsRequest {
+                targets: vec![aimed.clone()],
+                points: vec![point(5.5, 10.5)],
+            };
+            std::thread::spawn(move || {
+                tauri::async_runtime::block_on(crate::commands::lidar::lidar_sample_points(
+                    handle.state(),
+                    handle.state(),
+                    request,
+                ))
+            })
+        })
+        .collect();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while running.load(Ordering::SeqCst) == 0 {
+        assert!(Instant::now() < deadline, "no sampling work started");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    // Give a second sampler every chance to start beside the first.
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(running.load(Ordering::SeqCst), 1);
+
+    let (saved, save_done) = std::sync::mpsc::channel();
+    let save_executor = executor.clone();
+    std::thread::spawn(move || {
+        saved
+            .send(tauri::async_runtime::block_on(save_executor.run(
+                NativeOperationClass::Local,
+                "design save",
+                || Ok(7),
+            )))
+            .unwrap();
+    });
+    let save = save_done.recv_timeout(Duration::from_secs(5));
+
+    {
+        let (lock, wake) = &*released;
+        *lock.lock().unwrap() = true;
+        wake.notify_all();
+    }
+    assert_eq!(save, Ok(Ok(7)), "a save runs while sampling is held");
+    for call in calls {
+        let series = call.join().unwrap().expect("each sample answers");
+        assert_eq!(values(&series[0]), vec![Some(5.0)]);
+    }
+    assert_eq!(most.load(Ordering::SeqCst), 1);
+}
+
+/// A diagonal profile across a result's chunk corner reads every cell, over
+/// more than one 256-cell run: chunk (0, 0) holds its column, chunk (1, 1)
+/// 2000 plus its own column.
+#[test]
+fn a_diagonal_across_a_chunk_corner_reads_every_cell() {
+    let root = scratch_root("batch-diagonal");
+    let library = LidarLibrary::open(&root).unwrap();
+    let plane = plane_layer(&library, &root, 16, 16);
+    let result = chunk_result(&library, &plane, "item-diagonal");
+    let side = generation::CHUNK_SIDE as u32;
+    let near: Vec<f32> = (0..side * side)
+        .map(|index| (index % side) as f32)
+        .collect();
+    generation::publish_test_chunk(&library, &result, 0, 0, side, side, &near);
+    let far: Vec<f32> = (0..200 * 200)
+        .map(|index| 2000.0 + (index % 200) as f32)
+        .collect();
+    generation::publish_test_chunk(&library, &result, 1, 1, 200, 200, &far);
+
+    let steps: Vec<i64> = (900..1200).collect();
+    let points = steps
+        .iter()
+        .map(|&cell| point(cell as f64 + 0.5, -(cell as f64) - 0.5))
+        .collect();
+    let read = values(
+        &sample(
+            &library,
+            vec![target(LibraryItemRole::Derived, "item-diagonal", &result)],
+            points,
+        )[0],
+    );
+    let expected: Vec<Option<f64>> = steps
+        .iter()
+        .map(|&cell| {
+            Some(if cell < 1024 {
+                cell as f64
+            } else {
+                2000.0 + (cell - 1024) as f64
+            })
+        })
+        .collect();
+    assert_eq!(read, expected);
+}
+
+/// A published slope is readable through the sampler in the units it was
 /// computed in. The plane rises one metre per metre, so its slope is 45° and
 /// 100 % wherever it has neighbours.
 #[test]
 #[ignore = "requires the pinned GeoLibre CLI (CANOPI_GEOLIBRE_BIN)"]
-fn inspection_reads_a_published_slope_in_both_units() {
+fn the_sampler_reads_a_published_slope_in_both_units() {
     let root = scratch_root("inspection");
     let library = LidarLibrary::open(&root).unwrap();
     let layer_id = plane_layer(&library, &root, 16, 16);
-    let (longitude, latitude) = lon_lat(5.5, 16.0 - 5.5);
     let mut observed = Vec::new();
-    for (unit, expected, units) in [("degrees", 45.0_f64, "°"), ("percent", 100.0_f64, "%")] {
+    for (unit, expected) in [("degrees", 45.0_f64), ("percent", 100.0_f64)] {
         let receipt = run_slope(&library, &layer_id, unit, None);
         let item_id = &receipt.item_ids[0];
         let generation_id = catalogue::derived_head(&library.catalogue().unwrap(), item_id)
             .unwrap()
             .unwrap()
             .id;
-        let outcome = library
-            .sample(
-                &LidarSampleRequest {
-                    kind: LibraryItemRole::Derived,
-                    entity_id: item_id.clone(),
-                    expected_generation_id: generation_id,
-                    request_id: format!("test-{unit}"),
-                    longitude,
-                    latitude,
-                },
-                &AtomicBool::new(false),
-            )
-            .unwrap();
-        let LidarSampleOutcome::Value {
-            value,
-            units: sampled,
-            ..
-        } = outcome
-        else {
-            panic!("cell (5, 5) must hold a slope, got {outcome:?}");
-        };
+        let read = values(
+            &sample(
+                &library,
+                vec![target(LibraryItemRole::Derived, item_id, &generation_id)],
+                vec![point(5.5, 16.0 - 5.5)],
+            )[0],
+        );
+        let value = read[0].unwrap_or_else(|| panic!("cell (5, 5) must hold a slope"));
         assert!((value - expected).abs() < 0.5, "{unit}: {value}");
-        assert_eq!(sampled, units);
         observed.push(value);
     }
     assert!((observed[1] - 100.0 * observed[0].to_radians().tan()).abs() < 0.5);
@@ -1463,10 +1721,10 @@ fn a_cancelled_run_publishes_nothing() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// Inspection never answers from a generation the caller did not aim at, even
-/// when the head moves while the value is being read.
+/// The sampler never answers from a generation the caller did not aim at, even
+/// when the head moves while the values are being read.
 #[test]
-fn acceptance_inspection_rejects_head_changes_during_value_and_nodata_reads() {
+fn acceptance_sampling_rejects_head_changes_during_value_and_nodata_reads() {
     for mode in ["value", "hole", "early-nodata"] {
         let root = scratch_root(&format!("acceptance-inspect-{mode}"));
         let library = LidarLibrary::open(&root).unwrap();
@@ -1504,27 +1762,13 @@ fn acceptance_inspection_rejects_head_changes_during_value_and_nodata_reads() {
         } else {
             (5.5, 10.5)
         };
-        let (longitude, latitude) = lon_lat(x, y);
-        let request = LidarSampleRequest {
-            kind: LibraryItemRole::Source,
-            entity_id: layer.clone(),
-            expected_generation_id: old.id.clone(),
-            request_id: mode.to_string(),
-            longitude,
-            latitude,
-        };
-        let cancel = AtomicBool::new(false);
-        let healthy = library.sample(&request, &cancel).unwrap();
+        let aimed = target(LibraryItemRole::Source, &layer, &old.id);
+        let request = || sample(&library, vec![aimed.clone()], vec![point(x, y)]);
+        let healthy = values(&request()[0]);
         if mode == "value" {
-            assert!(
-                matches!(healthy, LidarSampleOutcome::Value { value, .. } if (value - 5.0).abs() < 0.001),
-                "{healthy:?}"
-            );
+            assert_eq!(healthy, vec![Some(5.0)]);
         } else {
-            assert!(
-                matches!(healthy, LidarSampleOutcome::NoData { .. }),
-                "{healthy:?}"
-            );
+            assert_eq!(healthy, vec![None]);
         }
         let reached = std::rc::Rc::new(std::cell::Cell::new(false));
         let observed = reached.clone();
@@ -1544,16 +1788,12 @@ fn acceptance_inspection_rejects_head_changes_during_value_and_nodata_reads() {
         } else {
             acceptance_hooks::on_read(change)
         };
-        let raced = library.sample(&request, &cancel).unwrap();
+        let raced = request();
         assert!(reached.get(), "the fault boundary must be exercised");
-        assert!(
-            matches!(
-                raced,
-                LidarSampleOutcome::Unavailable {
-                    reason: LidarSampleUnavailableReason::StaleGeneration
-                }
-            ),
-            "{mode}: {raced:?}"
+        assert_eq!(
+            raced,
+            vec![unavailable(LidarSampleUnavailableReason::StaleGeneration)],
+            "{mode}"
         );
         drop(guard);
         drop(library);
@@ -1710,23 +1950,20 @@ fn acceptance_rerun_command_refreshes_in_place_and_retries_with_saved_identity()
     };
     let north_first = head(&north.item_ids[0]);
     let south_first = head(&south.item_ids[0]);
-    let (longitude, latitude) = lon_lat(5.5, 10.5);
-    let sample = library
-        .sample(
-            &LidarSampleRequest {
-                kind: LibraryItemRole::Derived,
-                entity_id: south.item_ids[0].clone(),
-                expected_generation_id: south_first.clone(),
-                request_id: "rerun-control".into(),
-                longitude,
-                latitude,
-            },
-            &AtomicBool::new(false),
-        )
-        .unwrap();
+    let read = values(
+        &sample(
+            &library,
+            vec![target(
+                LibraryItemRole::Derived,
+                &south.item_ids[0],
+                &south_first,
+            )],
+            vec![point(5.5, 10.5)],
+        )[0],
+    );
     assert!(
-        matches!(sample, LidarSampleOutcome::Value { value, .. } if (value - 100.0).abs() < 0.01),
-        "{sample:?}"
+        matches!(read[0], Some(value) if (value - 100.0).abs() < 0.01),
+        "{read:?}"
     );
 
     // Refresh updates the item in place; the other result is untouched.
