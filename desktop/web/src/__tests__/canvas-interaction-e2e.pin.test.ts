@@ -14,8 +14,7 @@ vi.mock('../ipc/species', async (importOriginal) => ({
 import { currentCanvasSelection } from '../canvas/session-state'
 import type { ScenePoint, SceneStore } from '../canvas/runtime/scene'
 import type { SceneInteractionSession, SceneInteractionSessionDeps } from '../canvas/runtime/interaction-session'
-import { createDetachedCanvasRuntimeAppAdapter } from '../canvas/runtime/app-adapter'
-import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
+import { createAppCanvasRuntimeAppAdapter } from '../app/canvas-runtime/app-adapter'
 import {
   createSceneInteractionEventHarness,
   type SceneInteractionEventHarness,
@@ -27,6 +26,7 @@ import {
   makePlant,
   makeRectZone,
 } from './support/canvas-interaction-setup'
+import { createLiveTestCanvasRuntimeHost, type CanvasRuntimeHost } from './support/live-canvas-runtime'
 import './support/camera-tolerance'
 
 describe('SceneInteractionSession: the Site data pin', () => {
@@ -114,37 +114,41 @@ describe('SceneInteractionSession: the Site data pin', () => {
   })
 })
 
-describe('SceneCanvasRuntime: the Site data pin', () => {
+describe('the canvas runtime: the Site data pin', () => {
   const harnesses: SceneInteractionEventHarness[] = []
+  const hosts: CanvasRuntimeHost[] = []
 
-  afterEach(() => {
+  afterEach(async () => {
     for (const harness of harnesses.splice(0)) harness.dispose()
+    for (const host of hosts.splice(0)) await host.destroy()
     document.body.replaceChildren()
   })
 
-  it('a Select click on empty ground reaches the app adapter\'s pinAt', async () => {
+  it('a Select click on empty ground reaches the edition\'s pinAt capability through the app adapter', async () => {
     const pinAt = vi.fn()
-    const runtime = new SceneCanvasRuntime({ appAdapter: { ...createDetachedCanvasRuntimeAppAdapter(), pinAt } })
-    runtime.connectRenderTarget({ setSnapshot: vi.fn(), setDraft: vi.fn(), requestRender: vi.fn() })
+    const host = createLiveTestCanvasRuntimeHost({
+      screen: { width: 400, height: 300 },
+      appAdapter: createAppCanvasRuntimeAppAdapter({ presentationData: {}, pinAt }),
+    })
+    hosts.push(host)
     const container = document.createElement('div')
     document.body.appendChild(container)
     Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
     Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
-    await runtime.init(container)
+    await host.init(container)
     const events = createSceneInteractionEventHarness(container)
     harnesses.push(events)
     // An empty Design opens in overview, where a press pans: show the site at 1 px/m.
-    placeOnHost(runtime.cameraHost, runtime.querySurface.sessionPlane.peek()!, { x: 0, y: 0, scale: 1 })
-    expect(runtime.cameraHost.frames.viewFrame.peek().mode).toBe('site')
+    placeOnHost(host.cameraHost, host.surfaces.queries.sessionPlane.peek()!, { x: 0, y: 0, scale: 1 })
+    expect(host.cameraHost.frames.viewFrame.peek().mode).toBe('site')
 
     events.pointerDown({ x: 100, y: 80 }, { button: 0, buttons: 1, detail: 0 })
     events.pointerUp({ x: 100, y: 80 }, { button: 0, buttons: 0, detail: 0 })
 
-    const expected = runtime.cameraHost.frames.viewFrame.peek().view.screenToWorld({ x: 100, y: 80 })
+    const expected = host.cameraHost.frames.viewFrame.peek().view.screenToWorld({ x: 100, y: 80 })
     expect(pinAt).toHaveBeenCalledTimes(1)
     const [point] = pinAt.mock.calls[0]! as [ScenePoint]
     expect(point.x).toBeCloseTo(expected.x, 9)
     expect(point.y).toBeCloseTo(expected.y, 9)
-    runtime.destroy()
   })
 })
