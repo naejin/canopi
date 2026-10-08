@@ -173,6 +173,20 @@ describe('Analyze dialog', () => {
     expect(onRun).toHaveBeenCalledWith(expect.objectContaining({ inputs: [{ key: 'dem', item_id: 'canopy' }] }))
   })
 
+  it('starts the forms afresh when the Source changes back to the one it opened with', async () => {
+    const both = [{ id: 'ground', name: 'Ground', offers: OFFERS }, { id: 'canopy', name: 'Canopy', offers: OFFERS }]
+    mount({ sources: both, initial: 'hydrology.flow' })
+    const chooseSource = async (name: string) => {
+      await act(async () => { dropdownTrigger(container, 'Source')!.click() })
+      const option = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find((candidate) => candidate.textContent === name)!
+      await act(async () => { option.click() })
+    }
+    await chooseSource('Canopy')
+    await type(container.querySelector<HTMLInputElement>('input:not([type])')!, 'Canopy flow (fine)')
+    await chooseSource('Ground')
+    expect(container.querySelector<HTMLInputElement>('input:not([type])')!.value).toBe('Ground · fixture.flow.title')
+  })
+
   it('keeps the source of Run again with changes fixed', () => {
     mount({ sources: [{ id: 'ground', name: 'Ground', offers: OFFERS }], sourceFixed: true })
     expect(dropdownTrigger(container, 'Source')).toBeNull()

@@ -106,8 +106,10 @@ export function AnalyzeDialog({
   }, [])
 
   // A new Source starts the forms afresh (their names follow it) and keeps the chosen analysis when it can run.
+  const formsSourceId = useRef(sourceId)
   useEffect(() => {
-    if (currentSourceId === sourceId) return
+    if (currentSourceId === formsSourceId.current) return
+    formsSourceId.current = currentSourceId
     setForms({})
     setTouched(new Set())
     setAttempted(false)
