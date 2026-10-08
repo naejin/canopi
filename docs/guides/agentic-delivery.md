@@ -29,6 +29,8 @@ A planned cut or behaviour whose design-check entry says users notice nothing na
 
 Each stream names its riskiest platform assumption (WebKitGTK against Chromium first), and its first commit probes it in both engines: phase R's note measuring assumed WebKit reports a loading font as Chromium does, and paid four fix rounds.
 
+A colour offered in a question carries its contrast on every surface it is drawn on (light and dark map, PDF paper, grayscale print) beside its colour-vision distance: the polish batch's no-stratum grey was chosen on distance alone, printed at 2.25:1 and cost a held review round (U48).
+
 Phase 2's audit said P3, P8 and P27 changed nothing visible, and its plan had the overview band-select objects the overview never draws: seven more decision batches (U35–U40) followed the build. Phase 3's A16 said a touch tap needed no code to move the lens probe, which only hover fed and touch never sends; the live check found it.
 
 ## Review lenses
