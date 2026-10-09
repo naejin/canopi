@@ -195,6 +195,23 @@ describe('profile statistics', () => {
     })
   })
 
+  it('Steepest measures each curve over its own cell size when that is longer than 2 m, beside a finer curve', async () => {
+    // A uniform 10 % slope along 60 m, read every 0.5 m (the finest curve), each grid answering its nearest cell: the
+    // coarse grids are staircases at that step, so a 2 m run across a cell edge would read 125 % and 25 %.
+    const cells = [25, 5, 0.5]
+    const { calls, owner } = profileOf([at(0, 0), at(60, 0)], cells.map((cellM) => source(`c${cellM}`, 'elevation', { resolutionM: cellM })))
+    const distances = Array.from({ length: 121 }, (_, index) => index * 0.5)
+    await calls[0]!.answer((target) => {
+      const cellM = cells[target]!
+      return values(...distances.map((distance) => 0.1 * (Math.floor(distance / cellM) * cellM + cellM / 2)))
+    })
+    expect(ready(owner.profile.value).curves.map((curve) => curve.stats)).toEqual(cells.map((cellM) => ({
+      role: 'elevation',
+      rise: expect.any(Number),
+      steepest: { percent: expect.closeTo(10, 6), index: expect.any(Number), runM: expect.closeTo(Math.max(2, cellM), 6) },
+    })))
+  })
+
   it('Steepest on a line longer than 8,190 m is measured over the sampling step, its run', async () => {
     // 12 km at 4,096 points: 2.93 m between points over a 0.5 m DEM.
     const { calls, owner } = profileOf([at(0, 0), at(12_000, 0)], [source('c', 'elevation', { resolutionM: 0.5 })])

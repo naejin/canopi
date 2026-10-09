@@ -27,8 +27,8 @@ import { profileLine, setProfileLine, type GeoPoint } from './site-transients'
 
 /** At most this many points along a line (LIDAR_SAMPLE_MAX_POINTS). */
 const PROFILE_MAX_POINTS = 4096
-/** Steepest is the steepest slope over this run along the line. */
-const STEEPEST_RUN_M = 2
+/** Steepest is the steepest slope over at least this run along the line (longer for a coarser curve). */
+const STEEPEST_MIN_RUN_M = 2
 
 /** One item a profile plots: a shown, ready elevation or height item. */
 interface ProfileCurveSource {
@@ -50,8 +50,9 @@ interface ProfileSamples {
 }
 
 /**
- * An elevation curve's statistics: Rise (the signed net change) and Steepest (percent over about 2 m, at a point, with
- * the run it was measured over, which the legend names: longer than 2 m when the points are further apart).
+ * An elevation curve's statistics: Rise (the signed net change) and Steepest (percent over about max(2 m, the curve's own
+ * cell size), at a point, with the run it was measured over, which the legend names: longer still when the points are
+ * further apart).
  */
 interface ElevationStats {
   readonly role: 'elevation'
@@ -154,24 +155,29 @@ function profileRise(values: readonly (number | null)[]): number | null {
 }
 
 /**
- * Steepest: the largest slope, in percent, between two points about 2 m apart (adjacent points when they are further
- * apart than that), the point midway between them and the run between them; null with no such pair. A start too near the line's end to
- * reach 2 m is skipped, since a shorter run magnifies cell noise; a line shorter than 2 m is measured end to end.
+ * Steepest: the largest slope, in percent, between two points about `minRunM` apart (adjacent points when they are further
+ * apart than that), the point midway between them and the run between them; null with no such pair. The run is
+ * max(2 m, the curve's own cell size): the sampler reads the nearest native cell, so a coarse grid read at a finer
+ * curve's step is a staircase, and a shorter run across one of its cell edges reads the whole cell's jump. A start too
+ * near the line's end to reach the run is skipped, since a shorter run magnifies cell noise; a line shorter than the run
+ * is measured end to end.
  */
 function profileSteepest(
   values: readonly (number | null)[],
   distances: readonly number[],
+  resolutionM: number | null,
 ): ProfileSteepest | null {
+  const minRunM = Math.max(STEEPEST_MIN_RUN_M, resolutionM ?? 0)
   let best: ProfileSteepest | null = null
   const last = values.length - 1
   let end = 0
   for (let start = 0; start < last; start += 1) {
     end = Math.max(end, start + 1)
-    while (end < last && distances[end]! - distances[start]! < STEEPEST_RUN_M - 1e-9) end += 1
+    while (end < last && distances[end]! - distances[start]! < minRunM - 1e-9) end += 1
     const a = values[start]
     const b = values[end]
     const run = distances[end]! - distances[start]!
-    if (run < STEEPEST_RUN_M - 1e-9 && start > 0) break
+    if (run < minRunM - 1e-9 && start > 0) break
     if (a === null || a === undefined || b === null || b === undefined || run <= 0) continue
     const percent = (Math.abs(b - a) / run) * 100
     if (!best || percent > best.percent) best = { percent, index: Math.round((start + end) / 2), runM: run }
@@ -229,7 +235,7 @@ function curveOf(source: ProfileCurveSource, series: LidarSampleSeries | undefin
       })
     : samples.points.map(() => null)
   const stats: ElevationStats | HeightStats = source.role === 'elevation'
-    ? { role: 'elevation', rise: profileRise(values), steepest: profileSteepest(values, samples.distances) }
+    ? { role: 'elevation', rise: profileRise(values), steepest: profileSteepest(values, samples.distances, source.resolutionM) }
     : { role: 'height', highest: profileHighest(values) }
   return { id: source.id, name: source.name, units: source.units, role: source.role, values, stats }
 }
