@@ -101,7 +101,8 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
   const setMode = (next: DetailMode) => setModeFor({ mode: next, itemId: selectedId })
   useLayoutEffect(() => {
     listed.current = visible
-    if (selectedId !== requestedId) setRequestedId(selectedId)
+    // Before the library's first snapshot nothing is listed: the item asked for waits for it.
+    if (snapshot !== null && selectedId !== requestedId) setRequestedId(selectedId)
     if (modeFor.mode !== 'details' && modeFor.itemId !== selectedId) setModeFor({ mode: 'details', itemId: null })
     // A search or filter that leaves nothing selected returns to the list, which stays when the filters clear.
     if (!item && pane === 'details') setPane('list')

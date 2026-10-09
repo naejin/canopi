@@ -223,6 +223,16 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(selectedName()).toBe('Beta')
     })
 
+    it('keeps the item it was asked for until the library has loaded', async () => {
+      lidarLibrary.value = null
+      act(() => {
+        openDataLibrary('b')
+        render(<DataDialogs />, container)
+      })
+      await act(async () => { lidarLibrary.value = library([layer('a', 'Alpha'), layer('b', 'Beta')]) })
+      expect(selectedName()).toBe('Beta')
+    })
+
     it('selects the row that took its place when the selected item leaves the library', async () => {
       lidarLibrary.value = library([layer('a', 'Alpha'), layer('b', 'Beta'), layer('c', 'Gamma')])
       mount()
