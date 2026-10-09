@@ -150,6 +150,8 @@ const occluders = new Map<HTMLElement, MapOccluderSide | undefined>()
 const rails: Record<ChromeRail, HTMLElement | null> = { tool: null, panel: null }
 const underRail: Record<ChromeRail, Set<HTMLElement>> = { tool: new Set(), panel: new Set() }
 let observer: ResizeObserver | null = null
+/** The frame a chrome resize is measured on; null when none is due. */
+let pendingFrame: number | null = null
 let stopCameraSync: (() => void) | null = null
 
 function recompute(): void {
@@ -174,6 +176,20 @@ function recompute(): void {
   ) visibleMapFrame.value = next
 }
 
+/**
+ * A chrome resize is measured on the next frame, never inside the observer's delivery: the insets and rail rooms it
+ * writes resize chrome this observer watches (the top chip slot reflows when the tool rail drops its names), which
+ * WebKit reports as "ResizeObserver loop completed with undelivered notifications". On the next frame that resize is an
+ * ordinary new observation. Resizes delivered together are measured once.
+ */
+function recomputeNextFrame(): void {
+  if (pendingFrame !== null) return
+  pendingFrame = requestAnimationFrame(() => {
+    pendingFrame = null
+    recompute()
+  })
+}
+
 function observe(element: HTMLElement): void {
   observer?.observe(element)
 }
@@ -182,7 +198,7 @@ function startWatching(): void {
   if (typeof ResizeObserver !== 'undefined' && !observer) {
     // The map area is full-bleed, so the window's resize covers it; the
     // observer watches the chrome, whose size changes on its own.
-    observer = new ResizeObserver(() => recompute())
+    observer = new ResizeObserver(recomputeNextFrame)
     for (const element of [...occluders.keys(), ...underRail.tool, ...underRail.panel]) observer.observe(element)
   }
   window.addEventListener('resize', recompute)
@@ -200,6 +216,8 @@ function startWatching(): void {
 function stopWatching(): void {
   observer?.disconnect()
   observer = null
+  if (pendingFrame !== null) cancelAnimationFrame(pendingFrame)
+  pendingFrame = null
   window.removeEventListener('resize', recompute)
   stopCameraSync?.()
   stopCameraSync = null
