@@ -7,7 +7,7 @@ from scripts import change_coupling as cc
 
 
 def git(repo: Path, *args: str) -> None:
-    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", *args], check=True, capture_output=True)
 
 
 def commit(repo: Path, files: dict[str, str], message: str) -> None:
@@ -27,6 +27,13 @@ class AreaTest(unittest.TestCase):
         self.assertEqual(cc.area("desktop/src/services/lidar/mod.rs"), "desktop/services/lidar")
         self.assertEqual(cc.area("desktop/src/lib.rs"), "desktop")
         self.assertEqual(cc.area("common-types/src/lidar.rs"), "common-types")
+        self.assertEqual(cc.area("desktop/web/ui-gallery/main.tsx"), "web-tooling/ui-gallery")
+        self.assertEqual(cc.area("desktop/web/vite.config.ts"), "web-tooling")
+        self.assertEqual(cc.area("desktop/build.rs"), "desktop-root")
+
+    def test_a_folder_and_its_subfolder_are_one_area_for_pairing(self) -> None:
+        self.assertTrue(cc.nested("web/canvas", "web/canvas/runtime"))
+        self.assertFalse(cc.nested("web/canvas", "web/canvas-map"))
 
     def test_docs_tests_locales_and_generated_files_are_not_counted(self) -> None:
         for path in (
@@ -38,9 +45,11 @@ class AreaTest(unittest.TestCase):
             "desktop/web/src/generated/contracts.ts",
             "desktop/src/services/lidar/fixed_library_tests.rs",
             "desktop/web/e2e/gallery/profile.spec.ts",
+            "desktop/web/package-lock.json",
         ):
             self.assertFalse(cc.counted(path), path)
-        self.assertTrue(cc.counted("desktop/web/src/app/lidar/profile.ts"))
+        for path in ("desktop/web/src/app/lidar/profile.ts", "common-types/analysis-registry.json", "desktop/web/src/styles/global.css"):
+            self.assertTrue(cc.counted(path), path)
 
 
 class CouplingTest(unittest.TestCase):
@@ -53,8 +62,10 @@ class CouplingTest(unittest.TestCase):
         a, b = "desktop/web/src/app/lidar/a.ts", "desktop/web/src/maplibre/b.ts"
         c = "desktop/web/src/app/lidar/c.ts"
         for i in range(3):
-            commit(self.repo, {a: f"a{i}\n", b: f"b{i}\n"}, f"together {i}")
+            commit(self.repo, {a: f"a{i}\n", b: f"b{i}\n" * 50}, f"together {i}")
+        git(self.repo, "tag", "after-together")
         commit(self.repo, {a: "a-alone\n"}, "a alone")
+        commit(self.repo, {a: "a-c\n", c: "c0\n"}, "a with c, one area")
         commit(self.repo, {c: "c\n", "docs/x.md": "d\n"}, "c with docs")
         commit(self.repo, {f"desktop/web/src/app/x/f{i}.ts": "x\n" for i in range(5)}, "mass edit")
 
@@ -76,8 +87,25 @@ class CouplingTest(unittest.TestCase):
 
     def test_hotspots_rank_changes_times_size(self) -> None:
         report = cc.analyse(self.repo, since=None, max_files=4)
-        self.assertEqual(report.hotspots[0][0], "desktop/web/src/app/lidar/a.ts")
-        self.assertEqual(report.hotspots[0][1], 4)
+        # a changed 5 times but has 1 line; b changed 3 times with 50 lines.
+        self.assertEqual([h[0] for h in report.hotspots[:2]], ["desktop/web/src/maplibre/b.ts", "desktop/web/src/app/lidar/a.ts"])
+        hotspots = cc.render(report, top=10).split("## Hotspots")[1]
+        self.assertLess(hotspots.index("maplibre/b.ts"), hotspots.index("lidar/a.ts"))
+
+    def test_files_in_one_area_never_pair(self) -> None:
+        report = cc.analyse(self.repo, since=None, max_files=4)
+        self.assertFalse(any({p.a, p.b} == {"desktop/web/src/app/lidar/a.ts", "desktop/web/src/app/lidar/c.ts"} for p in report.pairs))
+
+    def test_since_takes_a_ref_or_a_date(self) -> None:
+        self.assertEqual(cc.analyse(self.repo, since="after-together", max_files=4).commits, 3)
+        self.assertEqual(cc.analyse(self.repo, since="2000-01-01", max_files=4).commits, 6)
+
+    def test_merge_commits_are_not_counted(self) -> None:
+        git(self.repo, "checkout", "-q", "-b", "side", "after-together")
+        commit(self.repo, {"desktop/web/src/maplibre/d.ts": "d\n"}, "side")
+        git(self.repo, "checkout", "-q", "-")
+        git(self.repo, "merge", "-q", "--no-ff", "-m", "merge side", "side")
+        self.assertEqual(cc.analyse(self.repo, since=None, max_files=4).commits, 7)
 
     def test_the_report_is_markdown_with_its_three_tables(self) -> None:
         text = cc.render(cc.analyse(self.repo, since=None, max_files=4), top=10)

@@ -12,8 +12,10 @@ the coupling that costs work. Three tables, in Markdown:
 - area pairs by shared commits;
 - hotspots: changes times current line count.
 An area is the owning folder (`web/app/lidar`, `desktop/services/lidar`,
-`common-types`). Docs, tracker files, locales, tests, generated files and
-snapshots are not counted: they change with everything and say nothing about
+`common-types`; the rest of desktop/web is `web-tooling/<folder>`, the rest of
+desktop is `desktop-root`); a folder and its own subfolder are one area for
+pairing. Docs, tracker files, locale and lock JSON, tests, generated files and
+snapshots are not counted (CSS and contract JSON are): they change with everything and say nothing about
 code structure. Merge commits and commits touching more than --max-files
 counted files (mass renames, formatting) are skipped, and the skip count is
 printed so the cut is never silent. Stdlib only.
@@ -31,7 +33,8 @@ from pathlib import Path
 
 NOT_COUNTED = (
     re.compile(r"^(docs|\.beads|\.interface-design|\.github)/"),
-    re.compile(r"\.(md|json|jsonl|lock|snap|png|svg|css)$"),
+    re.compile(r"\.(md|jsonl|lock|snap|png|svg)$"),
+    re.compile(r"(^|/)(i18n/.*|package-lock|tsconfig[^/]*)\.json$"),
     re.compile(r"(^|/)(__tests__|e2e|tests|generated)/"),
     re.compile(r"\.(test|spec)\.tsx?$"),
     re.compile(r"(_tests|/tests)\.rs$"),
@@ -44,12 +47,22 @@ def counted(path: str) -> bool:
 
 
 def area(path: str) -> str:
-    """The owning folder: two folder levels under a source root, else the top folder."""
+    """The owning folder: two folder levels under a source root, else a named root."""
     for root, label in (("desktop/web/src/", "web"), ("desktop/src/", "desktop")):
         if path.startswith(root):
             folders = path[len(root):].split("/")[:-1][:2]
             return "/".join([label, *folders])
+    if path.startswith("desktop/web/"):
+        rest = path[len("desktop/web/"):].split("/")
+        return "web-tooling" + (f"/{rest[0]}" if len(rest) > 1 else "")
+    if path.startswith("desktop/"):
+        return "desktop-root"
     return path.split("/", 1)[0]
+
+
+def nested(a: str, b: str) -> bool:
+    """Whether one area holds the other (web/canvas and web/canvas/runtime): not a cross-area link."""
+    return a == b or a.startswith(b + "/") or b.startswith(a + "/")
 
 
 @dataclass(frozen=True)
@@ -70,7 +83,7 @@ class Report:
 
 
 def commits(repo: Path, since: str | None) -> list[list[str]]:
-    args = ["git", "-C", str(repo), "log", "--no-merges", "--name-only", "--format=format:@@"]
+    args = ["git", "-C", str(repo), "-c", "core.quotepath=off", "log", "--no-merges", "--name-only", "--format=format:@@"]
     if since:
         args += [f"{since}..HEAD"] if not re.match(r"^\d{4}-\d{2}-\d{2}$", since) else [f"--since={since}"]
     out = subprocess.run(args, check=True, capture_output=True, text=True).stdout
@@ -92,10 +105,11 @@ def analyse(repo: Path, since: str | None, max_files: int = 40) -> Report:
         kept += 1
         changes.update(code)
         for a, b in combinations(code, 2):
-            if area(a) != area(b):
+            if not nested(area(a), area(b)):
                 together[(a, b)] += 1
         for x, y in combinations(sorted({area(f) for f in code}), 2):
-            area_pairs[(x, y)] += 1
+            if not nested(x, y):
+                area_pairs[(x, y)] += 1
     pairs = [
         Pair(a, b, n, n / min(changes[a], changes[b]))
         for (a, b), n in together.items()
@@ -108,7 +122,7 @@ def analyse(repo: Path, since: str | None, max_files: int = 40) -> Report:
         lines = sum(1 for _ in file.open(errors="replace")) if file.is_file() else 0
         if lines:
             hotspots.append((path, n, lines, n * lines))
-    hotspots.sort(key=lambda h: (-h[1], -h[3], h[0]))
+    hotspots.sort(key=lambda h: (-h[3], h[0]))
     return Report(pairs, area_pairs, hotspots, kept, skipped)
 
 
@@ -125,8 +139,7 @@ def render(report: Report, top: int) -> str:
     out += ["", "## Areas that change together", "", "| Shared commits | Area | Area |", "|---:|---|---|"]
     out += [f"| {n} | {a} | {b} |" for (a, b), n in report.area_pairs.most_common(top)]
     out += ["", "## Hotspots", "", "| Changes | Lines | Changes × lines | File |", "|---:|---:|---:|---|"]
-    ranked = sorted(report.hotspots, key=lambda h: (-h[3], h[0]))
-    out += [f"| {n} | {lines} | {score} | `{path}` |" for path, n, lines, score in ranked[:top]]
+    out += [f"| {n} | {lines} | {score} | `{path}` |" for path, n, lines, score in report.hotspots[:top]]
     return "\n".join(out) + "\n"
 
 
