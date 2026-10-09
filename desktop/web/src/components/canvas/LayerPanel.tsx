@@ -54,7 +54,7 @@ function LockIcon({ locked }: { locked: boolean }) {
 
 export interface LayerPanelActions {
   /** Opens a row's settings under it, or closes them when it is open (one row at a time). */
-  active(id: string): void
+  open(id: string): void
   visibility(id: string, visible: boolean): void
   locked(id: string, locked: boolean): void
   opacity(id: string, opacity: number): void
@@ -269,8 +269,8 @@ function LayerRow({ row, actions, caption }: {
   const eyeLabel = t(row.visible ? 'canvas.lidar.layers.hide' : 'canvas.lidar.layers.show', { name: row.label })
   const item = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (row.active) item.current?.scrollIntoView?.({ block: 'nearest' })
-  }, [row.active])
+    if (row.open) item.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [row.open])
   return (
     <div
       ref={item}
@@ -297,9 +297,9 @@ function LayerRow({ row, actions, caption }: {
         <button
           type="button"
           className={`${layerRow.name} ${styles.layerName}`}
-          aria-expanded={row.active}
+          aria-expanded={row.open}
           title={row.label}
-          onClick={() => actions.active(row.id)}
+          onClick={() => actions.open(row.id)}
         >
           <LayerIcon id={row.id} />
           <span className={styles.nameText}>
@@ -325,7 +325,7 @@ function LayerRow({ row, actions, caption }: {
           <span className={styles.lockSlot} aria-hidden="true" />
         )}
       </div>
-      {row.active && <LayerDetail row={row} actions={actions} />}
+      {row.open && <LayerDetail row={row} actions={actions} />}
     </div>
   )
 }

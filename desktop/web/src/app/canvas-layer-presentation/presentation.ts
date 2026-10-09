@@ -50,7 +50,7 @@ export interface CanvasLayerPresentationRow {
   readonly authority: CanvasLayerPresentationAuthority
   readonly group: CanvasLayerPresentationGroup
   /** The row is open: its settings show under it (one row at a time; `open-row.ts`). */
-  readonly active: boolean
+  readonly open: boolean
   readonly visible: boolean
   readonly opacity: number
   readonly locked: boolean
@@ -85,7 +85,7 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
     label,
     authority: 'map-layers',
     group: id === 'basemap' || id === 'satellite' ? 'background' : 'map',
-    active: open === id,
+    open: open === id,
     visible: state.visible,
     opacity: state.opacity,
     locked: false,
@@ -103,7 +103,7 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
         authority: 'scene' as const,
         group: 'design' as const,
         count: (id === 'measurement-guides' ? scene?.measurementGuides : scene?.[id])?.length ?? 0,
-        active: open === id,
+        open: open === id,
         visible: sceneLayer?.visible ?? true,
         opacity: sceneLayer?.opacity ?? 1,
         locked: sceneLayer?.locked ?? false,
