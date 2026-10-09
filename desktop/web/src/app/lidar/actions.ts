@@ -47,7 +47,7 @@ import {
   readCurrentLidarPresentation,
   refreshLidarLibrary,
 } from './library-store'
-import { movedReferenceOrders, siblingMoveOrders } from './reference-tree'
+import { siblingMoveOrders } from './reference-tree'
 import { kindDisplayDefaults } from './item-types'
 import { designSessionStore } from '../document-session/store'
 import { isPresentableOutput } from '../analyses/registry'
@@ -233,20 +233,9 @@ export function setLidarEntryDisplay(id: string, display: LidarEntryDisplay): vo
 }
 
 /**
- * Move one reference one place towards the front or the back among its
- * siblings in Layers: a top-level item past its neighbour group, a result
- * among the results of the same source. Display order only: it never changes
- * an item's source priority.
- */
-export function moveReference(id: string, towards: 'front' | 'back'): void {
-  const orders = movedReferenceOrders(readCurrentLidarPresentation(), id, towards)
-  if (orders) setLidarEntryOrders(orders)
-}
-
-/**
  * Move one reference to a sibling's place in Site data (a drop, or Alt ↑/↓
  * to the neighbour), in one order write; nothing when the target is not a
- * sibling. Display order only, like `moveReference`.
+ * sibling. Display order only: it never changes an item's source priority.
  */
 export function moveReferenceTo(id: string, targetId: string): void {
   const orders = siblingMoveOrders(readCurrentLidarPresentation(), id, targetId)

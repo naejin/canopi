@@ -79,7 +79,6 @@ import {
   dismissLibraryImport,
   fetchProcessingHistory,
   importLibraryItem,
-  moveReference,
   moveReferenceTo,
   removeFromDesign,
   renameLibraryItem,
@@ -345,22 +344,6 @@ describe('Design data references', () => {
     patchMock.mockClear()
     setLidarEntryDisplay('ground', { range: { mode: 'Custom', min: 190, max: 182 } })
     expect(patchMock).not.toHaveBeenCalled()
-  })
-
-  it('moves a reference among its siblings and saves every order in one edit', () => {
-    presentation.value = [
-      { id: 'ground', order: 0, parentId: null },
-      { id: 'slope', order: 1, parentId: 'ground' },
-      { id: 'canopy', order: 2, parentId: null },
-    ]
-    moveReference('ground', 'front')
-    expect(moveMock).toHaveBeenCalledTimes(1)
-    expect([...moveMock.mock.calls[0]![0] as Map<string, number>]).toEqual([['canopy', 0], ['ground', 1], ['slope', 2]])
-
-    moveMock.mockClear()
-    moveReference('canopy', 'front')
-    moveReference('slope', 'back')
-    expect(moveMock).not.toHaveBeenCalled()
   })
 
   it('a drop moves a reference to a sibling\'s place in one order write, and a refused target writes nothing', () => {
