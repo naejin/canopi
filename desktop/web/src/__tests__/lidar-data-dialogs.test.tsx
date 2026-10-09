@@ -59,7 +59,7 @@ vi.mock('../components/panels/lidar/LibraryPreview', () => ({
 import { DataDialogs } from '../components/panels/lidar/DataDialogs'
 import { lidarLibrary } from '../app/lidar/library-store'
 import { currentDesign } from '../app/document-session/store'
-import { activeSiteItemId, analyzeItem, dataDialog, libraryView, openDataLibrary } from '../app/lidar/library-navigation'
+import { activeSiteItemId, analyzeItem, dataDialog, libraryView, openDataLibrary, siteDataDetails } from '../app/lidar/library-navigation'
 import { locale } from '../app/settings/state'
 import { openLayerRow } from '../app/canvas-layer-presentation/open-row'
 import { dropdownTrigger } from './support/dropdown-trigger'
@@ -184,6 +184,7 @@ describe('Data library, Import and Analyze dialogs', () => {
     dataDialog.value = null
     libraryView.value = null
     openLayerRow.value = null
+    siteDataDetails.value = null
   })
 
   describe('the Data library sheet', () => {
@@ -295,7 +296,9 @@ describe('Data library, Import and Analyze dialogs', () => {
 
     it('adds a ready item to the Design, and shows an item the Design has in Site data', async () => {
       lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Canopy')])
-      setDesign(design([{ kind: 'Source', id: 'b' }]))
+      setDesign(design([{ kind: 'Source', id: 'a' }, { kind: 'Source', id: 'b' }]))
+      // Opened from another item's details in Site data ("Open in library").
+      siteDataDetails.value = 'a'
       mount()
       // The rows already show how many items there are; the header carries no bare count.
       expect(container.querySelector('header')?.textContent).not.toMatch(/\d/)
@@ -306,6 +309,10 @@ describe('Data library, Import and Analyze dialogs', () => {
       await click(button(/^Show in Site data$/))
       expect(siteDataView.showInSiteData).toHaveBeenCalledWith('b')
       expect(libraryView.value).toBeNull()
+      // Site data shows its rows with Canopy open, not the details it came from.
+      expect(siteDataDetails.value).toBeNull()
+      expect(activeSiteItemId()).toBe('b')
+      setDesign(design([{ kind: 'Source', id: 'b' }]))
 
       act(() => { openDataLibrary() })
       await selectRow('Ground')
@@ -893,11 +900,14 @@ describe('Data library, Import and Analyze dialogs', () => {
     it('shows a result the Design already has in Site data instead of calculating it again', async () => {
       lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a')])
       setDesign(design([{ kind: 'Source', id: 'a' }, { kind: 'Derived', id: 's' }]))
+      // Analyze started from Ground's details page in Site data.
+      siteDataDetails.value = 'a'
       openAnalyze('a')
       await choose('Degrees')
       expect(container.textContent).toContain('Already in Site data.')
       await click(button('Show in Site data'))
       expect(siteDataView.showInSiteData).toHaveBeenCalledWith('s')
+      expect(siteDataDetails.value).toBeNull()
       // The row Site data marks open.
       expect(activeSiteItemId()).toBe('s')
       expect(dataDialog.value).toBeNull()
