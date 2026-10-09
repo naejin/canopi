@@ -70,13 +70,17 @@ export function openSiteDataPanel(): void {
 
 /**
  * Shows one of this Design's items in Site data, open under its row (Site
- * data's own view state, `site-data-view.ts`; Layers' open row is left as it
- * is); the library sheet and any dialog over it close first.
+ * data's own view state, `site-data-view.ts`); the library sheet and any
+ * dialog over it close first. The base Site data panel still reads the shared
+ * open row and its details page, so both are set here until stream B's panel
+ * replaces it; commit Z deletes them, leaving Layers' open row alone.
  */
 export function revealInSiteData(itemId: string): void {
   dataDialog.value = null
   libraryView.value = null
+  siteDataDetails.value = null
   showInSiteData(itemId)
+  selectSiteRow(itemId)
 }
 
 /**
