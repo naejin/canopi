@@ -10,7 +10,10 @@
 // permission, which Playwright cannot produce; a unit test stubs it). The dot's core is platform blue #1A73E8 (U54 Q11)
 // over an accuracy polygon of the fix's accuracy radius.
 // Chromium sends a code 2 error to a running watch before each setGeolocation fix (design check §6); every check after a
-// new fix polls until the fix has arrived, and a single code 2 never ends Following.
+// new fix polls until that fix's longitude has been delivered (a count would pass on an earlier second read), and a
+// single code 2 never ends Following. The moved fix has a wider accuracy than the first, so the moved fix being drawn
+// is seen positively (its wider polygon tints the centre), not only as the absence of an off-centre dot, which a frame
+// not yet drawn would also give.
 // The trust half: while not following, the downloaded .canopi, the Draft record and the saved view carry no fix (the
 // fix's digits, such as 12.3456789). A camera saved while following is a view (Q10), so these checks run after a pan.
 // No baselines: nothing here is compared with a recorded screenshot.
@@ -24,8 +27,11 @@ const FIXTURE = fileURLToPath(new URL('../fixtures/canvas-base.canopi', import.m
 
 /** Far from the fixture's site (Montpellier), so the map around the dot is empty paper. */
 const FIX = { latitude: 45.6789012, longitude: 12.3456789, accuracy: 25 } as const
-/** About 156 m east of FIX: some 370 px at zoom 17, so a dot that is not followed leaves the centre. */
-const MOVED_FIX = { ...FIX, longitude: 12.3476789 } as const
+/**
+ * About 156 m east of FIX: some 370 px at zoom 17, so a dot that is not followed leaves the centre. Twice FIX's
+ * accuracy, so its polygon, when centred, tints a ring that FIX's polygon leaves clear.
+ */
+const MOVED_FIX = { ...FIX, longitude: 12.3476789, accuracy: 50 } as const
 /** How far east of the centre the moved fix would be drawn at zoom 17 if the camera did not follow it. */
 const MOVED_FIX_PX = Math.round(((MOVED_FIX.longitude - FIX.longitude) / 360) * 512 * 2 ** 17)
 /** Each fix's digits; none may reach a saved file or the Draft while not following. */
@@ -40,8 +46,11 @@ const EARTH_CIRCUMFERENCE_M = 2 * Math.PI * 6_378_137
 
 interface Point { readonly x: number, readonly y: number }
 
+/** The longitude of each fix the page's geolocation delivered, in order, and each error code. */
+interface GeolocationRecord { readonly longitudes: number[], readonly errors: number[] }
+
 declare global {
-  interface Window { __geolocation?: { fixes: number, errors: number[] } }
+  interface Window { __geolocation?: GeolocationRecord }
 }
 
 test.describe('granted', () => {
@@ -75,8 +84,12 @@ test.describe('granted', () => {
 
     await test.step('a moved fix is followed', async () => {
       await context.setGeolocation(MOVED_FIX)
-      await expect.poll(async () => (await geolocationRecord(page)).fixes, 'the moved fix arrived').toBeGreaterThanOrEqual(2)
+      await expect.poll(async () => (await geolocationRecord(page)).longitudes, 'the moved fix arrived').toContain(MOVED_FIX.longitude)
       const centre = await mapCentre(page)
+      const movedRadiusPx = MOVED_FIX.accuracy / (await scaleDenominator(page) * CSS_PIXEL_METRES)
+      // The ring at 0.75 of the moved radius lies outside FIX's polygon (half the moved radius), and some 280 px from
+      // where the moved polygon would be if the camera had stayed: only the moved fix drawn at the centre tints it.
+      await expectAccuracyTint(page, centre, movedRadiusPx, 0.75)
       await expectDot(page, centre, 'the camera followed the moved fix')
       await expectNoDot(page, { x: centre.x + MOVED_FIX_PX, y: centre.y }, 'the dot did not move off the centre')
       await expect(locationButton(page), 'still Following after the fix (and Chromium\'s code 2 before it)').toHaveAttribute('aria-pressed', 'true')
@@ -148,10 +161,10 @@ test('without permission the click leaves location Off, not Blocked', async ({ p
   await expectNoDot(page, await mapCentre(page), 'no fix, no dot')
 })
 
-/** Counts the fixes and the error codes the page's geolocation delivers, without changing them. */
+/** Records the fixes' longitudes and the error codes the page's geolocation delivers, without changing them. */
 async function recordGeolocation(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    const record = { fixes: 0, errors: [] as number[] }
+    const record = { longitudes: [] as number[], errors: [] as number[] }
     window.__geolocation = record
     const geolocation = Geolocation.prototype as unknown as Record<string, (...args: unknown[]) => unknown>
     for (const name of ['watchPosition', 'getCurrentPosition']) {
@@ -159,7 +172,7 @@ async function recordGeolocation(page: Page): Promise<void> {
       geolocation[name] = function (this: Geolocation, success: PositionCallback, error?: PositionErrorCallback | null, options?: PositionOptions) {
         return original.call(
           this,
-          (position: GeolocationPosition) => { record.fixes += 1; success(position) },
+          (position: GeolocationPosition) => { record.longitudes.push(position.coords.longitude); success(position) },
           (failure: GeolocationPositionError) => { record.errors.push(failure.code); error?.(failure) },
           options,
         )
@@ -168,8 +181,8 @@ async function recordGeolocation(page: Page): Promise<void> {
   })
 }
 
-async function geolocationRecord(page: Page): Promise<{ fixes: number, errors: number[] }> {
-  return page.evaluate(() => window.__geolocation ?? { fixes: 0, errors: [] })
+async function geolocationRecord(page: Page): Promise<GeolocationRecord> {
+  return page.evaluate(() => window.__geolocation ?? { longitudes: [], errors: [] })
 }
 
 async function openBaseFixture(page: Page): Promise<void> {
@@ -311,12 +324,12 @@ function ringMedian(pixels: Pixels, at: Point, radius: number): [number, number,
   return [median(0), median(1), median(2)]
 }
 
-/** Inside the accuracy radius the paper is tinted; well outside it is not. */
-async function expectAccuracyTint(page: Page, centre: Point, radiusPx: number): Promise<void> {
+/** Inside the accuracy radius (on the ring at `insideAt` of it) the paper is tinted; well outside it is not. */
+async function expectAccuracyTint(page: Page, centre: Point, radiusPx: number, insideAt = 0.6): Promise<void> {
   const half = Math.ceil(radiusPx * 2.2) + 2
   await expect.poll(async () => {
     const pixels = await pixelsAround(page, centre, half)
-    const inside = ringMedian(pixels, centre, radiusPx * 0.6)
+    const inside = ringMedian(pixels, centre, radiusPx * insideAt)
     const outside = ringMedian(pixels, centre, radiusPx * 2)
     return inside.reduce((sum, value, index) => sum + Math.abs(value - outside[index]!), 0)
   }, `the accuracy polygon (${Math.round(radiusPx)} px) tints the map under it`).toBeGreaterThanOrEqual(12)
