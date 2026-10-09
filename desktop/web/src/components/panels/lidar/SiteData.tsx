@@ -249,14 +249,16 @@ export function SiteDataList({ view }: { readonly view: SiteDataView }) {
 
 /**
  * Where a drop at `clientY` puts the dragged unit: before the first other
- * unit whose first row's middle is below the pointer. Returns the row whose
- * place it takes (`siblingMoveOrders`), or null where it started.
+ * unit whose first row's middle is below the pointer; a run collapsed under
+ * its analysis line is measured by that line. Returns the row whose place it
+ * takes (`siblingMoveOrders`), or null where it started.
  */
 function dropTarget(list: HTMLUListElement | null, session: DragSession, clientY: number): string | null {
   const others = session.units.filter((_, index) => index !== session.from)
   let insert = others.length
   for (let index = 0; index < others.length; index += 1) {
-    const head = rowElement(list, others[index]![0]!)
+    const unit = others[index]!
+    const head = rowElement(list, unit[0]!) ?? runElement(list, unit)
     if (!head) continue
     const rect = head.getBoundingClientRect()
     if (clientY < rect.top + rect.height / 2) {
@@ -270,6 +272,12 @@ function dropTarget(list: HTMLUListElement | null, session: DragSession, clientY
 /** The list item of one Site data row; ids are matched as data, never as selector text. */
 export function rowElement(root: ParentNode | null, id: string): HTMLElement | null {
   return Array.from(root?.querySelectorAll<HTMLElement>('[data-site-row]') ?? []).find((element) => element.dataset.siteRow === id) ?? null
+}
+
+/** The analysis line of a run, found by any of its outputs; ids are matched as data. */
+function runElement(root: ParentNode | null, unit: readonly string[]): HTMLElement | null {
+  return Array.from(root?.querySelectorAll<HTMLElement>('[data-site-run]') ?? [])
+    .find((element) => unit.includes(element.dataset.siteRun ?? '')) ?? null
 }
 
 function isDescendant(rows: readonly SiteRow[], row: SiteRow, ancestorId: string): boolean {
@@ -381,7 +389,7 @@ function AnalysisLine({ line, chevron }: {
   const shown = line.members.some((member) => member.shown)
   const eyeLabel = visible ? t('canvas.lidar.layers.hide', { name: label }) : t('canvas.lidar.layers.show', { name: label })
   return (
-    <li className={`${layerRow.row} ${styles.row}`} data-site-line={`analysis:${line.definitionId}`} data-depth={line.depth} data-hidden={!shown}>
+    <li className={`${layerRow.row} ${styles.row}`} data-site-line={`analysis:${line.definitionId}`} data-site-run={first.id} data-depth={line.depth} data-hidden={!shown}>
       <div className={styles.line}>
         <span className={styles.gripSlot} aria-hidden="true" />
         <Indent depth={line.depth} />

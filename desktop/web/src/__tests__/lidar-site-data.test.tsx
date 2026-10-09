@@ -519,6 +519,41 @@ describe('reordering', () => {
     expect(actions.moveReferenceTo).toHaveBeenCalledWith('a', 'b')
   })
 
+  it('measures a collapsed run by its analysis line, so a row behind it can drop in front of it', async () => {
+    mount()
+    await click(button('Collapse Slope', container.querySelector<HTMLElement>('[data-site-line="analysis:flow-def"]')!))
+    expect(lines()).toEqual(['b', 'a', '  [analysis:flow-def]', '  s'])
+    const run = container.querySelector<HTMLElement>('[data-site-line="analysis:flow-def"]')!
+    rects(['b', 'a'])
+    vi.spyOn(run, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 64, 440, 32))
+    vi.spyOn(row('s'), 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 96, 440, 32))
+    // The slope dropped over the run's line lands before the whole run.
+    await drag(button('Reorder Ground · Slope', row('s')), 64 + 4)
+    expect(actions.moveReferenceTo).toHaveBeenCalledTimes(1)
+    expect(actions.moveReferenceTo).toHaveBeenCalledWith('s', 'o1')
+  })
+
+  it('keeps a row in front of a collapsed run where it started while the pointer stays on it', async () => {
+    lidarLibrary.value = library([sourceItem('a', 'Ground'), output('o1'), output('o2'), slopeItem('s', 'a'), slopeItem('t', 'a', { name: 'Terrace' }), sourceItem('b', 'Canopy')])
+    setDesign([
+      { kind: 'Source', id: 'a', order: 0 },
+      { kind: 'Derived', id: 's', order: 4 },
+      { kind: 'Derived', id: 'o1', order: 3 },
+      { kind: 'Derived', id: 'o2', order: 2 },
+      { kind: 'Derived', id: 't', order: 1 },
+      { kind: 'Source', id: 'b', order: 1 },
+    ])
+    mount()
+    await click(button('Collapse Slope', container.querySelector<HTMLElement>('[data-site-line="analysis:flow-def"]')!))
+    expect(lines()).toEqual(['b', 'a', '  s', '  [analysis:flow-def]', '  t'])
+    const run = container.querySelector<HTMLElement>('[data-site-line="analysis:flow-def"]')!
+    rects(['b', 'a', 's'])
+    vi.spyOn(run, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 96, 440, 32))
+    vi.spyOn(row('t'), 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 128, 440, 32))
+    await drag(button('Reorder Ground · Slope', row('s')), 64 + 4)
+    expect(actions.moveReferenceTo).not.toHaveBeenCalled()
+  })
+
   it('writes nothing for a drop where the row started', async () => {
     mount()
     rects(['b', 'a', 'o1', 'o2', 's'])
