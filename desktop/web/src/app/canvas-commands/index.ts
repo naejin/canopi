@@ -4,6 +4,7 @@ import {
   isCharacterKeyShortcut,
 } from '../shell-commands/shortcut-text'
 import type { ToolId } from '../../canvas/runtime/tool-id'
+import { canvasEditAvailable, type CanvasEditSelectionAvailability } from './edit-availability'
 
 /**
  * The tools a command arms: every tool but the saved stamp, which Favorites arms
@@ -103,11 +104,10 @@ export interface CanvasCommandProjectionState {
   readonly canvasAvailable: boolean
   /** False in overview, where Design objects are hidden and cannot change. */
   readonly spatialEditingAvailable: boolean
-  readonly hasSelection: boolean
-  /** The selection names one species, so "Select all of this species" can run. */
-  readonly sameSpeciesSelectionAvailable: boolean
-  /** The selection can turn: editable, nothing locked, more than one plant alone. */
-  readonly rotateAvailable: boolean
+  /** What the selection's commands can do; null with nothing selected. */
+  readonly selection: CanvasEditSelectionAvailability | null
+  /** The re-origin hold (a press, a tool transient or a text entry): Cut and Delete wait (U39). */
+  readonly held: boolean
   /** Some Design Object is locked, so Unlock all has something to do. */
   readonly lockedObjectsPresent: boolean
   readonly canUndo: boolean
@@ -373,39 +373,6 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
   },
 ]
 
-const SELECTION_EDITS: ReadonlySet<CanvasEditAction> = new Set([
-  'deselect',
-  'cut',
-  'copy',
-  'duplicate',
-  'delete',
-  'group',
-  'ungroup',
-  'bring-to-front',
-  'send-to-back',
-  'rotate',
-  'lock',
-  'unlock',
-  'save-as-stamp',
-])
-
-/** Edits that change Design objects; overview hides objects, so they cannot run there. */
-const MUTATING_EDITS: ReadonlySet<CanvasEditAction> = new Set([
-  'cut',
-  'paste',
-  'duplicate',
-  'delete',
-  'group',
-  'ungroup',
-  'bring-to-front',
-  'send-to-back',
-  'rotate',
-  'lock',
-  'unlock',
-  'unlock-all',
-  'save-as-stamp',
-])
-
 export function isCanvasCommandDisabled(
   intent: CanvasCommandIntent,
   state: CanvasCommandProjectionState,
@@ -422,15 +389,18 @@ export function isCanvasCommandDisabled(
     case 'toggle-snap-to-grid':
       return !state.canvasAvailable
     case 'view':
-      return !state.canvasAvailable || (intent.action === 'zoom-to-selection' && !state.hasSelection)
-    case 'edit': {
-      if (!state.canvasAvailable) return true
-      if (MUTATING_EDITS.has(intent.action) && !state.spatialEditingAvailable) return true
-      if (intent.action === 'select-same-species') return !state.sameSpeciesSelectionAvailable
-      if (intent.action === 'rotate') return !state.rotateAvailable
-      if (intent.action === 'unlock-all') return !state.lockedObjectsPresent
-      return SELECTION_EDITS.has(intent.action) && !state.hasSelection
-    }
+      return !state.canvasAvailable || (intent.action === 'zoom-to-selection' && state.selection === null)
+    case 'edit':
+      return !canvasEditAvailable(intent.action, {
+        canvasAvailable: state.canvasAvailable,
+        overview: !state.spatialEditingAvailable,
+        selection: state.selection,
+        held: state.held,
+        lockedObjectsPresent: state.lockedObjectsPresent,
+        // The menu bar and the palette keep Paste enabled, a no-op without a clipboard (U54 Q5): the one difference
+        // from the canvas menu, which reads the clipboard.
+        canPaste: true,
+      })
   }
 }
 

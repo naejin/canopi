@@ -57,6 +57,11 @@ export interface CanvasDesignObjectSelectionModel {
 export interface CanvasQueryRevision {
   readonly scene: ReadonlySignal<number>
   readonly plantNames: ReadonlySignal<number>
+  /**
+   * Moves after each tool call, settling commit and interaction teardown, so after every change of the re-origin hold
+   * (`CanvasKeyboardPort.holdsSelectionDeletes`): the menu bar re-reads the hold on it (S3b).
+   */
+  readonly transientHistory: ReadonlySignal<number>
 }
 
 /** Plant a row's spacing field, which the tool card shows while a plant is picked. */

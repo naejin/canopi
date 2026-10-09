@@ -20,6 +20,8 @@ import { applyRotateSelection, rotateSelectionDialog } from '../app/rotate-selec
 function mountCanvasCommandSurface(overrides: Parameters<typeof createTestCanvasCommandSurface>[0]): void {
   setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
     commands: createTestCanvasCommandSurface(overrides),
+    // The edit table reads what the selection can do: two editable targets, one a group.
+    queries: createTestCanvasQuerySurface({ selection: [{ kind: 'plant', id: 'plant-1' }, { kind: 'group', id: 'group-1' }] }),
   }))
 }
 

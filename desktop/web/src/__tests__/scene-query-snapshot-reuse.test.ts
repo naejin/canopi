@@ -30,7 +30,7 @@ function setup() {
   })
   const query = createSceneCanvasQuerySurface({
     sceneStore: store, frames: camera.frames, settledReader: authority, presentation,
-    revision: { scene: signal(0), plantNames: signal(0) },
+    revision: { scene: signal(0), plantNames: signal(0), transientHistory: signal(0) },
     mutations: {
       getSelectedPlantColorContext: () => { throw new Error('unused') },
       getSelectedPlantSymbolContext: () => { throw new Error('unused') },

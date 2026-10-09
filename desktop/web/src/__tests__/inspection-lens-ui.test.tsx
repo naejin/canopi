@@ -176,7 +176,7 @@ it('a drag on the preview pans the lens, through the real lens owner', async () 
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
   document.body.appendChild(root)
   const camera = createTestView({ screen: { width: 800, height: 600 }, viewport: { x: 100, y: 0, scale: 6 } })
-  const owner = new SceneCanvasInspectionOwner({ frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
+  const owner = new SceneCanvasInspectionOwner({ frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0), transientHistory: signal(0) },
     readSessionPlane: () => createSessionPlane({ lon: 0, lat: 0 }),
     getSnapshot: () => createTestSceneRendererSnapshot(), setHoveredTarget() {} })
   let view: CanvasInspectionHandle | null = null

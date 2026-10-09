@@ -35,7 +35,7 @@ function runtimeOverOneApple() {
     }]
     draft.plantSpeciesColors = { 'Malus domestica': '#b06045' }
   })
-  const revision = { scene: signal(0), plantNames: signal(0) }
+  const revision = { scene: signal(0), plantNames: signal(0), transientHistory: signal(0) }
   const camera = createTestView()
   const edits = new SceneRuntimeEditCoordinator({
     sceneStore: store, history: new SceneHistory(),

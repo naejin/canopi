@@ -49,6 +49,8 @@ export type TestCanvasQuerySurface = CanvasQuerySurface & {
   setPlacement(placement: TestPlacement): void
   bumpSceneRevision(): void
   bumpPlantNamesRevision(): void
+  /** Moves the transient history, as the runtime does after each tool call. */
+  bumpTransientHistory(): void
   setSettled(settled: boolean): void
   setPlants(plants: readonly PlacedPlant[]): void
   setLocalizedNames(names: ReadonlyMap<string, string | null>): void
@@ -73,11 +75,13 @@ export function createTestCanvasQuerySurface({
   const sessionPlaneSignal = signal<SessionPlane | null>(sessionPlane)
   const sceneRevision = signal(0)
   const plantNamesRevision = signal(0)
+  const transientHistoryRevision = signal(0)
   const placementSignal = signal<TestPlacement>(placement)
   const admissionRevision = signal(0)
   const revision = {
     scene: sceneRevision,
     plantNames: plantNamesRevision,
+    transientHistory: transientHistoryRevision,
   }
   let currentPlants = [...plants]
   let currentLocalizedNames = localizedNames
@@ -163,6 +167,9 @@ export function createTestCanvasQuerySurface({
     },
     bumpPlantNamesRevision: () => {
       plantNamesRevision.value += 1
+    },
+    bumpTransientHistory: () => {
+      transientHistoryRevision.value += 1
     },
     setSettled: (nextSettled) => {
       if (settled === nextSettled) return
