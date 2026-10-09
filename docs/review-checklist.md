@@ -12,7 +12,7 @@ Check every section in light and dark, English and French, and a 720 px tall win
 4. Save as… to a `.canopi` file, close (Ctrl W), reopen from Recent Designs: objects are where they were; two files with one name show their folders.
 5. Edit the open file outside Canopi, then change something: "Changed outside Canopi" offers a choice; nothing is written silently.
 6. Open a Design from Canopi 1.2 or a 2.0 preview (format 8 or older): "Can’t open this Design · Made with Canopi before 2.0; Canopi 2.0 and later can’t open it", and the file is unchanged.
-7. Start on a Canopi 1.2 profile: one notice says earlier data was set aside; `user.db.before-2.0-…` and `drafts.before-2.0-…` are in the data folder; the next start shows none. A 2.0 preview profile (schema 9) keeps its user DB; only older Drafts move. A newer profile is refused, unchanged.
+7. Start on a Canopi 1.2 profile (until P25, ADR 0021): one notice says earlier data was set aside; `user.db.before-2.0-…` and `drafts.before-2.0-…` are in app data; a second start shows none. A 2.0 preview (schema 9) keeps its user DB; only older Drafts move. A newer one is refused, unchanged.
 8. Recent Designs › More: Show in folder opens the folder; Remove from list forgets the row and keeps the file.
 9. File › Revert to the version when opened…: confirms, then restores the opened version as one Undo step.
 
@@ -99,7 +99,7 @@ Check every section in light and dark, English and French, and a 720 px tall win
 4. Layers reads "N terrain or height layers in this Design · Needs Canopi Desktop"; they survive a Web round trip.
 5. Phone (a real device, portrait and landscape): the top bar with Menu, name, Undo and search; the tool strip; the compass; the bottom sheet (Layers, Plants, Catalog, More) opens to half and full height by drag, tap and arrow keys; targets ≥ 44 px; typing in a field does not zoom the page; the notch and home indicator are clear.
 6. Present a story on the phone: swipe moves steps; Esc or Finish returns to the panel.
-7. Open the 1.x Web storage profile: one notice says earlier data was set aside (`…before-2.0-…` keys); the app starts empty.
+7. Open the 1.x Web storage profile: one notice says earlier data was set aside (`…before-2.0-…` keys; until P25); the app starts empty.
 
 ## Platform builds
 

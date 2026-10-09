@@ -6,7 +6,7 @@ Boundaries of the Preact frontend in `desktop/web/src/`. Related: [design system
 
 ## Authorities and boundaries
 
-- Stack and directory map: [AGENTS.md](../../AGENTS.md). `generated/` is bindings output and never hand-edited.
+- Stack: [architecture](../architecture.md#stack); banned libraries: [AGENTS.md](../../AGENTS.md). `generated/` is bindings output and never hand-edited.
 - Import direction: components → actions/controllers/workbenches → Design Edit or state. Canvas edits go through runtime commands on `currentCanvasSession` (`canvas/session.ts`); non-canvas Design edits through `app/design-edit/`; panels read canvas entities through read-only runtime queries. A view never mirrors an authority's state to restyle it.
 - Commands: `commands/registry.ts` is the one public seam over `commands/graph/`. `app/shell-commands/index.ts` owns neutral ids, label keys and shortcut matching; `app/shell-commands/menus.ts` (`composeWorkspaceMenus`) is the one menu model for the menubar, the compact Menu button, the palette and the F1 dialog; `app/workspace-commands/` holds the capabilities and canvas intents both editions share.
 - Keys ([ADR 0020](../adr/0020-focus-and-keyboard-ownership.md)): the one key router owns the window key listeners (capture: IME composition, focus class, held keys, a live canvas gesture, F6; bubble: under a modal only its `worksInModal` rows, after the modal's own element handlers; otherwise global rows (Ctrl F asks the open plant finder first), the Stories Undo toast's pushed scope, the Esc chain, then the keymap); a key a focused widget already handled (`defaultPrevented`) is left alone.

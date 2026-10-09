@@ -7,7 +7,7 @@ Canopi is a desktop (Tauri) and Web app for designing agroecological sites on a 
 1. **The map is the canvas.** Basemap, satellite, LiDAR and terrain are the background of the design surface. There is no separate local canvas and no Design location ([ADR 0001](adr/0001-geolocated-map-canvas.md)).
 2. **Every design object is geolocated.** Files store WGS84 longitude/latitude; metres exist only in the runtime's session plane ([ADR 0001](adr/0001-geolocated-map-canvas.md)).
 3. **Reuse GeoLibre before writing code.** Generic GIS pieces are copied with attribution or depended on as light packages; Canopi never forks the GeoLibre app or imports its React code ([ADR 0002](adr/0002-geolibre-module-reuse.md)).
-4. **Canopi 2.0 breaks stored data.** No code reads an older format; old files are refused, old local data is moved aside ([ADR 0021](adr/0021-canopi-2-breaks-stored-data.md), [Persistence of app data](#persistence-of-app-data)).
+4. **Canopi 2.0 breaks stored data.** No code reads an older format; old files are refused, old local data is left unread ([ADR 0021](adr/0021-canopi-2-breaks-stored-data.md), [Persistence of app data](#persistence-of-app-data)).
 5. **Delete, don't deprecate.** Dead code, docs, tests, scripts and dependencies go in the change that makes them dead.
 
 ## Stack
@@ -83,7 +83,7 @@ Every `#[tauri::command]` is registered once and is executor-backed async or one
 
 ## Persistence of app data
 
-[ADR 0021](adr/0021-canopi-2-breaks-stored-data.md) decides every store: no migrations; what is moved aside is never deleted and the user is told once.
+[ADR 0021](adr/0021-canopi-2-breaks-stored-data.md) decides every store: no migrations; older local data is left in place, unread, and the user is told once; Drafts and Web below move aside until P25.
 
 - Designs: only the current format opens; an older or newer file is refused unchanged with a typed `DesignLoadFailure` that says which.
 - Desktop user DB and Drafts: a database or Draft from before 2.0 is renamed `….before-2.0-<unix-seconds>` and Canopi starts fresh; a newer database is refused untouched; a damaged one is renamed `<file>.corrupt-<unix-seconds>`.
