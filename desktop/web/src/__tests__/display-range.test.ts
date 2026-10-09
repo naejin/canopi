@@ -141,6 +141,25 @@ describe('Cut outliers ranges', () => {
     expect(high).toBeCloseTo(1096, 1)
   })
 
+  // A corridor survey on top of a regional DTM with about the same bounds: the strip's nodata shows the DTM.
+  it('counts a higher asset as covering only its valid share, so a lower one its nodata shows is read and weighed', async () => {
+    requestCutOutlierRange('Source/r/g1', [
+      { url: 'strip.tif', bbox: [0, 0, 10, 10] },
+      { url: 'dtm.tif', bbox: [1, 1, 9, 9] },
+    ])
+    // 100 valid samples of 1000: the strip draws a tenth of its bounds.
+    const strip = { ...statsOf(Array.from({ length: 100 }, (_, index) => (10 * index) / 99)), pixels: 1000 }
+    answers.get('strip.tif')!(strip)
+    await vi.waitFor(() => expect(asked).toEqual(['strip.tif', 'dtm.tif']))
+    answers.get('dtm.tif')!(stats(1000, 1100, 1002, 1098))
+    await vi.waitFor(() => expect(cutOutlierRange('Source/r/g1')).not.toBeNull())
+    // The strip shows 10 units of ground, the DTM 64 × 0.9 = 57.6: the 2 % point sits in the strip, the 98 % in the DTM.
+    const [low, high] = cutOutlierRange('Source/r/g1')!
+    expect(low).toBeLessThan(10)
+    expect(high).toBeGreaterThan(1090)
+    expect(clients).toBe(0)
+  })
+
   it('keeps the data range for an asset with no valid pixel, and does not ask again', async () => {
     requestCutOutlierRange('Source/e/g1', side('empty.tif'))
     answers.get('empty.tif')!(null)
