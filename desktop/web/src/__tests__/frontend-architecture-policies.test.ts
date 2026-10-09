@@ -1,6 +1,7 @@
 // @vitest-environment node
 
 import { readFileSync } from 'node:fs'
+import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -3469,5 +3470,66 @@ describe('one zone geometry', () => {
       .map(({ path }) => path)
 
     expect(declaring).toEqual(['src/canvas/runtime/zone-geometry.ts'])
+  }, 20_000)
+})
+
+/**
+ * item-types.ts is the one place that knows library item types (canopi-f47t.42): nothing else in production spells
+ * a RasterQuantity member as a string, so a new quantity is one table entry, never a scatter of branches.
+ */
+const RASTER_QUANTITY_HOMES = ['src/app/lidar/item-types.ts']
+
+function rasterQuantityMembers(): readonly string[] {
+  const path = 'src/generated/contracts.ts'
+  const file = ts.createSourceFile(path, readFileSync(new URL('../generated/contracts.ts', import.meta.url), 'utf8'), ts.ScriptTarget.Latest)
+  const alias = file.statements.find((node): node is ts.TypeAliasDeclaration => ts.isTypeAliasDeclaration(node) && node.name.text === 'RasterQuantity')
+  if (!alias || !ts.isUnionTypeNode(alias.type)) throw new Error(`${path} no longer declares RasterQuantity as a union`)
+  return alias.type.types.flatMap((member) => ts.isLiteralTypeNode(member) && ts.isStringLiteral(member.literal) ? [member.literal.text] : [])
+}
+
+function rasterQuantityLiteralViolations(
+  sources: readonly { readonly path: string; readonly source: string }[],
+  members: readonly string[],
+): string[] {
+  const quantities = new Set(members)
+  const violations: string[] = []
+  for (const { path, source } of sources) {
+    if (RASTER_QUANTITY_HOMES.includes(path) || path.startsWith('src/generated/')) continue
+    if (path.startsWith('src/__tests__/') || /\.test\.tsx?$/.test(path)) continue
+    const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, path.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
+    const visit = (node: ts.Node): void => {
+      if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && quantities.has(node.text)) {
+        const { line } = file.getLineAndCharacterOfPosition(node.getStart(file))
+        violations.push(`${path}:${line + 1} spells RasterQuantity '${node.text}'; ask item-types.ts instead`)
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(file)
+  }
+  return violations
+}
+
+describe('library item types have one home (canopi-f47t.42)', () => {
+  it('reads the RasterQuantity members from the generated contract', () => {
+    expect(rasterQuantityMembers()).toEqual(expect.arrayContaining(['GroundElevation', 'OtherContinuous', 'Slope']))
+  })
+
+  it('rejects a planted RasterQuantity literal outside item-types.ts, generated contracts and tests', () => {
+    const members = ['GroundElevation', 'OtherContinuous']
+    expect(rasterQuantityLiteralViolations([
+      plantedSource('src/components/panels/lidar/Planted.tsx', ["const other = quantity === 'OtherContinuous'"]),
+      plantedSource('src/app/lidar/planted.ts', ['type Ground = `GroundElevation`', "const label = 'Ground elevation'"]),
+      plantedSource('src/app/lidar/item-types.ts', ["const home = 'OtherContinuous'"]),
+      plantedSource('src/generated/contracts.ts', ['export type RasterQuantity = "GroundElevation" | "OtherContinuous"']),
+      plantedSource('src/__tests__/planted.test.ts', ["const fixture = 'GroundElevation'"]),
+      plantedSource('src/app/lidar/planted.test.ts', ["const fixture = 'GroundElevation'"]),
+    ], members)).toEqual([
+      "src/components/panels/lidar/Planted.tsx:1 spells RasterQuantity 'OtherContinuous'; ask item-types.ts instead",
+      "src/app/lidar/planted.ts:1 spells RasterQuantity 'GroundElevation'; ask item-types.ts instead",
+    ])
+  })
+
+  it('keeps every production source free of RasterQuantity literals', () => {
+    expect(rasterQuantityLiteralViolations(discoveredSourceGraph(), rasterQuantityMembers())).toEqual([])
   }, 20_000)
 })

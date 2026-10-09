@@ -43,6 +43,8 @@ interface RasterQuantityType {
   readonly labelKey: string
   /** Whether a source can be imported as this quantity; derived-only otherwise. */
   readonly importable: boolean
+  /** Whether an import names the units (or says they are unknown); false is metres or the analysis's own unit. */
+  readonly declaresUnits: boolean
   readonly profile: ProfileRole | null
   /**
    * The ramps an open item offers, its default first (U49 Q32). Blue ramps
@@ -79,6 +81,7 @@ export const RASTER_QUANTITIES: Readonly<Record<RasterQuantity, RasterQuantityTy
   GroundElevation: {
     labelKey: 'canvas.lidar.library.quantity.GroundElevation',
     importable: true,
+    declaresUnits: false,
     profile: 'elevation',
     ramps: ['Terrain', 'Earth', 'Gray'],
     defaultRange: DATA_RANGE,
@@ -86,6 +89,7 @@ export const RASTER_QUANTITIES: Readonly<Record<RasterQuantity, RasterQuantityTy
   SurfaceElevation: {
     labelKey: 'canvas.lidar.library.quantity.SurfaceElevation',
     importable: true,
+    declaresUnits: false,
     profile: 'elevation',
     ramps: ['Terrain', 'Earth', 'Gray'],
     defaultRange: DATA_RANGE,
@@ -93,6 +97,7 @@ export const RASTER_QUANTITIES: Readonly<Record<RasterQuantity, RasterQuantityTy
   AboveGroundHeight: {
     labelKey: 'canvas.lidar.library.quantity.AboveGroundHeight',
     importable: true,
+    declaresUnits: false,
     profile: 'height',
     ramps: ['Greens', 'Magma', 'Gray'],
     defaultRange: DATA_RANGE,
@@ -100,6 +105,7 @@ export const RASTER_QUANTITIES: Readonly<Record<RasterQuantity, RasterQuantityTy
   OtherContinuous: {
     labelKey: 'canvas.lidar.library.quantity.OtherContinuous',
     importable: true,
+    declaresUnits: true,
     profile: null,
     ramps: ['Magma', 'YellowRed', 'Gray'],
     defaultRange: DATA_RANGE,
@@ -107,6 +113,7 @@ export const RASTER_QUANTITIES: Readonly<Record<RasterQuantity, RasterQuantityTy
   Slope: {
     labelKey: 'canvas.lidar.library.quantity.Slope',
     importable: false,
+    declaresUnits: false,
     profile: null,
     ramps: ['YellowRed', 'Magma', 'Gray'],
     // A fixed 0–30° (57.7 % for a percent result) in the result's own unit, so

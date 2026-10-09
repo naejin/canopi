@@ -103,6 +103,12 @@ describe('library item types', () => {
     expect(RASTER_QUANTITIES.Slope.importable).toBe(false)
   })
 
+  it('has an import declare units only for other values; elevations and heights are metres', () => {
+    const declaring = (Object.keys(RASTER_QUANTITIES) as RasterQuantity[])
+      .filter((quantity) => RASTER_QUANTITIES[quantity].declaresUnits)
+    expect(declaring).toEqual(['OtherContinuous'])
+  })
+
   it('labels every quantity through its own key', () => {
     expect(itemTypeLabel(raster('Slope'))).toBe('Slope')
     expect(itemTypeLabel(raster('AboveGroundHeight'))).toBe('Height above ground (CHM)')
