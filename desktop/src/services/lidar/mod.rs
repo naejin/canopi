@@ -78,14 +78,11 @@ pub(crate) struct LidarLibraryInner {
     /// before a Local slot: hover, pin and profile reads never hold more than
     /// one of Local's running slots, so a save is always admitted beside them.
     sampling: Arc<tokio::sync::Semaphore>,
-    /// What sampling keeps between requests (resolved source readers, the
-    /// unreadable targets already logged).
+    /// What sampling keeps between requests (the unreadable targets already
+    /// logged).
     sample_memo: Mutex<inspection::SampleMemo>,
     /// One lane preparing display derivatives, separate from numeric jobs.
     display_preparation: Mutex<display_cog::DisplayPreparation>,
-    /// Catalogue turns taken, so a test can bound a path's catalogue work.
-    #[cfg(test)]
-    pub(crate) catalogue_turns: std::sync::atomic::AtomicUsize,
 }
 
 /// The display basis a stored label names.
@@ -233,8 +230,6 @@ impl LidarLibrary {
                 sampling: Arc::new(tokio::sync::Semaphore::new(1)),
                 sample_memo: Mutex::new(inspection::SampleMemo::default()),
                 display_preparation: Mutex::new(display_cog::DisplayPreparation::default()),
-                #[cfg(test)]
-                catalogue_turns: std::sync::atomic::AtomicUsize::new(0),
             }),
         };
         // A library that does not own its catalogue file sweeps nothing: the
@@ -298,10 +293,6 @@ impl LidarLibrary {
     }
 
     pub(crate) fn catalogue(&self) -> Result<CatalogueGuard<'_>, String> {
-        #[cfg(test)]
-        self.inner
-            .catalogue_turns
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Ok(CatalogueGuard(self.inner.catalogue.lock().map_err(
             |_| "LiDAR catalogue lock poisoned".to_string(),
         )?))
