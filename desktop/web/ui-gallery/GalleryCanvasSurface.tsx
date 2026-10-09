@@ -2,6 +2,7 @@ import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import type { WorkspaceRuntimeComposition } from '../src/app/canvas-map-surface/workspace-runtime-composition'
 import { CanvasChrome } from '../src/components/canvas/CanvasChrome'
+import { MyLocationButtonView } from '../src/components/canvas/MyLocationButton'
 import type { StampChooserProps } from '../src/components/canvas/ToolCard'
 import type { CanvasContextMenuProfileLine } from '../src/app/canvas-context-menu/entries'
 import type { FunctionComponent } from 'preact'
@@ -24,6 +25,16 @@ import { getMapNoticeReadModel } from '../src/app/canvas-map-surface/map-notice'
 import { IDLE_MAPLIBRE_CANVAS_SURFACE_STATE } from '../src/maplibre/canvas-surface-state'
 import { t } from '../src/i18n'
 import styles from './gallery.module.css'
+import { GALLERY_LOCATION_STATES, parseGalleryLocationState, type GalleryLocationState } from './surface-routing'
+
+/** Show my location in each state the `location` surface reviews; one component per state, so a re-render keeps it. */
+const GALLERY_LOCATION_BUTTONS = new Map<GalleryLocationState, FunctionComponent>(GALLERY_LOCATION_STATES.map((state) => [state, () => (
+  <MyLocationButtonView
+    mode={state === 'stale' ? 'following' : state}
+    unavailable={state === 'stale'}
+    onPress={() => { activity.value = `Show my location pressed (${state}).` }}
+  />
+)]))
 
 interface GallerySurfaceSignal {
   readonly value: string
@@ -263,6 +274,9 @@ export function GalleryCanvasSurface({
             canvasRef={canvas}
             stampChooser={stampChooser}
             profileLine={profileLine}
+            myLocation={activeSurface.value === 'location'
+              ? GALLERY_LOCATION_BUTTONS.get(parseGalleryLocationState(new URLSearchParams(location.search).get('location')))
+              : undefined}
           />
         ) : null}
         <MapNotice
