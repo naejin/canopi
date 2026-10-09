@@ -165,15 +165,63 @@ describe('style readiness', () => {
     // The engine gates its first map mutation on isStyleLoaded(), which stays
     // false while basemap tiles load, and then waits for a style event that
     // never comes. The adapter nudges it once the map settles.
+    // The nudge runs once the event's own task is done.
+    const settle = () => new Promise<void>((resolve) => queueMicrotask(resolve))
     emit('sourcedata')
+    await settle()
     expect(manager.calls.filter((call) => call.startsWith('state'))).toEqual([])
     loaded = true
     emit('idle')
+    emit('sourcedata')
+    await settle()
     expect(manager.calls.filter((call) => call.startsWith('state'))).toEqual(['state lidar-a-gen1 '])
     present.add('lidar-a-gen1')
     emit('idle')
+    await settle()
     expect(manager.calls.filter((call) => call.startsWith('state'))).toHaveLength(1)
     expect([...listeners.values()].every((set) => set.size === 0)).toBe(true)
+    display.dispose()
+  })
+})
+
+describe('the nudge and the engine\'s own map mutations', () => {
+  it('never re-enters the engine from a map event its own mutation fires (Cut outliers\' second restyle)', async () => {
+    FakeLayerManager.instances = []
+    const listeners = new Map<string, Set<() => void>>()
+    const map = {
+      on: (type: string, listener: () => void) => { const set = listeners.get(type) ?? new Set(); set.add(listener); listeners.set(type, set) },
+      off: (type: string, listener: () => void) => { listeners.get(type)?.delete(listener) },
+      isStyleLoaded: () => true,
+      // The engine's restyle removes the layer and its source, then adds them again.
+      getLayer: () => (restyling ? undefined : { id: 'lidar-a-gen1' }),
+    }
+    const emit = (type: string) => { for (const listener of [...(listeners.get(type) ?? [])]) listener() }
+    let restyling = false
+    let depth = 0
+    let deepest = 0
+    const pool = new RasterWorkerPool({ lanes: 1, budgetBytes: 1024, maxInFlightPerLane: 1, createWorker: () => new IdleLane() })
+    const display = createRasterDisplay(map, { pool, loadRasterModule: async () => ({ LayerManager: FakeLayerManager }) as never })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    display.sync([layer('lidar-a-gen1')], undefined)
+    const manager = FakeLayerManager.instances[0]!
+    const setState = manager.setState.bind(manager)
+    manager.setState = (id, patch) => {
+      depth += 1
+      deepest = Math.max(deepest, depth)
+      setState(id, patch)
+      // MapLibre's removeSource fires 'sourcedata' synchronously, between the engine's remove and its add again.
+      restyling = true
+      emit('sourcedata')
+      restyling = false
+      depth -= 1
+    }
+
+    // Cut outliers: the data range first, the read range a moment later.
+    display.sync([layer('lidar-a-gen1', { rescale: [10, 90] })], undefined)
+    display.sync([layer('lidar-a-gen1', { rescale: [12, 88] })], undefined)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(deepest).toBe(1)
     display.dispose()
   })
 })
