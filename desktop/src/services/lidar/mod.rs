@@ -1040,37 +1040,8 @@ impl LidarLibrary {
     /// go with it, under the heavy lease as a settling import frees its own,
     /// so Dismiss is refused while another raster job runs.
     pub fn dismiss_import(&self, layer_id: &str) -> Result<(), String> {
-        self.ensure_writable()?;
         {
-            let connection = self.catalogue()?;
-            let running: bool = connection
-                .query_row(
-                    "SELECT EXISTS(SELECT 1 FROM lidar_import_jobs WHERE layer_id = ?1
-                     AND state IN ('staging', 'applying'))",
-                    [layer_id],
-                    |row| row.get(0),
-                )
-                .map_err(|e| e.to_string())?;
-            if running {
-                return Err("this import is still running; cancel it first".to_string());
-            }
-            let managed = self.saved_managed_originals(&connection, layer_id)?;
-            let _lease = if managed.is_empty() {
-                None
-            } else {
-                Some(HeavyJobLease::acquire(self, &new_id("dis"))?)
-            };
-            let transaction = connection
-                .unchecked_transaction()
-                .map_err(|e| e.to_string())?;
-            if !delete_unpublished_item_rows(&transaction, layer_id)? {
-                return Err(
-                    "this item is published; delete it from the library instead".to_string()
-                );
-            }
-            let originals = import::release_unclaimed_originals(&transaction, managed)?;
-            transaction.commit().map_err(|e| e.to_string())?;
-            drop(connection);
+            let (_lease, originals) = self.release_dismissed_item(layer_id)?;
             // Still under the lease, so no import stages this content meanwhile.
             if let Err(error) = import::remove_original_dirs(self, &originals) {
                 tracing::warn!(layer_id, %error, "a dismissed item's original was not removed");
@@ -1080,6 +1051,44 @@ impl LidarLibrary {
         // kept goes at the next start.
         self.refresh_source_meta();
         Ok(())
+    }
+
+    /// Dismiss's catalogue step: delete the failed item's rows with those of
+    /// the managed originals no other item claims, in one committed
+    /// transaction, and return those originals with the lease their removal
+    /// must stay under.
+    fn release_dismissed_item(
+        &self,
+        layer_id: &str,
+    ) -> Result<(Option<HeavyJobLease>, Vec<String>), String> {
+        self.ensure_writable()?;
+        let connection = self.catalogue()?;
+        let running: bool = connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM lidar_import_jobs WHERE layer_id = ?1
+                 AND state IN ('staging', 'applying'))",
+                [layer_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if running {
+            return Err("this import is still running; cancel it first".to_string());
+        }
+        let managed = self.saved_managed_originals(&connection, layer_id)?;
+        let lease = if managed.is_empty() {
+            None
+        } else {
+            Some(HeavyJobLease::acquire(self, &new_id("dis"))?)
+        };
+        let transaction = connection
+            .unchecked_transaction()
+            .map_err(|e| e.to_string())?;
+        if !delete_unpublished_item_rows(&transaction, layer_id)? {
+            return Err("this item is published; delete it from the library instead".to_string());
+        }
+        let originals = import::release_unclaimed_originals(&transaction, managed)?;
+        transaction.commit().map_err(|e| e.to_string())?;
+        Ok((lease, originals))
     }
 
     /// The managed originals (`sources/<sha256>/original`) any saved import
