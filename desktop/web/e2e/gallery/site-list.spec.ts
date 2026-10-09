@@ -173,6 +173,18 @@ test.describe('missing and pending Site data', () => {
     await expect(library.getByRole('option', { name: /Canopy height 2024/ })).toHaveCount(0)
   })
 
+  test('Cancel on a Retry puts the item back to failed, with Retry and Dismiss (U51)', async ({ page }) => {
+    await openGallery(page, { surface: 'library', state: 'lidar-progress' })
+    const library = page.getByRole('dialog', { name: 'Data library' })
+    await library.getByRole('option', { name: /Survey tile 0712/ }).click()
+    await library.getByRole('button', { name: 'Retry', exact: true }).click()
+    await library.getByRole('button', { name: 'Cancel import' }).click()
+    await expect(library.getByRole('option', { name: /Survey tile 0712/ })).toHaveCount(1)
+    await expect(library.getByText('The file is not a readable raster.')).toBeVisible()
+    await expect(library.getByRole('button', { name: 'Retry', exact: true })).toBeVisible()
+    await expect(library.getByRole('button', { name: 'Dismiss' })).toBeVisible()
+  })
+
   test('says when work started here could not join the Design', async ({ page }) => {
     await openGallery(page, { surface: 'site-data', state: 'lidar-failure' })
     await expect(siteData(page).getByRole('button', { name: 'Show in the Data library' })).toBeVisible()
