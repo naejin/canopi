@@ -9,6 +9,8 @@ mod http;
 mod image_cache;
 mod logging;
 #[cfg(test)]
+mod module_layering;
+#[cfg(test)]
 mod native_command_policy;
 mod native_operation;
 mod services;
