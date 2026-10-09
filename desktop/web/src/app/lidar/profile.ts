@@ -8,7 +8,7 @@
 // - The curves are the shown, ready elevation and height items, front first (the panel's order), as one request in the
 //   'profile' lane under the key (line, item ids, generations); the sampler splits it into batches of
 //   LIDAR_SAMPLE_MAX_TARGETS sent in turn. A key no longer current is never published, and the chart draws once every
-//   batch of its key has landed.
+//   batch of its key has landed. Closing the profile, or hiding its last curve, drops the lane's queued request.
 // - Nothing here is stored, printed or captured.
 
 import { computed, effect, signal, type ReadonlySignal } from '@preact/signals'
@@ -265,12 +265,24 @@ export function createSiteProfile(deps: SiteProfileDeps): SiteProfileOwner {
   const state = signal<SiteProfile>(NONE)
   const cursor = signal<number | null>(null)
   let asked: string | null = null
+  // Whether the lane's last request is this profile's: a request still queued when the profile closes or loses every
+  // curve would hold the backend's one sampling permit for nothing, so it is replaced by an empty request, which reads
+  // no batch. The running request still finishes its batches (the sampler never cuts one short).
+  let requested = false
+  const release = () => {
+    if (!requested) return
+    requested = false
+    deps.sampler.request('profile', '', [], [], () => {}).catch(() => {
+      // Nothing waits on the empty request.
+    })
+  }
 
   const dispose = effect(() => {
     const line = deps.line.value
     const curves = deps.readCurves()
     const plane = deps.readPlane()
     if (!line || !plane) {
+      release()
       asked = null
       cursor.value = null
       state.value = NONE
@@ -288,6 +300,7 @@ export function createSiteProfile(deps: SiteProfileDeps): SiteProfileOwner {
     asked = key
     cursor.value = null
     if (curves.length === 0) {
+      release()
       state.value = { status: 'needs-layer', lengthM: samples.lengthM }
       return
     }
@@ -295,6 +308,7 @@ export function createSiteProfile(deps: SiteProfileDeps): SiteProfileOwner {
     // This request's own answers: every batch it reads lands here, even while its key is not current, since the key
     // can come back before the request ends; only the end decides what is published.
     const answers: (LidarSampleSeries | undefined)[] = []
+    requested = true
     deps.sampler.request('profile', key, targets, samples.points.map((point) => [point.lon, point.lat]), (first, series) => {
       series.forEach((answer, index) => {
         answers[first + index] = answer

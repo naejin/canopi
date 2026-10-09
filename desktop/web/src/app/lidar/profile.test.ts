@@ -327,6 +327,32 @@ describe('createSiteProfile: request key, batches and stale answers', () => {
     expect(ready(owner.profile.value).curves.map((curve) => curve.values[0])).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 2])
   })
 
+  it('closing the profile drops its queued request; the running request only finishes its batches', async () => {
+    // Nine curves: two batches. A redraw while the first batch is read queues the second line's request; closing the
+    // profile (×, Esc, a panel switch) must drop it, so it never holds the backend's one sampling permit the row values need.
+    const curves = Array.from({ length: 9 }, (_, index) => source(`c${index}`))
+    const { calls, lineSignal, status } = profileOf([at(0, 0), at(5, 0)], curves)
+    lineSignal.value = [at(0, 0), at(0, 5)]
+    lineSignal.value = null
+    expect(status()).toBe('none')
+
+    await calls[0]!.answer(() => values(...Array.from({ length: 201 }, () => 1)))
+    await calls[1]!.answer(() => values(...Array.from({ length: 201 }, () => 1)))
+    expect(calls.map((call) => call.request.targets[0]!.entity_id)).toEqual(['c0', 'c8'])
+    expect(status()).toBe('none')
+  })
+
+  it('hiding every curve drops the profile\'s queued request', async () => {
+    const { calls, lineSignal, curveSignal, status } = profileOf([at(0, 0), at(5, 0)], [source('mnt')])
+    lineSignal.value = [at(0, 0), at(0, 5)]
+    curveSignal.value = []
+    expect(status()).toBe('needs-layer')
+
+    await calls[0]!.answer(() => values(...Array.from({ length: 201 }, () => 1)))
+    expect(calls).toHaveLength(1)
+    expect(status()).toBe('needs-layer')
+  })
+
   it('a line with no curve keeps its length and asks for a layer; no line is no profile', () => {
     const { calls, owner, lineSignal } = profileOf([at(0, 0), at(30, 40)], [])
     expect(owner.profile.value).toEqual({ status: 'needs-layer', lengthM: expect.closeTo(50, 6) })
