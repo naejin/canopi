@@ -379,8 +379,8 @@ impl LidarLibrary {
         }
     }
 
+    /// Every import job root no running job owns: a settled job's, and one
     /// whose import a cancel withdrew before its job settled. Each frees the
-    /// whose item a cancel deleted before its job settled. Each frees the
     /// files its job wrote that no item claims.
     fn prune_settled_job_roots(&self) -> Result<(), String> {
         let running: std::collections::HashSet<String> = {
