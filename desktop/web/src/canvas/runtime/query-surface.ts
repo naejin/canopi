@@ -119,7 +119,11 @@ class SceneCanvasQueryRole implements SceneCanvasQuerySurface {
     )
   }
   sceneHasObjects(): boolean { return this.options.sceneStore.hasObjects }
-  getSceneSnapshot(): ScenePersistedState { return this.options.sceneStore.persisted }
+  getSceneSnapshot(): ScenePersistedState {
+    // A reader in a component, computed or effect follows each Scene Edit (a Species Key recolour reaches the tool card).
+    void this.options.revision.scene.value
+    return this.options.sceneStore.persisted
+  }
   getSpeciesFocus() { return this.options.sceneStore.session.speciesFocus }
   getPlantLabelCoverage(): CanvasPlantLabelCoverage {
     const { view, mode } = this.options.frames.viewFrame.peek()

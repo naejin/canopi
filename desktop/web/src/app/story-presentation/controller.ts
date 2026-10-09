@@ -1,4 +1,4 @@
-import { computed, effect, signal, type ReadonlySignal } from '@preact/signals'
+import { computed, effect, signal, untracked, type ReadonlySignal } from '@preact/signals'
 import { currentCanvasQuerySurface, getCurrentCanvasCommandSurface } from '../../canvas/session'
 import type { PlantLabelMode } from '../../canvas/runtime/plant-display'
 import type { ViewCamera } from '../../canvas/runtime/view/types'
@@ -306,7 +306,8 @@ function stepOverrides(view: SavedView, layers: MapLayersState, plantLabels: Pla
  * previous step's (or the user's) focus into this one.
  */
 function plantedSpeciesToFocus(view: SavedView): string | null {
-  const plants = currentCanvasQuerySurface.peek()?.getSceneSnapshot().plants ?? []
+  // Read untracked: the step's effect focuses the species next, which bumps the Scene revision this read follows.
+  const plants = untracked(() => currentCanvasQuerySurface.peek()?.getSceneSnapshot().plants) ?? []
   return view.highlighted.species.find((name) => plants.some((plant) => plant.canonicalName === name)) ?? null
 }
 

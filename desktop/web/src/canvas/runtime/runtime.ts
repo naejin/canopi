@@ -226,6 +226,7 @@ export interface CanvasQuerySurface {
   captureViewScene(request: CanvasViewSceneRequest): SceneRendererSnapshot | null
   /** Whether the Scene holds any plant, note, measurement guide, or zone with a point ("Where is your site?"). */
   sceneHasObjects(): boolean
+  /** The persisted Scene; a reader inside a component, computed or effect follows the Scene revision. */
   getSceneSnapshot(): ScenePersistedState
   getSelection(): SceneDesignObjectTarget[]
   getDesignObjectSelection(): CanvasDesignObjectSelectionModel
