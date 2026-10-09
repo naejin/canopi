@@ -11,6 +11,7 @@ Code copied or adapted from other projects, with its source, the exact revision 
 |---|---|---|
 | `desktop/web/src/maplibre/openfreemap-basemap.ts` (`OPENFREEMAP_BASEMAPS`) | `packages/core/src/types.ts` (`OPENFREEMAP_BASEMAPS`) | OpenFreeMap style presets |
 | `desktop/web/src/app/geocoding/registry.ts` | `packages/core/src/geocoding.ts` (forward geocoding only) | Geocoding provider registry, Nominatim and Pelias providers, request pacing |
+| `desktop/web/src/app/lidar/profile-chart.ts` | `packages/plugins/src/plugins/elevation-profile/chart/profileChart.ts` | The profile chart's scales, SVG paths and pointer-to-sample lookup (adapted: several curves on one axis, gaps for no data, a height plot from zero, round distance ticks) |
 | `desktop/web/src/canvas/runtime/input/selection-drag-guard.ts` and its test | `packages/map/src/selection-drag-guard.ts` and `tests/selection-drag-guard.test.ts` at commit `b3d91de` | A map drag never selects or drags page text (adapted: `pointerdown`, `selectstart`, text fields kept) |
 
 MIT License text:

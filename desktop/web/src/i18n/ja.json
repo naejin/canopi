@@ -2077,7 +2077,7 @@
       "close": "断面図を閉じる",
       "at": "{{distance}} 地点",
       "rise": "高低差 {{value}}",
-      "steepest": "2 m あたり最急 {{percent}}",
+      "steepest": "{{run}} あたり最急 {{percent}}",
       "highest": "最高 {{value}}",
       "reading": "値を読み込んでいます…",
       "noValues": "この線上に値がありません",

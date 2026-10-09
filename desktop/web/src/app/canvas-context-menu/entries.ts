@@ -30,6 +30,7 @@ export type CanvasContextMenuItemId =
   | 'place-plants-here'
   | 'turn-view-to-edge'
   | 'finish-shape'
+  | 'profile-line'
 
 export interface CanvasContextMenuCommand {
   readonly id: CanvasContextMenuItemId
@@ -70,6 +71,16 @@ export interface CanvasContextMenuEntryOptions {
   addToCalendar(target: CalendarAddTarget): void
   /** Set unit cost…: the species' price field in the Budget. */
   setUnitCost(canonicalName: string): void
+  /** Profile this line (Desktop's Site data, spec §1.10, U49 Q29); absent where there is no Site data. */
+  readonly profileLine?: CanvasContextMenuProfileLine
+}
+
+/** What "Profile this line" needs from the edition that has Site data (app/lidar/profile.ts). */
+export interface CanvasContextMenuProfileLine {
+  /** False disables the entry, as the Site data Profile button: no elevation or height layer is shown. */
+  readonly available: boolean
+  /** Profiles the lone Line zone or Measure guide the menu acts on. */
+  profile(target: { readonly kind: 'zone' | 'measurement-guide'; readonly id: string }): void
 }
 
 const SEPARATOR = { separator: true } as const
@@ -81,7 +92,8 @@ const SEPARATOR = { separator: true } as const
  * draft that can finish, Finish shape leads every menu. On a zone's edge,
  * Turn view to this edge leads the empty map's menu and comes before Lock in
  * the selection's. While a gesture or tool transient is live, Cut and Delete
- * are disabled (U39).
+ * are disabled (U39). Where there is Site data, a lone Line zone or Measure
+ * guide offers Profile this line after the zone's own entries.
  */
 export function buildCanvasContextMenuEntries(
   request: CanvasContextMenuRequest,
@@ -208,6 +220,20 @@ export function buildCanvasContextMenuEntries(
         },
       }, SEPARATOR]
 
+  // Profile this line: a lone Line zone or Measure guide, locked or not, since a profile edits nothing.
+  const lineTarget = profileLineTarget(selection, options.summary)
+  const profileLine = options.profileLine
+  const profileEntries: readonly CanvasContextMenuEntry[] = profileLine && lineTarget
+    ? [{
+        id: 'profile-line',
+        label: options.translate('canvas.contextMenu.profileLine'),
+        disabled: !profileLine.available,
+        run: () => {
+          if (profileLine.available) profileLine.profile(lineTarget)
+        },
+      }, SEPARATOR]
+    : []
+
   const arrange = [
     edit('bring-to-front', !can.edit, () => commands.bringToFront()),
     edit('send-to-back', !can.edit, () => commands.sendToBack()),
@@ -228,6 +254,7 @@ export function buildCanvasContextMenuEntries(
     SEPARATOR,
     ...plantEntries,
     ...zoneEntries,
+    ...profileEntries,
     ...planningEntries,
     {
       id: 'arrange',
@@ -291,4 +318,18 @@ function calendarTargetFor(selection: CanvasDesignObjectSelectionModel): Calenda
   const targets = [...selection.editableTargets, ...selection.lockedTargets]
   const [only] = targets
   return targets.length === 1 && only?.kind === 'zone' ? { kind: 'zone', zoneId: only.id } : null
+}
+
+/** The lone Line zone or Measure guide a menu acts on, or null. */
+function profileLineTarget(
+  selection: CanvasDesignObjectSelectionModel,
+  summary: MapSelectionSummary | null,
+): { readonly kind: 'zone' | 'measurement-guide'; readonly id: string } | null {
+  const targets = [...selection.editableTargets, ...selection.lockedTargets]
+  const [only] = targets
+  if (targets.length !== 1 || !only) return null
+  if (only.kind === 'measurement-guide') return { kind: 'measurement-guide', id: only.id }
+  return only.kind === 'zone' && summary?.zones.length === 1 && summary.zones[0]!.zoneType === 'line'
+    ? { kind: 'zone', id: only.id }
+    : null
 }

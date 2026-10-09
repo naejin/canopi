@@ -2077,7 +2077,7 @@
       "close": "Close profile",
       "at": "At {{distance}}",
       "rise": "Rise {{value}}",
-      "steepest": "Steepest {{percent}} over 2 m",
+      "steepest": "Steepest {{percent}} over {{run}}",
       "highest": "Highest {{value}}",
       "reading": "Reading values…",
       "noValues": "No values along this line",

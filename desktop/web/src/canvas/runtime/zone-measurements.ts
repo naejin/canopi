@@ -58,20 +58,26 @@ export function createLinearZoneMeasurements(start: ScenePoint, end: ScenePoint)
   return [createEdgeLabel('edge-0', start, end)]
 }
 
-export function createPolygonalZoneDraftMeasurements(
+/** An open line while it is drawn (Profile): one edge per segment, the last one to the pointer. */
+export function createPolylineDraftMeasurements(
   vertices: readonly ScenePoint[],
   activePoint: ScenePoint | null,
 ): ZoneMeasurementLabel[] {
-  if (vertices.length === 0) return []
-  const last = vertices[vertices.length - 1]!
-  const previewPoints = activePoint && !pointsEqual(last, activePoint)
-    ? [...vertices, activePoint]
-    : [...vertices]
-
+  const previewPoints = draftPreviewPoints(vertices, activePoint)
   const labels: ZoneMeasurementLabel[] = []
   for (let index = 0; index < previewPoints.length - 1; index += 1) {
     labels.push(createEdgeLabel(`edge-${index}`, previewPoints[index]!, previewPoints[index + 1]!))
   }
+  return labels
+}
+
+/** A polygon while it is drawn: the open line's edges, then the closing edge and the area once it has one. */
+export function createPolygonalZoneDraftMeasurements(
+  vertices: readonly ScenePoint[],
+  activePoint: ScenePoint | null,
+): ZoneMeasurementLabel[] {
+  const previewPoints = draftPreviewPoints(vertices, activePoint)
+  const labels = createPolylineDraftMeasurements(vertices, activePoint)
 
   if (previewPoints.length >= 3) {
     const area = Math.abs(polygonArea(previewPoints))
@@ -87,6 +93,13 @@ export function createPolygonalZoneDraftMeasurements(
   }
 
   return labels
+}
+
+/** The placed points, then the pointer unless it is on the last one. */
+function draftPreviewPoints(vertices: readonly ScenePoint[], activePoint: ScenePoint | null): ScenePoint[] {
+  const last = vertices[vertices.length - 1]
+  if (!last) return []
+  return activePoint && !pointsEqual(last, activePoint) ? [...vertices, activePoint] : [...vertices]
 }
 
 /** A closed polygon's edges and area; none under 0.25 m². */

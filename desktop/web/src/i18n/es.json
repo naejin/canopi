@@ -2077,7 +2077,7 @@
       "close": "Cerrar perfil",
       "at": "A {{distance}}",
       "rise": "Desnivel {{value}}",
-      "steepest": "Máxima pendiente {{percent}} en 2 m",
+      "steepest": "Máxima pendiente {{percent}} en {{run}}",
       "highest": "Máximo {{value}}",
       "reading": "Leyendo valores…",
       "noValues": "No hay valores a lo largo de esta línea",

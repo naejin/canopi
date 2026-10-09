@@ -86,6 +86,7 @@ function build(
     readonly characterKeyShortcuts?: boolean
     readonly turnViewToEdge?: () => void
     readonly finishShape?: () => void
+    readonly profileLine?: CanvasContextMenuEntryOptions['profileLine']
   } = {},
 ) {
   const commands = options.commands ?? createCommands()
@@ -112,6 +113,7 @@ function build(
     openSpeciesDetail,
     addToCalendar,
     setUnitCost,
+    ...(options.profileLine ? { profileLine: options.profileLine } : {}),
   })
   return { entries, commands, openPlantAppearance, openSpeciesDetail, addToCalendar, setUnitCost, request }
 }
@@ -477,5 +479,59 @@ describe('canvas context menu entries', () => {
     const group = build(selection({ editableTargets: [{ kind: 'group', id: 'group-1' }] })).entries
     expect(item(group, 'group').disabled).toBe(true)
     expect(item(group, 'ungroup').disabled).toBe(false)
+  })
+  describe('Profile this line (Desktop, U49 Q29)', () => {
+    const LINE_SUMMARY: MapSelectionSummary = {
+      ...APPLE_SUMMARY, plantCount: 0, species: [], plantSpacingM: null,
+      zones: [{ name: null, zoneType: 'line', areaM2: null, perimeterM: 46 }],
+    }
+    const GUIDE_SUMMARY: MapSelectionSummary = {
+      ...APPLE_SUMMARY, plantCount: 0, species: [], plantSpacingM: null, measurementCount: 1, measurementLengthM: 12,
+    }
+    const profiler = (available = true) => ({ available, profile: vi.fn() })
+
+    it('a Line zone\'s menu offers it after Rename zone…, and running it profiles that zone', () => {
+      const profileLine = profiler()
+      const { entries } = build(ONE_ZONE, { summary: LINE_SUMMARY, profileLine })
+
+      expect(ids(entries).slice(5, 9)).toEqual(['rename-zone', '—', 'profile-line', '—'])
+      expect(item(entries, 'profile-line').label).toBe('Profile this line')
+      expect(item(entries, 'profile-line').disabled).toBe(false)
+      item(entries, 'profile-line').run()
+      expect(profileLine.profile).toHaveBeenCalledWith({ kind: 'zone', id: 'zone-1' })
+    })
+
+    it('a Measure guide\'s menu offers it, a locked one too, since a profile edits nothing', () => {
+      const profileLine = profiler()
+      const guide = selection({ editableTargets: [{ kind: 'measurement-guide', id: 'guide-1' }] })
+      item(build(guide, { summary: GUIDE_SUMMARY, profileLine }).entries, 'profile-line').run()
+      expect(profileLine.profile).toHaveBeenCalledWith({ kind: 'measurement-guide', id: 'guide-1' })
+
+      const locked = selection({
+        lockedTargets: [{ kind: 'zone', id: 'zone-1' }],
+        blockedTargets: [{ target: { kind: 'zone', id: 'zone-1' }, reason: 'locked-design-object' }],
+      })
+      expect(item(build(locked, { summary: LINE_SUMMARY, profileLine }).entries, 'profile-line').disabled).toBe(false)
+    })
+
+    it('is disabled like the Profile button while no elevation or height layer is shown', () => {
+      const profileLine = profiler(false)
+      const { entries } = build(ONE_ZONE, { summary: LINE_SUMMARY, profileLine })
+
+      expect(item(entries, 'profile-line').disabled).toBe(true)
+      item(entries, 'profile-line').run()
+      expect(profileLine.profile).not.toHaveBeenCalled()
+    })
+
+    it('only a lone Line zone or Measure guide offers it, and only where Site data exists', () => {
+      const profileLine = profiler()
+      const rectangle = { ...LINE_SUMMARY, zones: [{ name: null, zoneType: 'rect', areaM2: 12, perimeterM: 14 }] }
+      const twoGuides = selection({ editableTargets: [{ kind: 'measurement-guide', id: 'a' }, { kind: 'measurement-guide', id: 'b' }] })
+      expect(ids(build(ONE_ZONE, { summary: rectangle, profileLine }).entries)).not.toContain('profile-line')
+      expect(ids(build(TWO_APPLES, { profileLine }).entries)).not.toContain('profile-line')
+      expect(ids(build(twoGuides, { summary: GUIDE_SUMMARY, profileLine }).entries)).not.toContain('profile-line')
+      expect(ids(build(null, { profileLine }).entries)).not.toContain('profile-line')
+      expect(ids(build(ONE_ZONE, { summary: LINE_SUMMARY }).entries)).not.toContain('profile-line')
+    })
   })
 })

@@ -2077,7 +2077,7 @@
       "close": "Chiudi profilo",
       "at": "A {{distance}}",
       "rise": "Dislivello {{value}}",
-      "steepest": "Pendenza massima {{percent}} su 2 m",
+      "steepest": "Pendenza massima {{percent}} su {{run}}",
       "highest": "Massimo {{value}}",
       "reading": "Lettura dei valori…",
       "noValues": "Nessun valore lungo questa linea",
