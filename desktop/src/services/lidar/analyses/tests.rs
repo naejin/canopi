@@ -609,6 +609,64 @@ fn library_rerun(library: &LidarLibrary, definition_id: &str) -> AnalysisReceipt
     record_rerun(&library.catalogue().unwrap(), definition_id, None).unwrap()
 }
 
+/// A cancelled run and a job a restart interrupted keep no status text: the
+/// state says what happened, and the UI words it in the user's language.
+/// Only a failure's own reason is stored.
+#[test]
+fn a_cancelled_or_interrupted_job_keeps_no_status_text() {
+    let root = scratch_root("status-text");
+    let library = LidarLibrary::open(&root).unwrap();
+    let (source, _) = source_with_head(
+        &library,
+        "Ground",
+        RasterQuantity::GroundElevation,
+        CRS_PROJECTED_METRE,
+    );
+    let cancelled = record(&library, &slope_request(&source, "degrees", None));
+    library.cancel_job(&cancelled.job_id);
+    let stopped = record(&library, &slope_request(&source, "percent", None));
+    settle_unpublished(&library.catalogue().unwrap(), &stopped.job_id, "cancelled");
+    record(
+        &library,
+        &slope_request(&source, "degrees", Some("Running")),
+    );
+    library
+        .record_import_item(
+            "Orchard",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            &[root.join("orchard.tif")],
+        )
+        .unwrap();
+    drop(library);
+    let reopened = LidarLibrary::open(&root).unwrap();
+    assert_eq!(
+        count(
+            &reopened,
+            "SELECT COUNT(*) FROM lidar_analysis_jobs WHERE state IN ('cancelled', 'failed')"
+        ),
+        3
+    );
+    assert_eq!(
+        count(
+            &reopened,
+            "SELECT COUNT(*) FROM lidar_import_jobs WHERE state = 'failed'"
+        ),
+        1
+    );
+    assert_eq!(
+        count(
+            &reopened,
+            "SELECT (SELECT COUNT(*) FROM lidar_analysis_jobs WHERE message IS NOT NULL)
+                  + (SELECT COUNT(*) FROM lidar_import_jobs WHERE message IS NOT NULL)"
+        ),
+        0
+    );
+    drop(reopened);
+    let _ = std::fs::remove_dir_all(root);
+}
+
 /// A cancelled job, a moved input or a deleted item publishes nothing.
 #[test]
 fn publication_is_refused_when_the_run_no_longer_matches_the_library() {

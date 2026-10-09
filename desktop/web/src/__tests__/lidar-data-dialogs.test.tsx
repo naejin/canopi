@@ -746,6 +746,28 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(() => button('Show more')).toThrow()
     })
 
+    it('words a run in history by its state, showing a message only as a failure\'s reason', async () => {
+      const run = (job: string, state: 'Cancelled' | 'Failed', message: string) => ({
+        job_id: job, state, message, recipe_version: 1, tool: null, inputs: [],
+        created_at: '1790000000000', finished_at: null, outputs: [],
+      })
+      locale.value = 'fr'
+      actions.fetchProcessingHistory.mockResolvedValueOnce({
+        definition_id: 's-def', runs: [run('j2', 'Cancelled', 'analysis cancelled'), run('j1', 'Failed', 'engine stopped')], next_cursor: null,
+      })
+      lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', { name: 'Steepness' })])
+      act(() => {
+        openDataLibrary('s')
+        render(<DataDialogs />, container)
+      })
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 130)) })
+      await act(async () => {})
+      const [cancelled, failed] = Array.from(container.querySelectorAll('section[aria-label="Historique des traitements"] li'))
+      expect(cancelled!.textContent).toContain('Annulé')
+      expect(cancelled!.textContent).not.toContain('analysis cancelled')
+      expect(failed!.textContent).toContain('engine stopped')
+    })
+
     it('offers Cancel for a running calculation and cancels its job', async () => {
       lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', {
         generation_id: null, state: 'Preparing', name: 'Pending', run: { job_id: 'job-1', state: 'Preparing', message: null },

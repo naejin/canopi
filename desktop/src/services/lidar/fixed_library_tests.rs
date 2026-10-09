@@ -635,10 +635,8 @@ fn rebuilt_item(root: &Path, members: &[(&Path, &str, &str)]) -> (LidarLibrary, 
         library.open_status(),
         recovery::LibraryOpenStatus::Recovered { items: 1, .. }
     ));
-    assert_eq!(
-        row_message(&library, "lyr-rebuilt"),
-        recovery::RECOVERED_IMPORT_MESSAGE
-    );
+    // A failed import to retry; the Data library's banner says why.
+    assert_eq!(row_message(&library, "lyr-rebuilt"), "");
     (library, "lyr-rebuilt".to_string())
 }
 

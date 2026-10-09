@@ -950,7 +950,7 @@ impl LidarLibrary {
         if let Ok(connection) = self.catalogue() {
             let _ = connection.execute(
                 "UPDATE lidar_analysis_jobs
-                 SET state = 'cancelled', message = 'analysis cancelled', finished_at = ?2,
+                 SET state = 'cancelled', message = NULL, finished_at = ?2,
                      updated_at = ?2
                  WHERE id = ?1 AND state = 'preparing'",
                 rusqlite::params![job_id, now_iso()],
@@ -2439,10 +2439,7 @@ mod tests {
         assert_eq!(canopy.state, common_types::lidar::LidarResultState::Failed);
         let job = canopy.import_job.as_ref().expect("a retryable import");
         assert_eq!(job.state, LidarImportJobState::Failed);
-        assert_eq!(
-            job.message.as_deref(),
-            Some(recovery::RECOVERED_IMPORT_MESSAGE)
-        );
+        assert_eq!(job.message, None, "the Data library's banner says why");
         assert_eq!(
             saved_selection(&library, "lyr-2"),
             vec![library.inner.paths.source_original("sha-2")]
