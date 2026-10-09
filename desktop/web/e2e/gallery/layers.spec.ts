@@ -25,7 +25,52 @@ async function overflowing(scope: Locator): Promise<string[]> {
     .map((element) => `${element.tagName.toLowerCase()}: ${element.textContent?.slice(0, 40) ?? ''}`))
 }
 
+/**
+ * The share of a shown tooltip's box that is drawn: what its containing block and every clipping box above that leave
+ * of it, within the window (an `overflow` box between the tooltip and its containing block does not clip it).
+ */
+async function drawnShare(tooltip: Locator): Promise<number> {
+  return tooltip.evaluate((element: HTMLElement) => {
+    const box = element.getBoundingClientRect()
+    let [left, top, right, bottom] = [box.left, box.top, box.right, box.bottom]
+    for (let clip = element.offsetParent; clip; clip = clip.parentElement) {
+      const style = getComputedStyle(clip)
+      if (style.overflowX === 'visible' && style.overflowY === 'visible') continue
+      const rect = clip.getBoundingClientRect()
+      left = Math.max(left, rect.left)
+      top = Math.max(top, rect.top)
+      right = Math.min(right, rect.right)
+      bottom = Math.min(bottom, rect.bottom)
+    }
+    left = Math.max(left, 0)
+    top = Math.max(top, 0)
+    right = Math.min(right, window.innerWidth)
+    bottom = Math.min(bottom, window.innerHeight)
+    const drawn = Math.max(0, right - left) * Math.max(0, bottom - top)
+    return drawn / (box.width * box.height)
+  })
+}
+
 test.describe('Desktop Layers', () => {
+  test('the Site data row\'s name shows its shortcut tooltip whole, and its eye and › their names', async ({ page }) => {
+    await openGallery(page, { surface: 'layers' })
+    const summary = layers(page).getByRole('region', { name: 'Site data' })
+    const clipped: string[] = []
+    for (const [button, text] of [
+      [summary.getByRole('button', { name: /^Site data/ }), /^Site data\s*Ctrl\+?\s?2$/],
+      [summary.getByRole('button', { name: 'Hide Site data' }), /^Hide Site data$/],
+      [summary.getByRole('button', { name: 'Open Site data' }), /^Open Site data$/],
+    ] as const) {
+      await button.hover()
+      const tooltip = button.locator('[role="tooltip"]')
+      await expect(tooltip).toHaveText(text)
+      await expect(tooltip).toHaveCSS('opacity', '1')
+      clipped.push(`${await tooltip.textContent()}: ${(await drawnShare(tooltip)).toFixed(2)}`)
+    }
+    expect(clipped, 'each tooltip is drawn whole').toEqual(clipped.map((entry) => entry.replace(/[\d.]+$/, '1.00')))
+  })
+
+
   test('the summary row counts what is shown, and its eye hides all site data but leaves the item eyes', async ({ page }) => {
     await openGallery(page, { surface: 'layers' })
     const panel = layers(page)
