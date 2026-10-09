@@ -80,6 +80,15 @@ test.describe('the Data library sheet', () => {
     expect(await details.evaluate((element) => getComputedStyle(element).overflowY)).toBe('auto')
   })
 
+  test('opened on an item far down the list, the sheet scrolls its selected row into view', async ({ page }) => {
+    await page.setViewportSize(WIDE)
+    await openGallery(page, { surface: 'library', state: 'long', open: 'lidar-tile-37' })
+    const selected = itemList(page).getByRole('option', { selected: true })
+    await expect(selected).toContainText('IGN LiDAR HD MNT tile 0470_6836')
+    await expect(detailsPane(page)).toHaveAccessibleName('IGN LiDAR HD MNT tile 0470_6836')
+    await expect(selected).toBeInViewport()
+  })
+
   test('below 760 px one pane shows at a time, with Back', async ({ page }) => {
     await page.setViewportSize(NARROW)
     await openGallery(page, { surface: 'library', state: 'long' })

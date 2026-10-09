@@ -233,6 +233,29 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(selectedName()).toBe('Beta')
     })
 
+    it('scrolls the selected row into the list when the sheet opens on it or a search moves the selection', async () => {
+      const scrolled: string[] = []
+      const original = Element.prototype.scrollIntoView
+      Element.prototype.scrollIntoView = function (this: Element, options?: boolean | ScrollIntoViewOptions) {
+        if (this.getAttribute('role') === 'option' && typeof options === 'object' && options.block === 'nearest') {
+          scrolled.push(this.querySelector('strong')?.textContent ?? '')
+        }
+      }
+      try {
+        lidarLibrary.value = library([layer('a', 'Alpha'), layer('b', 'Beta'), layer('c', 'Gamma')])
+        act(() => {
+          openDataLibrary('c')
+          render(<DataDialogs />, container)
+        })
+        expect(scrolled).toEqual(['Gamma'])
+        await type(container.querySelector<HTMLInputElement>('input[type="search"]')!, 'Be')
+        expect(selectedName()).toBe('Beta')
+        expect(scrolled).toEqual(['Gamma', 'Beta'])
+      } finally {
+        Element.prototype.scrollIntoView = original
+      }
+    })
+
     it('selects the row that took its place when the selected item leaves the library', async () => {
       lidarLibrary.value = library([layer('a', 'Alpha'), layer('b', 'Beta'), layer('c', 'Gamma')])
       mount()

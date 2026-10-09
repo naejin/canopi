@@ -113,6 +113,12 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
     }
   })
 
+  // The list pane scrolls on its own: a selection focus did not move (the item the sheet opened on, the row that took
+  // a hidden item's place) is brought into it; ↑/↓ also focus the row, which scrolls it anyway.
+  useLayoutEffect(() => {
+    if (selectedId) document.getElementById(rowId(selectedId))?.scrollIntoView?.({ block: 'nearest' })
+  }, [selectedId])
+
   // The details fetch, and draw their large preview, only once the selection has rested.
   const [restedId, setRestedId] = useState<string | null>(null)
   useEffect(() => {
