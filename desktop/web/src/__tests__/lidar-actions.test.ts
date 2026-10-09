@@ -17,7 +17,6 @@ const patchMock = vi.hoisted(() => vi.fn())
 const reconcileNamesMock = vi.hoisted(() => vi.fn())
 const refreshMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const ensurePollingMock = vi.hoisted(() => vi.fn())
-const reconcileInspectionMock = vi.hoisted(() => vi.fn())
 const sessionIdentity = vi.hoisted(() => ({ value: 'design-a' as string | null }))
 const presentation = vi.hoisted(() => ({ value: [] as Array<{
   id: string
@@ -63,10 +62,6 @@ vi.mock('../app/lidar/library-store', async () => {
     refreshLidarLibrary: refreshMock,
   }
 })
-
-vi.mock('../app/lidar/inspection', () => ({
-  reconcileInspectionWithPresentation: reconcileInspectionMock,
-}))
 
 vi.mock('../app/document-session/store', () => ({
   designSessionStore: { sessionIdentity },
@@ -230,7 +225,6 @@ describe('Data Library actions', () => {
     await deleteLibraryItem('analysis-1')
 
     expect(removeMock).toHaveBeenCalledWith(['analysis-1'])
-    expect(reconcileInspectionMock).toHaveBeenCalled()
   })
 
   it('does not remove references from a Design opened during deletion', async () => {
@@ -279,16 +273,14 @@ describe('Design data references', () => {
     expect(removeMock).toHaveBeenCalledWith(['analysis-1'])
   })
 
-  it('ends inspection in the same interaction that hides a reference', () => {
+  it('hides a reference through Design Edit', () => {
     setLidarEntryVisibility('layer-1', false)
     expect(patchMock).toHaveBeenCalledWith('layer-1', { visible: false })
-    expect(reconcileInspectionMock).toHaveBeenCalled()
   })
 
-  it('the Site data eye shows or hides every entry at once and reconciles inspection in the same interaction', () => {
+  it('the Site data eye shows or hides every entry at once', () => {
     setSiteDataShown(false)
     expect(sectionEyeMock).toHaveBeenCalledWith(false)
-    expect(reconcileInspectionMock).toHaveBeenCalled()
     setSiteDataShown(true)
     expect(sectionEyeMock).toHaveBeenLastCalledWith(true)
   })
