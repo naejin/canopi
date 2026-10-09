@@ -316,6 +316,18 @@ describe('CSS module policy facts', () => {
     })).toBe(false)
   })
 
+  it('reads only colour tokens global.css defines, so no var(--color-*) silently draws nothing', () => {
+    const undefinedReads = cssModuleFacts().flatMap((file) => {
+      const local = new Set(file.declarations.map((declaration) => declaration.property))
+      return file.declarations.flatMap((declaration) =>
+        [...declaration.value.matchAll(/var\(\s*(--color-[\w-]+)/g)]
+          .map((match) => match[1]!)
+          .filter((token) => !GLOBAL_DESIGN_TOKEN_NAMES.has(token) && !local.has(token))
+          .map((token) => `${file.path}:${declaration.line} ${declaration.property} reads ${token}`))
+    })
+    expect(undefinedReads).toEqual([])
+  })
+
   it('keeps every CSS Module on the shared design-token policies', () => {
     const files = cssModuleFacts()
 
