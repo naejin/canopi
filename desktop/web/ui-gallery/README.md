@@ -18,6 +18,7 @@ The canvas is the production shared workspace (MapLibre and its Pixi scene layer
 - `calendar`, `calendar-expanded`, `budget`, `consortium`, `favorites`, `notebook` (Desktop only)
 - `stories` (the Stories panel on its third step; `state=empty` has no story, `state=long` a long step title; `present=1` presents the story from that step, flying there unless the browser prefers reduced motion, so captures emulate `prefers-reduced-motion: reduce`)
 - `lens`, `snapshots` (off-screen saved-view snapshots with their timings, flags and attribution; offline unless `tiles=1`)
+- `location` (Location button: the Web zoom group's Show my location in one state, drawn without a device location)
 
 ## Parameters
 
@@ -25,6 +26,7 @@ The canvas is the production shared workspace (MapLibre and its Pixi scene layer
 - Site data states: `lidar-progress` shows imports and calculations in the library and in Site data; `lidar-failure` a failed attachment; `lidar-missing` two entries no library here has; `lidar-long` twelve entries (the filter shows above 8); `lidar-raster` places the Design on the Rust engine's display COG (`src/maplibre/raster-display/fixtures/`), drawn by Desktop's raster renderer; `no-design` opens no Design.
 - `open=<id>`: on `site-data`, the Site data item opened under its row; on `library`, the selected item.
 - `sampleDelay=<ms>`: each `lidar_sample_points` answer waits this long. The memory backend samples an analytic site (ground elevation 140 + 30·sin, the surface 6 m above, a canopy 6 ± 4 m, slope from the ground's gradient; no data outside an item's bounds, which cover the west of the fixture Design) and throws on a request over `LIDAR_SAMPLE_MAX_TARGETS` or `LIDAR_SAMPLE_MAX_POINTS`, so the test that sent it fails; Rust's refusal is tested in Rust.
+- `location=off|following|moved-away|blocked|stale` on `location` (default `following`); `stale` is Following with the position unavailable.
 - `plantDb=corrupt|missing` (the plant database notice), `theme=dark`, `locale=fr`, `panelWidth=320|352|480|800`.
 - `platform=mac|linux`: F1's gesture rows as on a Mac with trackpad gestures (Control-click, the twist), or on Linux with Desktop's pinch note (Desktop only). Only F1 reads it; press F1 on the workspace.
 - `edition=web` uses browser-safe registrations. In a phone-sized window (390×844 or 844×390) it shows the phone layout; between 640 and 760 px the stacked dock. Edition links reload the page so two canvas owners never mount together.
