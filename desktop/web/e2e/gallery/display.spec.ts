@@ -91,6 +91,22 @@ test.describe('an open Site data item\'s display on the real renderer', () => {
   })
 })
 
+test.describe('Cut outliers on the real display COG', () => {
+  test('reads the 2–98 % range from the COG and fills the Range fields with it', async ({ page }) => {
+    await openRaster(page)
+    const ground = await openGround(page)
+    await ground.getByRole('radio', { name: 'Cut outliers' }).click()
+    await expect(ground.getByRole('radio', { name: 'Cut outliers' })).toHaveAttribute('aria-checked', 'true')
+    // The fields show the item's data range (19.75–90.25 m) until the COG's own 2 % and 98 % points are read from it.
+    const minimum = ground.getByRole('textbox', { name: 'Minimum' })
+    const maximum = ground.getByRole('textbox', { name: 'Maximum' })
+    const range = async () => [Number(await minimum.inputValue()), Number(await maximum.inputValue())]
+    await expect.poll(range, { message: 'the 2–98 % range is read from the COG' }).not.toEqual([19.75, 90.25])
+    const [low, high] = await range()
+    expect(low).toBeLessThan(high!)
+  })
+})
+
 test.describe('an open Site data item\'s settings', () => {
   test('offer each kind\'s ramps, and Reset only while the display differs from the kind\'s', async ({ page }) => {
     await openGallery(page, { surface: 'site-data' })

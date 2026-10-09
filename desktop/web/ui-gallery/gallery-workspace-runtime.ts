@@ -85,18 +85,20 @@ export function createGalleryMapContributionAdapter(
     }
   }
   installLidarLibraryObserver()
-  installLidarDisplayDescriptors()
+  // The memory backend's asset paths are already URLs the gallery server serves by range, for Cut outliers' read too.
+  installLidarDisplayDescriptors(servedAsIs)
   return {
     createRasterDisplay: (map, options) => createRasterDisplay(map, options),
     readSiteHover,
     read: (runtime) => readWorkspaceMapContributions(runtime, store, () => ({
-      // The memory backend's asset paths are already URLs the gallery server serves by range.
-      lidar: lidarDisplayLayers(readCurrentLidarPresentation(), lidarDisplayDescriptors.value, null, (path) => path),
+      lidar: lidarDisplayLayers(readCurrentLidarPresentation(), lidarDisplayDescriptors.value, null, servedAsIs),
       terrain: OFFLINE_TERRAIN,
       site: readSiteMapOverlay(),
     })),
   }
 }
+
+const servedAsIs = (path: string): string => path
 
 const OFFLINE_TERRAIN = Object.freeze({
   contoursVisible: false, contoursOpacity: 0, contourIntervalMeters: 1,
