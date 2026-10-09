@@ -399,6 +399,28 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(actions.renameLibraryItem).toHaveBeenCalledWith('b', 'Terrain model')
     })
 
+    // Esc pressed as soon as Rename… or Delete everywhere renders its form, before the browser paints (a busy machine,
+    // or WebKit under load: canopi-kprb), reaches the form: the trigger it replaced has gone, so focus must already be
+    // inside the form when the render commits, not one frame later.
+    it.each([
+      { trigger: /^Rename…$/, open: 'section[aria-labelledby] form' },
+      { trigger: /^Delete everywhere$/, open: '[role="group"][aria-labelledby="library-delete-title"]' },
+    ])('Esc right after $trigger opens, before a paint, cancels only it', async ({ trigger, open }) => {
+      lidarLibrary.value = library([layer('a', 'Elevation'), layer('b', 'Terrain')])
+      actions.fetchDeleteImpact.mockResolvedValue({ dependent_item_ids: [] })
+      mount()
+      await selectRow('Terrain')
+      button(trigger).dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      // Preact renders on a microtask; effects that wait for a paint have not run yet.
+      await Promise.resolve()
+      expect(container.querySelector(open)).not.toBeNull()
+      ;(document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      await act(async () => {})
+      expect(libraryView.value, 'the sheet stays open').not.toBeNull()
+      expect(container.querySelector(open), 'Esc cancelled it').toBeNull()
+      expect(document.activeElement).toBe(button(trigger))
+    })
+
     it('confirms Delete everywhere in place of the actions', async () => {
       lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', { name: 'Steepness' })])
       actions.fetchDeleteImpact.mockResolvedValue({ dependent_item_ids: [] })

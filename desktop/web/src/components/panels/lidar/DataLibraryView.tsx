@@ -548,7 +548,9 @@ function RenameForm({ item, busy, error, onCancel, onSubmit }: {
   const form = useRef<HTMLFormElement>(null)
   const taken = takenItemNames(lidarLibrary.value, item.id)
   const ready = name.trim() !== '' && !isItemNameTaken(name, taken)
-  useEffect(() => { form.current?.querySelector<HTMLInputElement>('input')?.focus() }, [])
+  // Focused as the form commits, not after a paint: the trigger it replaced has gone, and an Esc pressed meanwhile
+  // would reach the sheet instead (canopi-kprb).
+  useLayoutEffect(() => { form.current?.querySelector<HTMLInputElement>('input')?.focus() }, [])
   return (
     <form
       ref={form}
@@ -590,7 +592,8 @@ function DeleteConfirmation({ item, inCurrentDesign, busy, error, onKeep, onDele
     void fetchDeleteImpact(item.id).then((value) => { if (current) setImpact(value) }).catch(() => {})
     return () => { current = false }
   }, [item.id])
-  useEffect(() => { title.current?.focus() }, [])
+  // Focused as it commits, as RenameForm's field is.
+  useLayoutEffect(() => { title.current?.focus() }, [])
   const dependents = impact?.dependent_item_ids.length ?? item.dependents
   return (
     <div
