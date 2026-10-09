@@ -1345,6 +1345,126 @@ fn dismissing_while_a_failed_retry_still_settles_waits_for_it() {
     let _ = std::fs::remove_dir_all(&workbench);
 }
 
+/// Two rebuilt items whose saved selections share one managed original:
+/// dismissing one keeps the original, its row and the other item, whose
+/// `meta.json` then names it alone; dismissing the other frees the original.
+#[test]
+fn dismissing_one_of_two_rebuilt_items_sharing_an_original_keeps_it() {
+    let workbench = scratch("dismiss-shared-rebuilt-tile");
+    let tile = plane(&attached_library(&workbench), &workbench, "tile", 445_000.0);
+    let root = scratch("dismiss-shared-rebuilt");
+    let lidar = paths::library_root(&root);
+    let dir = lidar.join("sources").join("sha-shared");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(&tile, dir.join("original")).unwrap();
+    let member_of = |id: &str, name: &str, created_at: &str| source_meta::ItemMeta {
+        id: id.to_string(),
+        name: name.to_string(),
+        quantity: RasterQuantity::GroundElevation.key().to_string(),
+        units: "m".to_string(),
+        created_at: created_at.to_string(),
+        members: vec!["sha-shared".to_string()],
+        analyses: Vec::new(),
+    };
+    let meta = source_meta::SourceMeta {
+        version: source_meta::META_VERSION,
+        sha256: "sha-shared".to_string(),
+        original_filename: "tile.tif".to_string(),
+        size_bytes: std::fs::metadata(&tile).unwrap().len(),
+        imported_at: "10".to_string(),
+        items: vec![
+            member_of("lyr-first", "First", "10"),
+            member_of("lyr-second", "Second", "11"),
+        ],
+    };
+    source_meta::write(&dir.join(source_meta::META_FILE), &meta).unwrap();
+    std::fs::write(lidar.join(paths::CATALOGUE_FILE), b"not a catalogue").unwrap();
+    let library = attached_library(&root);
+    assert!(matches!(
+        library.open_status(),
+        recovery::LibraryOpenStatus::Recovered { items: 2, .. }
+    ));
+
+    library.dismiss_import("lyr-first").unwrap();
+    let original = library.inner.paths.source_original("sha-shared");
+    assert!(original.is_file(), "the shared original stays");
+    assert_eq!(
+        count(
+            &library,
+            "SELECT COUNT(*) FROM lidar_sources WHERE sha256 = 'sha-shared'"
+        ),
+        1
+    );
+    let snapshot = library.library_snapshot().unwrap();
+    assert_eq!(snapshot.items.len(), 1);
+    item(&snapshot.items, "lyr-second");
+    let meta = source_meta::read(&library.inner.paths.source_meta("sha-shared")).unwrap();
+    assert_eq!(
+        meta.items
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>(),
+        ["lyr-second"]
+    );
+
+    library.dismiss_import("lyr-second").unwrap();
+    assert_eq!(import_rows(&library), no_import_rows());
+    assert_eq!(library_files(&library), Vec::<PathBuf>::new());
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&workbench);
+}
+
+/// A rebuilt item whose managed original a published item also uses:
+/// dismissing the rebuilt item keeps the original, its row and the published
+/// item.
+#[test]
+fn dismissing_a_rebuilt_item_keeps_an_original_a_published_item_uses() {
+    use sha2::Digest;
+    let workbench = scratch("dismiss-published-shared-tile");
+    let tile = plane(&attached_library(&workbench), &workbench, "tile", 445_000.0);
+    let sha256 = format!("{:x}", sha2::Sha256::digest(std::fs::read(&tile).unwrap()));
+    let root = scratch("dismiss-published-shared");
+    let (library, layer_id) = rebuilt_library(&root, &tile, &sha256);
+    let published = library
+        .import_item(
+            "Published",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            vec![tile.clone()],
+        )
+        .unwrap();
+    assert_eq!(
+        await_import(&library, &published.job_id),
+        LidarImportJobState::Complete
+    );
+
+    library.dismiss_import(&layer_id).unwrap();
+
+    assert!(library.inner.paths.source_original(&sha256).is_file());
+    assert_eq!(
+        library
+            .catalogue()
+            .unwrap()
+            .query_row(
+                "SELECT COUNT(*) FROM lidar_sources WHERE sha256 = ?1",
+                [&sha256],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap(),
+        1
+    );
+    let snapshot = library.library_snapshot().unwrap();
+    assert_eq!(snapshot.items.len(), 1);
+    assert!(
+        item(&snapshot.items, &published.layer_id)
+            .generation_id
+            .is_some()
+    );
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&workbench);
+}
+
 /// Dismiss frees a rebuilt item's originals under the heavy lease, as a
 /// settling import does, so it is refused while another raster job runs and
 /// changes nothing; once that job has finished it frees them.
