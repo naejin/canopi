@@ -63,7 +63,7 @@ fn layer_of(path: &str) -> Option<Layer> {
 
 /// The module path of a source file: `src/design/mod.rs` is `design`, `src/db/user_db.rs` is
 /// `db::user_db`, `src/lib.rs` the crate root.
-fn module_path_of(path: &str) -> Vec<String> {
+pub(crate) fn module_path_of(path: &str) -> Vec<String> {
     let relative = path.trim_start_matches("src/").trim_end_matches(".rs");
     let mut segments = relative.split('/').map(str::to_owned).collect::<Vec<_>>();
     if matches!(
