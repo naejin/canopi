@@ -175,3 +175,13 @@
   width: var(--control-size-touch);
   height: var(--control-size-touch);
 }
+
+/* Short phone landscapes (844×390): the five 44 px buttons fit between the top bar and the panel sheet only packed,
+   so the column closes its gaps and centres on that whole room. */
+@container (max-height: 480px) {
+  .phone {
+    top: calc((var(--chrome-top) + var(--title-bar-height) + 100% - var(--map-inset-bottom, 0px)) / 2);
+    gap: 0;
+    padding: var(--space-0-5);
+  }
+}
