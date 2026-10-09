@@ -11,12 +11,12 @@
 //!
 //! Sources and derived items are different storage contracts, so they are
 //! resolved separately: a source is an ordered collection described by
-//! `import::GenerationManifest` and binds its reader within the cells' bounds,
+//! `import::GenerationManifest` whose members it resolves once per generation,
 //! while a derived item is described by `analyses::DerivedManifest` and always
 //! reads through its published chunks. What a number means (its units) is the
 //! item's, which the caller already holds.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::AtomicBool;
 
 use common_types::library::LibraryItemRole;
@@ -32,17 +32,21 @@ use super::{LidarLibrary, catalogue, collection, generation, import};
 
 /// What the sampler keeps between requests, per library.
 ///
-/// Row values re-sample every shown row on every pointer move, so a target
-/// that cannot be read is reported once. It is bounded by clearing when full,
-/// which costs at most one more report.
+/// Row values re-sample every shown row on every pointer move, so per-request
+/// work that never changes for a generation is done once: a source
+/// generation's member list is resolved once (generations are immutable), and
+/// a target that cannot be read is reported once. Both are bounded by
+/// clearing when full, which costs at most one more resolve or report.
 #[derive(Default)]
 pub(super) struct SampleMemo {
+    /// Resolved readers of source generations, by generation id.
+    readers: HashMap<String, generation::CollectionReader>,
     /// Unreadable targets already logged, as (entity, generation).
     reported: HashSet<(String, String)>,
 }
 
-/// Entries the memo holds before it starts over: two requests' worth of
-/// targets, so the values and profile lanes do not evict each other.
+/// Entries each part of the memo holds before it starts over: two requests'
+/// worth of targets, so the values and profile lanes do not evict each other.
 const MEMO_CAPACITY: usize = 2 * LIDAR_SAMPLE_MAX_TARGETS;
 
 impl SampleMemo {
@@ -56,6 +60,17 @@ impl SampleMemo {
             self.reported.clear();
         }
         self.reported.insert(key)
+    }
+
+    fn reader(&self, generation_id: &str) -> Option<generation::CollectionReader> {
+        self.readers.get(generation_id).cloned()
+    }
+
+    fn remember_reader(&mut self, generation_id: &str, reader: generation::CollectionReader) {
+        if self.readers.len() >= MEMO_CAPACITY {
+            self.readers.clear();
+        }
+        self.readers.insert(generation_id.to_string(), reader);
     }
 }
 
@@ -229,10 +244,10 @@ pub(super) fn check_sample_caps(request: &LidarSamplePointsRequest) -> Result<()
 /// WGS84 point, in target and point order.
 ///
 /// Each target is resolved once, its points transformed in one call, its
-/// reader bound once over the cells' bounds, and its cells read one bounded
-/// window per run. A target whose head is not the generation the caller aimed
-/// at, before or after the read, answers `StaleGeneration`, so a late answer is
-/// never presented as current; an item that is gone answers
+/// reader bound once (a source's members once per generation), and its cells
+/// read one bounded window per run. A target whose head is not the generation
+/// the caller aimed at, before or after the read, answers `StaleGeneration`,
+/// so a late answer is never presented as current; an item that is gone answers
 /// `MissingGeneration`. A point off the data reads `None`: out of coverage is
 /// no data, not an error. A target that cannot be read (a CRS the engine
 /// rejects, a manifest or raster that does not parse) answers `Unavailable` on
@@ -326,40 +341,16 @@ fn read_cells(
     cancel: &AtomicBool,
 ) -> Result<Vec<Option<f64>>, String> {
     let mut values = vec![None; cells.len()];
-    let placed: Vec<(i64, i64)> = cells.iter().flatten().copied().collect();
-    let Some(&(first_x, first_y)) = placed.first() else {
+    if cells.iter().all(Option::is_none) {
         return Ok(values);
-    };
+    }
     let reader = match &target.read {
         TargetRead::Chunks => generation::GenerationReader::Chunks(
             generation::GenerationChunkReader::new(&target.generation_id, generation::RESULT_ROLE),
         ),
-        TargetRead::Collection(manifest) => {
-            // One binding for the whole target: only members that can reach a
-            // sampled cell are resolved. Every index is within
-            // `MAX_LATTICE_INDEX`, so the exclusive ends cannot overflow.
-            let bounds = placed.iter().fold(
-                collection::ReadBounds {
-                    x0: first_x,
-                    y0: first_y,
-                    x1: first_x + 1,
-                    y1: first_y + 1,
-                },
-                |bounds, &(x, y)| collection::ReadBounds {
-                    x0: bounds.x0.min(x),
-                    y0: bounds.y0.min(y),
-                    x1: bounds.x1.max(x + 1),
-                    y1: bounds.y1.max(y + 1),
-                },
-            );
-            generation::GenerationReader::Collection(Box::new(collection::load_reader_within(
-                library,
-                &target.generation_id,
-                manifest,
-                Some(bounds),
-                cancel,
-            )?))
-        }
+        TargetRead::Collection(manifest) => generation::GenerationReader::Collection(Box::new(
+            collection_reader(library, &target.generation_id, manifest, cancel)?,
+        )),
     };
     for run in cell_runs(cells) {
         let window = reader.read_window(library, &target.grid, run.window, cancel)?;
@@ -379,6 +370,26 @@ fn read_cells(
         }
     }
     Ok(values)
+}
+
+/// A source generation's reader, its members resolved through the catalogue
+/// once per generation. Each window then skips a member that cannot reach it
+/// by arithmetic on its extent, so a member off the sampled cells is never
+/// opened.
+fn collection_reader(
+    library: &LidarLibrary,
+    generation_id: &str,
+    manifest: &import::GenerationManifest,
+    cancel: &AtomicBool,
+) -> Result<generation::CollectionReader, String> {
+    let known = memo(library).reader(generation_id);
+    if let Some(reader) = known {
+        return Ok(reader);
+    }
+    // The memo is not held across the catalogue: resolving takes its lock.
+    let reader = collection::load_reader(library, generation_id, manifest, cancel)?;
+    memo(library).remember_reader(generation_id, reader.clone());
+    Ok(reader)
 }
 
 /// One window of consecutive cells and the points it answers.
@@ -675,6 +686,8 @@ mod latency_probe {
     use std::time::{Duration, Instant};
 
     const POINTS: usize = 500;
+    /// Strips cut from each tile for the many-member collection (64 members).
+    const MANY_STRIPS_PER_TILE: u32 = 32;
 
     /// The fixture tiles, copied into `work` so the master stays untouched.
     fn copied_tiles(work: &Path) -> Vec<PathBuf> {
@@ -702,45 +715,49 @@ mod latency_probe {
             .collect()
     }
 
-    /// Splits one tile into its west and east halves, so two tiles make a
-    /// 4-member collection with real member boundaries to cross.
-    fn halves(engine: &dyn RasterEngine, tile: &Path, out: &Path) -> [PathBuf; 2] {
+    /// Splits one tile into `parts` vertical strips, west to east, so two
+    /// tiles make a collection with real member boundaries to cross: halves
+    /// for the 4-member collection, narrow strips for a many-member one.
+    fn strips(engine: &dyn RasterEngine, tile: &Path, out: &Path, parts: u32) -> Vec<PathBuf> {
         let cancel = AtomicBool::new(false);
         let probe = engine.probe(tile, &cancel).expect("the tile probes");
         let values = engine
             .read_f32(tile, probe.width, probe.height, &cancel)
             .expect("the tile reads");
-        let half = probe.width / 2;
         let stem = tile.file_stem().unwrap().to_string_lossy().to_string();
         let nodata = probe.nodata.unwrap_or(-99_999.0);
-        [(0, half), (half, probe.width - half)].map(|(x0, width)| {
-            let mut part = Vec::with_capacity((width * probe.height) as usize);
-            for row in 0..probe.height {
-                let start = (row * probe.width + x0) as usize;
-                part.extend_from_slice(&values[start..start + width as usize]);
-            }
-            let mut geotransform = probe.geotransform;
-            geotransform[0] += f64::from(x0) * geotransform[1];
-            let grid = RasterGrid {
-                width,
-                height: probe.height,
-                geotransform,
-            };
-            let path = out.join(format!("{stem}-{x0}.tif"));
-            engine
-                .write_geotiff(
-                    &path,
-                    super::super::engine::RasterGeoref {
-                        grid: &grid,
-                        crs: &probe.crs_ref,
-                    },
-                    nodata,
-                    &part,
-                    &cancel,
-                )
-                .expect("the half writes");
-            path
-        })
+        (0..parts)
+            .map(|part| {
+                let x0 = probe.width * part / parts;
+                let width = probe.width * (part + 1) / parts - x0;
+                let mut strip = Vec::with_capacity((width * probe.height) as usize);
+                for row in 0..probe.height {
+                    let start = (row * probe.width + x0) as usize;
+                    strip.extend_from_slice(&values[start..start + width as usize]);
+                }
+                let mut geotransform = probe.geotransform;
+                geotransform[0] += f64::from(x0) * geotransform[1];
+                let grid = RasterGrid {
+                    width,
+                    height: probe.height,
+                    geotransform,
+                };
+                let path = out.join(format!("{stem}-{parts}-{x0}.tif"));
+                engine
+                    .write_geotiff(
+                        &path,
+                        super::super::engine::RasterGeoref {
+                            grid: &grid,
+                            crs: &probe.crs_ref,
+                        },
+                        nodata,
+                        &strip,
+                        &cancel,
+                    )
+                    .expect("the strip writes");
+                path
+            })
+            .collect()
     }
 
     fn import_source(library: &LidarLibrary, name: &str, paths: &[PathBuf]) -> String {
@@ -858,11 +875,17 @@ mod latency_probe {
         std::fs::create_dir_all(&parts).unwrap();
         let members: Vec<PathBuf> = tiles
             .iter()
-            .flat_map(|tile| halves(&engine, tile, &parts))
+            .flat_map(|tile| strips(&engine, tile, &parts, 2))
+            .collect();
+        // A source imported from many small tiles: its members are resolved
+        // once per generation, not on every hover.
+        let narrow: Vec<PathBuf> = tiles
+            .iter()
+            .flat_map(|tile| strips(&engine, tile, &parts, MANY_STRIPS_PER_TILE))
             .collect();
 
         let collection = import_source(&library, "four members", &members);
-        let pair = import_source(&library, "two tiles", &tiles);
+        let many = import_source(&library, "many members", &narrow);
         let west = import_source(&library, "west tile", &tiles[..1]);
         let east = import_source(&library, "east tile", &tiles[1..]);
         let slope_collection =
@@ -872,7 +895,7 @@ mod latency_probe {
             analyses::test_support::run_slope(&library, &west, "degrees", None).item_ids[0].clone();
         let targets: Vec<LidarSampleTarget> = [
             (LibraryItemRole::Source, collection),
-            (LibraryItemRole::Source, pair),
+            (LibraryItemRole::Source, many),
             (LibraryItemRole::Source, west),
             (LibraryItemRole::Source, east),
             (LibraryItemRole::Derived, slope_collection),

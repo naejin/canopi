@@ -1385,6 +1385,54 @@ fn an_unreadable_target_is_reported_once_however_often_it_is_sampled() {
     );
 }
 
+/// Row values sample every shown row on every pointer move, so a source's
+/// members are resolved once per generation: a repeat sample of a 12-member
+/// source takes as many catalogue turns as a one-member source's, and still
+/// reads the member under each point.
+#[test]
+fn a_repeat_sample_resolves_no_collection_member_again() {
+    let root = scratch_root("batch-many-members");
+    let library = LidarLibrary::open(&root).unwrap();
+    let tiles: Vec<PathBuf> = (0..12)
+        .map(|index| {
+            raster(
+                &root,
+                &format!("tile-{index}"),
+                &[index as f32; 16],
+                4,
+                4,
+                4.0 * f64::from(index),
+            )
+        })
+        .collect();
+    let lone = raster(&root, "lone", &[50.0; 16], 4, 4, 0.0);
+    let many = import_layer(&library, &tiles);
+    let one = import_layer(&library, &[lone]);
+    let turns = |layer: &str, easting: f64| {
+        let aimed = target(
+            LibraryItemRole::Source,
+            layer,
+            &source_head(&library, layer),
+        );
+        sample(&library, vec![aimed.clone()], vec![point(0.5, 1.5)]);
+        let before = library
+            .inner
+            .catalogue_turns
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let series = sample(&library, vec![aimed], vec![point(easting, 2.5)]);
+        let after = library
+            .inner
+            .catalogue_turns
+            .load(std::sync::atomic::Ordering::Relaxed);
+        (after - before, values(&series[0]))
+    };
+    let (many_turns, many_values) = turns(&many, 29.5);
+    let (one_turns, one_values) = turns(&one, 1.5);
+    assert_eq!(many_values, vec![Some(7.0)]);
+    assert_eq!(one_values, vec![Some(50.0)]);
+    assert_eq!(many_turns, one_turns);
+}
+
 /// N points in one request equal N one-point requests and the analytic plane:
 /// the cell's column inside the plane, `None` in its NoData hole, outside it
 /// and at a point that is not a number.
