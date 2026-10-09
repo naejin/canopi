@@ -79,17 +79,13 @@ export interface ScenePersistenceAuthority {
 }
 
 export interface SceneDocumentAuthority {
-  hydrate(
-    file: CanopiFile,
-    syncDocumentSignals?: (file: CanopiFile) => void,
-  ): void
+  hydrate(file: CanopiFile): void
   replaceDocument(file: CanopiFile, stages: SceneDocumentReplacementStages): boolean
 }
 
 export interface SceneDocumentReplacementStages {
   readonly token: CanvasDocumentReplacementToken
   readonly prepare: () => void
-  readonly syncDocumentSignals?: (file: CanopiFile) => void
   readonly finalizeReplacement?: () => void
 }
 
@@ -302,10 +298,7 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
     this._persistenceEpoch += 1
   }
 
-  hydrate(
-    file: CanopiFile,
-    syncDocumentSignals: (file: CanopiFile) => void = () => {},
-  ): void {
+  hydrate(file: CanopiFile): void {
     if (this._active && !isFailedSettlement(this._active)) throw new SceneEditBusyError(this._active.type)
     const ownedFile = cloneDocument(file)
     const hydration = new SceneHydrationSettlement({
@@ -314,7 +307,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       sceneStore: this._sceneStore,
       history: this._history,
       noteStoreHydrated: () => this._noteStoreHydrated(),
-      syncDocumentSignals: () => syncDocumentSignals(cloneDocument(ownedFile)),
       syncCanvasSignalsFromScene: this._syncCanvasSignalsFromScene,
       invalidate: this._invalidate,
       incrementSceneRevision: this._incrementSceneRevision,
@@ -341,9 +333,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       sceneStore: this._sceneStore,
       history: this._history,
       noteStoreHydrated: () => this._noteStoreHydrated(),
-      syncDocumentSignals: () => {
-        stages.syncDocumentSignals?.(cloneDocument(ownedFile))
-      },
       syncCanvasSignalsFromScene: this._syncCanvasSignalsFromScene,
       invalidate: this._invalidate,
       incrementSceneRevision: this._incrementSceneRevision,
@@ -481,7 +470,6 @@ interface SceneHydrationSettlementOptions {
   readonly sceneStore: SceneStore
   readonly history: SceneHistory
   readonly noteStoreHydrated: () => void
-  readonly syncDocumentSignals: () => void
   readonly syncCanvasSignalsFromScene: () => void
   readonly invalidate: () => void
   readonly incrementSceneRevision: () => void
@@ -511,7 +499,6 @@ class SceneHydrationSettlement implements SceneAuthorityOperation {
       options.sceneStore.hydrate(options.file)
       options.noteStoreHydrated()
       options.history.clear()
-      options.syncDocumentSignals()
       options.syncCanvasSignalsFromScene()
       options.invalidate()
       options.incrementSceneRevision()

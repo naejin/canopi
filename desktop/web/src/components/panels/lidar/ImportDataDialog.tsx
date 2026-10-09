@@ -40,7 +40,8 @@ export function ImportDataDialog({ paths, onClose }: {
   const taken = takenItemNames(lidarLibrary.value)
   const trimmed = name.trim()
   const duplicate = isItemNameTaken(name, taken)
-  const unitReady = quantity !== 'OtherContinuous' || unitUnknown || unitLabel.trim() !== ''
+  const declaresUnits = quantity !== '' && RASTER_QUANTITIES[quantity].declaresUnits
+  const unitReady = !declaresUnits || unitUnknown || unitLabel.trim() !== ''
   const ready = !busy && quantity !== '' && trimmed !== '' && !duplicate && unitReady && files.length > 0
   const fileName = (path: string) => path.split(/[\\/]/).pop() ?? path
   const move = (index: number, by: -1 | 1) => {
@@ -64,7 +65,7 @@ export function ImportDataDialog({ paths, onClose }: {
     setBusy(true)
     setError(null)
     try {
-      await importLibraryItem([...files], trimmed, quantity, quantity === 'OtherContinuous'
+      await importLibraryItem([...files], trimmed, quantity, declaresUnits
         ? { label: unitUnknown ? null : unitLabel.trim(), unknown: unitUnknown }
         : { label: null, unknown: false })
       onClose()
@@ -102,7 +103,7 @@ export function ImportDataDialog({ paths, onClose }: {
               onChange={setQuantity}
             />
           </div>
-          {quantity === 'OtherContinuous' && (
+          {declaresUnits && (
             <div className={styles.field}>
               <label className={styles.field}>
                 <span>{t('canvas.lidar.library.unit')}</span>
@@ -115,7 +116,7 @@ export function ImportDataDialog({ paths, onClose }: {
             </div>
           )}
         </div>
-        {quantity !== '' && quantity !== 'OtherContinuous' && (
+        {quantity !== '' && !declaresUnits && (
           <p className={styles.fieldHint}>{t('canvas.lidar.import.metres')}</p>
         )}
         <div className={styles.field}>

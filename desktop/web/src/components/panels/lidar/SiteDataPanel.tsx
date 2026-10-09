@@ -28,12 +28,10 @@ const PIN_DECIMALS = 6
  * The Site data panel (canopi-f47t.42, spec §1.10; Desktop, a Design panel):
  * the header with the Data library and close, the pinned point or the hint,
  * the toolbar (Import…, Analyze…, Profile), the Design's site data, and the
- * profile chart pinned to the bottom.
- *
- * `importGeoJson` is dead since Add data went (File ▸ Import GeoJSON is the
- * only entry); its two callers drop it in stream A's merge, then this type.
+ * profile chart pinned to the bottom. GeoJSON is imported from File ▸
+ * Import GeoJSON… only (U49 decision 13).
  */
-export function SiteDataPanel(_: { readonly importGeoJson?: () => void }) {
+export function SiteDataPanel() {
   useEffect(() => installLidarLibraryObserver(), [])
   const view = siteDataViewFor(designSessionStore.sessionIdentity.value)
   const libraryLabel = t('canvas.lidar.library.title')

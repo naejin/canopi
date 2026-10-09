@@ -110,7 +110,7 @@ describe('Canvas Layer Presentation', () => {
       label: row.label,
       authority: row.authority,
       group: row.group,
-      active: row.active,
+      open: row.open,
       visible: row.visible,
       opacity: row.opacity,
       locked: row.locked,
@@ -122,7 +122,7 @@ describe('Canvas Layer Presentation', () => {
         group: 'design',
         label: 'Annotations',
         authority: 'scene',
-        active: false,
+        open: false,
         visible: true,
         opacity: 1,
         locked: false,
@@ -134,7 +134,7 @@ describe('Canvas Layer Presentation', () => {
         group: 'design',
         label: 'Plants',
         authority: 'scene',
-        active: false,
+        open: false,
         visible: true,
         opacity: 0.8,
         locked: false,
@@ -146,7 +146,7 @@ describe('Canvas Layer Presentation', () => {
         group: 'design',
         label: 'Measurement guides',
         authority: 'scene',
-        active: false,
+        open: false,
         visible: true,
         opacity: 0.6,
         locked: false,
@@ -158,7 +158,7 @@ describe('Canvas Layer Presentation', () => {
         group: 'design',
         label: 'Zones',
         authority: 'scene',
-        active: false,
+        open: false,
         visible: false,
         opacity: 0.35,
         locked: true,
@@ -170,7 +170,7 @@ describe('Canvas Layer Presentation', () => {
         group: 'background',
         label: 'Street map',
         authority: 'map-layers',
-        active: true,
+        open: true,
         visible: false,
         opacity: 0.65,
         locked: false,
@@ -187,7 +187,7 @@ describe('Canvas Layer Presentation', () => {
         group: 'background',
         label: 'Satellite',
         authority: 'map-layers',
-        active: false,
+        open: false,
         visible: false,
         opacity: 0.9,
         locked: false,
@@ -203,7 +203,7 @@ describe('Canvas Layer Presentation', () => {
         group: 'map',
         label: 'Contour lines',
         authority: 'map-layers',
-        active: false,
+        open: false,
         visible: true,
         opacity: 0.5,
         locked: false,
@@ -218,7 +218,7 @@ describe('Canvas Layer Presentation', () => {
         group: 'map',
         label: 'Hillshading',
         authority: 'map-layers',
-        active: false,
+        open: false,
         visible: true,
         opacity: 0.45,
         locked: false,
@@ -241,11 +241,11 @@ describe('Canvas Layer Presentation', () => {
 
   it('opens one row at a time, and a second toggle closes it', () => {
     toggleLayerRow('plants')
-    expect(readCanvasLayerPresentation().rows.filter((row) => row.active).map((row) => row.id)).toEqual(['plants'])
+    expect(readCanvasLayerPresentation().rows.filter((row) => row.open).map((row) => row.id)).toEqual(['plants'])
     toggleLayerRow('zones')
-    expect(readCanvasLayerPresentation().rows.filter((row) => row.active).map((row) => row.id)).toEqual(['zones'])
+    expect(readCanvasLayerPresentation().rows.filter((row) => row.open).map((row) => row.id)).toEqual(['zones'])
     toggleLayerRow('zones')
-    expect(readCanvasLayerPresentation().rows.some((row) => row.active)).toBe(false)
+    expect(readCanvasLayerPresentation().rows.some((row) => row.open)).toBe(false)
   })
 
   it('reports the background choices, Soften background and a saved Google key without exposing it', () => {

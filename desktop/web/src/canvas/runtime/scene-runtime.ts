@@ -375,7 +375,7 @@ export class SceneCanvasRuntime {
   }
 
   private _syncCanvasSignalsFromScene(): void {
-    syncCanvasSignalsFromScene(this._sceneState, this._appAdapter.settings.layerProjections)
+    syncCanvasSignalsFromScene(this._sceneState)
   }
 
   private _installEffects(): void {

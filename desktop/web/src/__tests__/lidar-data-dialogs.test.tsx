@@ -797,6 +797,28 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(dataDialog.value).toBeNull()
     })
 
+    it('asks Other values for its units and says elevations are metres', async () => {
+      await act(async () => {
+        dataDialog.value = { kind: 'import', paths: ['/d/one.tif'] }
+        render(<DataDialogs />, container)
+      })
+      await chooseFrom('What the values measure', 'Ground elevation (DTM)')
+      expect(container.textContent).toContain('Values are read in metres.')
+      expect(container.querySelector('input[type="checkbox"]')).toBeNull()
+
+      await chooseFrom('What the values measure', 'Other values')
+      expect(container.textContent).not.toContain('Values are read in metres.')
+      expect(button('Import 1 file').disabled).toBe(true)
+      const unit = Array.from(container.querySelectorAll('label'))
+        .find((label) => label.textContent === 'Unit')!.querySelector('input')!
+      await type(unit, ' mg/kg ')
+      expect(button('Import 1 file').disabled).toBe(false)
+      await act(async () => {
+        container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      })
+      expect(actions.importLibraryItem).toHaveBeenCalledWith(['/d/one.tif'], 'one', 'OtherContinuous', { label: 'mg/kg', unknown: false })
+    })
+
     it('says whether the chosen files cover the Design before import', async () => {
       coverage.check.mockResolvedValueOnce({ kind: 'covers', widthM: 2000, heightM: 1000 })
       await act(async () => {

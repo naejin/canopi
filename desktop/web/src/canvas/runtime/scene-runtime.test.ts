@@ -33,7 +33,6 @@ vi.mock('../../app/plant-browser', async (importOriginal) => {
 import {
   snapToGridEnabled,
 } from '../../app/canvas-settings/signals'
-import { layerLockState, layerOpacity, layerVisibility } from '../../app/canvas-settings/signals'
 import { plantColorMenuOpen } from '../plant-color-menu-state'
 import {
   clearPlantStampSource,
@@ -476,10 +475,6 @@ function createTestSettingsAdapter(
       onChange('basemap')
       return () => {}
     },
-    layerProjections: {
-      syncFromLayers: () => {},
-      syncLayer: () => {},
-    },
     ...overrides,
   }
 }
@@ -548,9 +543,6 @@ describe('scene canvas runtime', () => {
     hoveredPanelTargets.value = []
     selectedPanelTargetOrigin.value = null
     selectedPanelTargets.value = []
-    layerVisibility.value = {}
-    layerLockState.value = {}
-    layerOpacity.value = {}
     plantSpacingIntervalM.value = 0.5
     vi.mocked(getCommonNames).mockReset()
     vi.mocked(getCommonNames).mockResolvedValue({})
@@ -3703,21 +3695,16 @@ describe('scene canvas runtime', () => {
     expect(serialized.layers.find((layer) => layer.name === 'plants')?.visible).toBe(false)
     expect(serialized.layers.find((layer) => layer.name === 'zones')?.opacity).toBe(0.4)
     expect(serialized.layers.find((layer) => layer.name === 'zones')?.locked).toBe(true)
-    expect(layerVisibility.value.plants).toBe(false)
-    expect(layerOpacity.value.zones).toBe(0.4)
-    expect(layerLockState.value.zones).toBe(true)
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
     expect(runtime.commandSurface.history.canUndo.value).toBe(true)
 
     runtime.commandSurface.history.undo()
     expect(runtime.documentSurface.captureForPersistence({ name: file.name }, file).content.layers.find((layer) => layer.name === 'zones')?.locked)
       .toBe(false)
-    expect(layerLockState.value.zones).toBe(false)
 
     runtime.commandSurface.history.redo()
     expect(runtime.documentSurface.captureForPersistence({ name: file.name }, file).content.layers.find((layer) => layer.name === 'zones')?.locked)
       .toBe(true)
-    expect(layerLockState.value.zones).toBe(true)
 
     runtime.destroy()
   })

@@ -635,40 +635,6 @@ describe('Scene document hydration and replacement', () => {
     expect(store.persisted.plants[0]?.position).toEqual({ x: 44, y: 55 })
   })
 
-  it('hydrates from an owned snapshot the caller cannot change', () => {
-    const { coordinator, store } = createAdmissionHarness()
-    const next = makeFile()
-    next.name = 'Owned hydration snapshot'
-    next.plants[0]!.position = geoAt(55, 66)
-    const syncDocumentSignals = vi.fn<(hydratedFile: CanopiFile) => void>(() => {
-      next.plants[0]!.position = geoAt(999, 999)
-    })
-
-    coordinator.hydrate(next, syncDocumentSignals)
-
-    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(55, 66))
-    expect(syncDocumentSignals.mock.calls[0]?.[0].plants[0]?.position)
-      .toEqual(geoAt(55, 66))
-  })
-
-  it('passes the document callback its own copy of the Design', () => {
-    const { coordinator, store } = createAdmissionHarness()
-    const next = makeFile()
-    next.name = 'Callback-safe hydration'
-    next.plants[0]!.position = geoAt(55, 66)
-    const projectedNames: string[] = []
-    const syncDocumentSignals = (hydratedFile: CanopiFile): void => {
-      projectedNames.push(hydratedFile.name)
-      hydratedFile.name = 'Mutated by callback'
-    }
-
-    coordinator.hydrate(next, syncDocumentSignals)
-
-    expect(projectedNames).toEqual(['Callback-safe hydration'])
-    expect(next.name).toBe('Callback-safe hydration')
-    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(55, 66))
-  })
-
   it('publishes one hydration revision when a revision observer throws', () => {
     const revision = signal(0)
     let throwFromObserver = false

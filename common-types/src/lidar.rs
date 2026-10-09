@@ -144,39 +144,7 @@ pub struct LidarImportReceipt {
     pub job_id: String,
 }
 
-// Numeric pixel inspection: one read-only lookup of the physical value at one
-// WGS84 point on one source or derived generation. The expected generation is
-// part of the request so a head that changed since the user aimed is refused
-// rather than answered from different bytes.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
-pub struct LidarSampleRequest {
-    pub kind: crate::library::LibraryItemRole,
-    /// Library item id, matching `kind`.
-    pub entity_id: String,
-    /// The immutable generation the caller believes is current.
-    pub expected_generation_id: String,
-    /// Opaque identity of this lookup, chosen by the caller.
-    ///
-    /// Inspection shares the bounded display read admission with raster tiles,
-    /// so a superseded or abandoned lookup has to be cancellable by the owner
-    /// that started it. The name is scoped per surface by the command, so one
-    /// caller can never signal another's read. It must not be empty.
-    pub request_id: String,
-    /// WGS84 longitude in degrees of the point to sample.
-    ///
-    /// The caller derives this from the scene point with the session plane's
-    /// `toGeo`, which is the projection the canvas actually drew with, so
-    /// the sampled point is the displayed point. Nothing here re-derives or
-    /// approximates the placement: the native side only transforms this WGS84
-    /// point into the generation's own CRS.
-    pub longitude: f64,
-    /// WGS84 latitude in degrees of the point to sample.
-    pub latitude: f64,
-}
-
 /// Why a sample could not produce a physical value.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub enum LidarSampleUnavailableReason {
     /// The entity or generation no longer exists.
@@ -187,26 +155,6 @@ pub enum LidarSampleUnavailableReason {
     TransformFailed,
     /// The generation's interpretation cannot be sampled numerically.
     UnsupportedInput,
-}
-
-/// The outcome of one numeric inspection lookup.
-///
-/// `Value` carries the generation that was actually read, so a caller can prove
-/// the answer belongs to the head it asked about. The containing pixel is read
-/// at native resolution; no display interpolation is involved.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
-pub enum LidarSampleOutcome {
-    Value {
-        generation_id: String,
-        value: f64,
-        units: String,
-    },
-    /// Inside the generation, but the containing pixel declares no data.
-    NoData { generation_id: String },
-    Unavailable {
-        reason: LidarSampleUnavailableReason,
-    },
 }
 
 /// The most targets one `lidar_sample_points` request may carry; the
@@ -250,8 +198,8 @@ pub enum LidarSampleSeries {
 
 // Display derivatives: regenerable tiled COGs with overviews that the upstream
 // WASM renderer reads through the scoped asset protocol. They are never source
-// members, heads or results; numeric inspection and analysis keep reading the
-// exact numeric generation.
+// members, heads or results; sampling and analysis keep reading the exact
+// numeric generation.
 
 /// Whether an entity's display derivative can be drawn now.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]

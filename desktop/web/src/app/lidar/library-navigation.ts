@@ -1,6 +1,5 @@
 import { signal } from '@preact/signals'
-import { openLayerRow } from '../canvas-layer-presentation/open-row'
-import { selectPanel, sidePanel } from '../shell/state'
+import { selectPanel } from '../shell/state'
 import { t } from '../../i18n'
 import { chooseImportFiles } from './actions'
 import { showInSiteData } from './site-data-view'
@@ -109,33 +108,4 @@ export function analyzeItem(
     analysisId: options.analysisId ?? null,
     from: options.from ?? null,
   }
-}
-
-const SITE_ROW_PREFIX = 'site:'
-
-/** The Layers row id of one site data item; one row is active across Layers. */
-function siteRowId(itemId: string): string {
-  return `${SITE_ROW_PREFIX}${itemId}`
-}
-
-/** The site data item whose row is active in Layers, if any. */
-export function activeSiteItemId(): string | null {
-  const active = openLayerRow.value
-  return active?.startsWith(SITE_ROW_PREFIX) ? active.slice(SITE_ROW_PREFIX.length) : null
-}
-
-export function selectSiteRow(itemId: string): void {
-  openLayerRow.value = siteRowId(itemId)
-}
-
-/** The site data item whose details Layers shows instead of its list. */
-export const siteDataDetails = signal<string | null>(null)
-
-export function openSiteDataDetails(itemId: string): void {
-  siteDataDetails.value = itemId
-  sidePanel.value = 'layers'
-}
-
-export function closeSiteDataDetails(): void {
-  siteDataDetails.value = null
 }

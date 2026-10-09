@@ -1,7 +1,6 @@
 import { lazy, Suspense } from 'preact/compat'
 import { dataDialog, libraryView } from '../../app/lidar/library-navigation'
-import { flattenMenuActions } from '../../app/shell-commands/menus'
-import { appCommandGraphChromeProjection, appCommandGraphPanelProjection } from '../../commands/registry'
+import { appCommandGraphPanelProjection } from '../../commands/registry'
 import { CanvasPanel } from '../panels/CanvasPanel'
 import {
   WorkspaceComposition,
@@ -67,15 +66,8 @@ function DesignNotebookSurface() {
   return <DesignNotebookPanel />
 }
 
-/** Site data's Add data › Design objects from GeoJSON… runs File › Import GeoJSON, until stream B replaces Add data. */
-function importGeoJsonFromSiteData(): void {
-  const command = flattenMenuActions(appCommandGraphChromeProjection.peek().menus)
-    .find((action) => action.id === 'file.importGeoJson')
-  if (command && !command.disabled) command.action()
-}
-
 function SiteDataSurface() {
-  return <SiteDataPanel importGeoJson={importGeoJsonFromSiteData} />
+  return <SiteDataPanel />
 }
 
 const DESKTOP_WORKSPACE_SURFACES: WorkspaceSurfaces = {

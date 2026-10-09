@@ -141,6 +141,19 @@ afterEach(() => {
 })
 
 describe('the Esc chain', () => {
+  it("names spec §3.7's layers and no other: the raster inspection is gone with Read values (canopi-f47t.42)", () => {
+    expect(ESCAPE_PRIORITY).toEqual({
+      popover: 100,
+      gesture: 70,
+      'nudge-series': 65,
+      'tool-transient': 60,
+      tool: 50,
+      selection: 30,
+      profile: 25,
+      'site-pin': 20,
+    })
+  })
+
   it('Esc with an open popover closes only the popover (I8)', () => {
     install()
     vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })

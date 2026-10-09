@@ -590,50 +590,10 @@ export type LidarRamp = "Terrain" | "Earth" | "Greens" | "YellowRed" | "Magma" |
 // State of a library item: its operation while it runs, then a fixed result.
 export type LidarResultState = "Preparing" | "Ready" | "Failed";
 
-/**
- *  The outcome of one numeric inspection lookup.
- *
- *  `Value` carries the generation that was actually read, so a caller can prove
- *  the answer belongs to the head it asked about. The containing pixel is read
- *  at native resolution; no display interpolation is involved.
- */
-export type LidarSampleOutcome = { Value: { generation_id: string; value: number; units: string } } |
-// Inside the generation, but the containing pixel declares no data.
-{ NoData: { generation_id: string } } | { Unavailable: { reason: LidarSampleUnavailableReason } };
-
 export type LidarSamplePointsRequest = {
 	targets: LidarSampleTarget[],
 	// WGS84 `[longitude, latitude]` in degrees, in the caller's order.
 	points: ([number, number])[],
-};
-
-export type LidarSampleRequest = {
-	kind: LibraryItemRole,
-	// Library item id, matching `kind`.
-	entity_id: string,
-	// The immutable generation the caller believes is current.
-	expected_generation_id: string,
-	/**
-	 *  Opaque identity of this lookup, chosen by the caller.
-	 *
-	 *  Inspection shares the bounded display read admission with raster tiles,
-	 *  so a superseded or abandoned lookup has to be cancellable by the owner
-	 *  that started it. The name is scoped per surface by the command, so one
-	 *  caller can never signal another's read. It must not be empty.
-	 */
-	request_id: string,
-	/**
-	 *  WGS84 longitude in degrees of the point to sample.
-	 *
-	 *  The caller derives this from the scene point with the session plane's
-	 *  `toGeo`, which is the projection the canvas actually drew with, so
-	 *  the sampled point is the displayed point. Nothing here re-derives or
-	 *  approximates the placement: the native side only transforms this WGS84
-	 *  point into the generation's own CRS.
-	 */
-	longitude: number,
-	// WGS84 latitude in degrees of the point to sample.
-	latitude: number,
 };
 
 // One target's answer, in target order.

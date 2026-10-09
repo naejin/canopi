@@ -51,7 +51,7 @@ function expectIconButtonsFollowRules(root: ParentNode, minimum: number): void {
 
 function row(id: string, overrides: Partial<CanvasLayerPresentationRow>): CanvasLayerPresentationRow {
   return {
-    id, label: id, authority: 'scene', group: 'design', active: false, visible: true, opacity: 1, locked: false,
+    id, label: id, authority: 'scene', group: 'design', open: false, visible: true, opacity: 1, locked: false,
     canLock: true, detail: { type: 'scene' }, ...overrides,
   }
 }
@@ -127,11 +127,11 @@ describe('canvas icon-only buttons', () => {
 
   it('labels layer row visibility and lock buttons', async () => {
     const actions: LayerPanelActions = {
-      active: vi.fn(), visibility: vi.fn(), locked: vi.fn(), opacity: vi.fn(),
+      open: vi.fn(), visibility: vi.fn(), locked: vi.fn(), opacity: vi.fn(),
       contourInterval: vi.fn(), basemapStyle: vi.fn(), saveGoogleKey: vi.fn(), background: vi.fn(), softenBackground: vi.fn(),
     }
     const rows = [
-      row('plants', { active: true, count: 3 }),
+      row('plants', { open: true, count: 3 }),
       row('zones', { locked: true }),
       row('hillshade', { authority: 'map-layers', canLock: false, detail: { type: 'hillshade' } }),
     ]

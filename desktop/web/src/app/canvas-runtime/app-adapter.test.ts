@@ -7,12 +7,7 @@ import { CanvasPlantLabelResolver } from '../../canvas/runtime/plant-labels'
 import { CanvasSpeciesCache } from '../../canvas/runtime/species-cache'
 import { t } from '../../i18n'
 import type { Settings } from '../../types/settings'
-import {
-  gridVisible,
-  layerLockState,
-  layerOpacity,
-  layerVisibility,
-} from '../canvas-settings/signals'
+import { gridVisible } from '../canvas-settings/signals'
 import { composeDocumentForSave } from '../contracts/document'
 import { setCanvasClean } from '../document-session/store'
 import {
@@ -33,12 +28,12 @@ describe('Canvas Runtime app adapter composition', () => {
       load: () => baseSettings(),
       save: persistSettings,
     })
-    resetLayerSignals()
+    resetGrid()
   })
 
   afterEach(() => {
     resetSettingsProjectionForTests()
-    resetLayerSignals()
+    resetGrid()
   })
 
   it('preserves the edition capabilities supplied by its composition root', () => {
@@ -166,29 +161,6 @@ describe('Canvas Runtime app adapter composition', () => {
     }
   })
 
-  it('projects scene-owned Layers', () => {
-    const adapter = createAdapter()
-
-    adapter.settings.layerProjections.syncFromLayers([
-      { name: 'plants', visible: false, locked: true, opacity: 0.45 },
-    ])
-
-    expect(layerVisibility.value.plants).toBe(false)
-    expect(layerLockState.value.plants).toBe(true)
-    expect(layerOpacity.value.plants).toBe(0.45)
-
-    adapter.settings.layerProjections.syncLayer({
-      name: 'zones',
-      visible: false,
-      locked: true,
-      opacity: 0.6,
-    })
-
-    expect(layerVisibility.value.zones).toBe(false)
-    expect(layerLockState.value.zones).toBe(true)
-    expect(layerOpacity.value.zones).toBe(0.6)
-  })
-
   it('lets the Desktop root supply native presentation and Saved Stamp capture', () => {
     const adapter = createDesktopCanvasRuntimeAppAdapter()
 
@@ -237,15 +209,7 @@ function createAdapter() {
   return createAppCanvasRuntimeAppAdapter({ presentationData: {} })
 }
 
-// The layer signals as the module starts them: the New Design defaults.
-const NEW_DESIGN_LAYER_VISIBILITY = layerVisibility.peek()
-const NEW_DESIGN_LAYER_LOCKS = layerLockState.peek()
-const NEW_DESIGN_LAYER_OPACITY = layerOpacity.peek()
-
-function resetLayerSignals(): void {
-  layerVisibility.value = { ...NEW_DESIGN_LAYER_VISIBILITY }
-  layerLockState.value = { ...NEW_DESIGN_LAYER_LOCKS }
-  layerOpacity.value = { ...NEW_DESIGN_LAYER_OPACITY }
+function resetGrid(): void {
   gridVisible.value = true
 }
 

@@ -340,7 +340,7 @@ function GalleryLayersSurface() {
 }
 
 function GallerySiteDataSurface() {
-  return <SiteDataPanel importGeoJson={() => { activity.value = 'Design objects from GeoJSON… runs File › Import GeoJSON.' }} />
+  return <SiteDataPanel />
 }
 
 function GalleryNotebookSurface() {

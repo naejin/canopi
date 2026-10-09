@@ -159,33 +159,6 @@ function renumbered<T extends ReferenceNode>(nodes: readonly T[], listed: readon
 }
 
 /**
- * The saved orders after moving one row one place towards the front or back
- * among its siblings, renumbered densely in drawing order; null when the row
- * is already at that end or is not listed.
- */
-export function movedReferenceOrders<T extends ReferenceNode>(
-  nodes: readonly T[],
-  id: string,
-  towards: 'front' | 'back',
-): Map<string, number> | null {
-  const rows = referenceRows(nodes)
-  const row = rows.find((candidate) => candidate.id === id)
-  if (!row) return null
-  const siblings = rows.filter((candidate) => candidate.parentId === row.parentId && candidate.depth === row.depth)
-  const index = siblings.findIndex((candidate) => candidate.id === id)
-  const target = towards === 'front' ? index - 1 : index + 1
-  if (target < 0 || target >= siblings.length) return null
-  // Re-rank the siblings in their new list order (front first), then
-  // renumber everything densely in drawing order.
-  const reordered = siblings.map((sibling) => sibling.id)
-  reordered[index] = siblings[target]!.id
-  reordered[target] = id
-  const ranks = new Map(reordered.map((sibling, position) => [sibling, reordered.length - 1 - position]))
-  const moved = nodes.map((node) => ranks.has(node.id) ? { ...node, order: ranks.get(node.id)! } : node)
-  return new Map(referenceDrawOrder(moved).map((node, position) => [node.id, position]))
-}
-
-/**
  * The saved orders after moving one row to a sibling's place (a drop on that
  * row, or Alt ↑/↓ to its neighbour): a row outside an analysis run moves past
  * the whole run whichever member it lands on, and a run's output moves only
