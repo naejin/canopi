@@ -105,7 +105,7 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
     if (snapshot !== null && selectedId !== requestedId) setRequestedId(selectedId)
     if (modeFor.mode !== 'details' && modeFor.itemId !== selectedId) setModeFor({ mode: 'details', itemId: null })
     // A search or filter that leaves nothing selected returns to the list, which stays when the filters clear.
-    if (!item && pane === 'details') setPane('list')
+    if (snapshot !== null && !item && pane === 'details') setPane('list')
     if (pendingFocus.current.length > 0) {
       const targets = pendingFocus.current
       pendingFocus.current = []

@@ -231,6 +231,8 @@ describe('Data library, Import and Analyze dialogs', () => {
       })
       await act(async () => { lidarLibrary.value = library([layer('a', 'Alpha'), layer('b', 'Beta')]) })
       expect(selectedName()).toBe('Beta')
+      // Below 760 px the sheet shows one pane: the item asked for opens on its details, not on the list.
+      expect(container.querySelector('[data-pane]')?.getAttribute('data-pane')).toBe('details')
     })
 
     it('scrolls the selected row into the list when the sheet opens on it or a search moves the selection', async () => {
