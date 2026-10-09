@@ -377,11 +377,14 @@ export const profileHover: ReadonlySignal<GeoPoint | null> = computed(() => {
 
 /**
  * The profile hand-off (CanvasRuntimeAppAdapter.finishProfile): the Profile tool's finished line, in session-plane
- * metres, becomes the Site data profile line in WGS84; a new line replaces the old.
+ * metres, becomes the Site data profile line in WGS84; a new line replaces the old. Site data opens first when another
+ * side panel took its place while Profile stayed armed, so the line the user drew always gets its chart.
  */
 export function finishSiteProfile(points: readonly { readonly x: number; readonly y: number }[]): void {
   const plane = currentCanvasQuerySurface.peek()?.sessionPlane.peek()
-  if (plane) setProfileLine(points.map((point) => plane.toGeo(point)))
+  if (!plane) return
+  if (sidePanel.peek() !== 'site-data') selectPanel('site-data')
+  setProfileLine(points.map((point) => plane.toGeo(point)))
 }
 
 /**
@@ -401,7 +404,6 @@ export const profileLineMenu: CanvasContextMenuProfileLine = {
           return guide ? [guide.start, guide.end] : undefined
         })()
     if (!points || points.length < 2) return
-    if (sidePanel.peek() !== 'site-data') selectPanel('site-data')
     finishSiteProfile(points)
   },
 }

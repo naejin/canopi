@@ -17,7 +17,7 @@ import type { SceneInteractionSession, SceneInteractionSessionDeps } from '../ca
 import { createDesktopCanvasRuntimeAppAdapter } from '../app/canvas-runtime/desktop-adapter'
 import { armProfile } from '../app/lidar/profile'
 import { endSiteDataTransients, pin, profileLine } from '../app/lidar/site-transients'
-import { sidePanel } from '../app/shell/state'
+import { selectPanel, sidePanel } from '../app/shell/state'
 import { currentCanvasTool } from '../canvas/session-state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import {
@@ -172,5 +172,31 @@ describe('Desktop: a drawn profile line becomes the Site data profile', () => {
     })
     expect(currentCanvasTool.value).toBe('select')
     expect(pin.value).toBeNull()
+  })
+
+  it('a line finished after the side panel switched away opens Site data again and shows its profile', async () => {
+    const host = createLiveTestCanvasRuntimeHost({ screen: { width: 400, height: 300 }, appAdapter: createDesktopCanvasRuntimeAppAdapter() })
+    hosts.push(host)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
+    await host.init(container)
+    setCurrentCanvasSession(host.surfaces)
+    const events = createSceneInteractionEventHarness(container)
+    harnesses.push(events)
+    placeOnHost(host.cameraHost, host.surfaces.queries.sessionPlane.peek()!, { x: 0, y: 0, scale: 1 })
+
+    armProfile('panel')
+    selectPanel('layers')
+    expect(currentCanvasTool.value).toBe('profile')
+    for (const [at, t] of [[{ x: 40, y: 40 }, 0], [{ x: 200, y: 120 }, 1000], [{ x: 200, y: 120 }, 1200]] as const) {
+      events.pointerDown(at, { button: 0, buttons: 1, detail: 0, timeStamp: t })
+      events.pointerUp(at, { button: 0, buttons: 0, detail: 0, timeStamp: t + 50 })
+    }
+
+    expect(sidePanel.value).toBe('site-data')
+    expect(profileLine.value).toHaveLength(2)
+    expect(currentCanvasTool.value).toBe('select')
   })
 })
