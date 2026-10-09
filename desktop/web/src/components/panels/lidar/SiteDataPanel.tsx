@@ -117,7 +117,7 @@ function Toolbar({ view }: { readonly view: SiteDataView }) {
         type="button"
         className={styles.toolButton}
         aria-disabled={sourceId ? undefined : true}
-        onClick={() => { if (sourceId) analyzeItem(sourceId, { attach: true }) }}
+        onClick={() => { if (sourceId) analyzeItem(sourceId) }}
       >
         {t('canvas.lidar.library.analyze')}
         {!sourceId && <ButtonTooltip label={t('siteData.analyzeNeedsData')} side="bottom" />}

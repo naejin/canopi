@@ -47,7 +47,7 @@ import { SiteDataPanel } from '../components/panels/lidar/SiteDataPanel'
 import { lidarLibrary, refreshLidarLibrary } from '../app/lidar/library-store'
 import { lidarListLibrary } from '../ipc/lidar'
 import { currentDesign, designSessionStore } from '../app/document-session/store'
-import { dataDialog } from '../app/lidar/library-navigation'
+import { dataDialog, libraryView } from '../app/lidar/library-navigation'
 import { showInSiteData, siteDataViewFor } from '../app/lidar/site-data-view'
 import { pin, setPin, unpin } from '../app/lidar/site-transients'
 import { activePanel, sidePanel } from '../app/shell/state'
@@ -140,6 +140,7 @@ beforeEach(() => {
   newSession()
   sidePanel.value = 'site-data'
   dataDialog.value = null
+  libraryView.value = null
   unpin()
   ;(pending.attachments as Signal<unknown[]>).value = []
   ;(pending.failure as Signal<unknown>).value = null
@@ -168,10 +169,10 @@ describe('the Site data panel', () => {
     await click(button('Import…'))
     expect(actions.chooseImportFiles).toHaveBeenCalledWith('Choose GeoTIFF files', 'GeoTIFF rasters')
     await click(button('Analyze…'))
-    expect(dataDialog.value).toMatchObject({ kind: 'analyze', itemId: 'a', attach: true })
+    expect(dataDialog.value).toMatchObject({ kind: 'analyze', itemId: 'a' })
     await click(button('Ground'))
     await click(button('Data library'))
-    expect(dataDialog.value).toEqual({ kind: 'library', focusId: 'a' })
+    expect(libraryView.value).toEqual({ focusId: 'a' })
     await click(button('Close panel'))
     expect(sidePanel.value).toBeNull()
   })
@@ -180,7 +181,7 @@ describe('the Site data panel', () => {
     mount()
     expect(container.textContent).toContain('No site data yet')
     await click(button('Open the Data library'))
-    expect(dataDialog.value).toEqual({ kind: 'library', focusId: null })
+    expect(libraryView.value).toEqual({ focusId: null })
     await click(button('Import files…'))
     expect(actions.chooseImportFiles).toHaveBeenCalledOnce()
   })
@@ -274,7 +275,7 @@ describe('the Site data panel', () => {
     expect(body.querySelector('[role="radiogroup"][aria-label="Range"]')).not.toBeNull()
     expect(body.querySelector('input[aria-label="Opacity: Ground"]')).not.toBeNull()
     await click(button('Details', body))
-    expect(dataDialog.value).toEqual({ kind: 'library', focusId: 'a' })
+    expect(libraryView.value).toEqual({ focusId: 'a' })
     await click(button('Remove Ground from this Design', body))
     expect(actions.removeFromDesign).toHaveBeenCalledWith('a')
     expect(body.textContent).toContain('Your library keeps the data.')
@@ -617,7 +618,7 @@ describe('pending work, failures and the Site data eye', () => {
     expect(container.textContent).toContain('Ground could not be added to this Design: not a raster')
     await click(button('Show in the Data library'))
     expect(actions.dismissAttachmentFailure).toHaveBeenCalled()
-    expect(dataDialog.value).toEqual({ kind: 'library', focusId: 'a' })
+    expect(libraryView.value).toEqual({ focusId: 'a' })
   })
 
   it('says when the Layers eye hides all site data, with Show, and dims the rows keeping their eyes', async () => {

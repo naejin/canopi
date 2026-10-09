@@ -97,15 +97,14 @@ export async function beginDataImport(): Promise<void> {
 /**
  * Opens Analyze from one item (the open Site data item; null starts from the
  * first eligible one), optionally with one registry entry chosen; `from` is the
- * result whose run "Run again with changes…" starts from. `attach` is no longer
- * read: whether results join the Design is the one attach rule (`runAnalysis`).
+ * result whose run "Run again with changes…" starts from. Whether results join
+ * the Design is the one attach rule (`runAnalysis`).
  */
 export function analyzeItem(
   itemId: string | null,
   options: {
     readonly analysisId?: string | null
     readonly from?: string | null
-    readonly attach?: boolean
   } = {},
 ): void {
   dataDialog.value = {
