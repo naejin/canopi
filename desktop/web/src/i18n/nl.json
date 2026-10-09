@@ -680,6 +680,11 @@
       "northUp": "Het noorden is boven",
       "hint": "Klik om het noorden te herstellen. Sleep de ring om de weergave te draaien; houd Shift ingedrukt voor stappen van 15°."
     },
+    "myLocation": {
+      "show": "Mijn locatie tonen",
+      "blocked": "Locatie is geblokkeerd. Sta deze toe voor deze site in de instellingen van je browser.",
+      "unavailable": "Je locatie is nu niet beschikbaar; we blijven het proberen."
+    },
     "selectionChip": {
       "label": "Selectie",
       "selected_one": "{{count, number}} geselecteerd",

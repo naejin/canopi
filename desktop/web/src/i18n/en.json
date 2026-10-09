@@ -680,6 +680,11 @@
       "northUp": "North is up",
       "hint": "Click to reset north. Drag the ring to turn the view; hold Shift for 15° steps."
     },
+    "myLocation": {
+      "show": "Show my location",
+      "blocked": "Location is blocked. Allow it for this site in your browser’s settings.",
+      "unavailable": "Your location is unavailable right now; still trying."
+    },
     "selectionChip": {
       "label": "Selection",
       "selected_one": "{{count, number}} selected",

@@ -680,6 +680,11 @@
       "northUp": "北向上",
       "hint": "点击重置为正北。拖动圆环旋转视图；按住 Shift 以 15° 为步进。"
     },
+    "myLocation": {
+      "show": "显示我的位置",
+      "blocked": "位置访问已被阻止。请在浏览器设置中允许此网站使用位置。",
+      "unavailable": "暂时无法获取您的位置，正在继续尝试。"
+    },
     "selectionChip": {
       "label": "选择",
       "selected_one": "已选 {{count, number}} 项",

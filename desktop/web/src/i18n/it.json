@@ -680,6 +680,11 @@
       "northUp": "Il nord è in alto",
       "hint": "Fai clic per ripristinare il nord. Trascina l’anello per ruotare la vista; tieni premuto Maiusc per passi di 15°."
     },
+    "myLocation": {
+      "show": "Mostra la mia posizione",
+      "blocked": "La posizione è bloccata. Consentila per questo sito nelle impostazioni del tuo browser.",
+      "unavailable": "La tua posizione non è disponibile al momento; continuiamo a provare."
+    },
     "selectionChip": {
       "label": "Selezione",
       "selected_one": "{{count, number}} selezionato",

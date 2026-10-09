@@ -680,6 +680,11 @@
       "northUp": "O norte está para cima",
       "hint": "Clique para redefinir o norte. Arraste o anel para girar a vista; mantenha Shift para passos de 15°."
     },
+    "myLocation": {
+      "show": "Mostrar minha localização",
+      "blocked": "A localização está bloqueada. Permita-a para este site nas configurações do seu navegador.",
+      "unavailable": "Sua localização não está disponível agora; continuamos tentando."
+    },
     "selectionChip": {
       "label": "Seleção",
       "selected_one": "{{count, number}} selecionado",

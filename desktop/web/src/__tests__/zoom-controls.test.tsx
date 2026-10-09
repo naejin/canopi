@@ -9,6 +9,8 @@ import type { ViewReadSurface } from '../canvas/runtime/view/read-surface'
 import { createViewReadSurface } from '../canvas/runtime/view/frame-source'
 import { createSessionPlane } from '../canvas/session-plane'
 import { ZoomControls } from '../components/canvas/ZoomControls'
+import { MyLocationButton } from '../components/canvas/MyLocationButton'
+import { myLocation } from '../app/my-location/session'
 import { phoneLayout } from '../app/shell/phone-layout'
 import { registerMapArea, visibleMapFrame } from '../app/shell/visible-map-area'
 import { createTestCanvasQuerySurface, createTestViewReadSurface } from './support/canvas-query-surface'
@@ -228,5 +230,108 @@ describe('ZoomControls', () => {
     button('Zoom out').click()
     expect(zoomOut).not.toHaveBeenCalled()
     expect(button('Zoom in').getAttribute('aria-disabled')).toBeNull()
+  })
+
+  describe('Show my location (the Web Edition\'s slot, canopi-f47t.53)', () => {
+    const descriptors = {
+      geolocation: Object.getOwnPropertyDescriptor(navigator, 'geolocation'),
+      permissions: Object.getOwnPropertyDescriptor(navigator, 'permissions'),
+      isSecureContext: Object.getOwnPropertyDescriptor(window, 'isSecureContext'),
+    }
+    let success: PositionCallback | null = null
+    let failure: PositionErrorCallback | null = null
+    let permission: EventTarget & { state: PermissionState }
+
+    beforeEach(() => {
+      permission = Object.assign(new EventTarget(), { state: 'prompt' as PermissionState })
+      Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true })
+      Object.defineProperty(navigator, 'geolocation', {
+        configurable: true,
+        value: {
+          watchPosition: (onFix: PositionCallback, onError: PositionErrorCallback) => { success = onFix; failure = onError; return 1 },
+          clearWatch: () => { success = null; failure = null },
+        },
+      })
+      Object.defineProperty(navigator, 'permissions', { configurable: true, value: { query: async () => permission } })
+      setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: { ...createTestCanvasQuerySurface(), view: view() } }))
+    })
+
+    afterEach(() => {
+      if (myLocation.mode.peek() === 'following') myLocation.press()
+      if (myLocation.mode.peek() === 'moved-away') { myLocation.press(); myLocation.press() }
+      for (const [name, descriptor] of Object.entries(descriptors)) {
+        const target = name === 'isSecureContext' ? window : navigator
+        if (descriptor) Object.defineProperty(target, name, descriptor)
+        else delete (target as unknown as Record<string, unknown>)[name]
+      }
+    })
+
+    const mountWithLocation = async () => {
+      await act(async () => {
+        render(<ZoomControls viewActions={workspaceCanvasCommandProjection.value.viewActions} myLocation={MyLocationButton} />, container)
+        await Promise.resolve()
+      })
+    }
+    const labels = () => [...container.querySelectorAll('[data-zoom-group] button')].map((element) => element.getAttribute('aria-label'))
+    const location = () => button('Show my location')
+    const tooltip = () => location().querySelector('[role="tooltip"]')!.textContent
+
+    it('stands just before the compass on the desktop group and in the phone column', async () => {
+      await mountWithLocation()
+      expect(labels()).toEqual(['Zoom out', 'Map scale 1:190. Choose a scale', 'Zoom in', 'Fit to Design', 'Show my location', 'Reset north'])
+      await act(async () => { phoneLayout.value = 'landscape' })
+      expect(labels()).toEqual(['Zoom in', 'Zoom out', 'Fit to Design', 'Show my location', 'Reset north'])
+    })
+
+    it.each([
+      ['without a secure context', () => Object.defineProperty(window, 'isSecureContext', { configurable: true, value: false })],
+      ['without navigator.geolocation', () => Object.defineProperty(navigator, 'geolocation', { configurable: true, value: undefined })],
+    ])('is hidden %s (design check A1)', async (_name, take) => {
+      take()
+      await mountWithLocation()
+      expect(labels()).toEqual(['Zoom out', 'Map scale 1:190. Choose a scale', 'Zoom in', 'Fit to Design', 'Reset north'])
+    })
+
+    it('is pressed only while Following, says when location is unavailable, and a click while Following turns it off', async () => {
+      await mountWithLocation()
+      expect(location().hasAttribute('aria-pressed')).toBe(false)
+      expect(location().hasAttribute('aria-disabled')).toBe(false)
+      expect(tooltip()).toBe('Show my location')
+
+      await act(async () => { location().click() })
+      expect(location().getAttribute('aria-pressed')).toBe('true')
+      await act(async () => { success!({ coords: { longitude: 2.35, latitude: 48.85, accuracy: 12 }, timestamp: 1 } as GeolocationPosition) })
+      await act(async () => { failure!({ code: 2, message: '' } as GeolocationPositionError) })
+      expect(location().getAttribute('aria-pressed')).toBe('true')
+      expect(tooltip()).toContain('Your location is unavailable right now')
+      expect(document.getElementById(location().getAttribute('aria-describedby')!)!.textContent).toContain('unavailable')
+
+      await act(async () => { location().click() })
+      expect(location().hasAttribute('aria-pressed')).toBe(false)
+      expect(tooltip()).toBe('Show my location')
+      expect(success).toBeNull()
+    })
+
+    it('is disabled with the reason in its tooltip while Blocked, and enabled again when the permission changes (A4)', async () => {
+      permission.state = 'denied'
+      await mountWithLocation()
+      await act(async () => { location().click() })
+      await act(async () => {
+        failure!({ code: 1, message: 'User denied Geolocation' } as GeolocationPositionError)
+        for (let i = 0; i < 5; i += 1) await Promise.resolve()
+      })
+      expect(location().getAttribute('aria-disabled')).toBe('true')
+      expect(location().hasAttribute('aria-pressed')).toBe(false)
+      expect(tooltip()).toContain('Location is blocked')
+      await act(async () => { location().click() })
+      expect(success).toBeNull()
+
+      await act(async () => {
+        permission.state = 'prompt'
+        permission.dispatchEvent(new Event('change'))
+      })
+      expect(location().hasAttribute('aria-disabled')).toBe(false)
+      expect(myLocation.mode.peek()).toBe('off')
+    })
   })
 })
