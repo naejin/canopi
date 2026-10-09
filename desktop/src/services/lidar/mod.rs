@@ -1197,8 +1197,10 @@ impl LidarLibrary {
     fn fail_import_job(&self, job_id: &str, message: &str) {
         if let Ok(connection) = self.catalogue() {
             let _ = connection.execute(
-                "UPDATE lidar_import_jobs SET state = 'failed', message = ?2, updated_at = ?3
-                 WHERE id = ?1 AND state = 'staging'",
+                "UPDATE lidar_import_jobs
+                 SET state = 'failed', message = ?2, progress_phase = NULL,
+                     progress_percent = NULL, updated_at = ?3
+                 WHERE id = ?1 AND state IN ('staging', 'applying')",
                 rusqlite::params![job_id, message, now_iso()],
             );
         }
@@ -1253,42 +1255,57 @@ impl LidarLibrary {
         let job_id_clone = job_id.to_string();
         tauri::async_runtime::spawn(async move {
             let library_for_work = library.clone();
-            let outcome = executor
+            let ran = executor
                 .run(RASTER_WORK, "lidar import sources", move || {
-                    // Prepare and validate every selected source. The head
-                    // is captured inside this call, before preparation
-                    // begins, and carried by the staged payload.
-                    match import::stage_import(
-                        &library_for_work,
+                    let outcome = library_for_work.stage_and_publish(
                         &job_id_for_stage,
                         &layer_for_stage,
                         &source_paths,
                         &flag,
-                    ) {
-                        Ok(_) => {}
-                        Err(error) => return Err(error),
-                    }
-                    let staging = import::read_staged_import(&library_for_work, &job_id_for_stage)?;
-                    // Every occurrence is compatible and validated before
-                    // anything becomes visible; a partial batch is never
-                    // published as a success.
-                    import::ensure_whole_batch_compatible(&staging)?;
-                    // Display derivatives are staged under the same job, so
-                    // the item can be drawn as soon as it is published.
-                    library_for_work.prepare_staged_display(&staging, &flag)?;
-                    // Publication refuses an item that already has a head:
-                    // items are fixed once published.
-                    import::apply_import(&library_for_work, &staging, &flag).map(|outcome| {
-                        tracing::info!(summary = outcome.summary(), "LiDAR import published");
-                    })
+                    );
+                    // Settled on this lane with the lease held, so the files
+                    // a failed or cancelled job frees are removed inside the
+                    // executor's admission and no other import stages that
+                    // content meanwhile.
+                    library_for_work.finish_import_sources(&job_id_for_stage, outcome);
+                    drop(lease);
+                    Ok(())
                 })
                 .await;
-            // The lease is held through the settlement, so no other import
-            // stages the content a failed or cancelled one frees.
-            library.finish_import_sources(&job_id_clone, outcome);
-            drop(lease);
+            if let Err(error) = ran {
+                // The lane refused the work or it panicked; the lease went with
+                // it, and startup frees any files the job wrote.
+                library.fail_import_job(&job_id_clone, &error);
+            }
+            library.settle_cancel(&job_id_clone);
         });
         Ok(())
+    }
+
+    /// Prepare, validate and publish one import's staged sources; the caller
+    /// settles the job with the outcome.
+    fn stage_and_publish(
+        &self,
+        job_id: &str,
+        layer_id: &str,
+        source_paths: &[PathBuf],
+        flag: &AtomicBool,
+    ) -> Result<(), String> {
+        // The head is captured inside staging, before preparation begins,
+        // and carried by the staged payload.
+        import::stage_import(self, job_id, layer_id, source_paths, flag)?;
+        let staging = import::read_staged_import(self, job_id)?;
+        // Every occurrence is compatible and validated before anything
+        // becomes visible; a partial batch is never published as a success.
+        import::ensure_whole_batch_compatible(&staging)?;
+        // Display derivatives are staged under the same job, so the item can
+        // be drawn as soon as it is published.
+        self.prepare_staged_display(&staging, flag)?;
+        // Publication refuses an item that already has a head: items are
+        // fixed once published.
+        import::apply_import(self, &staging, flag).map(|outcome| {
+            tracing::info!(summary = outcome.summary(), "LiDAR import published");
+        })
     }
 
     /// Record the outcome of a one-step import.
@@ -1332,19 +1349,12 @@ impl LidarLibrary {
                 Err(error) => {
                     // A failed item stays for Retry, which reads the user's
                     // files again, so none of its own are kept.
-                    let _ = connection.execute(
-                        "UPDATE lidar_import_jobs
-                         SET state = 'failed', message = ?2, progress_phase = NULL,
-                             progress_percent = NULL, updated_at = ?3
-                         WHERE id = ?1 AND state IN ('staging', 'applying')",
-                        rusqlite::params![job_id, error, now_iso()],
-                    );
                     drop(connection);
+                    self.fail_import_job(job_id, &error);
                     self.discard_import_job_files(job_id);
                 }
             }
         }
-        self.settle_cancel(job_id);
     }
 
     /// Wait for the library-wide heavy lease without holding an executor

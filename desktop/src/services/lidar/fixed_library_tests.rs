@@ -864,6 +864,75 @@ fn await_settled(library: &LidarLibrary, job_id: &str) {
     }
 }
 
+/// A failed import frees its files on the raster lane, inside the executor's
+/// admission, never on the async runtime: while its settlement waits for the
+/// display registry, other raster work on a one-slot lane waits too.
+#[test]
+fn a_failed_import_frees_its_files_on_the_raster_lane() {
+    use crate::native_operation::{
+        NativeOperationClassLimits, NativeOperationExecutor, NativeOperationLimits,
+    };
+    let root = scratch("settle-on-lane");
+    let library = LidarLibrary::open(&root).unwrap();
+    let lane = NativeOperationClassLimits::new(4, 1);
+    let executor =
+        NativeOperationExecutor::new(NativeOperationLimits::new(lane, lane, lane, lane, lane))
+            .unwrap();
+    library.attach_executor(executor.clone());
+    let west = plane(&library, &root, "west", 445_000.0);
+    // Half a cell off, so the batch stages and then fails as a whole.
+    let shifted = plane(&library, &root, "shifted", 445_000.5);
+    let display = library.display().unwrap();
+    let receipt = library
+        .import_item(
+            "Orchard",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            vec![west, shifted],
+        )
+        .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while library
+        .get_import_job(&receipt.job_id)
+        .unwrap()
+        .unwrap()
+        .state
+        != LidarImportJobState::Failed
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the import never failed"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+
+    // The settlement is now freeing the staged COGs and waits for the held
+    // display registry; a raster probe must queue behind it.
+    let (ran, probe_ran) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let outcome = tauri::async_runtime::block_on(executor.run(RASTER_WORK, "probe", || Ok(())));
+        let _ = ran.send(outcome);
+    });
+    assert!(
+        probe_ran
+            .recv_timeout(std::time::Duration::from_millis(300))
+            .is_err(),
+        "the settlement holds the raster lane while it frees the job's files"
+    );
+    drop(display);
+    probe_ran
+        .recv_timeout(std::time::Duration::from_secs(60))
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        await_import(&library, &receipt.job_id),
+        LidarImportJobState::Failed
+    );
+    assert_eq!(library_files(&library), Vec::<PathBuf>::new());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// Cancel deletes the half-imported item at once, and the job's settlement
 /// removes every file it wrote: nothing is listed, nothing stays on disk,
 /// and the same file imports again under the same name (user, 2026-10-09).
