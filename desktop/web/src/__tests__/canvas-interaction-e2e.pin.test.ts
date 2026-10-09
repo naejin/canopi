@@ -158,6 +158,28 @@ describe('SceneInteractionSession: readouts under a still pointer', () => {
     ])
     session.dispose()
   })
+
+  it('a still mouse that goes through overview and back republishes the ground under it once settled (or null), never the ground from before', () => {
+    vi.useFakeTimers()
+    const session = fixture.createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('select')
+    const points: unknown[] = []
+    session.subscribePointerWorld((point) => { points.push(point) })
+
+    events.pointerMove({ x: 120, y: 90 }, { buttons: 0 })
+    const before = { world: testView.view().screenToWorld({ x: 120, y: 90 }), screen: { x: 120, y: 90 }, pointerKind: 'mouse' }
+    testView.setViewport({ x: 0, y: 0, scale: 0.01 })
+    vi.advanceTimersByTime(150)
+    testView.setViewport({ x: 40, y: 10, scale: 2 })
+    vi.advanceTimersByTime(150)
+
+    const after = { world: testView.view().screenToWorld({ x: 120, y: 90 }), screen: { x: 120, y: 90 }, pointerKind: 'mouse' }
+    expect(after.world).not.toEqual(before.world)
+    expect(points[0]).toEqual(before)
+    expect(points.slice(1), 'nothing after overview is the ground from before').not.toContainEqual(before)
+    expect([null, after]).toContainEqual(points.at(-1))
+    session.dispose()
+  })
 })
 
 describe('the canvas runtime: the Site data pin', () => {
