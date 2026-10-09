@@ -3,7 +3,7 @@
 //! Production code under `design/` and `db/` names nothing in `crate::services`, and production
 //! code under `services/` names nothing in `crate::commands` and never `AppHealth`. The test parses
 //! each file with `syn`, resolves `crate::`, `self::` and `super::` paths in `use` trees,
-//! expressions, types and macro arguments, and skips inline `#[cfg(test)]` code and out-of-line
+//! expressions, types and macro bodies (read as tokens), and skips inline `#[cfg(test)]` code and out-of-line
 //! `#[cfg(test)]` modules. Each current breach is a named exception with its 2.1 bead; an exception
 //! that excuses nothing fails, so a fixed breach must leave the list.
 
@@ -11,7 +11,8 @@ use std::{collections::BTreeSet, fs, path::Path};
 
 use syn::{
     Attribute, Expr, ImplItem, Item, ItemMod, ItemUse, Macro, Stmt, TraitItem, UseTree,
-    punctuated::Punctuated,
+    buffer::Cursor,
+    parse::ParseStream,
     visit::{self, Visit},
 };
 
@@ -311,14 +312,56 @@ impl<'ast> Visit<'ast> for NameVisitor {
 
     fn visit_macro(&mut self, node: &'ast Macro) {
         visit::visit_macro(self, node);
-        // Macro arguments are tokens to `syn`; read them as expressions when they parse as such.
-        let parser = Punctuated::<Expr, syn::Token![,]>::parse_terminated;
-        if let Ok(arguments) = node.parse_body_with(parser) {
-            for argument in &arguments {
-                self.visit_expr(argument);
-            }
+        // A macro body is tokens, often not expressions (`tracing`'s `%value` and `?value` fields,
+        // `vec![value; count]`), so every `a::b::c` run in it is read as a path.
+        let runs = node
+            .parse_body_with(|input: ParseStream| input.step(|cursor| Ok(path_runs(*cursor))))
+            .unwrap_or_default();
+        for run in runs {
+            self.record(run);
         }
     }
+}
+
+/// The `ident::ident::…` runs in a token stream, its groups included, and the cursor at its end.
+fn path_runs(mut cursor: Cursor) -> (Vec<Vec<String>>, Cursor) {
+    let mut runs = Vec::new();
+    let mut run = Vec::new();
+    let mut colons = 0;
+    while !cursor.eof() {
+        if let Some((ident, next)) = cursor.ident() {
+            if colons != 2 && !run.is_empty() {
+                runs.push(std::mem::take(&mut run));
+            }
+            run.push(ident.to_string());
+            colons = 0;
+            cursor = next;
+            continue;
+        }
+        if let Some((punct, next)) = cursor.punct()
+            && punct.as_char() == ':'
+        {
+            colons += 1;
+            cursor = next;
+            continue;
+        }
+        if !run.is_empty() {
+            runs.push(std::mem::take(&mut run));
+        }
+        colons = 0;
+        if let Some((inside, _, _, next)) = cursor.any_group() {
+            runs.extend(path_runs(inside).0);
+            cursor = next;
+        } else if let Some((_, next)) = cursor.token_tree() {
+            cursor = next;
+        } else {
+            break;
+        }
+    }
+    if !run.is_empty() {
+        runs.push(run);
+    }
+    (runs, cursor)
 }
 
 fn item_attributes(item: &Item) -> &[Attribute] {
@@ -443,15 +486,25 @@ mod tests {
                 "src/design/preview.rs",
                 r#"fn log() { tracing::info!("{}", crate::services::export::label()); }"#,
             ),
+            (
+                "src/design/mod.rs",
+                r#"fn saved() { tracing::debug!(fingerprint = %crate::services::export::digest(), "saved"); }"#,
+            ),
+            (
+                "src/db/plant_db.rs",
+                "fn sizes() -> Vec<u8> { vec![crate::services::lidar::grid::CELL; 4] }",
+            ),
         ]);
 
         assert_eq!(
             violations,
             [
+                "design and db code must not name crate::services: src/db/plant_db.rs names crate::services::lidar::grid::CELL",
                 "design and db code must not name crate::services: src/db/query_builder/filters.rs names crate::services::plant_browser::Query",
                 "design and db code must not name crate::services: src/db/user_db.rs names crate::services::settings",
                 "design and db code must not name crate::services: src/db/user_db.rs names crate::services::settings::Settings",
                 "design and db code must not name crate::services: src/design/format.rs names crate::services::lidar::grid::sha256_hex",
+                "design and db code must not name crate::services: src/design/mod.rs names crate::services::export::digest",
                 "design and db code must not name crate::services: src/design/preview.rs names crate::services::export::label",
             ]
         );
@@ -472,14 +525,27 @@ mod tests {
                 "src/services/mod.rs",
                 "use super::commands as entry; mod health { fn read(_: super::super::AppHealth) {} }",
             ),
+            (
+                "src/services/lidar/mod.rs",
+                r#"
+                    fn retry(error: &str) {
+                        tracing::warn!(%error, kind = crate::commands::lidar::kind(), "retry");
+                        tracing::debug!(mode = ?super::super::commands::lidar::mode(), "mode");
+                        tracing::info!(health = ?super::super::AppHealth::default(), "health");
+                    }
+                "#,
+            ),
         ]);
 
         assert_eq!(
             violations,
             [
                 "services code must not name AppHealth: src/services/health.rs names AppHealth",
+                "services code must not name AppHealth: src/services/lidar/mod.rs names AppHealth",
                 "services code must not name AppHealth: src/services/mod.rs names AppHealth",
                 "services code must not name crate::commands: src/services/lidar/inspection.rs names crate::commands::lidar::lidar_sample_points",
+                "services code must not name crate::commands: src/services/lidar/mod.rs names crate::commands::lidar::kind",
+                "services code must not name crate::commands: src/services/lidar/mod.rs names crate::commands::lidar::mode",
                 "services code must not name crate::commands: src/services/mod.rs names crate::commands",
             ]
         );
