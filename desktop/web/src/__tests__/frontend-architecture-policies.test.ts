@@ -2243,6 +2243,19 @@ const CANVAS_V2_POLICIES = [
     exceptFrom: ['src/app/settings/projection.ts', ...TEST_SOURCE_PATTERNS],
     targets: SETTINGS_PROJECTION_SIGNALS.flatMap((signal) => [`${signal}.value`, `*.${signal}.value`]),
   },
+  {
+    // A presentation starts and ends in its controller; the map, the runtime adapter and the overlays only read the
+    // overrides. Tests set them to stage a presentation.
+    kind: 'confine-symbols',
+    name: 'P45 only the presentation controller writes story overrides',
+    from: ['src/**'],
+    names: ['setStoryPresentationOverrides', 'setStoryPresentationHidesEditingAids'],
+    allowedFrom: [
+      'src/app/story-presentation/controller.ts',
+      'src/app/story-presentation/overrides.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+  },
 ] satisfies readonly ArchitecturePolicy[]
 
 /**
@@ -3544,6 +3557,7 @@ const P41 = '[P41 canvas imports no native or edition code]'
 const P42 = '[P42 shared app code imports no Web edition module]'
 const P43 = '[P43 the input core stays camera-free and app-free]'
 const P44 = '[P44 settings and map-layer signals are written only by the projection]'
+const P45 = '[P45 only the presentation controller writes story overrides]'
 
 describe('2.0 guard policies (canopi-f47t.52.17)', () => {
   it('P39 rejects a production value cycle; type-only, dynamic and test cycles pass', () => {
@@ -3695,6 +3709,36 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
       `${P44} src/app/planted.ts:3 writes settings.googleMapsApiKey.value = null`,
       `${P44} src/app/planted.ts:4 writes mapLayers.value = next`,
       `${P44} src/app/planted.ts:5 writes scrollWheel.value = ++`,
+    ])
+  })
+
+  it('P45 confines the story override setters to the presentation controller, the overrides module and tests', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/app/story-presentation/overrides.ts', [
+        'export function setStoryPresentationOverrides() {}',
+        'export function setStoryPresentationHidesEditingAids() {}',
+      ]),
+      plantedSource('src/app/story-presentation/controller.ts', [
+        "import { setStoryPresentationOverrides, setStoryPresentationHidesEditingAids } from './overrides'",
+        'setStoryPresentationOverrides(null); setStoryPresentationHidesEditingAids(false)',
+      ]),
+      plantedSource('src/app/canvas-map-surface/planted.ts', [
+        "import { setStoryPresentationOverrides } from '../story-presentation/overrides'",
+        'setStoryPresentationOverrides(null)',
+      ]),
+      plantedSource('src/components/panels/Planted.tsx', [
+        "import * as overrides from '../../app/story-presentation/overrides'",
+        'overrides.setStoryPresentationHidesEditingAids(true)',
+      ]),
+      plantedSource('src/__tests__/planted.test.ts', [
+        "import { setStoryPresentationOverrides } from '../app/story-presentation/overrides'",
+        'setStoryPresentationOverrides(null)',
+      ]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P45'))).toEqual([
+      `${P45} src/app/canvas-map-surface/planted.ts contains confined symbol setStoryPresentationOverrides; allowed sources: src/app/story-presentation/controller.ts, src/app/story-presentation/overrides.ts, ${TEST_SOURCES}`,
+      `${P45} src/components/panels/Planted.tsx contains confined symbol setStoryPresentationHidesEditingAids; allowed sources: src/app/story-presentation/controller.ts, src/app/story-presentation/overrides.ts, ${TEST_SOURCES}`,
     ])
   })
 })
