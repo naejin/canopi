@@ -61,46 +61,19 @@ phase 0 (done) ─▶ F (done) ─▶ 1 (done) ─▶ 2.0 bug fixes (done) ─�
 
 ## 5. File ownership for parallel agents
 
-One file has one owner per phase. No two agents edit the same file, and streams run in parallel only on areas that share no file; coupled work is one sequential stream. No agent reverts another's work. In the 11 locale files (`desktop/web/src/i18n/*.json`) an agent adds or removes only its own keys; you integrate. A needed edit outside an agent's list comes back to you. The full lists are in plan section 4, per phase; brief each agent with its row copied from there, not this summary.
-
-| Phase | Streams (plan section) | Owns, in short |
-|---|---|---|
-| canopi-f47t.52 | cut by its planning session along the target ADR's module boundaries, one boundary per stream (plan section 4, "2.0 architecture") | the briefs its planning session writes |
-| Release close | you, with agents for step 1 (the last cuts) and the docs check | plan section 4, "2.0 release close" |
-
-You own: `__tests__/frontend-architecture-policies.test.ts`, `__tests__/canvas-boundaries.test.ts` (the policy tests of plan section 5; P9b, P13 and P15 are not written), `__tests__/unused-code.test.ts` with its snapshot, locale integration, every `bd` write and the worktree's `.beads/issues.jsonl` (plan section 7, "JSONL"), the Playwright scenarios (`desktop/web/e2e/**`, the release close's `v2.spec.ts` included) and every end-of-step deletion.
+Owned by `AGENTS.md` ("Subagents": disjoint files, locale namespaces, the merge agent's snapshot), the skill (step 4, the owners file) and the guide's Gates ("Ownership"); each step's lists come from its amendment.
 
 ## 6. Gates at every phase
 
-Run the gates for the changed area, from `AGENTS.md`, on the integration branch at the end of every step and before every push:
-
-| Change | Run |
-|---|---|
-| Rust | `cargo fmt --all -- --check`; `CANOPI_SKIP_BUNDLED_DB=1 cargo clippy --workspace --all-targets -- -D warnings`; `CANOPI_SKIP_BUNDLED_DB=1 cargo test --workspace`; `cargo cov` above its floor; `python3 scripts/check_unused_crates.py` |
-| A `#[tauri::command]` | `CANOPI_SKIP_BUNDLED_DB=1 cargo test -p canopi-desktop native_command_policy::tests` |
-| Shared contracts (`common-types/`) | `cd desktop/web && npm run gen:types && npm run check:types` |
-| Frontend | `cd desktop/web && npx tsc --noEmit && npm run test:coverage -- --maxWorkers=4 && npm run test:policies && npm run check:ui && npm run build && npm run build:web` |
-| Docs | `python3 scripts/check_docs.py` (validator changes: `python3 -m unittest scripts.test_check_docs`) |
-
-Every canvas step runs the Frontend row. A step adds the Rust and Shared contracts rows whenever it changes `common-types/` (`bindings-gen` copies the `settings.rs` doc comments into `generated/contracts.ts`), and the regenerated `generated/contracts.ts` is committed with the change. Docs commits run the Docs row. Coverage floors are raised at milestones, never lowered. A gate you cannot run is recorded in the bead and the handoff with the command, the reason and the residual risk. No performance gates.
+The table in `AGENTS.md` ("Quality gates") is the only list; the affected and full commands are in [`docs/guides/agentic-delivery.md`](../guides/agentic-delivery.md) ("Gates"). No performance gates.
 
 ## 7. Review, live check and Web check at every phase
 
-**Reviews** (user, 2026-10-02, changed 2026-10-04; plan section 1, "Reviews"). Each stream's diff gets one round by two reviewers that did not write the code: the bug reviewer (a workflow agent reviewing the diff itself at high effort, U29) and a plan-conformance check (project-briefed, no bug hunting), as section 11 says. A separate agent verifies each finding (read-only, refuted unless shown) before anyone fixes it; the fix is test first and never stacks a guard on code the step just added. The fix diff is always re-reviewed on its own. A full second round runs on work that touches the user's files or stored data, on rotation's core, and when the first round found a blocker or a major; never more than two full rounds on one diff (a third points at the design or the tests). **Before every push**, a review of exactly the diff since the last push (`/code-review` at high effort, or a review stage of the workflow); fix every confirmed finding, re-run the gates, and record in the bead that it ran and what it changed. No push without it.
-
-**Live check** through the MCP bridge on an isolated review instance, after the merged gates pass of any merge that changes a seam the tests fake (map, renderer, input, file dialogs), and again before the pre-push review: plan section 3.1 and `.rq-scratch/screenshots/phase-0/PROCEDURE.md` (with `drag-helper.js` for dispatched drags), then the phase's live-check steps from plan section 4. Run it from a detached worktree no other agent edits (`git worktree add --detach /home/daylon/projects/canopi/.rq-scratch/canvas-v2-live <commit>`, removed afterwards), since the review instance hot-reloads any edit. Profile `.rq-scratch/reference/<phase>/` (phase F's, basemap off, is `.rq-scratch/reference/phase-F`); copy the read-only master `.rq-scratch/reference/orchard.canopi` into it and never open the master or the user's files. Never drive the user's own app: check who owns the bridge port first. Record in the bead which host each step drove (dispatched `PointerEvent`s or native input).
-
-**Web check** (plan section 3.2) on every merge that touches the renderer, camera, input or map, before the push: in phase 0 it alone caught a crash of the real renderer. From the worktree root, after `cd desktop/web && npm run build:web`: `docker run --rm --ipc=host -v "$PWD":/work -w /work/desktop/web --user $(id -u):$(id -g) -e HOME=/tmp mcr.microsoft.com/playwright:v1.63.0-noble npx playwright test e2e/canvas --reporter=line`. The CI job (canopi-9x95) runs the same scenarios in Chromium and WebKit on every push; every phase ends with it green on the pushed commit. The later phases' Web steps are automated once, at the release close, in `desktop/web/e2e/canvas/v2.spec.ts` (you own it); list each phase's Web steps in its bead. Known limits: multi-touch Chromium-only; WebKit trackpad `gesture*` events covered by fixtures E9 and E10.
+Review rounds and verification: the skill's `references/review-protocol.md`, with Canopi's triggers in the guide's "Review lenses"; the live check and the Web check: the guide's "Live check" and "Gates".
 
 ## 8. Worktrees, branch and disk
 
-- Never pull, commit, stage or push in the main checkout `/home/daylon/projects/canopi`: it is the user's (`cargo tauri dev` runs there; untracked `.beads.gate.lock` is theirs). Read-only commands only.
-- The integration worktree is `/home/daylon/projects/canopi/.rq-scratch/canvas-v2` on `canvas-v2/integration`, which tracks `origin/feature/geolibre-adoption`. Before each bead: `git fetch`, then `git rebase --rebase-merges origin/feature/geolibre-adoption` if behind (a plain rebase flattens the stream merges). Push with `git push origin HEAD:feature/geolibre-adoption` (origin pushes to GitHub and Codeberg). Only one agent works in the integration worktree at a time.
-- Every worktree uses `CARGO_TARGET_DIR=/home/daylon/projects/canopi/.rq-scratch/shared-build/target` (the last component must be `target`). Say so in every implementation brief.
-- Tools in `/home/daylon/projects/canopi/.rq-scratch/tools/`: `mkwt.sh <stream> [base]` makes `.rq-scratch/canvas-v2-<stream>` on `canvas-v2/<stream>` from `canvas-v2/integration` with `npm ci` (which installs the pre-commit hook), the PDF fonts and the catalog DB copy; `quiet-gates.sh <worktree> affected|quick|full` runs the Frontend gates (`affected`: tests related to the files changed since `BASE`) printing only failures and totals (logs in `.rq-scratch/gate-logs/`; the Rust gates are section 6's row); `journal.py <run-id> [--full LABEL]` summarises a workflow journal; `imgdiff.py` diffs two screenshots by pixel; `x11-dialog.py <winid> <path>` drives a native GTK file dialog by X11 `send_event`; `wf-1.js` is phase 1's workflow script (section 11); `wf-f.js` and `wf-0e.js` are older examples whose tool paths point at an old job folder.
-- Run `df -h /` before launching agents or heavy builds; clean up below about 50 GB free. Remove a merged worktree and its caches (`/tmp/canopi-*`, headless browser profiles); keep screenshots. Review profiles under `.rq-scratch/reference/<phase>/` go only when the phase's bead closes (plan section 3.1, step 6). Never delete the main checkout's `target/` without asking the user.
-- The git stash stack is shared; set work aside with a WIP commit. Never amend.
-- Commits: `refactor(frontend): …`, `fix(frontend): …`, `feat(frontend): …`, `test(frontend): …`, `docs: …`; stage only your files; generated files go with the commit that produced them.
+The guide's "Places" (the user's checkout, the integration and stream worktrees, the shared build cache, scratch and disk); commits as `AGENTS.md` says.
 
 ## 9. Stop and amend
 
@@ -112,33 +85,11 @@ Run `bd prime` for the commands. Plan section 7 maps every phase to its bead id,
 
 ## 11. Using ultracode workflows
 
-Run each step with the user-level `phased-agentic-delivery` skill (load it, and `workflow-authoring` before writing a script): its loop is this prompt's process, its `references/workflow-design-check.js` and `workflow-step.js` are the script templates (build cap, serial merges, verified reviews, the collect-hand-offs stage), its `review-protocol.md` is the review stage, and its `gotchas.md` holds the workflow traps (resume re-runs everything after the first changed `agent()` call; the STOPPED check `/^\s*\**STOPPED(?! (was|is) not)/i`; one agent at a time in the integration worktree). Canopi's places, gates, live-check launch and tools are in [`docs/guides/agentic-delivery.md`](../guides/agentic-delivery.md); `.rq-scratch/tools/wf-1.js` is phase 1's filled-in example. Canopi specifics on top of the skill: stream worktrees come from `mkwt.sh`, never the workflow's `isolation: worktree`; the Web check runs at every merge touching the renderer, camera, input or map; the live check runs from `.rq-scratch/canvas-v2-live`; the user's answers are recorded, dated, in plan section 1; design drift follows section 9.
-
-The process the user agreed on 2026-10-04 (plan section 1, "Reviews", and for the reuse scan "How a step is chosen"):
-- **Design checks scan for reuse first**: the libraries Canopi uses, GeoLibre and the framework's own options for the area, before planning to write or simplify generic code.
-- **Two reviewers per stream, separate jobs.** The bug reviewer is a workflow agent that reviews the diff itself at high effort with the stream's lens; it does not call `/code-review`, whose forks returned to the main session after the agent had moved on (U29, 2026-10-05). `/code-review` at high effort runs for the pre-push review. The plan-conformance check (Opus medium, project-briefed) checks plan rows, the user's decisions, file ownership, docs, tests written first, strings in 11 locales and planned items missing; it does not hunt bugs. Every finding goes to a verifier before any fix; never `/code-review --fix`.
-- **No `/simplify` per stream**; the close's usefulness pass does that job once.
-- **Fix rounds simplify, accept or file**: a later finding that is only an edge case on code the step just added never gets another guard.
-- **A live check after any merge that changes a faked seam** (map, renderer, input, file dialogs), and again before the pre-push review.
-- **No messaging.** Briefs forbid agents messaging the main agent, and you never message a workflow agent, even to answer it. A fix agent that stops on an out-of-list finding has handed it off to the main agent; its stream is not stopped.
-
-Models: Opus high for complex work, bug reviews, verification of hard findings and fixes; Opus medium for simpler or mechanical coding and the plan-conformance check; Sonnet only for very simple tasks; never Fable or any other model.
-
-When a usage limit stops agents, do not schedule check-ins to resume them: the user types "Resume", and you then continue each stopped agent where it stopped. Weekly usage limits are not a reason to slow work: keep the efficiency habits of this section (models per stage, short briefs) and keep going. `.rq-scratch/tools/wf-1.js` shows the build-slot semaphore (at most 4 mutating agents on this 8-CPU host). Keep briefs short and point at plan sections. Subagents never push, close beads or edit locale keys that are not theirs.
+The `phased-agentic-delivery` skill (its loop, workflow templates, review protocol and gotchas) with the guide's "Workflows and measured cost", "Models" and "Tools"; design drift follows section 9.
 
 ## 12. Handoff
 
-At the end of every phase, from `AGENTS.md`:
-
-1. Gates for the changed area passed, or are recorded as skipped with the reason.
-2. Bead closed with a receipt; follow-up beads filed.
-3. Affected guide, pattern, ADR or release notes updated, or the handoff says none were needed.
-4. Committed, pulled with rebase, pushed; `git status --short --branch` clean and up to date.
-5. Final message: bead id, commit hash, branch, gates run or skipped, user-owned files left untouched, and what to try in `cargo tauri dev`.
-
-Add: the unused-code check's result (what it found and deleted, or why an entry stays), the conventions and "(spec)" details this phase shipped (plan section 8), any design amendment made under section 9, the inventory rows cleared, the Web-check engines and limits, the pre-push review outcome, any planned behaviour dropped because no user path or roadmap item needed it, and the phase's entries for the release close (Web steps, docs to check, gallery, release-note lines).
-
-**Retrospective (every phase close).** The bead receipt carries a "Process" section of a few lines: tokens spent and calendar days; stop-and-amend and fix rounds; review findings that were real bugs versus noise, per review lens; what the live or Web check caught that unit tests missed. Then one or two changes, each made permanent rather than remembered: a rule in `AGENTS.md` or plan section 1 (rewritten, not appended), a script, or a test. Tune by results: a review lens that finds nothing real for two phases goes; a stage whose Sonnet output needs repeated fix rounds moves to Opus; a step that stops on design questions gets a deeper design check first. Delete the finished parts of the plan and spec, so later briefs stay short. Batch the user's questions at the start of the next phase, after its design check. Every few phases, check each rule in `AGENTS.md` and plan section 1 still earns its cost.
+`AGENTS.md`'s Handoff and the skill's handoff message and `references/retrospective.md`. Canopi adds to the receipt: the unused-code check's result, the conventions and "(spec)" details shipped (plan section 8), any amendment under section 9, the inventory rows cleared, the Web-check engines and limits, and the step's entries for the release close (Web steps, docs to check, gallery, release-note lines).
 
 ## 13. Definition of done (verbatim)
 
@@ -154,16 +105,9 @@ Add: the unused-code check's result (what it found and deleted, or why an entry 
 
 How the definition of done reads under the user's 2026-10-01 decision (one release): the docs, gallery, release notes and the cross-engine scenario of the later phases are done once, at the release close; every phase still ends with the CI job green in Chromium and WebKit on its pushed commit, and with its review and live check. Windows and macOS are covered only by that CI job and the recogniser fixtures; no Windows or Mac hand check gates the release (U20). Under U33 (2026-10-05) rulers are removed, so the rotated list's "rulers" no longer applies.
 
-## 14. Operational notes (verbatim)
+## 14. Operational notes
 
-Review instance. The user's own `cargo tauri dev` usually runs from the main checkout on port 1420. Run a review instance from a worktree with its own identity and port, and check which process owns the bridge port before driving it: `cargo tauri dev -f mcp-bridge --config '{"identifier":"com.canopi.review","build":{"devUrl":"http://localhost:1431","beforeDevCommand":{"script":"npx vite --port 1431 --strictPort","cwd":"web"}}}'`. Run it with `XDG_DATA_HOME`, `XDG_CONFIG_HOME` and `XDG_CACHE_HOME` pointed at a scratch profile.
-Worktree setup. Worktrees need `npm ci`, `npm run prepare:pdf-fonts` (or the PDF tests fail with ENOENT), and a copy of `desktop/resources/canopi-core.db`. Use the shared `CARGO_TARGET_DIR` (`.rq-scratch/shared-build/target`). Check `df -h /` first.
-The bridge. It works only in debug-profile builds, because `desktop/build.rs` grants its capability only then. In builds with the production CSP it cannot inject its helper. For optimised measurement use `cargo tauri build --debug --no-bundle` with `CARGO_PROFILE_DEV_OPT_LEVEL=3` and a separate target folder.
-The window's Close button. The only button labelled "Close" in the app is the window's close button. Clicking it quits the app, and on Linux with NVIDIA the WebKitGTK web process then segfaults harmlessly (canopi-pj62). Close panels with their rail button instead.
-Shell pitfalls. The shell is zsh with noclobber: use `>|` to overwrite files. `pkill -f` and `pgrep -f` patterns match the calling shell's own command line and kill it. Stop processes by PID after checking `/proc/<pid>/exe`.
-CI. It runs the native tests on Windows and macOS runners and checks the Windows manifest. Pushing to the pull request cancels in-progress pull-request runs; push runs are not cancelled.
-Native dialogs. They can be driven for tests by sending X11 key events to the dialog window only, using python-xlib `send_event`, never global input.
-Also: the user requires a code review of every change before each push. Work in worktrees under .rq-scratch/, commit to feature/geolibre-adoption. Use ultracode workflows.
+In the guide ("Places", "Live check", "Gates": the review instance, worktree setup, shell pitfalls, CI cancelling).
 
 ## 15. What to do first
 

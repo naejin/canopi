@@ -65,7 +65,7 @@ cd desktop/web && npm audit --omit=dev && npm audit     # before a release
 
 ## Release workflow
 
-1. Merge through PRs into `main` with CI green (v2 branch rule: [workflow](../workflow.md)).
+1. Merge through PRs into `main` with CI green (v2 branch rule: `AGENTS.md`).
 2. Bump `desktop/tauri.conf.json`; keep `Cargo.toml`, `desktop/web/package.json` and `package-lock.json` in sync (preflight fails on drift).
 3. Run `Release Candidate` (`.github/workflows/release-candidate.yml`) from `main` (until v2 merges, `--ref feature/geolibre-adoption -f ref=feature/geolibre-adoption`; `ref` defaults to `main`) with `ref`, `release_version` and `db_release_tag` (usually `canopi-core-db`). Every packaging job checks out the resolved commit and matches the DB checksum from preflight.
 4. Smoke test the exact artifacts on Linux, macOS arm64, macOS x64 and Windows (start; create, edit, save, reopen Designs; search, placement; undo; layers; place search moves the view only; theme and locale) and record run id, commit, DB SHA-256, tester and results. A platform nobody can test by hand is recorded as untested; its evidence is `Build & Test` running the native tests on that runner and the Web Edition driven in Chromium (WebView2's engine) and WebKit (WKWebView's). macOS needs 12 or later (`bundle.macOS.minimumSystemVersion`) for the WebKit the canvas uses.

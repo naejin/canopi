@@ -9,7 +9,7 @@ Every document answers one of four questions. Start with the narrowest one for y
 | Where is this area's boundary? | one guide per area in [`guides/`](guides/) (see below) |
 | What changed for users? | [`release-notes/`](release-notes/), the in-app Getting started |
 
-Also: [`workflow.md`](workflow.md) for beads, branches, ownership and delivery; [`review-checklist.md`](review-checklist.md) for what to try before a release; [`plans/`](plans/) for agreed but unbuilt work (the canvas v2 [implementation prompt](plans/canvas-v2-implementation-prompt.md), to start from, and its [plan](plans/canvas-v2-plan.md), [spec](plans/canvas-v2-spec.md) and [inventory](plans/canvas-v2-inventory.md) carry out ADRs [0015](adr/0015-rotating-map-and-canvas-controls.md) to [0020](adr/0020-focus-and-keyboard-ownership.md)); [`CONTEXT.md`](../CONTEXT.md) for product vocabulary.
+Also: [`workflow.md`](workflow.md) for bead commands and triage labels; [`review-checklist.md`](review-checklist.md) for what to try before a release; [`plans/`](plans/) for agreed but unbuilt work (the canvas v2 [implementation prompt](plans/canvas-v2-implementation-prompt.md), to start from, and its [plan](plans/canvas-v2-plan.md), [spec](plans/canvas-v2-spec.md) and [inventory](plans/canvas-v2-inventory.md) carry out ADRs [0015](adr/0015-rotating-map-and-canvas-controls.md) to [0020](adr/0020-focus-and-keyboard-ownership.md)); [`CONTEXT.md`](../CONTEXT.md) for product vocabulary.
 
 ## Guides
 
