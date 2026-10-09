@@ -35,7 +35,7 @@ describe('the user location map overlay', () => {
     expect(dot).toEqual({ type: 'Feature', geometry: { type: 'Point', coordinates: [READING.lon, READING.lat] }, properties: { role: 'dot' } })
     expect(accuracy!.properties).toEqual({ role: 'accuracy' })
     expect(accuracy!.geometry.type).toBe('Polygon')
-    const ring = (accuracy!.geometry.coordinates as readonly (readonly number[])[][])[0]!
+    const ring = (accuracy!.geometry.coordinates as readonly (readonly (readonly number[])[])[])[0]!
     expect(ring).toHaveLength(65)
     expect(ring[64]).toEqual(ring[0])
     for (const vertex of ring) expect(metresFrom(READING, vertex)).toBeCloseTo(READING.accuracy, 1)
