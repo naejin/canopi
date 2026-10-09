@@ -1,3 +1,4 @@
+import type { FunctionComponent } from 'preact'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import type { CanvasToolbarActionCommand } from '../../app/canvas-commands'
 import { locale } from '../../app/settings/state'
@@ -27,14 +28,19 @@ const VIEW_ACTION_ICONS: Readonly<Record<string, ControlIconName>> = {
 /**
  * The zoom group at the bottom right: scale bar, zoom out, the map scale as
  * a ratio (a menu of common scales), zoom in, Fit to Design and, after a
- * divider, the compass (always shown). The map attribution pill sits just
- * left of it. On a phone it is a column on the right above the panel sheet:
- * zoom in, zoom out, Fit to Design and the compass, with 44 px targets and no
- * ratio (phones have no scale readout); it is placed from the visible map
- * frame, so it covers no edge. The compass is a button of the group: the
- * group's layer and map registration cover it.
+ * divider, the edition's Show my location (Web) and the compass (always
+ * shown). The map attribution pill sits just left of it. On a phone it is a
+ * column on the right above the panel sheet: zoom in, zoom out, Fit to Design,
+ * Show my location and the compass, with 44 px targets and no ratio (phones
+ * have no scale readout); it is placed from the visible map frame, so it
+ * covers no edge. Show my location and the compass are buttons of the group:
+ * the group's layer and map registration cover them.
  */
-export function ZoomControls({ viewActions }: { readonly viewActions: readonly CanvasToolbarActionCommand[] }) {
+export function ZoomControls({ viewActions, myLocation: MyLocation }: {
+  readonly viewActions: readonly CanvasToolbarActionCommand[]
+  /** Show my location, rendered before the compass; editions without it pass none. */
+  readonly myLocation?: FunctionComponent
+}) {
   const zoomIn = viewCommand(viewActions, 'zoom-in')
   const zoomOut = viewCommand(viewActions, 'zoom-out')
   const fit = viewCommand(viewActions, 'fit-to-design')
@@ -60,6 +66,7 @@ export function ZoomControls({ viewActions }: { readonly viewActions: readonly C
         <ZoomButton command={zoomIn} disabled={zoomIn.disabled || atMaximum} />
         <ZoomButton command={zoomOut} disabled={zoomOut.disabled || atMinimum} />
         <ZoomButton command={fit} disabled={fit.disabled} />
+        {MyLocation && <MyLocation />}
         <Compass command={resetNorth} className={styles.button} />
       </div>
     )
@@ -79,6 +86,7 @@ export function ZoomControls({ viewActions }: { readonly viewActions: readonly C
       <ZoomButton command={zoomIn} disabled={zoomIn.disabled || atMaximum} />
       <ZoomButton command={fit} disabled={fit.disabled} />
       <span className={styles.rule} aria-hidden="true" />
+      {MyLocation && <MyLocation />}
       <Compass command={resetNorth} className={styles.button} />
     </div>
   )

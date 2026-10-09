@@ -8,6 +8,7 @@ import { CanvasRuntimeCleanupError } from '../canvas/runtime/cleanup'
 import type { CanvasDocumentSurface } from '../canvas/runtime/runtime'
 import { acquireCanvasRuntimeLifecycle } from '../canvas/runtime/lifecycle-owner'
 import { CanvasChrome } from '../components/canvas/CanvasChrome'
+import { MyLocationButton } from '../components/canvas/MyLocationButton'
 import { workspaceCanvasCommandProjection } from '../app/workspace-commands/canvas-actions'
 import panelStyles from '../components/panels/Panels.module.css'
 import { browserDesignSessionController, type BrowserDesignSessionController } from './browser-design-session'
@@ -237,7 +238,7 @@ export function WebCanvasWorkspace({
           data-map-active={mapState?.status === 'ready' ? 'true' : 'false'}
           data-testid="web-canvas-workspace-surface"
         />
-        {hasDesign && <CanvasChrome projection={workspaceCanvasCommandProjection.value} canvasRef={containerRef} />}
+        {hasDesign && <CanvasChrome projection={workspaceCanvasCommandProjection.value} canvasRef={containerRef} myLocation={MyLocationButton} />}
         <MapNotice notice={mapNotice} onRetry={() => runtimeRef.current?.composition.retryMap()} canvasRef={containerRef} />
         {reveal.startScreen && <WebWelcomeScreen controller={controller} />}
       </div>

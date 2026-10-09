@@ -28,11 +28,13 @@ import { ZoomControls } from './ZoomControls'
  * chip, zoom group, the top-centre chip slot, the selection status chip, right-click menu, plant appearance popovers,
  * the overview pin, inspection and New-Design guidance. The edition hands over its canvas command projection.
  */
-export function CanvasChrome({ projection, canvasRef, stampChooser, profileLine, children }: {
+export function CanvasChrome({ projection, canvasRef, stampChooser, myLocation, profileLine, children }: {
   readonly projection: CanvasCommandProjection
   readonly canvasRef: RefObject<HTMLDivElement>
   /** Place a stamp's saved-stamp chooser (Desktop, where stamps are saved). */
   readonly stampChooser?: FunctionComponent<StampChooserProps>
+  /** Show my location, a button of the zoom group before the compass (Web, U54 Q9). */
+  readonly myLocation?: FunctionComponent
   /** The canvas menu's "Profile this line" (Desktop, where Site data is). */
   readonly profileLine?: CanvasContextMenuProfileLine
   /** Edition-only chrome (Desktop: raster inspection). */
@@ -42,16 +44,17 @@ export function CanvasChrome({ projection, canvasRef, stampChooser, profileLine,
   // A presented story shows the map alone, under its own card.
   if (storyPresentationActive.value) return null
   return (
-    <CanvasChromeContent projection={projection} canvasRef={canvasRef} stampChooser={stampChooser} profileLine={profileLine}>
+    <CanvasChromeContent projection={projection} canvasRef={canvasRef} stampChooser={stampChooser} myLocation={myLocation} profileLine={profileLine}>
       {children}
     </CanvasChromeContent>
   )
 }
 
-function CanvasChromeContent({ projection, canvasRef, stampChooser, profileLine, children }: {
+function CanvasChromeContent({ projection, canvasRef, stampChooser, myLocation, profileLine, children }: {
   readonly projection: CanvasCommandProjection
   readonly canvasRef: RefObject<HTMLDivElement>
   readonly stampChooser?: FunctionComponent<StampChooserProps>
+  readonly myLocation?: FunctionComponent
   readonly profileLine?: CanvasContextMenuProfileLine
   readonly children?: ComponentChildren
 }) {
@@ -63,7 +66,7 @@ function CanvasChromeContent({ projection, canvasRef, stampChooser, profileLine,
       <ToolCard stampChooser={stampChooser} />
       {/* Phones leave Grid and Snap to grid to the View menu. */}
       {!phoneLayout.value && <ViewChip toggles={projection.settingsToggles} />}
-      <ZoomControls viewActions={projection.viewActions} />
+      <ZoomControls viewActions={projection.viewActions} myLocation={myLocation} />
       <InspectionLens canvasRef={canvasRef} />
       {children}
       {!locating && <SelectionChip />}
