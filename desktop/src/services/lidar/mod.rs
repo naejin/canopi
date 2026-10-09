@@ -78,6 +78,9 @@ pub(crate) struct LidarLibraryInner {
     /// before a Local slot: hover, pin and profile reads never hold more than
     /// one of Local's running slots, so a save is always admitted beside them.
     sampling: Arc<tokio::sync::Semaphore>,
+    /// What sampling keeps between requests (the unreadable targets already
+    /// logged).
+    sample_memo: Mutex<inspection::SampleMemo>,
     /// One lane preparing display derivatives, separate from numeric jobs.
     display_preparation: Mutex<display_cog::DisplayPreparation>,
 }
@@ -225,6 +228,7 @@ impl LidarLibrary {
                 executor: Mutex::new(None),
                 heavy_job: Mutex::new(None),
                 sampling: Arc::new(tokio::sync::Semaphore::new(1)),
+                sample_memo: Mutex::new(inspection::SampleMemo::default()),
                 display_preparation: Mutex::new(display_cog::DisplayPreparation::default()),
             }),
         };

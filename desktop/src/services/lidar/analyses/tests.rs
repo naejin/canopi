@@ -1329,6 +1329,62 @@ fn an_unreadable_target_answers_unavailable_and_the_batch_still_reads() {
     assert_eq!(values(&series[3]), vec![None, Some(109.0)]);
 }
 
+/// Row values re-sample on every pointer move, so a target that stays
+/// unreadable is reported once per generation, not once per request.
+#[test]
+fn an_unreadable_target_is_reported_once_however_often_it_is_sampled() {
+    #[derive(Clone, Default)]
+    struct Captured(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+    impl std::io::Write for Captured {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let root = scratch_root("batch-reported-once");
+    let library = LidarLibrary::open(&root).unwrap();
+    let plane = plane_layer(&library, &root, 16, 16);
+    let corrupt = chunk_result(&library, &plane, "item-corrupt-once");
+    let cells: Vec<f32> = (0..16).map(|index| 300.0 + index as f32).collect();
+    let asset = generation::publish_test_chunk(&library, &corrupt, 0, 0, 4, 4, &cells);
+    std::fs::write(&asset.path, b"not a tiff").unwrap();
+    let aimed = target(LibraryItemRole::Derived, "item-corrupt-once", &corrupt);
+
+    let log = Captured::default();
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer({
+            let log = log.clone();
+            move || log.clone()
+        })
+        .with_ansi(false)
+        .with_max_level(tracing::Level::WARN)
+        .finish();
+    tracing::subscriber::with_default(subscriber, || {
+        for column in 0..4 {
+            let series = sample(
+                &library,
+                vec![aimed.clone()],
+                vec![point(f64::from(column) + 0.5, -1.5)],
+            );
+            assert_eq!(
+                series[0],
+                unavailable(LidarSampleUnavailableReason::UnsupportedInput)
+            );
+        }
+    });
+    let written = String::from_utf8(log.0.lock().unwrap().clone()).unwrap();
+    assert_eq!(
+        written
+            .matches("a LiDAR sample target could not be read")
+            .count(),
+        1,
+        "{written}"
+    );
+}
+
 /// N points in one request equal N one-point requests and the analytic plane:
 /// the cell's column inside the plane, `None` in its NoData hole, outside it
 /// and at a point that is not a number.

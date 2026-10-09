@@ -16,6 +16,7 @@
 //! reads through its published chunks. What a number means (its units) is the
 //! item's, which the caller already holds.
 
+use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
 
 use common_types::library::LibraryItemRole;
@@ -28,6 +29,45 @@ use super::analyses;
 use super::engine::RasterEngine;
 use super::grid::RasterGrid;
 use super::{LidarLibrary, catalogue, collection, generation, import};
+
+/// What the sampler keeps between requests, per library.
+///
+/// Row values re-sample every shown row on every pointer move, so a target
+/// that cannot be read is reported once. It is bounded by clearing when full,
+/// which costs at most one more report.
+#[derive(Default)]
+pub(super) struct SampleMemo {
+    /// Unreadable targets already logged, as (entity, generation).
+    reported: HashSet<(String, String)>,
+}
+
+/// Entries the memo holds before it starts over: two requests' worth of
+/// targets, so the values and profile lanes do not evict each other.
+const MEMO_CAPACITY: usize = 2 * LIDAR_SAMPLE_MAX_TARGETS;
+
+impl SampleMemo {
+    /// True the first time this (entity, generation) is reported.
+    fn first_report(&mut self, entity_id: &str, generation_id: &str) -> bool {
+        let key = (entity_id.to_string(), generation_id.to_string());
+        if self.reported.contains(&key) {
+            return false;
+        }
+        if self.reported.len() >= MEMO_CAPACITY {
+            self.reported.clear();
+        }
+        self.reported.insert(key)
+    }
+}
+
+/// The library's sample memo; a poisoned lock only means a panicked sampler,
+/// and every entry it holds is still a correct immutable fact.
+fn memo(library: &LidarLibrary) -> std::sync::MutexGuard<'_, SampleMemo> {
+    library
+        .inner
+        .sample_memo
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
 
 /// Which reader serves a target's numbers.
 enum TargetRead {
@@ -215,11 +255,16 @@ pub(super) fn sample_points(
         .map(|target| {
             sample_target(library, engine, &cancel, target, &request.points).unwrap_or_else(
                 |error| {
-                    tracing::warn!(
-                        entity_id = %target.entity_id,
-                        %error,
-                        "a LiDAR sample target could not be read"
-                    );
+                    // Once per generation: row values ask again on every
+                    // pointer move, and the row shows nothing either way.
+                    if memo(library).first_report(&target.entity_id, &target.expected_generation_id)
+                    {
+                        tracing::warn!(
+                            entity_id = %target.entity_id,
+                            %error,
+                            "a LiDAR sample target could not be read"
+                        );
+                    }
                     unavailable(LidarSampleUnavailableReason::UnsupportedInput)
                 },
             )
