@@ -21,6 +21,7 @@ interface ForbidImportsPolicy extends ImportPolicyBase {
   readonly exceptFrom?: readonly string[]
   readonly exceptTargets?: readonly string[]
   readonly allowTypeOnlyTargets?: readonly string[]
+  /** Only edges that read one of these names count; '*' matches an edge that may read every member. */
   readonly importedNames?: readonly string[]
 }
 
@@ -329,9 +330,7 @@ function collectForbiddenImportViolations(
       if (isTypeOnlyImport(edge) && matchesAny(edge.target, policy.allowTypeOnlyTargets ?? [])) {
         continue
       }
-      if (policy.importedNames && !edge.bindings.some(
-        (binding) => policy.importedNames?.includes(binding.importedName),
-      )) continue
+      if (policy.importedNames && !namesRead(edge).some((name) => policy.importedNames?.includes(name))) continue
       violations.push(formatImportViolation(policy.name, source.path, edge))
     }
   }
@@ -620,6 +619,11 @@ function matchesImportKind(
   edgeKinds: readonly ImportKind[] | undefined,
 ): boolean {
   return !edgeKinds || edgeKinds.includes(edge.kind)
+}
+
+/** The names an edge reads: its bindings, plus the members read through a namespace or `import()`, '*' if it escapes. */
+function namesRead(edge: TypeScriptImportFact): readonly string[] {
+  return [...edge.bindings.map((binding) => binding.importedName), ...(edge.members ?? ['*'])]
 }
 
 function isTypeOnlyImport(edge: TypeScriptImportFact): boolean {

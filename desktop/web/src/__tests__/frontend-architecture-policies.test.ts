@@ -3799,7 +3799,7 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
     ])
   })
 
-  it('P46 rejects a Google key or settings snapshot import outside its reviewed readers, by name, namespace or re-export', () => {
+  it('P46 rejects a Google key or settings snapshot import outside its reviewed readers, by name, namespace, re-export or dynamic import', () => {
     const graph = createTypeScriptSourceGraph([
       plantedSource('src/app/settings/state.ts', [
         'export const googleMapsApiKey = 1',
@@ -3821,6 +3821,13 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
       plantedSource('src/components/shared/Planted.tsx', [
         "export { googleMapsApiKey } from '../../app/settings/state'",
       ]),
+      plantedSource('src/app/dynamic.ts', [
+        "export const key = async () => (await import('./settings/state')).googleMapsApiKey",
+        "export const snapshot = async () => { const { snapshotSettingsProjection: s } = await import('./settings/projection'); return s }",
+        "export const active = import('./settings/state').then((m) => m.activeGoogleMapsApiKey)",
+        "export const whole = async () => await import('./settings/state')",
+        "export const language = async () => (await import('./settings/state')).locale",
+      ]),
       plantedSource('src/components/shared/SettingsGoogleKeyField.tsx', [
         "import { googleMapsApiKey } from '../../app/settings/state'",
       ]),
@@ -3836,6 +3843,10 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
       `${P46} src/app/planted.ts:2:1 imports src/app/settings/projection.ts via "./settings/projection" (static)`,
       `${P46} src/app/planted.ts:3:1 imports src/app/settings/state.ts via "./settings/state" (static)`,
       `${P46} src/components/shared/Planted.tsx:1:1 imports src/app/settings/state.ts via "../../app/settings/state" (reexport)`,
+      `${P46} src/app/dynamic.ts:1:39 imports src/app/settings/state.ts via "./settings/state" (dynamic)`,
+      `${P46} src/app/dynamic.ts:2:87 imports src/app/settings/projection.ts via "./settings/projection" (dynamic)`,
+      `${P46} src/app/dynamic.ts:3:23 imports src/app/settings/state.ts via "./settings/state" (dynamic)`,
+      `${P46} src/app/dynamic.ts:4:40 imports src/app/settings/state.ts via "./settings/state" (dynamic)`,
     ])
   })
 
@@ -3851,6 +3862,8 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
         "import { getCurrentCanvasDocumentSurface } from '../../canvas/session'",
         "import * as session from '../../canvas/session'",
         "import { currentCanvasQuerySurface as queries } from '../../canvas/session'",
+        "export const lifecycle = async () => (await import('../../canvas/session')).currentCanvasDocumentSurface",
+        "export const queries2 = async () => (await import('../../canvas/session')).currentCanvasQuerySurface",
       ]),
       plantedSource('src/components/canvas/InspectionLens.tsx', [
         "import { currentCanvasDocumentSurface } from '../../canvas/session'",
@@ -3867,6 +3880,7 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
       `${P47} src/components/canvas/Planted.tsx:1:1 imports src/canvas/session.ts via "../../canvas/session" (static)`,
       `${P47} src/components/canvas/Planted.tsx:2:1 imports src/canvas/session.ts via "../../canvas/session" (static)`,
       `${P47} src/components/canvas/Planted.tsx:3:1 imports src/canvas/session.ts via "../../canvas/session" (static)`,
+      `${P47} src/components/canvas/Planted.tsx:5:45 imports src/canvas/session.ts via "../../canvas/session" (dynamic)`,
     ])
   })
 
