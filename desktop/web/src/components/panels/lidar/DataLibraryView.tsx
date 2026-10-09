@@ -563,7 +563,10 @@ function RenameForm({ item, busy, error, onCancel, onSubmit }: {
   )
 }
 
-/** Delete everywhere, confirmed in place of the actions; refused while other results depend on the item. */
+/**
+ * Delete everywhere, confirmed in place of the actions; refused while other
+ * results depend on the item. Esc keeps the item, never closes the sheet.
+ */
 function DeleteConfirmation({ item, inCurrentDesign, busy, error, onKeep, onDelete }: {
   item: LibraryItem
   inCurrentDesign: boolean
@@ -582,7 +585,17 @@ function DeleteConfirmation({ item, inCurrentDesign, busy, error, onKeep, onDele
   useEffect(() => { title.current?.focus() }, [])
   const dependents = impact?.dependent_item_ids.length ?? item.dependents
   return (
-    <div className={styles.confirm} role="group" aria-labelledby="library-delete-title">
+    <div
+      className={styles.confirm}
+      role="group"
+      aria-labelledby="library-delete-title"
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return
+        event.preventDefault()
+        event.stopPropagation()
+        onKeep()
+      }}
+    >
       <p id="library-delete-title" className={styles.confirmTitle} tabIndex={-1} ref={title}>{t('canvas.lidar.library.deleteTitle', { name: item.name })}</p>
       {dependents > 0 ? <>
         <p>{t('canvas.lidar.library.deleteBlocked', { count: dependents })}</p>

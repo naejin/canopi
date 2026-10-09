@@ -426,6 +426,21 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(container.querySelector('[data-pane]')?.getAttribute('data-pane')).toBe('list')
     })
 
+    it('Esc backs out of Delete everywhere only, never the sheet', async () => {
+      lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Canopy')])
+      actions.fetchDeleteImpact.mockResolvedValue({ dependent_item_ids: [] })
+      mount()
+      await selectRow('Canopy')
+      await click(button(/^Delete everywhere$/))
+      expect(document.activeElement?.id).toBe('library-delete-title')
+      await key(document.activeElement!, 'Escape')
+      expect(libraryView.value).not.toBeNull()
+      expect(container.querySelector('[role="group"][aria-labelledby="library-delete-title"]')).toBeNull()
+      expect(selectedName()).toBe('Canopy')
+      expect(document.activeElement).toBe(button(/^Delete everywhere$/))
+      expect(actions.deleteLibraryItem).not.toHaveBeenCalled()
+    })
+
     it('keeps focus in the sheet when Rename, Delete everywhere or a pane closes under it', async () => {
       lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Canopy')])
       actions.fetchDeleteImpact.mockResolvedValue({ dependent_item_ids: [] })
