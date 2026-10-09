@@ -1178,11 +1178,18 @@ pub(super) fn release_unclaimed_originals(
 }
 
 /// Remove the directories, original and `meta.json`, of released originals.
+/// The original goes first, so a removal that fails part way never leaves
+/// one without the meta that says it names no item.
 pub(super) fn remove_original_dirs(
     library: &LidarLibrary,
     originals: &[String],
 ) -> Result<(), String> {
     for sha256 in originals {
+        match std::fs::remove_file(library.inner.paths.source_original(sha256)) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(format!("Failed to remove an original: {error}")),
+        }
         remove_dir_if_present(&library.inner.paths.source_dir(sha256))?;
     }
     Ok(())

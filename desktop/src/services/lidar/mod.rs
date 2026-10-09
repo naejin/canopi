@@ -351,13 +351,15 @@ impl LidarLibrary {
     }
 
     /// Best-effort bounded cleanup at startup: job roots of settled jobs,
-    /// unregistered display derivatives, settled analysis scratch, leftover engine
-    /// output, unpublished chunk rows and unreferenced assets. Each step that
-    /// fails is logged and left for the next start; none stops the library.
+    /// released originals, unregistered display derivatives, settled analysis
+    /// scratch, leftover engine output, unpublished chunk rows and
+    /// unreferenced assets. Each step that fails is logged and left for the
+    /// next start; none stops the library.
     fn prune_transient_artifacts(&self) {
         type Step = fn(&LidarLibrary) -> Result<(), String>;
-        let steps: [(&str, Step); 6] = [
+        let steps: [(&str, Step); 7] = [
             ("settled job roots", Self::prune_settled_job_roots),
+            ("released originals", Self::prune_released_originals),
             // Display derivatives nobody registered, and interrupted writes,
             // can go now: no WebView reader exists before the library opens.
             (
@@ -405,6 +407,48 @@ impl LidarLibrary {
             let job_id = entry.file_name().to_string_lossy().into_owned();
             if !running.contains(&job_id) {
                 self.discard_import_job_files(&job_id);
+            }
+        }
+        Ok(())
+    }
+
+    /// Remove each `sources/<sha256>/` folder nothing claims: no catalogue row
+    /// names it and its `meta.json` names no item. Dismiss releases an
+    /// original's meta and rows, then removes its folder; a stop or a failed
+    /// removal between the two leaves the folder for this step.
+    fn prune_released_originals(&self) -> Result<(), String> {
+        let sources = self.inner.paths.root().join("sources");
+        let entries = match std::fs::read_dir(&sources) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(format!("Failed to list {}: {error}", sources.display())),
+        };
+        let connection = self.catalogue()?;
+        if catalogue::jobs_in_flight(&connection)? {
+            return Ok(());
+        }
+        for entry in entries.flatten() {
+            if !entry.path().is_dir() {
+                continue;
+            }
+            let sha256 = entry.file_name().to_string_lossy().into_owned();
+            let claimed: bool = connection
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM lidar_sources WHERE sha256 = ?1)
+                     OR EXISTS(
+                         SELECT 1 FROM lidar_import_jobs WHERE instr(request_json, ?1) > 0)",
+                    [&sha256],
+                    |row| row.get(0),
+                )
+                .map_err(|e| e.to_string())?;
+            if claimed
+                || source_meta::read(&self.inner.paths.source_meta(&sha256))
+                    .is_some_and(|meta| !meta.items.is_empty())
+            {
+                continue;
+            }
+            if let Err(error) = import::remove_original_dirs(self, &[sha256]) {
+                tracing::warn!(%error, "a released original was kept until the next start");
             }
         }
         Ok(())

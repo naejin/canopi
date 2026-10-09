@@ -1316,6 +1316,63 @@ fn a_rebuild_after_a_dismiss_stopped_before_its_folders_went_lists_nothing() {
         }
     ));
     assert!(reopened.library_snapshot().unwrap().items.is_empty());
+    assert!(!reopened.inner.paths.source_dir("sha-kept").exists());
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&workbench);
+}
+
+/// The next start removes the folders of originals a Dismiss released but
+/// stopped short of removing: no catalogue row and no `meta.json` item
+/// claims them.
+#[test]
+fn reopening_after_a_dismiss_stopped_before_its_folders_went_removes_them() {
+    let workbench = scratch("dismiss-crash-reopen-tile");
+    let tile = plane(&attached_library(&workbench), &workbench, "tile", 445_000.0);
+    let root = scratch("dismiss-crash-reopen");
+    let (library, layer_id) = rebuilt_library(&root, &tile, "sha-kept");
+
+    drop(library.release_dismissed_item(&layer_id).unwrap());
+    let folder = library.inner.paths.source_dir("sha-kept");
+    assert!(folder.is_dir(), "the stop kept the folder");
+    drop(library);
+
+    let reopened = LidarLibrary::open(&root).unwrap();
+    assert!(matches!(
+        reopened.open_status(),
+        recovery::LibraryOpenStatus::Ready
+    ));
+    assert!(!folder.exists(), "the next start removed the folder");
+    assert!(reopened.library_snapshot().unwrap().items.is_empty());
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&workbench);
+}
+
+/// A released original's folder that Dismiss could not remove stays hidden
+/// and goes at the next start.
+#[cfg(unix)]
+#[test]
+fn an_original_dismiss_could_not_remove_goes_at_the_next_start() {
+    use std::os::unix::fs::PermissionsExt;
+    let workbench = scratch("dismiss-remove-fails-tile");
+    let tile = plane(&attached_library(&workbench), &workbench, "tile", 445_000.0);
+    let root = scratch("dismiss-remove-fails");
+    let (library, layer_id) = rebuilt_library(&root, &tile, "sha-kept");
+    let folder = library.inner.paths.source_dir("sha-kept");
+    let locked = folder.join("locked");
+    std::fs::create_dir(&locked).unwrap();
+    std::fs::write(locked.join("file"), b"kept").unwrap();
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o500)).unwrap();
+
+    library.dismiss_import(&layer_id).unwrap();
+    assert!(folder.is_dir(), "the removal failed");
+    assert!(library.library_snapshot().unwrap().items.is_empty());
+    assert_eq!(import_rows(&library), no_import_rows());
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o700)).unwrap();
+    drop(library);
+
+    let reopened = LidarLibrary::open(&root).unwrap();
+    assert!(!folder.exists(), "the next start removed the folder");
+    assert!(reopened.library_snapshot().unwrap().items.is_empty());
     let _ = std::fs::remove_dir_all(&root);
     let _ = std::fs::remove_dir_all(&workbench);
 }
