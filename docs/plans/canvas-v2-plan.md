@@ -452,7 +452,7 @@ The open beads of 2.0 and their slots (read with `bd show`, `bd dep tree canopi-
 | canopi-j9ry | blank map while switching Designs | after 2.0 with P5 and its prototype (U43); a known-issue line in the 2.0 release notes |
 | canopi-2v5a, canopi-fxil.12 | Release 2.0.0 (deferred) | un-deferred by the release close, step 10 |
 | canopi-224j | whole-codebase audit | after 2.0; receives phase 0's "Left standing" items |
-| canopi-f47t.13, .14, .15, .16, .31, .51 | open children with no slot in this plan | asked in the 2.0 live bugs step's question batch (2.0 or 2.1) |
+| canopi-f47t.13, .14, .15, .16, .31 | open children with no slot in this plan | asked in the 2.0 live bugs step's question batch (2.0 or 2.1) |
 
 **JSONL.** After `bd` writes, the main agent runs `bd export -o .beads/issues.jsonl` in the integration worktree and commits it; never the user's checkout's copy.
 

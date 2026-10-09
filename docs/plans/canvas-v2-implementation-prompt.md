@@ -48,7 +48,7 @@ Read with `bd show`, `bd dep tree canopi-f47t`, `bd list --parent canopi-f47t` a
 - **Release close:** canopi-f47t.29 (1) and (4); canopi-k94s with P10; P34 asked in its question batch; canopi-f47t.11 gets spec §6's last paragraph (R3).
 - **Done, close if still open:** canopi-f47t.42 and .43 (the Layers receipt).
 - **In progress:** canopi-f47t.19, the usefulness items placed per step in plan section 4.
-- **No slot in the plan yet:** canopi-f47t.13, .14, .15, .16, .31 and .51 (a story step showing a hidden Site data item draws nothing); slot them (2.0 or 2.1) in the next step's question batch.
+- **No slot in the plan yet:** canopi-f47t.13, .14, .15, .16 and .31; slot them (2.0 or 2.1) in the next step's question batch.
 - **Gate nothing:** canopi-f47t.6.2 (Windows panel drops, U20); the phone or tablet hand check (U41), the user's when possible.
 - **After 2.0:** canopi-f47t.9, .10, .32–.36, .38, .44–.47, .49, .50; canopi-p32r and canopi-wx8w (a production-build measurement and profiling); canopi-j9ry with P5 (U43), plus its known-issue line in the 2.0 release notes; canopi-3uaj; the U-crs follow-ups canopi-yox6, canopi-bhwt, canopi-yyjq, canopi-9m01, canopi-qh03, canopi-1aj4 (a later bug batch); canopi-x6qc, canopi-7ve0, canopi-h4ec; hydrology 2.1 (canopi-5ys2.1); canopi-224j.
 
