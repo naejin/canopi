@@ -901,13 +901,15 @@ impl LidarLibrary {
     /// with Retry and Dismiss, and its saved selection still names its
     /// originals and their `meta.json` the item; a first import's item goes
     /// with its job, so the same file imports again under its default name.
-    /// A published item, or a job the catalogue no longer has, is left alone.
+    /// A published item, a job that already settled (its failure stays on
+    /// the item) or one the catalogue no longer has is left alone.
     fn withdraw_cancelled_import(&self, job_id: &str) -> Result<(), String> {
         let withdrawn = {
             let connection = self.catalogue()?;
             let layer_id: Option<String> = connection
                 .query_row(
-                    "SELECT layer_id FROM lidar_import_jobs WHERE id = ?1",
+                    "SELECT layer_id FROM lidar_import_jobs
+                     WHERE id = ?1 AND state IN ('staging', 'applying')",
                     [job_id],
                     |row| row.get(0),
                 )

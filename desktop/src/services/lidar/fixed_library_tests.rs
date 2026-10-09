@@ -574,6 +574,34 @@ fn retrying_an_import_whose_file_is_gone_is_refused_on_its_item_without_a_new_jo
     assert_eq!(count(&library, "SELECT COUNT(*) FROM lidar_import_jobs"), 1);
 }
 
+/// A Cancel that lands after its import has already failed changes nothing:
+/// the item keeps that failure's reason, never an older one, and a first
+/// import's item is not deleted.
+#[test]
+fn a_cancel_after_its_import_failed_keeps_that_failure() {
+    let root = scratch("cancel-after-failure");
+    let library = attached_library(&root);
+    let layer_id = failed_import(&library, root.join("gone.tif"), "first failure");
+    let (_, retry_job, _) = library.record_import_retry(&layer_id).unwrap();
+    library.fail_import_job(&retry_job, "second failure");
+
+    library.cancel_import(&retry_job).unwrap();
+    assert_eq!(row_message(&library, &layer_id), "second failure");
+
+    let first = failed_import(&library, root.join("gone.tif"), "only failure");
+    let first_job: String = library
+        .catalogue()
+        .unwrap()
+        .query_row(
+            "SELECT id FROM lidar_import_jobs WHERE layer_id = ?1",
+            [&first],
+            |row| row.get(0),
+        )
+        .unwrap();
+    library.cancel_import(&first_job).unwrap();
+    assert_eq!(row_message(&library, &first), "only failure");
+}
+
 /// A refused Retry whose reason cannot be written onto its item still returns
 /// the refusal itself, not the failed write.
 #[test]
