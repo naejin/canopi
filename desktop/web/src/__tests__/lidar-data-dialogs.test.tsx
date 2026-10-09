@@ -45,11 +45,10 @@ vi.mock('../app/lidar/library-store', async () => {
 
 vi.mock('../app/document-session/store', async () => {
   const { signal } = await import('@preact/signals')
-  return { currentDesign: signal<unknown>(null) }
+  // Site data's view state (`site-data-view.ts`, real) is per Design session.
+  return { currentDesign: signal<unknown>(null), designSessionStore: { sessionIdentity: signal<object>({}) } }
 })
 
-const siteDataView = vi.hoisted(() => ({ showInSiteData: vi.fn() }))
-vi.mock('../app/lidar/site-data-view', () => siteDataView)
 
 vi.mock('../components/panels/lidar/LibraryPreview', () => ({
   usePreviewClient: () => null,
@@ -58,8 +57,10 @@ vi.mock('../components/panels/lidar/LibraryPreview', () => ({
 
 import { DataDialogs } from '../components/panels/lidar/DataDialogs'
 import { lidarLibrary } from '../app/lidar/library-store'
-import { currentDesign } from '../app/document-session/store'
-import { activeSiteItemId, analyzeItem, dataDialog, libraryView, openDataLibrary, siteDataDetails } from '../app/lidar/library-navigation'
+import { currentDesign, designSessionStore } from '../app/document-session/store'
+import { analyzeItem, dataDialog, libraryView, openDataLibrary, siteDataDetails } from '../app/lidar/library-navigation'
+import { siteDataViewFor } from '../app/lidar/site-data-view'
+import { sidePanel } from '../app/shell/state'
 import { locale } from '../app/settings/state'
 import { openLayerRow } from '../app/canvas-layer-presentation/open-row'
 import { dropdownTrigger } from './support/dropdown-trigger'
@@ -88,6 +89,11 @@ function design(entries: { kind: 'Source' | 'Derived'; id: string }[]) {
 }
 
 let container: HTMLDivElement
+
+/** The item Site data shows open (the real `showInSiteData` writes it). */
+function siteDataOpenItem(): string | null {
+  return siteDataViewFor(designSessionStore.sessionIdentity.peek()).openItem.value
+}
 
 function setDesign(value: unknown): void {
   (currentDesign as unknown as { value: unknown }).value = value
@@ -185,6 +191,8 @@ describe('Data library, Import and Analyze dialogs', () => {
     libraryView.value = null
     openLayerRow.value = null
     siteDataDetails.value = null
+    siteDataViewFor(designSessionStore.sessionIdentity.peek()).openItem.value = null
+    sidePanel.value = null
   })
 
   describe('the Data library sheet', () => {
@@ -312,8 +320,8 @@ describe('Data library, Import and Analyze dialogs', () => {
     it('adds a ready item to the Design, and shows an item the Design has in Site data', async () => {
       lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Canopy')])
       setDesign(design([{ kind: 'Source', id: 'a' }, { kind: 'Source', id: 'b' }]))
-      // Opened from another item's details in Site data ("Open in library").
-      siteDataDetails.value = 'a'
+      // Layers has the Zones row open; Show in Site data leaves it so.
+      openLayerRow.value = 'zones'
       mount()
       // The rows already show how many items there are; the header carries no bare count.
       expect(container.querySelector('header')?.textContent).not.toMatch(/\d/)
@@ -322,11 +330,10 @@ describe('Data library, Import and Analyze dialogs', () => {
       await selectRow('Canopy')
       expect(() => button('Add Canopy to this Design')).toThrow()
       await click(button(/^Show in Site data$/))
-      expect(siteDataView.showInSiteData).toHaveBeenCalledWith('b')
       expect(libraryView.value).toBeNull()
-      // Site data shows its rows with Canopy open, not the details it came from.
-      expect(siteDataDetails.value).toBeNull()
-      expect(activeSiteItemId()).toBe('b')
+      expect(sidePanel.value).toBe('site-data')
+      expect(siteDataOpenItem()).toBe('b')
+      expect(openLayerRow.value).toBe('zones')
       setDesign(design([{ kind: 'Source', id: 'b' }]))
 
       act(() => { openDataLibrary() })
@@ -928,16 +935,14 @@ describe('Data library, Import and Analyze dialogs', () => {
     it('shows a result the Design already has in Site data instead of calculating it again', async () => {
       lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a')])
       setDesign(design([{ kind: 'Source', id: 'a' }, { kind: 'Derived', id: 's' }]))
-      // Analyze started from Ground's details page in Site data.
-      siteDataDetails.value = 'a'
+      openLayerRow.value = 'zones'
       openAnalyze('a')
       await choose('Degrees')
       expect(container.textContent).toContain('Already in Site data.')
       await click(button('Show in Site data'))
-      expect(siteDataView.showInSiteData).toHaveBeenCalledWith('s')
-      expect(siteDataDetails.value).toBeNull()
-      // The row Site data marks open.
-      expect(activeSiteItemId()).toBe('s')
+      expect(sidePanel.value).toBe('site-data')
+      expect(siteDataOpenItem()).toBe('s')
+      expect(openLayerRow.value).toBe('zones')
       expect(dataDialog.value).toBeNull()
       expect(actions.runAnalysis).not.toHaveBeenCalled()
     })
@@ -950,7 +955,7 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(container.textContent).toContain('already in the library')
       await click(button('Add existing'))
       expect(actions.addToDesign).toHaveBeenCalledWith('Derived', 's')
-      expect(siteDataView.showInSiteData).toHaveBeenCalledWith('s')
+      expect(siteDataOpenItem()).toBe('s')
       expect(actions.runAnalysis).not.toHaveBeenCalled()
     })
 

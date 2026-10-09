@@ -69,16 +69,14 @@ export function openSiteDataPanel(): void {
 }
 
 /**
- * Shows one of this Design's items in Site data, opened under its row (the
- * open row Site data reads, `openLayerRow`); the library sheet and any dialog
- * over it close first, and Site data leaves any item's details for its rows.
+ * Shows one of this Design's items in Site data, open under its row (Site
+ * data's own view state, `site-data-view.ts`; Layers' open row is left as it
+ * is); the library sheet and any dialog over it close first.
  */
 export function revealInSiteData(itemId: string): void {
   dataDialog.value = null
   libraryView.value = null
-  siteDataDetails.value = null
   showInSiteData(itemId)
-  selectSiteRow(itemId)
 }
 
 /**
