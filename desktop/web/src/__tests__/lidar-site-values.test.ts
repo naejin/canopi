@@ -40,7 +40,7 @@ import { pinSiteDataPoint, siteValues } from '../app/lidar/site-values'
 import { activePanel, selectPanel, sidePanel } from '../app/shell/state'
 import type { CanopiFile } from '../types/design'
 import { createTestCanvasQuerySurface, type TestCanvasQuerySurface } from './support/canvas-query-surface'
-import { librarySnapshot, slopeItem, sourceItem } from './support/library-fixtures'
+import { librarySnapshot, slopeItem, slopeProvenance, sourceItem } from './support/library-fixtures'
 
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
@@ -130,6 +130,22 @@ describe('Site data row values', () => {
     await flush()
 
     expect(native.requests.at(-1)!.targets.map((target) => target.entity_id)).toEqual(['dsm', 'mnt', 'slope'])
+  })
+
+  it('reads the outputs of one analysis together, as the panel gathers them, before a sibling listed between them', async () => {
+    const flowOutput = (id: string) =>
+      slopeItem(id, 'mnt', { provenance: slopeProvenance(id, 'mnt', { definition_id: 'flow-def' }) })
+    lidarLibrary.value = librarySnapshot([sourceItem('mnt', 'MNT'), flowOutput('flow-a'), slopeItem('slope', 'mnt'), flowOutput('flow-b')])
+    openDesign([
+      { id: 'mnt', visible: true },
+      { id: 'flow-b', visible: true, kind: 'Derived' },
+      { id: 'slope', visible: true, kind: 'Derived' },
+      { id: 'flow-a', visible: true, kind: 'Derived' },
+    ])
+    hover(10, 20)
+    await flush()
+
+    expect(native.requests.at(-1)!.targets.map((target) => target.entity_id)).toEqual(['mnt', 'flow-a', 'flow-b', 'slope'])
   })
 
   it('shows no data where the cell holds none, and reads nothing with no pointer and no pin', async () => {
