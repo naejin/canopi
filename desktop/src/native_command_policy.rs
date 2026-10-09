@@ -50,10 +50,6 @@ const SYNC_COMMAND_ALLOWLIST: &[SyncCommandAllowance] = &[
         path: "commands::lidar::lidar_cancel_analysis_job",
         reason: "delivers a bounded in-memory cancellation flag that must bypass a busy Local raster queue",
     },
-    SyncCommandAllowance {
-        path: "commands::lidar::lidar_cancel_sample_pixel",
-        reason: "delivers a bounded in-memory cancellation flag that must bypass the bounded display read queue",
-    },
 ];
 
 /// One reviewed operation an async command performs on managed state (`State<...>` or a value
@@ -78,19 +74,9 @@ const STATE_ACCESS_ALLOWLIST: &[StateAccessAllowance] = &[
         reason: "clones the SQLite interrupt handle; no statement runs",
     },
     StateAccessAllowance {
-        path: "commands::lidar::lidar_sample_pixel",
-        operation: "admit_sample_request",
-        reason: "bounded in-memory inspection admission",
-    },
-    StateAccessAllowance {
-        path: "commands::lidar::lidar_sample_pixel",
-        operation: "activate",
-        reason: "awaits a bounded in-memory inspection slot without holding an executor permit",
-    },
-    StateAccessAllowance {
-        path: "commands::lidar::lidar_sample_pixel",
-        operation: "cancel_flag",
-        reason: "clones the in-memory cancellation flag",
+        path: "commands::lidar::lidar_sample_points",
+        operation: "sampling_turn",
+        reason: "refuses an over-cap request, then awaits the library's one in-memory sampling permit before a Local slot",
     },
     StateAccessAllowance {
         path: "commands::problem_report::create_problem_report",

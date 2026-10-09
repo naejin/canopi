@@ -5,20 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('#geocoding-transport', () => ({ geocodingTransport: vi.fn(async () => []) }))
 
-const inspection = vi.hoisted(() => ({ target: null as unknown }))
-vi.mock('../app/lidar/inspection', async () => {
-  const { signal: makeSignal } = await import('@preact/signals')
-  const target = makeSignal<{ name: string } | null>(null)
-  inspection.target = target
-  return {
-    inspectionTarget: target,
-    inspectionSample: makeSignal({ kind: 'idle' }),
-    inspectionLocation: makeSignal(null),
-    endInspection: vi.fn(),
-    sampleInspectionCentre: vi.fn(),
-  }
-})
-
 import type { CanvasInspectionHandle } from '../canvas/inspection'
 import { setCurrentCanvasSession } from '../canvas/session'
 import type { CanvasLayerPresentationRow } from '../app/canvas-layer-presentation/presentation'
@@ -28,7 +14,6 @@ import { WorkspaceTitleBar } from '../components/shared/WorkspaceTitleBar'
 import { PanelRail } from '../components/shared/PanelRail'
 import { ZoomControls } from '../components/canvas/ZoomControls'
 import { InspectionLens } from '../components/canvas/InspectionLens'
-import { InspectionStatus } from '../components/canvas/InspectionStatus'
 import { SpeciesFocusChip } from '../components/canvas/SpeciesFocusChip'
 import { CanvasOverview, OverviewNotice } from '../components/canvas/CanvasOverview'
 import { LayerPanel, type LayerPanelActions } from '../components/canvas/LayerPanel'
@@ -104,7 +89,6 @@ describe('canvas icon-only buttons', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
-    ;(inspection.target as ReturnType<typeof signal>).value = null
     setCurrentCanvasSession(null)
   })
 
@@ -139,12 +123,6 @@ describe('canvas icon-only buttons', () => {
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-expanded]')!.click())
     // Expand, close, recentre, widen and magnify.
     expectIconButtonsFollowRules(container, 5)
-  })
-
-  it('labels the raster inspection dismiss control', async () => {
-    ;(inspection.target as ReturnType<typeof signal>).value = { name: 'Slope' }
-    await mount(<InspectionStatus />)
-    expectIconButtonsFollowRules(container, 1)
   })
 
   it('labels layer row visibility and lock buttons', async () => {

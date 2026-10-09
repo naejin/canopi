@@ -9,9 +9,7 @@ import type {
   LidarImportCoverage,
   LidarImportReceipt,
   LidarLayerCollection,
-  LidarSampleOutcome,
   LidarSamplePointsRequest,
-  LidarSampleRequest,
   LidarSampleSeries,
   ProcessingHistoryPage,
   RasterQuantity,
@@ -129,39 +127,14 @@ export async function lidarLayerCollection(
 }
 
 /**
- * One bounded numeric inspection lookup.
- *
- * The request carries the generation the caller believes is current, so a head
- * that moved since the user aimed is refused as stale rather than answered from
- * different bytes.
- */
-export async function lidarSamplePixel(
-  request: LidarSampleRequest,
-): Promise<LidarSampleOutcome> {
-  return invoke('lidar_sample_pixel', { request })
-}
-
-/**
  * Sample up to LIDAR_SAMPLE_MAX_TARGETS items at up to LIDAR_SAMPLE_MAX_POINTS
  * WGS84 points in one request (canopi-f47t.42, spec §1.10): one series per
- * target, in target order, each value the native cell under its point. Only
- * `app/lidar/sampler.ts` calls it. Commit 0's stub: stream C adds the command.
+ * target, in target order, each value the native cell under its point. Each
+ * target names the generation it expects, so a moved head answers Unavailable
+ * rather than newer data. Only `app/lidar/sampler.ts` calls it.
  */
 export async function lidarSamplePoints(request: LidarSamplePointsRequest): Promise<LidarSampleSeries[]> {
-  void request
-  throw new Error('lidar_sample_points is not built yet (canopi-f47t.42, stream C)')
-}
-
-/**
- * Stop one inspection lookup.
- *
- * The request id is the one the sample request carried, so this cancels exactly
- * the lookup that asked for it and nothing else: a superseded pan, a hidden
- * layer or an exited session must not leave bounded native work running.
- */
-export async function lidarCancelSamplePixel(requestId: string): Promise<void> {
-  if (!requestId) return
-  await invoke('lidar_cancel_sample_pixel', { requestId })
+  return invoke('lidar_sample_points', { request })
 }
 
 /**

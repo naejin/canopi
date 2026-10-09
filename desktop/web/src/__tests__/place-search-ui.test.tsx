@@ -91,6 +91,14 @@ describe('Place search field', () => {
     expect(input().getAttribute('aria-expanded')).toBe('false')
   })
 
+  it('writes the coordinate row in the locale\'s digits: French reads a decimal comma', async () => {
+    await act(async () => { locale.value = 'fr'; await flush() })
+    await act(async () => { render(<PlaceSearchField />, container) })
+    await type('48.2201, 0.0351')
+
+    expect(options()[0]?.textContent).toBe('48,2201° N, 0,0351° ECoordonnées · y aller directement')
+  })
+
   it('searches on Enter only, shows short labels with their locality, and closes on pick', async () => {
     transport.mockImplementation(async () => [
       { lat: '48.22', lon: '0.035', display_name: 'Ballon-Saint-Mars, Mamers, Sarthe, Pays de la Loire, France métropolitaine, 72290, France' },

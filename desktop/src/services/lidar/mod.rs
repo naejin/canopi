@@ -74,30 +74,18 @@ pub(crate) struct LidarLibraryInner {
     /// One exclusive heavy raster job at a time, library-wide. Import and
     /// analysis jobs hold it.
     heavy_job: Mutex<Option<String>>,
-    /// Bounded display read admission, separate from the heavy lease.
-    display: Mutex<DisplayAdmission>,
-    /// Signalled whenever a waiting read may now proceed or must stop: a slot
-    /// or queue place was released, or a read was cancelled.
-    display_changed: tokio::sync::Notify,
+    /// One sampling turn library-wide (architecture review finding 3), taken
+    /// before a Local slot: hover, pin and profile reads never hold more than
+    /// one of Local's running slots, so a save is always admitted beside them.
+    sampling: Arc<tokio::sync::Semaphore>,
+    /// What sampling keeps between requests (resolved source readers, the
+    /// unreadable targets already logged).
+    sample_memo: Mutex<inspection::SampleMemo>,
     /// One lane preparing display derivatives, separate from numeric jobs.
     display_preparation: Mutex<display_cog::DisplayPreparation>,
-}
-
-/// Most display reads that may run at once, library-wide.
-pub(crate) const MAX_ACTIVE_DISPLAY_REQUESTS: usize = 2;
-/// Most display reads that may wait for a slot, library-wide.
-pub(crate) const MAX_QUEUED_DISPLAY_REQUESTS: usize = 32;
-
-/// Library-wide display read admission.
-///
-/// Display reads are bounded separately from the heavy raster lease: two may
-/// run at once, thirty-two may wait, and anything beyond that is declined by
-/// name instead of being allowed to exceed the bound. A cancelled request
-/// stops waiting or stops at its next bounded read.
-#[derive(Default)]
-struct DisplayAdmission {
-    active: HashMap<String, Arc<AtomicBool>>,
-    queued: Vec<(String, Arc<AtomicBool>)>,
+    /// Catalogue turns taken, so a test can bound a path's catalogue work.
+    #[cfg(test)]
+    pub(crate) catalogue_turns: std::sync::atomic::AtomicUsize,
 }
 
 /// The display basis a stored label names.
@@ -146,105 +134,6 @@ pub(crate) fn display_basis_label(
     match basis {
         common_types::lidar::LidarDisplayRangeBasis::Exact => "exact",
         common_types::lidar::LidarDisplayRangeBasis::SourceEnvelope => "source-envelope",
-    }
-}
-
-/// The admission name one inspection lookup occupies.
-///
-/// Scoped by surface so an inspection cancel can never signal a raster tile's
-/// read, or another caller's lookup, that happens to share an id.
-pub(crate) fn sample_admission_name(request_id: &str) -> String {
-    format!("sample-{request_id}")
-}
-
-/// One admitted display read. Dropping it frees its slot.
-pub(crate) struct DisplayTicket {
-    inner: Arc<LidarLibraryInner>,
-    request_id: String,
-    cancel: Arc<AtomicBool>,
-    active: bool,
-}
-
-impl DisplayTicket {
-    pub(crate) fn cancel_flag(&self) -> Arc<AtomicBool> {
-        Arc::clone(&self.cancel)
-    }
-
-    /// Whether this request has been cancelled while waiting or running.
-    pub(crate) fn is_cancelled(&self) -> bool {
-        self.cancel.load(Ordering::Relaxed)
-    }
-
-    /// Take a slot when one is free and this request is next in line.
-    pub(crate) fn try_activate(&mut self) -> Result<bool, String> {
-        if self.active {
-            return Ok(true);
-        }
-        if self.is_cancelled() {
-            return Err("cancelled".to_string());
-        }
-        let mut admission = self
-            .inner
-            .display
-            .lock()
-            .map_err(|_| "LiDAR display admission poisoned".to_string())?;
-        if admission.active.len() >= MAX_ACTIVE_DISPLAY_REQUESTS {
-            return Ok(false);
-        }
-        // Obsolete work is dropped first: a cancelled waiter never takes a
-        // slot from a newer viewport request.
-        while let Some((queued_id, flag)) = admission.queued.first() {
-            let cancelled = flag.load(Ordering::Relaxed);
-            let is_self = queued_id == &self.request_id;
-            if !cancelled {
-                break;
-            }
-            admission.queued.remove(0);
-            if is_self {
-                return Err("cancelled".to_string());
-            }
-        }
-        match admission.queued.first() {
-            Some((queued_id, _)) if queued_id == &self.request_id => {
-                admission.queued.remove(0);
-            }
-            // A newer viewport request supersedes waiting work.
-            _ => return Ok(false),
-        }
-        admission
-            .active
-            .insert(self.request_id.clone(), Arc::clone(&self.cancel));
-        self.active = true;
-        Ok(true)
-    }
-
-    /// Wait until this request holds a slot, without occupying an executor
-    /// permit. Woken by a released slot or a cancel, never by a timer; a
-    /// cancelled request stops waiting with `cancelled`.
-    pub(crate) async fn activate(&mut self) -> Result<(), String> {
-        let inner = Arc::clone(&self.inner);
-        loop {
-            // Registered before the check, so a release between the check and
-            // the wait is not missed.
-            let mut changed = std::pin::pin!(inner.display_changed.notified());
-            changed.as_mut().enable();
-            if self.try_activate()? {
-                return Ok(());
-            }
-            changed.await;
-        }
-    }
-}
-
-impl Drop for DisplayTicket {
-    fn drop(&mut self) {
-        if let Ok(mut admission) = self.inner.display.lock() {
-            admission.active.remove(&self.request_id);
-            admission
-                .queued
-                .retain(|(queued_id, _)| queued_id != &self.request_id);
-        }
-        self.inner.display_changed.notify_waiters();
     }
 }
 
@@ -341,9 +230,11 @@ impl LidarLibrary {
                 cancel_flags: Mutex::new(HashMap::new()),
                 executor: Mutex::new(None),
                 heavy_job: Mutex::new(None),
-                display: Mutex::new(DisplayAdmission::default()),
-                display_changed: tokio::sync::Notify::new(),
+                sampling: Arc::new(tokio::sync::Semaphore::new(1)),
+                sample_memo: Mutex::new(inspection::SampleMemo::default()),
                 display_preparation: Mutex::new(display_cog::DisplayPreparation::default()),
+                #[cfg(test)]
+                catalogue_turns: std::sync::atomic::AtomicUsize::new(0),
             }),
         };
         // A library that does not own its catalogue file sweeps nothing: the
@@ -407,6 +298,10 @@ impl LidarLibrary {
     }
 
     pub(crate) fn catalogue(&self) -> Result<CatalogueGuard<'_>, String> {
+        #[cfg(test)]
+        self.inner
+            .catalogue_turns
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Ok(CatalogueGuard(self.inner.catalogue.lock().map_err(
             |_| "LiDAR catalogue lock poisoned".to_string(),
         )?))
@@ -615,17 +510,13 @@ impl LidarLibrary {
         presentation::library_snapshot(&connection, self.inner.engine.as_ref(), &geolibre)
     }
 
-    /// One bounded numeric inspection lookup.
-    ///
-    /// The read is synchronous inside the caller's executor slot — it touches
-    /// one pixel — and takes a caller-owned cancellation flag so a superseded
-    /// aim releases the native work instead of leaving it running.
-    pub fn sample(
+    /// The native cell under each point of each target (spec §1.10), in
+    /// target and point order; one call serves hover, the pin and a profile.
+    pub fn sample_points(
         &self,
-        request: &common_types::lidar::LidarSampleRequest,
-        cancel: &std::sync::atomic::AtomicBool,
-    ) -> Result<common_types::lidar::LidarSampleOutcome, String> {
-        inspection::sample(self, self.inner.engine.as_ref(), cancel, request)
+        request: &common_types::lidar::LidarSamplePointsRequest,
+    ) -> Result<Vec<common_types::lidar::LidarSampleSeries>, String> {
+        inspection::sample_points(self, self.inner.engine.as_ref(), request)
     }
 
     /// Test support: an empty item row, before any import job is recorded.
@@ -898,88 +789,17 @@ impl LidarLibrary {
         })
     }
 
-    /// Admit one display read, or decline it when the budget is full.
-    ///
-    /// The caller waits for a slot with [`DisplayTicket::activate`], so a
-    /// waiting display read never occupies a Native Operation Executor permit
-    /// behind another heavy job.
-    pub(crate) fn admit_display_request(&self, request_id: &str) -> Result<DisplayTicket, String> {
-        if request_id.is_empty() {
-            return Err("display request identity must not be empty".to_string());
-        }
-        let mut admission = self
-            .inner
-            .display
-            .lock()
-            .map_err(|_| "LiDAR display admission poisoned".to_string())?;
-        let cancel = Arc::new(AtomicBool::new(false));
-        if admission.active.len() >= MAX_ACTIVE_DISPLAY_REQUESTS {
-            if admission.queued.len() >= MAX_QUEUED_DISPLAY_REQUESTS {
-                return Err(format!(
-                    "the display request budget is full ({MAX_QUEUED_DISPLAY_REQUESTS} queued)"
-                ));
-            }
-            admission
-                .queued
-                .push((request_id.to_string(), Arc::clone(&cancel)));
-            return Ok(DisplayTicket {
-                inner: self.inner.clone(),
-                request_id: request_id.to_string(),
-                cancel,
-                active: false,
-            });
-        }
-        admission
-            .active
-            .insert(request_id.to_string(), Arc::clone(&cancel));
-        Ok(DisplayTicket {
-            inner: self.inner.clone(),
-            request_id: request_id.to_string(),
-            cancel,
-            active: true,
-        })
-    }
-
-    /// Admit one inspection lookup into the shared bounded read admission.
-    ///
-    /// Inspection deliberately shares the display budget, so a burst of
-    /// abandoned lookups is bounded by the same active/queued limits tiles use.
-    /// An unnamed lookup is refused: it could never be cancelled.
-    pub(crate) fn admit_sample_request(&self, request_id: &str) -> Result<DisplayTicket, String> {
-        if request_id.is_empty() {
-            return Err("sample request identity must not be empty".to_string());
-        }
-        self.admit_display_request(&sample_admission_name(request_id))
-    }
-
-    /// Cancel one inspection lookup.
-    ///
-    /// The admission name is scoped to the inspection surface, so this can
-    /// never signal a raster tile's read — or another surface's lookup — that
-    /// happens to carry the same caller-chosen id.
-    pub fn cancel_sample_request(&self, request_id: &str) {
-        if request_id.is_empty() {
-            return;
-        }
-        self.cancel_display_request(&sample_admission_name(request_id));
-    }
-
-    /// Cancel one display read: a waiting request stops waiting, a running one
-    /// stops at its next bounded read. Bounded in-memory state only.
-    pub fn cancel_display_request(&self, request_id: &str) {
-        if let Ok(admission) = self.inner.display.lock() {
-            if let Some(flag) = admission.active.get(request_id) {
-                flag.store(true, Ordering::Relaxed);
-            }
-            if let Some((_, flag)) = admission
-                .queued
-                .iter()
-                .find(|(queued_id, _)| queued_id == request_id)
-            {
-                flag.store(true, Ordering::Relaxed);
-            }
-        }
-        self.inner.display_changed.notify_waiters();
+    /// Wait for the library's one sampling turn; a request over the generated
+    /// caps is refused first, so it never waits or holds the turn.
+    pub(crate) async fn sampling_turn(
+        &self,
+        request: &common_types::lidar::LidarSamplePointsRequest,
+    ) -> Result<tokio::sync::OwnedSemaphorePermit, String> {
+        inspection::check_sample_caps(request)?;
+        Arc::clone(&self.inner.sampling)
+            .acquire_owned()
+            .await
+            .map_err(|_| "the LiDAR sampler is closed".to_string())
     }
 
     #[cfg(test)]
@@ -2216,156 +2036,6 @@ mod tests {
 
         drop(library);
         let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// An inspection lookup shares the display admission and is cancellable.
-    ///
-    /// The defect this pins: the sample command passed an always-false flag and
-    /// entered no admission at all, so a superseded or abandoned lookup could
-    /// not be stopped and could not be accounted for. The scoping is part of
-    /// the contract — a caller cancels *its* lookup, never a tile's read or
-    /// another surface's entry that happens to carry the same id.
-    #[test]
-    fn inspection_reads_share_the_display_admission_and_are_scoped() {
-        let root = crate::test_scratch::TestScratch::new("lidar-sample-admission-test");
-        std::fs::create_dir_all(&root).unwrap();
-        let library = LidarLibrary::open(&root).unwrap();
-
-        // A named lookup takes a real slot, and cancelling it signals the flag
-        // the read is actually given.
-        let mut sample = library.admit_sample_request("lookup-1").unwrap();
-        assert!(sample.try_activate().unwrap());
-        let flag = sample.cancel_flag();
-        assert!(!flag.load(Ordering::Relaxed));
-        library.cancel_sample_request("lookup-1");
-        assert!(flag.load(Ordering::Relaxed));
-
-        // The same caller-chosen id on another surface is a different entry:
-        // cancelling the inspection lookup must not have signalled it.
-        let tile = library.admit_display_request("lookup-1").unwrap();
-        let tile_flag = tile.cancel_flag();
-        assert!(!tile_flag.load(Ordering::Relaxed));
-        library.cancel_sample_request("lookup-1");
-        assert!(!tile_flag.load(Ordering::Relaxed));
-        // ...and cancelling the tile leaves the inspection name alone.
-        let sample_two = library.admit_sample_request("lookup-2").unwrap();
-        let sample_two_flag = sample_two.cancel_flag();
-        library.cancel_display_request("lookup-2");
-        assert!(!sample_two_flag.load(Ordering::Relaxed));
-        library.cancel_sample_request("lookup-2");
-        assert!(sample_two_flag.load(Ordering::Relaxed));
-
-        // An unnamed lookup is refused: it could hold a slot no one can release.
-        assert!(library.admit_sample_request("").is_err());
-
-        // Dropping a finished lookup frees its slot for the next one.
-        drop(sample);
-        drop(sample_two);
-        drop(tile);
-        let mut next = library.admit_sample_request("lookup-3").unwrap();
-        assert!(next.try_activate().unwrap());
-        drop(next);
-
-        drop(library);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn display_reads_are_bounded_in_order_and_cancellable() {
-        let root = crate::test_scratch::TestScratch::new("lidar-display-admission-test");
-        std::fs::create_dir_all(&root).unwrap();
-        let library = LidarLibrary::open(&root).unwrap();
-
-        // Two reads may run at once.
-        let first = library.admit_display_request("tile-1").unwrap();
-        let second = library.admit_display_request("tile-2").unwrap();
-        // The next thirty-two wait their turn...
-        let mut queued = Vec::new();
-        for index in 0..MAX_QUEUED_DISPLAY_REQUESTS {
-            queued.push(
-                library
-                    .admit_display_request(&format!("tile-q{index}"))
-                    .unwrap(),
-            );
-        }
-        // ...and anything beyond the bound is declined by name.
-        let error = match library.admit_display_request("tile-overflow") {
-            Ok(_) => panic!("the display budget must decline extra work"),
-            Err(error) => error,
-        };
-        assert!(error.contains("budget is full"), "{error}");
-
-        // A waiting read neither runs early nor jumps the queue.
-        assert!(!queued[0].try_activate().unwrap());
-        let mut newcomer = {
-            drop(queued.pop().unwrap());
-            library.admit_display_request("tile-newcomer").unwrap()
-        };
-        drop(first);
-        assert!(queued[0].try_activate().unwrap());
-        assert!(!newcomer.try_activate().unwrap());
-
-        // Cancelling a waiter stops it instead of letting it take a slot.
-        library.cancel_display_request("tile-newcomer");
-        assert!(newcomer.try_activate().is_err());
-        drop(newcomer);
-
-        // Cancelling a running read signals its own flag.
-        let flag = second.cancel_flag();
-        assert!(!flag.load(Ordering::Relaxed));
-        library.cancel_display_request("tile-2");
-        assert!(flag.load(Ordering::Relaxed));
-
-        drop(second);
-        drop(queued);
-        drop(library);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    /// A waiting lookup is woken by a released slot or by its own cancel, not
-    /// by a timer.
-    #[test]
-    fn a_waiting_read_wakes_on_release_and_on_cancel() {
-        let root = crate::test_scratch::TestScratch::new("lidar-display-wakeup-test");
-        std::fs::create_dir_all(&root).unwrap();
-        let library = LidarLibrary::open(&root).unwrap();
-        let first = library.admit_sample_request("held-1").unwrap();
-        let _second = library.admit_sample_request("held-2").unwrap();
-        let waiting = library.admit_sample_request("waiting").unwrap();
-        let cancelled = library.admit_sample_request("abandoned").unwrap();
-
-        let (sender, receiver) = std::sync::mpsc::channel();
-        let waiter = std::thread::spawn(move || {
-            let mut waiting = waiting;
-            let mut cancelled = cancelled;
-            let activated =
-                tauri::async_runtime::block_on(async { waiting.activate().await.is_ok() });
-            sender.send(activated).unwrap();
-            let refused =
-                tauri::async_runtime::block_on(async { cancelled.activate().await.is_err() });
-            sender.send(refused).unwrap();
-        });
-        let deadline = std::time::Duration::from_secs(10);
-        assert!(
-            receiver
-                .recv_timeout(std::time::Duration::from_millis(200))
-                .is_err(),
-            "no slot is free yet"
-        );
-        drop(first);
-        assert!(
-            receiver.recv_timeout(deadline).unwrap(),
-            "a released slot wakes the waiter"
-        );
-        library.cancel_sample_request("abandoned");
-        assert!(
-            receiver.recv_timeout(deadline).unwrap(),
-            "a cancel wakes and stops the waiter"
-        );
-        waiter.join().unwrap();
-        drop(library);
-        // Best-effort: Windows refuses to delete a file another handle still has open.
-        let _ = std::fs::remove_dir_all(root);
     }
 
     /// Startup removes analysis scratch that no running job owns.

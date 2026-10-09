@@ -68,37 +68,3 @@ export function lidarBoundsToLocalWorld(
     maxY: Math.max(...corners.map(({ y }) => y)),
   }
 }
-
-/**
- * The WGS84 point one scene point actually displays at.
- *
- * The session plane is the canvas's own projection, so this is the geographic
- * position the canvas drew — not a flat-earth reconstruction of it. Using
- * anything else would let the sampled cell differ from the drawn one, which is
- * the failure mode where a confidently wrong physical value is reported for a
- * point the user can see.
- */
-export function inspectionPointForScenePoint(
-  point: { readonly x: number; readonly y: number },
-  plane: SessionPlane | null = currentSessionPlane(),
-): { lat: number; lon: number } | null {
-  if (!plane || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null
-  const geo = plane.toGeo(point)
-  if (!Number.isFinite(geo.lat) || !Number.isFinite(geo.lon)) return null
-  return { lat: geo.lat, lon: geo.lon }
-}
-
-/**
- * The scene point at the centre of the live view: the ground under the screen centre, whatever the bearing.
- *
- * Read from the existing canvas query surface rather than from a second camera
- * owner, so "sample at view centre" reads exactly what the user is looking at.
- */
-export function inspectionViewCentreScenePoint(): { x: number; y: number } | null {
-  const surface = currentCanvasQuerySurface.value
-  const plane = surface?.sessionPlane.value
-  if (!surface || !plane) return null
-  const centre = plane.toPlane(surface.view.captureView().camera.center)
-  if (!Number.isFinite(centre.x) || !Number.isFinite(centre.y)) return null
-  return centre
-}

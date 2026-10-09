@@ -12,7 +12,6 @@ import { useDesignReveal } from '../../app/canvas-map-surface/design-reveal'
 import { currentDesign } from '../../app/document-session/store'
 import { appCommandGraphToolbarProjection } from '../../commands/registry'
 import { CanvasChrome } from '../canvas/CanvasChrome'
-import { InspectionStatus } from '../canvas/InspectionStatus'
 import { MapNotice } from '../canvas/MapNotice'
 import { StampChooser } from '../canvas/StampChooser'
 import { useMapArea } from '../shared/useMapChrome'
@@ -54,10 +53,7 @@ export function CanvasPanel() {
           data-map-active={mapNotice.mapSurfaceVisible ? 'true' : 'false'}
         />
         {hasDesign && (
-          <CanvasChrome projection={appCommandGraphToolbarProjection.value} canvasRef={containerRef} stampChooser={StampChooser}>
-            {/* Read-only raster inspection; nothing here is document state. */}
-            <InspectionStatus />
-          </CanvasChrome>
+          <CanvasChrome projection={appCommandGraphToolbarProjection.value} canvasRef={containerRef} stampChooser={StampChooser} />
         )}
         <MapNotice notice={mapNotice} onRetry={retryMap} canvasRef={containerRef} />
         {reveal.startScreen && <WelcomeScreen />}
