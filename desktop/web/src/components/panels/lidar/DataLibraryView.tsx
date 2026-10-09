@@ -85,8 +85,9 @@ export function DataLibraryView({ focusId }: { readonly focusId: string | null }
   const pendingFocus = useRef<readonly FocusTarget[]>([])
   const root = useRef<HTMLDivElement>(null)
 
-  // Measured again when the items change (an import, a result, a deletion).
-  const itemsKey = items.map((row) => `${row.id}:${row.generationId ?? ''}`).join(',')
+  // Measured again when the items change (an import, a result, a deletion),
+  // never when only their order does (the sort, the locale): the key is sorted.
+  const itemsKey = items.map((row) => `${row.id}:${row.generationId ?? ''}`).sort().join(',')
   useEffect(() => {
     let current = true
     void fetchLibraryDiskUsage().then((bytes) => { if (current) setDiskUsage(bytes) }, () => {})

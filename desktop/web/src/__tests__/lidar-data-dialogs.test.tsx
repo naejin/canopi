@@ -236,6 +236,21 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(names()).toEqual(['Beta', 'Alpha', 'Steepness'])
     })
 
+    it('measures the library on disk again when its items change, not when the order does', async () => {
+      lidarLibrary.value = library([layer('old', 'Alpha', { created_at: '1000' }), layer('new', 'Beta', { created_at: '3000' })])
+      mount()
+      await act(async () => { await Promise.resolve() })
+      expect(actions.fetchLibraryDiskUsage).toHaveBeenCalledOnce()
+      await chooseFrom('Sort', 'Recently added')
+      await chooseFrom('Sort', 'Name')
+      await act(async () => { locale.value = 'fr' })
+      expect(actions.fetchLibraryDiskUsage).toHaveBeenCalledOnce()
+      await act(async () => {
+        lidarLibrary.value = library([layer('old', 'Alpha', { created_at: '1000' }), layer('new', 'Beta', { created_at: '3000' }), layer('c', 'Gamma')])
+      })
+      expect(actions.fetchLibraryDiskUsage).toHaveBeenCalledTimes(2)
+    })
+
     it('keeps a matching result\'s source in the list while searching', async () => {
       lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Canopy')], [slope('s', 'a', { name: 'Steepness' })])
       mount()
