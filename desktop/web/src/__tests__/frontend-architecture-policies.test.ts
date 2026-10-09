@@ -2153,6 +2153,58 @@ const CANVAS_V2_POLICIES = [
     from: ['src/**'],
     exceptFrom: [...TEST_SOURCE_PATTERNS],
   },
+  {
+    // The foundation layers sit below app code: they may name app types (type-only edges enter no bundle), never
+    // import app values, components or edition code.
+    kind: 'forbid-imports',
+    name: 'P40 foundation layers import no app, component or edition code',
+    from: [
+      'src/i18n/**',
+      'src/utils/**',
+      'src/types/**',
+      'src/generated/**',
+      'src/maplibre/**',
+      'src/target/**',
+      'src/canvas/**',
+      'src/ipc/**',
+    ],
+    exceptFrom: [
+      // Locale and theme read their settings signals until they get a foundation home (canopi-f47t.52.12).
+      'src/i18n/index.ts',
+      'src/utils/theme.ts',
+      // Design write admission and dialogs still compose app/document-session (canopi-m4v0).
+      'src/ipc/design.ts',
+      // Reads the Google key until the release close's P10 commit moves the key path (canopi-k94s).
+      'src/maplibre/satellite-bind.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+    targets: ['src/app/**', 'src/components/**', 'src/web/**', 'src/commands/**', 'src/platform/**'],
+    allowTypeOnlyTargets: ['src/app/**'],
+  },
+  {
+    kind: 'forbid-imports',
+    name: 'P41 canvas imports no native or edition code',
+    from: ['src/canvas/**'],
+    exceptFrom: [
+      // The Desktop species cache moves to app/canvas-runtime/ in 2.1 (S26, canopi-f47t.52.18).
+      'src/canvas/runtime/species-cache.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+    targets: ['src/ipc/**', '@tauri-apps/**', 'src/web/**', 'src/platform/**'],
+  },
+  {
+    kind: 'forbid-imports',
+    name: 'P42 shared app code imports no Web edition module',
+    from: ['src/app/**'],
+    exceptFrom: [
+      // Web-only app modules that move to web/ in 2.1 (S25, canopi-f47t.52.12).
+      'src/app/community/catalog.browser.ts',
+      'src/app/design-template-import/workflow.browser.ts',
+      'src/app/plant-browser/browser-runtime.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+    targets: ['src/web/**'],
+  },
 ] satisfies readonly ArchitecturePolicy[]
 
 /**
@@ -3449,6 +3501,9 @@ describe('canvas v2 policies, end of 0B', () => {
 })
 
 const P39 = '[P39 production modules form no value import cycle]'
+const P40 = '[P40 foundation layers import no app, component or edition code]'
+const P41 = '[P41 canvas imports no native or edition code]'
+const P42 = '[P42 shared app code imports no Web edition module]'
 
 describe('2.0 guard policies (canopi-f47t.52.17)', () => {
   it('P39 rejects a production value cycle; type-only, dynamic and test cycles pass', () => {
@@ -3466,6 +3521,83 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
     expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P39'))).toEqual([
       `${P39} src/app/planted/a.ts is in a value import cycle with src/app/planted/b.ts`,
       `${P39} src/app/planted/b.ts is in a value import cycle with src/app/planted/a.ts`,
+    ])
+  })
+
+  it('P40 rejects foundation imports of app values, components and edition code, but not app types or named exceptions', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/app/settings/state.ts', ['export const locale = 1', 'export type Locale = string']),
+      plantedSource('src/components/shared/Chip.tsx', ['export const Chip = 1']),
+      plantedSource('src/web/browser-app-data.ts', ['export const data = 1']),
+      plantedSource('src/commands/registry.ts', ['export const registry = 1']),
+      plantedSource('src/platform/desktop.ts', ['export const desktop = 1']),
+      plantedSource('src/utils/planted.ts', [
+        "import { locale } from '../app/settings/state'",
+        "import type { Locale } from '../app/settings/state'",
+        "import type { Chip } from '../components/shared/Chip'",
+      ]),
+      plantedSource('src/maplibre/planted.ts', ["import { data } from '../web/browser-app-data'"]),
+      plantedSource('src/canvas/planted.ts', ["import { registry } from '../commands/registry'"]),
+      plantedSource('src/ipc/planted.ts', ["import { desktop } from '../platform/desktop'"]),
+      plantedSource('src/i18n/planted.ts', ["import { locale } from '../app/settings/state'"]),
+      plantedSource('src/types/planted.ts', ["import { locale } from '../app/settings/state'"]),
+      plantedSource('src/generated/planted.ts', ["import { locale } from '../app/settings/state'"]),
+      plantedSource('src/target/planted.ts', ["import { locale } from '../app/settings/state'"]),
+      plantedSource('src/i18n/index.ts', ["import { locale } from '../app/settings/state'"]),
+      plantedSource('src/utils/theme.ts', ["import { locale } from '../app/settings/state'"]),
+      plantedSource('src/ipc/design.ts', ["import { locale } from '../app/settings/state'"]),
+      plantedSource('src/maplibre/satellite-bind.ts', ["import { locale } from '../app/settings/state'"]),
+      plantedSource('src/utils/planted.test.ts', ["import { Chip } from '../components/shared/Chip'"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P40'))).toEqual([
+      `${P40} src/utils/planted.ts:1:1 imports src/app/settings/state.ts via "../app/settings/state" (static)`,
+      `${P40} src/utils/planted.ts:3:1 imports src/components/shared/Chip.tsx via "../components/shared/Chip" (static)`,
+      `${P40} src/maplibre/planted.ts:1:1 imports src/web/browser-app-data.ts via "../web/browser-app-data" (static)`,
+      `${P40} src/canvas/planted.ts:1:1 imports src/commands/registry.ts via "../commands/registry" (static)`,
+      `${P40} src/ipc/planted.ts:1:1 imports src/platform/desktop.ts via "../platform/desktop" (static)`,
+      `${P40} src/i18n/planted.ts:1:1 imports src/app/settings/state.ts via "../app/settings/state" (static)`,
+      `${P40} src/types/planted.ts:1:1 imports src/app/settings/state.ts via "../app/settings/state" (static)`,
+      `${P40} src/generated/planted.ts:1:1 imports src/app/settings/state.ts via "../app/settings/state" (static)`,
+      `${P40} src/target/planted.ts:1:1 imports src/app/settings/state.ts via "../app/settings/state" (static)`,
+    ])
+  })
+
+  it('P41 rejects canvas imports of IPC, Tauri, Web and platform code, but not the named species cache', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/ipc/species.ts', ['export const species = 1']),
+      plantedSource('src/web/browser-app-data.ts', ['export const data = 1']),
+      plantedSource('src/platform/desktop.ts', ['export const desktop = 1']),
+      plantedSource('src/canvas/runtime/planted.ts', [
+        "import { species } from '../../ipc/species'",
+        "import { invoke } from '@tauri-apps/api/core'",
+        "import type { data } from '../../web/browser-app-data'",
+        "import { desktop } from '../../platform/desktop'",
+      ]),
+      plantedSource('src/canvas/runtime/species-cache.ts', ["import { species } from '../../ipc/species'"]),
+      plantedSource('src/canvas/runtime/planted.test.ts', ["import { species } from '../../ipc/species'"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P41'))).toEqual([
+      `${P41} src/canvas/runtime/planted.ts:1:1 imports src/ipc/species.ts via "../../ipc/species" (static)`,
+      `${P41} src/canvas/runtime/planted.ts:2:1 imports @tauri-apps/api/core via "@tauri-apps/api/core" (static)`,
+      `${P41} src/canvas/runtime/planted.ts:3:1 imports src/web/browser-app-data.ts via "../../web/browser-app-data" (static)`,
+      `${P41} src/canvas/runtime/planted.ts:4:1 imports src/platform/desktop.ts via "../../platform/desktop" (static)`,
+    ])
+  })
+
+  it('P42 rejects shared app imports of Web edition modules, but not the three named browser files', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/web/static-design-templates.ts', ['export const templates = 1']),
+      plantedSource('src/app/planted/module.ts', ["import type { templates } from '../../web/static-design-templates'"]),
+      plantedSource('src/app/community/catalog.browser.ts', ["import { templates } from '../../web/static-design-templates'"]),
+      plantedSource('src/app/design-template-import/workflow.browser.ts', ["import { templates } from '../../web/static-design-templates'"]),
+      plantedSource('src/app/plant-browser/browser-runtime.ts', ["import { templates } from '../../web/static-design-templates'"]),
+      plantedSource('src/app/planted/module.test.ts', ["import { templates } from '../../web/static-design-templates'"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P42'))).toEqual([
+      `${P42} src/app/planted/module.ts:1:1 imports src/web/static-design-templates.ts via "../../web/static-design-templates" (static)`,
     ])
   })
 })
