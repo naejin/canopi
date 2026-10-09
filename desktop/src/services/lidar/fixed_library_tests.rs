@@ -1194,6 +1194,95 @@ fn cancelling_a_retry_puts_a_rebuilt_item_back_to_failed_and_a_rebuild_recovers_
     let _ = std::fs::remove_dir_all(&workbench);
 }
 
+/// Through the real commands: a rebuilt item's Retry cancelled, then
+/// Dismiss, clicked while the cancelled job may still be settling, frees the
+/// managed original the item's saved selection named, with its row and its
+/// `meta.json`: nothing of the item stays on disk or in the catalogue.
+#[test]
+fn dismissing_a_rebuilt_item_after_a_cancelled_retry_frees_its_originals() {
+    use crate::commands::lidar::{lidar_cancel_import, lidar_dismiss_import, lidar_retry_import};
+    use tauri::Manager;
+    let workbench = scratch("dismiss-rebuilt-tile");
+    let tile = plane(&attached_library(&workbench), &workbench, "tile", 445_000.0);
+    let root = scratch("dismiss-rebuilt");
+    let (library, layer_id) = rebuilt_library(&root, &tile, "sha-kept");
+    let executor = crate::native_operation::NativeOperationExecutor::production();
+    library.attach_executor(executor.clone());
+    let app = tauri::test::mock_builder()
+        .manage(library.clone())
+        .manage(executor)
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    // Held, the display registry keeps the retry from reaching publication.
+    let display = library.display().unwrap();
+    let receipt = tauri::async_runtime::block_on(lidar_retry_import(
+        app.state(),
+        app.state(),
+        layer_id.clone(),
+    ))
+    .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while library
+        .get_import_job(&receipt.job_id)
+        .unwrap()
+        .unwrap()
+        .state
+        != LidarImportJobState::Applying
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the retry never prepared"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    tauri::async_runtime::block_on(lidar_cancel_import(
+        app.state(),
+        app.state(),
+        receipt.job_id.clone(),
+    ))
+    .unwrap();
+    drop(display);
+
+    tauri::async_runtime::block_on(lidar_dismiss_import(
+        app.state(),
+        app.state(),
+        layer_id.clone(),
+    ))
+    .unwrap();
+
+    await_settled(&library, &receipt.job_id);
+    assert!(library.library_snapshot().unwrap().items.is_empty());
+    assert_eq!(import_rows(&library), no_import_rows());
+    assert_eq!(library_files(&library), Vec::<PathBuf>::new());
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&workbench);
+}
+
+/// Dismiss frees a rebuilt item's originals under the heavy lease, as a
+/// settling import does, so it is refused while another raster job runs and
+/// changes nothing; once that job has finished it frees them.
+#[test]
+fn dismissing_a_rebuilt_item_waits_for_no_other_raster_job() {
+    let workbench = scratch("dismiss-rebuilt-leased-tile");
+    let tile = plane(&attached_library(&workbench), &workbench, "tile", 445_000.0);
+    let root = scratch("dismiss-rebuilt-leased");
+    let (library, layer_id) = rebuilt_library(&root, &tile, "sha-kept");
+    let files = library_files(&library);
+
+    let other = HeavyJobLease::acquire(&library, "imp-other").unwrap();
+    let refused = library.dismiss_import(&layer_id).unwrap_err();
+    assert!(refused.contains("already running"), "{refused}");
+    assert_eq!(library.library_snapshot().unwrap().items.len(), 1);
+    assert_eq!(library_files(&library), files);
+
+    drop(other);
+    library.dismiss_import(&layer_id).unwrap();
+    assert_eq!(import_rows(&library), no_import_rows());
+    assert_eq!(library_files(&library), Vec::<PathBuf>::new());
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&workbench);
+}
+
 /// Cancel deletes the half-imported item at once, and the job's settlement
 /// removes every file it wrote: nothing is listed, nothing stays on disk,
 /// and the same file imports again under the same name (user, 2026-10-09).

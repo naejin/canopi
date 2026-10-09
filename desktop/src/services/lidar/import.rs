@@ -1118,36 +1118,7 @@ pub(super) fn discard_job_files(library: &LidarLibrary, job_id: &str) -> Result<
         let transaction = connection
             .unchecked_transaction()
             .map_err(|e| e.to_string())?;
-        let mut originals = Vec::new();
-        for sha256 in created {
-            let claimed: bool = transaction
-                .query_row(
-                    "SELECT EXISTS(
-                         SELECT 1 FROM lidar_collection_members AS member
-                         JOIN lidar_interpretations AS interpretation
-                           ON interpretation.id = member.interpretation_id
-                         WHERE interpretation.source_sha256 = ?1)
-                     OR EXISTS(
-                         SELECT 1 FROM lidar_import_jobs WHERE instr(request_json, ?1) > 0)",
-                    [&sha256],
-                    |row| row.get(0),
-                )
-                .map_err(|e| e.to_string())?;
-            if claimed {
-                continue;
-            }
-            for sql in [
-                "DELETE FROM lidar_interpretation_cogs WHERE interpretation_id IN
-                 (SELECT id FROM lidar_interpretations WHERE source_sha256 = ?1)",
-                "DELETE FROM lidar_interpretations WHERE source_sha256 = ?1",
-                "DELETE FROM lidar_sources WHERE sha256 = ?1",
-            ] {
-                transaction
-                    .execute(sql, [&sha256])
-                    .map_err(|e| e.to_string())?;
-            }
-            originals.push(sha256);
-        }
+        let originals = release_unclaimed_originals(&transaction, created)?;
         transaction.commit().map_err(|e| e.to_string())?;
         let referenced = catalogue::referenced_asset_digests(&connection)?;
         let cogs: Vec<String> = staged
@@ -1160,10 +1131,61 @@ pub(super) fn discard_job_files(library: &LidarLibrary, job_id: &str) -> Result<
         remove_dir_if_present(&paths.asset_dir(sha256))?;
         super::display_cog::forget_asset_derivatives(library, sha256)?;
     }
-    for sha256 in &originals {
-        remove_dir_if_present(&paths.source_dir(sha256))?;
-    }
+    remove_original_dirs(library, &originals)?;
     remove_job_root(library, job_id)
+}
+
+/// Delete the catalogue rows of each managed original in `candidates` that no
+/// published item and no saved import selection claims, and return those
+/// originals; the caller commits, then removes them with
+/// [`remove_original_dirs`]. Run under the heavy lease, so no import stages
+/// the same content meanwhile.
+pub(super) fn release_unclaimed_originals(
+    transaction: &rusqlite::Connection,
+    candidates: Vec<String>,
+) -> Result<Vec<String>, String> {
+    let mut released = Vec::new();
+    for sha256 in candidates {
+        let claimed: bool = transaction
+            .query_row(
+                "SELECT EXISTS(
+                     SELECT 1 FROM lidar_collection_members AS member
+                     JOIN lidar_interpretations AS interpretation
+                       ON interpretation.id = member.interpretation_id
+                     WHERE interpretation.source_sha256 = ?1)
+                 OR EXISTS(
+                     SELECT 1 FROM lidar_import_jobs WHERE instr(request_json, ?1) > 0)",
+                [&sha256],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if claimed {
+            continue;
+        }
+        for sql in [
+            "DELETE FROM lidar_interpretation_cogs WHERE interpretation_id IN
+             (SELECT id FROM lidar_interpretations WHERE source_sha256 = ?1)",
+            "DELETE FROM lidar_interpretations WHERE source_sha256 = ?1",
+            "DELETE FROM lidar_sources WHERE sha256 = ?1",
+        ] {
+            transaction
+                .execute(sql, [&sha256])
+                .map_err(|e| e.to_string())?;
+        }
+        released.push(sha256);
+    }
+    Ok(released)
+}
+
+/// Remove the directories, original and `meta.json`, of released originals.
+pub(super) fn remove_original_dirs(
+    library: &LidarLibrary,
+    originals: &[String],
+) -> Result<(), String> {
+    for sha256 in originals {
+        remove_dir_if_present(&library.inner.paths.source_dir(sha256))?;
+    }
+    Ok(())
 }
 
 fn remove_dir_if_present(dir: &Path) -> Result<(), String> {

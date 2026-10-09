@@ -1035,7 +1035,10 @@ impl LidarLibrary {
     /// Remove an unpublished item whose import failed.
     ///
     /// Only that operation's own metadata and files go; a published item is
-    /// deleted through the library deletion guard instead.
+    /// deleted through the library deletion guard instead. A rebuilt item's
+    /// saved selection names managed originals: those no other item claims
+    /// go with it, under the heavy lease as a settling import frees its own,
+    /// so Dismiss is refused while another raster job runs.
     pub fn dismiss_import(&self, layer_id: &str) -> Result<(), String> {
         self.ensure_writable()?;
         {
@@ -1051,6 +1054,12 @@ impl LidarLibrary {
             if running {
                 return Err("this import is still running; cancel it first".to_string());
             }
+            let managed = self.saved_managed_originals(&connection, layer_id)?;
+            let _lease = if managed.is_empty() {
+                None
+            } else {
+                Some(HeavyJobLease::acquire(self, &new_id("dis"))?)
+            };
             let transaction = connection
                 .unchecked_transaction()
                 .map_err(|e| e.to_string())?;
@@ -1059,12 +1068,48 @@ impl LidarLibrary {
                     "this item is published; delete it from the library instead".to_string()
                 );
             }
+            let originals = import::release_unclaimed_originals(&transaction, managed)?;
             transaction.commit().map_err(|e| e.to_string())?;
+            drop(connection);
+            // Still under the lease, so no import stages this content meanwhile.
+            if let Err(error) = import::remove_original_dirs(self, &originals) {
+                tracing::warn!(layer_id, %error, "a dismissed item's original was not removed");
+            }
         }
-        // A failed import freed its files as it settled; one it kept goes at
-        // the next start.
+        // A failed import freed the files it created as it settled; one it
+        // kept goes at the next start.
         self.refresh_source_meta();
         Ok(())
+    }
+
+    /// The managed originals (`sources/<sha256>/original`) any saved import
+    /// selection of `layer_id` names.
+    fn saved_managed_originals(
+        &self,
+        connection: &Connection,
+        layer_id: &str,
+    ) -> Result<Vec<String>, String> {
+        let mut managed = Vec::new();
+        for request in string_column(
+            connection,
+            "SELECT request_json FROM lidar_import_jobs
+             WHERE layer_id = ?1 AND request_json IS NOT NULL",
+            layer_id,
+        )? {
+            for path in parse_import_request(&request).unwrap_or_default() {
+                let sha256 = path
+                    .parent()
+                    .and_then(|dir| dir.file_name())
+                    .and_then(|sha256| sha256.to_str())
+                    .filter(|sha256| self.inner.paths.source_original(sha256) == path);
+                if let Some(sha256) = sha256
+                    && !managed.iter().any(|known| known == sha256)
+                {
+                    managed.push(sha256.to_string());
+                }
+            }
+        }
+        Ok(managed)
     }
 
     /// Record and start one import as a new library item. A file Canopi
