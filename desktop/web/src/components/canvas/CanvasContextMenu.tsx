@@ -1,4 +1,4 @@
-import { buildCanvasContextMenuEntries } from '../../app/canvas-context-menu/entries'
+import { buildCanvasContextMenuEntries, type CanvasContextMenuProfileLine } from '../../app/canvas-context-menu/entries'
 import {
   canvasContextMenuRequest,
   closeCanvasContextMenu,
@@ -18,15 +18,19 @@ import { ContextMenu } from '../shared/ActionMenu'
  * The map's right-click menu. The canvas runtime opens it (pointer, Menu key
  * or Shift F10) with the selection it acts on; each item runs a scene edit or
  * opens the panel that owns the rest. A heading names the selection in the
- * selection chip's words.
+ * selection chip's words. The edition with Site data (Desktop) hands over "Profile this line"; the Web entry graph must
+ * not import app/lidar.
  */
-export function CanvasContextMenu() {
+export function CanvasContextMenu({ profileLine }: { readonly profileLine?: CanvasContextMenuProfileLine }) {
   const request = canvasContextMenuRequest.value
   if (!request) return null
-  return <OpenCanvasContextMenu request={request} />
+  return <OpenCanvasContextMenu request={request} profileLine={profileLine} />
 }
 
-function OpenCanvasContextMenu({ request }: { readonly request: CanvasContextMenuRequest }) {
+function OpenCanvasContextMenu({ request, profileLine }: {
+  readonly request: CanvasContextMenuRequest
+  readonly profileLine?: CanvasContextMenuProfileLine
+}) {
   // Right-click retargets the selection first, so the chip's summary is the request's selection. A request with no
   // targets (an object on a locked layer) names nothing: the app's selection is not what the menu acts on.
   const selectionSummary = useMapSelectionSummary()
@@ -41,6 +45,7 @@ function OpenCanvasContextMenu({ request }: { readonly request: CanvasContextMen
     openSpeciesDetail,
     addToCalendar: requestCalendarAdd,
     setUnitCost: requestBudgetPrice,
+    profileLine,
   })
   return (
     <ContextMenu

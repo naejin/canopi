@@ -37,6 +37,7 @@ import { activity } from './memory-backend'
 import { attachmentFailure, pendingAttachments } from '../src/app/lidar/actions'
 import { analyzeItem, dataDialog, libraryView, openDataLibrary } from '../src/app/lidar/library-navigation'
 import { showInSiteData } from '../src/app/lidar/site-data-view'
+import { profileLineMenu } from '../src/app/lidar/profile'
 import { GalleryCanvasSurface } from './GalleryCanvasSurface'
 import { StampChooser } from '../src/components/canvas/StampChooser'
 import { PlantSymbolSheet } from './PlantSymbolSheet'
@@ -209,6 +210,7 @@ function GalleryCanvasWorkspace() {
       bearingDeg={bearingDeg}
       onReadyChange={setGalleryCanvasReady}
       stampChooser={edition === 'desktop' ? StampChooser : undefined}
+      profileLine={edition === 'desktop' ? profileLineMenu : undefined}
     />
   )
 }

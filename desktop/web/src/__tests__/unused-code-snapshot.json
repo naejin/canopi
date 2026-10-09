@@ -234,7 +234,6 @@
     "src/app/lidar/library-store.ts#hasActiveLibraryWork",
     "src/app/lidar/library-store.ts#readLidarPresentation",
     "src/app/lidar/profile.ts#createSiteProfile",
-    "src/app/lidar/profile.ts#profileLineMenu",
     "src/app/lidar/site-transients.ts#endSiteDataTransients",
     "src/app/map-layers/state.ts#createDefaultMapLayers",
     "src/app/map-selection/summary.ts#readMapSelectionSummary",

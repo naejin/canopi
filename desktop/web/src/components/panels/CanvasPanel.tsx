@@ -11,6 +11,7 @@ import { getMapNoticeReadModel } from '../../app/canvas-map-surface/map-notice'
 import { useDesignReveal } from '../../app/canvas-map-surface/design-reveal'
 import { currentDesign } from '../../app/document-session/store'
 import { appCommandGraphToolbarProjection } from '../../commands/registry'
+import { profileLineMenu } from '../../app/lidar/profile'
 import { CanvasChrome } from '../canvas/CanvasChrome'
 import { MapNotice } from '../canvas/MapNotice'
 import { StampChooser } from '../canvas/StampChooser'
@@ -53,7 +54,12 @@ export function CanvasPanel() {
           data-map-active={mapNotice.mapSurfaceVisible ? 'true' : 'false'}
         />
         {hasDesign && (
-          <CanvasChrome projection={appCommandGraphToolbarProjection.value} canvasRef={containerRef} stampChooser={StampChooser} />
+          <CanvasChrome
+            projection={appCommandGraphToolbarProjection.value}
+            canvasRef={containerRef}
+            stampChooser={StampChooser}
+            profileLine={profileLineMenu}
+          />
         )}
         <MapNotice notice={mapNotice} onRetry={retryMap} canvasRef={containerRef} />
         {reveal.startScreen && <WelcomeScreen />}
