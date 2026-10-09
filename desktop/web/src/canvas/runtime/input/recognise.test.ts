@@ -938,7 +938,7 @@ describe('recognise: 5.9 precedence', () => {
     expect(pansOf(result.gestures)[0]!.source).toBe('space-drag')
   })
 
-  it('J10 a press with Space held pans and never reaches the probe', () => {
+  it('J10 a press with Space held pans and never reaches a tool or the pin', () => {
     const result = run(SEQUENCES.J10_SPACE)
     expect(result.gestures.some((gesture) => gesture.kind === 'press' || gesture.kind === 'tap')).toBe(false)
     expect(kinds(result.gestures)[0]).toBe('pan:start')
