@@ -20,7 +20,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// `gdalinfo` reads headers only and finishes in seconds on any local file. A
-/// file on an unreachable share must not hold one of the two Local slots for
+/// file on an unreachable share must not hold one of the executor's running slots for
 /// the full conversion deadline; Import coverage runs up to 24 of these.
 const INFO_PROCESS_TIMEOUT: Duration = Duration::from_secs(60);
 #[derive(Debug, Clone)]

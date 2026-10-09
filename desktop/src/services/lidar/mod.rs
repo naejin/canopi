@@ -59,6 +59,12 @@ pub struct LidarLibrary {
     pub(crate) inner: Arc<LidarLibraryInner>,
 }
 
+/// The executor class LiDAR's raster work runs on: import, analysis and display
+/// preparation (U50(1)). Not Local, so a heavy job and a display plan never fill
+/// the Local slots that saves, loads and Site data sampling need.
+pub(crate) const RASTER_WORK: crate::native_operation::NativeOperationClass =
+    crate::native_operation::NativeOperationClass::Raster;
+
 pub(crate) struct LidarLibraryInner {
     pub(crate) paths: LidarPaths,
     catalogue: Mutex<Connection>,
@@ -1224,40 +1230,35 @@ impl LidarLibrary {
         tauri::async_runtime::spawn(async move {
             let library_for_work = library.clone();
             let outcome = executor
-                .run(
-                    crate::native_operation::NativeOperationClass::Local,
-                    "lidar import sources",
-                    move || {
-                        let _lease = lease;
-                        // Prepare and validate every selected source. The head
-                        // is captured inside this call, before preparation
-                        // begins, and carried by the staged payload.
-                        match import::stage_import(
-                            &library_for_work,
-                            &job_id_for_stage,
-                            &layer_for_stage,
-                            &source_paths,
-                            &flag,
-                        ) {
-                            Ok(_) => {}
-                            Err(error) => return Err(error),
-                        }
-                        let staging =
-                            import::read_staged_import(&library_for_work, &job_id_for_stage)?;
-                        // Every occurrence is compatible and validated before
-                        // anything becomes visible; a partial batch is never
-                        // published as a success.
-                        import::ensure_whole_batch_compatible(&staging)?;
-                        // Display derivatives are staged under the same job, so
-                        // the item can be drawn as soon as it is published.
-                        library_for_work.prepare_staged_display(&staging, &flag)?;
-                        // Publication refuses an item that already has a head:
-                        // items are fixed once published.
-                        import::apply_import(&library_for_work, &staging, &flag).map(|outcome| {
-                            tracing::info!(summary = outcome.summary(), "LiDAR import published");
-                        })
-                    },
-                )
+                .run(RASTER_WORK, "lidar import sources", move || {
+                    let _lease = lease;
+                    // Prepare and validate every selected source. The head
+                    // is captured inside this call, before preparation
+                    // begins, and carried by the staged payload.
+                    match import::stage_import(
+                        &library_for_work,
+                        &job_id_for_stage,
+                        &layer_for_stage,
+                        &source_paths,
+                        &flag,
+                    ) {
+                        Ok(_) => {}
+                        Err(error) => return Err(error),
+                    }
+                    let staging = import::read_staged_import(&library_for_work, &job_id_for_stage)?;
+                    // Every occurrence is compatible and validated before
+                    // anything becomes visible; a partial batch is never
+                    // published as a success.
+                    import::ensure_whole_batch_compatible(&staging)?;
+                    // Display derivatives are staged under the same job, so
+                    // the item can be drawn as soon as it is published.
+                    library_for_work.prepare_staged_display(&staging, &flag)?;
+                    // Publication refuses an item that already has a head:
+                    // items are fixed once published.
+                    import::apply_import(&library_for_work, &staging, &flag).map(|outcome| {
+                        tracing::info!(summary = outcome.summary(), "LiDAR import published");
+                    })
+                })
                 .await;
             library.finish_import_sources(&job_id_clone, outcome);
         });
@@ -1359,14 +1360,10 @@ impl LidarLibrary {
         let library = self.clone();
         let job = job_id.clone();
         let outcome = executor
-            .run(
-                crate::native_operation::NativeOperationClass::Local,
-                "lidar analysis",
-                move || {
-                    let _lease = lease;
-                    analyses::run_job(&library, &job, &flag)
-                },
-            )
+            .run(RASTER_WORK, "lidar analysis", move || {
+                let _lease = lease;
+                analyses::run_job(&library, &job, &flag)
+            })
             .await;
         match outcome {
             Ok(outcome) => {

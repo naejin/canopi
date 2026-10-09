@@ -785,23 +785,29 @@ mod latency_probe {
         sorted[index]
     }
 
-    /// One 6-target request per point, timed; returns the sorted durations
-    /// and how many values were found.
+    /// One 6-target request per point through the real command, so each
+    /// waits for the sampling turn and a Local slot as hover does; timed.
+    /// Returns the sorted durations and how many values were found.
     fn sample_all(
-        library: &LidarLibrary,
+        app: &tauri::App<tauri::test::MockRuntime>,
         targets: &[LidarSampleTarget],
         points: &[(f64, f64)],
     ) -> (Vec<Duration>, usize) {
+        use tauri::Manager;
         let mut found = 0;
         let mut durations: Vec<Duration> = points
             .iter()
             .map(|&(longitude, latitude)| {
                 let started = Instant::now();
-                let series = library
-                    .sample_points(&LidarSamplePointsRequest {
-                        targets: targets.to_vec(),
-                        points: vec![[longitude, latitude]],
-                    })
+                let series =
+                    tauri::async_runtime::block_on(crate::commands::lidar::lidar_sample_points(
+                        app.state(),
+                        app.state(),
+                        LidarSamplePointsRequest {
+                            targets: targets.to_vec(),
+                            points: vec![[longitude, latitude]],
+                        },
+                    ))
                     .expect("the batch samples");
                 let elapsed = started.elapsed();
                 found += series
@@ -873,21 +879,35 @@ mod latency_probe {
         })
         .collect();
         let points = points(&engine, &tiles[0]);
+        let executor = crate::native_operation::NativeOperationExecutor::production();
+        let app = tauri::test::mock_builder()
+            .manage(library.clone())
+            .manage(executor.clone())
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .unwrap();
 
-        let (idle, found) = sample_all(&library, &targets, &points);
+        let (idle, found) = sample_all(&app, &targets, &points);
         let idle_p95 = report("idle", &idle, found);
 
         // The same points again while an import of both tiles runs, over and
-        // over, until the sampling ends.
+        // over on the executor class a real import takes, until the sampling
+        // ends.
         let stop = Arc::new(AtomicBool::new(false));
         let importer = {
             let library = library.clone();
             let tiles = tiles.clone();
             let stop = stop.clone();
+            let executor = executor.clone();
             std::thread::spawn(move || {
                 let mut imports = 0;
                 while !stop.load(Ordering::Relaxed) {
-                    import_source(&library, "busy import", &tiles);
+                    let (library, tiles) = (library.clone(), tiles.clone());
+                    tauri::async_runtime::block_on(executor.run(
+                        super::super::RASTER_WORK,
+                        "lidar import sources",
+                        move || Ok(import_source(&library, "busy import", &tiles)),
+                    ))
+                    .expect("the busy import runs");
                     imports += 1;
                 }
                 imports
@@ -895,7 +915,7 @@ mod latency_probe {
         };
         // Let the import reach its heavy phase first.
         std::thread::sleep(Duration::from_millis(500));
-        let (busy, found) = sample_all(&library, &targets, &points);
+        let (busy, found) = sample_all(&app, &targets, &points);
         stop.store(true, Ordering::Relaxed);
         let imports = importer.join().expect("the importer finishes");
         let busy_p95 = report(&format!("during {imports} import(s)"), &busy, found);

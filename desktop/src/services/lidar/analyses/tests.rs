@@ -1514,6 +1514,89 @@ fn concurrent_samples_take_one_local_slot_and_a_save_still_runs() {
     assert_eq!(most.load(Ordering::SeqCst), 1);
 }
 
+/// Raster work never stalls sampling (held finding 5): with a heavy job (an
+/// import or an analysis) and a display plan each running on the class raster
+/// work uses, a `lidar_sample_points` call through the real command and
+/// executor still answers within its budget, so row values, the pin and the
+/// profile keep reading while both run.
+#[test]
+fn sampling_answers_while_a_heavy_job_and_a_display_plan_run() {
+    use crate::native_operation::NativeOperationExecutor;
+    use crate::services::lidar::RASTER_WORK;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Condvar, Mutex};
+    use std::time::{Duration, Instant};
+    use tauri::Manager;
+
+    let root = scratch_root("sampling-beside-raster-work");
+    let library = LidarLibrary::open(&root).unwrap();
+    let plane = plane_layer(&library, &root, 16, 16);
+    let aimed = target(
+        LibraryItemRole::Source,
+        &plane,
+        &source_head(&library, &plane),
+    );
+    let executor = NativeOperationExecutor::production();
+    let app = tauri::test::mock_builder()
+        .manage(library.clone())
+        .manage(executor.clone())
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+
+    let running = Arc::new(AtomicUsize::new(0));
+    let released = Arc::new((Mutex::new(false), Condvar::new()));
+    let held: Vec<_> = ["lidar analysis", "lidar display preparation"]
+        .into_iter()
+        .map(|label| {
+            let (executor, running, released) =
+                (executor.clone(), running.clone(), released.clone());
+            std::thread::spawn(move || {
+                tauri::async_runtime::block_on(executor.run(RASTER_WORK, label, move || {
+                    running.fetch_add(1, Ordering::SeqCst);
+                    let (lock, wake) = &*released;
+                    let mut open = lock.lock().unwrap();
+                    while !*open {
+                        open = wake.wait(open).unwrap();
+                    }
+                    Ok(())
+                }))
+            })
+        })
+        .collect();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while running.load(Ordering::SeqCst) < 2 {
+        assert!(Instant::now() < deadline, "the raster work never started");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+
+    let (answered, answer) = std::sync::mpsc::channel();
+    let handle = app.handle().clone();
+    std::thread::spawn(move || {
+        let request = LidarSamplePointsRequest {
+            targets: vec![aimed],
+            points: vec![point(5.5, 10.5)],
+        };
+        // The receiver is gone once the budget ran out; the assertion below says so.
+        let _ = answered.send(tauri::async_runtime::block_on(
+            crate::commands::lidar::lidar_sample_points(handle.state(), handle.state(), request),
+        ));
+    });
+    let sample = answer.recv_timeout(Duration::from_secs(2));
+
+    {
+        let (lock, wake) = &*released;
+        *lock.lock().unwrap() = true;
+        wake.notify_all();
+    }
+    for work in held {
+        work.join().unwrap().unwrap();
+    }
+    let series = sample
+        .expect("a sample answers while raster work holds its slots")
+        .expect("the sample succeeds");
+    assert_eq!(values(&series[0]), vec![Some(5.0)]);
+}
+
 /// A diagonal profile across a result's chunk corner reads every cell, over
 /// more than one 256-cell run: chunk (0, 0) holds its column, chunk (1, 1)
 /// 2000 plus its own column.

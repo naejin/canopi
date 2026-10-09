@@ -5,11 +5,12 @@ use std::{
 };
 use tokio::sync::{Semaphore, TryAcquireError};
 
-const OPERATION_CLASSES: [NativeOperationClass; 4] = [
+const OPERATION_CLASSES: [NativeOperationClass; 5] = [
     NativeOperationClass::Catalog,
     NativeOperationClass::UserData,
     NativeOperationClass::Local,
     NativeOperationClass::Network,
+    NativeOperationClass::Raster,
 ];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -18,6 +19,10 @@ pub enum NativeOperationClass {
     UserData,
     Local,
     Network,
+    /// LiDAR import, analysis and display preparation (U50(1)): their own
+    /// class, so raster work never fills the Local slots that saves, loads and
+    /// Site data sampling need.
+    Raster,
 }
 
 impl NativeOperationClass {
@@ -27,6 +32,7 @@ impl NativeOperationClass {
             Self::UserData => 1,
             Self::Local => 2,
             Self::Network => 3,
+            Self::Raster => 4,
         }
     }
 
@@ -36,6 +42,7 @@ impl NativeOperationClass {
             Self::UserData => "user-data",
             Self::Local => "local",
             Self::Network => "network",
+            Self::Raster => "raster",
         }
     }
 
@@ -74,7 +81,7 @@ impl NativeOperationClassLimits {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct NativeOperationLimits {
-    classes: [NativeOperationClassLimits; 4],
+    classes: [NativeOperationClassLimits; 5],
 }
 
 impl NativeOperationLimits {
@@ -83,15 +90,16 @@ impl NativeOperationLimits {
         user_data: NativeOperationClassLimits,
         local: NativeOperationClassLimits,
         network: NativeOperationClassLimits,
+        raster: NativeOperationClassLimits,
     ) -> Self {
         Self {
-            classes: [catalog, user_data, local, network],
+            classes: [catalog, user_data, local, network, raster],
         }
     }
 
     #[cfg(test)]
     const fn uniform(limits: NativeOperationClassLimits) -> Self {
-        Self::new(limits, limits, limits, limits)
+        Self::new(limits, limits, limits, limits, limits)
     }
 
     pub const fn production() -> Self {
@@ -100,6 +108,7 @@ impl NativeOperationLimits {
             NativeOperationClassLimits::new(8, 1),
             NativeOperationClassLimits::new(6, 2),
             NativeOperationClassLimits::new(12, 4),
+            NativeOperationClassLimits::new(4, 2),
         )
     }
 
@@ -110,7 +119,7 @@ impl NativeOperationLimits {
 
 #[derive(Clone)]
 pub struct NativeOperationExecutor {
-    classes: [NativeOperationClassExecutor; 4],
+    classes: [NativeOperationClassExecutor; 5],
 }
 
 impl NativeOperationExecutor {
@@ -316,6 +325,10 @@ mod tests {
         assert_eq!(
             limits.for_class(NativeOperationClass::Network),
             NativeOperationClassLimits::new(12, 4),
+        );
+        assert_eq!(
+            limits.for_class(NativeOperationClass::Raster),
+            NativeOperationClassLimits::new(4, 2),
         );
     }
 
