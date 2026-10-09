@@ -15,10 +15,11 @@
  * MapLibre's abort signal. Tile work is dispatched newest first, a bounded
  * number per lane, and a queued tile the client reports as no longer relevant
  * (outside the current viewport) is rejected before it starts. Statistics
- * (an overview decode and a sort) are background work: they start only when
- * no tile waits, at most one per lane, so a mosaic's range reads never hold
- * back the map. Disposing a
- * client rejects its queued work and closes its sources in every lane.
+ * (an overview decode and a sort that block their worker) are background work:
+ * they start only when no tile waits, at most one per lane and one fewer than
+ * the lanes in all, and tiles go first to a lane running none, so a mosaic's
+ * range reads never hold back the map. Disposing a client rejects its queued
+ * work and closes its sources in every lane.
  */
 import type {
   RasterBandStatistics,
@@ -105,7 +106,7 @@ interface Lane {
   readonly worker: RasterWorkerLike
   readonly pending: Map<number, { resolve(value: unknown): void; reject(error: unknown): void }>
   inFlight: number
-  /** Statistics running here; at most one, so a lane always has room for tiles. */
+  /** Statistics running here; at most one, and never in every lane at once. */
   background: number
   broken: Error | null
 }
@@ -298,20 +299,28 @@ export class RasterWorkerPool {
       }
       return task
     }
-    // Background work, oldest first, once no tile waits: one per lane.
-    if (!this.leastLoadedLane(true)) return null
+    // Background work, oldest first, once no tile waits: one per lane, and
+    // one lane (when there are two or more) always left free for tiles.
+    const running = this.lanes.reduce((sum, lane) => sum + lane.background, 0)
+    if (running >= Math.max(1, this.lanes.length - 1) || !this.leastLoadedLane(true)) return null
     const index = this.queue.findIndex((task) => task.kind === 'background')
     if (index < 0) return null
     return this.queue.splice(index, 1)[0]!
   }
 
-  /** The lane with most room; for background work, only a lane running none. */
+  /**
+   * The lane with most room. Background work takes only a lane running none;
+   * other work prefers such a lane, since a running read blocks its worker.
+   */
   private leastLoadedLane(background = false): Lane | null {
     let best: Lane | null = null
     for (const lane of this.lanes) {
       if (lane.inFlight >= this.options.maxInFlightPerLane) continue
       if (background && lane.background > 0) continue
-      if (!best || lane.inFlight < best.inFlight) best = lane
+      if (!best) best = lane
+      else if ((lane.background === 0) !== (best.background === 0)) {
+        if (lane.background === 0) best = lane
+      } else if (lane.inFlight < best.inFlight) best = lane
     }
     return best
   }

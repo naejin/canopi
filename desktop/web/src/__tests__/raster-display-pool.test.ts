@@ -67,56 +67,47 @@ describe('raster display worker pool', () => {
     expect(lane.requests.at(-1)).toMatchObject({ op: 'close', handle: (opened as { handle: number }).handle })
   })
 
-  it('runs statistics behind tiles, one per lane at a time, so a mosaic\'s reads never hold back the map', async () => {
-    const { instance, created } = pool(2, 4)
-    const map = instance.acquire()
-    const ranges = instance.acquire()
-    const source = await map.openCog('asset://localhost/tile.tif')
-    const all = (op: string) => created.flatMap((lane) => lane.requests.filter((request) => request.op === op))
-    const reads = Array.from({ length: 30 }, (_, index) =>
-      ranges.statistics(`asset://localhost/part-${index}.tif`).catch((error: unknown) => error))
-    await settle()
-    expect(all('statistics')).toHaveLength(2)
-    const tile = source.renderTilePNG(10, 1, 1)
-    await settle()
-    expect(all('render')).toHaveLength(1)
-    // An answered read frees its lane's statistics slot for the next one.
-    const first = all('statistics')[0]!
-    created.find((lane) => lane.requests.includes(first))!.answer(first, null)
-    await expect(reads[0]).resolves.toBeNull()
-    await settle()
-    expect(all('statistics')).toHaveLength(3)
-    const render = all('render')[0]!
-    created.find((lane) => lane.requests.includes(render))!.answer(render)
-    await expect(tile).resolves.toEqual(new Uint8Array([1]))
-    ranges.dispose()
-    await expect(reads.at(-1)).resolves.toMatchObject({ name: 'AbortError' })
-  })
-
-  it('never runs two statistics in one lane, even when the other lane is busier with tiles', async () => {
+  it('runs statistics behind tiles and keeps one lane free of them, so a mosaic\'s reads never hold back the map', async () => {
     const { instance, created } = pool(2, 4)
     const map = instance.acquire()
     const ranges = instance.acquire()
     const source = await map.openCog('asset://localhost/tile.tif')
     const [laneA, laneB] = created as [FakeLane, FakeLane]
-    await settle()
-    const tiles = Array.from({ length: 6 }, (_, index) =>
-      source.renderTilePNG(10, index, 1).catch((error: unknown) => error))
-    await settle()
-    // Free lane A, so lane B holds three tiles and lane A none.
-    for (const render of laneA.renders()) laneA.answer(render)
-    await Promise.all(laneA.renders().map((render) => tiles[render.x]))
-    await settle()
-    expect(laneA.renders()).toHaveLength(3)
-    expect(laneB.renders()).toHaveLength(3)
-    const reads = Array.from({ length: 2 }, (_, index) =>
+    const all = (op: string) => created.flatMap((lane) => lane.requests.filter((request) => request.op === op))
+    const reads = Array.from({ length: 30 }, (_, index) =>
       ranges.statistics(`asset://localhost/part-${index}.tif`).catch((error: unknown) => error))
     await settle()
-    const statistics = (lane: FakeLane) => lane.requests.filter((request) => request.op === 'statistics')
-    expect(statistics(laneA)).toHaveLength(1)
-    expect(statistics(laneB)).toHaveLength(1)
+    expect(all('statistics')).toHaveLength(1)
+    const reading = laneA.requests.some((request) => request.op === 'statistics') ? laneA : laneB
+    const free = reading === laneA ? laneB : laneA
+    // Tiles go to the lane no read blocks, even once it holds more tiles.
+    const tiles = [source.renderTilePNG(10, 1, 1), source.renderTilePNG(10, 2, 1)]
+    await settle()
+    expect(free.renders()).toHaveLength(2)
+    expect(reading.renders()).toHaveLength(0)
+    // An answered read frees the one statistics slot for the next one.
+    const first = all('statistics')[0]!
+    reading.answer(first, null)
+    await expect(reads[0]).resolves.toBeNull()
+    await settle()
+    expect(all('statistics')).toHaveLength(2)
+    expect(free.requests.some((request) => request.op === 'statistics')).toBe(false)
+    for (const render of free.renders()) free.answer(render)
+    await expect(Promise.all(tiles)).resolves.toEqual([new Uint8Array([1]), new Uint8Array([1])])
     ranges.dispose()
+    await expect(reads.at(-1)).resolves.toMatchObject({ name: 'AbortError' })
     map.dispose()
+  })
+
+  it('runs at most one statistics read per lane and one fewer than the lanes in all', async () => {
+    const { instance, created } = pool(3, 4)
+    const ranges = instance.acquire()
+    const reads = Array.from({ length: 5 }, (_, index) =>
+      ranges.statistics(`asset://localhost/part-${index}.tif`).catch((error: unknown) => error))
+    await settle()
+    const statistics = (lane: FakeLane) => lane.requests.filter((request) => request.op === 'statistics').length
+    expect(created.map(statistics).sort()).toEqual([0, 1, 1])
+    ranges.dispose()
     await Promise.all(reads)
   })
 
