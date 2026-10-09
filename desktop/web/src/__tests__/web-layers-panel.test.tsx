@@ -35,27 +35,32 @@ describe('Web Layers', () => {
     act(() => { render(<WebLayersPanel />, container) })
   }
 
-  it('offers Satellite, Map or None as the background and says why Site data is empty', () => {
+  function entry(id: string, kind: 'Source' | 'Derived', order: number) {
+    return { kind, id, name: id, visible: true, opacity: 1, order, ramp: null, reversed: false, range: null }
+  }
+
+  it('offers Satellite, Street map or None in Map, and no Site data row without site data', () => {
     mount(null)
-    const site = container.querySelector('section[aria-labelledby="layers-site"]')!
-    expect(site.textContent).toContain('Terrain and height data need Canopi Desktop.')
-    expect(site.querySelector('button[aria-haspopup="menu"]')).toBeNull()
+    expect(container.textContent).not.toContain('Site data')
     expect(container.textContent).not.toContain('Contour lines')
     expect(container.textContent).not.toContain('Hillshading')
-    const background = container.querySelector('section[aria-labelledby="layers-background"]')!
-    expect(Array.from(background.querySelectorAll('[role="radio"], input[type="radio"]')).map((input) => (input as HTMLInputElement).value))
+    expect(container.querySelector('button[aria-haspopup="menu"]')).toBeNull()
+    const map = container.querySelector('section[aria-labelledby="layers-map"]')!
+    expect(Array.from(map.querySelectorAll('input[type="radio"]')).map((input) => (input as HTMLInputElement).value))
       .toEqual(['satellite', 'basemap', 'none'])
   })
 
-  it('counts the terrain layers a Design keeps for Desktop', () => {
-    mount({
-      schema_version: 1,
-      visible: true,
-      entries: [
-        { kind: 'Source', id: 'a', name: 'Ground', visible: true, opacity: 1, order: 0, ramp: null, reversed: false, range: null },
-        { kind: 'Derived', id: 's', name: 'Slope', visible: true, opacity: 1, order: 1, ramp: null, reversed: false, range: null },
-      ],
-    })
-    expect(container.textContent).toContain('This Design has 2 terrain or height layers.')
+  it('says how many terrain or height layers the Design keeps for Desktop, with no eye and no Site data button', () => {
+    mount({ schema_version: 1, visible: true, entries: [entry('a', 'Source', 0), entry('s', 'Derived', 1)] })
+    const row = container.querySelector('section[aria-label="Site data"]')!
+    expect(row.textContent).toBe('Site data2 terrain or height layers in this Design · Needs Canopi Desktop')
+    expect(row.querySelector('button')).toBeNull()
+    expect(container.querySelector('button[aria-label="Open Site data"]')).toBeNull()
+  })
+
+  it('uses the singular for one layer', () => {
+    mount({ schema_version: 1, visible: true, entries: [entry('a', 'Source', 0)] })
+    expect(container.querySelector('section[aria-label="Site data"]')?.textContent)
+      .toContain('1 terrain or height layer in this Design · Needs Canopi Desktop')
   })
 })

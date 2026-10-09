@@ -1688,6 +1688,7 @@
       "introLibrary": "Da {{name}}. I risultati vengono salvati nella tua libreria; aggiungili a qualsiasi progetto.",
       "source": "Origine",
       "intro": "I risultati vengono aggiunti sotto la loro origine in Dati del sito e conservati nella tua libreria.",
+      "introLibraryOnly": "I risultati vengono conservati nella tua libreria. Questo progetto non mostra la loro origine, quindi non vengono aggiunti a Dati del sito.",
       "showInSiteData": "Mostra in Dati del sito"
     },
     "details": {

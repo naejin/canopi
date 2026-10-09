@@ -46,7 +46,7 @@ vi.mock('../components/panels/lidar/LibraryPreview', () => ({
 import { lidarLibraryStatus, plantDbStatus } from '../app/health/state'
 import { lidarLibrary } from '../app/lidar/library-store'
 import { locale } from '../app/settings/state'
-import { DataLibraryDialog } from '../components/panels/lidar/DataLibraryDialog'
+import { DataLibraryView } from '../components/panels/lidar/DataLibraryView'
 import { DegradedBanner } from '../components/shared/DegradedBanner'
 
 const RECOVERED = 'Canopi rebuilt its Data library from the files it keeps. Items marked failed can be prepared again with Retry.'
@@ -120,13 +120,13 @@ describe('Data library health', () => {
     }
 
     it('shows no notice when the library opened ready', async () => {
-      await act(async () => { render(<DataLibraryDialog focusId={null} />, container) })
+      await act(async () => { render(<DataLibraryView focusId={null} />, container) })
       expect(notice()).toBeNull()
     })
 
     it('explains a rebuilt library as a warning that names Retry', async () => {
       lidarLibraryStatus.value = { kind: 'recovered', items: 3, generated: 1 }
-      await act(async () => { render(<DataLibraryDialog focusId={null} />, container) })
+      await act(async () => { render(<DataLibraryView focusId={null} />, container) })
       expect(notice()?.getAttribute('data-notice-tone')).toBe('warning')
       expect(notice()?.getAttribute('role')).toBe('status')
       expect(notice()?.textContent).toContain(RECOVERED)
@@ -134,7 +134,7 @@ describe('Data library health', () => {
 
     it('explains a library saved by a newer Canopi as an error', async () => {
       lidarLibraryStatus.value = { kind: 'refused_newer' }
-      await act(async () => { render(<DataLibraryDialog focusId={null} />, container) })
+      await act(async () => { render(<DataLibraryView focusId={null} />, container) })
       expect(notice()?.getAttribute('data-notice-tone')).toBe('error')
       expect(notice()?.getAttribute('role')).toBe('alert')
       expect(notice()?.textContent).toContain(REFUSED_NEWER)
@@ -142,14 +142,14 @@ describe('Data library health', () => {
 
     it('explains a library that could not be opened as an error', async () => {
       lidarLibraryStatus.value = { kind: 'unavailable' }
-      await act(async () => { render(<DataLibraryDialog focusId={null} />, container) })
+      await act(async () => { render(<DataLibraryView focusId={null} />, container) })
       expect(notice()?.getAttribute('data-notice-tone')).toBe('error')
       expect(notice()?.textContent).toContain(UNAVAILABLE)
     })
 
     it('follows the locale', async () => {
       lidarLibraryStatus.value = { kind: 'recovered', items: 1, generated: 0 }
-      await act(async () => { render(<DataLibraryDialog focusId={null} />, container) })
+      await act(async () => { render(<DataLibraryView focusId={null} />, container) })
       await act(async () => { locale.value = 'fr' })
       expect(notice()?.textContent).toContain('Canopi a reconstruit sa Bibliothèque de données')
     })

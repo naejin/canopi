@@ -1,5 +1,5 @@
+import { toggleLayerRow } from './open-row'
 import {
-  setCanvasLayerPresentationActiveLayer,
   setCanvasLayerPresentationContourIntervalMeters,
   setCanvasLayerPresentationLocked,
   setCanvasLayerPresentationOpacity,
@@ -12,7 +12,7 @@ import { saveGoogleMapsApiKey, setBasemapStyle, setMapBackground, setSoftenBackg
  * Desktop-only LiDAR wiring stays in the Desktop Layers panel.
  */
 export const LAYER_PANEL_ACTIONS = {
-  active: setCanvasLayerPresentationActiveLayer,
+  active: toggleLayerRow,
   visibility: setCanvasLayerPresentationVisibility,
   locked: setCanvasLayerPresentationLocked,
   opacity: setCanvasLayerPresentationOpacity,

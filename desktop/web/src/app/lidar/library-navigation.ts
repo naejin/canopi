@@ -1,97 +1,118 @@
 import { signal } from '@preact/signals'
-import { activeLayerName } from '../canvas-settings/signals'
-import { sidePanel } from '../shell/state'
+import { openLayerRow } from '../canvas-layer-presentation/open-row'
+import { selectPanel, sidePanel } from '../shell/state'
 import { t } from '../../i18n'
 import { chooseImportFiles } from './actions'
+import { showInSiteData } from './site-data-view'
 
 /**
- * Navigation of the data workflow (Desktop): Layers shows the Design's site
- * data, and three modal dialogs share one slot: the Data library, Import and
- * Analyze. Everything here is session view state, never Design data.
+ * Navigation of the data workflow (Desktop): the Data library sheet, and Import
+ * and Analyze, which open stacked over it when it is open, so its search,
+ * filter, scroll and selection survive and it returns unchanged. Everything
+ * here is session view state, never Design data.
  */
+interface LibraryView {
+  /** The item selected when the sheet opens; null selects the first row. */
+  readonly focusId: string | null
+}
+
 export type DataDialog =
-  | {
-    readonly kind: 'library'
-    /** An item whose details open first. */
-    readonly focusId: string | null
-  }
   | {
     readonly kind: 'import'
     readonly paths: readonly string[]
-    /** Whether the published item joins the Design that asked (started from Layers). */
-    readonly attach: boolean
-    readonly returnTo: 'library' | null
   }
   | {
     readonly kind: 'analyze'
-    readonly itemId: string
+    /** The item Analyze starts from (the open Site data item); null starts from the first eligible one. */
+    readonly itemId: string | null
     readonly analysisId: string | null
-    /** Whether the results join the Design that asked (started from Layers). */
-    readonly attach: boolean
-    /** A derived item whose run the dialog starts from ("Run again with changes"). */
+    /** A derived item whose run the dialog starts from ("Run again with changes…"); its input is the fixed source. */
     readonly from: string | null
-    readonly returnTo: 'library' | null
   }
 
+/** The Data library sheet, when it is open. */
+export const libraryView = signal<LibraryView | null>(null)
+/** Import or Analyze, over the library when it is open. */
 export const dataDialog = signal<DataDialog | null>(null)
 
-/** The Data library dialog, on its list or on one item's details. */
+/** The Data library sheet, with one item selected (the first row when none is given). */
 export function openDataLibrary(focusId: string | null = null): void {
-  dataDialog.value = { kind: 'library', focusId }
+  libraryView.value = { focusId }
 }
 
+export function closeDataLibrary(): void {
+  libraryView.value = null
+}
+
+/** Closes Import or Analyze; the library under it, if open, returns as it was. */
 export function closeDataDialog(): void {
   dataDialog.value = null
 }
 
-/** Leave Import or Analyze: back to the library when it opened them, else closed. */
-export function leaveDataDialog(): void {
-  const current = dataDialog.value
-  dataDialog.value = current && current.kind !== 'library' && current.returnTo === 'library'
-    ? { kind: 'library', focusId: null }
-    : null
+/**
+ * Opens the Site data panel from Layers (the summary row's name and ›) and moves
+ * focus into its header once the dock has drawn it, so the keyboard continues
+ * there. The panel is a Design panel: without a Design nothing opens.
+ */
+export function openSiteDataPanel(): void {
+  selectPanel('site-data')
+  const label = t('canvas.layers.siteData')
+  let frames = 0
+  const focusHeader = () => {
+    const panel = Array.from(document.querySelectorAll<HTMLElement>('aside[aria-label]'))
+      .find((candidate) => candidate.getAttribute('aria-label') === label)
+    const target = panel?.querySelector<HTMLElement>('header button:not([disabled])')
+    if (target) target.focus()
+    else if (frames++ < 60) requestAnimationFrame(focusHeader)
+  }
+  requestAnimationFrame(focusHeader)
 }
 
 /**
- * Add terrain or height data from files: the native picker first (cancelling
- * it creates nothing), then the Import dialog. By default the published item
- * joins the current Design, as "Add data" in Layers and File › Add data… ask;
- * from the Data library it stays in the library.
+ * Shows one of this Design's items in Site data, open under its row (Site
+ * data's own view state, `site-data-view.ts`); the library sheet and any
+ * dialog over it close first. The base Site data panel still reads the shared
+ * open row and its details page, so both are set here until stream B's panel
+ * replaces it; commit Z deletes them, leaving Layers' open row alone.
  */
-export async function beginDataImport(
-  options: { readonly attach?: boolean; readonly returnTo?: 'library' | null } = {},
-): Promise<void> {
+export function revealInSiteData(itemId: string): void {
+  dataDialog.value = null
+  libraryView.value = null
+  siteDataDetails.value = null
+  showInSiteData(itemId)
+  selectSiteRow(itemId)
+}
+
+/**
+ * Import terrain or height data from files: the native picker first
+ * (cancelling it creates nothing), then the Import dialog. The item joins the
+ * current Design once it is published (the one attach rule in `actions.ts`).
+ */
+export async function beginDataImport(): Promise<void> {
   const paths = await chooseImportFiles(t('canvas.lidar.import.chooseFiles'), t('canvas.lidar.import.fileFilter'))
   if (!paths) return
-  dataDialog.value = {
-    kind: 'import',
-    paths,
-    attach: options.attach ?? true,
-    returnTo: options.returnTo ?? null,
-  }
+  dataDialog.value = { kind: 'import', paths }
 }
 
 /**
- * Open Analyze for one item, optionally with one registry entry chosen.
- * Started from Layers the finished results join the Design that asked;
- * started from the library they stay in the library.
+ * Opens Analyze from one item (the open Site data item; null starts from the
+ * first eligible one), optionally with one registry entry chosen; `from` is the
+ * result whose run "Run again with changes…" starts from. `attach` is no longer
+ * read: whether results join the Design is the one attach rule (`runAnalysis`).
  */
 export function analyzeItem(
-  itemId: string,
+  itemId: string | null,
   options: {
     readonly analysisId?: string | null
-    readonly attach: boolean
     readonly from?: string | null
-    readonly returnTo?: 'library' | null
-  },
+    readonly attach?: boolean
+  } = {},
 ): void {
   dataDialog.value = {
     kind: 'analyze',
     itemId,
     analysisId: options.analysisId ?? null,
-    attach: options.attach,
     from: options.from ?? null,
-    returnTo: options.returnTo ?? null,
   }
 }
 
@@ -104,12 +125,12 @@ function siteRowId(itemId: string): string {
 
 /** The site data item whose row is active in Layers, if any. */
 export function activeSiteItemId(): string | null {
-  const active = activeLayerName.value
-  return active.startsWith(SITE_ROW_PREFIX) ? active.slice(SITE_ROW_PREFIX.length) : null
+  const active = openLayerRow.value
+  return active?.startsWith(SITE_ROW_PREFIX) ? active.slice(SITE_ROW_PREFIX.length) : null
 }
 
 export function selectSiteRow(itemId: string): void {
-  activeLayerName.value = siteRowId(itemId)
+  openLayerRow.value = siteRowId(itemId)
 }
 
 /** The site data item whose details Layers shows instead of its list. */
@@ -122,15 +143,4 @@ export function openSiteDataDetails(itemId: string): void {
 
 export function closeSiteDataDetails(): void {
   siteDataDetails.value = null
-}
-
-/**
- * Show one reference in Layers, selected, rather than calculating a result
- * the Design already has.
- */
-export function showInLayers(itemId: string): void {
-  dataDialog.value = null
-  siteDataDetails.value = null
-  selectSiteRow(itemId)
-  sidePanel.value = 'layers'
 }

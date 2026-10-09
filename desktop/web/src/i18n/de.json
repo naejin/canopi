@@ -1688,6 +1688,7 @@
       "introLibrary": "Aus {{name}}. Ergebnisse werden in Ihrer Bibliothek gespeichert; fügen Sie sie einem beliebigen Design hinzu.",
       "source": "Quelle",
       "intro": "Ergebnisse werden in den Standortdaten unter ihrer Quelle eingefügt und in Ihrer Bibliothek aufbewahrt.",
+      "introLibraryOnly": "Ergebnisse werden in Ihrer Bibliothek aufbewahrt. Dieses Design zeigt ihre Quelle nicht, daher werden sie nicht zu den Standortdaten hinzugefügt.",
       "showInSiteData": "In den Standortdaten zeigen"
     },
     "details": {

@@ -1688,6 +1688,7 @@
       "introLibrary": "Uit {{name}}. Resultaten worden in je bibliotheek bewaard; voeg ze aan elk ontwerp toe.",
       "source": "Bron",
       "intro": "Resultaten worden in Terreindata onder hun bron toegevoegd en in je bibliotheek bewaard.",
+      "introLibraryOnly": "Resultaten worden in je bibliotheek bewaard. Dit ontwerp toont hun bron niet, dus ze worden niet aan Terreindata toegevoegd.",
       "showInSiteData": "Tonen in Terreindata"
     },
     "details": {

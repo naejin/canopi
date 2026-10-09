@@ -1688,6 +1688,7 @@
       "introLibrary": "From {{name}}. Results are saved to your library; add them to any Design.",
       "source": "Source",
       "intro": "Results are added under their source in Site data and kept in your library.",
+      "introLibraryOnly": "Results are kept in your library. This Design doesn’t show their source, so they aren’t added to Site data.",
       "showInSiteData": "Show in Site data"
     },
     "details": {

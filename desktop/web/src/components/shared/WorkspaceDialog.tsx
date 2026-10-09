@@ -11,14 +11,17 @@ const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select
 /**
  * A modal workspace dialog: Literata title, close button, focus moved in on
  * open, trapped while open and returned on close (`useModalLayer`, which also
- * makes the chrome behind it inert); Escape closes.
+ * makes the chrome behind it inert); Escape closes. `large` is a sheet of fixed
+ * size, min(1200 px, 100vw − 48) × min(860 px, 100vh − 48), whose body does not
+ * scroll: its content lays out panes that scroll on their own (the Data library).
  */
-export function WorkspaceDialog({ title, onClose, children, footer, wide = false }: {
+export function WorkspaceDialog({ title, onClose, children, footer, wide = false, large = false }: {
   readonly title: string
   onClose(): void
   readonly children: ComponentChildren
   readonly footer?: ComponentChildren
   readonly wide?: boolean
+  readonly large?: boolean
 }) {
   const dialog = useRef<HTMLElement>(null)
   const titleId = useId()
@@ -35,7 +38,7 @@ export function WorkspaceDialog({ title, onClose, children, footer, wide = false
     <div className={styles.overlay} {...scrim}>
       <section
         ref={dialog}
-        className={`${styles.dialog} ${wide ? styles.wide : ''}`}
+        className={`${styles.dialog} ${wide ? styles.wide : ''} ${large ? styles.large : ''}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

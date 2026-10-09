@@ -5,6 +5,7 @@ import type { AnalysisOffer, Provenance } from '../generated/contracts'
 import {
   analysisOptions,
   buildAnalysisRequest,
+  defaultAnalysisSource,
   entryAvailability,
   findExistingResult,
   formFromProvenance,
@@ -177,6 +178,22 @@ describe('Analyze dialog model', () => {
     expect(validateForm(FLOW, withValues(initialForm(FLOW, 'G', 'F', 'fr'), { max_breach_m: '2,5' }), 'fr').valid).toBe(true)
   })
 
+  it('defaults the source to the open item, else the open result\'s input, else the first eligible item', () => {
+    const accepts: AnalysisOffer[] = [{ analysis_id: 'terrain.slope', unavailable: null }]
+    const wrong: AnalysisOffer[] = [{ analysis_id: 'terrain.slope', unavailable: { reason: 'WrongInput', expected: [{ kind: 'Raster', quantity: 'GroundElevation' }] } }]
+    const sources = [
+      { id: 'surface', name: 'Surface', offers: accepts, inputId: null },
+      { id: 'ground', name: 'Ground', offers: accepts, inputId: null },
+    ]
+    const items = [...sources, { id: 'slope', name: 'Slope', offers: wrong, inputId: 'ground' }]
+    expect(defaultAnalysisSource(sources, items, 'ground')).toBe('ground')
+    // A result no analysis accepts: its input.
+    expect(defaultAnalysisSource(sources, items, 'slope')).toBe('ground')
+    // Nothing open: the first eligible item in list order.
+    expect(defaultAnalysisSource(sources, items, null)).toBe('surface')
+    expect(defaultAnalysisSource([], items, 'slope')).toBeNull()
+  })
+
   it('names parameter units users see: metres, square metres and degrees', () => {
     expect(['metre', 'square-metre', 'degree'].map((unit) => paramUnitSuffix(unit as 'metre'))).toEqual(['m', 'm²', '°'])
   })
@@ -191,7 +208,7 @@ describe('Analyze dialog model', () => {
     const degrees = withValues(initialForm(SLOPE, 'Ground', 'Slope', 'en'), { unit: 'degrees' })
     const inDesign = context({ results, inDesign: new Set(['in-design']) })
     expect(findExistingResult(SLOPE, 'ground', degrees, inDesign, 'en')).toEqual({ id: 'in-design', inDesign: true })
-    expect(entryAvailability(SLOPE, subject(), inDesign, degrees, 'en')).toEqual({ reason: 'AlreadyInLayers', itemId: 'in-design' })
+    expect(entryAvailability(SLOPE, subject(), inDesign, degrees, 'en')).toEqual({ reason: 'AlreadyInSiteData', itemId: 'in-design' })
 
     const libraryOnly = context({ results })
     expect(findExistingResult(SLOPE, 'ground', degrees, libraryOnly, 'en')).toEqual({ id: 'library-copy', inDesign: false })

@@ -1,15 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  activeLayerName,
-  layerLockState,
-  layerOpacity,
-  layerVisibility,
-} from '../app/canvas-settings/signals'
 import { mapLayers } from '../app/map-layers/state'
+import { openLayerRow, toggleLayerRow } from '../app/canvas-layer-presentation/open-row'
+import { NEW_DESIGN_LAYER_DEFAULTS } from '../generated/new-design-defaults'
 import {
   readCanvasLayerPresentation,
-  setCanvasLayerPresentationActiveLayer,
   setCanvasLayerPresentationContourIntervalMeters,
   setCanvasLayerPresentationLocked,
   setCanvasLayerPresentationOpacity,
@@ -29,22 +24,7 @@ describe('Canvas Layer Presentation', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     locale.value = 'en'
-    activeLayerName.value = 'basemap'
-    layerVisibility.value = {
-      plants: true,
-      zones: false,
-      annotations: true,
-    }
-    layerLockState.value = {
-      plants: false,
-      zones: true,
-      annotations: false,
-    }
-    layerOpacity.value = {
-      plants: 0.8,
-      zones: 0.35,
-      annotations: 1,
-    }
+    openLayerRow.value = 'basemap'
     hydrateSettingsProjectionForTests({
       locale: 'en',
       theme: 'light',
@@ -129,6 +109,7 @@ describe('Canvas Layer Presentation', () => {
       id: row.id,
       label: row.label,
       authority: row.authority,
+      group: row.group,
       active: row.active,
       visible: row.visible,
       opacity: row.opacity,
@@ -138,6 +119,7 @@ describe('Canvas Layer Presentation', () => {
     }))).toEqual([
       {
         id: 'annotations',
+        group: 'design',
         label: 'Annotations',
         authority: 'scene',
         active: false,
@@ -149,6 +131,7 @@ describe('Canvas Layer Presentation', () => {
       },
       {
         id: 'plants',
+        group: 'design',
         label: 'Plants',
         authority: 'scene',
         active: false,
@@ -160,6 +143,7 @@ describe('Canvas Layer Presentation', () => {
       },
       {
         id: 'measurement-guides',
+        group: 'design',
         label: 'Measurement guides',
         authority: 'scene',
         active: false,
@@ -171,6 +155,7 @@ describe('Canvas Layer Presentation', () => {
       },
       {
         id: 'zones',
+        group: 'design',
         label: 'Zones',
         authority: 'scene',
         active: false,
@@ -182,6 +167,7 @@ describe('Canvas Layer Presentation', () => {
       },
       {
         id: 'basemap',
+        group: 'background',
         label: 'Street map',
         authority: 'map-layers',
         active: true,
@@ -198,6 +184,7 @@ describe('Canvas Layer Presentation', () => {
       },
       {
         id: 'satellite',
+        group: 'background',
         label: 'Satellite',
         authority: 'map-layers',
         active: false,
@@ -213,6 +200,7 @@ describe('Canvas Layer Presentation', () => {
       },
       {
         id: 'contours',
+        group: 'map',
         label: 'Contour lines',
         authority: 'map-layers',
         active: false,
@@ -227,6 +215,7 @@ describe('Canvas Layer Presentation', () => {
       },
       {
         id: 'hillshade',
+        group: 'map',
         label: 'Hillshading',
         authority: 'map-layers',
         active: false,
@@ -237,6 +226,26 @@ describe('Canvas Layer Presentation', () => {
         detail: { type: 'hillshade' },
       },
     ])
+  })
+
+  it('reads Design rows only from the scene, and shows the New Design defaults before a scene exists', () => {
+    setCurrentCanvasSession(null)
+    const design = readCanvasLayerPresentation().rows.filter((row) => row.authority === 'scene')
+    expect(design.map((row) => ({ id: row.id, visible: row.visible, opacity: row.opacity, locked: row.locked }))).toEqual(
+      ['annotations', 'plants', 'measurement-guides', 'zones'].map((id) => {
+        const layer = NEW_DESIGN_LAYER_DEFAULTS.find((candidate) => candidate.name === id)!
+        return { id, visible: layer.visible, opacity: layer.opacity, locked: layer.locked }
+      }),
+    )
+  })
+
+  it('opens one row at a time, and a second toggle closes it', () => {
+    toggleLayerRow('plants')
+    expect(readCanvasLayerPresentation().rows.filter((row) => row.active).map((row) => row.id)).toEqual(['plants'])
+    toggleLayerRow('zones')
+    expect(readCanvasLayerPresentation().rows.filter((row) => row.active).map((row) => row.id)).toEqual(['zones'])
+    toggleLayerRow('zones')
+    expect(readCanvasLayerPresentation().rows.some((row) => row.active)).toBe(false)
   })
 
   it('reports the background choices, Soften background and a saved Google key without exposing it', () => {
@@ -278,7 +287,6 @@ describe('Canvas Layer Presentation', () => {
     expect(setCanvasLayerPresentationVisibility('hillshade', false)).toBe(true)
     expect(setCanvasLayerPresentationOpacity('hillshade', 0.2)).toBe(true)
     expect(setCanvasLayerPresentationContourIntervalMeters(18)).toBe(true)
-    setCanvasLayerPresentationActiveLayer('plants')
 
     expect(mapLayers.value.basemap.visible).toBe(true)
     expect(mapLayers.value.satellite.visible).toBe(true)
@@ -287,7 +295,6 @@ describe('Canvas Layer Presentation', () => {
     expect(mapLayers.value.hillshade.visible).toBe(false)
     expect(mapLayers.value.hillshade.opacity).toBe(0.2)
     expect(mapLayers.value.contours.intervalMeters).toBe(18)
-    expect(activeLayerName.value).toBe('plants')
 
     expect(setCanvasLayerPresentationVisibility('plants', false)).toBe(true)
     expect(setCanvasLayerPresentationOpacity('zones', 0.4)).toBe(true)

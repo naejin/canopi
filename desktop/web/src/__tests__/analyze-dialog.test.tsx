@@ -7,6 +7,7 @@ import type { AnalysisContext } from '../app/analyses/model'
 import { AnalyzeDialog } from '../components/panels/analyze/AnalyzeDialog'
 import { locale } from '../app/settings/state'
 import { slopeProvenance } from './support/library-fixtures'
+import { dropdownTrigger } from './support/dropdown-trigger'
 
 const water = 'water' as unknown as AnalysisGroup
 
@@ -69,24 +70,38 @@ const OFFERS: AnalysisOffer[] = [
 let container: HTMLDivElement
 const onRun = vi.fn<(request: AnalysisRequest) => void>()
 const onCancel = vi.fn()
-const onShowInLayers = vi.fn()
+const onShowInSiteData = vi.fn()
 const onAddExisting = vi.fn()
 
-function mount(options: { context?: Partial<AnalysisContext>; offers?: AnalysisOffer[]; initial?: string | null } = {}): void {
+const CANOPY_OFFERS: AnalysisOffer[] = [
+  { analysis_id: 'terrain.slope', unavailable: { reason: 'WrongInput', expected: [{ kind: 'Raster', quantity: 'GroundElevation' }] } },
+  { analysis_id: 'hydrology.flow', unavailable: null },
+]
+
+function mount(options: {
+  context?: Partial<AnalysisContext>
+  offers?: AnalysisOffer[]
+  initial?: string | null
+  sources?: { id: string; name: string; offers: AnalysisOffer[] }[]
+  sourceId?: string
+  sourceFixed?: boolean
+} = {}): void {
   const context: AnalysisContext = { edition: 'desktop', results: [], inDesign: new Set(), ...options.context }
+  const sources = options.sources ?? [{ id: 'ground', name: 'Ground', offers: options.offers ?? OFFERS }]
   act(() => {
     render(
       <AnalyzeDialog
-        item={{ id: 'ground', name: 'Ground', offers: options.offers ?? OFFERS }}
+        sources={sources}
+        sourceId={options.sourceId ?? sources[0]!.id}
+        sourceFixed={options.sourceFixed ?? false}
         context={context}
-        attach={false}
         canAddToDesign
         initialAnalysisId={options.initial ?? null}
         busy={false}
         error={null}
         onCancel={onCancel}
         onRun={onRun}
-        onShowInLayers={onShowInLayers}
+        onShowInSiteData={onShowInSiteData}
         onAddExisting={onAddExisting}
         registry={REGISTRY}
         groups={GROUPS}
@@ -134,6 +149,48 @@ describe('Analyze dialog', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
+  })
+
+  it('is titled Analyze, says where results go and starts from the given source', () => {
+    mount({ sources: [{ id: 'canopy', name: 'Canopy', offers: CANOPY_OFFERS }, { id: 'ground', name: 'Ground', offers: OFFERS }], sourceId: 'ground', context: { inDesign: new Set(['canopy', 'ground']) } })
+    expect(container.querySelector('h2')?.textContent).toBe('Analyze')
+    expect(container.textContent).toContain('Results are added under their source in Site data and kept in your library.')
+    expect(dropdownTrigger(container, 'Source')?.textContent).toContain('Ground')
+  })
+
+  it('recomputes the analyses and the result name when the Source changes', async () => {
+    mount({ sources: [{ id: 'ground', name: 'Ground', offers: OFFERS }, { id: 'canopy', name: 'Canopy', offers: CANOPY_OFFERS }] })
+    expect(container.textContent).not.toContain('Needs Ground elevation (DTM).')
+    await act(async () => { dropdownTrigger(container, 'Source')!.click() })
+    const canopy = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find((option) => option.textContent === 'Canopy')!
+    await act(async () => { canopy.click() })
+    expect(dropdownTrigger(container, 'Source')?.textContent).toContain('Canopy')
+    expect(container.textContent).toContain('Needs Ground elevation (DTM).')
+    // Slope cannot run from Canopy, so the first analysis that can is chosen and named after the new source.
+    expect(radio('fixture.flow.title').checked).toBe(true)
+    expect(container.querySelector<HTMLInputElement>('input:not([type])')!.value).toBe('Canopy · fixture.flow.title')
+    await submit()
+    expect(onRun).toHaveBeenCalledWith(expect.objectContaining({ inputs: [{ key: 'dem', item_id: 'canopy' }] }))
+  })
+
+  it('starts the forms afresh when the Source changes back to the one it opened with', async () => {
+    const both = [{ id: 'ground', name: 'Ground', offers: OFFERS }, { id: 'canopy', name: 'Canopy', offers: OFFERS }]
+    mount({ sources: both, initial: 'hydrology.flow' })
+    const chooseSource = async (name: string) => {
+      await act(async () => { dropdownTrigger(container, 'Source')!.click() })
+      const option = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find((candidate) => candidate.textContent === name)!
+      await act(async () => { option.click() })
+    }
+    await chooseSource('Canopy')
+    await type(container.querySelector<HTMLInputElement>('input:not([type])')!, 'Canopy flow (fine)')
+    await chooseSource('Ground')
+    expect(container.querySelector<HTMLInputElement>('input:not([type])')!.value).toBe('Ground · fixture.flow.title')
+  })
+
+  it('keeps the source of Run again with changes fixed', () => {
+    mount({ sources: [{ id: 'ground', name: 'Ground', offers: OFFERS }], sourceFixed: true })
+    expect(dropdownTrigger(container, 'Source')).toBeNull()
+    expect(container.querySelector('[data-analysis-source]')?.textContent).toBe('SourceGround')
   })
 
   it('lists the registry by group and focuses the chosen entry', async () => {
@@ -212,22 +269,23 @@ describe('Analyze dialog', () => {
     expect(container.textContent).toContain('Needs Canopi Desktop.')
   })
 
-  it('offers Show in Layers instead of Run for a result the Design already shows', async () => {
+  it('offers Show in Site data instead of Run for a result the Design already shows', async () => {
     mount({ context: { results: [{ id: 'slope-1', provenance: slopeProvenance('slope-1', 'ground') }], inDesign: new Set(['slope-1']) } })
     expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Run')).toBe(true)
     await act(async () => { radio('Degrees').click() })
 
-    expect(container.textContent).toContain('Already in Layers.')
+    expect(container.textContent).toContain('Already in Site data.')
     expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Run')).toBe(false)
+    expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Show in Site data')).toBe(true)
     await submit()
-    expect(onShowInLayers).toHaveBeenCalledWith('slope-1')
+    expect(onShowInSiteData).toHaveBeenCalledWith('slope-1')
     expect(onRun).not.toHaveBeenCalled()
   })
 
-  it('marks an entry already in Layers when its default settings match', () => {
+  it('marks an entry already in Site data when its default settings match', () => {
     const results = [{ id: 'flow-1', provenance: slopeProvenance('flow-1', 'ground', { analysis_id: 'hydrology.flow', parameters: [] }) }]
     mount({ context: { results, inDesign: new Set(['flow-1']) } })
-    expect(container.textContent).toContain('Already in Layers.')
+    expect(container.textContent).toContain('Already in Site data.')
   })
 
   it('cancels with Escape', async () => {

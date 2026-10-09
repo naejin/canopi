@@ -1688,6 +1688,7 @@
       "introLibrary": "De {{name}}. Los resultados se guardan en tu biblioteca; añádelos a cualquier diseño.",
       "source": "Origen",
       "intro": "Los resultados se añaden bajo su origen en Datos del lugar y se guardan en tu biblioteca.",
+      "introLibraryOnly": "Los resultados se guardan en tu biblioteca. Este diseño no muestra su origen, así que no se añaden a Datos del lugar.",
       "showInSiteData": "Mostrar en Datos del lugar"
     },
     "details": {

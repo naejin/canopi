@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'preact/compat'
-import { dataDialog } from '../../app/lidar/library-navigation'
+import { dataDialog, libraryView } from '../../app/lidar/library-navigation'
 import { flattenMenuActions } from '../../app/shell-commands/menus'
 import { appCommandGraphChromeProjection, appCommandGraphPanelProjection } from '../../commands/registry'
 import { CanvasPanel } from '../panels/CanvasPanel'
@@ -103,8 +103,8 @@ export function DesktopWorkspace() {
         panelProjection={appCommandGraphPanelProjection.value}
         surfaces={DESKTOP_WORKSPACE_SURFACES}
       />
-      {/* The data workflow's dialogs sit outside the composition, which turns inert under them. */}
-      {dataDialog.value && (
+      {/* The Data library and the data dialogs sit outside the composition, which turns inert under them. */}
+      {(libraryView.value || dataDialog.value) && (
         <Suspense fallback={null}>
           <DataDialogs />
         </Suspense>

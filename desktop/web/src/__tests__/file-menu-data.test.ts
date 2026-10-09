@@ -27,6 +27,7 @@ vi.mock('../app/budget/export', async (importOriginal) => ({
 
 import { DESKTOP_SHELL_COMMAND_CATALOG } from '../commands/graph/catalog'
 import type { ShellCommandState } from '../app/shell-commands'
+import { t } from '../i18n'
 
 const withDesign: ShellCommandState = { hasDesign: true, revertAvailable: false, activePanel: 'canvas', sidePanel: null }
 const command = (id: string) => DESKTOP_SHELL_COMMAND_CATALOG.find((entry) => entry.id === id)!
@@ -34,7 +35,14 @@ const command = (id: string) => DESKTOP_SHELL_COMMAND_CATALOG.find((entry) => en
 describe('File menu (Desktop)', () => {
   afterEach(() => vi.clearAllMocks())
 
-  it('adds data to the open Design through the Layers import, and needs a Design', () => {
+  it('lists the two imports and the Data library flat, in one section (U49 Q8)', () => {
+    const imports = DESKTOP_SHELL_COMMAND_CATALOG
+      .filter((entry) => entry.menu?.id === 'file' && entry.menu.section === 2 && !('submenu' in entry.menu && entry.menu.submenu))
+      .map((entry) => t(entry.labelKey))
+    expect(imports).toEqual(['Import terrain or height data…', 'Import GeoJSON…', 'Data library…'])
+  })
+
+  it('imports terrain or height data into the open Design, and needs a Design', () => {
     const addData = command('file.addData')
     expect(addData.isExecutionDisabled({ ...withDesign, hasDesign: false })).toBe(true)
     expect(addData.isExecutionDisabled(withDesign)).toBe(false)

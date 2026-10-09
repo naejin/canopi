@@ -5,13 +5,14 @@ import { formatCount } from '../../utils/format-count'
 import type { CanvasLayerPresentationDetail, CanvasLayerPresentationRow } from '../../app/canvas-layer-presentation/presentation'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import { Dropdown } from '../shared/Dropdown'
-import { useState } from 'preact/hooks'
-import type { ComponentChildren } from 'preact'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import type { BasemapStyle } from '../../generated/contracts'
 import type { MapBackground } from '../../app/map-layers/state'
 import { Slider } from '../shared/Slider'
 import { Switch } from '../shared/Switch'
 import { LayerVisibilityIcon } from '../shared/LayerVisibilityIcon'
+import { ControlIcon } from '../shared/ControlIcon'
+import { PanelIcon } from '../shared/PanelIcon'
 import layerRow from '../shared/layer-row.module.css'
 import styles from './LayerPanel.module.css'
 
@@ -52,6 +53,7 @@ function LockIcon({ locked }: { locked: boolean }) {
 }
 
 export interface LayerPanelActions {
+  /** Opens a row's settings under it, or closes them when it is open (one row at a time). */
   active(id: string): void
   visibility(id: string, visible: boolean): void
   locked(id: string, locked: boolean): void
@@ -59,11 +61,32 @@ export interface LayerPanelActions {
   contourInterval(meters: number): void
   basemapStyle(style: BasemapStyle): void
   saveGoogleKey(key: string | null): void
-  /** Background › Satellite, Map or None. */
+  /** Background › Satellite, Street map or None. */
   background(choice: MapBackground): void
   /** Soften background: dims the chosen background under the Design. */
   softenBackground(soften: boolean): void
 }
+
+/**
+ * The Site data summary row between Design and Map. Desktop: one eye that hides
+ * or shows all site data (the items keep their own eyes), "N of M shown", and
+ * Site data's panel command on the name area and ›. Web: how many terrain or
+ * height layers the Design has and that they need Canopi Desktop; no row at 0.
+ */
+export type SiteDataSummary =
+  | {
+      readonly edition: 'desktop'
+      readonly count: number
+      /** Entries not missing whose own eye is on, while the summary eye is on. */
+      readonly shown: number
+      /** The summary eye: the Design's Site data flag. */
+      readonly visible: boolean
+      /** Site data's panel command (label, shortcut), which the name area and › run. */
+      readonly command: { readonly label: string; readonly shortcut?: string; readonly ariaShortcut?: string }
+      setVisible(visible: boolean): void
+      open(): void
+    }
+  | { readonly edition: 'web'; readonly count: number }
 
 /** Background sources are proper names, the same in every language. */
 const BACKGROUND_SOURCES = { satellite: 'Google', basemap: 'OpenFreeMap' } as const
@@ -75,37 +98,20 @@ function chosenBackground(background: readonly CanvasLayerPresentationRow[]): Ma
 }
 
 /**
- * The Layers panel of both editions, front to back in three sections: the
- * Design's own objects, its site data, and the background (one choice of
- * Satellite, Map or None; the chosen one's settings show in the footer). `siteData` is the
- * edition's part of Site data (Desktop: the Design's terrain and height items
- * with their results; Web: why they are not shown) and `siteAction` its Add
- * data entry. The online-elevation terrain rows follow, nested under the
- * source they come from. The footer shows the active row's settings, or
- * `siteFooter` when the active row is a site data item.
+ * The Layers panel of both editions, top to bottom: the Design's own objects,
+ * the Site data summary row, and the Map (contour lines and hillshading from
+ * online elevation, then the background: one choice of Satellite, Street map
+ * or None, whose settings always show under it). A row's name opens its
+ * settings under it; one row is open at a time. There is no footer.
  */
-export function LayerPanel({ rows, actions, siteData, siteAction, siteFooter }: {
+export function LayerPanel({ rows, actions, siteData }: {
   readonly rows: readonly CanvasLayerPresentationRow[]
   readonly actions: LayerPanelActions
-  readonly siteData?: ComponentChildren
-  readonly siteAction?: ComponentChildren
-  readonly siteFooter?: ComponentChildren
+  readonly siteData?: SiteDataSummary
 }) {
   const inGroup = (group: CanvasLayerPresentationRow['group']) => rows.filter((row) => row.group === group)
-  const terrain = inGroup('site')
+  const terrain = inGroup('map')
   const background = inGroup('background')
-  const choice = chosenBackground(background)
-  // A background that is not drawn has no settings to show.
-  const active = rows.find(row => row.active && (row.group !== 'background' || row.id === choice))
-  const footer = active
-    ? (
-      <section className={styles.inspector} aria-label={active.label}>
-        <div className={styles.inspectorHeading}><LayerIcon id={active.id} /><h3>{active.label}</h3>
-          <span>{t(active.visible ? 'canvas.layers.visible' : 'canvas.layers.hidden')}{active.canLock && ` · ${t(active.locked ? 'canvas.layers.locked' : 'canvas.layers.unlocked')}`}</span></div>
-        <LayerDetail row={active} actions={actions} />
-      </section>
-    )
-    : siteFooter
   return (
     <aside className={styles.panel} aria-label={t('canvas.layers.layerPanel')}>
       <DockPanelHeader title={t('canvas.layers.layerPanel')} />
@@ -114,69 +120,118 @@ export function LayerPanel({ rows, actions, siteData, siteAction, siteFooter }: 
           <div className={styles.groupHeading}><h3 id="layers-design">{t('canvas.layers.design')}</h3></div>
           <div role="list">{inGroup('design').map((row) => <LayerRow key={row.id} row={row} actions={actions} />)}</div>
         </section>
-        {(siteData || terrain.length > 0) && (
-          <section className={styles.section} aria-labelledby="layers-site">
-            <div className={styles.groupHeading}><h3 id="layers-site">{t('canvas.layers.siteData')}</h3>{siteAction}</div>
-            {siteData}
-            {terrain.length > 0 && <>
-              <div className={styles.sourceHeading}>
-                <strong>{t('canvas.terrain.onlineElevation')}</strong>
-                <span>{t('canvas.terrain.onlineElevationNote')}</span>
-              </div>
+        {siteData && <SiteDataSummaryRow summary={siteData} />}
+        {(terrain.length > 0 || background.length > 0) && (
+          <section className={styles.section} aria-labelledby="layers-map">
+            <div className={styles.groupHeading}><h3 id="layers-map">{t('canvas.layers.map')}</h3></div>
+            {terrain.length > 0 && (
               <div role="list">
-                {terrain.map((row) => <LayerRow key={row.id} row={row} actions={actions} nested caption={terrainCaption(row)} />)}
+                {terrain.map((row) => <LayerRow key={row.id} row={row} actions={actions} caption={terrainCaption(row)} />)}
               </div>
+            )}
+            {background.length > 0 && <>
+              <h4 className={styles.subHeading} id="layers-background">{t('canvas.layers.background')}</h4>
+              <BackgroundChoice rows={background} actions={actions} />
             </>}
           </section>
         )}
-        {background.length > 0 && (
-          <section className={styles.section} aria-labelledby="layers-background">
-            <div className={styles.groupHeading}><h3 id="layers-background">{t('canvas.layers.background')}</h3></div>
-            <BackgroundChoice rows={background} choice={choice} actions={actions} />
-          </section>
-        )}
       </div>
-      {footer && <div className={styles.footer}>{footer}</div>}
     </aside>
   )
 }
 
+/** The Site data glyph (the rail's topographic rings) at the rows' 16 px. */
+function SiteDataGlyph() {
+  return <span className={styles.glyph}><PanelIcon panel="site-data" /></span>
+}
+
+function SiteDataSummaryRow({ summary }: { readonly summary: SiteDataSummary }) {
+  const name = t('canvas.layers.siteData')
+  if (summary.edition === 'web') {
+    if (summary.count === 0) return null
+    return (
+      <section className={`${styles.section} ${styles.summary}`} aria-label={name}>
+        <div className={`${layerRow.row} ${styles.summaryRow}`} data-edition="web">
+          <span className={styles.summaryName}>
+            <SiteDataGlyph />
+            <span className={styles.nameText}>
+              <span>{name}</span>
+              <small className={styles.caption}>{t('canvas.layers.siteDataWeb', { count: summary.count })}</small>
+            </span>
+          </span>
+        </div>
+      </section>
+    )
+  }
+  const caption = summary.count === 0
+    ? t('canvas.layers.siteDataNone')
+    : t('canvas.layers.siteDataShown', { shown: summary.shown, count: summary.count })
+  const eyeLabel = t(summary.visible ? 'canvas.lidar.layers.hide' : 'canvas.lidar.layers.show', { name })
+  const openLabel = t('canvas.layers.openSiteData')
+  return (
+    <section className={`${styles.section} ${styles.summary}`} aria-label={name}>
+      <div className={`${layerRow.row} ${styles.summaryRow}`} data-hidden={summary.count > 0 && !summary.visible ? 'true' : 'false'}>
+        {summary.count > 0 ? (
+          <button
+            type="button"
+            className={layerRow.eye}
+            aria-label={eyeLabel}
+            aria-pressed={summary.visible}
+            onClick={() => summary.setVisible(!summary.visible)}
+          >
+            <LayerVisibilityIcon open={summary.visible} />
+            <ButtonTooltip label={eyeLabel} side="left" />
+          </button>
+        ) : <span className={styles.lockSlot} aria-hidden="true" />}
+        <button
+          type="button"
+          className={`${layerRow.name} ${styles.layerName} ${styles.summaryName}`}
+          aria-keyshortcuts={summary.command.ariaShortcut}
+          onClick={summary.open}
+        >
+          <SiteDataGlyph />
+          <span className={styles.nameText}>
+            <span>{name}</span>
+            <small className={styles.caption}>{caption}</small>
+          </span>
+          {/* The name and caption name the button; the tooltip only adds the shortcut. */}
+          <span aria-hidden="true"><ButtonTooltip label={summary.command.label} shortcut={summary.command.shortcut} side="left" /></span>
+        </button>
+        <button type="button" className={styles.lockBtn} aria-label={openLabel} onClick={summary.open}>
+          <ControlIcon name="chevron-right" size={16} />
+          <ButtonTooltip label={openLabel} side="left" />
+        </button>
+      </div>
+    </section>
+  )
+}
+
 /**
- * Background as one choice: Satellite, Map or None. Choosing Satellite or Map
- * (or choosing it again) shows its settings in the footer: opacity, Soften
- * background, and the map style or satellite key.
+ * Background as one choice: Satellite, Street map or None. The chosen
+ * background's settings always show under the choice: the satellite key or
+ * the map style, then opacity and Soften background.
  */
-function BackgroundChoice({ rows, choice, actions }: {
+function BackgroundChoice({ rows, actions }: {
   readonly rows: readonly CanvasLayerPresentationRow[]
-  readonly choice: MapBackground
   readonly actions: LayerPanelActions
 }) {
+  const choice = chosenBackground(rows)
   const options: { value: MapBackground; label: string; source: string; row?: CanvasLayerPresentationRow }[] = [
     { value: 'satellite', label: t('canvas.layers.satellite'), source: BACKGROUND_SOURCES.satellite, row: rows.find((row) => row.id === 'satellite') },
     { value: 'basemap', label: t('canvas.layers.backgroundMap'), source: BACKGROUND_SOURCES.basemap, row: rows.find((row) => row.id === 'basemap') },
     { value: 'none', label: t('canvas.layers.backgroundNone'), source: t('canvas.layers.backgroundPlainPaper') },
   ]
-  return (
+  const chosen = options.find((option) => option.value === choice)?.row
+  return <>
     <div role="radiogroup" aria-labelledby="layers-background" className={styles.backgroundChoice}>
       {options.filter((option) => option.value === 'none' || option.row).map((option) => (
-        <label
-          key={option.value}
-          className={styles.backgroundOption}
-          data-active={option.row?.active && option.value === choice ? 'true' : 'false'}
-        >
+        <label key={option.value} className={styles.backgroundOption}>
           <input
             type="radio"
             name="layers-background"
             value={option.value}
             checked={option.value === choice}
-            onChange={() => {
-              actions.background(option.value)
-              if (option.row) actions.active(option.row.id)
-            }}
-            onClick={() => {
-              // Choosing the current background again brings back its settings.
-              if (option.value === choice && option.row) actions.active(option.row.id)
-            }}
+            onChange={() => actions.background(option.value)}
           />
           <span className={styles.nameText}>
             <span>{option.label}</span>
@@ -185,7 +240,8 @@ function BackgroundChoice({ rows, choice, actions }: {
         </label>
       ))}
     </div>
-  )
+    {chosen && <LayerDetail row={chosen} actions={actions} />}
+  </>
 }
 
 /** Contour lines and hillshading say which elevation they are drawn from. */
@@ -200,64 +256,76 @@ function terrainCaption(row: CanvasLayerPresentationRow): string {
   return t('canvas.terrain.fromOnlineElevation')
 }
 
-function LayerRow({ row, actions, nested = false, caption }: {
+/**
+ * One row: eye, icon, name (with a caption and count) and lock. Its name opens
+ * the row's settings under it, scrolled into view.
+ */
+function LayerRow({ row, actions, caption }: {
   readonly row: CanvasLayerPresentationRow
   readonly actions: LayerPanelActions
-  readonly nested?: boolean
   readonly caption?: string
 }) {
   const lockLabel = row.locked ? t('canvas.layers.unlockLayer') : t('canvas.layers.lockLayer')
+  const eyeLabel = t(row.visible ? 'canvas.lidar.layers.hide' : 'canvas.lidar.layers.show', { name: row.label })
+  const item = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (row.active) item.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [row.active])
   return (
     <div
+      ref={item}
       role="listitem"
-      className={`${layerRow.row} ${styles.layerRow}`}
-      data-active={row.active ? 'true' : 'false'}
-      data-hidden={row.visible ? 'false' : 'true'}
-      data-locked={row.locked ? 'true' : 'false'}
-      data-nested={nested ? 'true' : undefined}
+      className={styles.item}
     >
-      <button
-        type="button"
-        className={layerRow.eye}
-        aria-label={`${t('canvas.layers.visibility')}: ${row.label}`}
-        aria-pressed={row.visible}
-        onClick={() => {
-          actions.visibility(row.id, !row.visible)
-        }}
+      <div
+        className={`${layerRow.row} ${styles.layerRow}`}
+        data-hidden={row.visible ? 'false' : 'true'}
+        data-locked={row.locked ? 'true' : 'false'}
       >
-        <LayerVisibilityIcon open={row.visible} />
-        <ButtonTooltip label={`${t('canvas.layers.visibility')}: ${row.label}`} side="left" />
-      </button>
-      <button
-        type="button"
-        className={`${layerRow.name} ${styles.layerName}`}
-        aria-current={row.active ? 'true' : undefined}
-        title={row.label}
-        onClick={() => actions.active(row.id)}
-      >
-        <LayerIcon id={row.id} />
-        <span className={styles.nameText}>
-          <span>{row.label}</span>
-          {caption && <small className={styles.caption}>{caption}</small>}
-        </span>
-        {row.count !== undefined && <span className={styles.count}>{formatCount(row.count, locale.value)}</span>}
-      </button>
-      {row.canLock ? (
         <button
           type="button"
-          className={styles.lockBtn}
-          aria-label={`${lockLabel}: ${row.label}`}
-          aria-pressed={row.locked}
+          className={layerRow.eye}
+          aria-label={eyeLabel}
+          aria-pressed={row.visible}
           onClick={() => {
-            actions.locked(row.id, !row.locked)
+            actions.visibility(row.id, !row.visible)
           }}
         >
-          <LockIcon locked={row.locked} />
-          <ButtonTooltip label={lockLabel} side="left" />
+          <LayerVisibilityIcon open={row.visible} />
+          <ButtonTooltip label={eyeLabel} side="left" />
         </button>
-      ) : (
-        <span className={styles.lockSlot} aria-hidden="true" />
-      )}
+        <button
+          type="button"
+          className={`${layerRow.name} ${styles.layerName}`}
+          aria-expanded={row.active}
+          title={row.label}
+          onClick={() => actions.active(row.id)}
+        >
+          <LayerIcon id={row.id} />
+          <span className={styles.nameText}>
+            <span>{row.label}</span>
+            {caption && <small className={styles.caption}>{caption}</small>}
+          </span>
+          {row.count !== undefined && <span className={styles.count}>{formatCount(row.count, locale.value)}</span>}
+        </button>
+        {row.canLock ? (
+          <button
+            type="button"
+            className={styles.lockBtn}
+            aria-label={`${lockLabel}: ${row.label}`}
+            aria-pressed={row.locked}
+            onClick={() => {
+              actions.locked(row.id, !row.locked)
+            }}
+          >
+            <LockIcon locked={row.locked} />
+            <ButtonTooltip label={lockLabel} side="left" />
+          </button>
+        ) : (
+          <span className={styles.lockSlot} aria-hidden="true" />
+        )}
+      </div>
+      {row.active && <LayerDetail row={row} actions={actions} />}
     </div>
   )
 }
@@ -416,7 +484,7 @@ function HillshadeLayerDetail({ row, actions }: {
 }) {
   return (
     <div className={styles.layerDetail}>
-      <OpacitySlider actions={actions} row={row} label={t('canvas.terrain.hillshadeOpacity')} />
+      <OpacitySlider actions={actions} row={row} />
     </div>
   )
 }
@@ -429,11 +497,11 @@ function SceneLayerDetail({ row, actions }: { row: CanvasLayerPresentationRow; a
   )
 }
 
-function OpacitySlider({ row, actions, label }: { row: CanvasLayerPresentationRow; actions: LayerPanelActions; label?: string }) {
+function OpacitySlider({ row, actions }: { row: CanvasLayerPresentationRow; actions: LayerPanelActions }) {
   return (
     <Slider
-      label={label ?? t('canvas.layers.opacity')}
-      ariaLabel={label ?? `${t('canvas.layers.opacity')}: ${row.label}`}
+      label={t('canvas.layers.opacity')}
+      ariaLabel={`${t('canvas.layers.opacity')}: ${row.label}`}
       min={0}
       max={100}
       value={Math.round(row.opacity * 100)}

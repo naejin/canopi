@@ -11,7 +11,7 @@ import type {
 } from '../../generated/contracts'
 import { analysisGroup } from '../analyses/registry'
 import { itemDisplayRange, libraryItemName } from './library-store'
-import { treeRows } from './reference-tree'
+import { filterKeepingAncestors, treeRows } from './reference-tree'
 
 /**
  * One reusable Data Library item: an imported source or a derived result.
@@ -48,18 +48,35 @@ export interface LibraryItem {
   /** Nesting depth in the list: 0 for a top-level row. */
   readonly depth: number
   readonly message: string | null
+  /** When the item entered the library (epoch milliseconds as a string). */
+  readonly createdAt: string
 }
 
 /** All, sources, or the derived items of one registry group. */
 export type LibraryTypeFilter = 'all' | 'sources' | AnalysisGroup
 
+/** The Data library's sort: by name, or most recently added first. */
+export type LibrarySort = 'name' | 'recent'
+
+type Unnested = Omit<LibraryItem, 'depth'>
+
+/** Stable name order, identity as the tie-breaker: names are not unique. */
+function byName(left: Unnested, right: Unnested): number {
+  return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }) || left.id.localeCompare(right.id)
+}
+
+function byRecent(left: Unnested, right: Unnested): number {
+  return Number(right.createdAt) - Number(left.createdAt) || byName(left, right)
+}
+
 /**
- * Library items in list order: top-level rows by name, each followed by the
- * derived items calculated from it, nested under their first input.
+ * Library items in list order: top-level rows in `sort` order, each followed
+ * by the derived items calculated from it, nested under their first input and
+ * sorted the same way among themselves.
  */
-export function libraryItems(snapshot: LibrarySnapshot | null): LibraryItem[] {
+export function libraryItems(snapshot: LibrarySnapshot | null, sort: LibrarySort = 'name'): LibraryItem[] {
   if (!snapshot) return []
-  const items = snapshot.items.map((summary): Omit<LibraryItem, 'depth'> => {
+  const items = snapshot.items.map((summary): Unnested => {
     const job = summary.import_job ?? null
     const published = summary.generation_id !== null
     return {
@@ -84,32 +101,45 @@ export function libraryItems(snapshot: LibrarySnapshot | null): LibraryItem[] {
       message: summary.role === 'Source'
         ? (published ? null : job?.message ?? null)
         : summary.run?.message ?? null,
+      createdAt: summary.created_at,
     }
   })
-  // Stable name order, identity as the tie-breaker: names are not unique.
-  return treeRows(items, (left, right) =>
-    left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }) || left.id.localeCompare(right.id))
+  return treeRows(items, sort === 'recent' ? byRecent : byName)
 }
 
 /**
- * Items matching a name search and type filter. Operations in progress or
- * failed stay listed whatever the filter, so an import or calculation started
- * here is never hidden before it settles.
+ * Items matching a name search and type filter, each with the sources it was
+ * calculated from above it (GeoLibre's browser tree filter). Operations in
+ * progress or failed stay listed whatever the filter, so an import or
+ * calculation started here is never hidden before it settles.
  */
-export function filterLibraryItems(
-  items: readonly LibraryItem[],
-  query: string,
-  type: LibraryTypeFilter,
-  relatedTo: string | null = null,
-): LibraryItem[] {
+export function filterLibraryItems(items: readonly LibraryItem[], query: string, type: LibraryTypeFilter): LibraryItem[] {
   const needle = query.trim().toLocaleLowerCase()
-  return items.filter((item) => {
+  return filterKeepingAncestors(items, (item) => {
     if (item.status !== 'ready') return true
-    if (relatedTo !== null) return item.provenance?.inputs.some((input) => input.item_id === relatedTo) ?? false
     if (type === 'sources' && item.role !== 'Source') return false
     if (type !== 'all' && type !== 'sources' && item.group !== type) return false
     return needle === '' || item.name.toLocaleLowerCase().includes(needle)
   })
+}
+
+/**
+ * The row selected once the list changes: the same item while it is listed;
+ * else the row that took its place (the next one, or the last row when it was
+ * last); else the first row. Null for an empty list.
+ */
+export function selectionAfter(
+  before: readonly { readonly id: string }[],
+  after: readonly { readonly id: string }[],
+  selectedId: string | null,
+): string | null {
+  if (selectedId !== null && after.some((row) => row.id === selectedId)) return selectedId
+  const index = selectedId === null ? -1 : before.findIndex((row) => row.id === selectedId)
+  if (index < 0) return after[0]?.id ?? null
+  const remaining = new Set(after.map((row) => row.id))
+  const next = before.slice(index + 1).find((row) => remaining.has(row.id))
+    ?? before.slice(0, index).reverse().find((row) => remaining.has(row.id))
+  return next?.id ?? after[0]?.id ?? null
 }
 
 /** A default item name from the chosen files: their shared stem, or the first. */
