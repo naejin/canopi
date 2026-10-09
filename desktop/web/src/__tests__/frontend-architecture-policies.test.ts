@@ -2295,6 +2295,20 @@ const CANVAS_V2_POLICIES = [
     targets: ['src/canvas/runtime/interaction/canvas-context-menu.ts'],
     allowedFrom: ['src/canvas/runtime/tools/tool-host.ts', ...TEST_SOURCE_PATTERNS],
   },
+  {
+    // A symbol rule, so a namespace or dynamic import of @tauri-apps/api/core is caught too.
+    kind: 'confine-symbols',
+    name: 'P49 only IPC transports invoke native commands',
+    from: ['src/**'],
+    names: ['invoke'],
+    allowedFrom: [
+      'src/ipc/**',
+      // Both calls move into ipc/ in 2.1 (canopi-f47t.52.19).
+      'src/app/shell/bootstrap.ts',
+      'src/app/canvas-pdf/platform.desktop.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+  },
 ] satisfies readonly ArchitecturePolicy[]
 
 /**
@@ -3600,6 +3614,7 @@ const P45 = '[P45 only the presentation controller writes story overrides]'
 const P46 = '[P46 the Google key has reviewed readers]'
 const P47 = '[P47 components never hold the canvas document lifecycle]'
 const P48 = '[P48 the tool host is the only canvas-menu opener]'
+const P49 = '[P49 only IPC transports invoke native commands]'
 
 describe('2.0 guard policies (canopi-f47t.52.17)', () => {
   it('P39 rejects a production value cycle; type-only, dynamic and test cycles pass', () => {
@@ -3875,6 +3890,25 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
     expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P48'))).toEqual([
       `${P48} src/canvas/runtime/interaction-session.ts:1:1 imports src/canvas/runtime/interaction/canvas-context-menu.ts via "./interaction/canvas-context-menu" (static); allowed importers: src/canvas/runtime/tools/tool-host.ts, ${TEST_SOURCES}`,
       `${P48} src/app/canvas-context-menu/planted.ts:1:1 imports src/canvas/runtime/interaction/canvas-context-menu.ts via "../../canvas/runtime/interaction/canvas-context-menu" (static); allowed importers: src/canvas/runtime/tools/tool-host.ts, ${TEST_SOURCES}`,
+    ])
+  })
+
+  it('P49 confines invoke to ipc/, the two named files and tests, through a namespace or a dynamic import too', () => {
+    const allowed = `src/ipc/**, src/app/shell/bootstrap.ts, src/app/canvas-pdf/platform.desktop.ts, ${TEST_SOURCES}`
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/ipc/species.ts', ["import { invoke } from '@tauri-apps/api/core'", "invoke('search')"]),
+      plantedSource('src/app/shell/bootstrap.ts', ["import { invoke } from '@tauri-apps/api/core'", "invoke('health')"]),
+      plantedSource('src/app/canvas-pdf/platform.desktop.ts', ["import { invoke } from '@tauri-apps/api/core'", "invoke('pdf')"]),
+      plantedSource('src/app/planted.ts', ["import { invoke } from '@tauri-apps/api/core'", "void invoke('x')"]),
+      plantedSource('src/components/Planted.tsx', ["import * as core from '@tauri-apps/api/core'", "void core.invoke('x')"]),
+      plantedSource('src/web/planted.ts', ["void import('@tauri-apps/api/core').then((core) => core.invoke('x'))"]),
+      plantedSource('src/app/planted.test.ts', ["import { invoke } from '@tauri-apps/api/core'", "void invoke('x')"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P49'))).toEqual([
+      `${P49} src/app/planted.ts contains confined symbol invoke; allowed sources: ${allowed}`,
+      `${P49} src/components/Planted.tsx contains confined symbol invoke; allowed sources: ${allowed}`,
+      `${P49} src/web/planted.ts contains confined symbol invoke; allowed sources: ${allowed}`,
     ])
   })
 })
