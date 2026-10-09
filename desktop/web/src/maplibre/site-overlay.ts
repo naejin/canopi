@@ -1,12 +1,11 @@
 // maplibre/site-overlay.ts
 //
-// The Site data pin and profile line on the map (canopi-f47t.42, spec §1.10; plan §4 "Map overlay route"; stream C builds
-// it): a pure contract from the overlay snapshot's `site` (lon/lat) to one GeoJSON source and its layers in the
+// The Site data pin and profile line on the map (canopi-f47t.42, spec §1.10; plan §4 "Map overlay route"; stream C
+// builds it): a pure contract from the overlay snapshot's `site` (lon/lat) to one GeoJSON source and its layers in the
 // interaction-overlay band, drawn by the generalised overlay sync with its own skip key. The pin is a two-tone dot (ink
-// core, white ring) in fixed colours; the line, a light line on the draft casing with vertex dots, takes scene-visuals.ts's
-// guide colours. The chart
-// hover never rides the snapshot: it is one setData on its own source (WorkspaceMapContributions.setSiteHover). No
-// setters.
+// core, white ring) in fixed colours; the line, a light line on the draft casing with vertex dots, takes
+// scene-visuals.ts's guide colours. The chart hover never rides the snapshot: it is one setData on its own source
+// (WorkspaceMapContributions.setSiteHover). No setters.
 
 import { getGuideLineVisual, getMapBackdropInk, OVERLAY_CASING_EXTRA_PX } from '../canvas/runtime/scene-visuals'
 
