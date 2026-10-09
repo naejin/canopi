@@ -40,20 +40,20 @@ import { pinSiteDataPoint, siteValues } from '../app/lidar/site-values'
 import { activePanel, selectPanel, sidePanel } from '../app/shell/state'
 import type { CanopiFile } from '../types/design'
 import { createTestCanvasQuerySurface, type TestCanvasQuerySurface } from './support/canvas-query-surface'
-import { librarySnapshot, sourceItem } from './support/library-fixtures'
+import { librarySnapshot, slopeItem, sourceItem } from './support/library-fixtures'
 
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
 let surface: TestCanvasQuerySurface
 
-function openDesign(entries: { id: string; visible: boolean }[]): void {
+function openDesign(entries: { id: string; visible: boolean; kind?: 'Source' | 'Derived' }[]): void {
   const design = {
     name: 'Orchard',
     lidar: {
       schema_version: 1,
       visible: true,
-      entries: entries.map(({ id, visible }, order) => ({
-        kind: 'Source', id, name: id, visible, opacity: 1, order, ramp: null, reversed: false, range: null,
+      entries: entries.map(({ id, visible, kind = 'Source' }, order) => ({
+        kind, id, name: id, visible, opacity: 1, order, ramp: null, reversed: false, range: null,
       })),
     },
   } as unknown as CanopiFile
@@ -121,6 +121,15 @@ describe('Site data row values', () => {
     surface.emitPointerWorld(null)
     await flush()
     expect(shown()).toEqual({ at: 'pin', dsm: { kind: 'value', value: 1.5 }, mnt: { kind: 'value', value: 1.5 } })
+  })
+
+  it('reads the rows in the panel list order: a source before the result listed under it', async () => {
+    lidarLibrary.value = librarySnapshot([sourceItem('mnt', 'MNT'), slopeItem('slope', 'mnt'), sourceItem('dsm', 'DSM')])
+    openDesign([{ id: 'mnt', visible: true }, { id: 'slope', visible: true, kind: 'Derived' }, { id: 'dsm', visible: true }])
+    hover(10, 20)
+    await flush()
+
+    expect(native.requests.at(-1)!.targets.map((target) => target.entity_id)).toEqual(['dsm', 'mnt', 'slope'])
   })
 
   it('shows no data where the cell holds none, and reads nothing with no pointer and no pin', async () => {

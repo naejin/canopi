@@ -3,13 +3,15 @@
 // Owns the values Site data rows show (canopi-f47t.42, spec §1.10, §3.8; stream C builds them): while the panel is open,
 // each shown, ready row's value under the pointer over the map, otherwise at the pin, sampled only through `sampler.ts`.
 // Touch never hovers, so touch reads values through the pin. An eye toggle, a new generation or a list change re-samples
-// at once. Rows are read in list order (front first), so the first batch answers the rows the user sees first.
+// at once. Rows are read in the panel's list order (front first, each result under its source), so the first batch answers
+// the rows the user sees first.
 
 import { computed, effect, signal, type ReadonlySignal } from '@preact/signals'
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import type { LidarSampleTarget } from '../../generated/contracts'
 import { activePanel, sidePanel } from '../shell/state'
 import { readCurrentLidarPresentation } from './library-store'
+import { referenceRows } from './reference-tree'
 import { siteSampler } from './sampler'
 import { pin, setPin, type GeoPoint } from './site-transients'
 
@@ -93,10 +95,9 @@ effect(() => {
   const hovered = pointer.value
   const at = hovered ? 'pointer' : 'pin'
   const point = hovered ?? pin.value
-  // The presentation lists back to front; the panel and the batches go front first.
-  const rows = readCurrentLidarPresentation()
+  // The batches go in the panel's list order (front first, each result under its source), as SiteData.tsx lists.
+  const rows = referenceRows(readCurrentLidarPresentation())
     .filter((item) => item.shown && item.availability === 'present' && item.state === 'Ready' && item.generationId !== null)
-    .reverse()
   if (!point || rows.length === 0) {
     stopReading()
     return
