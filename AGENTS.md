@@ -6,7 +6,7 @@ Rules for agents working in Canopi. Optimise for user work preserved, reviewable
 
 1. [`docs/README.md`](docs/README.md): which document answers which question.
 2. The one guide for your area under `docs/guides/`, and the one pattern file under [`.interface-design/`](.interface-design/system.md) for the surface you touch.
-3. The ADR behind any rule you are about to bend. Code shows current behaviour; ADRs and guides show intended boundaries. When they disagree, file a bead; never weaken the contract to match the code.
+3. The ADR behind any rule you are about to bend. Code shows current behaviour; ADRs and guides show intended boundaries. When they disagree, file a bead; never weaken the contract to match the code. A process rule that blocks a better fix is rewritten in the same change, named in the handoff; safety rules stay.
 
 ## Rules
 
@@ -19,7 +19,7 @@ Rules for agents working in Canopi. Optimise for user work preserved, reviewable
 - **Secrets.** The Google Maps key never reaches Designs, exports, snapshots, logs, diagnostics or the page markup while masked. Map errors go through `maplibre/redact-credentials.ts`. Enforced by `settings-sections.test.tsx`, `map-background.test.ts`, `map-error-redaction.test.ts`, `app/canvas-map-surface/workspace-map-controls.test.ts` and `problem-report-diagnostics.test.ts`.
 - **Layering and chrome.** Popups use the stacking scale in `global.css`; floating chrome registers with the visible-map-area seam so framing and chips avoid it. Enforced by `stacking-order.test.ts`, `canvas-chrome-layering.test.ts` (the scale) and `visible-map-area.test.tsx` (the seam).
 - **Localisation.** Every user-facing string exists in all 11 locales; English is sentence case and placeholders fit their field. Enforced by `i18n-completeness.test.ts` and `i18n-copy.test.ts`. The glossary's terms and `Intl` for numbers, dates and units (advice, reviewed by hand).
-- **Data.** Never change the plant catalog's data (`canopi-core.db`; user rule). The `.canopi` format and local data may change when that improves the project, without asking first; name each change in the handoff (ADR 0021, user 2026-10-02). Canopi 2.0 has no migrations: an older `.canopi` is refused with the typed message and left unchanged, older local data moves aside under a `before-2.0` name, and a LiDAR catalogue bump keeps `source_meta.rs` complete. After 2.0, refuse or migrate is decided per change.
+- **Data.** Never change the plant catalog's data (`canopi-core.db`; user rule). The `.canopi` format and local data may change when that improves the project, without asking first; name each change in the handoff (ADR 0021, user 2026-10-02). Canopi 2.0 has no migrations: an older `.canopi` is refused with the typed message and left unchanged, older local data is handled as ADR 0021 says, and a LiDAR catalogue bump keeps `source_meta.rs` complete. After 2.0, refuse or migrate is decided per change.
 - **Reuse before writing** (ADR 0002): a geo feature's design check studies GeoLibre's design and crates first, follows them or says why not (user, 2026-10-04). Depend on light GeoLibre packages or copy its framework-free modules with attribution, never its React code. A new runtime dependency needs a bead with the reason.
 - **Delete, don't deprecate.** Dead code, tests, docs and dependencies go in the change that kills them.
 - **Banned:** React, Tailwind, Zustand/Redux/MobX, react-i18next (use preact, CSS Modules, `@preact/signals`, `import { t } from '../i18n'`); rusqlite pools, typeshare, string-formatted SQL; raw `rgba()`/`white`/`black` and `font-weight: 500` in CSS Modules.
@@ -33,7 +33,7 @@ Rules for agents working in Canopi. Optimise for user work preserved, reviewable
 | Shared contracts (`common-types/`) | `cd desktop/web && npm run gen:types && npm run check:types` |
 | Frontend | `cd desktop/web && npx tsc --noEmit && npm run test:coverage -- --maxWorkers=4 && npm run test:policies && npm run check:ui && npm run build && npm run build:web` |
 | Species catalog queries | `python3 scripts/species_catalog_contract.py check` and its Python tests |
-| LiDAR services | the GeoLibre ignored lane and the engine comparison lane ([data library](docs/guides/data-library.md)) |
+| LiDAR services | the engine lane (CI job `lidar-native`) and the comparison lane ([data library](docs/guides/data-library.md)) |
 | Docs | `python3 scripts/check_docs.py` (validator changes: `python3 -m unittest scripts.test_check_docs`) |
 
 Docs-only changes skip code gates; say so in the handoff.
@@ -41,10 +41,9 @@ Docs-only changes skip code gates; say so in the handoff.
 ## Working method
 
 - **Beads** (`bd prime` for commands) track user-visible work, bugs and decisions, not sub-steps. Close with a receipt: what shipped, commits, gates. Commit `.beads/issues.jsonl` when bead metadata changed.
-- **Branch.** Canopi v2 lives on `feature/geolibre-adoption` until it ships; commit there, `git pull --rebase=merges` before starting, push after each bead. Maintenance starts from `main` on an intent-named branch.
-- **Worktrees.** Implement in a worktree under `.rq-scratch/`, never in the user's `cargo tauri dev` checkout. All worktrees share `CARGO_TARGET_DIR=…/.rq-scratch/shared-build/target` (the last component must be `target`, or Tauri reads resources from the installed app). Check `df -h /` first; remove a merged worktree and its caches; never delete the user's `target/` without asking.
+- **Branch and worktrees.** Canopi v2 lives on `feature/geolibre-adoption` until it ships; maintenance starts from `main` on an intent-named branch. Implement in a worktree under `.rq-scratch/`, never in the user's `cargo tauri dev` checkout; branch, sync, build-cache and disk mechanics: [agentic delivery](docs/guides/agentic-delivery.md#places). A step is pushed once, after its pre-push review.
 - **Scope** (advice; v2 value audit). Before building a step, name the user path or roadmap item behind each planned behaviour; drop what has none. A refactor keeps what users see, not mechanisms. Never build what a later step of the release replaces; delete the old path in the change that replaces it. Specs hold contracts; briefs hold line numbers.
-- **Subagents** run in parallel only on disjoint files (coupled work is one sequential stream; advice), each with explicit file ownership; none reverts another's work. In locale files an agent adds or removes only its own keys. The main agent integrates, runs gates, closes beads and pushes.
+- **Subagents** run in parallel only on disjoint files (coupled work is one sequential stream; advice), each with explicit file ownership; none reverts another's work. A stream owns its feature's locale key namespace in all 11 locales (add, reword, delete); only the merge agent regenerates the unused-code snapshot. The main agent integrates, runs gates, closes beads and pushes.
 - **Multi-agent steps** follow the `phased-agentic-delivery` skill; Canopi's places, commands, live-check launch and tools are in [agentic delivery](docs/guides/agentic-delivery.md). Live checks drive an isolated review instance, never the user's app.
 - **Commits** follow `fix(frontend): …`, `docs: …`; stage only your files; generated files go with the commit that produced them.
 
@@ -59,5 +58,5 @@ A guide changes when a rule or boundary changes, and the section is rewritten, n
 1. Gates for the changed area passed, or are recorded as skipped with the reason.
 2. Bead closed with a receipt; follow-up beads filed.
 3. Affected guide, pattern, ADR or release notes updated, or the handoff says none were needed.
-4. Committed, pulled with rebase, pushed; `git status --short --branch` clean and up to date.
+4. Committed, rebased, pushed (once per step); `git status --short --branch` clean and up to date.
 5. Final message: bead id, commit hash, branch, gates run or skipped, user-owned files left untouched, and what to try in `cargo tauri dev`.
