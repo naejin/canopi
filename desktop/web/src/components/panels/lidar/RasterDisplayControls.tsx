@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import type { Ref } from 'preact'
+import type { RefObject } from 'preact'
 import { setLidarEntryDisplay } from '../../../app/lidar/actions'
 import { parseLocaleNumber } from '../../../app/analyses/model'
 import { lidarDisplayStyle } from '../../../app/lidar/display'
@@ -150,11 +150,7 @@ function Range({ item, mode, values }: {
         ]}
       />
       <div className={styles.fields}>
-        <RangeField inputRef={minimum} label={t('siteData.display.minimum')} value={values[0]}
-          onCommit={(min) => commit(min, values[1])} />
-        <span className={styles.dash} aria-hidden="true">–</span>
-        <RangeField label={t('siteData.display.maximum')} value={values[1]}
-          onCommit={(max) => commit(values[0], max)} />
+        <RangeFields minimumRef={minimum} values={values} onCommit={commit} />
         <span className={styles.units}>{unitSuffix(item.units).trim()}</span>
         {differs && (
           <button type="button" className={styles.reset}
@@ -183,52 +179,72 @@ function fieldNumber(value: number, localeTag: string): string {
 }
 
 /**
- * One end of the range: it always shows the value in use, accepts the
- * locale's decimal mark, and commits on Enter or leaving the field; a value
- * that does not parse or would not keep minimum below maximum is reverted.
- * The input stays mounted as the value in use changes, so focus survives a
- * commit; a new value replaces the text unless the user is editing it.
+ * Minimum and Maximum as one pair: each always shows the value in use and
+ * accepts the locale's decimal mark. The pair commits on Enter or leaving a
+ * field when both ends parse and minimum stays below maximum. Moving from one
+ * end to the other keeps a draft that only the other end's draft makes valid,
+ * so a new range above or below the one in use can be typed in either order;
+ * leaving the pair, or Enter, with no valid pair reverts both ends. The
+ * inputs stay mounted as the values in use change, so focus survives a
+ * commit; a new value replaces an end's text unless the user is editing it.
  */
-function RangeField({ label, value, onCommit, inputRef }: {
-  readonly label: string
-  readonly value: number
-  onCommit(value: number): boolean
-  readonly inputRef?: Ref<HTMLInputElement>
+function RangeFields({ values, onCommit, minimumRef }: {
+  readonly values: readonly [number, number]
+  onCommit(min: number, max: number): boolean
+  readonly minimumRef: RefObject<HTMLInputElement>
 }) {
-  const shown = fieldNumber(value, locale.value)
-  const [draft, setDraft] = useState(shown)
+  const shown: [string, string] = [fieldNumber(values[0], locale.value), fieldNumber(values[1], locale.value)]
+  const [drafts, setDrafts] = useState(shown)
   const previous = useRef(shown)
+  const maximumRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
     const before = previous.current
     previous.current = shown
-    setDraft((current) => (current === before ? shown : current))
-  }, [shown])
-  const finish = () => {
-    if (draft === shown) return
-    const parsed = parseLocaleNumber(draft, locale.value)
-    if (parsed !== null && onCommit(parsed)) setDraft(fieldNumber(parsed, locale.value))
-    else setDraft(shown)
+    setDrafts((current) => [0, 1].map((end) => (current[end] === before[end] ? shown[end] : current[end])) as [string, string])
+  }, [shown[0], shown[1]])
+  const pending = drafts[0] !== shown[0] || drafts[1] !== shown[1]
+  // An untouched end commits the value in use, not its shorter text.
+  const parsed = (end: 0 | 1) => (drafts[end] === shown[end] ? values[end] : parseLocaleNumber(drafts[end], locale.value))
+  const finish = (staysInPair: boolean) => {
+    if (!pending) return
+    const min = parsed(0)
+    const max = parsed(1)
+    if (min !== null && max !== null && onCommit(min, max)) {
+      setDrafts([fieldNumber(min, locale.value), fieldNumber(max, locale.value)])
+    } else if (!staysInPair) {
+      setDrafts(shown)
+    }
   }
-  return (
+  const field = (end: 0 | 1, label: string) => (
     <input
-      ref={inputRef}
+      ref={end === 0 ? minimumRef : maximumRef}
       className={styles.field}
       type="text"
       inputMode="decimal"
       aria-label={label}
-      value={draft}
-      onInput={(event) => setDraft(event.currentTarget.value)}
-      onBlur={finish}
+      value={drafts[end]}
+      onInput={(event) => {
+        const text = event.currentTarget.value
+        setDrafts((current) => (end === 0 ? [text, current[1]] : [current[0], text]))
+      }}
+      onBlur={(event) => finish(event.relatedTarget !== null && event.relatedTarget === (end === 0 ? maximumRef : minimumRef).current)}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
           event.preventDefault()
-          finish()
-        } else if (event.key === 'Escape' && draft !== shown) {
+          finish(false)
+        } else if (event.key === 'Escape' && pending) {
           event.preventDefault()
           event.stopPropagation()
-          setDraft(shown)
+          setDrafts(shown)
         }
       }}
     />
+  )
+  return (
+    <>
+      {field(0, t('siteData.display.minimum'))}
+      <span className={styles.dash} aria-hidden="true">–</span>
+      {field(1, t('siteData.display.maximum'))}
+    </>
   )
 }

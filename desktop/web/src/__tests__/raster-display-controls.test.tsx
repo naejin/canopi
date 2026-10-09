@@ -159,6 +159,47 @@ describe('an open item\'s Range', () => {
     expect((named('Maximum') as HTMLInputElement).value).toBe('200')
   })
 
+  it('commits a typed pair above or below the range in use, whichever end is typed first', async () => {
+    mount(item())
+    const minimum = named('Minimum') as HTMLInputElement
+    const maximum = named('Maximum') as HTMLInputElement
+    await act(async () => {
+      minimum.value = '300'
+      minimum.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => { minimum.dispatchEvent(new FocusEvent('blur', { relatedTarget: maximum })) })
+    expect(setLidarEntryDisplay).not.toHaveBeenCalled()
+    expect(minimum.value).toBe('300')
+    await type(maximum, '400', 'Enter')
+    expect(setLidarEntryDisplay).toHaveBeenCalledTimes(1)
+    expect(setLidarEntryDisplay).toHaveBeenCalledWith('a', { range: { mode: 'Custom', min: 300, max: 400 } })
+    setLidarEntryDisplay.mockClear()
+    mount(item({ range: { mode: 'Custom', min: 300, max: 400 } }))
+    await act(async () => {
+      maximum.value = '50'
+      maximum.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => { maximum.dispatchEvent(new FocusEvent('blur', { relatedTarget: minimum })) })
+    expect(maximum.value).toBe('50')
+    await type(minimum, '20', 'blur')
+    expect(setLidarEntryDisplay).toHaveBeenCalledTimes(1)
+    expect(setLidarEntryDisplay).toHaveBeenCalledWith('a', { range: { mode: 'Custom', min: 20, max: 50 } })
+  })
+
+  it('reverts both ends when focus leaves the pair while it would not keep minimum below maximum', async () => {
+    mount(item())
+    const minimum = named('Minimum') as HTMLInputElement
+    const maximum = named('Maximum') as HTMLInputElement
+    await act(async () => {
+      minimum.value = '300'
+      minimum.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => { minimum.dispatchEvent(new FocusEvent('blur', { relatedTarget: maximum })) })
+    await act(async () => { maximum.dispatchEvent(new FocusEvent('blur')) })
+    expect(setLidarEntryDisplay).not.toHaveBeenCalled()
+    expect([minimum.value, maximum.value]).toEqual(['100', '200'])
+  })
+
   it('shows Reset only when the display differs from the kind\'s, and Reset restores colours, Reverse and range', async () => {
     mount(item())
     expect(() => named('Reset')).toThrow()
