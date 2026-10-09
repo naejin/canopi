@@ -434,6 +434,11 @@ CURVES = [('MNT · IGN 0.5 m', 'elev', [_mnt(d) for d in DIST], 'var(--curve-1)'
           ('MNH · IGN 0.5 m', 'height', [_chm(d) for d in DIST], 'var(--curve-3)')]
 
 
+# Steepest measures each curve over max(2 m, its own cell size) and the legend names that run
+# ("Steepest {percent} over {run}"); the sample curves are IGN 0.5 m grids, so the run is 2 m.
+STEEPEST_RUN_M = max(2, 0.5)
+
+
 def _stats(vals):
     ok = [v for v in vals if v is not None]
     steep = max((abs(b - a) / 2 * 100, DIST[i]) for i, (a, b) in enumerate(zip(vals, vals[1:])) if a is not None and b is not None)
@@ -500,7 +505,7 @@ def profile_chart(at=74, hover=True, width=408):
         elif k == 'elev':
             rise, (steep, where) = _stats(vals)
             right = (f'<span class="small" style="color: var(--ink-2);">{_fmt_rise(rise)} · </span>'
-                     + btn(f'Steepest {steep:.0f}% over 2 m', 'link', size='sm', aria=f'Steepest {steep:.0f}% over 2 m, at {where} m: move the cursor there', extra=' style="padding: 0 2px; height: 24px; font-size: 12.5px;"'))
+                     + btn(f'Steepest {steep:.0f}% over {STEEPEST_RUN_M} m', 'link', size='sm', aria=f'Steepest {steep:.0f}% over {STEEPEST_RUN_M} m, at {where} m: move the cursor there', extra=' style="padding: 0 2px; height: 24px; font-size: 12.5px;"'))
         else:
             right = f'<span class="small" style="color: var(--ink-2);">Highest {max(vals):.1f} m</span>'
         leg += (f'<div style="display: flex; align-items: center; gap: 8px; min-height: 24px;">{sw}<span style="flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{esc(name)}</span>'

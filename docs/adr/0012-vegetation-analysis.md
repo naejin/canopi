@@ -33,7 +33,7 @@ The better source is the ONF plugin for Computree (`ct_pluginonf`, https://gitla
   - DSM holes filled with the minimum.
 
   Fidelity tests compare with Computree only on inputs where the two agree.
-- **Native lane.** The analysis registry gains a `native` lane. Analyses run in process on the `Local` executor under the heavy-job lease, cancel cooperatively at bounded intervals, and are admitted under a 25-million-cell cap (and point-list caps for point metrics). No new sidecar, child process or CI engine is needed: goldens make fidelity a plain `cargo test`.
+- **Native lane.** The analysis registry gains a `native` lane. Analyses run in process on the `Raster` executor class (admitted 4, running 2), never `Local`, so saves and sampling never queue behind them. They hold the heavy-job lease, cancel cooperatively at bounded intervals, and are admitted under a 25-million-cell cap (and point-list caps for point metrics). No new sidecar, child process or CI engine is needed: goldens make fidelity a plain `cargo test`.
 - **GeoLibre stays** the engine for slope, hillshade, contours and hydrology. ADR 0011's optional Computree integration is dropped.
 - **Scope.** The work is ordered as follows:
   1. Raster canopy from above-ground height: gaps, tree tops, and cover facts.

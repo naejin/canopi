@@ -69,8 +69,8 @@ Beads:
 
 **`commands/lidar.rs`** (316 lines)
 - 17 IPC commands, registered in `lib.rs:116-132`.
-- All are executor-backed (`UserData` for catalogue work, `Local` for `lidar_sample_pixel`).
-- Three are synchronous and on the allowlist: `lidar_cancel_import`, `lidar_cancel_analysis_job` and `lidar_cancel_sample_pixel`.
+- All but one are executor-backed: `UserData` for catalogue work; `Local` for coverage, disk usage and the batched `lidar_sample_points` (it awaits a 1-permit sampling semaphore first; at most 8 targets and 4,096 points per request). Import, analysis and display-preparation jobs run on the `Raster` class (admitted 4, running 2).
+- One is synchronous and on the allowlist: `lidar_cancel_analysis_job`. `lidar_cancel_import` is executor-backed.
 - Analysis commands:
   - `lidar_create_analysis(layer_id, kind: LidarAnalysisKind, parameters: LidarAnalysisParameters, result_name)`
   - `lidar_retry_analysis(definition_id, expected_source_generation_id)`
@@ -78,9 +78,9 @@ Beads:
   - `lidar_rename_analysis`
 
 **`services/lidar/mod.rs`** (2702 lines)
-- `LidarLibrary` holds the catalogue `Mutex<Connection>`, the `RasterEngine` (pure Rust, ADR 0014), `GeolibreEngine`, cancel flags, the exclusive `heavy_job` lease and display admission.
+- `LidarLibrary` holds the catalogue `Mutex<Connection>`, the `RasterEngine` (pure Rust, ADR 0014), `GeolibreEngine`, cancel flags, the exclusive `heavy_job` lease, the 1-permit sampling semaphore and the display-preparation lane.
 - `library_snapshot` (:466) discovers GeoLibre and reports it as `slope_engine`.
-- `run_analysis` (:1298) waits for the lease, parses the parameters, and runs `analysis::run_slope_job` on `Local`.
+- `run_analysis` (:1298) waits for the lease, parses the parameters, and runs `analysis::run_slope_job` on `Raster`.
 - `create_analysis` / `create_analysis_unchecked` (:1378/:1393):
   - hard-code `SlopeRecipe::GeolibreProjected`;
   - write the definition, `lidar_dependencies(kind='source')` and the job, then spawn the run.
@@ -222,7 +222,7 @@ These are registered for TS in `bindings-gen/src/contracts.rs:28+` and generated
   - `lidarDisplayStyle`: dispatches through `item-types.ts`. Slope gets ylorrd over `[0,30°]` or `[0,57.7%]`; ground and surface elevation get schwarzwald; height above ground gets greens; everything else gets viridis.
   - `lidarDisplayLayers` (:175).
 - `display-legend.ts`: RAMPS for schwarzwald, greens, ylorrd and viridis, sampled from the wasm's `colorize()` (held by `display-legend.test.ts`); `°` and `%` are special-cased.
-- `app/lidar/inspection.ts`: native readout. The units come from `LidarSampleOutcome::Value.units`.
+- `app/lidar/sampler.ts`: the one sampler (row values, the pin, Profile) over the batched `lidar_sample_points`; a row's value reads in its item's own units (`value-format.ts`).
 - `app/design-edit/lidar.ts`: Design Edit for the entries. It holds a hand copy of schema version 1.
 
 **Components (`components/panels/lidar/`)**

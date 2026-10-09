@@ -2354,7 +2354,7 @@ New keys are named in commit 0 (plan §4); "Site data" and "Profile" join the gl
 | Open item | Colors; Terrain; Earth; Gray; Greens; Magma; Yellow–red; Reverse; Range; Data range; Cut outliers; Leaves out the lowest and highest 2 % of values (tooltip); Custom; Minimum; Maximum; Reset |
 | Missing reasons | Not in this computer's Data library; The Data library needs a newer Canopi; The Data library couldn't be opened. Restart Canopi. |
 | Profile | Profile (tool title); Click to add points. Double-click or press Enter to finish. (tool card); Backspace removes the last point · Shift keeps 45° angles (tool card); Profile this line (canvas menu); Copy values; Close profile (aria); At {{distance}}; Rise {{value}}; Steepest {{percent}} over {{run}}; Highest {{value}}; Reading values…; No values along this line; Show an elevation or height layer to see its profile; Distance (m); Longitude; Latitude; Copied; Couldn't copy the values |
-| Analyze | Analyze (title, reworded without the name); Source; Results are added under their source in Site data and kept in your library. (reworded); Already in Site data. (reworded); Show in Site data (reworded) |
+| Analyze | Analyze (title, reworded without the name); Source; Results are added under their source in Site data and kept in your library. (reworded); Results are kept in your library. This Design doesn’t show their source, so they aren’t added to Site data. (`analyses.dialog.introLibraryOnly`, new); Already in Site data. (reworded); Show in Site data (reworded) |
 | Data library | Sort; Recently added; Added; Deleted item; Open a Design to import data (tooltip) |
 | File menu | Import terrain or height data… (reworded from Add data…) |
 

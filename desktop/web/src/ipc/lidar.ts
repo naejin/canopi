@@ -50,12 +50,12 @@ export async function lidarImportItem(
   })
 }
 
-/** Retry a failed or cancelled import with its saved selection and identity. */
+/** Retry a failed import with its saved selection and identity. */
 export async function lidarRetryImport(layerId: string): Promise<LidarImportReceipt> {
   return invoke('lidar_retry_import', { layerId })
 }
 
-/** Remove an unpublished item whose import failed or was cancelled. */
+/** Remove an unpublished item whose import failed. */
 export async function lidarDismissImport(layerId: string): Promise<void> {
   return invoke('lidar_dismiss_import', { layerId })
 }
