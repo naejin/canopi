@@ -56,7 +56,7 @@ test.describe('the UI gallery for Site data', () => {
     await openGallery(page, { surface: 'library', state: 'no-design' })
     await expect(page.getByRole('dialog', { name: 'Data library' })).toBeVisible()
     await openGallery(page, { surface: 'library', state: 'long' })
-    await expect(page.getByRole('dialog', { name: 'Data library' }).getByRole('button', { name: /^IGN LiDAR HD MNT tile 0470_6836 / })).toBeAttached()
+    await expect(page.getByRole('dialog', { name: 'Data library' }).getByRole('option', { name: /^IGN LiDAR HD MNT tile 0470_6836/ })).toBeAttached()
   })
 
   test('the analytic sampler answers within the generated caps and never exceeds them', async ({ page }) => {
