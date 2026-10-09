@@ -179,7 +179,9 @@ fn in_memory(status: LibraryOpenStatus) -> Result<OpenedCatalogue, String> {
     })
 }
 
-/// Move the catalogue file and its WAL sidecars under the set-aside folder.
+/// Move the catalogue file and its WAL sidecars under the set-aside folder,
+/// all or nothing: a sidecar that cannot follow returns the catalogue to its
+/// place and fails, so no catalogue is rebuilt beside an old log.
 /// Returns the new place of the main file.
 pub fn set_aside(paths: &LidarPaths) -> Result<PathBuf, String> {
     let directory = paths.set_aside_dir();
@@ -191,33 +193,18 @@ pub fn set_aside(paths: &LidarPaths) -> Result<PathBuf, String> {
             .map(|d| d.as_secs())
             .unwrap_or(0),
     );
-    let mut target = directory.join(format!("{stamp}.sqlite"));
-    let mut attempt = 1;
-    while target.exists() {
-        target = directory.join(format!("{stamp}-{attempt}.sqlite"));
-        attempt += 1;
-    }
+    let candidates = (0u32..=10_000).map(|attempt| match attempt {
+        0 => directory.join(format!("{stamp}.sqlite")),
+        n => directory.join(format!("{stamp}-{n}.sqlite")),
+    });
     let source = paths.catalogue_path();
-    std::fs::rename(&source, &target).map_err(|e| {
+    crate::db::move_aside(&source, candidates, &["-wal", "-shm"]).map_err(|e| {
         format!(
-            "Failed to set aside {} as {}: {e}",
+            "Failed to set aside {} under {}: {e}",
             source.display(),
-            target.display()
+            directory.display()
         )
-    })?;
-    for suffix in ["-wal", "-shm"] {
-        let sidecar = sidecar_path(&source, suffix);
-        if sidecar.exists() {
-            let _ = std::fs::rename(sidecar, sidecar_path(&target, suffix));
-        }
-    }
-    Ok(target)
-}
-
-fn sidecar_path(path: &Path, suffix: &str) -> PathBuf {
-    let mut name = path.file_name().unwrap_or_default().to_os_string();
-    name.push(suffix);
-    path.with_file_name(name)
+    })
 }
 
 /// `YYYYMMDDTHHMMSSZ` for a Unix time, without a date crate (proleptic
@@ -655,6 +642,44 @@ mod tests {
         ));
         drop(opened);
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A `-wal` left behind would be replayed into the rebuilt catalogue, so a
+    /// sidecar that cannot follow the catalogue aside moves nothing back and
+    /// the library opens Unavailable instead of being rebuilt over it.
+    #[cfg(unix)]
+    #[test]
+    fn a_wal_that_cannot_move_leaves_the_catalogue_in_place_and_unavailable() {
+        let root = crate::test_scratch::TestScratch::new("lidar-stuck-wal");
+        let paths = LidarPaths::open(&root).unwrap();
+        let catalogue_path = paths.catalogue_path();
+        let damaged: &[u8] = b"not a database at all, just bytes";
+        std::fs::write(&catalogue_path, damaged).unwrap();
+        // A sidecar no rename can move: the set-aside folder lies inside it,
+        // and a directory cannot be moved into itself.
+        let mut wal = catalogue_path.clone().into_os_string();
+        wal.push("-wal");
+        let wal = PathBuf::from(wal);
+        std::fs::create_dir(&wal).unwrap();
+        std::os::unix::fs::symlink(&wal, paths.set_aside_dir()).unwrap();
+
+        let opened = open_catalogue(&paths).unwrap();
+
+        assert!(
+            matches!(opened.status, LibraryOpenStatus::Unavailable { .. }),
+            "{:?}",
+            opened.status
+        );
+        assert_eq!(
+            std::fs::read(&catalogue_path).unwrap(),
+            damaged,
+            "the catalogue stays where it was, byte for byte"
+        );
+        assert_eq!(
+            std::fs::read_dir(&wal).unwrap().count(),
+            0,
+            "nothing stays in the set-aside folder"
+        );
     }
 
     fn has_column(connection: &Connection, table: &str, column: &str) -> bool {

@@ -24,16 +24,21 @@ export function asCanopiDesignIngestionError(error: unknown): CanopiDesignIngest
   )
 }
 
-const DESIGN_LOAD_FAILURE_KINDS: readonly DesignLoadFailureKind[] = [
-  'missing',
-  'unreadable',
-  'too_large',
-  'invalid_json',
-  'older_version',
-  'newer_version',
-  'invalid_document',
-  'internal',
-]
+/** Every kind once: the compiler refuses a kind added to the contract and not here. */
+const DESIGN_LOAD_FAILURE_KINDS = {
+  missing: true,
+  unreadable: true,
+  too_large: true,
+  invalid_json: true,
+  older_version: true,
+  newer_version: true,
+  invalid_document: true,
+  internal: true,
+} as const satisfies Record<DesignLoadFailureKind, true>
+
+function isDesignLoadFailureKind(kind: unknown): kind is DesignLoadFailureKind {
+  return typeof kind === 'string' && Object.prototype.hasOwnProperty.call(DESIGN_LOAD_FAILURE_KINDS, kind)
+}
 
 /**
  * The typed failure a native `load_design` rejection carries, or the
@@ -56,9 +61,9 @@ export function designLoadFailureOf(error: unknown): DesignLoadFailure | null {
     && 'kind' in error
     && 'message' in error
     && typeof error.message === 'string'
-    && (DESIGN_LOAD_FAILURE_KINDS as readonly unknown[]).includes(error.kind)
+    && isDesignLoadFailureKind(error.kind)
   ) {
-    return { kind: error.kind as DesignLoadFailureKind, message: error.message }
+    return { kind: error.kind, message: error.message }
   }
   return null
 }

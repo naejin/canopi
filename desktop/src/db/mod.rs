@@ -185,40 +185,50 @@ fn set_aside_name(path: &Path, reason: SetAsideReason) -> String {
 /// `base-<n>` when that name is taken. Either everything moves or, on failure,
 /// what moved is moved back.
 fn set_aside_user_db(path: &Path, base: &str) -> std::io::Result<PathBuf> {
+    let candidates = (1u32..=10_000).map(|attempt| match attempt {
+        1 => path.with_file_name(base),
+        n => path.with_file_name(format!("{base}-{n}")),
+    });
+    move_aside(path, candidates, &USER_DB_COMPANION_SUFFIXES)
+}
+
+/// Move the database at `path` and each of its `companions` (name suffixes
+/// such as `-wal`) to the first candidate that is free for all of them.
+/// Either everything moves or, on failure, what moved is moved back: a
+/// companion left behind would be applied to a fresh database at `path`.
+pub(crate) fn move_aside(
+    path: &Path,
+    mut candidates: impl Iterator<Item = PathBuf>,
+    companions: &[&str],
+) -> std::io::Result<PathBuf> {
     let companion = |target: &Path, suffix: &str| {
         let mut name = target.as_os_str().to_owned();
         name.push(suffix);
         PathBuf::from(name)
     };
-    let aside = (1u32..=10_000)
-        .map(|attempt| match attempt {
-            1 => path.with_file_name(base),
-            n => path.with_file_name(format!("{base}-{n}")),
-        })
+    let aside = candidates
         .find(|candidate| {
             !candidate.exists()
-                && USER_DB_COMPANION_SUFFIXES
+                && companions
                     .iter()
                     .all(|suffix| !companion(candidate, suffix).exists())
         })
         .ok_or_else(|| {
             std::io::Error::new(
                 std::io::ErrorKind::AlreadyExists,
-                "no free name to set the user database aside",
+                format!("no free name to set {} aside", path.display()),
             )
         })?;
 
     std::fs::rename(path, &aside)?;
     let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
-    for suffix in USER_DB_COMPANION_SUFFIXES {
+    for suffix in companions {
         let from = companion(path, suffix);
         if !from.exists() {
             continue;
         }
         let to = companion(&aside, suffix);
         if let Err(error) = std::fs::rename(&from, &to) {
-            // A companion left behind would be applied to the fresh database,
-            // so restore the original set before reporting the failure.
             let mut rollback_errors = Vec::new();
             for (original, renamed) in moved.iter().rev() {
                 if let Err(rollback) = std::fs::rename(renamed, original) {

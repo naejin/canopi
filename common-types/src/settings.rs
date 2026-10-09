@@ -25,7 +25,9 @@ macro_rules! settings_enum {
     };
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+/// Device settings. `Debug` is written by hand so the Google key prints as
+/// `<redacted>`.
+#[derive(Clone, Serialize, Deserialize, Type)]
 #[serde(default)]
 pub struct Settings {
     pub locale: Locale,
@@ -111,6 +113,73 @@ pub struct LastView {
     pub lon: f64,
     pub lat: f64,
     pub zoom: f64,
+}
+
+impl std::fmt::Debug for Settings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Destructured so a new field cannot be left out of the output.
+        let Self {
+            locale,
+            theme,
+            snap_to_grid,
+            side_panel_width,
+            saved_stamps_frame_height,
+            basemap_style,
+            basemap_visible,
+            basemap_opacity,
+            satellite_visible,
+            satellite_opacity,
+            google_maps_api_key,
+            satellite_source,
+            contour_visible,
+            contour_opacity,
+            contour_interval,
+            hillshade_visible,
+            hillshade_opacity,
+            soften_background,
+            plant_spacing_interval_m,
+            last_view,
+            used_canvas_tools,
+            tool_names_visible,
+            single_key_shortcuts,
+            scroll_wheel,
+            new_design_satellite,
+            new_design_symbol_scale,
+            new_design_labels,
+        } = self;
+        f.debug_struct("Settings")
+            .field("locale", locale)
+            .field("theme", theme)
+            .field("snap_to_grid", snap_to_grid)
+            .field("side_panel_width", side_panel_width)
+            .field("saved_stamps_frame_height", saved_stamps_frame_height)
+            .field("basemap_style", basemap_style)
+            .field("basemap_visible", basemap_visible)
+            .field("basemap_opacity", basemap_opacity)
+            .field("satellite_visible", satellite_visible)
+            .field("satellite_opacity", satellite_opacity)
+            .field(
+                "google_maps_api_key",
+                &google_maps_api_key.as_ref().map(|_| "<redacted>"),
+            )
+            .field("satellite_source", satellite_source)
+            .field("contour_visible", contour_visible)
+            .field("contour_opacity", contour_opacity)
+            .field("contour_interval", contour_interval)
+            .field("hillshade_visible", hillshade_visible)
+            .field("hillshade_opacity", hillshade_opacity)
+            .field("soften_background", soften_background)
+            .field("plant_spacing_interval_m", plant_spacing_interval_m)
+            .field("last_view", last_view)
+            .field("used_canvas_tools", used_canvas_tools)
+            .field("tool_names_visible", tool_names_visible)
+            .field("single_key_shortcuts", single_key_shortcuts)
+            .field("scroll_wheel", scroll_wheel)
+            .field("new_design_satellite", new_design_satellite)
+            .field("new_design_symbol_scale", new_design_symbol_scale)
+            .field("new_design_labels", new_design_labels)
+            .finish()
+    }
 }
 
 impl Default for Settings {
@@ -366,6 +435,25 @@ mod tests {
             serde_json::from_value::<Settings>(serde_json::json!({ "satellite_source": "bing" }))
                 .is_err()
         );
+    }
+
+    /// `Debug` output reaches logs, so it never carries the Google key.
+    #[test]
+    fn debug_output_redacts_the_google_key() {
+        let settings = Settings {
+            google_maps_api_key: Some("AIzaSecretKey123".to_owned()),
+            ..Settings::default()
+        };
+        let printed = format!("{settings:?}");
+        assert!(!printed.contains("AIzaSecretKey123"), "{printed}");
+        assert!(
+            printed.contains("google_maps_api_key: Some(\"<redacted>\")"),
+            "{printed}"
+        );
+        assert!(printed.contains("locale: En"), "{printed}");
+
+        let printed = format!("{:?}", Settings::default());
+        assert!(printed.contains("google_maps_api_key: None"), "{printed}");
     }
 
     #[test]

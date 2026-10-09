@@ -14,6 +14,7 @@ import { cyclePlantLabels } from '../plant-display/actions'
 import {
   currentCanvasCommandSurface,
   currentCanvasHasSelection,
+  currentCanvasKeyboardPort,
   currentCanvasQuerySurface,
   currentCanvasSelection,
   currentCanvasTool,
@@ -59,7 +60,11 @@ function withCanvas(run: (canvas: CanvasCommandSurface) => void): void {
   if (canvas) run(canvas)
 }
 
+/** Edits that delete the selection: refused during the re-origin hold, as the keys and the canvas menu refuse them (U39). */
+const DELETING_EDITS: ReadonlySet<CanvasEditAction> = new Set(['cut', 'delete'])
+
 function runCanvasEditAction(action: CanvasEditAction): void {
+  if (DELETING_EDITS.has(action) && (currentCanvasKeyboardPort()?.holdsSelectionDeletes() ?? false)) return
   withCanvas(({ sceneEdits }) => {
     switch (action) {
       case 'cut':
