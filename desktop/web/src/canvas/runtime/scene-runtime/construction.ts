@@ -227,7 +227,6 @@ export function createSceneRuntimeConstruction(
     clearHoveredTargets: () => callbacks.syncHoveredCanvasTargets(null),
     clearPanelOriginTargets: () => panelTargetAdapter.clearPanelOriginTargets(),
     composeDocumentForSave: (input) => appAdapter.document.composeDocumentForSave(input),
-    syncCanvasSignalsFromDocument: (file) => appAdapter.settings.layerProjections.syncFromLayers(file.layers),
   })
   const inspection = new SceneCanvasInspectionOwner({
     frames: cameraHost.frames,

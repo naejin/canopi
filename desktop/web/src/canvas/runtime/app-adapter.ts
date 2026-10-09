@@ -14,13 +14,6 @@ import type {
   CanvasSceneEditCommandSurface,
 } from './runtime'
 
-export interface CanvasRuntimeLayerProjectionSource {
-  readonly name: string
-  readonly visible: boolean
-  readonly locked: boolean
-  readonly opacity: number
-}
-
 interface CanvasRuntimeChromeSettingsSnapshot {
   /** The grid; the app hides it while it presents the map. */
   readonly gridVisible: boolean
@@ -155,12 +148,6 @@ export interface CanvasRuntimeSettingsAdapter {
   subscribeChromeOverlay(onChange: () => void): () => void
   /** Calls `onChange` now and whenever the map background under the Design changes. */
   subscribeMapBackdrop(onChange: (backdrop: CanvasMapBackdrop) => void): () => void
-  readonly layerProjections: CanvasRuntimeLayerProjectionAdapter
-}
-
-export interface CanvasRuntimeLayerProjectionAdapter {
-  syncFromLayers(layers: ReadonlyArray<CanvasRuntimeLayerProjectionSource>): void
-  syncLayer(layer: CanvasRuntimeLayerProjectionSource): void
 }
 
 /** Display on the map: how plants are coloured, sized, outlined and labelled. */
@@ -216,7 +203,6 @@ export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter
   let gridVisible = false
   let snapToGrid = false
   let plantSpacingIntervalM = FALLBACK_PLANT_SPACING_INTERVAL_M
-  const layerProjections = new Map<string, CanvasRuntimeLayerProjectionSource>()
 
   return {
     cleanState: {
@@ -247,15 +233,6 @@ export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter
       subscribeMapBackdrop: (onChange) => {
         onChange('basemap')
         return () => {}
-      },
-      layerProjections: {
-        syncFromLayers: (layers) => {
-          layerProjections.clear()
-          for (const layer of layers) layerProjections.set(layer.name, layer)
-        },
-        syncLayer: (layer) => {
-          layerProjections.set(layer.name, layer)
-        },
       },
     },
   }

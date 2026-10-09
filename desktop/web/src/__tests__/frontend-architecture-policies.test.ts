@@ -1477,14 +1477,22 @@ const SYMBOL_OWNERSHIP_POLICIES = [
     names: ['_zoneControlPoints', '_measurementGuideControlPoints'],
   },
   {
+    // The Scene owns layer visibility, locks and opacity; Layers reads them from the scene snapshot and its open row
+    // from open-row.ts, so no app signal mirrors them and no runtime port feeds one (canopi-f47t.42).
     kind: 'forbid-source-symbols',
-    name: 'Scene Session keeps retired active entity and Layer mirrors deleted',
-    from: [
-      'src/canvas/runtime/scene/types.ts',
-      'src/canvas/runtime/scene/defaults.ts',
-      'src/canvas/runtime/scene/store.ts',
+    name: 'Retired active entity and Layer mirrors stay deleted',
+    from: ['src/**'],
+    names: [
+      'activeEntityId',
+      'activeLayerName',
+      'setActiveLayerName',
+      'layerVisibility',
+      'layerLockState',
+      'layerOpacity',
+      'CanvasRuntimeLayerProjectionAdapter',
+      'CanvasRuntimeLayerProjectionSource',
+      'layerProjections',
     ],
-    names: ['activeEntityId', 'activeLayerName', 'setActiveLayerName'],
   },
   {
     // ADR 0004: one renderer (Pixi inside MapLibre); no selection, probing or fallback.
@@ -1650,12 +1658,6 @@ const SYMBOL_OWNERSHIP_POLICIES = [
       'src/canvas/runtime/scene-runtime/document.ts',
     ],
     names: ['applySignalBackedSceneState'],
-  },
-  {
-    kind: 'forbid-source-symbols',
-    name: 'Scene effects do not own persisted layer state',
-    from: ['src/canvas/runtime/scene-runtime/effects.ts'],
-    names: ['layerVisibility'],
   },
   {
     kind: 'forbid-source-symbols',

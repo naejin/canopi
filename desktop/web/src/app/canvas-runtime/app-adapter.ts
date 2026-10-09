@@ -1,20 +1,13 @@
-import { batch, effect, signal, type ReadonlySignal } from '@preact/signals'
+import { effect, signal, type ReadonlySignal } from '@preact/signals'
 import type {
   CanvasRuntimeAppAdapter,
-  CanvasRuntimeLayerProjectionSource,
   CanvasRuntimePresentationDataAdapter,
   CanvasRuntimeSavedObjectStampAdapter,
 } from '../../canvas/runtime/app-adapter'
 import type { CanvasMapBackdrop } from '../../canvas/runtime/scene-visuals'
 import { effectiveBackgroundOpacity, mapBackgroundOf, type MapLayersState } from '../map-layers/state'
 import { presentedMapLayers, storyPresentationHidesEditingAids, storyPresentationOverrides } from '../story-presentation/overrides'
-import {
-  gridVisible,
-  layerLockState,
-  layerOpacity,
-  layerVisibility,
-  snapToGridEnabled,
-} from '../canvas-settings/signals'
+import { gridVisible, snapToGridEnabled } from '../canvas-settings/signals'
 import { mutateSettingsProjection } from '../settings/projection'
 import { lastView, locale, plantSpacingIntervalM, scrollWheel, theme } from '../settings/state'
 import { composeDocumentForSave } from '../contracts/document'
@@ -101,10 +94,6 @@ export function createAppCanvasRuntimeAppAdapter(
       subscribeMapBackdrop: (onChange) => effect(() => {
         onChange(mapBackdropOf(presentedMapLayers()))
       }),
-      layerProjections: {
-        syncFromLayers,
-        syncLayer,
-      },
     },
   }
 }
@@ -141,39 +130,4 @@ function mapBackdropOf(state: MapLayersState): CanvasMapBackdrop {
     case 'none':
       return 'paper'
   }
-}
-
-function syncFromLayers(layers: ReadonlyArray<CanvasRuntimeLayerProjectionSource>): void {
-  const visibility = { ...layerVisibility.value }
-  const locks = { ...layerLockState.value }
-  const opacities = { ...layerOpacity.value }
-
-  for (const layer of layers) {
-    visibility[layer.name] = layer.visible
-    locks[layer.name] = layer.locked
-    opacities[layer.name] = layer.opacity
-  }
-
-  batch(() => {
-    layerVisibility.value = visibility
-    layerLockState.value = locks
-    layerOpacity.value = opacities
-  })
-}
-
-function syncLayer(layer: CanvasRuntimeLayerProjectionSource): void {
-  batch(() => {
-    layerVisibility.value = {
-      ...layerVisibility.value,
-      [layer.name]: layer.visible,
-    }
-    layerLockState.value = {
-      ...layerLockState.value,
-      [layer.name]: layer.locked,
-    }
-    layerOpacity.value = {
-      ...layerOpacity.value,
-      [layer.name]: layer.opacity,
-    }
-  })
 }

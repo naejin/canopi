@@ -1,8 +1,6 @@
 {
   "files": [],
-  "exports": [
-    "src/app/canvas-settings/signals.ts#activeLayerName"
-  ],
+  "exports": [],
   "typeExports": [
     "src/app/analyses/model.ts#AnalysisOptionGroup",
     "src/app/analyses/model.ts#ExistingMatch",

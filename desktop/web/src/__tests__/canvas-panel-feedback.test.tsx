@@ -3,7 +3,6 @@ import { useEffect } from 'preact/hooks'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { layerVisibility } from '../app/canvas-settings/signals'
 import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
 import { CanvasPanel } from '../components/panels/CanvasPanel'
 import { WebCanvasWorkspace } from '../web/WebCanvasWorkspace'
@@ -68,7 +67,6 @@ describe('CanvasPanel basemap feedback', () => {
     document.body.innerHTML = ''
     document.body.appendChild(container)
     locale.value = 'en'
-    layerVisibility.value = { plants: true, zones: true, annotations: true }
     mapLayers.value = createDefaultMapLayers()
     designSessionFixture.file = null
     mockBasemapState = IDLE_MAPLIBRE_CANVAS_SURFACE_STATE

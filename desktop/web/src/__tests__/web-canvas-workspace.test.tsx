@@ -2,9 +2,6 @@ import { effect, signal } from '@preact/signals'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  layerVisibility,
-} from '../app/canvas-settings/signals'
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
 import { currentCanvasSession } from '../canvas/session'
 import { CanvasRuntimeCleanupError } from '../canvas/runtime/cleanup'
@@ -32,9 +29,6 @@ import type {
   WorkspaceRuntimeStartOutcome,
 } from '../app/canvas-map-surface/workspace-runtime-composition'
 
-// The layer visibility the module starts with: the New Design defaults.
-const NEW_DESIGN_LAYER_VISIBILITY = layerVisibility.peek()
-
 describe('Web Edition canvas workspace', () => {
   let container: HTMLDivElement
 
@@ -56,7 +50,6 @@ describe('Web Edition canvas workspace', () => {
     render(null, container)
     container?.remove()
     currentCanvasSession.value = null
-    layerVisibility.value = { ...NEW_DESIGN_LAYER_VISIBILITY }
   })
 
   it.each<WorkspaceRuntimeStartOutcome>(['shared-ready', 'map-unavailable'])(
