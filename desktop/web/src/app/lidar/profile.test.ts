@@ -1,11 +1,7 @@
 import { signal } from '@preact/signals'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createSessionPlane } from '../../canvas/session-plane'
-import {
-  LIDAR_SAMPLE_MAX_TARGETS,
-  type LidarSamplePointsRequest,
-  type LidarSampleSeries,
-} from '../../generated/contracts'
+import type { LidarSamplePointsRequest, LidarSampleSeries } from '../../generated/contracts'
 import { setCurrentCanvasSession } from '../../canvas/session'
 import type { CanvasRuntimeSurfaces } from '../../canvas/runtime/runtime'
 import { activePanel, sidePanel } from '../shell/state'
@@ -15,58 +11,16 @@ import {
   profileLineMenu,
   type SiteProfile,
 } from './profile'
-import type { SiteSampler } from './sampler'
+import { createSiteSampler } from './sampler'
 import { endSiteDataTransients, profileLine, type GeoPoint } from './site-transients'
 
-type SampleLane = Parameters<SiteSampler['request']>[0]
 /** An item a profile plots, as the profile's owner reads it. */
 type ProfileCurveSource = ReturnType<Parameters<typeof createSiteProfile>[0]['readCurves']>[number]
 
 const PLANE = createSessionPlane({ lon: 2.35, lat: 48.85 })
+/** The one Design session the samples are asked for. */
+const DESIGN = {}
 const at = (x: number, y: number): GeoPoint => PLANE.toGeo({ x, y })
-
-/**
- * The sampler's contract (sampler.ts), standing in for stream C's createSiteSampler until it merges: one request in
- * flight per lane, a newer key replacing the lane's queued key, targets split in list order into batches of
- * LIDAR_SAMPLE_MAX_TARGETS sent one after another.
- */
-function contractSampler(sample: (request: LidarSamplePointsRequest) => Promise<LidarSampleSeries[]>): SiteSampler {
-  type Asked = { run(): Promise<void>; supersede(): void }
-  const lanes = new Map<SampleLane, { running: boolean; queued: Asked | null }>()
-  async function drain(lane: { running: boolean; queued: Asked | null }) {
-    lane.running = true
-    while (lane.queued) {
-      const next = lane.queued
-      lane.queued = null
-      await next.run()
-    }
-    lane.running = false
-  }
-  return {
-    request(laneId, _key, targets, points, onBatch) {
-      return new Promise((resolve, reject) => {
-        const lane = lanes.get(laneId) ?? { running: false, queued: null }
-        lanes.set(laneId, lane)
-        lane.queued?.supersede()
-        lane.queued = {
-          supersede: () => resolve('superseded'),
-          async run() {
-            try {
-              for (let first = 0; first < targets.length; first += LIDAR_SAMPLE_MAX_TARGETS) {
-                const batch = targets.slice(first, first + LIDAR_SAMPLE_MAX_TARGETS)
-                onBatch(first, await sample({ targets: batch, points: points.map(([lon, lat]) => [lon, lat]) }))
-              }
-              resolve('done')
-            } catch (error) {
-              reject(error)
-            }
-          },
-        }
-        if (!lane.running) void drain(lane)
-      })
-    },
-  }
-}
 
 /** A sample call the test answers by hand. */
 interface PendingSample {
@@ -77,7 +31,8 @@ interface PendingSample {
 
 function manualBackend() {
   const calls: PendingSample[] = []
-  const sampler = contractSampler((request) => new Promise((resolve, reject) => {
+  // The real sampler (one request in flight per lane, batches of LIDAR_SAMPLE_MAX_TARGETS in turn) over a faked command.
+  const sampler = createSiteSampler({ designIdentity: () => DESIGN, sample: (request) => new Promise((resolve, reject) => {
     calls.push({
       request,
       answer: async (series) => {
@@ -89,7 +44,7 @@ function manualBackend() {
         await settle()
       },
     })
-  }))
+  }) })
   return { calls, sampler }
 }
 
