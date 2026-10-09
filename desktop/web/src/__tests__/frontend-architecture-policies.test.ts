@@ -2146,6 +2146,13 @@ const CANVAS_V2_POLICIES = [
     exceptFrom: [...TEST_SOURCE_PATTERNS],
     targets: ['src/commands/**', 'src/web/**', 'src/platform/**', 'src/components/**'],
   },
+  {
+    // Static and re-export value edges; type-only and dynamic edges enter no evaluation order, so they may close a loop.
+    kind: 'forbid-cycles',
+    name: 'P39 production modules form no value import cycle',
+    from: ['src/**'],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+  },
 ] satisfies readonly ArchitecturePolicy[]
 
 /**
@@ -3437,6 +3444,28 @@ describe('canvas v2 policies, end of 0B', () => {
       `${P14} src/app/keyboard/planted.ts:2:1 imports src/web/browser-shell-commands.ts via "../../web/browser-shell-commands" (static)`,
       `${P14} src/app/keyboard/planted.ts:3:1 imports src/platform/desktop.ts via "../../platform/desktop" (static)`,
       `${P14} src/app/keyboard/planted.ts:4:1 imports src/components/canvas/ToolRail.tsx via "../../components/canvas/ToolRail" (static)`,
+    ])
+  })
+})
+
+const P39 = '[P39 production modules form no value import cycle]'
+
+describe('2.0 guard policies (canopi-f47t.52.17)', () => {
+  it('P39 rejects a production value cycle; type-only, dynamic and test cycles pass', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/app/planted/a.ts', ["import { b } from './b'", 'export const a = b']),
+      plantedSource('src/app/planted/b.ts', ["export { a } from './a'", 'export const b = 1']),
+      plantedSource('src/app/planted/type-a.ts', ["import type { B } from './type-b'", 'export type A = B']),
+      plantedSource('src/app/planted/type-b.ts', ["import { type A } from './type-a'", 'export type B = A']),
+      plantedSource('src/app/planted/lazy-a.ts', ["export const load = () => import('./lazy-b')"]),
+      plantedSource('src/app/planted/lazy-b.ts', ["import { load } from './lazy-a'", 'void load']),
+      plantedSource('src/app/planted/tested.ts', ["import './tested.test'"]),
+      plantedSource('src/app/planted/tested.test.ts', ["import './tested'"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P39'))).toEqual([
+      `${P39} src/app/planted/a.ts is in a value import cycle with src/app/planted/b.ts`,
+      `${P39} src/app/planted/b.ts is in a value import cycle with src/app/planted/a.ts`,
     ])
   })
 })

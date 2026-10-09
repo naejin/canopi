@@ -103,6 +103,14 @@ interface ForbidCallsPolicy {
   readonly callKinds?: readonly CallKind[]
 }
 
+/** No value import cycle among the `from` sources, `exceptFrom` dropped: static and re-export edges, type-only ones skipped. */
+interface ForbidCyclesPolicy {
+  readonly kind: 'forbid-cycles'
+  readonly name: string
+  readonly from: readonly string[]
+  readonly exceptFrom?: readonly string[]
+}
+
 interface SourceTombstonesPolicy {
   readonly kind: 'source-tombstones'
   readonly name: string
@@ -125,6 +133,7 @@ export type ArchitecturePolicy =
   | ConfineSymbolsPolicy
   | ForbidWritesPolicy
   | ForbidCallsPolicy
+  | ForbidCyclesPolicy
   | SourceTombstonesPolicy
 
 export function collectArchitecturePolicyViolations(
@@ -176,6 +185,9 @@ export function collectArchitecturePolicyViolations(
         break
       case 'forbid-calls':
         collectForbiddenCallViolations(graph, policy, violations)
+        break
+      case 'forbid-cycles':
+        collectImportCycleViolations(graph, policy, violations)
         break
       case 'source-tombstones':
         collectSourceTombstoneViolations(graph, policy, violations)
@@ -515,6 +527,56 @@ function collectForbiddenCallViolations(
         `[${policy.name}] ${source.path}:${call.line} ${call.kind === 'new' ? 'constructs' : 'calls'} ${call.target}`,
       )
     }
+  }
+}
+
+/** Tarjan's strongly connected components over value edges; each member of a cycle is reported once. */
+function collectImportCycleViolations(
+  graph: readonly TypeScriptSourceFact[],
+  policy: ForbidCyclesPolicy,
+  violations: string[],
+): void {
+  const nodes = matchingSources(graph, policy.from)
+    .filter((source) => !matchesAny(source.path, policy.exceptFrom ?? []))
+  const covered = new Set(nodes.map((source) => source.path))
+  const successors = new Map(nodes.map((source) => [source.path, [...new Set(source.imports
+    .filter((edge) => edge.kind !== 'dynamic' && !edge.typeOnly && covered.has(edge.target))
+    .map((edge) => edge.target))]]))
+  const index = new Map<string, number>()
+  const lowLink = new Map<string, number>()
+  const stack: string[] = []
+  const onStack = new Set<string>()
+  const cycles: string[][] = []
+
+  const visit = (path: string): void => {
+    index.set(path, index.size)
+    lowLink.set(path, index.get(path)!)
+    stack.push(path)
+    onStack.add(path)
+    for (const next of successors.get(path)!) {
+      if (!index.has(next)) {
+        visit(next)
+        lowLink.set(path, Math.min(lowLink.get(path)!, lowLink.get(next)!))
+      } else if (onStack.has(next)) {
+        lowLink.set(path, Math.min(lowLink.get(path)!, index.get(next)!))
+      }
+    }
+    if (lowLink.get(path) !== index.get(path)) return
+    const component: string[] = []
+    let member: string
+    do {
+      member = stack.pop()!
+      onStack.delete(member)
+      component.push(member)
+    } while (member !== path)
+    if (component.length > 1 || successors.get(path)!.includes(path)) cycles.push(component.sort())
+  }
+  for (const path of covered) if (!index.has(path)) visit(path)
+
+  for (const path of cycles.flat().sort()) {
+    const component = cycles.find((cycle) => cycle.includes(path))!
+    const others = component.length > 1 ? component.filter((other) => other !== path) : component
+    violations.push(`[${policy.name}] ${path} is in a value import cycle with ${others.join(', ')}`)
   }
 }
 
