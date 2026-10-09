@@ -88,7 +88,11 @@ export function createGalleryMapContributionAdapter(
   // The memory backend's asset paths are already URLs the gallery server serves by range, for Cut outliers' read too.
   installLidarDisplayDescriptors(servedAsIs)
   return {
-    createRasterDisplay: (map, options) => createRasterDisplay(map, options),
+    createRasterDisplay: (map, options) => {
+      // The map whose rasters draw, for a spec that reads its layer order (a Retry builds a new one).
+      (window as { __galleryRasterMap?: unknown }).__galleryRasterMap = map
+      return createRasterDisplay(map, options)
+    },
     readSiteHover,
     read: (runtime) => readWorkspaceMapContributions(runtime, store, () => ({
       lidar: lidarDisplayLayers(readCurrentLidarPresentation(), lidarDisplayDescriptors.value, null, servedAsIs),

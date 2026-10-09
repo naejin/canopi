@@ -304,6 +304,8 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
       map,
       createMapLayerStackDescriptors(attempt.contributionSnapshot?.lidar.map((layer) => layer.id) ?? []),
     )
+    // A rebuilt map gains its scene layer after the contributions' first drain: the rasters re-anchor beneath it.
+    attempt.contributions.restack()
   }
 
   private publishUnavailable(): void {

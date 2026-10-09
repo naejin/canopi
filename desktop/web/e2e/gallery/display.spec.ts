@@ -147,3 +147,45 @@ test.describe('an open Site data item\'s settings', () => {
     await expect(ground.locator('[data-control="name"]')).toHaveAttribute('aria-expanded', 'true')
   })
 })
+
+test.describe('the raster band after a map Retry', () => {
+  test.use({ expectedConsoleErrors: ['Shared workspace map failed: Error: MapLibre WebGL context was lost'] })
+
+  /** The rebuilt map's layers, bottom first: each LiDAR raster as `lidar`, the scene and the Site data pin as named. */
+  async function stack(page: Page): Promise<string[]> {
+    return page.evaluate(() => {
+      const map = (window as { __galleryRasterMap?: { getLayersOrder(): string[], getLayer(id: string): { type: string } } }).__galleryRasterMap
+      if (!map) return []
+      return map.getLayersOrder().map((id) => map.getLayer(id)?.type === 'raster' ? 'lidar' : id)
+    })
+  }
+
+  test('a raster that arrives after the rebuild draws below the Design and the pin', async ({ page }) => {
+    const { map } = await openRaster(page)
+    // A pin, so the Site data layers are on the map too.
+    const box = await map.boundingBox()
+    await page.mouse.click(box!.x + box!.width * 0.2, box!.y + box!.height * 0.4)
+    await expect.poll(() => stack(page)).toContain('site-pin-core')
+    const before = await stack(page)
+    expect(before.lastIndexOf('lidar'), before.join(' ')).toBeLessThan(before.indexOf('canopi-shared-scene'))
+
+    const tiles = await renderedTiles(page)
+    await page.locator('canvas.maplibregl-canvas').evaluate((canvas: HTMLCanvasElement) => {
+      const lose = canvas.getContext('webgl2')?.getExtension('WEBGL_lose_context')
+      if (!lose) throw new Error('the map canvas has no WEBGL_lose_context')
+      lose.loseContext()
+    })
+    const stopped = page.getByText('The map stopped drawing. Your Design is safe.')
+    await expect(stopped).toBeVisible()
+    await page.getByRole('button', { name: 'Retry', exact: true }).click()
+    await expect(stopped).toBeHidden()
+    await settled(page, map, tiles)
+
+    const after = await stack(page)
+    const scene = after.indexOf('canopi-shared-scene')
+    expect(scene, after.join(' ')).toBeGreaterThan(-1)
+    expect(after.filter((id) => id === 'lidar').length, after.join(' ')).toBe(before.filter((id) => id === 'lidar').length)
+    expect(after.lastIndexOf('lidar'), after.join(' ')).toBeLessThan(scene)
+    expect(after.slice(scene).filter((id) => id === 'lidar'), 'nothing above the Design is a raster').toEqual([])
+  })
+})

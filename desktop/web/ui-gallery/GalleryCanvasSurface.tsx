@@ -19,6 +19,10 @@ import {
 import { activity } from './memory-backend'
 import { specimens } from './fixtures'
 import { useMapArea } from '../src/components/shared/useMapChrome'
+import { MapNotice } from '../src/components/canvas/MapNotice'
+import { getMapNoticeReadModel } from '../src/app/canvas-map-surface/map-notice'
+import { IDLE_MAPLIBRE_CANVAS_SURFACE_STATE } from '../src/maplibre/canvas-surface-state'
+import { t } from '../src/i18n'
 import styles from './gallery.module.css'
 
 interface GallerySurfaceSignal {
@@ -59,6 +63,10 @@ export function GalleryCanvasSurface({
   const canvasArea = useRef<HTMLDivElement>(null)
   useMapArea(canvasArea)
   const ready = useSignal(false)
+  // The production map notice, for failures only (the gallery's background stays hidden offline): a lost map shows
+  // "The map stopped drawing" with Retry, which rebuilds the map as the app's does.
+  const mapState = useSignal(IDLE_MAPLIBRE_CANVAS_SURFACE_STATE)
+  const retryMap = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     const container = canvas.current
@@ -137,6 +145,7 @@ export function GalleryCanvasSurface({
           container,
           design,
           onMapStateChange: (state) => {
+            mapState.value = state
             if (state.status === 'error') activity.value = 'Map unavailable'
           },
           onFailure: (error) => console.error('Gallery workspace failed:', error),
@@ -146,6 +155,7 @@ export function GalleryCanvasSurface({
         runtimeCreationSettlement = null
       }
       const activeRuntime = runtime
+      retryMap.current = () => activeRuntime.retryMap()
       const activeResize = new ResizeObserver(() => {
         activeRuntime.surfaces.documents.resize(container.clientWidth, container.clientHeight)
       })
@@ -255,6 +265,11 @@ export function GalleryCanvasSurface({
             profileLine={profileLine}
           />
         ) : null}
+        <MapNotice
+          notice={getMapNoticeReadModel({ hasDesign: true, mapVisible: false, mapSurface: mapState.value, t })}
+          onRetry={() => retryMap.current?.()}
+          canvasRef={canvas}
+        />
       </div>
     </div>
   )

@@ -6,7 +6,7 @@ From `desktop/web/`, run `npm run dev:ui` and open http://127.0.0.1:1422/. Typec
 
 The gallery mounts production workspace and panel components over memory fixtures (`fixtures.ts`, `memory-backend.ts`, `memory-dialogs.ts`). No user database, Design, settings store or file is read or written; a reload resets the session. It lives outside `src` and the normal build inputs, its Vite config rejects builds, and it owns a separate dependency cache so it runs beside Desktop Vite (1420) and the Web edition (1421). The port is strict: stop the existing owner instead of accepting another port.
 
-The canvas is the production shared workspace (MapLibre and its Pixi scene layer, `gallery-workspace-runtime.ts`) with at most one live runtime. It works offline and deterministically because Basemap and Satellite stay hidden, whatever the Layers panel shows; the map draws only its local background and fetches no tiles. It needs WebGL2; without it the map is unavailable and the status line says so.
+The canvas is the production shared workspace (MapLibre and its Pixi scene layer, `gallery-workspace-runtime.ts`) with at most one live runtime. It works offline and deterministically because Basemap and Satellite stay hidden, whatever the Layers panel shows; the map draws only its local background and fetches no tiles. It needs WebGL2; without it the map is unavailable and the status line says so. A map that stops drawing shows the production map notice with Retry, which rebuilds it as the app does.
 
 ## Surfaces
 
