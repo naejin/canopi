@@ -139,7 +139,7 @@ jobs:
           python-version: "3.12"
       - name: Documentation links and lifecycle
         run: |
-          python3 -m unittest scripts.test_check_docs
+          python3 -m unittest scripts.test_check_docs scripts.test_change_coupling
           python3 scripts/check_docs.py
 
   lint-rust:
