@@ -200,12 +200,12 @@ describe('Modal layer', () => {
     expect(document.activeElement).toBe(view)
   })
 
-  it('one Esc in the palette closes only the palette, not a popover or the inspection under it', async () => {
+  it('one Esc in the palette closes only the palette, not a popover or the profile under it', async () => {
     await act(async () => { render(<><Workspace /><CommandPalette /></>, container) })
     const popover = vi.fn(() => true)
-    const inspection = vi.fn(() => true)
+    const profile = vi.fn(() => true)
     const releasePopover = registerEscapeLayer({ priority: ESCAPE_PRIORITY.popover, isActive: () => true, escape: popover })
-    const releaseInspection = registerEscapeLayer({ priority: ESCAPE_PRIORITY.inspection, isActive: () => true, escape: inspection })
+    const releaseProfile = registerEscapeLayer({ priority: ESCAPE_PRIORITY.profile, isActive: () => true, escape: profile })
     try {
       await act(async () => { commandPaletteOpen.value = true })
       const input = container.querySelector<HTMLInputElement>('[role="combobox"]')!
@@ -227,10 +227,10 @@ describe('Modal layer', () => {
       expect(modalLayerOpen.value).toBe(false)
       expect(escape.defaultPrevented).toBe(true)
       expect(popover).not.toHaveBeenCalled()
-      expect(inspection).not.toHaveBeenCalled()
+      expect(profile).not.toHaveBeenCalled()
     } finally {
       releasePopover()
-      releaseInspection()
+      releaseProfile()
     }
   })
 
