@@ -32,6 +32,8 @@ vi.mock('../ipc/lidar', () => ({
   lidarDisplayDescriptor: vi.fn(() => new Promise(() => {})),
   // The panel's library observer reads the list on mount: it answers with the snapshot the test set.
   lidarListLibrary: vi.fn(async () => (await import('../app/lidar/library-store')).lidarLibrary.peek()),
+  // The panel's Profile button imports the profile, which builds the app's one sampler on this transport.
+  lidarSamplePoints: vi.fn(() => new Promise(() => {})),
 }))
 vi.mock('../app/document-session/store', async () => {
   const { signal } = await import('@preact/signals')
