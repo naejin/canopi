@@ -53,7 +53,7 @@ Read with `bd show`, `bd dep tree canopi-f47t`, `bd list --parent canopi-f47t` a
 ## 5. What to do first
 
 1. **Plan canopi-f47t.52 in a fresh session, planning only.** Orientation, read-only in the user's checkout: `git -C /home/daylon/projects/canopi status --short --branch` (the user's `.beads.gate.lock` is expected), `df -h /`, `bd show canopi-f47t.52`. In the integration worktree: `git status --short --branch` (clean), `git fetch`, rebase if behind (the guide's Places); check CI on the last pushed commit (`gh run list --branch feature/geolibre-adoption --limit 3`).
-   Then read section 2's path, then run plan section 4's planning steps (1)–(6), the design check, one question batch and the amendment with the target ADR, the owners file, commit 0's failing user-path tests and the briefs. Build nothing.
+   Then read section 2's path, then run plan section 4's planning steps (1)–(6), the design check, one question batch and the amendment with the target ADR, the owners file, commit 0's failing user-path tests and the briefs; the amendment commit trims finished text (the phase-0 narrative, plan section 5's table of built policies) in the same commit to stay within the plan's byte budget. Build nothing.
 2. **Build it in a later session** from the amended plan: commit 0 (the gate tooling the guide dates to it, the policy tests with their ratchet lists, the failing user-path tests), then one boundary per stream, reviews, serial merges with gates, the live and Web checks, the pre-push review, one push, and the close against the stopping rule.
 3. **Then the release close** (plan section 4, "2.0 release close"): design check, one question batch (P34 among them), amendment, its steps 1–10 and the definition of done.
 

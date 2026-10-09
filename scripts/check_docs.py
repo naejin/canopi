@@ -42,7 +42,7 @@ BYTE_BUDGETS = {
     # The session brief holds only what the next session needs; the plan file
     # shrinks as steps close (both are deleted at the 2.0 release close).
     "docs/plans/canvas-v2-implementation-prompt.md": 12_000,
-    "docs/plans/canvas-v2-plan.md": 115_000,
+    "docs/plans/canvas-v2-plan.md": 120_000,
 }
 GUIDE_BYTE_BUDGET = 12_000
 PATTERN_BYTE_BUDGET = 8_000

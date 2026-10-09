@@ -2,7 +2,7 @@
 
 Trimmed 2026-10-02 at the phase-0 close (full earlier text at commit 76bd08a659d916069a340fc06e670e54e32f54c7), at the phase-F close (text before it at `99bbe615`), at the phase-1 close (text before it at `da12600b`) and at the phase-2 close (text before it at `f2db5e1a`) and at the phase-R close (text before it at `bfbdf053`).
 
-Status: agreed (2026-09-29); scope amended 2026-10-01 (plan §1, "Decisions of 2026-10-01"); phase 0 and phase F done (2026-10-02); phase 1 done (2026-10-03), phase 2 done (2026-10-06) and phase R done (2026-10-08), their cleared rows deleted; input to docs/plans/canvas-v2-plan.md
+Status: agreed (2026-09-29); scope amended 2026-10-01 (plan §1, U1–U8); phase 0 and phase F done (2026-10-02); phase 1 done (2026-10-03), phase 2 done (2026-10-06) and phase R done (2026-10-08), their cleared rows deleted; input to docs/plans/canvas-v2-plan.md
 
 This is the current-state inventory behind `docs/plans/canvas-v2-plan.md` and `docs/plans/canvas-v2-spec.md`. It covers every place that assumes a north-up or axis-aligned screen, and every copy of the world-to-screen transform. It also lists where input, tools, camera and rendering are entangled, every raw input listener, camera writer and focus or keyboard handler on the canvas path, every document statement of north-up or the old controls, and the stored data that touches bearing. Each row has a stable ID, so the plan, the beads and the reviewers can cite it (for example `INV-CAM-20`). Rows that phases 0, F, 1, 2 and R cleared are deleted, and a kept row's phase column names only the work left; what phase 0 changed is in the plan's phase-0 summary, the phase-0 bead's receipt and git history at the commit above.
 

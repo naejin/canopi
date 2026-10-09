@@ -13,7 +13,7 @@ Paths are relative to `desktop/web/src/` unless they start with `docs/`, `common
 - **(user)** marks a user decision (2026-09-29). **(convention)** marks a planner convention the user may overturn; the plan lists them for confirmation. **(spec)** marks a detail this specification settles that the design left implicit; the plan's handoff lists these too.
 - **mod** is Cmd on macOS and Ctrl elsewhere. On macOS a physical Ctrl is never mod: from phase 2 it turns a left click into a right click, and Ctrl+arrows belong to Mission Control.
 - **Phases.** All phases ship together as 2.0 (user, 2026-10-01). There is no bindings constant: phase 2 hard-coded its final behaviour and phase 3 deletes `Bindings` (A7, U41), so touch behaviour is unconditional and the drag slop is a threshold (§1.2). In this document LEGACY names the behaviour before phase 1 (phase 0's with F's hover end and 3 px slop), ROTATION from phase 1, V2 from phase 2 and TOUCH from phase 3. These are names of expectation columns, never constants: each phase rewrites the expectations it changes in place. "From 1" means the behaviour exists from that phase on; a cell without a phase is unchanged from today.
-- **Decisions of 2026-10-01** (user; plan §1): one release; no second-button navigation during a drag; one map angle for the whole PDF layout; no edge highlight; a panel drag hides the tool's preview; the hover end lands in F; the keyboard is built once, in F; LiDAR's Return to Design keeps the exact view.
+- **Decisions of 2026-10-01** (user; plan §1, U1–U8): one release; no second-button navigation during a drag; one map angle for the whole PDF layout; no edge highlight; a panel drag hides the tool's preview; the hover end lands in F; the keyboard is built once, in F; LiDAR's Return to Design keeps the exact view.
 - **Free gesture**: a rotation whose end angle the user did not choose exactly (pointer rotate drag, compass drag, touch twist, trackpad twist). **Explicit target**: a bearing Canopi was told (key step, reset, "Turn view to this edge", a saved view, a story step, the view a file was saved with, `map_view`).
 - Bearing: the compass direction that is up on screen, degrees clockwise from true north, normalised to [0, 360). Stored rotations (`rotationDeg` on zones, notes and stamps) are clockwise from true north, as today; Print Areas carry no angle (one layout angle, §4.12).
 
@@ -1559,7 +1559,7 @@ Phase 0's, F's and phase 1's deletions are done; P11 tombstones them. Left:
 
 ### 1.10 Layers, Site data and Profile (canopi-f47t.42, U49)
 
-The user's decisions are U49 (plan §1); the step's files and checks are plan §4, "2.0 Layers redesign". Two panels, no overlap.
+The user's decisions are U49 (plan §1); the step's files and checks are plan §4, "2.0 Layers redesign" at `62a5bacb`. Two panels, no overlap.
 
 **Layers** (both editions, 380 px). Front to back: **Design** (Annotations, Plants, Measurement guides, Zones: eye, icon, name, count, lock); one **Site data** row; **Map** (online Contour lines and Hillshading, then Background: Satellite, Street map, None, the chosen option's settings always under it). No footer, and nothing replaces the list. A name opens its row's settings under it (Opacity; Contour lines add Contour interval); one row is open at a time (`openLayerRow`, none at start), drawn with a 3 px amber bar and a semibold name, no fill. Every eye reads "Hide {{name}}"/"Show {{name}}". Drawing order is unchanged: online contours and hillshading still draw over site data.
 
@@ -1583,7 +1583,7 @@ The user's decisions are U49 (plan §1); the step's files and checks are plan §
 **File menu**: Import terrain or height data… (renamed from Add data…), Import GeoJSON…, Data library…, Export ▸. Layers has no import entry.
 
 ```ts
-// Map overlay (canopi-f47t.42; plan §4 says why the snapshot route): app/canvas-map-surface/overlays.ts
+// Map overlay (canopi-f47t.42; plan §4 at `62a5bacb` says why the snapshot route): app/canvas-map-surface/overlays.ts
 export interface CanvasMapSurfaceOverlaySnapshot {
   // … hoveredTargets, selectedTargets …
   /** Desktop's pin and profile line, as [lon, lat], read from app/lidar/site-transients.ts; null on Web and in overview. Colours from scene-visuals.ts.
