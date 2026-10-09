@@ -1087,6 +1087,11 @@ impl LidarLibrary {
             return Err("this item is published; delete it from the library instead".to_string());
         }
         let originals = import::release_unclaimed_originals(&transaction, managed)?;
+        // Before the commit, so a stop between it and the removal never lets
+        // a catalogue rebuild list the item again.
+        for sha256 in &originals {
+            source_meta::release(&self.inner.paths, sha256)?;
+        }
         transaction.commit().map_err(|e| e.to_string())?;
         Ok((lease, originals))
     }

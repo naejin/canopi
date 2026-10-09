@@ -1283,6 +1283,43 @@ fn dismissing_a_rebuilt_item_waits_for_no_other_raster_job() {
     let _ = std::fs::remove_dir_all(&workbench);
 }
 
+/// A Dismiss that stops after its catalogue commit, before its originals'
+/// folders go (a crash), never lets a catalogue rebuild list the item again:
+/// each released original's `meta.json` names no item before the commit.
+#[test]
+fn a_rebuild_after_a_dismiss_stopped_before_its_folders_went_lists_nothing() {
+    let workbench = scratch("dismiss-crash-rebuild-tile");
+    let tile = plane(&attached_library(&workbench), &workbench, "tile", 445_000.0);
+    let root = scratch("dismiss-crash-rebuild");
+    let (library, layer_id) = rebuilt_library(&root, &tile, "sha-kept");
+
+    drop(library.release_dismissed_item(&layer_id).unwrap());
+    assert_eq!(import_rows(&library), no_import_rows());
+    assert!(library.inner.paths.source_original("sha-kept").is_file());
+    let meta = source_meta::read(&library.inner.paths.source_meta("sha-kept"))
+        .expect("the released original's meta");
+    assert!(meta.items.is_empty(), "the meta names no item");
+
+    drop(library);
+    std::fs::write(
+        paths::library_root(&root).join(paths::CATALOGUE_FILE),
+        b"not a catalogue",
+    )
+    .unwrap();
+    let reopened = LidarLibrary::open(&root).unwrap();
+    assert!(matches!(
+        reopened.open_status(),
+        recovery::LibraryOpenStatus::Recovered {
+            items: 0,
+            generated: 0,
+            ..
+        }
+    ));
+    assert!(reopened.library_snapshot().unwrap().items.is_empty());
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&workbench);
+}
+
 /// Cancel deletes the half-imported item at once, and the job's settlement
 /// removes every file it wrote: nothing is listed, nothing stays on disk,
 /// and the same file imports again under the same name (user, 2026-10-09).

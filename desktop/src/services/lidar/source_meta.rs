@@ -321,6 +321,31 @@ pub fn refresh(connection: &Connection, paths: &LidarPaths) -> Result<usize, Str
     Ok(written)
 }
 
+/// Mark one original released before the catalogue commit that drops its
+/// rows: its meta then names no item, so a catalogue rebuild never lists it
+/// again, and the startup sweep removes its folder if the removal that
+/// follows the commit never happens. An original already gone needs no mark.
+pub fn release(paths: &LidarPaths, sha256: &str) -> Result<(), String> {
+    let Ok(original) = std::fs::metadata(paths.source_original(sha256)) else {
+        return Ok(());
+    };
+    let path = paths.source_meta(sha256);
+    let known = read(&path).unwrap_or_else(|| SourceMeta {
+        version: META_VERSION,
+        sha256: String::new(),
+        original_filename: "original".to_string(),
+        size_bytes: original.len(),
+        imported_at: String::new(),
+        items: Vec::new(),
+    });
+    let released = SourceMeta {
+        sha256: sha256.to_string(),
+        items: Vec::new(),
+        ..known
+    };
+    write(&path, &released).map(|_| ())
+}
+
 /// Write `meta` to `path` atomically; unchanged content is left alone.
 /// Returns whether the file changed.
 pub fn write(path: &Path, meta: &SourceMeta) -> Result<bool, String> {
