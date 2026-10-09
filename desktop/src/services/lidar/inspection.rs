@@ -835,7 +835,7 @@ mod latency_probe {
     }
 
     #[test]
-    #[ignore = "requires the IGN MNT tiles (CANOPI_LIDAR_SAMPLER_FIXTURE_DIR) and the pinned GeoLibre CLI"]
+    #[ignore = "local fixture: the IGN MNT tiles (CANOPI_LIDAR_SAMPLER_FIXTURE_DIR) and the pinned GeoLibre CLI"]
     fn sampler_latency_over_six_targets_idle_and_during_an_import() {
         let work = crate::test_scratch::TestScratch::new("lidar-sampler-latency");
         let tiles = copied_tiles(&work);

@@ -924,13 +924,13 @@ fn scan_escape_exemptions(sources: &[(&str, &str)]) -> (Vec<String>, Vec<Reviewe
 /// Files that belong to an out-of-line `#[cfg(test)] mod name;`, and everything below them.
 /// `#[path]` modules are not resolved, so they are scanned as production.
 #[derive(Default)]
-struct TestModuleFiles {
+pub(crate) struct TestModuleFiles {
     files: BTreeSet<String>,
     directories: Vec<String>,
 }
 
 impl TestModuleFiles {
-    fn collect(&mut self, path: &str, items: &[Item]) {
+    pub(crate) fn collect(&mut self, path: &str, items: &[Item]) {
         let directory = match path.rsplit_once('/') {
             Some((parent, "mod.rs" | "lib.rs" | "main.rs")) => parent.to_owned(),
             Some(_) | None => path.trim_end_matches(".rs").to_owned(),
@@ -957,7 +957,7 @@ impl TestModuleFiles {
         }
     }
 
-    fn contains(&self, path: &str) -> bool {
+    pub(crate) fn contains(&self, path: &str) -> bool {
         self.files.contains(path)
             || self
                 .directories
@@ -1414,7 +1414,7 @@ fn has_tauri_command_attribute(attributes: &[Attribute]) -> bool {
         .any(|attribute| path_segments(attribute.path()) == ["tauri", "command"])
 }
 
-fn has_cfg_test_attribute(attributes: &[Attribute]) -> bool {
+pub(crate) fn has_cfg_test_attribute(attributes: &[Attribute]) -> bool {
     attributes.iter().any(|attribute| {
         attribute.path().is_ident("cfg")
             && attribute
@@ -1445,7 +1445,7 @@ fn path_to_string(path: &SynPath) -> String {
         .join("::")
 }
 
-fn rust_sources_under(path: &Path, sources: &mut Vec<PathBuf>) {
+pub(crate) fn rust_sources_under(path: &Path, sources: &mut Vec<PathBuf>) {
     for entry in fs::read_dir(path).unwrap() {
         let path = entry.unwrap().path();
         if path.is_dir() {

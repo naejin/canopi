@@ -159,7 +159,7 @@ fn dirs_home() -> PathBuf {
 /// separate item, and delete. Run with:
 /// `CANOPI_LIDAR_E2E_FIXTURE=<mnt> cargo test -p canopi-desktop --lib -- --ignored e2e_import_publish --nocapture`
 #[test]
-#[ignore = "requires the pinned GeoLibre CLI and an IGN MNT fixture; see CANOPI_LIDAR_E2E_FIXTURE"]
+#[ignore = "local fixture: an IGN MNT tile and the pinned GeoLibre CLI; see CANOPI_LIDAR_E2E_FIXTURE"]
 fn e2e_import_publish_slope_restart_reuse() {
     let engine = crate::services::lidar::rust_engine::RustRasterEngine;
     let engine_version = engine
@@ -373,7 +373,7 @@ fn e2e_import_publish_slope_restart_reuse() {
 /// Run with:
 /// `CANOPI_LIDAR_E2E_FIXTURE=<mnt> cargo test -p canopi-desktop --lib -- --ignored e2e_sparse --nocapture`
 #[test]
-#[ignore = "requires the pinned GeoLibre CLI and an IGN MNT fixture; see CANOPI_LIDAR_E2E_FIXTURE"]
+#[ignore = "local fixture: an IGN MNT tile and the pinned GeoLibre CLI; see CANOPI_LIDAR_E2E_FIXTURE"]
 fn e2e_sparse_generation_lifecycle() {
     let engine = crate::services::lidar::rust_engine::RustRasterEngine;
     engine
@@ -550,7 +550,7 @@ fn fixture_mnh_batch() -> Result<Vec<PathBuf>, String> {
 /// published sparsely, displayed on demand, and reopened. MNH is height above
 /// ground, so it is deliberately never used as slope input here.
 #[test]
-#[ignore = "requires the 12-tile MNH batch and a host with headroom; see CANOPI_LIDAR_MNH_DIR"]
+#[ignore = "local fixture: the 12-tile MNH batch and a host with headroom; see CANOPI_LIDAR_MNH_DIR"]
 fn e2e_mnh_batch_import_apply_display_restart() {
     let engine = crate::services::lidar::rust_engine::RustRasterEngine;
     engine

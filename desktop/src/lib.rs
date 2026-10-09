@@ -2,12 +2,16 @@
 // disallowed in clippy.toml (native_command_policy::tests).
 #![cfg_attr(test, allow(clippy::disallowed_methods))]
 
+#[cfg(test)]
+mod ci_lane_policy;
 mod commands;
 mod db;
 mod design;
 mod http;
 mod image_cache;
 mod logging;
+#[cfg(test)]
+mod module_layering;
 #[cfg(test)]
 mod native_command_policy;
 mod native_operation;

@@ -583,6 +583,80 @@ mod tests {
     }
 
     #[test]
+    fn a_local_operation_starts_while_raster_is_saturated() {
+        tauri::async_runtime::block_on(async {
+            let executor = NativeOperationExecutor::production();
+            let raster =
+                NativeOperationLimits::production().for_class(NativeOperationClass::Raster);
+            let (started_tx, started_rx) = mpsc::channel();
+            let mut releases = Vec::new();
+            let mut raster_jobs = Vec::new();
+            let mut start_raster_job = |label: &'static str| {
+                let (release_tx, release_rx) = mpsc::sync_channel(1);
+                releases.push(release_tx);
+                let started_tx = started_tx.clone();
+                let job_executor = executor.clone();
+                raster_jobs.push(tauri::async_runtime::spawn(async move {
+                    job_executor
+                        .run(NativeOperationClass::Raster, label, move || {
+                            started_tx.send(()).unwrap();
+                            release_rx.recv().unwrap();
+                            Ok(())
+                        })
+                        .await
+                }));
+            };
+
+            for _ in 0..raster.running {
+                start_raster_job("running raster operation");
+            }
+            for _ in 0..raster.running {
+                started_rx.recv_timeout(WAIT_TIMEOUT).unwrap();
+            }
+            for _ in raster.running..raster.admitted {
+                start_raster_job("queued raster operation");
+            }
+            wait_until(|| executor.available_admission_for_test(NativeOperationClass::Raster) == 0);
+
+            let refused = executor
+                .run(
+                    NativeOperationClass::Raster,
+                    "one raster operation too many",
+                    || Ok(()),
+                )
+                .await
+                .unwrap_err();
+            assert_eq!(refused, "Native raster operations are busy; try again");
+
+            let (local_tx, local_rx) = mpsc::sync_channel(1);
+            let local_executor = executor.clone();
+            let local = tauri::async_runtime::spawn(async move {
+                let result = local_executor
+                    .run(
+                        NativeOperationClass::Local,
+                        "save during raster work",
+                        || Ok("saved"),
+                    )
+                    .await;
+                local_tx.send(result).unwrap();
+            });
+            assert_eq!(
+                local_rx.recv_timeout(WAIT_TIMEOUT).unwrap(),
+                Ok("saved"),
+                "a Local operation must not wait behind saturated Raster work",
+            );
+            local.await.unwrap();
+
+            for release in releases {
+                release.send(()).unwrap();
+            }
+            for job in raster_jobs {
+                job.await.unwrap().unwrap();
+            }
+        });
+    }
+
+    #[test]
     fn operation_classes_have_isolated_capacity() {
         tauri::async_runtime::block_on(async {
             let executor = test_executor(1, 1);
