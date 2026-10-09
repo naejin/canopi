@@ -358,6 +358,10 @@ export type LibraryItemSummary = {
 	bounds: [number, number, number, number] | null,
 	value_range: [number, number] | null,
 	display_range: LidarDisplayRange | null,
+	/**
+	 *  One cell's size on the ground in metres, whatever the grid's units
+	 *  (degrees and Web Mercator converted at the grid's centre).
+	 */
 	resolution_m: number | null,
 	// Exact valid cells, `None` when not measured.
 	coverage_cells: string | null,

@@ -265,6 +265,8 @@ pub struct LibraryItemSummary {
     pub bounds: Option<[f64; 4]>,
     pub value_range: Option<[f64; 2]>,
     pub display_range: Option<LidarDisplayRange>,
+    /// One cell's size on the ground in metres, whatever the grid's units
+    /// (degrees and Web Mercator converted at the grid's centre).
     pub resolution_m: Option<f64>,
     /// Exact valid cells, `None` when not measured.
     pub coverage_cells: Option<u64>,
