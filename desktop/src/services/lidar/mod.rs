@@ -75,6 +75,9 @@ pub(crate) struct LidarLibraryInner {
     pub(crate) engine: Box<dyn RasterEngine>,
     /// The pinned GeoLibre CLI sidecar every registered analysis runs on.
     pub(crate) geolibre: geolibre::GeolibreEngine,
+    /// Each running job's flag, set when the job is cancelled or, for an
+    /// import, once its work is done and it only settles; the entry goes
+    /// once the job has settled and let go of the heavy lease.
     cancel_flags: Mutex<HashMap<String, Arc<AtomicBool>>>,
     executor: Mutex<Option<crate::native_operation::NativeOperationExecutor>>,
     /// One exclusive heavy raster job at a time, library-wide. Import and
@@ -1420,6 +1423,10 @@ impl LidarLibrary {
     /// Import publishes a new fixed item; it never touches another item or
     /// enqueues analysis.
     fn finish_import_sources(&self, job_id: &str, outcome: Result<(), String>) {
+        // From here the job only settles: flagged, it is waited for by
+        // Import, Retry and Dismiss (`await_stopping_jobs`) rather than
+        // refusing them once its item reads Failed or published.
+        self.set_cancel_flag(job_id);
         if let Ok(connection) = self.catalogue() {
             match outcome {
                 Ok(()) => {
@@ -1464,12 +1471,14 @@ impl LidarLibrary {
         }
     }
 
-    /// Wait until every cancelled job has settled and let go of the heavy
-    /// lease. Cancel returns once its import is withdrawn, while the job may still
-    /// be stopping or freeing its files, so Import and Retry wait here, with
-    /// no executor permit held, instead of refusing work the library no
-    /// longer shows. A running job nobody cancelled still refuses them.
-    pub async fn await_cancelled_jobs(&self) {
+    /// Wait until every stopping job has settled and let go of the heavy
+    /// lease: a cancelled one, or an import whose work is done. Cancel
+    /// returns once its import is withdrawn, and a failed import reads Failed
+    /// as it starts settling, while the job may still be stopping or freeing
+    /// its files, so Import, Retry and Dismiss wait here, with no executor
+    /// permit held, instead of refusing work the library no longer shows. A
+    /// running job nobody cancelled still refuses them.
+    pub async fn await_stopping_jobs(&self) {
         loop {
             let stopping = self
                 .inner

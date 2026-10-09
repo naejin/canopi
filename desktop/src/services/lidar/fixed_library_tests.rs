@@ -1258,6 +1258,93 @@ fn dismissing_a_rebuilt_item_after_a_cancelled_retry_frees_its_originals() {
     let _ = std::fs::remove_dir_all(&workbench);
 }
 
+/// Through the real commands: a rebuilt item's Retry that fails with no
+/// cancel shows Failed, with Dismiss, while its job still holds the heavy
+/// lease to free its files; Dismiss clicked then waits for that settlement
+/// instead of being refused, and frees the item's originals.
+#[test]
+fn dismissing_while_a_failed_retry_still_settles_waits_for_it() {
+    use crate::commands::lidar::{lidar_dismiss_import, lidar_retry_import};
+    use tauri::Manager;
+    let workbench = scratch("dismiss-settling-tiles");
+    let west = plane(&attached_library(&workbench), &workbench, "west", 445_000.0);
+    // Half a cell off, so the retry stages both and then fails as a whole.
+    let shifted = plane(
+        &attached_library(&workbench),
+        &workbench,
+        "shifted",
+        445_000.5,
+    );
+    let root = scratch("dismiss-settling");
+    let (library, layer_id) = rebuilt_item(
+        &root,
+        &[
+            (west.as_path(), "sha-west", "west.tif"),
+            (shifted.as_path(), "sha-shifted", "shifted.tif"),
+        ],
+    );
+    let executor = crate::native_operation::NativeOperationExecutor::production();
+    library.attach_executor(executor.clone());
+    let app = tauri::test::mock_builder()
+        .manage(library.clone())
+        .manage(executor)
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    // Held, the display registry keeps the failed job's settlement, which
+    // frees its staged COGs, from finishing.
+    let display = library.display().unwrap();
+    let receipt = tauri::async_runtime::block_on(lidar_retry_import(
+        app.state(),
+        app.state(),
+        layer_id.clone(),
+    ))
+    .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while library
+        .get_import_job(&receipt.job_id)
+        .unwrap()
+        .unwrap()
+        .state
+        != LidarImportJobState::Failed
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the retry never failed"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+
+    let handle = app.handle().clone();
+    let dismissing = layer_id.clone();
+    let (sent, dismissed) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let outcome = tauri::async_runtime::block_on(lidar_dismiss_import(
+            handle.state(),
+            handle.state(),
+            dismissing,
+        ));
+        let _ = sent.send(outcome);
+    });
+    assert!(
+        dismissed
+            .recv_timeout(std::time::Duration::from_millis(300))
+            .is_err(),
+        "Dismiss waits for the item's settling job"
+    );
+    drop(display);
+    dismissed
+        .recv_timeout(std::time::Duration::from_secs(60))
+        .unwrap()
+        .unwrap();
+
+    await_settled(&library, &receipt.job_id);
+    assert!(library.library_snapshot().unwrap().items.is_empty());
+    assert_eq!(import_rows(&library), no_import_rows());
+    assert_eq!(library_files(&library), Vec::<PathBuf>::new());
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&workbench);
+}
+
 /// Dismiss frees a rebuilt item's originals under the heavy lease, as a
 /// settling import does, so it is refused while another raster job runs and
 /// changes nothing; once that job has finished it frees them.
