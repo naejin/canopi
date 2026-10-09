@@ -154,8 +154,11 @@ fn an_import_is_one_unpublished_item_with_a_retryable_saved_request() {
 
     let refused = library.dismiss_import(&layer_id).unwrap_err();
     assert!(refused.contains("running"), "{refused}");
-    // Cancel deletes the item with every import it had.
+    // Cancel on a Retry puts the item back to its failed import; only
+    // Dismiss removes it, with every import it had.
     library.cancel_import(&retry_job).unwrap();
+    assert_eq!(row_message(&library, &layer_id), "south.tif is not tiled");
+    library.dismiss_import(&layer_id).unwrap();
     assert_eq!(
         count(&library, "SELECT COUNT(*) FROM lidar_source_layers"),
         0
@@ -1062,6 +1065,105 @@ fn importing_again_waits_for_a_cancelled_job_to_let_go() {
         LidarImportJobState::Complete
     );
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Through the real commands (user, 2026-10-09): Cancel on a Retry puts the
+/// item back to Failed with Retry instead of deleting it. A rebuilt item keeps
+/// its managed original and the `meta.json` that names it, so a later
+/// catalogue rebuild still recovers it.
+#[test]
+fn cancelling_a_retry_puts_a_rebuilt_item_back_to_failed_and_a_rebuild_recovers_it() {
+    use crate::commands::lidar::{lidar_cancel_import, lidar_retry_import};
+    use tauri::Manager;
+    let workbench = scratch("cancel-retry-tile");
+    let tile = plane(&attached_library(&workbench), &workbench, "tile", 445_000.0);
+    let root = scratch("cancel-retry");
+    let (library, layer_id) = rebuilt_library(&root, &tile, "sha-kept");
+    let executor = crate::native_operation::NativeOperationExecutor::production();
+    library.attach_executor(executor.clone());
+    let app = tauri::test::mock_builder()
+        .manage(library.clone())
+        .manage(executor)
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    // Held, the display registry keeps the retry from reaching publication.
+    let display = library.display().unwrap();
+    let receipt = tauri::async_runtime::block_on(lidar_retry_import(
+        app.state(),
+        app.state(),
+        layer_id.clone(),
+    ))
+    .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while library
+        .get_import_job(&receipt.job_id)
+        .unwrap()
+        .unwrap()
+        .state
+        != LidarImportJobState::Applying
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the retry never prepared"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    tauri::async_runtime::block_on(lidar_cancel_import(
+        app.state(),
+        app.state(),
+        receipt.job_id.clone(),
+    ))
+    .unwrap();
+    let back_to_failed = |library: &LidarLibrary| {
+        let snapshot = library.library_snapshot().unwrap();
+        let listed = item(&snapshot.items, &layer_id);
+        assert_eq!(listed.state, LidarResultState::Failed);
+        let job = listed.import_job.as_ref().expect("Retry is offered");
+        assert_eq!(job.state, LidarImportJobState::Failed);
+        assert_ne!(job.job_id, receipt.job_id, "the cancelled retry is gone");
+    };
+    back_to_failed(&library);
+    drop(display);
+    await_settled(&library, &receipt.job_id);
+    back_to_failed(&library);
+    let original = library.inner.paths.source_original("sha-kept");
+    assert!(original.is_file(), "the managed original is kept");
+    let meta = source_meta::read(&library.inner.paths.source_meta("sha-kept"))
+        .expect("the original's meta is kept");
+    assert_eq!(
+        meta.items
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>(),
+        [layer_id.as_str()],
+        "the meta still names the item"
+    );
+
+    library
+        .catalogue()
+        .unwrap()
+        .execute(
+            "UPDATE lidar_catalogue_meta SET value = '24' WHERE key = 'schema_version'",
+            [],
+        )
+        .unwrap();
+    drop(app);
+    drop(library);
+    let reopened = LidarLibrary::open(&root).unwrap();
+    assert!(matches!(
+        reopened.open_status(),
+        recovery::LibraryOpenStatus::Recovered {
+            items: 1,
+            generated: 0,
+            ..
+        }
+    ));
+    let snapshot = reopened.library_snapshot().unwrap();
+    let recovered = item(&snapshot.items, &layer_id);
+    assert_eq!(recovered.name.as_deref(), Some("Orchard"));
+    assert_eq!(recovered.state, LidarResultState::Failed);
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&workbench);
 }
 
 /// Cancel deletes the half-imported item at once, and the job's settlement

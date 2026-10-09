@@ -80,8 +80,9 @@ pub async fn lidar_delete_item(
 }
 
 /// Cancel one import: its flag is set before any queued work, so the job
-/// stops at its next step however busy the executor is, then its unpublished
-/// item is deleted on `UserData` before Cancel returns.
+/// stops at its next step however busy the executor is, then its import is
+/// withdrawn on `UserData` before Cancel returns: a Retry's item reads Failed
+/// again, a first import's item is deleted.
 #[tauri::command]
 pub async fn lidar_cancel_import(
     library: State<'_, LidarLibrary>,

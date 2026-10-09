@@ -379,7 +379,7 @@ impl LidarLibrary {
         }
     }
 
-    /// Every import job root no running job owns: a settled job's, and one
+    /// whose import a cancel withdrew before its job settled. Each frees the
     /// whose item a cancel deleted before its job settled. Each frees the
     /// files its job wrote that no item claims.
     fn prune_settled_job_roots(&self) -> Result<(), String> {
@@ -887,21 +887,23 @@ impl LidarLibrary {
     }
 
     /// Cancel one import (user, 2026-10-09): the job stops at its next step
-    /// and its unpublished item is deleted at once, so the library no longer
-    /// lists it and the same file imports again under its default name; the
-    /// job's settlement removes the files it wrote. The deletion and a
-    /// publication are each one catalogue transaction, so an import that
-    /// published first keeps its finished item: a cancel leaves the whole
-    /// item or nothing.
+    /// and its import is withdrawn at once (`withdraw_cancelled_import`); the
+    /// job's settlement removes the files it wrote that nothing claims. The
+    /// withdrawal and a publication are each one catalogue transaction, so an
+    /// import that published first keeps its finished item.
     pub fn cancel_import(&self, job_id: &str) -> Result<(), String> {
         self.set_cancel_flag(job_id);
-        self.delete_unpublished_import(job_id)
+        self.withdraw_cancelled_import(job_id)
     }
 
-    /// Delete the unpublished item of one import job with all its jobs; a
-    /// published item, or a job the catalogue no longer has, is left alone.
-    fn delete_unpublished_import(&self, job_id: &str) -> Result<(), String> {
-        let deleted = {
+    /// Withdraw one cancelled import that has not published. A Retry's job
+    /// row goes, so the item reads Failed again under its earlier import,
+    /// with Retry and Dismiss, and its saved selection still names its
+    /// originals and their `meta.json` the item; a first import's item goes
+    /// with its job, so the same file imports again under its default name.
+    /// A published item, or a job the catalogue no longer has, is left alone.
+    fn withdraw_cancelled_import(&self, job_id: &str) -> Result<(), String> {
+        let withdrawn = {
             let connection = self.catalogue()?;
             let layer_id: Option<String> = connection
                 .query_row(
@@ -917,12 +919,12 @@ impl LidarLibrary {
             let transaction = connection
                 .unchecked_transaction()
                 .map_err(|e| e.to_string())?;
-            let deleted = delete_unpublished_item_rows(&transaction, &layer_id)?;
+            let withdrawn = withdraw_import_rows(&transaction, &layer_id, job_id)?;
             transaction.commit().map_err(|e| e.to_string())?;
-            deleted
+            withdrawn
         };
-        if deleted {
-            // A rebuilt item's meta names it until it is rewritten.
+        if withdrawn {
+            // The originals' meta follows the item, kept or deleted.
             self.refresh_source_meta();
         }
         Ok(())
@@ -1338,11 +1340,11 @@ impl LidarLibrary {
                     self.refresh_source_meta();
                 }
                 Err(error) if error == "cancelled" => {
-                    // Cancel deletes the item; a job that stopped before the
-                    // cancel's own deletion ran deletes it here.
+                    // Cancel withdraws the import; a job that stopped before
+                    // the cancel's own withdrawal ran withdraws it here.
                     drop(connection);
-                    if let Err(error) = self.delete_unpublished_import(job_id) {
-                        tracing::warn!(job_id, %error, "a cancelled import's item was not deleted");
+                    if let Err(error) = self.withdraw_cancelled_import(job_id) {
+                        tracing::warn!(job_id, %error, "a cancelled import was not withdrawn");
                     }
                     self.discard_import_job_files(job_id);
                 }
@@ -1358,7 +1360,7 @@ impl LidarLibrary {
     }
 
     /// Wait until every cancelled job has settled and let go of the heavy
-    /// lease. Cancel returns once its item is gone, while the job may still
+    /// lease. Cancel returns once its import is withdrawn, while the job may still
     /// be stopping or freeing its files, so Import and Retry wait here, with
     /// no executor permit held, instead of refusing work the library no
     /// longer shows. A running job nobody cancelled still refuses them.
@@ -1504,6 +1506,33 @@ fn string_column(connection: &Connection, sql: &str, key: &str) -> Result<Vec<St
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())
+}
+
+/// Withdraw one unpublished import job: the job alone when the item has an
+/// earlier import (a Retry), else the whole item; false, changing nothing,
+/// once the item is published.
+fn withdraw_import_rows(
+    connection: &Connection,
+    layer_id: &str,
+    job_id: &str,
+) -> Result<bool, String> {
+    let retried: bool = connection
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM lidar_import_jobs WHERE layer_id = ?1 AND id <> ?2)",
+            [layer_id, job_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if !retried {
+        return delete_unpublished_item_rows(connection, layer_id);
+    }
+    if catalogue::head_generation(connection, layer_id)?.is_some() {
+        return Ok(false);
+    }
+    connection
+        .execute("DELETE FROM lidar_import_jobs WHERE id = ?1", [job_id])
+        .map_err(|e| e.to_string())?;
+    Ok(true)
 }
 
 /// Delete an unpublished item and its import jobs; false, deleting nothing,
