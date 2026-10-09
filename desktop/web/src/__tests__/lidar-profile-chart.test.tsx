@@ -260,6 +260,36 @@ describe('ProfileChart', () => {
     expect(container.querySelector('[role="status"]')?.textContent).toMatch(/^At \d/)
   })
 
+  it('pressing Steepest keeps it focused and the legend at rest; leaving it clears the cursor', async () => {
+    await drawLine()
+    const steepest = button('Steepest')
+    const atRest = legendLines()
+    steepest.focus()
+    await act(async () => {
+      steepest.click()
+    })
+
+    // The cursor is on the steepest spot, yet only hovering the chart swaps the legend for readings.
+    expect(profileHover.value).not.toBeNull()
+    expect(legendLines()).toEqual(atRest)
+    expect(document.activeElement).toBe(steepest)
+
+    await act(async () => {
+      steepest.blur()
+    })
+    expect(profileHover.value).toBeNull()
+    expect(container.querySelector('[role="status"]')?.textContent).toBe('')
+
+    // Pressing the plots from Steepest blurs it after the press: the pressed spot keeps the cursor.
+    steepest.focus()
+    await act(async () => {
+      steepest.click()
+      container.querySelector('section > svg')!.dispatchEvent(new PointerEvent('pointerdown', { clientX: 60 + (342 * 9) / 10, bubbles: true }))
+      steepest.blur()
+    })
+    expect(container.querySelector('[role="status"]')?.textContent).toBe('At 9 m')
+  })
+
   it('Copy values writes the tab-separated text inside the click, then says Copied', async () => {
     await drawLine()
     const writes: string[] = []

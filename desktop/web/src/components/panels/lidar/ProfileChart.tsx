@@ -44,8 +44,8 @@ const COPY_FEEDBACK_MS = 2000
  * mounts it with no props: it reads the profile itself and draws nothing while no profile is shown. Header: "Profile",
  * the length, "At {distance}" while the cursor is on the chart, Copy values and ×. Elevation curves share the first plot
  * and height curves a strip under it, sharing distance and cursor; hovering or scrubbing moves the cursor, which the map
- * shows as a ring on the line. The legend gives each curve's value at the cursor, otherwise Rise and Steepest (a button
- * that moves the cursor there) or Highest.
+ * shows as a ring on the line. The legend gives each curve's value at the cursor while the pointer is on the plots,
+ * otherwise Rise and Steepest (a button that moves the cursor there until it loses focus) or Highest.
  */
 export function ProfileChart() {
   const profile = siteProfile.value
@@ -170,7 +170,25 @@ function drawProfile(profile: ReadyProfile): { readonly drawn: readonly DrawnPlo
 function ReadyChart({ profile, language }: { readonly profile: ReadyProfile; readonly language: string }) {
   const { drawn, bottom } = useMemo(() => drawProfile(profile), [profile])
   const { distances } = profile.samples
+  // Readings replace the legend's Rise and Steepest only while the pointer is on the plots: a cursor Steepest set keeps
+  // the legend, so its button stays in place and keeps focus.
+  const [hovering, setHovering] = useState(false)
+  // Read in events, before the render the state change asks for: pressing the plots blurs Steepest after the press.
+  const pointerOnPlots = useRef(false)
+  const pointerOn = (on: boolean) => {
+    pointerOnPlots.current = on
+    setHovering(on)
+  }
+  const leave = () => {
+    pointerOn(false)
+    setProfileCursor(null)
+  }
+  // Steepest's cursor lasts while its button has focus, unless the pointer took the cursor over on the plots.
+  const releaseSteepest = () => {
+    if (!pointerOnPlots.current) setProfileCursor(null)
+  }
   const scrub = (event: JSX.TargetedPointerEvent<SVGSVGElement>) => {
+    if (!pointerOnPlots.current) pointerOn(true)
     const rect = event.currentTarget.getBoundingClientRect()
     const scale = rect.width > 0 ? WIDTH / rect.width : 1
     setProfileCursor(indexAtX((event.clientX - rect.left) * scale, distances, { x0: X0, x1: X1 }))
@@ -216,15 +234,15 @@ function ReadyChart({ profile, language }: { readonly profile: ReadyProfile; rea
         aria-hidden="true"
         onPointerMove={scrub}
         onPointerDown={scrub}
-        onPointerLeave={() => setProfileCursor(null)}
-        onPointerCancel={() => setProfileCursor(null)}
+        onPointerLeave={leave}
+        onPointerCancel={leave}
       >
         {plots}
         <CursorMarks drawn={drawn} distances={distances} bottom={bottom} />
       </svg>
       <ul className={styles.legend}>
         {profile.curves.map((curve, index) => (
-          <LegendLine key={curve.id} curve={curve} index={index} language={language} />
+          <LegendLine key={curve.id} curve={curve} index={index} language={language} reading={hovering} releaseSteepest={releaseSteepest} />
         ))}
       </ul>
     </>
@@ -258,12 +276,15 @@ function CursorMarks({ drawn, distances, bottom }: {
   )
 }
 
-function LegendLine({ curve, index, language }: {
+function LegendLine({ curve, index, language, reading: showsReading, releaseSteepest }: {
   readonly curve: ProfileCurve
   readonly index: number
   readonly language: string
+  /** The pointer is on the plots: the line gives the curve's value at the cursor. */
+  readonly reading: boolean
+  releaseSteepest(): void
 }) {
-  const cursor = profileCursor.value
+  const cursor = showsReading ? profileCursor.value : null
   const style = curveStyle(index)
   const one = numberFormat(language, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
   let reading: JSX.Element
@@ -284,6 +305,7 @@ function LegendLine({ curve, index, language }: {
             type="button"
             className={styles.linkButton}
             onClick={() => setProfileCursor(steepest.index)}
+            onBlur={releaseSteepest}
           >
             {t('siteData.chart.steepest', {
               percent: numberFormat(language, { style: 'percent', maximumFractionDigits: 0 }).format(steepest.percent / 100),
