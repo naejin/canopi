@@ -39,6 +39,10 @@ BYTE_BUDGETS = {
     "docs/review-checklist.md": 12_000,
     "docs/release-notes/v2.0.0.md": 10_000,
     ".interface-design/system.md": 9_000,
+    # The session brief holds only what the next session needs; the plan file
+    # shrinks as steps close (both are deleted at the 2.0 release close).
+    "docs/plans/canvas-v2-implementation-prompt.md": 12_000,
+    "docs/plans/canvas-v2-plan.md": 115_000,
 }
 GUIDE_BYTE_BUDGET = 12_000
 PATTERN_BYTE_BUDGET = 8_000
@@ -46,7 +50,16 @@ ADR_BUDGET = 60
 # One idea per paragraph. Long paragraphs are how file-by-file narration crept
 # into the guides; tables and reference definitions are exempt.
 PARAGRAPH_BUDGET = 600
-PARAGRAPH_EXEMPT = ("docs/plans/", "docs/release-notes/")
+# Exempt: release notes, and plans written before the budget reached docs/plans:
+# the canvas v2 plan, spec and inventory (deleted at the 2.0 release close) and
+# the ONF adaptation plan, whose long paragraphs are lists of upstream names.
+PARAGRAPH_EXEMPT = (
+    "docs/release-notes/",
+    "docs/plans/canvas-v2-plan.md",
+    "docs/plans/canvas-v2-spec.md",
+    "docs/plans/canvas-v2-inventory.md",
+    "docs/plans/onf-plugin-adaptation.md",
+)
 
 
 def prose(text):

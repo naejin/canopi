@@ -51,9 +51,28 @@ class DocumentationChecks(unittest.TestCase):
             self.assertIn("paragraph of 601 characters exceeds 600", errors[0])
             plan = root / "docs/plans/hydrology.md"
             plan.parent.mkdir(parents=True)
-            plan.write_text("# Plan\n" + "z" * 900 + "\n", encoding="utf-8")
+            plan.write_text("# Plan\n" + "z" * 600 + "\n", encoding="utf-8")
             self.assertEqual(check_document(plan, root), ["docs/plans/hydrology.md: a plan needs a `Status:` line (proposed, agreed, in progress)"])
-            plan.write_text("# Plan\n\nStatus: agreed\n" + "z" * 900 + "\n", encoding="utf-8")
+            plan.write_text("# Plan\n\nStatus: agreed\n" + "z" * 600 + "\n", encoding="utf-8")
+            self.assertEqual(check_document(plan, root), [])
+
+    def test_plan_budgets(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            brief = root / "docs/plans/canvas-v2-implementation-prompt.md"
+            brief.parent.mkdir(parents=True)
+            brief.write_text("Status: in progress\n" + ("short line\n" * 1100), encoding="utf-8")
+            self.assertTrue(any("exceeds its 12000-byte budget" in e for e in check_document(brief, root)))
+            plan = root / "docs/plans/canvas-v2-plan.md"
+            plan.write_text("Status: in progress\n" + ("short line\n" * 11000), encoding="utf-8")
+            self.assertTrue(any("exceeds its 115000-byte budget" in e for e in check_document(plan, root)))
+            # The paragraph budget applies to plans, except the legacy files named in PARAGRAPH_EXEMPT.
+            other = root / "docs/plans/hydrology.md"
+            other.write_text("Status: agreed\n" + "z" * 601 + "\n", encoding="utf-8")
+            self.assertEqual(check_document(other, root), ["docs/plans/hydrology.md:2: paragraph of 601 characters exceeds 600"])
+            brief.write_text("Status: in progress\n" + "z" * 601 + "\n", encoding="utf-8")
+            self.assertEqual(len(check_document(brief, root)), 1)
+            plan.write_text("Status: in progress\n" + "z" * 900 + "\n", encoding="utf-8")
             self.assertEqual(check_document(plan, root), [])
 
     def test_superseded_adr_requires_existing_replacement(self):
