@@ -16,13 +16,11 @@ import { currentCanvasQuerySurface } from '../../canvas/session'
 import type { CanvasContextMenuProfileLine } from '../canvas-context-menu/entries'
 import type { SessionPlane } from '../../canvas/session-plane'
 import type { LibraryItemRole, LibrarySnapshot, LidarSampleSeries, LidarSampleTarget } from '../../generated/contracts'
-import { lidarSamplePoints } from '../../ipc/lidar'
-import { designSessionStore } from '../document-session/store'
 import { armCanvasTool } from '../keyboard/arming'
 import { selectPanel, sidePanel } from '../shell/state'
 import { profileRole, type ProfileRole } from './item-types'
 import { lidarLibrary, readCurrentLidarPresentation, type LidarPresentationItem } from './library-store'
-import { createSiteSampler, type SiteSampler } from './sampler'
+import { siteSampler, type SiteSampler } from './sampler'
 import { profileLine, setProfileLine, type GeoPoint } from './site-transients'
 
 /** At most this many points along a line (LIDAR_SAMPLE_MAX_POINTS). */
@@ -339,17 +337,11 @@ export function createSiteProfile(deps: SiteProfileDeps): SiteProfileOwner {
   }
 }
 
-// The app's profile. Stream C's `siteSampler` is the app's one sampler; until it merges, the profile builds its own over
-// the same command (the backend serialises sampling either way).
-const profileSampler = createSiteSampler({
-  sample: lidarSamplePoints,
-  designIdentity: () => designSessionStore.sessionIdentity.peek(),
-})
-
+// The app's profile, in the 'profile' lane of the app's one sampler, beside the row values' lane.
 const readAppCurves = () => profileCurveSources(readCurrentLidarPresentation(), lidarLibrary.value)
 
 const app = createSiteProfile({
-  sampler: profileSampler,
+  sampler: siteSampler,
   line: profileLine,
   readCurves: readAppCurves,
   readPlane: () => currentCanvasQuerySurface.value?.sessionPlane.value ?? null,

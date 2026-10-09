@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
+import { acceptsAnalysis, defaultAnalysisSource } from '../../../app/analyses/model'
 import { designSessionStore } from '../../../app/document-session/store'
 import { armCanvasTool } from '../../../app/keyboard/arming'
 import { formatCoordinates } from '../../../app/geocoding/coordinates'
@@ -95,17 +96,12 @@ function Toolbar({ view }: { readonly view: SiteDataView }) {
   const items = readCurrentLidarPresentation()
   const library = lidarLibrary.value
   // A ready item in this Design that an analysis accepts (spec §1.10 "Toolbar"): an engine or grid problem still counts,
-  // and Analyze names it. Analyze runs on the item it is sent, so the toolbar picks the source: the open item if
-  // eligible, else the open result's input, else the first eligible item.
+  // and Analyze names it. Analyze runs on the item it is sent, with Analyze's own default Source.
   const eligible = referenceRows(items).filter((item) => {
     const summary = library?.items.find((candidate) => candidate.id === item.id)
-    return summary?.state === 'Ready' && summary.offers.some((offer) =>
-      offer.unavailable?.reason !== 'WrongInput' && offer.unavailable?.reason !== 'NotReady')
+    return summary?.state === 'Ready' && acceptsAnalysis(summary)
   })
-  const open = items.find((item) => item.id === view.openItem.value)
-  const sourceId = (eligible.find((item) => item.id === open?.id)
-    ?? eligible.find((item) => open?.inputId != null && item.id === open.inputId)
-    ?? eligible[0])?.id ?? null
+  const sourceId = defaultAnalysisSource(eligible, items, view.openItem.value)
   const canProfile = profileAvailable.value
   const profiling = currentCanvasTool.value === 'profile'
   return (

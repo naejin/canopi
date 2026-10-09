@@ -29,7 +29,7 @@ Rules for the Rust/Tauri backend (execution policy, files, network, redaction, t
 
 ### Native operation executor
 
-Classes follow the constrained resource, (admitted / running) limits in `NativeOperationLimits::production()`: `Catalog` (8/1) species reads; `UserData` (8/1) settings, favorites, Recent Designs, Notebook, stamps, LiDAR catalogue; `Local` (6/2) Design and draft files, exports, GeoJSON, reports, folders, LiDAR raster work; `Network` (12/4) geocoding and images.
+Classes follow the constrained resource, (admitted/running) limits in `NativeOperationLimits::production()`: `Catalog` (8/1) species reads; `UserData` (8/1) settings, favorites, Recent Designs, Notebook, stamps, LiDAR catalogue; `Local` (6/2) Design, draft files, exports, GeoJSON, reports, folders, LiDAR sampling; `Network` (12/4) geocoding, images; `Raster` (4/2) LiDAR jobs.
 
 A full class returns its stable busy error before touching anything; admitted work waits FIFO; validation, locks and transactions stay inside the started closure. Tokio enables only `sync` and `time`. Command tests invoke the real command through `tauri::test::mock_builder()` (advice).
 

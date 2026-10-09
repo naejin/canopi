@@ -1,4 +1,5 @@
 import { createRef, render } from 'preact'
+import { profileLineMenu } from '../app/lidar/profile'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CanvasContextMenu } from '../components/canvas/CanvasContextMenu'
@@ -415,5 +416,35 @@ describe('CanvasContextMenu', () => {
 
     expect(plantColorMenuOpen.value).toBe(false)
     expect(document.querySelector('[role="menu"]')).not.toBeNull()
+  })
+
+  async function rightClickLineZone(): Promise<void> {
+    const scene = createDefaultScenePersistedState()
+    scene.zones.push({
+      kind: 'zone', id: 'zone-path', locked: false, fillColor: null, notes: null, name: null,
+      zoneType: 'line', rotationDeg: 0, points: [{ x: 0, y: 0 }, { x: 5, y: 5 }],
+    })
+    const queries = createTestCanvasQuerySurface({ scene, selection: [{ kind: 'zone', id: 'zone-path' }] })
+    await act(async () => { setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries })) })
+    await open(request({
+      selection: { ...APPLES, editableTargets: [{ kind: 'zone', id: 'zone-path' }], sameSpeciesReferenceCanonicalName: null, plantNamePinning: { plantIds: [], allPinned: false } },
+    }))
+  }
+
+  const profileThisLine = () => [...document.querySelectorAll('[role="menu"] [role="menuitem"]')]
+    .find((item) => item.textContent?.includes('Profile this line'))
+
+  it('offers Profile this line on a Line zone where the edition hands Site data’s profile over (Desktop)', async () => {
+    await act(async () => {
+      render(<CanvasContextMenu profileLine={profileLineMenu} />, container)
+    })
+    await rightClickLineZone()
+    expect(profileThisLine()).toBeDefined()
+  })
+
+  it('offers no Profile this line where the edition has no Site data (Web)', async () => {
+    await rightClickLineZone()
+    expect(document.querySelector('[role="menu"]')).not.toBeNull()
+    expect(profileThisLine()).toBeUndefined()
   })
 })

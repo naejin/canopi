@@ -149,7 +149,7 @@ export class WorkspaceMapContributions {
       return true
     }
     if (SITE_OVERLAY_IDS.has(id)) {
-      if (this.skippedSiteKey === null && this.snapshot) this.siteFailed(siteKey(this.snapshot.overlays.site ?? null), event)
+      if (this.skippedSiteKey === null && this.snapshot) this.siteFailed(siteKey(this.snapshot.overlays.site), event)
       this.dirty = true
       this.drain()
       return true
@@ -214,7 +214,7 @@ export class WorkspaceMapContributions {
         try {
           this.syncRaster(map, snapshot.lidar)
           this.syncOverlays(map, snapshot.overlays)
-          this.syncSiteOverlay(map, snapshot.overlays.site ?? null)
+          this.syncSiteOverlay(map, snapshot.overlays.site)
           this.syncSiteHover(map)
           this.reconcileOrder(map, snapshot)
           this.publishState({ ...this.state, status: 'ready', layerSkipped: this.layerSkipped() })

@@ -7,39 +7,20 @@
 // is DOM: each kind's ramps, Reset only off the default, Custom only for a valid pair with the fr comma, and an
 // opacity drag that keeps the item open. No baselines.
 import type { Locator, Page } from '@playwright/test'
-import { expect, openGallery, test } from '../support/gallery'
+import { expect, openGallery, recordRasterTiles, renderedRasterTiles as renderedTiles, settledRaster, test } from '../support/gallery'
 
 /** The map's pixels as PNG bytes, the dock panels over it masked (a pressed or focused control is not a repaint). */
 async function mapPixels(map: Locator): Promise<Buffer> {
   return map.screenshot({ animations: 'disabled', mask: [map.page().locator('aside')] })
 }
 
-/** Tiles the renderer's worker pool has rendered since the page opened. */
-async function renderedTiles(page: Page): Promise<number> {
-  return page.evaluate(() => {
-    const timeline = (window as { __CANOPI_RASTER_DIAGNOSTICS__?: { events: { kind: string }[] } }).__CANOPI_RASTER_DIAGNOSTICS__
-    return timeline?.events.filter((event) => event.kind === 'tile').length ?? 0
-  })
-}
-
-/**
- * Waits until the renderer has rendered tiles beyond `after`, then until two captures in a row agree (MapLibre draws
- * them on a later frame).
- */
+/** Waits until the renderer has rendered tiles beyond `after` and the map's picture holds still. */
 async function settled(page: Page, map: Locator, after: number): Promise<Buffer> {
-  await expect.poll(() => renderedTiles(page), { timeout: 20_000, message: 'the renderer renders tiles' }).toBeGreaterThan(after)
-  let drawn = await mapPixels(map)
-  await expect.poll(async () => {
-    const next = await mapPixels(map)
-    const same = next.equals(drawn)
-    drawn = next
-    return same
-  }, { timeout: 20_000 }).toBe(true)
-  return drawn
+  return settledRaster(page, () => mapPixels(map), after)
 }
 
 async function openRaster(page: Page): Promise<{ map: Locator }> {
-  await page.addInitScript(() => localStorage.setItem('canopi.rasterDiagnostics', '1'))
+  await recordRasterTiles(page)
   const cog = page.waitForResponse((response) => response.url().includes('rust-display-cog.tif') && response.ok())
   await openGallery(page, { surface: 'site-data', state: 'lidar-raster' })
   await cog
@@ -88,6 +69,22 @@ test.describe('an open Site data item\'s display on the real renderer', () => {
     await expect(ground.getByRole('radio', { name: 'Custom' })).toHaveAttribute('aria-checked', 'true')
     const custom = await settled(page, map, before)
     expect(custom.equals(drawn), 'a Custom range repaints the raster').toBe(false)
+  })
+})
+
+test.describe('Cut outliers on the real display COG', () => {
+  test('reads the 2–98 % range from the COG and fills the Range fields with it', async ({ page }) => {
+    await openRaster(page)
+    const ground = await openGround(page)
+    await ground.getByRole('radio', { name: 'Cut outliers' }).click()
+    await expect(ground.getByRole('radio', { name: 'Cut outliers' })).toHaveAttribute('aria-checked', 'true')
+    // The fields show the item's data range (19.75–90.25 m) until the COG's own 2 % and 98 % points are read from it.
+    const minimum = ground.getByRole('textbox', { name: 'Minimum' })
+    const maximum = ground.getByRole('textbox', { name: 'Maximum' })
+    const range = async () => [Number(await minimum.inputValue()), Number(await maximum.inputValue())]
+    await expect.poll(range, { message: 'the 2–98 % range is read from the COG' }).not.toEqual([19.75, 90.25])
+    const [low, high] = await range()
+    expect(low).toBeLessThan(high!)
   })
 })
 

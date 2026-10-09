@@ -3,6 +3,7 @@ import { useRef } from 'preact/hooks'
 import { useFocusRegion } from '../shared/useFocusRegion'
 import { useMapOccluder } from '../shared/useMapChrome'
 import type { CanvasCommandProjection } from '../../app/canvas-commands'
+import type { CanvasContextMenuProfileLine } from '../../app/canvas-context-menu/entries'
 import { phoneLayout } from '../../app/shell/phone-layout'
 import { siteLocateOpen } from '../../app/site-onboarding/state'
 import { storyPresentationActive } from '../../app/story-presentation'
@@ -27,24 +28,31 @@ import { ZoomControls } from './ZoomControls'
  * chip, zoom group, the top-centre chip slot, the selection status chip, right-click menu, plant appearance popovers,
  * the overview pin, inspection and New-Design guidance. The edition hands over its canvas command projection.
  */
-export function CanvasChrome({ projection, canvasRef, stampChooser, children }: {
+export function CanvasChrome({ projection, canvasRef, stampChooser, profileLine, children }: {
   readonly projection: CanvasCommandProjection
   readonly canvasRef: RefObject<HTMLDivElement>
   /** Place a stamp's saved-stamp chooser (Desktop, where stamps are saved). */
   readonly stampChooser?: FunctionComponent<StampChooserProps>
+  /** The canvas menu's "Profile this line" (Desktop, where Site data is). */
+  readonly profileLine?: CanvasContextMenuProfileLine
   /** Edition-only chrome (Desktop: raster inspection). */
   readonly children?: ComponentChildren
 }) {
   useFocusRegion(canvasRef, 'map')
   // A presented story shows the map alone, under its own card.
   if (storyPresentationActive.value) return null
-  return <CanvasChromeContent projection={projection} canvasRef={canvasRef} stampChooser={stampChooser}>{children}</CanvasChromeContent>
+  return (
+    <CanvasChromeContent projection={projection} canvasRef={canvasRef} stampChooser={stampChooser} profileLine={profileLine}>
+      {children}
+    </CanvasChromeContent>
+  )
 }
 
-function CanvasChromeContent({ projection, canvasRef, stampChooser, children }: {
+function CanvasChromeContent({ projection, canvasRef, stampChooser, profileLine, children }: {
   readonly projection: CanvasCommandProjection
   readonly canvasRef: RefObject<HTMLDivElement>
   readonly stampChooser?: FunctionComponent<StampChooserProps>
+  readonly profileLine?: CanvasContextMenuProfileLine
   readonly children?: ComponentChildren
 }) {
   // "Where is your site?" is the one task until it is answered or skipped.
@@ -62,7 +70,7 @@ function CanvasChromeContent({ projection, canvasRef, stampChooser, children }: 
       {!locating && <CanvasOverview />}
       <DisplayLegend />
       <SiteOnboarding><TopChipSlot locating={locating} /></SiteOnboarding>
-      <CanvasContextMenu />
+      <CanvasContextMenu profileLine={profileLine} />
       <PlantAppearancePopovers canvasRef={canvasRef} />
     </>
   )

@@ -1,5 +1,5 @@
 // The Site data profile chart through the real profile (canopi-f47t.42, spec §1.10 "Profile"): a profile line over two
-// shown elevation items and a height item, sampled through the sampler's contract over a faked lidar_sample_points,
+// shown elevation items and a height item, sampled through the app's one sampler over a faked lidar_sample_points,
 // drawn in jsdom. Hovering sets the map's hover point, Steepest moves the cursor, Copy values writes the text inside the
 // click, and × ends the profile.
 import { signal } from '@preact/signals'
@@ -34,26 +34,6 @@ vi.mock('../ipc/lidar', () => ({
     return sampling.answer!(request)
   }),
 }))
-// Stream C's sampler, in its contract's shape (batches of LIDAR_SAMPLE_MAX_TARGETS in turn), until it merges.
-vi.mock('../app/lidar/sampler', async () => {
-  const { LIDAR_SAMPLE_MAX_TARGETS } = await import('../generated/contracts')
-  return {
-    createSiteSampler: (deps: { sample(request: LidarSamplePointsRequest): Promise<LidarSampleSeries[]> }) => ({
-      async request(
-        _lane: string,
-        _key: string,
-        targets: LidarSamplePointsRequest['targets'],
-        points: readonly (readonly [number, number])[],
-        onBatch: (first: number, series: readonly LidarSampleSeries[]) => void,
-      ) {
-        for (let first = 0; first < targets.length; first += LIDAR_SAMPLE_MAX_TARGETS) {
-          onBatch(first, await deps.sample({ targets: targets.slice(first, first + LIDAR_SAMPLE_MAX_TARGETS), points: points.map(([lon, lat]) => [lon, lat]) }))
-        }
-        return 'done'
-      },
-    }),
-  }
-})
 vi.mock('../app/document-session/store', async () => {
   const { signal } = await import('@preact/signals')
   return {
@@ -67,6 +47,7 @@ import { currentDesign } from '../app/document-session/store'
 import { lidarLibrary } from '../app/lidar/library-store'
 import { profileCopyText, profileHover, setProfileCursor, siteProfile } from '../app/lidar/profile'
 import { endSiteDataTransients, profileLine, setProfileLine } from '../app/lidar/site-transients'
+import { siteSampler } from '../app/lidar/sampler'
 import { activePanel, selectPanel, sidePanel } from '../app/shell/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { createSessionPlane } from '../canvas/session-plane'
@@ -170,6 +151,15 @@ describe('ProfileChart', () => {
       'MNS · IGNRise +1.4 m · Steepest 40% over 2 m',
       'MNH · IGNHighest 9.0 m',
     ])
+  })
+
+  it('samples through the app\'s one sampler, in its profile lane beside the row values\' lane', async () => {
+    const request = vi.spyOn(siteSampler, 'request')
+
+    await drawLine()
+
+    expect(request.mock.calls.map(([lane]) => lane)).toEqual(['profile'])
+    expect(legendLines()).toHaveLength(3)
   })
 
   it('Steepest names the run it was measured over when the samples are further apart than 2 m', async () => {

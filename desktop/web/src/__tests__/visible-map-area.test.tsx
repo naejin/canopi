@@ -414,6 +414,42 @@ describe('visible map area', () => {
     expect(measureRailRoom(shortRail, [rect({ left: 692, top: 672, width: 320, height: 40 })])).toBe(672 - 8 - 310)
   })
 
+  it('measures a chrome resize on the next frame, never inside the observer\'s delivery (WebKit\'s loop error)', () => {
+    // Writing --map-inset-* or a rail's room while ResizeObserver delivers resizes chrome it observes (the top chip slot
+    // reflows when the tool rail drops its names), which WebKit reports as "ResizeObserver loop completed with
+    // undelivered notifications"; measured on the next frame, that resize is an ordinary new observation.
+    let deliver: ResizeObserverCallback | null = null
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: ResizeObserverCallback) { deliver = callback }
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    })
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => frames.push(callback))
+    vi.stubGlobal('cancelAnimationFrame', () => {})
+    const area = element(WINDOW)
+    const releaseArea = registerMapArea(area)
+    const rail = element(TOOL_RAIL)
+    const releaseRail = registerRail('tool', rail)
+    try {
+      expect(area.style.getPropertyValue('--map-inset-left')).toBe('236px')
+      boxes.set(rail, { ...TOOL_RAIL, width: 52 })
+      deliver!([], {} as ResizeObserver)
+      deliver!([], {} as ResizeObserver)
+      expect(area.style.getPropertyValue('--map-inset-left'), 'nothing written during the delivery').toBe('236px')
+      expect(visibleMapFrame.value.left).toBe(236)
+      expect(frames).toHaveLength(1)
+      frames.shift()!(0)
+      expect(area.style.getPropertyValue('--map-inset-left')).toBe('64px')
+      expect(visibleMapFrame.value.left).toBe(64)
+    } finally {
+      releaseRail()
+      releaseArea()
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('publishes the panel rail room and follows the rail when a notice lowers it', () => {
     const area = element(WINDOW)
     const releaseArea = registerMapArea(area)

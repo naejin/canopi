@@ -78,6 +78,10 @@
   --color-family: #6B4F3A;           /* bark — taxonomy */
   --color-height: #5C6B6B;           /* stone — dimensions */
 
+  /* Site data profile curves 3 and 4 (curves 1 and 2 are the text ink and the ochre accent) */
+  --color-profile-green: #2E7D4F;
+  --color-profile-plum: #8A3F7A;
+
   /* Shadows — soft and warm; floating chrome, menus and dialogs use --shadow-float */
   --shadow-sm: 0 2px 8px rgba(30, 22, 10, 0.12);
   --shadow-md: 0 4px 14px rgba(30, 22, 10, 0.14);
@@ -250,6 +254,10 @@
   --color-sun: #D4A060;
   --color-family: #A08870;
   --color-height: #8A9A9A;
+
+  /* Site data profile curves 3 and 4 */
+  --color-profile-green: #7FC79A;
+  --color-profile-plum: #D58BC6;
 }
 
 /* CJK text never goes below 13px. */

@@ -46,7 +46,11 @@ effect(() => {
   pointer.value = null
   if (!surface) return
   return surface.subscribePointerWorld((point) => {
-    if (point?.pointerKind === 'touch') return
+    // A finger never hovers: it ends a mouse's hover, so the rows read the pin it taps.
+    if (point?.pointerKind === 'touch') {
+      pointer.value = null
+      return
+    }
     const plane = surface.sessionPlane.peek()
     const geo = point && plane ? plane.toGeo(point.world) : null
     pointer.value = geo && Number.isFinite(geo.lon) && Number.isFinite(geo.lat) ? { lon: geo.lon, lat: geo.lat } : null

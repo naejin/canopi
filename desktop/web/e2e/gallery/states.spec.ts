@@ -4,7 +4,7 @@
 // streams' own specs (layers, site-list, display, values, profile, library) assert their surfaces; this one only holds
 // what they share. DOM and pixel assertions, no baselines.
 import type { Locator, Page } from '@playwright/test'
-import { expect, openGallery, test } from '../support/gallery'
+import { expect, openGallery, recordRasterTiles, settledRaster, test } from '../support/gallery'
 
 /** The memory backend's `invoke`, imported in the page from the module the app's Tauri alias resolves to. */
 async function invokeInPage(page: Page, command: string, args: Record<string, unknown>): Promise<{ ok: unknown } | { failed: true }> {
@@ -26,35 +26,38 @@ async function mapPixels(map: Locator): Promise<Buffer> {
 
 test.describe('the UI gallery for Site data', () => {
   test('lidar-raster draws the Rust engine\'s display COG through Desktop\'s raster renderer, and hiding it repaints', async ({ page }) => {
+    await recordRasterTiles(page)
     const cog = page.waitForResponse((response) => response.url().includes('rust-display-cog.tif') && response.ok())
     await openGallery(page, { surface: 'site-data', state: 'lidar-raster' })
     await cog
     const map = page.getByRole('application', { name: 'Design map' })
-    // The renderer decodes in its worker and draws on a later frame: wait until two captures agree.
-    let drawn = await mapPixels(map)
-    await expect.poll(async () => {
-      const next = await mapPixels(map)
-      const settled = next.equals(drawn)
-      drawn = next
-      return settled
-    }, { timeout: 20_000 }).toBe(true)
+    // The renderer decodes in its worker and draws on a later frame: wait for its tiles, then for a still picture.
+    const drawn = await settledRaster(page, () => mapPixels(map), 0)
     // The row's eye (the open item's settings repeat it below the list).
     await page.getByRole('button', { name: 'Hide IGN ground elevation' }).first().click()
     await expect.poll(async () => (await mapPixels(map)).equals(drawn), { timeout: 20_000 }).toBe(false)
   })
 
-  test('opens the Site data panel on its states: an item opened among twelve, and two missing items', async ({ page }) => {
+  // One page per test: a second navigation cancels the first page's late module loads, which WebKit reports as
+  // "Cannot load … due to access control checks" console errors under load.
+  test('opens the Site data panel with an item opened among twelve', async ({ page }) => {
     await openGallery(page, { surface: 'site-data', state: 'lidar-long', open: 'lidar-block-7' })
     const panel = page.getByRole('complementary', { name: 'Site data' })
     await expect(panel.getByText('Survey block 7 · access track', { exact: true }).filter({ visible: true }).first()).toBeVisible()
+  })
+
+  test('opens the Site data panel with two missing items', async ({ page }) => {
     await openGallery(page, { surface: 'site-data', state: 'lidar-missing' })
     // Five entries, two of them in no library on this computer (stream B words their rows).
     await expect(page.getByRole('complementary', { name: 'Site data' }).getByRole('listitem')).toHaveCount(5)
   })
 
-  test('opens the Data library with no Design open, and the long library with forty items', async ({ page }) => {
+  test('opens the Data library with no Design open', async ({ page }) => {
     await openGallery(page, { surface: 'library', state: 'no-design' })
     await expect(page.getByRole('dialog', { name: 'Data library' })).toBeVisible()
+  })
+
+  test('opens the long Data library with forty items', async ({ page }) => {
     await openGallery(page, { surface: 'library', state: 'long' })
     await expect(page.getByRole('dialog', { name: 'Data library' }).getByRole('option', { name: /^IGN LiDAR HD MNT tile 0470_6836/ })).toBeAttached()
   })

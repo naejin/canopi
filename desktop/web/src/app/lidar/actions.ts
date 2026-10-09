@@ -51,7 +51,6 @@ import { movedReferenceOrders, siblingMoveOrders } from './reference-tree'
 import { kindDisplayDefaults } from './item-types'
 import { designSessionStore } from '../document-session/store'
 import { isPresentableOutput } from '../analyses/registry'
-import { reconcileInspectionWithPresentation } from './inspection'
 import { isAdmittedColourRange, isAdmittedOpacity } from '../contracts/design-admission'
 
 /**
@@ -193,8 +192,6 @@ export function removeFromDesign(id: string): void {
 
 export function setLidarEntryVisibility(id: string, visible: boolean): void {
   patchLidarEntryById(id, { visible })
-  // Hiding the inspected reference ends inspection in the same interaction.
-  reconcileInspectionWithPresentation()
 }
 
 /**
@@ -203,7 +200,6 @@ export function setLidarEntryVisibility(id: string, visible: boolean): void {
  */
 export function setSiteDataShown(shown: boolean): void {
   setSiteDataVisible(shown)
-  reconcileInspectionWithPresentation()
 }
 
 /** An entry's display settings; a field left out keeps its stored value. */
@@ -396,8 +392,6 @@ export async function fetchProcessingHistory(
 
 function removePresentedEntities(ids: string[]): void {
   removeLidarEntries(ids)
-  // Removing a reference removes its reason to be inspected.
-  reconcileInspectionWithPresentation()
 }
 
 /**

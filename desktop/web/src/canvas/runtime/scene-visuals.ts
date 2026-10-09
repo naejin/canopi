@@ -241,6 +241,16 @@ const INK_FOR_LIGHT_BACKDROP: CanvasBackdropInk = {
   gridMajor: 'rgba(39, 35, 29, 0.14)',
 }
 
+/**
+ * The Site data pin on the map: an ink core inside a white ring, so it reads on light maps and dark imagery alike. Map
+ * overlays sit on imagery, so its two tones are fixed and never follow the theme or the backdrop (spec §1.10, the
+ * board's MAPINK).
+ */
+export const SITE_PIN_VISUAL: { readonly core: string; readonly ring: string } = Object.freeze({
+  core: INK_FOR_LIGHT_BACKDROP.text,
+  ring: '#FFFFFF',
+})
+
 const INK_FOR_DARK_BACKDROP: CanvasBackdropInk = {
   text: '#FFF3D6',
   halo: '#14100A',

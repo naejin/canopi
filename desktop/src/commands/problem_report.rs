@@ -143,8 +143,10 @@ mod tests {
 
     fn local_test_executor() -> NativeOperationExecutor {
         let limits = NativeOperationClassLimits::new(1, 1);
-        NativeOperationExecutor::new(NativeOperationLimits::new(limits, limits, limits, limits))
-            .unwrap()
+        NativeOperationExecutor::new(NativeOperationLimits::new(
+            limits, limits, limits, limits, limits,
+        ))
+        .unwrap()
     }
 
     #[test]

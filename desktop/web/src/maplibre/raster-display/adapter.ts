@@ -106,9 +106,20 @@ export function createRasterDisplay(
    * The engine gates its first map mutation on `isStyleLoaded()`, which is
    * false while any source (the basemap) is still loading, and then waits for
    * a style event that a settled style never emits. Until every desired layer
-   * reaches the map, re-apply once the style reports loaded.
+   * reaches the map, re-apply once the style reports loaded. The re-apply waits for the event's own task to finish:
+   * MapLibre fires 'sourcedata' synchronously inside the engine's restyle (between removing a layer's source and adding
+   * it again), and re-entering the engine there adds the source twice ("Source … already exists").
    */
+  let nudgeQueued = false
   const nudge = () => {
+    if (nudgeQueued) return
+    nudgeQueued = true
+    queueMicrotask(() => {
+      nudgeQueued = false
+      nudgeNow()
+    })
+  }
+  const nudgeNow = () => {
     if (disposed || !manager) return stopNudging()
     const missing = desired.some((layer) => applied.has(layer.id) && map.getLayer?.(layer.id) == null)
     if (!missing) return stopNudging()

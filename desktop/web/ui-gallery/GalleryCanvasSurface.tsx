@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'preact/hooks'
 import type { WorkspaceRuntimeComposition } from '../src/app/canvas-map-surface/workspace-runtime-composition'
 import { CanvasChrome } from '../src/components/canvas/CanvasChrome'
 import type { StampChooserProps } from '../src/components/canvas/ToolCard'
+import type { CanvasContextMenuProfileLine } from '../src/app/canvas-context-menu/entries'
 import type { FunctionComponent } from 'preact'
 import { workspaceCanvasCommandProjection } from '../src/app/workspace-commands/canvas-actions'
 import panelStyles from '../src/components/panels/Panels.module.css'
@@ -36,6 +37,8 @@ interface GalleryCanvasSurfaceProps {
   readonly onReadyChange: (ready: boolean) => void
   /** Place a stamp's saved-stamp chooser, as the Desktop canvas hands it over; none on Web. */
   readonly stampChooser?: FunctionComponent<StampChooserProps>
+  /** The canvas menu's "Profile this line", as the Desktop canvas hands it over; none on Web. */
+  readonly profileLine?: CanvasContextMenuProfileLine
   readonly createRuntimeComposition?: (options: GalleryWorkspaceRuntimeOptions) => WorkspaceRuntimeComposition
 }
 
@@ -48,6 +51,7 @@ export function GalleryCanvasSurface({
   bearingDeg = 0,
   onReadyChange,
   stampChooser,
+  profileLine,
   createRuntimeComposition = createGalleryWorkspaceRuntimeComposition,
 }: GalleryCanvasSurfaceProps) {
   const canvas = useRef<HTMLDivElement>(null)
@@ -248,6 +252,7 @@ export function GalleryCanvasSurface({
             projection={workspaceCanvasCommandProjection.value}
             canvasRef={canvas}
             stampChooser={stampChooser}
+            profileLine={profileLine}
           />
         ) : null}
       </div>

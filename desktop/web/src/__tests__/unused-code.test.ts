@@ -64,7 +64,10 @@ const OPTIONS: UnusedCodeOptions = {
  * Entries the check reports that stay on purpose. Each reason names the bead id
  * (`canopi-…`) or the plan section (`canvas-v2-plan.md section N`) that needs it.
  */
-const KEPT: Readonly<Record<string, string>> = {}
+const KEPT: Readonly<Record<string, string>> = {
+  'src/app/lidar/sampler.ts#createSiteSampler': 'Test seam: the app keeps one sampler (siteSampler); sampler.test.ts and '
+    + 'profile.test.ts drive the real one over a faked command (canvas-v2-plan.md section 4, architecture finding 3).',
+}
 const KEPT_REASON = /\bcanopi-[a-z0-9]+(?:\.\d+)*\b|\bcanvas-v2-plan\.md section \d+(?:\.\d+)*/
 
 

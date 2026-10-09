@@ -62,6 +62,22 @@ describe('the runtime query surface', () => {
     runtime.destroy()
   })
 
+  it('the pointer ends with the map: an unmount with the mouse still over it publishes null', async () => {
+    const { runtime, container, events } = await mountedRuntime()
+    const points: (PointerWorld | null)[] = []
+    const stop = runtime.querySurface.subscribePointerWorld((point) => { points.push(point) })
+
+    events.pointerMove({ x: 100, y: 80 }, { target: container, buttons: 0 })
+    expect(points.at(-1)).not.toBeNull()
+    // A map failure unmounts the renderer; until Retry no cursor is over a map, so nothing reads the old point.
+    await runtime.unmountRenderer()
+
+    expect(points).toHaveLength(2)
+    expect(points.at(-1)).toBeNull()
+    stop()
+    runtime.destroy()
+  })
+
   it('a pointer feed subscribed before a Retry is heard from the session remountRenderer mounts', async () => {
     const { runtime, container, events } = await mountedRuntime()
     const points: (PointerWorld | null)[] = []

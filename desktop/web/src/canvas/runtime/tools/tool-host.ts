@@ -1100,6 +1100,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     }
     if (next.mode !== mode) {
       mode = next.mode
+      // The ground under a still pointer is not where it was in the other mode, and nothing re-emits a hover across
+      // the change: the pointer reads nothing until it moves, never the ground from before (a row value, the lens).
+      publishPointer(null)
       if (mode === 'overview') enterOverview()
     }
     refreshAtPointer(activeTool)

@@ -285,6 +285,18 @@ describe('Site data row values', () => {
     expect(shown()?.at).toBe('pin')
   })
 
+  it('a finger after a resting mouse reads through the pin', async () => {
+    hover(10, 20)
+    await flush()
+    expect(shown()?.at).toBe('pointer')
+
+    hover(5, 5, 'touch')
+    setPin({ lon: 1.25, lat: 47 })
+    await flush()
+
+    expect(shown()).toEqual({ at: 'pin', dsm: { kind: 'value', value: 1.25 }, mnt: { kind: 'value', value: 1.25 } })
+  })
+
   it('pins the tap no tool uses as the WGS84 point the canvas drew there', () => {
     pinSiteDataPoint({ x: 12, y: -30 })
 

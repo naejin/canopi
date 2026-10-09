@@ -253,7 +253,7 @@ describe('WorkspaceActivationCoordinator', () => {
     const contribution: WorkspaceMapContributionSnapshot = {
       sessionIdentity: activation.sessionIdentity, lidar: [],
       terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
-      overlays: { runtime: { getSceneSnapshot: vi.fn() }, location: { lat: 0, lon: 0 }, hoveredTargets: [], selectedTargets: [] },
+      overlays: { runtime: { getSceneSnapshot: vi.fn() }, location: { lat: 0, lon: 0 }, hoveredTargets: [], selectedTargets: [] , site: null },
     }
     f.coordinator.updateMapContributions(contribution)
     expect(f.mapControls.updateMapContributions).not.toHaveBeenCalled()
@@ -274,7 +274,7 @@ describe('WorkspaceActivationCoordinator', () => {
     const contribution = (sessionIdentity: object): WorkspaceMapContributionSnapshot => ({
       sessionIdentity, lidar: [],
       terrain: { contourIntervalMeters: 1, contoursVisible: true, contoursOpacity: 1, hillshadeVisible: true, hillshadeOpacity: 1, isDark: false },
-      overlays: { runtime: { getSceneSnapshot: vi.fn() }, location: { lat: 0, lon: 0 }, hoveredTargets: [], selectedTargets: [] },
+      overlays: { runtime: { getSceneSnapshot: vi.fn() }, location: { lat: 0, lon: 0 }, hoveredTargets: [], selectedTargets: [] , site: null },
     })
     const first = createActivationSnapshot()
     const second = createActivationSnapshot()
@@ -905,7 +905,7 @@ describe('WorkspaceActivationCoordinator', () => {
     const contribution: WorkspaceMapContributionSnapshot = {
       sessionIdentity: activation.sessionIdentity, lidar: [],
       terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
-      overlays: { runtime: { getSceneSnapshot: vi.fn() }, location: { lat: 7, lon: 7 }, hoveredTargets: [], selectedTargets: [] },
+      overlays: { runtime: { getSceneSnapshot: vi.fn() }, location: { lat: 7, lon: 7 }, hoveredTargets: [], selectedTargets: [] , site: null },
     }
     f.coordinator.updateMapContributions(contribution)
     expect(f.mapControls.updateMapContributions).not.toHaveBeenLastCalledWith(contribution)

@@ -23,10 +23,9 @@ export interface CanvasMapSurfaceOverlaySnapshot {
   readonly selectedTargets: readonly PanelTarget[]
   /**
    * Desktop's pin and profile line, as [lon, lat], read from app/lidar/site-transients.ts; null on Web, in overview and with
-   * neither (absent reads as null). The chart hover never rides the snapshot: `readSiteHover?()` feeds
-   * `WorkspaceMapContributions.setSiteHover`.
+   * neither. The chart hover never rides the snapshot: `readSiteHover?()` feeds `WorkspaceMapContributions.setSiteHover`.
    */
-  readonly site?: SiteMapOverlay | null
+  readonly site: SiteMapOverlay | null
 }
 
 export function clearCanvasMapSurfaceOverlays(map: MapLibreOverlayMap): void {

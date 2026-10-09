@@ -258,7 +258,7 @@ function targetContribution(sessionIdentity: object): WorkspaceMapContributionSn
   return {
     sessionIdentity, lidar: [],
     terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
-    overlays: { runtime: { getSceneSnapshot: () => scene }, location: { lat: 48, lon: 2 }, hoveredTargets: [{ kind: 'zone', zone_id: 'plot' }], selectedTargets: [] },
+    overlays: { runtime: { getSceneSnapshot: () => scene }, location: { lat: 48, lon: 2 }, hoveredTargets: [{ kind: 'zone', zone_id: 'plot' }], selectedTargets: [] , site: null },
   }
 }
 
@@ -616,7 +616,7 @@ describe('WorkspaceMapControls', () => {
       sessionIdentity: controls.sessionIdentity,
       lidar: [],
       terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
-      overlays: { runtime: { getSceneSnapshot: vi.fn() }, location: { lat: 0, lon: 0 }, hoveredTargets: [], selectedTargets: [] },
+      overlays: { runtime: { getSceneSnapshot: vi.fn() }, location: { lat: 0, lon: 0 }, hoveredTargets: [], selectedTargets: [] , site: null },
     }
     controls.updateMapContributions(input)
     const map = await waitForMap(maps)

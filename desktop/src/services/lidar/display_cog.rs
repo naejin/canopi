@@ -456,14 +456,10 @@ impl LidarLibrary {
                     let worker = library.clone();
                     let job = Arc::clone(&plan);
                     let outcome = executor
-                        .run(
-                            crate::native_operation::NativeOperationClass::Local,
-                            "lidar display preparation",
-                            move || {
-                                let cancel = AtomicBool::new(false);
-                                worker.prepare_display_plan(&job, &cancel)
-                            },
-                        )
+                        .run(super::RASTER_WORK, "lidar display preparation", move || {
+                            let cancel = AtomicBool::new(false);
+                            worker.prepare_display_plan(&job, &cancel)
+                        })
                         .await;
                     if let Ok(mut state) = library.display_preparation() {
                         state.pending.remove(&key);

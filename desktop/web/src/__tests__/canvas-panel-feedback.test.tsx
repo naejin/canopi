@@ -7,6 +7,7 @@ import { layerVisibility } from '../app/canvas-settings/signals'
 import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
 import { CanvasPanel } from '../components/panels/CanvasPanel'
 import { WebCanvasWorkspace } from '../web/WebCanvasWorkspace'
+import { profileLineMenu } from '../app/lidar/profile'
 import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   type MapLibreCanvasSurfaceState,
@@ -23,8 +24,13 @@ let mockBasemapState: MapLibreCanvasSurfaceState = IDLE_MAPLIBRE_CANVAS_SURFACE_
 let publishMapState: ((state: MapLibreCanvasSurfaceState) => void) | null = null
 const retryMap = vi.fn()
 
+const chromeProps = vi.hoisted(() => [] as Array<Readonly<Record<string, unknown>>>)
+
 vi.mock('../components/canvas/CanvasChrome', () => ({
-  CanvasChrome: () => <div data-testid="canvas-chrome" />,
+  CanvasChrome: (props: Readonly<Record<string, unknown>>) => {
+    chromeProps.push(props)
+    return <div data-testid="canvas-chrome" />
+  },
 }))
 
 vi.mock('../components/canvas/LayerPanel', () => ({
@@ -103,6 +109,15 @@ describe('CanvasPanel basemap feedback', () => {
     expect(container.querySelector<HTMLElement>('[data-map-notice]')!.dataset.tone).toBe('loading')
     expect(status.getAttribute('aria-live')).toBe('polite')
     expect(container.querySelector('[data-testid="canvas-chrome"]')).not.toBeNull()
+  })
+
+  it('hands the canvas menu Site data’s Profile this line', async () => {
+    designSessionFixture.file = demoDesign()
+    chromeProps.length = 0
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+    expect(chromeProps.at(-1)?.profileLine).toBe(profileLineMenu)
   })
 
   it('shows a loading basemap notice until the map becomes active', async () => {
@@ -412,6 +427,9 @@ describe('WebCanvasWorkspace map notice', () => {
     const button = [...notice.querySelectorAll('button')].find((candidate) => candidate.textContent === 'Retry')!
     await act(async () => { button.click() })
     expect(retry).toHaveBeenCalledOnce()
+    // Web has no Site data, so its canvas menu offers no Profile this line.
+    expect(chromeProps.at(-1)).toBeDefined()
+    expect(chromeProps.at(-1)?.profileLine).toBeUndefined()
   })
 
   it('hands keyboard focus to the map container once a Retried map is back, before its session returns', async () => {

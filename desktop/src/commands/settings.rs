@@ -73,8 +73,10 @@ mod tests {
 
     fn user_data_test_executor(admitted: usize, running: usize) -> NativeOperationExecutor {
         let limits = NativeOperationClassLimits::new(admitted, running);
-        NativeOperationExecutor::new(NativeOperationLimits::new(limits, limits, limits, limits))
-            .unwrap()
+        NativeOperationExecutor::new(NativeOperationLimits::new(
+            limits, limits, limits, limits, limits,
+        ))
+        .unwrap()
     }
 
     #[test]

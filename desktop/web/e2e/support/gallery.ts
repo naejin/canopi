@@ -58,3 +58,33 @@ export async function openGallery(page: Page, params: Readonly<Record<string, st
 export async function copiedTexts(page: Page): Promise<string[]> {
   return page.evaluate(() => [...(window.__galleryClipboard ?? [])])
 }
+
+/** Turns on Desktop's raster renderer timeline (`raster-display/diagnostics.ts`) for the pages `page` opens next. */
+export async function recordRasterTiles(page: Page): Promise<void> {
+  await page.addInitScript(() => localStorage.setItem('canopi.rasterDiagnostics', '1'))
+}
+
+/** Tiles the raster renderer's worker pool has rendered since the page opened (after `recordRasterTiles`). */
+export async function renderedRasterTiles(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const timeline = (window as { __CANOPI_RASTER_DIAGNOSTICS__?: { events: { kind: string }[] } }).__CANOPI_RASTER_DIAGNOSTICS__
+    return timeline?.events.filter((event) => event.kind === 'tile').length ?? 0
+  })
+}
+
+/**
+ * Waits until the raster renderer has rendered tiles beyond `after`, then until two captures in a row agree (MapLibre
+ * draws them on a later frame). The map holds a steady picture for seconds before the first tile lands, so two equal
+ * captures alone can be the empty map.
+ */
+export async function settledRaster(page: Page, capture: () => Promise<Buffer>, after: number): Promise<Buffer> {
+  await expect.poll(() => renderedRasterTiles(page), { timeout: 20_000, message: 'the renderer renders tiles' }).toBeGreaterThan(after)
+  let drawn = await capture()
+  await expect.poll(async () => {
+    const next = await capture()
+    const same = next.equals(drawn)
+    drawn = next
+    return same
+  }, { timeout: 20_000 }).toBe(true)
+  return drawn
+}
