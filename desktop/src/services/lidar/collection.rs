@@ -52,69 +52,18 @@ pub(super) struct SnapshotMeasurement {
     pub bounds_3857: [f64; 4],
 }
 
-/// Lattice-cell rectangle a bounded read needs.
-#[derive(Debug, Clone, Copy)]
-pub(super) struct ReadBounds {
-    pub x0: i64,
-    pub y0: i64,
-    pub x1: i64,
-    pub y1: i64,
-}
-
-impl ReadBounds {
-    fn intersects(&self, other: &Self) -> bool {
-        self.x0 < other.x1 && other.x0 < self.x1 && self.y0 < other.y1 && other.y0 < self.y1
-    }
-}
-
-/// Bind one generation's members for a read, optionally limited to a footprint.
-///
-/// Only occurrences whose own extent intersects the footprint are resolved, in
-/// priority order, so the composed value is identical to reading the whole
-/// composition while a bounded window never opens a source that cannot reach it.
-pub(super) fn load_reader_within(
-    library: &LidarLibrary,
-    generation_id: &str,
-    manifest: &GenerationManifest,
-    bounds: Option<ReadBounds>,
-    cancel: &AtomicBool,
-) -> Result<CollectionReader, String> {
-    let rows = {
-        let connection = library.catalogue()?;
-        catalogue::collection_members(&connection, generation_id)?
-    };
-    let mut members = Vec::with_capacity(rows.len());
-    for row in &rows {
-        import::check_cancel(cancel)?;
-        let member = resolve_row(library, row)?;
-        if let Some(bounds) = bounds.as_ref() {
-            let offset = generation::lattice_offset(&manifest.grid, &member.resolved.grid)?;
-            let extent = ReadBounds {
-                x0: offset.0,
-                y0: offset.1,
-                x1: offset
-                    .0
-                    .saturating_add(i64::from(member.resolved.grid.width)),
-                y1: offset
-                    .1
-                    .saturating_add(i64::from(member.resolved.grid.height)),
-            };
-            if !bounds.intersects(&extent) {
-                continue;
-            }
-        }
-        members.push((member.member_id, member.resolved));
-    }
-    CollectionReader::new(members, manifest.grid.clone())
-}
-
+/// Bind one generation's members for a read, top-first.
 pub(super) fn load_reader(
     library: &LidarLibrary,
     generation_id: &str,
     manifest: &GenerationManifest,
     cancel: &AtomicBool,
 ) -> Result<CollectionReader, String> {
-    load_reader_within(library, generation_id, manifest, None, cancel)
+    let members = snapshot_members(library, generation_id, cancel)?
+        .into_iter()
+        .map(|member| (member.member_id, member.resolved))
+        .collect();
+    CollectionReader::new(members, manifest.grid.clone())
 }
 
 /// Resolve one generation's stored rows into readable occurrences, top-first.
