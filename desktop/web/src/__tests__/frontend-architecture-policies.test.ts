@@ -2256,6 +2256,24 @@ const CANVAS_V2_POLICIES = [
       ...TEST_SOURCE_PATTERNS,
     ],
   },
+  {
+    // An import rule, since the key's names are also property names. A namespace import ('*') reads every member, so
+    // it counts too. Readers: settings itself, the key field, the Layers presentation and satellite-bind.ts until the
+    // release close's P10 commit (canopi-k94s). Residual risk (canopi-f47t.52.21): mutateSettingsProjection's draft
+    // carries googleMapsApiKey to every caller of the mutation seam, which this rule cannot see.
+    kind: 'forbid-imports',
+    name: 'P46 the Google key has reviewed readers',
+    from: ['src/**'],
+    exceptFrom: [
+      'src/app/settings/**',
+      'src/components/shared/SettingsGoogleKeyField.tsx',
+      'src/app/canvas-layer-presentation/presentation.ts',
+      'src/maplibre/satellite-bind.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+    targets: ['src/app/settings/state.ts', 'src/app/settings/projection.ts'],
+    importedNames: ['googleMapsApiKey', 'activeGoogleMapsApiKey', 'snapshotSettingsProjection', '*'],
+  },
 ] satisfies readonly ArchitecturePolicy[]
 
 /**
@@ -3558,6 +3576,7 @@ const P42 = '[P42 shared app code imports no Web edition module]'
 const P43 = '[P43 the input core stays camera-free and app-free]'
 const P44 = '[P44 settings and map-layer signals are written only by the projection]'
 const P45 = '[P45 only the presentation controller writes story overrides]'
+const P46 = '[P46 the Google key has reviewed readers]'
 
 describe('2.0 guard policies (canopi-f47t.52.17)', () => {
   it('P39 rejects a production value cycle; type-only, dynamic and test cycles pass', () => {
@@ -3739,6 +3758,46 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
     expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P45'))).toEqual([
       `${P45} src/app/canvas-map-surface/planted.ts contains confined symbol setStoryPresentationOverrides; allowed sources: src/app/story-presentation/controller.ts, src/app/story-presentation/overrides.ts, ${TEST_SOURCES}`,
       `${P45} src/components/panels/Planted.tsx contains confined symbol setStoryPresentationHidesEditingAids; allowed sources: src/app/story-presentation/controller.ts, src/app/story-presentation/overrides.ts, ${TEST_SOURCES}`,
+    ])
+  })
+
+  it('P46 rejects a Google key or settings snapshot import outside its reviewed readers, by name, namespace or re-export', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/app/settings/state.ts', [
+        'export const googleMapsApiKey = 1',
+        'export const activeGoogleMapsApiKey = 1',
+        'export const locale = 1',
+      ]),
+      plantedSource('src/app/settings/projection.ts', [
+        "import { googleMapsApiKey } from './state'",
+        'export function snapshotSettingsProjection() { return googleMapsApiKey }',
+        'export function mutateSettingsProjection() {}',
+      ]),
+      plantedSource('src/app/planted.ts', [
+        "import { locale, activeGoogleMapsApiKey } from './settings/state'",
+        "import { snapshotSettingsProjection, mutateSettingsProjection } from './settings/projection'",
+        "import * as settings from './settings/state'",
+        "import { locale as language } from './settings/state'",
+        "import { mutateSettingsProjection as mutate } from './settings/projection'",
+      ]),
+      plantedSource('src/components/shared/Planted.tsx', [
+        "export { googleMapsApiKey } from '../../app/settings/state'",
+      ]),
+      plantedSource('src/components/shared/SettingsGoogleKeyField.tsx', [
+        "import { googleMapsApiKey } from '../../app/settings/state'",
+      ]),
+      plantedSource('src/app/canvas-layer-presentation/presentation.ts', [
+        "import { googleMapsApiKey } from '../settings/state'",
+      ]),
+      plantedSource('src/maplibre/satellite-bind.ts', ["import { activeGoogleMapsApiKey } from '../app/settings/state'"]),
+      plantedSource('src/app/planted.test.ts', ["import { googleMapsApiKey } from './settings/state'"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P46'))).toEqual([
+      `${P46} src/app/planted.ts:1:1 imports src/app/settings/state.ts via "./settings/state" (static)`,
+      `${P46} src/app/planted.ts:2:1 imports src/app/settings/projection.ts via "./settings/projection" (static)`,
+      `${P46} src/app/planted.ts:3:1 imports src/app/settings/state.ts via "./settings/state" (static)`,
+      `${P46} src/components/shared/Planted.tsx:1:1 imports src/app/settings/state.ts via "../../app/settings/state" (reexport)`,
     ])
   })
 })
