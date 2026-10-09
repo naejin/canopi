@@ -11,12 +11,11 @@
 //!
 //! Sources and derived items are different storage contracts, so they are
 //! resolved separately: a source is an ordered collection described by
-//! `import::GenerationManifest` whose members it resolves once per generation,
-//! while a derived item is described by `analyses::DerivedManifest` and always
+//! `import::GenerationManifest` and binds its members on each read, while a derived item is described by `analyses::DerivedManifest` and always
 //! reads through its published chunks. What a number means (its units) is the
 //! item's, which the caller already holds.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
 
 use common_types::library::LibraryItemRole;
@@ -32,21 +31,16 @@ use super::{LidarLibrary, catalogue, collection, generation, import};
 
 /// What the sampler keeps between requests, per library.
 ///
-/// Row values re-sample every shown row on every pointer move, so per-request
-/// work that never changes for a generation is done once: a source
-/// generation's member list is resolved once (generations are immutable), and
-/// a target that cannot be read is reported once. Both are bounded by
-/// clearing when full, which costs at most one more resolve or report.
+/// Row values re-sample every shown row on every pointer move, so a target
+/// that cannot be read is reported once. It is bounded by clearing when full,
+/// which costs at most one more report.
 #[derive(Default)]
 pub(super) struct SampleMemo {
-    /// Resolved readers of source generations, by generation id.
-    readers: HashMap<String, generation::CollectionReader>,
     /// Unreadable targets already logged, as (entity, generation).
     reported: HashSet<(String, String)>,
 }
 
-/// Entries each part of the memo holds before it starts over: two requests'
-/// worth of targets, so the values and profile lanes do not evict each other.
+/// Entries the memo holds before it starts over: two requests' worth of targets, so the values and profile lanes do not evict each other.
 const MEMO_CAPACITY: usize = 2 * LIDAR_SAMPLE_MAX_TARGETS;
 
 impl SampleMemo {
@@ -60,17 +54,6 @@ impl SampleMemo {
             self.reported.clear();
         }
         self.reported.insert(key)
-    }
-
-    fn reader(&self, generation_id: &str) -> Option<generation::CollectionReader> {
-        self.readers.get(generation_id).cloned()
-    }
-
-    fn remember_reader(&mut self, generation_id: &str, reader: generation::CollectionReader) {
-        if self.readers.len() >= MEMO_CAPACITY {
-            self.readers.clear();
-        }
-        self.readers.insert(generation_id.to_string(), reader);
     }
 }
 
@@ -244,8 +227,8 @@ pub(super) fn check_sample_caps(request: &LidarSamplePointsRequest) -> Result<()
 /// WGS84 point, in target and point order.
 ///
 /// Each target is resolved once, its points transformed in one call, its
-/// reader bound once (a source's members once per generation), and its cells
-/// read one bounded window per run. A target whose head is not the generation
+/// reader bound once, and its cells read one bounded window per run (a window
+/// opens only the source members that reach it). A target whose head is not the generation
 /// the caller aimed at, before or after the read, answers `StaleGeneration`,
 /// so a late answer is never presented as current; an item that is gone answers
 /// `MissingGeneration`. A point off the data reads `None`: out of coverage is
@@ -349,7 +332,7 @@ fn read_cells(
             generation::GenerationChunkReader::new(&target.generation_id, generation::RESULT_ROLE),
         ),
         TargetRead::Collection(manifest) => generation::GenerationReader::Collection(Box::new(
-            collection_reader(library, &target.generation_id, manifest, cancel)?,
+            collection::load_reader(library, &target.generation_id, manifest, cancel)?,
         )),
     };
     for run in cell_runs(cells) {
@@ -370,26 +353,6 @@ fn read_cells(
         }
     }
     Ok(values)
-}
-
-/// A source generation's reader, its members resolved through the catalogue
-/// once per generation. Each window then skips a member that cannot reach it
-/// by arithmetic on its extent, so a member off the sampled cells is never
-/// opened.
-fn collection_reader(
-    library: &LidarLibrary,
-    generation_id: &str,
-    manifest: &import::GenerationManifest,
-    cancel: &AtomicBool,
-) -> Result<generation::CollectionReader, String> {
-    let known = memo(library).reader(generation_id);
-    if let Some(reader) = known {
-        return Ok(reader);
-    }
-    // The memo is not held across the catalogue: resolving takes its lock.
-    let reader = collection::load_reader(library, generation_id, manifest, cancel)?;
-    memo(library).remember_reader(generation_id, reader.clone());
-    Ok(reader)
 }
 
 /// One window of consecutive cells and the points it answers.
@@ -686,8 +649,9 @@ mod latency_probe {
     use std::time::{Duration, Instant};
 
     const POINTS: usize = 500;
-    /// Strips cut from each tile for the many-member collection (64 members).
-    const MANY_STRIPS_PER_TILE: u32 = 32;
+    /// Strips cut from each tile for the many-member collection: 24 members,
+    /// the most one import admits.
+    const MANY_STRIPS_PER_TILE: u32 = 12;
 
     /// The fixture tiles, copied into `work` so the master stays untouched.
     fn copied_tiles(work: &Path) -> Vec<PathBuf> {
@@ -877,8 +841,8 @@ mod latency_probe {
             .iter()
             .flat_map(|tile| strips(&engine, tile, &parts, 2))
             .collect();
-        // A source imported from many small tiles: its members are resolved
-        // once per generation, not on every hover.
+        // A source imported from as many small tiles as one import admits:
+        // every hover binds all its members.
         let narrow: Vec<PathBuf> = tiles
             .iter()
             .flat_map(|tile| strips(&engine, tile, &parts, MANY_STRIPS_PER_TILE))
