@@ -942,6 +942,10 @@ export type SavedViewTerrain = {
  */
 export type ScrollWheel = "zoom" | "pan";
 
+/**
+ *  Device settings. `Debug` is written by hand so the Google key prints as
+ *  `<redacted>`.
+ */
 export type Settings = {
 	locale: Locale,
 	theme: Theme,
