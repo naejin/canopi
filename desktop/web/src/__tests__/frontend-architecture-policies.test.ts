@@ -1493,6 +1493,7 @@ const SYMBOL_OWNERSHIP_POLICIES = [
       'CanvasRuntimeLayerProjectionAdapter',
       'CanvasRuntimeLayerProjectionSource',
       'layerProjections',
+      'syncDocumentSignals',
     ],
   },
   {
