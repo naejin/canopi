@@ -933,6 +933,88 @@ fn a_failed_import_frees_its_files_on_the_raster_lane() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// Through the real commands: Cancel returns once the item is gone, while
+/// the cancelled job may still be settling under the heavy lease. Importing
+/// the same file then waits for that job to let go instead of refusing it
+/// for a job the library no longer shows.
+#[test]
+fn importing_again_waits_for_a_cancelled_job_to_let_go() {
+    use crate::commands::lidar::{lidar_cancel_import, lidar_import_item};
+    use tauri::Manager;
+    let root = scratch("cancel-reimport");
+    let library = LidarLibrary::open(&root).unwrap();
+    let executor = crate::native_operation::NativeOperationExecutor::production();
+    library.attach_executor(executor.clone());
+    let app = tauri::test::mock_builder()
+        .manage(library.clone())
+        .manage(executor)
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    let source = plane(&library, &root, "orchard", 445_000.0);
+    // Held, the display registry keeps the job from reaching its next step.
+    let display = library.display().unwrap();
+    let receipt = library
+        .import_item(
+            "Orchard",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            vec![source.clone()],
+        )
+        .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while library
+        .get_import_job(&receipt.job_id)
+        .unwrap()
+        .unwrap()
+        .state
+        != LidarImportJobState::Applying
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the import never prepared"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    tauri::async_runtime::block_on(lidar_cancel_import(
+        app.state(),
+        app.state(),
+        receipt.job_id.clone(),
+    ))
+    .unwrap();
+    assert!(library.library_snapshot().unwrap().items.is_empty());
+
+    let (sent, imported) = std::sync::mpsc::channel();
+    let handle = app.handle().clone();
+    let path = source.display().to_string();
+    std::thread::spawn(move || {
+        let _ = sent.send(tauri::async_runtime::block_on(lidar_import_item(
+            handle.state(),
+            handle.state(),
+            "Orchard".to_string(),
+            RasterQuantity::GroundElevation,
+            None,
+            None,
+            vec![path],
+        )));
+    });
+    let early = imported.recv_timeout(std::time::Duration::from_millis(300));
+    assert!(
+        early.is_err(),
+        "Import waits while the cancelled job settles: {early:?}"
+    );
+    drop(display);
+    let again = imported
+        .recv_timeout(std::time::Duration::from_secs(60))
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        await_import(&library, &again.job_id),
+        LidarImportJobState::Complete
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// Cancel deletes the half-imported item at once, and the job's settlement
 /// removes every file it wrote: nothing is listed, nothing stays on disk,
 /// and the same file imports again under the same name (user, 2026-10-09).

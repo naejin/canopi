@@ -80,6 +80,16 @@ const STATE_ACCESS_ALLOWLIST: &[StateAccessAllowance] = &[
         reason: "sets the job's in-memory cancellation flag before the item's deletion is queued",
     },
     StateAccessAllowance {
+        path: "commands::lidar::lidar_import_item",
+        operation: "await_cancelled_jobs",
+        reason: "awaits, with no executor permit held, until in-memory cancellation flags show no cancelled job still holding the heavy lease",
+    },
+    StateAccessAllowance {
+        path: "commands::lidar::lidar_retry_import",
+        operation: "await_cancelled_jobs",
+        reason: "awaits, with no executor permit held, until in-memory cancellation flags show no cancelled job still holding the heavy lease",
+    },
+    StateAccessAllowance {
         path: "commands::problem_report::create_problem_report",
         operation: "get_health",
         reason: "clones the immutable startup health snapshot",

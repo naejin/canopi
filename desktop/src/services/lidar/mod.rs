@@ -1357,6 +1357,25 @@ impl LidarLibrary {
         }
     }
 
+    /// Wait until every cancelled job has settled and let go of the heavy
+    /// lease. Cancel returns once its item is gone, while the job may still
+    /// be stopping or freeing its files, so Import and Retry wait here, with
+    /// no executor permit held, instead of refusing work the library no
+    /// longer shows. A running job nobody cancelled still refuses them.
+    pub async fn await_cancelled_jobs(&self) {
+        loop {
+            let stopping = self
+                .inner
+                .cancel_flags
+                .lock()
+                .is_ok_and(|flags| flags.values().any(|flag| flag.load(Ordering::Relaxed)));
+            if !stopping {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+    }
+
     /// Wait for the library-wide heavy lease without holding an executor
     /// permit: a queued calculation must never occupy a permit while another
     /// heavy job runs, and one cancelled or deleted meanwhile stops waiting.
