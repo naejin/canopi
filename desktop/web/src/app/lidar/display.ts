@@ -2,8 +2,9 @@ import { effect, signal } from '@preact/signals'
 import type { convertFileSrc } from '@tauri-apps/api/core'
 import type { RasterDisplayLayer } from '../../maplibre/raster-display/adapter'
 import { lidarDisplayDescriptor, type LidarDisplayDescriptor } from '../../ipc/lidar'
-import type { LibraryItemRole, LibraryItemType } from '../../generated/contracts'
-import { itemTypeStyle, type LidarDisplayStyle } from './item-types'
+import type { LibraryItemRole } from '../../generated/contracts'
+import { cutOutlierRange, requestCutOutlierRange, resetCutOutlierRanges } from './display-range'
+import { itemTypeStyle, type LidarDisplayStyle, type RasterStyleInput } from './item-types'
 import { storyPresentationOverrides } from '../story-presentation/overrides'
 import { readCurrentLidarPresentation, refreshLidarLibrary, type LidarPresentationItem } from './library-store'
 
@@ -11,8 +12,9 @@ import { readCurrentLidarPresentation, refreshLidarLibrary, type LidarPresentati
  * Display descriptors of library entities, keyed by entity and generation.
  *
  * The library owns derivative preparation; this store only asks for the
- * descriptor of each generation something wants to draw (a visible Design
- * reference or a library preview) and polls while it is preparing. Entries are
+ * descriptor of each generation something wants to draw or measure (a visible
+ * Design reference, a library preview, or an entry set to Cut outliers) and
+ * polls while it is preparing. Entries are
  * identity-keyed, so a descriptor of an older generation can never be used for
  * a newer one.
  */
@@ -113,16 +115,27 @@ let displayDisposer: (() => void) | null = null
 
 /**
  * Keep descriptors current for every reference the map draws, a presented
- * story step's included. Installed for the Desktop workspace lifetime next to
- * the library workflow.
+ * story step's included, and for every entry set to Cut outliers, shown or
+ * not, and read that entry's range once its display is ready (`toAssetUrl`
+ * serves the display COGs).
+ * Installed for the Desktop workspace lifetime next to the library workflow.
  */
-export function installLidarDisplayDescriptors(): void {
+export function installLidarDisplayDescriptors(toAssetUrl: (path: string) => string = lidarAssetUrl): void {
   disposeLidarDisplayDescriptors()
   displayDisposer = effect(() => {
     const presentedIds = storyPresentationOverrides.value?.siteDataIds ?? null
+    const descriptors = lidarDisplayDescriptors.value
     for (const item of readCurrentLidarPresentation()) {
-      if (!mapShown(item, presentedIds) || item.availability !== 'present' || !item.generationId) continue
-      requestLidarDisplay(item.kind, item.id, item.generationId)
+      if (item.availability !== 'present' || !item.generationId) continue
+      const cutOutliers = item.range?.mode === 'CutOutliers'
+      // A hidden entry set to Cut outliers still reads its range: its fields and legend show it, and Custom starts from it.
+      if (mapShown(item, presentedIds) || cutOutliers) requestLidarDisplay(item.kind, item.id, item.generationId)
+      if (!cutOutliers) continue
+      const key = displayKey(item.kind, item.id, item.generationId)
+      const descriptor = descriptors.get(key)
+      if (descriptor?.state === 'Ready' && descriptor.generation_id === item.generationId) {
+        requestCutOutlierRange(key, descriptor.assets.map((asset) => ({ url: toAssetUrl(asset.path), bbox: asset.bounds })))
+      }
     }
   })
 }
@@ -131,6 +144,7 @@ export function disposeLidarDisplayDescriptors(): void {
   displayDisposer?.()
   displayDisposer = null
   storeGeneration += 1
+  resetCutOutlierRanges()
   for (const timer of pollTimers.values()) clearTimeout(timer)
   pollTimers.clear()
   inflight.clear()
@@ -144,17 +158,19 @@ export function lidarAssetUrl(path: string): string {
 }
 
 /**
- * Upstream palette and stretch for one item, always in its stored units,
- * dispatched on its item type. A reference whose item is gone has no type and
- * draws nothing, so its neutral style only serves an empty legend.
+ * Upstream palette and stretch for one entry, always in its item's stored
+ * units: its own ramp, Reverse and range over its item type's defaults, with
+ * Cut outliers' range once it is read. A reference whose item is gone has no
+ * type: it draws nothing and has no legend.
  */
-export function lidarDisplayStyle(item: {
-  readonly itemType: LibraryItemType | null
-  readonly units: string
-  readonly displayRange: readonly [number, number] | null
-}): LidarDisplayStyle {
-  if (!item.itemType) return { colormap: 'viridis', reversed: false, rescale: [0, 1], units: item.units }
-  return itemTypeStyle(item.itemType, item)
+export function lidarDisplayStyle(
+  item: RasterStyleInput & Pick<LidarPresentationItem, 'kind' | 'id' | 'generationId' | 'itemType'>,
+): LidarDisplayStyle | null {
+  if (!item.itemType) return null
+  const cutRange = item.range?.mode === 'CutOutliers' && item.generationId
+    ? cutOutlierRange(displayKey(item.kind, item.id, item.generationId))
+    : null
+  return itemTypeStyle(item.itemType, { ...item, cutRange })
 }
 
 /**
@@ -175,6 +191,7 @@ export function lidarDisplayLayers(
     if (!descriptor || descriptor.state !== 'Ready' || descriptor.generation_id !== item.generationId) continue
     if (descriptor.assets.length === 0) continue
     const style = lidarDisplayStyle(item)
+    if (!style) continue
     const bounds = descriptor.assets.reduce<[number, number, number, number]>(
       (union, asset) => [
         Math.min(union[0], asset.bounds[0]),

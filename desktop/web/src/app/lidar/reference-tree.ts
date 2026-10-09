@@ -67,23 +67,95 @@ export function filterKeepingAncestors<T extends TreeRow<TreeNode>>(rows: readon
  * Saved `order` ranks an entry among its siblings only. The tree decides the
  * map's drawing order: groups stack by their root's order, and inside a group
  * results draw over the item they come from, so a slope is never hidden under
- * its own terrain. Order is display order only; it never changes an item's
+ * its own terrain. Siblings that are outputs of one analysis run (one
+ * `definitionId`) stay together as one block, ranked by their front member,
+ * so the list is always the draw order (GeoLibre keeps a `groupId` contiguous
+ * the same way). Order is display order only; it never changes an item's
  * source priority or values.
  */
 export interface ReferenceNode extends TreeNode {
   readonly order: number
+  /** The analysis run a derived item is an output of; its outputs among one level's siblings move as one block. */
+  readonly definitionId?: string | null
 }
 
 export type ReferenceRow<T extends ReferenceNode> = TreeRow<T>
 
-/** Rows as Layers lists them: front first, each followed by its results. */
+/** Where a node sorts among its siblings: a run's block shares its front member's order and the run's key. */
+interface Rank {
+  readonly order: number
+  readonly key: string
+}
+
+/** Each node's place among its siblings, with every run's outputs ranked together. */
+function ranks<T extends ReferenceNode>(nodes: readonly T[]): Map<string, Rank> {
+  const ids = new Set(nodes.map((node) => node.id))
+  const parentOf = (node: T) => node.parentId !== null && node.parentId !== node.id && ids.has(node.parentId) ? node.parentId : null
+  const front = new Map<string, number>()
+  const blockOf = (node: T) => node.definitionId ? `${parentOf(node) ?? ''}\u0000${node.definitionId}` : null
+  for (const node of nodes) {
+    const block = blockOf(node)
+    if (block) front.set(block, Math.max(front.get(block) ?? -Infinity, node.order))
+  }
+  return new Map(nodes.map((node) => {
+    const block = blockOf(node)
+    return [node.id, block ? { order: front.get(block)!, key: `run:${node.definitionId}` } : { order: node.order, key: node.id }]
+  }))
+}
+
+/** Rows as Site data lists them: front first, each followed by its results. */
 export function referenceRows<T extends ReferenceNode>(nodes: readonly T[]): ReferenceRow<T>[] {
-  return treeRows(nodes, (left, right) => right.order - left.order || left.id.localeCompare(right.id))
+  const rank = ranks(nodes)
+  return treeRows(nodes, (left, right) => {
+    const [l, r] = [rank.get(left.id)!, rank.get(right.id)!]
+    return r.order - l.order || l.key.localeCompare(r.key) || right.order - left.order || left.id.localeCompare(right.id)
+  })
 }
 
 /** Items back to front, the order the map draws them. */
 export function referenceDrawOrder<T extends ReferenceNode>(nodes: readonly T[]): ReferenceRow<T>[] {
-  return treeRows(nodes, (left, right) => left.order - right.order || left.id.localeCompare(right.id))
+  const rank = ranks(nodes)
+  return treeRows(nodes, (left, right) => {
+    const [l, r] = [rank.get(left.id)!, rank.get(right.id)!]
+    return l.order - r.order || l.key.localeCompare(r.key) || left.order - right.order || left.id.localeCompare(right.id)
+  })
+}
+
+/**
+ * The units a row moves among, front first, and every sibling at its level:
+ * its run's members when it is an output of a run with others at its level,
+ * else its siblings with each run as one unit. Null when the row is not listed.
+ */
+function moveUnits<T extends ReferenceNode>(nodes: readonly T[], id: string): { units: string[][], siblings: string[] } | null {
+  const rows = referenceRows(nodes)
+  const row = rows.find((candidate) => candidate.id === id)
+  if (!row) return null
+  const siblings = rows.filter((candidate) => candidate.parentId === row.parentId && candidate.depth === row.depth)
+  const ids = siblings.map((sibling) => sibling.id)
+  const run = row.definitionId ? siblings.filter((candidate) => candidate.definitionId === row.definitionId) : []
+  if (run.length > 1) return { units: run.map((member) => [member.id]), siblings: ids }
+  const units: string[][] = []
+  siblings.forEach((sibling, index) => {
+    const sameRun = sibling.definitionId && index > 0 && siblings[index - 1]!.definitionId === sibling.definitionId
+    if (sameRun) units.at(-1)!.push(sibling.id)
+    else units.push([sibling.id])
+  })
+  return { units, siblings: ids }
+}
+
+/**
+ * The units a drag moves a row among, front first (each a run's outputs or
+ * one row), for the panel to measure; null for an unlisted row.
+ */
+export function siblingUnits<T extends ReferenceNode>(nodes: readonly T[], id: string): string[][] | null {
+  return moveUnits(nodes, id)?.units ?? null
+}
+
+/** The saved orders for siblings listed front first, renumbered densely in drawing order. */
+function renumbered<T extends ReferenceNode>(nodes: readonly T[], listed: readonly string[]): Map<string, number> {
+  const ranked = new Map(listed.map((sibling, position) => [sibling, listed.length - 1 - position]))
+  const moved = nodes.map((node) => ranked.has(node.id) ? { ...node, order: ranked.get(node.id)! } : node)
+  return new Map(referenceDrawOrder(moved).map((node, position) => [node.id, position]))
 }
 
 /**
@@ -115,10 +187,11 @@ export function movedReferenceOrders<T extends ReferenceNode>(
 
 /**
  * The saved orders after moving one row to a sibling's place (a drop on that
- * row, or Alt ↑/↓ to the neighbour): the rows between shift by one, and
- * everything is renumbered densely in drawing order. Null when the target is
- * the row itself, unknown, or not its sibling. It takes a row id, never an
- * index, so the sibling rule can change without touching its callers.
+ * row, or Alt ↑/↓ to its neighbour): a row outside an analysis run moves past
+ * the whole run whichever member it lands on, and a run's output moves only
+ * among that run's outputs. The units between shift by one, and everything is
+ * renumbered densely in drawing order. Null when the target is the row itself,
+ * unknown, or not a place the row can move to.
  */
 export function siblingMoveOrders<T extends ReferenceNode>(
   nodes: readonly T[],
@@ -126,30 +199,32 @@ export function siblingMoveOrders<T extends ReferenceNode>(
   targetId: string,
 ): Map<string, number> | null {
   if (id === targetId) return null
-  const rows = referenceRows(nodes)
-  const row = rows.find((candidate) => candidate.id === id)
-  const target = rows.find((candidate) => candidate.id === targetId)
-  if (!row || !target || target.parentId !== row.parentId || target.depth !== row.depth) return null
-  const siblings = rows
-    .filter((candidate) => candidate.parentId === row.parentId && candidate.depth === row.depth)
-    .map((sibling) => sibling.id)
-  const to = siblings.indexOf(targetId)
-  const reordered = siblings.filter((sibling) => sibling !== id)
-  reordered.splice(to, 0, id)
-  const ranks = new Map(reordered.map((sibling, position) => [sibling, reordered.length - 1 - position]))
-  const moved = nodes.map((node) => ranks.has(node.id) ? { ...node, order: ranks.get(node.id)! } : node)
-  return new Map(referenceDrawOrder(moved).map((node, position) => [node.id, position]))
+  const level = moveUnits(nodes, id)
+  const from = level?.units.findIndex((unit) => unit.includes(id)) ?? -1
+  const to = level?.units.findIndex((unit) => unit.includes(targetId)) ?? -1
+  if (!level || from < 0 || to < 0 || from === to) return null
+  const reordered = level.units.filter((_, index) => index !== from)
+  reordered.splice(to, 0, level.units[from]!)
+  // A move inside a run puts its members back in the run's places among the other siblings.
+  const moved = reordered.flat()
+  const places = new Set(moved)
+  let next = 0
+  return renumbered(nodes, level.siblings.map((sibling) => places.has(sibling) ? moved[next++]! : sibling))
 }
 
-/** Whether a row can move one place towards the front or back among its siblings. */
-export function canMoveReference<T extends ReferenceNode>(
-  rows: readonly ReferenceRow<T>[],
+/**
+ * The row Alt ↑ ('front') or Alt ↓ ('back') moves this one to with
+ * `siblingMoveOrders`: the next row of the neighbouring unit (a whole run for
+ * a row outside it, a member inside one); null at either end or for an
+ * unlisted row.
+ */
+export function siblingNeighbour<T extends ReferenceNode>(
+  nodes: readonly T[],
   id: string,
   towards: 'front' | 'back',
-): boolean {
-  const row = rows.find((candidate) => candidate.id === id)
-  if (!row) return false
-  const siblings = rows.filter((candidate) => candidate.parentId === row.parentId && candidate.depth === row.depth)
-  const index = siblings.findIndex((candidate) => candidate.id === id)
-  return towards === 'front' ? index > 0 : index < siblings.length - 1
+): string | null {
+  const units = moveUnits(nodes, id)?.units
+  const from = units?.findIndex((unit) => unit.includes(id)) ?? -1
+  if (!units || from < 0) return null
+  return towards === 'front' ? units[from - 1]?.at(-1) ?? null : units[from + 1]?.[0] ?? null
 }

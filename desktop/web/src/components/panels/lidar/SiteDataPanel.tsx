@@ -1,30 +1,53 @@
-import { useEffect } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import { designSessionStore } from '../../../app/document-session/store'
-import { openDataLibrary, siteDataDetails } from '../../../app/lidar/library-navigation'
-import { installLidarLibraryObserver } from '../../../app/lidar/library-store'
-import { siteDataViewFor } from '../../../app/lidar/site-data-view'
+import { armCanvasTool } from '../../../app/keyboard/arming'
+import { formatCoordinates } from '../../../app/geocoding/coordinates'
+import { analyzeItem, beginDataImport, openDataLibrary } from '../../../app/lidar/library-navigation'
+import { installLidarLibraryObserver, lidarLibrary, readCurrentLidarPresentation } from '../../../app/lidar/library-store'
+import { armProfile, profileAvailable } from '../../../app/lidar/profile'
+import { siteDataViewFor, type SiteDataView } from '../../../app/lidar/site-data-view'
+import { pin, unpin } from '../../../app/lidar/site-transients'
+import { siteValues } from '../../../app/lidar/site-values'
+import { referenceRows } from '../../../app/lidar/reference-tree'
+import { locale } from '../../../app/settings/state'
+import { currentCanvasTool } from '../../../canvas/session'
 import { t } from '../../../i18n'
 import { ButtonTooltip } from '../../shared/ButtonTooltip'
+import { ToolIcon } from '../../canvas/toolbar-icons'
 import { ControlIcon } from '../../shared/ControlIcon'
 import { DockPanelHeader } from '../../shared/DockPanelHeader'
-import { AddDataMenu, SiteDataInspector, SiteDataRows } from './SiteData'
-import { SiteDataDetails } from './SiteDataDetails'
+import { ProfileChart } from './ProfileChart'
+import { rowElement, SiteDataList } from './SiteData'
 import styles from './site-data.module.css'
+
+/** Decimals of the pinned point's coordinates (U49 Q21: about 0.1 m). */
+const PIN_DECIMALS = 6
 
 /**
  * The Site data panel (canopi-f47t.42, spec §1.10; Desktop, a Design panel):
- * the header with the Data library and close over the Design's site data.
- * Commit 0's skeleton: the toolbar and body still hold the Layers rows, Add
- * data and the open row's settings, so nothing is lost before stream B builds
- * the panel body. `importGeoJson` is File › Import GeoJSON, offered in Add
- * data until Add data goes.
+ * the header with the Data library and close, the pinned point or the hint,
+ * the toolbar (Import…, Analyze…, Profile), the Design's site data, and the
+ * profile chart pinned to the bottom.
+ *
+ * `importGeoJson` is dead since Add data went (File ▸ Import GeoJSON is the
+ * only entry); its two callers drop it in stream A's merge, then this type.
  */
-export function SiteDataPanel({ importGeoJson }: { readonly importGeoJson: () => void }) {
+export function SiteDataPanel(_: { readonly importGeoJson?: () => void }) {
   useEffect(() => installLidarLibraryObserver(), [])
-  const details = siteDataDetails.value
-  if (details) return <SiteDataDetails id={details} />
   const view = siteDataViewFor(designSessionStore.sessionIdentity.value)
   const libraryLabel = t('canvas.lidar.library.title')
+  const body = useRef<HTMLDivElement>(null)
+
+  // The list's scroll survives the dock unmounting the panel; a reveal scrolls its item into view once drawn.
+  useLayoutEffect(() => {
+    if (body.current) body.current.scrollTop = view.scrollTop
+  }, [view])
+  const reveal = view.reveal.value
+  useLayoutEffect(() => {
+    if (!reveal) return
+    rowElement(body.current, reveal.id)?.scrollIntoView?.({ block: 'nearest' })
+  }, [reveal])
+
   return (
     <aside className={styles.panel} aria-label={t('canvas.layers.siteData')}>
       <DockPanelHeader
@@ -36,9 +59,84 @@ export function SiteDataPanel({ importGeoJson }: { readonly importGeoJson: () =>
           </button>
         )}
       />
-      <div className={styles.toolbar}><AddDataMenu importGeoJson={importGeoJson} /></div>
-      <div className={styles.body}><SiteDataRows /></div>
-      <SiteDataInspector />
+      <PinLine />
+      <Toolbar view={view} />
+      <div ref={body} className={styles.body} onScroll={(event) => { view.scrollTop = event.currentTarget.scrollTop }}>
+        <SiteDataList view={view} />
+      </div>
+      <ProfileChart />
     </aside>
+  )
+}
+
+/**
+ * The pinned point's coordinates with Unpin; with no pin and the pointer off
+ * the map, a muted hint, but only while some row can show a value.
+ */
+function PinLine() {
+  const point = pin.value
+  if (point) {
+    return (
+      <div className={styles.pinLine}>
+        <ControlIcon name="pin" size={16} />
+        <span className={styles.coordinates}>{formatCoordinates(point.lat, point.lon, PIN_DECIMALS, locale.value)}</span>
+        <button type="button" className={styles.stripButton} onClick={unpin}>{t('siteData.unpin')}</button>
+      </div>
+    )
+  }
+  if (siteValues.value) return null
+  const readable = readCurrentLidarPresentation().some((item) => item.shown && item.availability === 'present' && item.state === 'Ready')
+  if (!readable) return null
+  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
+  return <p className={styles.hint}>{coarse ? t('siteData.hintTouch') : t('siteData.hint')}</p>
+}
+
+function Toolbar({ view }: { readonly view: SiteDataView }) {
+  const items = readCurrentLidarPresentation()
+  const library = lidarLibrary.value
+  // A ready item in this Design that an analysis accepts (spec §1.10 "Toolbar"): an engine or grid problem still counts,
+  // and Analyze names it. Analyze runs on the item it is sent, so the toolbar picks the source: the open item if
+  // eligible, else the open result's input, else the first eligible item.
+  const eligible = referenceRows(items).filter((item) => {
+    const summary = library?.items.find((candidate) => candidate.id === item.id)
+    return summary?.state === 'Ready' && summary.offers.some((offer) =>
+      offer.unavailable?.reason !== 'WrongInput' && offer.unavailable?.reason !== 'NotReady')
+  })
+  const open = items.find((item) => item.id === view.openItem.value)
+  const sourceId = (eligible.find((item) => item.id === open?.id)
+    ?? eligible.find((item) => open?.inputId != null && item.id === open.inputId)
+    ?? eligible[0])?.id ?? null
+  const canProfile = profileAvailable.value
+  const profiling = currentCanvasTool.value === 'profile'
+  return (
+    <div className={styles.toolbar}>
+      <button type="button" className={styles.toolButton} onClick={() => { void beginDataImport() }}>
+        {t('canvas.lidar.library.import')}
+      </button>
+      <button
+        type="button"
+        className={styles.toolButton}
+        aria-disabled={sourceId ? undefined : true}
+        onClick={() => { if (sourceId) analyzeItem(sourceId, { attach: true }) }}
+      >
+        {t('canvas.lidar.library.analyze')}
+        {!sourceId && <ButtonTooltip label={t('siteData.analyzeNeedsData')} side="bottom" />}
+      </button>
+      <button
+        type="button"
+        className={styles.toolButton}
+        aria-pressed={profiling}
+        aria-disabled={canProfile ? undefined : true}
+        onClick={() => {
+          if (!canProfile) return
+          if (profiling) armCanvasTool('select', { from: 'panel' })
+          else armProfile('panel')
+        }}
+      >
+        <ToolIcon name="profile" className={styles.toolIcon} />
+        {t('siteData.profile')}
+        {!canProfile && <ButtonTooltip label={t('siteData.profileNeedsLayer')} side="bottom" />}
+      </button>
+    </div>
   )
 }

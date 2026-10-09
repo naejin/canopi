@@ -4,6 +4,13 @@ import type { LidarPresentationItem } from '../app/lidar/library-store'
 
 const invoke = vi.fn()
 vi.mock('@tauri-apps/api/core', () => ({ invoke: (...args: unknown[]) => invoke(...args) }))
+const requestCutOutlierRange = vi.fn()
+const cutRanges = new Map<string, readonly [number, number]>()
+vi.mock('../app/lidar/display-range', () => ({
+  requestCutOutlierRange: (...args: unknown[]) => requestCutOutlierRange(...args),
+  cutOutlierRange: (key: string) => cutRanges.get(key) ?? null,
+  resetCutOutlierRanges: () => cutRanges.clear(),
+}))
 
 const display = await import('../app/lidar/display')
 const { lidarLibrary } = await import('../app/lidar/library-store')
@@ -109,12 +116,13 @@ describe('LiDAR display projection', () => {
     expect(drawn(new Set())).toEqual([])
   })
 
-  it('styles each reference by its item type and its own units', () => {
+  it('styles each reference by its item type, its own units and its own display, and a missing one not at all', () => {
     const slope = { kind: 'Derived' as const, itemType: { kind: 'Raster' as const, quantity: 'Slope' as const } }
     expect(display.lidarDisplayStyle(item({ ...slope, units: '%' })))
       .toMatchObject({ colormap: 'ylorrd', reversed: false, rescale: [0, 57.7], units: '%' })
-    expect(display.lidarDisplayStyle(item({ itemType: null, availability: 'not-in-library', state: null, units: '' })))
-      .toMatchObject({ colormap: 'viridis', rescale: [0, 1] })
+    expect(display.lidarDisplayStyle(item({ ramp: 'Earth', reversed: true, range: { mode: 'Custom', min: 110, max: 120 } })))
+      .toMatchObject({ ramp: 'Earth', colormap: 'turbid', reversed: true, rescale: [110, 120] })
+    expect(display.lidarDisplayStyle(item({ itemType: null, availability: 'not-in-library', state: null, units: '' }))).toBeNull()
   })
 
   it('names a derived layer as a result, keyed by its role', () => {
@@ -197,5 +205,76 @@ describe('LiDAR display descriptor requests', () => {
     answer(descriptor())
     await vi.advanceTimersByTimeAsync(0)
     expect(display.readLidarDisplay('Source', 'lyr-1', 'gen-2')).toBeNull()
+  })
+
+  it('reads Cut outliers\' range only for an entry set to it with a ready display, by generation, and draws it', async () => {
+    requestCutOutlierRange.mockClear()
+    invoke.mockImplementation(async (_command: string, args: { request: { entity_id: string, expected_generation_id: string } }) =>
+      descriptor({ entity_id: args.request.entity_id, generation_id: args.request.expected_generation_id }))
+    lidarLibrary.value = librarySnapshot([
+      sourceItem('lyr-1', 'Orchard terrain', { generation_id: 'gen-2' }),
+      sourceItem('lyr-2', 'Canopy', { generation_id: 'gen-5' }),
+    ])
+    const entry = (id: string, range: unknown) => ({ kind: 'Source', id, name: id, visible: true, opacity: 1, order: 0, ramp: null, reversed: false, range })
+    designSessionFixture.file = {
+      version: 9, name: 'Orchard', description: null,
+      plant_species_colors: {}, plant_species_symbols: {}, plant_species_codes: {},
+      layers: [], plants: [], zones: [], annotations: [], measurement_guides: [],
+      consortiums: [], groups: [], timeline: [], budget: [], budget_currency: 'EUR',
+      lidar: { schema_version: 1, visible: true, entries: [entry('lyr-1', { mode: 'CutOutliers' }), entry('lyr-2', null)] as never },
+      created_at: '', updated_at: '', extra: {},
+    }
+    try {
+      display.installLidarDisplayDescriptors((path) => `served:${path}`)
+      await vi.advanceTimersByTimeAsync(0)
+      // requestCutOutlierRange reads a key once; the effect may ask again as descriptors land.
+      expect([...new Set(requestCutOutlierRange.mock.calls.map((call) => JSON.stringify(call)))].map((call) => JSON.parse(call))).toEqual([[
+        display.displayKey('Source', 'lyr-1', 'gen-2'),
+        [
+          { url: 'served:/data/lidar/display-cog/asset-top.tif', bbox: [0, 0, 0.6, 1] },
+          { url: 'served:/data/lidar/display-cog/asset under.tif', bbox: [0.4, -0.1, 1, 1] },
+        ],
+      ]])
+      cutRanges.set(display.displayKey('Source', 'lyr-1', 'gen-2'), [106, 129])
+      expect(display.lidarDisplayStyle(item({ range: { mode: 'CutOutliers' } }))?.rescale).toEqual([106, 129])
+      expect(display.lidarDisplayStyle(item({ range: { mode: 'CutOutliers' }, generationId: 'gen-3' }))?.rescale).toEqual([104, 132])
+    } finally {
+      display.disposeLidarDisplayDescriptors()
+      invoke.mockReset()
+      designSessionFixture.file = null
+      lidarLibrary.value = null
+    }
+  })
+
+  // A hidden entry set to Cut outliers still shows its range in its fields and legend, and Custom starts from it.
+  it('reads Cut outliers\' range of an entry the map hides, and only for that mode', async () => {
+    requestCutOutlierRange.mockClear()
+    invoke.mockImplementation(async (_command: string, args: { request: { entity_id: string, expected_generation_id: string } }) =>
+      descriptor({ entity_id: args.request.entity_id, generation_id: args.request.expected_generation_id }))
+    lidarLibrary.value = librarySnapshot([
+      sourceItem('lyr-1', 'Orchard terrain', { generation_id: 'gen-2' }),
+      sourceItem('lyr-2', 'Canopy', { generation_id: 'gen-5' }),
+    ])
+    const entry = (id: string, range: unknown) => ({ kind: 'Source', id, name: id, visible: false, opacity: 1, order: 0, ramp: null, reversed: false, range })
+    designSessionFixture.file = {
+      version: 9, name: 'Orchard', description: null,
+      plant_species_colors: {}, plant_species_symbols: {}, plant_species_codes: {},
+      layers: [], plants: [], zones: [], annotations: [], measurement_guides: [],
+      consortiums: [], groups: [], timeline: [], budget: [], budget_currency: 'EUR',
+      lidar: { schema_version: 1, visible: true, entries: [entry('lyr-1', { mode: 'CutOutliers' }), entry('lyr-2', null)] as never },
+      created_at: '', updated_at: '', extra: {},
+    }
+    try {
+      display.installLidarDisplayDescriptors((path) => `served:${path}`)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(invoke.mock.calls.map(([, args]) => (args as { request: { entity_id: string } }).request.entity_id)).toEqual(['lyr-1'])
+      expect(requestCutOutlierRange).toHaveBeenCalledWith(display.displayKey('Source', 'lyr-1', 'gen-2'), expect.any(Array))
+      expect(display.lidarDisplayLayers([item({ visible: false, shown: false, range: { mode: 'CutOutliers' } })], display.lidarDisplayDescriptors.value, null)).toEqual([])
+    } finally {
+      display.disposeLidarDisplayDescriptors()
+      invoke.mockReset()
+      designSessionFixture.file = null
+      lidarLibrary.value = null
+    }
   })
 })
