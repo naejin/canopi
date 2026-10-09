@@ -41,11 +41,10 @@ const ROW_GUIDE_STROKE: DraftStroke = Object.freeze({ token: 'selection', widthP
 
 interface PlantRowSource {
   readonly sourceId: string
-  /** The picked plant as the row repeats it, taken when it was picked; its position follows the session plane. */
-  plant: ScenePlantEntity
+  /** The picked plant as it was picked; the row repeats the plant as the Scene holds it now (livePlant), so a Species
+   *  Key recolour reaches the card glyph and the new plants, and this copy serves only once the plant is gone. */
+  readonly plant: ScenePlantEntity
   readonly label: string
-  /** The picked plant's symbol and colour, read once when it is picked. */
-  readonly glyph: NonNullable<CanvasPlantRowGuidance['glyph']>
 }
 
 export function createPlantRowTool(): CanvasTool {
@@ -70,11 +69,25 @@ export function createPlantRowTool(): CanvasTool {
 
   // ── What the tool card and the map show ─────────────────────────────────────────────────────────────────────────
 
-  function describe(): CanvasPlantRowGuidance {
+  /** The source plant as the Scene holds it now, else as it was picked. */
+  function livePlant(tool: ToolContext, picked: PlantRowSource): ScenePlantEntity {
+    return tool.scene.persisted.plants.find((plant) => plant.id === picked.sourceId) ?? picked.plant
+  }
+
+  /** The picked plant's symbol and colour as the Scene shows them now. */
+  function glyphOf(tool: ToolContext, picked: PlantRowSource): CanvasPlantRowGuidance['glyph'] {
+    const plant = livePlant(tool, picked)
+    return {
+      symbol: resolvePlantSymbolForPlant(plant, tool.scene.persisted.plantSpeciesSymbols),
+      color: tool.scene.plantPresentation(plant).color,
+    }
+  }
+
+  function describe(tool: ToolContext): CanvasPlantRowGuidance {
     return {
       phase: source ? 'row' : missed ? 'missed' : 'pick',
       plantName: source?.label ?? null,
-      glyph: source?.glyph ?? null,
+      glyph: source ? glyphOf(tool, source) : null,
       interval: intervalText,
       intervalValid,
       count: source ? shownCount?.count ?? null : null,
@@ -87,21 +100,21 @@ export function createPlantRowTool(): CanvasTool {
   function publish(): void {
     const tool = ctx
     if (!tool) return
-    tool.effects.setGuidance({ gesture: source !== null, plantRow: describe() })
+    tool.effects.setGuidance({ gesture: source !== null, plantRow: describe(tool) })
     tool.effects.setDraft(source ? { shapes: draftShapes(tool, source) } : null)
   }
 
   function draftShapes(tool: ToolContext, picked: PlantRowSource): DraftShape[] {
     const start = picked.plant.position
     // The ring sits at the radius the scene presents the plant with now (the plant in the scene, for its crowding).
-    const presented = tool.scene.persisted.plants.find((plant) => plant.id === picked.sourceId) ?? picked.plant
+    const presented = livePlant(tool, picked)
     const radiusPx = tool.scene.plantPresentation(presented).radiusPx
     const shapes: DraftShape[] = [{ kind: 'circle-px', center: start, radiusPx, style: SOURCE_RING_STROKE }]
     const end = endpoint
     if (!end) return shapes
     // The guide and the ring under the row's discs, the length on top.
     shapes.push({ kind: 'polyline', points: [start, end], style: ROW_GUIDE_STROKE })
-    const ghosts = createPlantSpacingGeneratedPlants(picked.plant, generatedPositions, (index) => `plant-row-ghost-${index}`)
+    const ghosts = createPlantSpacingGeneratedPlants(presented, generatedPositions, (index) => `plant-row-ghost-${index}`)
     for (const plant of ghosts) {
       shapes.push({ kind: 'ghost', entity: { kind: 'plant', plant, mark: 'dot', sizeFrom: start }, opacity: PLANT_ROW_GHOST_OPACITY })
     }
@@ -156,15 +169,10 @@ export function createPlantRowTool(): CanvasTool {
       showSourcePicking('source-missed')
       return
     }
-    const presentation = tool.scene.plantPresentation(plant)
     source = {
       sourceId: plant.id,
       plant: { ...plant, pinnedName: false, position: { ...plant.position } },
-      label: presentation.commonName,
-      glyph: {
-        symbol: resolvePlantSymbolForPlant(plant, persisted.plantSpeciesSymbols),
-        color: presentation.color,
-      },
+      label: tool.scene.plantPresentation(plant).commonName,
     }
     intervalText = formatPlantSpacingIntervalInput(tool.settings.plantSpacingIntervalM())
     intervalValid = true
@@ -233,10 +241,13 @@ export function createPlantRowTool(): CanvasTool {
   }
 
   function commitPositions(picked: PlantRowSource, positions: readonly WorldPoint[]): void {
+    const tool = context()
+    // The source as the Scene holds it at the commit (canUseSource checked it is there): its colour now, not at the pick.
+    const repeated = livePlant(tool, picked)
     const generatedIds: string[] = []
-    context().effects.edits.run('interaction-plant-spacing', (tx) => {
+    tool.effects.edits.run('interaction-plant-spacing', (tx) => {
       tx.mutate((draft) => {
-        const generated = createPlantSpacingGeneratedPlants(picked.plant, positions, () => {
+        const generated = createPlantSpacingGeneratedPlants(repeated, positions, () => {
           const id = createUuid()
           generatedIds.push(id)
           return id
