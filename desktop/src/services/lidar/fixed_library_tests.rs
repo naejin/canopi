@@ -313,7 +313,7 @@ fn an_import_publishes_one_fixed_item_with_display_ready_and_nothing_refreshes()
         "item-old",
         "gen-earlier",
     );
-    drop(library);
+    close(library);
     let reopened = LidarLibrary::open(&root).unwrap();
     reopened.attach_executor(executor);
     std::thread::sleep(std::time::Duration::from_millis(300));
@@ -385,6 +385,25 @@ fn attached_library(root: &Path) -> LidarLibrary {
     let library = LidarLibrary::open(root).unwrap();
     library.attach_executor(crate::native_operation::NativeOperationExecutor::production());
     library
+}
+
+/// Drops the last handle on `library`, waiting for a settling job's own, so
+/// its catalogue connection is closed before the next open. Windows cannot
+/// set aside a catalogue another connection still holds (the rebuild then
+/// reads Unavailable), while Unix moves it regardless, so a handle left
+/// behind is caught here on every platform.
+fn close(library: LidarLibrary) {
+    let held = std::sync::Arc::downgrade(&library.inner);
+    drop(library);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while held.strong_count() > 0 {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "{} other handles keep the library and its catalogue open",
+            held.strong_count()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
 }
 
 /// Asserts a refusal shown in the import dialog: it names the user's file and
@@ -1167,17 +1186,37 @@ fn cancelling_a_retry_puts_a_rebuilt_item_back_to_failed_and_a_rebuild_recovers_
         "the meta still names the item"
     );
 
-    library
-        .catalogue()
-        .unwrap()
-        .execute(
-            "UPDATE lidar_catalogue_meta SET value = '24' WHERE key = 'schema_version'",
-            [],
-        )
-        .unwrap();
+    // The mock app keeps its managed library, and so the catalogue
+    // connection, until the process ends, and Windows cannot set aside a
+    // catalogue another connection holds (`close`). The rebuild therefore
+    // opens a copy: the catalogue as an older Canopi left it, and the
+    // originals with their `meta.json`, which are all a rebuild reads.
+    let copy = scratch("cancel-retry-reopened");
+    let copied = paths::library_root(&copy);
+    std::fs::create_dir_all(&copied).unwrap();
+    {
+        let connection = library.catalogue().unwrap();
+        connection
+            .execute(
+                "UPDATE lidar_catalogue_meta SET value = '24' WHERE key = 'schema_version'",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "VACUUM INTO ?1",
+                [copied.join(paths::CATALOGUE_FILE).to_str().unwrap()],
+            )
+            .unwrap();
+    }
+    let kept = library.inner.paths.source_dir("sha-kept");
+    let copied_source = copied.join("sources").join("sha-kept");
+    std::fs::create_dir_all(&copied_source).unwrap();
+    for name in ["original", source_meta::META_FILE] {
+        std::fs::copy(kept.join(name), copied_source.join(name)).unwrap();
+    }
     drop(app);
-    drop(library);
-    let reopened = LidarLibrary::open(&root).unwrap();
+    let reopened = LidarLibrary::open(&copy).unwrap();
     assert!(matches!(
         reopened.open_status(),
         recovery::LibraryOpenStatus::Recovered {
@@ -1191,6 +1230,7 @@ fn cancelling_a_retry_puts_a_rebuilt_item_back_to_failed_and_a_rebuild_recovers_
     assert_eq!(recovered.name.as_deref(), Some("Orchard"));
     assert_eq!(recovered.state, LidarResultState::Failed);
     let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&copy);
     let _ = std::fs::remove_dir_all(&workbench);
 }
 
@@ -1507,7 +1547,7 @@ fn a_rebuild_after_a_dismiss_stopped_before_its_folders_went_lists_nothing() {
         .expect("the released original's meta");
     assert!(meta.items.is_empty(), "the meta names no item");
 
-    drop(library);
+    close(library);
     std::fs::write(
         paths::library_root(&root).join(paths::CATALOGUE_FILE),
         b"not a catalogue",
@@ -1541,7 +1581,7 @@ fn reopening_after_a_dismiss_stopped_before_its_folders_went_removes_them() {
     drop(library.release_dismissed_item(&layer_id).unwrap());
     let folder = library.inner.paths.source_dir("sha-kept");
     assert!(folder.is_dir(), "the stop kept the folder");
-    drop(library);
+    close(library);
 
     let reopened = LidarLibrary::open(&root).unwrap();
     assert!(matches!(
@@ -1575,7 +1615,7 @@ fn an_original_dismiss_could_not_remove_goes_at_the_next_start() {
     assert!(library.library_snapshot().unwrap().items.is_empty());
     assert_eq!(import_rows(&library), no_import_rows());
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o700)).unwrap();
-    drop(library);
+    close(library);
 
     let reopened = LidarLibrary::open(&root).unwrap();
     assert!(!folder.exists(), "the next start removed the folder");

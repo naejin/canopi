@@ -35,6 +35,11 @@ async function scrollTop(locator: Locator): Promise<number> {
   return locator.evaluate((element) => element.scrollTop)
 }
 
+/** Whether a pane rests at its end, to the pixel. */
+async function atEnd(locator: Locator): Promise<boolean> {
+  return locator.evaluate((element) => element.scrollTop + element.clientHeight >= element.scrollHeight - 1)
+}
+
 test.describe('the Data library sheet', () => {
   test('forty items: the list and the details scroll on their own, and the footer stays in the sheet', async ({ page }) => {
     await page.setViewportSize(WIDE)
@@ -59,7 +64,9 @@ test.describe('the Data library sheet', () => {
     const listBox = await box(list)
     await page.mouse.move(listBox.x + listBox.width / 2, listBox.y + listBox.height / 2)
     await page.mouse.wheel(0, 2400)
-    await expect.poll(() => scrollTop(list), { message: 'the list scrolls' }).toBeGreaterThan(0)
+    // WebKit applies a wheel's scroll over several frames, so a list read as soon as it moves can still be moving (CI
+    // read 1759 px, then 1761): it is read once it rests at its end, which 2400 px passes.
+    await expect.poll(() => atEnd(list), { message: 'the list scrolls to its end' }).toBe(true)
     expect(await scrollTop(details), 'the details pane did not move').toBe(0)
     expect(await page.evaluate(() => document.scrollingElement?.scrollTop ?? 0), 'the page did not move').toBe(0)
     expect(await box(footer), 'the footer did not move').toEqual(footerBefore)

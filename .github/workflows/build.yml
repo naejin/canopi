@@ -314,7 +314,7 @@ jobs:
         run: |
           CANOPI_GEOLIBRE_BIN="$PWD/desktop/binaries/geolibre-$(rustc -vV | sed -n 's/^host: //p')"
           export CANOPI_GEOLIBRE_BIN
-          cargo test -p canopi-desktop --lib --locked services::lidar -- --ignored --test-threads=1 --skip e2e_
+          cargo test -p canopi-desktop --lib --locked services::lidar -- --ignored --test-threads=1 --skip e2e_ --skip latency_probe
 
   # test-rust runs the Rust suite on Linux only. File saving, atomic replace,
   # directory sync, locking and paths differ on Windows and macOS, so the

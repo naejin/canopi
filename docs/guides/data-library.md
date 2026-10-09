@@ -43,7 +43,7 @@ Boundaries for Canopi Desktop's store of LiDAR terrain rasters (imported and der
 ## Environment and commands
 
 - GeoLibre CLI: `CANOPI_GEOLIBRE_BIN`, beside the executable, then `PATH` (`geolibre.rs` tests); built by `scripts/build-geolibre-cli.sh` and bundled as a Tauri sidecar ([native and release](native-and-release.md)).
-- Engine lane (CI job `lidar-native`): `CANOPI_GEOLIBRE_BIN=<path> CANOPI_SKIP_BUNDLED_DB=1 cargo test -p canopi-desktop --lib services::lidar -- --ignored --test-threads=1 --skip e2e_`.
+- Engine lane: the CI job `lidar-native` (`.github/workflows/build.yml`) runs the ignored `services::lidar` tests except the fixture lanes' (`e2e_*`, `latency_probe`).
 - Comparison lane (local; `gdalinfo`, `gdal_translate`, `gdalwarp`, `gdaltransform` via `CANOPI_LIDAR_GDAL_BIN` or `PATH`; skips without them): `cargo test -p canopi-desktop --lib rust_engine::comparison -- --ignored --nocapture`.
 - Fixture lanes (local; no fixtures is not a pass): `CANOPI_LIDAR_E2E_FIXTURE=<IGN MNT GeoTIFF>`, `CANOPI_LIDAR_MNH_DIR=<IGN MNH tiles>`, then `cargo test -p canopi-desktop --lib -- --ignored --test-threads=1 --nocapture` for the `e2e_*` tests in `e2e.rs`.
 - Raster diagnostics: `localStorage['canopi.rasterDiagnostics']='1'`.
