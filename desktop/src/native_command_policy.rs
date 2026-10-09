@@ -81,18 +81,18 @@ const STATE_ACCESS_ALLOWLIST: &[StateAccessAllowance] = &[
     },
     StateAccessAllowance {
         path: "commands::lidar::lidar_import_item",
-        operation: "await_cancelled_jobs",
-        reason: "awaits, with no executor permit held, until in-memory cancellation flags show no cancelled job still holding the heavy lease",
+        operation: "await_stopping_jobs",
+        reason: "awaits, with no executor permit held, until in-memory job flags show no cancelled or settling job still holding the heavy lease",
     },
     StateAccessAllowance {
         path: "commands::lidar::lidar_retry_import",
-        operation: "await_cancelled_jobs",
-        reason: "awaits, with no executor permit held, until in-memory cancellation flags show no cancelled job still holding the heavy lease",
+        operation: "await_stopping_jobs",
+        reason: "awaits, with no executor permit held, until in-memory job flags show no cancelled or settling job still holding the heavy lease",
     },
     StateAccessAllowance {
         path: "commands::lidar::lidar_dismiss_import",
-        operation: "await_cancelled_jobs",
-        reason: "awaits, with no executor permit held, until in-memory cancellation flags show no cancelled job still holding the heavy lease",
+        operation: "await_stopping_jobs",
+        reason: "awaits, with no executor permit held, until in-memory job flags show no cancelled or settling job still holding the heavy lease",
     },
     StateAccessAllowance {
         path: "commands::problem_report::create_problem_report",

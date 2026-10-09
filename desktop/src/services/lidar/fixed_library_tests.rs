@@ -1258,6 +1258,213 @@ fn dismissing_a_rebuilt_item_after_a_cancelled_retry_frees_its_originals() {
     let _ = std::fs::remove_dir_all(&workbench);
 }
 
+/// Through the real commands: a rebuilt item's Retry that fails with no
+/// cancel shows Failed, with Dismiss, while its job still holds the heavy
+/// lease to free its files; Dismiss clicked then waits for that settlement
+/// instead of being refused, and frees the item's originals.
+#[test]
+fn dismissing_while_a_failed_retry_still_settles_waits_for_it() {
+    use crate::commands::lidar::{lidar_dismiss_import, lidar_retry_import};
+    use tauri::Manager;
+    let workbench = scratch("dismiss-settling-tiles");
+    let west = plane(&attached_library(&workbench), &workbench, "west", 445_000.0);
+    // Half a cell off, so the retry stages both and then fails as a whole.
+    let shifted = plane(
+        &attached_library(&workbench),
+        &workbench,
+        "shifted",
+        445_000.5,
+    );
+    let root = scratch("dismiss-settling");
+    let (library, layer_id) = rebuilt_item(
+        &root,
+        &[
+            (west.as_path(), "sha-west", "west.tif"),
+            (shifted.as_path(), "sha-shifted", "shifted.tif"),
+        ],
+    );
+    let executor = crate::native_operation::NativeOperationExecutor::production();
+    library.attach_executor(executor.clone());
+    let app = tauri::test::mock_builder()
+        .manage(library.clone())
+        .manage(executor)
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    // Held, the display registry keeps the failed job's settlement, which
+    // frees its staged COGs, from finishing.
+    let display = library.display().unwrap();
+    let receipt = tauri::async_runtime::block_on(lidar_retry_import(
+        app.state(),
+        app.state(),
+        layer_id.clone(),
+    ))
+    .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while library
+        .get_import_job(&receipt.job_id)
+        .unwrap()
+        .unwrap()
+        .state
+        != LidarImportJobState::Failed
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the retry never failed"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+
+    let handle = app.handle().clone();
+    let dismissing = layer_id.clone();
+    let (sent, dismissed) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let outcome = tauri::async_runtime::block_on(lidar_dismiss_import(
+            handle.state(),
+            handle.state(),
+            dismissing,
+        ));
+        let _ = sent.send(outcome);
+    });
+    assert!(
+        dismissed
+            .recv_timeout(std::time::Duration::from_millis(300))
+            .is_err(),
+        "Dismiss waits for the item's settling job"
+    );
+    drop(display);
+    dismissed
+        .recv_timeout(std::time::Duration::from_secs(60))
+        .unwrap()
+        .unwrap();
+
+    await_settled(&library, &receipt.job_id);
+    assert!(library.library_snapshot().unwrap().items.is_empty());
+    assert_eq!(import_rows(&library), no_import_rows());
+    assert_eq!(library_files(&library), Vec::<PathBuf>::new());
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&workbench);
+}
+
+/// Two rebuilt items whose saved selections share one managed original:
+/// dismissing one keeps the original, its row and the other item, whose
+/// `meta.json` then names it alone; dismissing the other frees the original.
+#[test]
+fn dismissing_one_of_two_rebuilt_items_sharing_an_original_keeps_it() {
+    let workbench = scratch("dismiss-shared-rebuilt-tile");
+    let tile = plane(&attached_library(&workbench), &workbench, "tile", 445_000.0);
+    let root = scratch("dismiss-shared-rebuilt");
+    let lidar = paths::library_root(&root);
+    let dir = lidar.join("sources").join("sha-shared");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(&tile, dir.join("original")).unwrap();
+    let member_of = |id: &str, name: &str, created_at: &str| source_meta::ItemMeta {
+        id: id.to_string(),
+        name: name.to_string(),
+        quantity: RasterQuantity::GroundElevation.key().to_string(),
+        units: "m".to_string(),
+        created_at: created_at.to_string(),
+        members: vec!["sha-shared".to_string()],
+        analyses: Vec::new(),
+    };
+    let meta = source_meta::SourceMeta {
+        version: source_meta::META_VERSION,
+        sha256: "sha-shared".to_string(),
+        original_filename: "tile.tif".to_string(),
+        size_bytes: std::fs::metadata(&tile).unwrap().len(),
+        imported_at: "10".to_string(),
+        items: vec![
+            member_of("lyr-first", "First", "10"),
+            member_of("lyr-second", "Second", "11"),
+        ],
+    };
+    source_meta::write(&dir.join(source_meta::META_FILE), &meta).unwrap();
+    std::fs::write(lidar.join(paths::CATALOGUE_FILE), b"not a catalogue").unwrap();
+    let library = attached_library(&root);
+    assert!(matches!(
+        library.open_status(),
+        recovery::LibraryOpenStatus::Recovered { items: 2, .. }
+    ));
+
+    library.dismiss_import("lyr-first").unwrap();
+    let original = library.inner.paths.source_original("sha-shared");
+    assert!(original.is_file(), "the shared original stays");
+    assert_eq!(
+        count(
+            &library,
+            "SELECT COUNT(*) FROM lidar_sources WHERE sha256 = 'sha-shared'"
+        ),
+        1
+    );
+    let snapshot = library.library_snapshot().unwrap();
+    assert_eq!(snapshot.items.len(), 1);
+    item(&snapshot.items, "lyr-second");
+    let meta = source_meta::read(&library.inner.paths.source_meta("sha-shared")).unwrap();
+    assert_eq!(
+        meta.items
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>(),
+        ["lyr-second"]
+    );
+
+    library.dismiss_import("lyr-second").unwrap();
+    assert_eq!(import_rows(&library), no_import_rows());
+    assert_eq!(library_files(&library), Vec::<PathBuf>::new());
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&workbench);
+}
+
+/// A rebuilt item whose managed original a published item also uses:
+/// dismissing the rebuilt item keeps the original, its row and the published
+/// item.
+#[test]
+fn dismissing_a_rebuilt_item_keeps_an_original_a_published_item_uses() {
+    use sha2::Digest;
+    let workbench = scratch("dismiss-published-shared-tile");
+    let tile = plane(&attached_library(&workbench), &workbench, "tile", 445_000.0);
+    let sha256 = format!("{:x}", sha2::Sha256::digest(std::fs::read(&tile).unwrap()));
+    let root = scratch("dismiss-published-shared");
+    let (library, layer_id) = rebuilt_library(&root, &tile, &sha256);
+    let published = library
+        .import_item(
+            "Published",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            vec![tile.clone()],
+        )
+        .unwrap();
+    assert_eq!(
+        await_import(&library, &published.job_id),
+        LidarImportJobState::Complete
+    );
+
+    library.dismiss_import(&layer_id).unwrap();
+
+    assert!(library.inner.paths.source_original(&sha256).is_file());
+    assert_eq!(
+        library
+            .catalogue()
+            .unwrap()
+            .query_row(
+                "SELECT COUNT(*) FROM lidar_sources WHERE sha256 = ?1",
+                [&sha256],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap(),
+        1
+    );
+    let snapshot = library.library_snapshot().unwrap();
+    assert_eq!(snapshot.items.len(), 1);
+    assert!(
+        item(&snapshot.items, &published.layer_id)
+            .generation_id
+            .is_some()
+    );
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&workbench);
+}
+
 /// Dismiss frees a rebuilt item's originals under the heavy lease, as a
 /// settling import does, so it is refused while another raster job runs and
 /// changes nothing; once that job has finished it frees them.
@@ -1279,6 +1486,100 @@ fn dismissing_a_rebuilt_item_waits_for_no_other_raster_job() {
     library.dismiss_import(&layer_id).unwrap();
     assert_eq!(import_rows(&library), no_import_rows());
     assert_eq!(library_files(&library), Vec::<PathBuf>::new());
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&workbench);
+}
+
+/// A Dismiss that stops after its catalogue commit, before its originals'
+/// folders go (a crash), never lets a catalogue rebuild list the item again:
+/// each released original's `meta.json` names no item before the commit.
+#[test]
+fn a_rebuild_after_a_dismiss_stopped_before_its_folders_went_lists_nothing() {
+    let workbench = scratch("dismiss-crash-rebuild-tile");
+    let tile = plane(&attached_library(&workbench), &workbench, "tile", 445_000.0);
+    let root = scratch("dismiss-crash-rebuild");
+    let (library, layer_id) = rebuilt_library(&root, &tile, "sha-kept");
+
+    drop(library.release_dismissed_item(&layer_id).unwrap());
+    assert_eq!(import_rows(&library), no_import_rows());
+    assert!(library.inner.paths.source_original("sha-kept").is_file());
+    let meta = source_meta::read(&library.inner.paths.source_meta("sha-kept"))
+        .expect("the released original's meta");
+    assert!(meta.items.is_empty(), "the meta names no item");
+
+    drop(library);
+    std::fs::write(
+        paths::library_root(&root).join(paths::CATALOGUE_FILE),
+        b"not a catalogue",
+    )
+    .unwrap();
+    let reopened = LidarLibrary::open(&root).unwrap();
+    assert!(matches!(
+        reopened.open_status(),
+        recovery::LibraryOpenStatus::Recovered {
+            items: 0,
+            generated: 0,
+            ..
+        }
+    ));
+    assert!(reopened.library_snapshot().unwrap().items.is_empty());
+    assert!(!reopened.inner.paths.source_dir("sha-kept").exists());
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&workbench);
+}
+
+/// The next start removes the folders of originals a Dismiss released but
+/// stopped short of removing: no catalogue row and no `meta.json` item
+/// claims them.
+#[test]
+fn reopening_after_a_dismiss_stopped_before_its_folders_went_removes_them() {
+    let workbench = scratch("dismiss-crash-reopen-tile");
+    let tile = plane(&attached_library(&workbench), &workbench, "tile", 445_000.0);
+    let root = scratch("dismiss-crash-reopen");
+    let (library, layer_id) = rebuilt_library(&root, &tile, "sha-kept");
+
+    drop(library.release_dismissed_item(&layer_id).unwrap());
+    let folder = library.inner.paths.source_dir("sha-kept");
+    assert!(folder.is_dir(), "the stop kept the folder");
+    drop(library);
+
+    let reopened = LidarLibrary::open(&root).unwrap();
+    assert!(matches!(
+        reopened.open_status(),
+        recovery::LibraryOpenStatus::Ready
+    ));
+    assert!(!folder.exists(), "the next start removed the folder");
+    assert!(reopened.library_snapshot().unwrap().items.is_empty());
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&workbench);
+}
+
+/// A released original's folder that Dismiss could not remove stays hidden
+/// and goes at the next start.
+#[cfg(unix)]
+#[test]
+fn an_original_dismiss_could_not_remove_goes_at_the_next_start() {
+    use std::os::unix::fs::PermissionsExt;
+    let workbench = scratch("dismiss-remove-fails-tile");
+    let tile = plane(&attached_library(&workbench), &workbench, "tile", 445_000.0);
+    let root = scratch("dismiss-remove-fails");
+    let (library, layer_id) = rebuilt_library(&root, &tile, "sha-kept");
+    let folder = library.inner.paths.source_dir("sha-kept");
+    let locked = folder.join("locked");
+    std::fs::create_dir(&locked).unwrap();
+    std::fs::write(locked.join("file"), b"kept").unwrap();
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o500)).unwrap();
+
+    library.dismiss_import(&layer_id).unwrap();
+    assert!(folder.is_dir(), "the removal failed");
+    assert!(library.library_snapshot().unwrap().items.is_empty());
+    assert_eq!(import_rows(&library), no_import_rows());
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o700)).unwrap();
+    drop(library);
+
+    let reopened = LidarLibrary::open(&root).unwrap();
+    assert!(!folder.exists(), "the next start removed the folder");
+    assert!(reopened.library_snapshot().unwrap().items.is_empty());
     let _ = std::fs::remove_dir_all(&root);
     let _ = std::fs::remove_dir_all(&workbench);
 }

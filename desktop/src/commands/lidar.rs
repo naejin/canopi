@@ -234,8 +234,9 @@ pub async fn lidar_display_descriptor(
 /// The item and its job are created together only when the user submits the
 /// selection; cancelling the file picker creates nothing. Preparation,
 /// display derivatives and publication run as one job: a failure or
-/// cancellation publishes none of the batch. A cancelled job still settling
-/// is waited for before the file check, so the same file imports again.
+/// cancellation publishes none of the batch. A stopping job still settling
+/// (cancelled, or done) is waited for before the file check, so the same
+/// file imports again.
 #[tauri::command]
 pub async fn lidar_import_item(
     library: State<'_, LidarLibrary>,
@@ -249,7 +250,7 @@ pub async fn lidar_import_item(
     paths: Vec<String>,
 ) -> Result<common_types::lidar::LidarImportReceipt, String> {
     let library = library.inner().clone();
-    library.await_cancelled_jobs().await;
+    library.await_stopping_jobs().await;
     executor
         .run(
             crate::native_operation::NativeOperationClass::UserData,
@@ -306,7 +307,7 @@ pub async fn lidar_library_disk_usage(
 }
 
 /// Retry a failed import with its saved selection, keeping the same library
-/// item. A published item cannot be retried. A cancelled job still settling
+/// item. A published item cannot be retried. A stopping job still settling
 /// is waited for first, as Import waits.
 #[tauri::command]
 pub async fn lidar_retry_import(
@@ -315,7 +316,7 @@ pub async fn lidar_retry_import(
     layer_id: String,
 ) -> Result<common_types::lidar::LidarImportReceipt, String> {
     let library = library.inner().clone();
-    library.await_cancelled_jobs().await;
+    library.await_stopping_jobs().await;
     executor
         .run(
             crate::native_operation::NativeOperationClass::UserData,
@@ -325,9 +326,10 @@ pub async fn lidar_retry_import(
         .await
 }
 
-/// Remove an unpublished item whose import failed. A cancelled job still
-/// settling is waited for first, as Import waits, since Dismiss may free
-/// originals under the same heavy lease.
+/// Remove an unpublished item whose import failed. A stopping job still
+/// settling, such as the item's own failed import freeing its files, is
+/// waited for first, as Import waits, since Dismiss may free originals under
+/// the same heavy lease.
 #[tauri::command]
 pub async fn lidar_dismiss_import(
     library: State<'_, LidarLibrary>,
@@ -335,7 +337,7 @@ pub async fn lidar_dismiss_import(
     layer_id: String,
 ) -> Result<(), String> {
     let library = library.inner().clone();
-    library.await_cancelled_jobs().await;
+    library.await_stopping_jobs().await;
     executor
         .run(
             crate::native_operation::NativeOperationClass::UserData,

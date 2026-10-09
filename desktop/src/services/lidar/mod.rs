@@ -75,6 +75,9 @@ pub(crate) struct LidarLibraryInner {
     pub(crate) engine: Box<dyn RasterEngine>,
     /// The pinned GeoLibre CLI sidecar every registered analysis runs on.
     pub(crate) geolibre: geolibre::GeolibreEngine,
+    /// Each running job's flag, set when the job is cancelled or, for an
+    /// import, once its work is done and it only settles; the entry goes
+    /// once the job has settled and let go of the heavy lease.
     cancel_flags: Mutex<HashMap<String, Arc<AtomicBool>>>,
     executor: Mutex<Option<crate::native_operation::NativeOperationExecutor>>,
     /// One exclusive heavy raster job at a time, library-wide. Import and
@@ -351,13 +354,15 @@ impl LidarLibrary {
     }
 
     /// Best-effort bounded cleanup at startup: job roots of settled jobs,
-    /// unregistered display derivatives, settled analysis scratch, leftover engine
-    /// output, unpublished chunk rows and unreferenced assets. Each step that
-    /// fails is logged and left for the next start; none stops the library.
+    /// released originals, unregistered display derivatives, settled analysis
+    /// scratch, leftover engine output, unpublished chunk rows and
+    /// unreferenced assets. Each step that fails is logged and left for the
+    /// next start; none stops the library.
     fn prune_transient_artifacts(&self) {
         type Step = fn(&LidarLibrary) -> Result<(), String>;
-        let steps: [(&str, Step); 6] = [
+        let steps: [(&str, Step); 7] = [
             ("settled job roots", Self::prune_settled_job_roots),
+            ("released originals", Self::prune_released_originals),
             // Display derivatives nobody registered, and interrupted writes,
             // can go now: no WebView reader exists before the library opens.
             (
@@ -405,6 +410,48 @@ impl LidarLibrary {
             let job_id = entry.file_name().to_string_lossy().into_owned();
             if !running.contains(&job_id) {
                 self.discard_import_job_files(&job_id);
+            }
+        }
+        Ok(())
+    }
+
+    /// Remove each `sources/<sha256>/` folder nothing claims: no catalogue row
+    /// names it and its `meta.json` names no item. Dismiss releases an
+    /// original's meta and rows, then removes its folder; a stop or a failed
+    /// removal between the two leaves the folder for this step.
+    fn prune_released_originals(&self) -> Result<(), String> {
+        let sources = self.inner.paths.root().join("sources");
+        let entries = match std::fs::read_dir(&sources) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(format!("Failed to list {}: {error}", sources.display())),
+        };
+        let connection = self.catalogue()?;
+        if catalogue::jobs_in_flight(&connection)? {
+            return Ok(());
+        }
+        for entry in entries.flatten() {
+            if !entry.path().is_dir() {
+                continue;
+            }
+            let sha256 = entry.file_name().to_string_lossy().into_owned();
+            let claimed: bool = connection
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM lidar_sources WHERE sha256 = ?1)
+                     OR EXISTS(
+                         SELECT 1 FROM lidar_import_jobs WHERE instr(request_json, ?1) > 0)",
+                    [&sha256],
+                    |row| row.get(0),
+                )
+                .map_err(|e| e.to_string())?;
+            if claimed
+                || source_meta::read(&self.inner.paths.source_meta(&sha256))
+                    .is_some_and(|meta| !meta.items.is_empty())
+            {
+                continue;
+            }
+            if let Err(error) = import::remove_original_dirs(self, &[sha256]) {
+                tracing::warn!(%error, "a released original was kept until the next start");
             }
         }
         Ok(())
@@ -1040,37 +1087,8 @@ impl LidarLibrary {
     /// go with it, under the heavy lease as a settling import frees its own,
     /// so Dismiss is refused while another raster job runs.
     pub fn dismiss_import(&self, layer_id: &str) -> Result<(), String> {
-        self.ensure_writable()?;
         {
-            let connection = self.catalogue()?;
-            let running: bool = connection
-                .query_row(
-                    "SELECT EXISTS(SELECT 1 FROM lidar_import_jobs WHERE layer_id = ?1
-                     AND state IN ('staging', 'applying'))",
-                    [layer_id],
-                    |row| row.get(0),
-                )
-                .map_err(|e| e.to_string())?;
-            if running {
-                return Err("this import is still running; cancel it first".to_string());
-            }
-            let managed = self.saved_managed_originals(&connection, layer_id)?;
-            let _lease = if managed.is_empty() {
-                None
-            } else {
-                Some(HeavyJobLease::acquire(self, &new_id("dis"))?)
-            };
-            let transaction = connection
-                .unchecked_transaction()
-                .map_err(|e| e.to_string())?;
-            if !delete_unpublished_item_rows(&transaction, layer_id)? {
-                return Err(
-                    "this item is published; delete it from the library instead".to_string()
-                );
-            }
-            let originals = import::release_unclaimed_originals(&transaction, managed)?;
-            transaction.commit().map_err(|e| e.to_string())?;
-            drop(connection);
+            let (_lease, originals) = self.release_dismissed_item(layer_id)?;
             // Still under the lease, so no import stages this content meanwhile.
             if let Err(error) = import::remove_original_dirs(self, &originals) {
                 tracing::warn!(layer_id, %error, "a dismissed item's original was not removed");
@@ -1080,6 +1098,49 @@ impl LidarLibrary {
         // kept goes at the next start.
         self.refresh_source_meta();
         Ok(())
+    }
+
+    /// Dismiss's catalogue step: delete the failed item's rows with those of
+    /// the managed originals no other item claims, in one committed
+    /// transaction, and return those originals with the lease their removal
+    /// must stay under.
+    fn release_dismissed_item(
+        &self,
+        layer_id: &str,
+    ) -> Result<(Option<HeavyJobLease>, Vec<String>), String> {
+        self.ensure_writable()?;
+        let connection = self.catalogue()?;
+        let running: bool = connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM lidar_import_jobs WHERE layer_id = ?1
+                 AND state IN ('staging', 'applying'))",
+                [layer_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if running {
+            return Err("this import is still running; cancel it first".to_string());
+        }
+        let managed = self.saved_managed_originals(&connection, layer_id)?;
+        let lease = if managed.is_empty() {
+            None
+        } else {
+            Some(HeavyJobLease::acquire(self, &new_id("dis"))?)
+        };
+        let transaction = connection
+            .unchecked_transaction()
+            .map_err(|e| e.to_string())?;
+        if !delete_unpublished_item_rows(&transaction, layer_id)? {
+            return Err("this item is published; delete it from the library instead".to_string());
+        }
+        let originals = import::release_unclaimed_originals(&transaction, managed)?;
+        // Before the commit, so a stop between it and the removal never lets
+        // a catalogue rebuild list the item again.
+        for sha256 in &originals {
+            source_meta::release(&self.inner.paths, sha256)?;
+        }
+        transaction.commit().map_err(|e| e.to_string())?;
+        Ok((lease, originals))
     }
 
     /// The managed originals (`sources/<sha256>/original`) any saved import
@@ -1362,6 +1423,10 @@ impl LidarLibrary {
     /// Import publishes a new fixed item; it never touches another item or
     /// enqueues analysis.
     fn finish_import_sources(&self, job_id: &str, outcome: Result<(), String>) {
+        // From here the job only settles: flagged, it is waited for by
+        // Import, Retry and Dismiss (`await_stopping_jobs`) rather than
+        // refusing them once its item reads Failed or published.
+        self.set_cancel_flag(job_id);
         if let Ok(connection) = self.catalogue() {
             match outcome {
                 Ok(()) => {
@@ -1406,12 +1471,14 @@ impl LidarLibrary {
         }
     }
 
-    /// Wait until every cancelled job has settled and let go of the heavy
-    /// lease. Cancel returns once its import is withdrawn, while the job may still
-    /// be stopping or freeing its files, so Import and Retry wait here, with
-    /// no executor permit held, instead of refusing work the library no
-    /// longer shows. A running job nobody cancelled still refuses them.
-    pub async fn await_cancelled_jobs(&self) {
+    /// Wait until every stopping job has settled and let go of the heavy
+    /// lease: a cancelled one, or an import whose work is done. Cancel
+    /// returns once its import is withdrawn, and a failed import reads Failed
+    /// as it starts settling, while the job may still be stopping or freeing
+    /// its files, so Import, Retry and Dismiss wait here, with no executor
+    /// permit held, instead of refusing work the library no longer shows. A
+    /// running job nobody cancelled still refuses them.
+    pub async fn await_stopping_jobs(&self) {
         loop {
             let stopping = self
                 .inner
