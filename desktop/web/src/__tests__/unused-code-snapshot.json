@@ -1,8 +1,6 @@
 {
   "files": [],
-  "exports": [
-    "src/app/lidar/profile.ts#setProfileHover"
-  ],
+  "exports": [],
   "typeExports": [
     "src/app/analyses/model.ts#AnalysisOptionGroup",
     "src/app/analyses/model.ts#ExistingMatch",
@@ -60,11 +58,9 @@
     "src/app/lidar/actions.ts#PendingAttachment",
     "src/app/lidar/analysis-groups.ts#GroupableNode",
     "src/app/lidar/import-coverage.ts#GroundBox",
-    "src/app/lidar/item-types.ts#ProfileRole",
     "src/app/lidar/reference-tree.ts#TreeNode",
     "src/app/lidar/reference-tree.ts#TreeRow",
     "src/app/lidar/sampler.ts#SampleLane",
-    "src/app/lidar/sampler.ts#SiteSampler",
     "src/app/lidar/site-values.ts#SiteRowValue",
     "src/app/lidar/site-values.ts#SiteValues",
     "src/app/map-layers/bands.ts#MapLayerOrderMap",
@@ -236,8 +232,8 @@
     "src/app/lidar/library-navigation.ts#siteDataDetails",
     "src/app/lidar/library-store.ts#hasActiveLibraryWork",
     "src/app/lidar/library-store.ts#readLidarPresentation",
-    "src/app/lidar/sampler.ts#createSiteSampler",
-    "src/app/lidar/site-transients.ts#clearProfile",
+    "src/app/lidar/profile.ts#createSiteProfile",
+    "src/app/lidar/profile.ts#profileLineMenu",
     "src/app/lidar/site-transients.ts#endSiteDataTransients",
     "src/app/map-layers/state.ts#createDefaultMapLayers",
     "src/app/map-selection/summary.ts#readMapSelectionSummary",
