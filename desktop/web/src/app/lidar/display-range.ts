@@ -4,8 +4,9 @@
 // generation, read once per display key from its display COGs in the shared raster worker lanes (`pool.ts`). One asset
 // uses cog-tiler's own percentiles; a mosaic takes the same 2–98 % points (GeoLibre's `autoRangeFor` rule) of the
 // distribution the map draws (`mosaicRange`): each asset counts for the ground it shows by its bounds, so a small part
-// read at a finer overview does not outweigh a large one, a member higher ones hide entirely is not read, and one they
-// hide in part counts for its visible share. Never stored: a reopened Design reads it again. Until it lands, or when it
+// read at a finer overview does not outweigh a large one; a higher asset covers its bounds only by its valid share, so
+// a member under another's nodata still counts, one hidden under assets that draw their whole bounds is not read, and
+// one they hide in part counts for its visible share. Never stored: a reopened Design reads it again. Until it lands, or when it
 // cannot be read, the entry draws its data range. An asset whose read fails (a lane restart, an asset error) is read
 // again up to `READ_ATTEMPTS` times; past that the key keeps its data range until the store resets (a new generation is
 // a new key), since the display effect asks again on every Design edit and would reread the whole mosaic each time.
@@ -58,27 +59,24 @@ export function resetCutOutlierRanges(): void {
 }
 
 async function readRange(assets: readonly CutOutlierAsset[]): Promise<Range | null> {
-  // The ground each asset shows; one that higher assets hide entirely is not read.
-  const shown = new Map<string, number>()
-  assets.forEach((asset, index) => {
-    if (shown.has(asset.url)) return
-    const area = visibleArea(asset.bbox, assets.slice(0, index).map((above) => above.bbox))
-    if (area > 0) shown.set(asset.url, area)
-  })
-  const urls = [...shown.keys()]
-  if (urls.length === 0) return null
   const client = rasterWorkerPool().acquire()
   try {
+    // Read in rounds from the top: an asset is read once the ground it shows is known to be more than none. An asset
+    // not read yet is taken to cover its bounds, so one wholly under assets that draw their whole bounds is never read.
     const read = new Map<string, RasterBandStatistics | null>()
-    for (let attempt = 1; read.size < urls.length; attempt += 1) {
-      const pending = urls.filter((url) => !read.has(url))
-      const settled = await Promise.allSettled(pending.map((url) => client.statistics(url)))
-      settled.forEach((result, index) => { if (result.status === 'fulfilled') read.set(pending[index]!, result.value) })
-      if (read.size < urls.length && attempt === READ_ATTEMPTS) throw new Error('Cut outliers could not read every asset')
+    let shown = shownAreas(assets, read)
+    const unread = () => [...shown.keys()].filter((url) => !read.has(url))
+    while (unread().length > 0) {
+      for (let attempt = 1, pending = unread(); pending.length > 0; attempt += 1, pending = unread()) {
+        if (attempt > READ_ATTEMPTS) throw new Error('Cut outliers could not read every asset')
+        const settled = await Promise.allSettled(pending.map((url) => client.statistics(url)))
+        settled.forEach((result, index) => { if (result.status === 'fulfilled') read.set(pending[index]!, result.value) })
+      }
+      shown = shownAreas(assets, read)
     }
-    const statistics = urls.flatMap((url) => {
+    const statistics = [...shown].flatMap(([url, area]) => {
       const entry = read.get(url)
-      return entry ? [{ statistics: entry, groundPerSample: shown.get(url)! / entry.pixels }] : []
+      return entry ? [{ statistics: entry, groundPerSample: area / entry.pixels }] : []
     })
     if (statistics.length === 0) return null
     if (statistics.length === 1) return [statistics[0]!.statistics.percentile2, statistics[0]!.statistics.percentile98]
@@ -89,23 +87,48 @@ async function readRange(assets: readonly CutOutlierAsset[]): Promise<Range | nu
 }
 
 /**
- * The area of `bbox` that none of `above` covers, in the bounds' own units. The cells of a grid on every edge inside
- * `bbox` are each wholly covered or not; an asset's valid pixels are taken to fill its bounds.
+ * The ground each asset shows (`visibleArea`), by URL, leaving out those that show none. An asset above covers its
+ * bounds by its valid share (`read`); one not read yet covers them wholly.
  */
-function visibleArea(bbox: Bounds, above: readonly Bounds[]): number {
+function shownAreas(assets: readonly CutOutlierAsset[], read: ReadonlyMap<string, RasterBandStatistics | null>): Map<string, number> {
+  const cover = (url: string): number => {
+    if (!read.has(url)) return 1
+    const statistics = read.get(url)
+    if (!statistics || statistics.pixels <= 0) return 0
+    return Math.min(1, statistics.histogram.reduce((sum, count) => sum + count, 0) / statistics.pixels)
+  }
+  const shown = new Map<string, number>()
+  const seen = new Set<string>()
+  assets.forEach((asset, index) => {
+    if (seen.has(asset.url)) return
+    seen.add(asset.url)
+    const area = visibleArea(asset.bbox, assets.slice(0, index).map((above) => ({ bbox: above.bbox, cover: cover(above.url) })))
+    if (area > 0) shown.set(asset.url, area)
+  })
+  return shown
+}
+
+/**
+ * The ground of `bbox` that the assets `above` leave showing, in the bounds' own units. The cells of a grid on every
+ * edge inside `bbox` are each inside an asset's bounds or not. Inside its bounds an asset draws its valid share
+ * (`cover`) of the ground: where its valid pixels lie is not known, so each cell keeps the share none of the assets
+ * over it draws, taken as independent (a corridor survey's nodata or a warped tile's corners show what lies below).
+ */
+function visibleArea(bbox: Bounds, above: readonly { bbox: Bounds, cover: number }[]): number {
   const [west, south, east, north] = bbox
   const covering = above
-    .map(([w, s, e, n]): Bounds => [Math.max(w, west), Math.max(s, south), Math.min(e, east), Math.min(n, north)])
-    .filter(([w, s, e, n]) => w < e && s < n)
+    .map(({ bbox: [w, s, e, n], cover }) => ({ box: [Math.max(w, west), Math.max(s, south), Math.min(e, east), Math.min(n, north)] as Bounds, cover }))
+    .filter(({ box: [w, s, e, n], cover }) => w < e && s < n && cover > 0)
   const edges = (low: number, high: number, cut: (box: Bounds) => number[]) =>
-    [...new Set([low, high, ...covering.flatMap(cut)])].sort((a, b) => a - b)
+    [...new Set([low, high, ...covering.flatMap(({ box }) => cut(box))])].sort((a, b) => a - b)
   const xs = edges(west, east, ([w, , e]) => [w, e])
   const ys = edges(south, north, ([, s, , n]) => [s, n])
   let area = 0
   for (let i = 1; i < xs.length; i += 1) {
     for (let j = 1; j < ys.length; j += 1) {
       const [x, y] = [(xs[i - 1]! + xs[i]!) / 2, (ys[j - 1]! + ys[j]!) / 2]
-      if (!covering.some(([w, s, e, n]) => x > w && x < e && y > s && y < n)) area += (xs[i]! - xs[i - 1]!) * (ys[j]! - ys[j - 1]!)
+      const showing = covering.reduce((share, { box: [w, s, e, n], cover }) => (x > w && x < e && y > s && y < n ? share * (1 - cover) : share), 1)
+      area += showing * (xs[i]! - xs[i - 1]!) * (ys[j]! - ys[j - 1]!)
     }
   }
   return area
