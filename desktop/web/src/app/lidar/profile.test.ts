@@ -301,6 +301,19 @@ describe('createSiteProfile: request key, batches and stale answers', () => {
     expect(ready(owner.profile.value).curves[0]!.values[0]).toBe(9)
   })
 
+  it('a request whose key comes back while it runs publishes every batch it read', async () => {
+    // Nine curves: two batches. Hiding the ninth while the first batch is read, then showing it again before the second
+    // lands, makes the running request's key current again; its first batch must not have been thrown away meanwhile.
+    const curves = Array.from({ length: 9 }, (_, index) => source(`c${index}`))
+    const { calls, curveSignal, owner } = profileOf([at(0, 0), at(5, 0)], curves)
+    curveSignal.value = curves.slice(0, 8)
+    await calls[0]!.answer(() => values(...Array.from({ length: 201 }, () => 1)))
+    curveSignal.value = curves
+    await calls[1]!.answer(() => values(...Array.from({ length: 201 }, () => 2)))
+
+    expect(ready(owner.profile.value).curves.map((curve) => curve.values[0])).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 2])
+  })
+
   it('a line with no curve keeps its length and asks for a layer; no line is no profile', () => {
     const { calls, owner, lineSignal } = profileOf([at(0, 0), at(30, 40)], [])
     expect(owner.profile.value).toEqual({ status: 'needs-layer', lengthM: expect.closeTo(50, 6) })

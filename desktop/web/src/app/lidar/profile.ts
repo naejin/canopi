@@ -289,9 +289,10 @@ export function createSiteProfile(deps: SiteProfileDeps): SiteProfileOwner {
       return
     }
     state.value = { status: 'reading', lengthM: samples.lengthM }
+    // This request's own answers: every batch it reads lands here, even while its key is not current, since the key
+    // can come back before the request ends; only the end decides what is published.
     const answers: (LidarSampleSeries | undefined)[] = []
     deps.sampler.request('profile', key, targets, samples.points.map((point) => [point.lon, point.lat]), (first, series) => {
-      if (asked !== key) return
       series.forEach((answer, index) => {
         answers[first + index] = answer
       })
