@@ -1,4 +1,5 @@
 // The Site data pin, profile line and chart hover as MapLibre overlay contracts (canopi-f47t.42, spec §1.10).
+import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   getGuideLineVisual,
@@ -90,5 +91,10 @@ describe('the Site data map overlay', () => {
     const none = siteHoverOverlayContract(null)
     expect(none.hasRenderableFeatures).toBe(false)
     expect(none.layers.map((layer) => layer.id)).toEqual(ids.layerIds)
+  })
+
+  it('takes every colour from scene-visuals.ts: the module holds no colour literal of its own (spec §1.10)', () => {
+    const source = readFileSync('src/maplibre/site-overlay.ts', 'utf8')
+    expect(source.match(/#[0-9a-f]{3,8}\b/gi) ?? []).toEqual([])
   })
 })

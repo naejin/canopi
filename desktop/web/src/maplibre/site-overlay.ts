@@ -7,7 +7,12 @@
 // scene-visuals.ts's guide colours. The chart hover never rides the snapshot: it is one setData on its own source
 // (WorkspaceMapContributions.setSiteHover). No setters.
 
-import { getGuideLineVisual, getMapBackdropInk, OVERLAY_CASING_EXTRA_PX } from '../canvas/runtime/scene-visuals'
+import {
+  getGuideLineVisual,
+  getMapBackdropInk,
+  OVERLAY_CASING_EXTRA_PX,
+  SITE_PIN_VISUAL,
+} from '../canvas/runtime/scene-visuals'
 
 /** The overlay snapshot's Site data part, in [lon, lat]; null on Web and in overview. */
 export interface SiteMapOverlay {
@@ -65,12 +70,6 @@ export function siteMapOverlayIds() {
 /** The profile line's width in CSS px; its casing is `OVERLAY_CASING_EXTRA_PX` wider, as guides and drafts. */
 const PROFILE_LINE_WIDTH_PX = 2
 const PROFILE_VERTEX_RADIUS_PX = 3
-/**
- * The pin: an ink core inside a white ring, so it reads on light maps and dark imagery alike. Map overlays sit on imagery,
- * so its two tones are fixed and never follow the theme or the backdrop (spec §1.10, the board's MAPINK).
- */
-const PIN_CORE_COLOR = '#27231D'
-const PIN_RING_COLOR = '#FFFFFF'
 const PIN_CORE_RADIUS_PX = 4
 const PIN_RING_RADIUS_PX = 7
 const HOVER_RING_RADIUS_PX = 6
@@ -136,14 +135,14 @@ export function siteMapOverlayContract(site: SiteMapOverlay | null): SiteMapOver
         source: ids.sourceId,
         type: 'circle',
         filter: roleFilter('pin'),
-        paint: { 'circle-radius': PIN_RING_RADIUS_PX, 'circle-color': PIN_RING_COLOR },
+        paint: { 'circle-radius': PIN_RING_RADIUS_PX, 'circle-color': SITE_PIN_VISUAL.ring },
       },
       {
         id: core,
         source: ids.sourceId,
         type: 'circle',
         filter: roleFilter('pin'),
-        paint: { 'circle-radius': PIN_CORE_RADIUS_PX, 'circle-color': PIN_CORE_COLOR },
+        paint: { 'circle-radius': PIN_CORE_RADIUS_PX, 'circle-color': SITE_PIN_VISUAL.core },
       },
     ],
     hasRenderableFeatures: features.length > 0,
