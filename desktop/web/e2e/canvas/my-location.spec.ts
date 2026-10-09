@@ -6,8 +6,8 @@
 // whole map, and the button is aria-pressed while Following (and only then). A new fix while Following moves the camera
 // with it. Any other camera move (a pan) is Moved away: the dot stays where the fix is and the button is not pressed; a
 // click re-centres and follows again. A click while Following turns location off (no dot). Without permission the
-// request fails with code 1 and the button stays Off: not pressed and not aria-disabled (Blocked needs a 'denied'
-// permission, which Playwright cannot produce; a unit test stubs it). The dot's core is platform blue #1A73E8 (U54 Q11)
+// request fails with code 1 and design check A4's rule applies to the permission state the engine reports: 'denied'
+// is Blocked (aria-disabled; Playwright WebKit), anything else is Off (Chromium reports 'prompt'). The dot's core is platform blue #1A73E8 (U54 Q11)
 // over an accuracy polygon of the fix's accuracy radius.
 // Chromium sends a code 2 error to a running watch before each setGeolocation fix (design check §6); every check after a
 // new fix polls until that fix's longitude has been delivered (a count would pass on an earlier second read), and a
@@ -150,14 +150,19 @@ test.describe('granted', () => {
   })
 })
 
-test('without permission the click leaves location Off, not Blocked', async ({ page }) => {
+test('without permission the click gives Blocked when the permission is denied, otherwise Off', async ({ page }) => {
   await recordGeolocation(page)
   await openBaseFixture(page)
   await expect(locationButton(page)).toBeVisible()
   await locationButton(page).click()
   await expect.poll(async () => (await geolocationRecord(page)).errors, 'the request was refused with code 1').toContain(1)
   await expect(locationButton(page)).not.toHaveAttribute('aria-pressed', 'true')
-  await expect(locationButton(page), 'a prompt that was never answered is not Blocked').not.toHaveAttribute('aria-disabled', 'true')
+  const permission = await page.evaluate(async () => (await navigator.permissions.query({ name: 'geolocation' })).state)
+  if (permission === 'denied') {
+    await expect(locationButton(page), 'a denied permission is Blocked (A4)').toHaveAttribute('aria-disabled', 'true')
+  } else {
+    await expect(locationButton(page), `a '${permission}' permission is Off, not Blocked (A4)`).not.toHaveAttribute('aria-disabled', 'true')
+  }
   await expectNoDot(page, await mapCentre(page), 'no fix, no dot')
 })
 
