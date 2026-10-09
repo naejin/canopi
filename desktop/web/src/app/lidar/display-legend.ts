@@ -68,12 +68,3 @@ export function formatRasterMetres(value: number, locale: string): string {
 export function formatRasterRange(range: readonly [number, number], units: string, locale: string): string {
   return `${fixed(range[0], 1, locale)} – ${fixed(range[1], 1, locale)}${unitSuffix(units)}`
 }
-
-/**
- * A sampled raster value, at a precision that does not overstate the source: the read is one
- * native pixel rather than a survey-grade observation.
- */
-export function formatRasterSample(value: number, locale: string): string {
-  const magnitude = Math.abs(value)
-  return fixed(value, magnitude >= 1000 ? 2 : magnitude >= 1 ? 3 : 4, locale)
-}

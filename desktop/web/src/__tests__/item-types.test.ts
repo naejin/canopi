@@ -10,7 +10,7 @@ import {
   profileRole,
   unitSuffix,
 } from '../app/lidar/item-types'
-import { formatLegendValue, formatRasterMetres, formatRasterRange, formatRasterSample } from '../app/lidar/display-legend'
+import { formatLegendValue, formatRasterMetres, formatRasterRange } from '../app/lidar/display-legend'
 import { locale } from '../app/settings/state'
 
 const raster = (quantity: RasterQuantity) => ({ kind: 'Raster' as const, quantity })
@@ -129,8 +129,5 @@ describe('library item types', () => {
     expect(formatRasterMetres(12, 'fr')).toBe('12 m')
     expect(formatRasterRange([1, 2.25], 'm', 'fr')).toBe('1,0 – 2,3 m')
     expect(formatRasterRange([10, 30], '%', 'en')).toBe('10.0 – 30.0%')
-    expect(formatRasterSample(1234.5, 'fr')).toBe('1\u202f234,50')
-    expect(formatRasterSample(1.23456, 'de')).toBe('1,235')
-    expect(formatRasterSample(0.5, 'en')).toBe('0.5000')
   })
 })
