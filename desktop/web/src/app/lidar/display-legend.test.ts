@@ -104,9 +104,10 @@ describe('LiDAR legend ramps against the real renderer', () => {
     expect(blue).toEqual([])
   })
 
-  it('counts a blue ramp as blue and a warm one as not', () => {
+  it('counts a blue ramp as blue and a warm one as not, and catches viridis, the 2.0 offender', () => {
     expect(wasmColours('blues', SAMPLES).filter(isBlue).length).toBeGreaterThanOrEqual(16)
     expect(wasmColours('ylorrd', SAMPLES).filter(isBlue).length).toBe(0)
+    expect(wasmColours('viridis', SAMPLES).filter(isBlue).length).toBeGreaterThan(0)
   })
 
   it('draws every ramp with a colormap the wasm compiles in', () => {
