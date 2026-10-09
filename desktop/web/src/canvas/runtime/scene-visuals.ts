@@ -251,6 +251,17 @@ export const SITE_PIN_VISUAL: { readonly core: string; readonly ring: string } =
   ring: '#FFFFFF',
 })
 
+/**
+ * Show my location's dot (U54 Q11): a platform blue core in a cream ring, the convention phone users know and the one
+ * exception to blue = focus or water (system.md). Its accuracy area is the core at 15 %. Fixed, like the Site data pin:
+ * it sits on imagery and never follows the theme or the backdrop.
+ */
+export const USER_LOCATION_VISUAL: { readonly core: string; readonly ring: string; readonly accuracyOpacity: number } = Object.freeze({
+  core: '#1A73E8',
+  ring: '#FFF8EC',
+  accuracyOpacity: 0.15,
+})
+
 const INK_FOR_DARK_BACKDROP: CanvasBackdropInk = {
   text: '#FFF3D6',
   halo: '#14100A',
