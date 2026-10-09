@@ -221,6 +221,24 @@ describe('Site data row values', () => {
     expect(shown()).toEqual({ at: 'pointer', mnt: { kind: 'value', value: lonAt(5, 5) } })
   })
 
+  it('reads again when the Design is reopened with the same rows while the pointer rests', async () => {
+    native.holding = true
+    hover(10, 20)
+    await flush()
+    // Reopened from the keyboard: the pointer never leaves the map, and the rows to read are the same.
+    openDesign([{ id: 'mnt', visible: true }, { id: 'dsm', visible: true }])
+    await flush()
+
+    // The answer asked for the closed session is dropped; the reopened session asks again at the same point.
+    await releaseHeld()
+    expect(native.requests).toHaveLength(2)
+    expect(shown()).toEqual({
+      at: 'pointer',
+      dsm: { kind: 'value', value: lonAt(10, 20) },
+      mnt: { kind: 'value', value: lonAt(10, 20) },
+    })
+  })
+
   it('drops values a refused read leaves behind, and asks again until the read lands', async () => {
     setPin({ lon: 1.5, lat: 47 })
     hover(10, 20)

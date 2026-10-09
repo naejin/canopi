@@ -135,8 +135,15 @@ effect(() => {
       }
     })
     values.value = { at, rows: merged }
-  }).then(() => {
-    if (askedKey === key) refused = null
+  }).then((outcome) => {
+    if (askedKey !== key) return
+    refused = null
+    // Still the newest key, yet superseded: the Design session changed (a reopen with the same rows and a resting
+    // pointer builds the same key), so ask again for the open session.
+    if (outcome === 'superseded') {
+      askedKey = null
+      retry.value += 1
+    }
   }, () => {
     // Only the newest key's refusal counts: a newer key asked meanwhile has its own answer coming.
     if (askedKey !== key) return
