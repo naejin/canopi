@@ -19,6 +19,7 @@ import type { SharedMapSceneRendererComposition } from '../../maplibre/shared-sc
 import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import type { RasterDisplay, RasterDisplayLayer } from '../../maplibre/raster-display/adapter'
 import type { SiteMapOverlay } from '../../maplibre/site-overlay'
+import type { UserLocationReading } from '../../maplibre/user-location-overlay'
 
 // Stream C draws the pin and line; here a pin draws as one point in two layers, so the site route can be seen and broken.
 vi.mock('../../maplibre/site-overlay', async (importOriginal) => {
@@ -113,25 +114,35 @@ function snapshot(identity: object, overrides: Partial<WorkspaceMapContributionS
   }
 }
 
-/** The composition's hover feed: the chart cursor's ground point, pushed at scrub rate. */
-function hoverFeed() {
-  let current: readonly [number, number] | null = null
-  const listeners = new Set<(hover: readonly [number, number] | null) => void>()
+/** A composition feed: the latest value, pushed to the attached contributions outside the drain. */
+function feed<T>(initial: T) {
+  let current = initial
+  const listeners = new Set<(value: T) => void>()
   return {
     current: () => current,
-    subscribe(listener: (hover: readonly [number, number] | null) => void) {
+    subscribe(listener: (value: T) => void) {
       listeners.add(listener)
       return () => { listeners.delete(listener) }
     },
-    push(hover: readonly [number, number] | null) {
-      current = hover
-      for (const listener of listeners) listener(hover)
+    push(value: T) {
+      current = value
+      for (const listener of listeners) listener(value)
     },
     listeners,
   }
 }
 
-function fixture(loadTerrainSupport = vi.fn(async () => terrainSupport), siteHover = hoverFeed()) {
+/** The composition's hover feed: the chart cursor's ground point, pushed at scrub rate. */
+function hoverFeed() {
+  return feed<readonly [number, number] | null>(null)
+}
+
+/** The composition's user location feed: the session's reading, hidden during a story presentation. */
+function locationFeed() {
+  return feed<UserLocationReading | null>(null)
+}
+
+function fixture(loadTerrainSupport = vi.fn(async () => terrainSupport), siteHover = hoverFeed(), userLocation = locationFeed()) {
   const identity = {}
   const map = new ContributionMap()
   const states: MapLibreCanvasSurfaceState[] = []
@@ -140,11 +151,11 @@ function fixture(loadTerrainSupport = vi.fn(async () => terrainSupport), siteHov
   let active = true
   let raster!: FakeRasterDisplay
   const manager = new WorkspaceMapContributions({
-    onFailure: failure, loadTerrainSupport, onStateChange: (state) => states.push(state), logError, siteHover,
+    onFailure: failure, loadTerrainSupport, onStateChange: (state) => states.push(state), logError, siteHover, userLocation,
     createRasterDisplay: (_map, options) => { raster = new FakeRasterDisplay(map, options.onLayersChanged!); return raster },
   })
   manager.attach({ map, maplibre: {} as MapLibreApi, lifetime: { on() {}, off() {}, addCleanup() {} }, isCurrent: () => active })
-  return { identity, map, states, failure, manager, loadTerrainSupport, logError, raster, siteHover, expire: () => { active = false } }
+  return { identity, map, states, failure, manager, loadTerrainSupport, logError, raster, siteHover, userLocation, expire: () => { active = false } }
 }
 
 function deferred<T>() {
@@ -711,6 +722,105 @@ describe('WorkspaceMapContributions', () => {
       expect(f.logError).toHaveBeenCalledOnce()
       expect(f.map.order.some((id) => id.startsWith('site-'))).toBe(false)
       expect(f.map.getLayer('panel-target-hover-zones-fill')).toBeTruthy()
+    })
+  })
+
+  describe('the user location (one setData from its feed, never the drain)', () => {
+    const FIX: UserLocationReading = { lon: 2.0012345, lat: 48.0012345, accuracy: 20, timestamp: 1_760_000_000_000, stale: false }
+    const MOVED: UserLocationReading = { ...FIX, lon: 2.0022345 }
+
+    it('draws the dot on its own source at the top of the band, moves it with one setData and clears it on null', async () => {
+      const terrain = deferred<TerrainProtocolSupport>()
+      const f = fixture(vi.fn(() => terrain.promise))
+      f.manager.update(withSite(snapshot(f.identity, { terrain: { ...snapshot(f.identity).terrain, hillshadeVisible: true } }), [2.001, 48.001]))
+      f.manager.admitStyle()
+      const rasterSyncs = f.raster.syncs.length
+      const orderReads = f.map.getLayersOrder.mock.calls.length
+      f.userLocation.push(FIX)
+      const source = f.map.getSource('user-location-source')!
+      expect(source).toBeTruthy()
+      expect(f.map.order.slice(-3)).toEqual(['user-location-accuracy', 'user-location-ring', 'user-location-core'])
+      f.userLocation.push(MOVED)
+      f.userLocation.push({ ...MOVED, stale: true })
+      expect(source.setData).toHaveBeenCalledTimes(1)
+      expect(f.map.setPaintProperty).toHaveBeenCalledWith('user-location-core', 'circle-opacity', 0)
+      expect(f.raster.syncs).toHaveLength(rasterSyncs)
+      expect(f.map.getLayersOrder).toHaveBeenCalledTimes(orderReads)
+      // The terrain rebuild the drain started is still current: the reading moved no revision.
+      terrain.resolve(terrainSupport)
+      await flush()
+      expect(f.states.at(-1)).toMatchObject({ terrainStatus: 'ready' })
+      f.userLocation.push(null)
+      expect(f.map.getSource('user-location-source')).toBeUndefined()
+      expect(f.map.order.some((id) => id.startsWith('user-location-'))).toBe(false)
+    })
+
+    it('draws the reading the feed already holds once the style is in, keeps it through a drain, and none without a Design', () => {
+      const f = fixture()
+      f.userLocation.push(FIX)
+      f.manager.update(snapshot(f.identity))
+      expect(f.map.getSource('user-location-source')).toBeUndefined()
+      f.manager.admitStyle()
+      expect(f.map.getSource('user-location-source')).toBeTruthy()
+      f.manager.update(withSite(snapshot(f.identity), [2.001, 48.001]))
+      expect(f.map.order.indexOf('site-pin-core')).toBeLessThan(f.map.order.indexOf('user-location-core'))
+      f.manager.update(null)
+      expect(f.map.getSource('user-location-source')).toBeUndefined()
+      f.userLocation.push(MOVED)
+      expect(f.map.getSource('user-location-source')).toBeUndefined()
+    })
+
+    it('survives Retry: the next map draws the current reading, and a disposed one stops listening and clears it', () => {
+      const location = locationFeed()
+      const first = fixture(undefined, undefined, location)
+      first.manager.update(snapshot(first.identity))
+      first.manager.admitStyle()
+      location.push(FIX)
+      first.manager.dispose()
+      expect(location.listeners.size).toBe(0)
+      expect(first.map.getSource('user-location-source')).toBeUndefined()
+      const retried = fixture(undefined, undefined, location)
+      retried.manager.update(snapshot(retried.identity))
+      retried.manager.admitStyle()
+      expect(retried.map.getSource('user-location-source')).toBeTruthy()
+    })
+
+    it('a failing write keeps the map and the other overlays, logs once without the error (it can echo the reading), and retries on the next fix', () => {
+      const f = fixture()
+      f.manager.update(snapshot(f.identity))
+      f.manager.admitStyle()
+      const add = f.map.addSource.getMockImplementation()!
+      let broken = true
+      f.map.addSource.mockImplementation((id, source) => {
+        if (broken && id === 'user-location-source') throw new Error(`addSource rejected ${JSON.stringify(source)}`)
+        add(id, source)
+      })
+      f.userLocation.push(FIX)
+      f.userLocation.push(MOVED)
+      expect(f.failure).not.toHaveBeenCalled()
+      expect(f.logError).toHaveBeenCalledOnce()
+      expect(JSON.stringify(f.logError.mock.calls)).not.toContain('2.00')
+      expect(f.logError.mock.calls[0]).toHaveLength(1)
+      expect(f.map.order.some((id) => id.startsWith('user-location-'))).toBe(false)
+      expect(f.map.getLayer('panel-target-hover-zones-fill')).toBeTruthy()
+      broken = false
+      f.userLocation.push(FIX)
+      expect(f.map.getSource('user-location-source')).toBeTruthy()
+    })
+
+    it('owns a MapLibre error naming its source or layers: it never logs the event, which can carry the reading, and clears the dot', () => {
+      const f = fixture()
+      f.manager.update(snapshot(f.identity))
+      f.manager.admitStyle()
+      f.userLocation.push(FIX)
+      const event = { sourceId: 'user-location-source', error: new Error(`geojson rejected ${JSON.stringify(FIX)}`) }
+      expect(f.manager.handleMapError(event)).toBe(true)
+      expect(f.manager.handleMapError({ layer: { id: 'user-location-core' }, error: new Error('bad paint') })).toBe(true)
+      expect(f.failure).not.toHaveBeenCalled()
+      expect(JSON.stringify(f.logError.mock.calls)).not.toContain('2.00')
+      expect(f.map.getSource('user-location-source')).toBeUndefined()
+      f.manager.dispose()
+      expect(f.manager.handleMapError(event), 'a late error from a removed dot stays passive').toBe(true)
     })
   })
 

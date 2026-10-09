@@ -27,19 +27,30 @@ import {
   type CanvasMapSurfaceOverlaySnapshot,
 } from './overlays'
 import { siteMapOverlayIds, type SiteMapOverlay } from '../../maplibre/site-overlay'
+import {
+  clearUserLocationOverlay,
+  syncUserLocationOverlay,
+  userLocationOverlayIds,
+  type UserLocationReading,
+} from '../../maplibre/user-location-overlay'
 import { createMapLayerStackDescriptors, reconcileMapLayerStack } from '../map-layers/bands'
 import type { WorkspaceMapContributionAdapter, WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 
-/** The profile chart's hover point ([lon, lat]) as the composition reads it; a map's contributions follow it while attached. */
-export interface SiteHoverFeed {
-  current(): readonly [number, number] | null
-  subscribe(listener: (hover: readonly [number, number] | null) => void): () => void
+/**
+ * A value the composition reads outside the contributions read (the profile chart's hover, the user location); a map's
+ * contributions follow it while attached, so a Retry's new map starts from the current value.
+ */
+export interface ContributionFeed<T> {
+  current(): T
+  subscribe(listener: (value: T) => void): () => void
 }
 
 export interface WorkspaceMapContributionsOptions {
   readonly onFailure: (error: unknown) => void
-  /** Desktop only: the chart hover, drawn by one setData outside the drain (architecture review finding 7). */
-  readonly siteHover?: SiteHoverFeed
+  /** Desktop only: the chart hover ([lon, lat]), drawn by one setData outside the drain (architecture review finding 7). */
+  readonly siteHover?: ContributionFeed<readonly [number, number] | null>
+  /** Web only: the device location, drawn by one setData outside the drain like the chart hover (canopi-f47t.53). */
+  readonly userLocation?: ContributionFeed<UserLocationReading | null>
   readonly loadTerrainSupport?: WorkspaceMapContributionAdapter['loadTerrainSupport']
   readonly createRasterDisplay?: WorkspaceMapContributionAdapter['createRasterDisplay']
   readonly onStateChange?: (state: MapLibreCanvasSurfaceState) => void
@@ -70,6 +81,14 @@ export class WorkspaceMapContributions {
   /** The chart hover's ground point; never part of the snapshot, so it moves no revision. */
   private siteHover: readonly [number, number] | null = null
   private unsubscribeSiteHover: (() => void) | null = null
+  /** The device reading; never part of the snapshot, so it moves no revision. It lives here and on the map only. */
+  private userLocation: UserLocationReading | null = null
+  private unsubscribeUserLocation: (() => void) | null = null
+  /** A user location write is under way: a MapLibre error it raises synchronously leaves the clearing to it. */
+  private syncingUserLocation = false
+  private userLocationRejected = false
+  /** A failing user location write is logged once per map. */
+  private userLocationFailureLogged = false
   private rasterSkipped = false
   /** The layer the rasters were last told to draw beneath (`syncRaster`). */
   private rasterAnchor: string | undefined = undefined
@@ -86,6 +105,8 @@ export class WorkspaceMapContributions {
     }) ?? null
     this.siteHover = this.options.siteHover?.current() ?? null
     this.unsubscribeSiteHover = this.options.siteHover?.subscribe((hover) => this.setSiteHover(hover)) ?? null
+    this.userLocation = this.options.userLocation?.current() ?? null
+    this.unsubscribeUserLocation = this.options.userLocation?.subscribe((reading) => this.setUserLocation(reading)) ?? null
     this.publishState({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'loading' })
   }
 
@@ -100,6 +121,22 @@ export class WorkspaceMapContributions {
     if (!this.live() || !this.styleReady || this.draining || !this.snapshot) return
     try {
       this.syncSiteHover(this.guardedMap(this.revision))
+    } catch (error) {
+      if (error !== STALE_CONTRIBUTION) this.fail(error)
+    }
+  }
+
+  /**
+   * The device location (Show my location), at fix rate: one setData on its own source, outside the drain, like the chart
+   * hover. It draws only on a Design's map; each drain re-applies it, which covers Retry. A write that fails is cleared and
+   * retried with the next reading, and its error is never logged: MapLibre's errors can echo the data they were given.
+   */
+  setUserLocation(reading: UserLocationReading | null): void {
+    if (this.disposed) return
+    this.userLocation = reading
+    if (!this.live() || !this.styleReady || this.draining || !this.snapshot) return
+    try {
+      this.syncUserLocation(this.guardedMap(this.revision))
     } catch (error) {
       if (error !== STALE_CONTRIBUTION) this.fail(error)
     }
@@ -150,6 +187,12 @@ export class WorkspaceMapContributions {
       this.terrainFailed(event)
       return true
     }
+    if (USER_LOCATION_IDS.has(id)) {
+      // Never log the event: it can carry the reading. A write under way clears the dot when it returns.
+      this.userLocationFailed()
+      if (!this.syncingUserLocation) this.clearUserLocation()
+      return true
+    }
     if (SITE_OVERLAY_IDS.has(id)) {
       if (this.skippedSiteKey === null && this.snapshot) this.siteFailed(siteKey(this.snapshot.overlays.site), event)
       this.dirty = true
@@ -178,6 +221,9 @@ export class WorkspaceMapContributions {
     this.disposed = true
     this.unsubscribeSiteHover?.()
     this.unsubscribeSiteHover = null
+    this.unsubscribeUserLocation?.()
+    this.unsubscribeUserLocation = null
+    this.userLocation = null
     this.revision += 1
     this.terrainGeneration += 1
     this.snapshot = null
@@ -218,6 +264,7 @@ export class WorkspaceMapContributions {
           this.syncOverlays(map, snapshot.overlays)
           this.syncSiteOverlay(map, snapshot.overlays.site)
           this.syncSiteHover(map)
+          this.syncUserLocation(map)
           this.reconcileOrder(map, snapshot)
           this.publishState({ ...this.state, status: 'ready', layerSkipped: this.layerSkipped() })
           if (!this.current(revision)) continue
@@ -312,6 +359,35 @@ export class WorkspaceMapContributions {
       clearCanvasMapSurfaceSiteOverlay(map)
       this.publishState({ ...this.state, layerSkipped: this.layerSkipped() })
     }
+  }
+
+  /** Draws the reading; a write that fails, by throwing or by a MapLibre error event during it, is rolled back. */
+  private syncUserLocation(map: MapLibreMapInstance): void {
+    this.syncingUserLocation = true
+    this.userLocationRejected = false
+    try {
+      syncUserLocationOverlay(map, this.userLocation)
+    } catch (error) {
+      if (error === STALE_CONTRIBUTION) throw error
+      this.userLocationFailed()
+    } finally {
+      this.syncingUserLocation = false
+    }
+    // A rollback that cannot remove the partial dot escapes to the hard failure path, as the other overlays' do.
+    if (this.userLocationRejected) clearUserLocationOverlay(map)
+  }
+
+  /** Logs that the dot failed, once per map, never with the error: it can echo the reading. */
+  private userLocationFailed(): void {
+    this.userLocationRejected = true
+    if (this.userLocationFailureLogged) return
+    this.userLocationFailureLogged = true
+    ;(this.options.logError ?? logMapError)('Skipped the user location map overlay that failed to draw.')
+  }
+
+  private clearUserLocation(): void {
+    const revision = this.revision
+    if (this.context) this.attempt('Failed to clear the user location map overlay:', () => clearUserLocationOverlay(this.guardedMap(revision)))
   }
 
   private siteFailed(key: string, error: unknown): void {
@@ -426,6 +502,7 @@ export class WorkspaceMapContributions {
     if (map) {
       this.attempt('Failed to clear map target overlays:', () => clearCanvasMapSurfaceOverlays(map))
       this.attempt('Failed to clear the Site data map overlay:', () => clearCanvasMapSurfaceSiteOverlay(map))
+      this.attempt('Failed to clear the user location map overlay:', () => clearUserLocationOverlay(map))
       this.attempt('Failed to clear map terrain:', () => clearTerrain(map))
       this.attempt('Failed to clear map rasters:', () => this.raster?.sync([], undefined))
     }
@@ -490,6 +567,11 @@ const SITE_OVERLAY_IDS = (() => {
   return new Set<string>([ids.sourceId, ...ids.layerIds, ids.hover.sourceId, ...ids.hover.layerIds])
 })()
 
+const USER_LOCATION_IDS = (() => {
+  const ids = userLocationOverlayIds()
+  return new Set<string>([ids.sourceId, ...ids.layerIds])
+})()
+
 /** Late errors from a contribution this owner already removed stay passive. */
 function isContributionResource(id: string): boolean {
   return /^mlrcog\d+-/.test(id)
@@ -497,6 +579,7 @@ function isContributionResource(id: string): boolean {
     || TERRAIN_CONTOUR_IDS.has(id)
     || id.startsWith(PANEL_TARGET_PREFIX)
     || SITE_OVERLAY_IDS.has(id)
+    || USER_LOCATION_IDS.has(id)
 }
 
 /** Identity of the Target set an overlay draws; geometry is re-read on each sync. */

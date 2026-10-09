@@ -33,7 +33,7 @@ import {
   type WorkspaceGenerationLifecycle,
 } from './workspace-generation-reconciler'
 import { WorkspaceMapControls } from './workspace-map-controls'
-import type { SiteHoverFeed } from './workspace-map-contributions'
+import type { ContributionFeed } from './workspace-map-contributions'
 import { mapAttributionFolded } from '../shell/visible-map-area'
 import type { WorkspaceActivationMapControls, WorkspaceActivationSnapshot } from './workspace-activation'
 import type { WorkspaceMapContributionAdapter, WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
@@ -144,7 +144,7 @@ export function createWorkspaceRuntimeComposition(
     mapState = state
     options.onMapStateChange?.({ ...state, retryable: state.status === 'error' && workspace.canRetry() })
   }
-  const siteHover = options.mapContributions.readSiteHover ? createSiteHoverFeed() : null
+  const siteHover = options.mapContributions.readSiteHover ? createContributionFeed<readonly [number, number] | null>(null) : null
   const controls = dependencies.createControls({
     container: options.container,
     // The map container's resizes reach the live camera driver's setScreen: the driver is the map's one resize owner (both maps
@@ -307,19 +307,19 @@ export function createWorkspaceRuntimeComposition(
   }
 }
 
-/** The latest chart hover, handed to whichever map's contributions are attached (a Retry attaches new ones). */
-function createSiteHoverFeed(): SiteHoverFeed & { publish(hover: readonly [number, number] | null): void } {
-  let current: readonly [number, number] | null = null
-  const listeners = new Set<(hover: readonly [number, number] | null) => void>()
+/** The latest value, handed to whichever map's contributions are attached (a Retry attaches new ones). */
+function createContributionFeed<T>(initial: T): ContributionFeed<T> & { publish(value: T): void } {
+  let current = initial
+  const listeners = new Set<(value: T) => void>()
   return {
     current: () => current,
     subscribe(listener) {
       listeners.add(listener)
       return () => { listeners.delete(listener) }
     },
-    publish(hover) {
-      current = hover
-      for (const listener of [...listeners]) listener(hover)
+    publish(value) {
+      current = value
+      for (const listener of [...listeners]) listener(value)
     },
   }
 }
