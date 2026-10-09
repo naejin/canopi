@@ -151,13 +151,15 @@ export function kindRamps(itemType: LibraryItemType): readonly LidarRamp[] {
 
 /**
  * The colours and stretch one entry draws with: its own ramp, Reverse and
- * range over its kind's defaults. Data range spans the data; Cut outliers
- * spans its 2–98 % range once known and the data until then; Custom spans the
- * entry's pair. A flat span widens by one unit so the renderer can divide by it.
+ * range over its kind's defaults. A stored ramp the kind does not offer draws
+ * with the kind's default, so the per-kind lists keep blue for water. Data
+ * range spans the data; Cut outliers spans its 2–98 % range once known and the
+ * data until then; Custom spans the entry's pair. A flat span widens by one
+ * unit so the renderer can divide by it.
  */
 export function itemTypeStyle(itemType: LibraryItemType, item: RasterStyleInput): LidarDisplayStyle {
   const defaults = kindDisplayDefaults(itemType, item.units)
-  const ramp = item.ramp ?? defaults.ramp
+  const ramp = item.ramp !== null && kindRamps(itemType).includes(item.ramp) ? item.ramp : defaults.ramp
   const range = item.range ?? defaults.range
   const [min, max] = range.mode === 'Custom'
     ? [range.min, range.max]

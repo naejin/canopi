@@ -40,9 +40,21 @@ describe('library item types', () => {
   })
 
   it('draws each ramp with one renderer colormap', () => {
-    const colormap = (ramp: LidarRamp) => itemTypeStyle(raster('OtherContinuous'), { units: '', displayRange: null, ramp, reversed: false, range: null }).colormap
+    const colormaps = new Map<LidarRamp, string>()
+    for (const quantity of Object.keys(RASTER_QUANTITIES) as RasterQuantity[]) {
+      for (const ramp of kindRamps(raster(quantity))) {
+        colormaps.set(ramp, itemTypeStyle(raster(quantity), { units: '', displayRange: null, ramp, reversed: false, range: null }).colormap)
+      }
+    }
     const ramps: LidarRamp[] = ['Terrain', 'Earth', 'Greens', 'YellowRed', 'Magma', 'Gray']
-    expect(ramps.map(colormap)).toEqual(['schwarzwald', 'turbid', 'greens', 'ylorrd', 'magma', 'gray'])
+    expect(ramps.map((ramp) => colormaps.get(ramp))).toEqual(['schwarzwald', 'turbid', 'greens', 'ylorrd', 'magma', 'gray'])
+  })
+
+  it('draws a stored ramp its kind does not offer with the kind\'s default ramp', () => {
+    expect(itemTypeStyle(raster('Slope'), { units: '°', displayRange: [0, 12], ramp: 'Terrain', reversed: false, range: null }))
+      .toEqual({ ramp: 'YellowRed', colormap: 'ylorrd', reversed: false, rescale: [0, 30], units: '°' })
+    expect(itemTypeStyle(raster('GroundElevation'), { units: 'm', displayRange: [104, 132], ramp: 'Greens', reversed: true, range: null }))
+      .toEqual({ ramp: 'Terrain', colormap: 'schwarzwald', reversed: true, rescale: [104, 132], units: 'm' })
   })
 
   it('colours elevation with Terrain over the data range by default, keeping blue for water', () => {
