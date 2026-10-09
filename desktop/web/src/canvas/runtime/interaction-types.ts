@@ -7,11 +7,7 @@ export type PointerKind = 'mouse' | 'pen' | 'touch'
 export interface Modifiers { readonly shift: boolean; readonly ctrl: boolean; readonly alt: boolean; readonly meta: boolean }
 export type CancelReason = 'pointercancel' | 'lost-capture' | 'blur' | 'hidden' | 'escape' | 'multitouch' | 'tool-change'
   | 'navigate'                                                  // a Pan-tool press whose drag panned: after its pan end (spec §2.2)
-export type ToolId =
-  | 'select' | 'hand' | 'plant-stamp' | 'text' | 'line' | 'measurement-guide' | 'rectangle' | 'ellipse'
-  | 'polygon' | 'object-stamp' | 'saved-object-stamp' | 'plant-spacing'
-  | 'profile'                                                   // Desktop, from canopi-f47t.42 (U49, spec §1.10): no key, not on the rail
-// 'hand' is the Pan tool (label "Pan", key H). It stays in every phase (user).
+export type { ToolId } from './tool-id'
 /** 'rotate', 'vertex:<zone id>:<index>', 'rect-corner:<id>:ne', 'guide-end:<id>:a', 'edge-mid:<zone id>:<index>'. */
 export type ToolHandleId = string & { readonly __toolHandleId: true }
 /** What a panel drag carries, read from dataTransfer by the DOM source (today plant-stamp-source.ts and saved-object-stamp-source.ts). */

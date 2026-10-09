@@ -1,4 +1,5 @@
 import type { CanvasStampGuidance, CanvasToolGuidance } from '../../canvas/session-state'
+import type { ToolId } from '../../canvas/runtime/tool-id'
 
 type Translate = (key: string, options?: Readonly<Record<string, unknown>>) => string
 
@@ -10,7 +11,7 @@ export interface SavedStampSummary {
 }
 
 export interface ToolCardInput {
-  readonly tool: string
+  readonly tool: ToolId
   readonly guidance: CanvasToolGuidance
   /** Place plants: the chosen species' shown name, or null while the card offers its chooser. */
   readonly speciesName: string | null
@@ -31,7 +32,7 @@ export interface ToolCardInput {
  * end with what Esc does now.
  */
 export interface ToolCardContent {
-  readonly tool: string
+  readonly tool: ToolId
   readonly title: string
   readonly subject: string | null
   /** Empty for Select, whose card is its name and one line of hints. */
@@ -46,7 +47,7 @@ export interface ToolCardContent {
   readonly rowCount: { readonly text: string; readonly density: 'normal' | 'dense' | 'blocked' } | null
 }
 
-const TITLE_KEYS: Readonly<Record<string, string>> = {
+const TITLE_KEYS: Readonly<Record<ToolId, string>> = {
   select: 'canvas.tools.select',
   // Pan is off the main rail, so its card says what it does.
   hand: 'canvas.tools.hand',
@@ -69,7 +70,6 @@ const STAMP_TOOLS = new Set(['object-stamp', 'saved-object-stamp'])
 export function toolCardContent(input: ToolCardInput): ToolCardContent | null {
   const { tool, guidance, translate } = input
   const titleKey = TITLE_KEYS[tool]
-  if (!titleKey) return null
 
   // What the next Esc does: drops a held row source or stamp pick first, cancels a draft, then leaves the tool.
   const esc = translate(
@@ -144,8 +144,6 @@ export function toolCardContent(input: ToolCardInput): ToolCardContent | null {
       return card(null, translate('canvas.toolCard.measure'), hints('canvas.toolCard.lineKeys'))
     case 'profile':
       return card(null, translate('canvas.toolCard.profile'), hints('canvas.toolCard.profileKeys'))
-    default:
-      return null
   }
 }
 
