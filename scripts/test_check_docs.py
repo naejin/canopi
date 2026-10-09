@@ -65,13 +65,15 @@ class DocumentationChecks(unittest.TestCase):
             self.assertTrue(any("exceeds its 12000-byte budget" in e for e in check_document(brief, root)))
             plan = root / "docs/plans/canvas-v2-plan.md"
             plan.write_text("Status: in progress\n" + ("short line\n" * 11000), encoding="utf-8")
-            self.assertTrue(any("exceeds its 115000-byte budget" in e for e in check_document(plan, root)))
+            self.assertTrue(any("exceeds its 120000-byte budget" in e for e in check_document(plan, root)))
             # The paragraph budget applies to plans, except the legacy files named in PARAGRAPH_EXEMPT.
             other = root / "docs/plans/hydrology.md"
             other.write_text("Status: agreed\n" + "z" * 601 + "\n", encoding="utf-8")
             self.assertEqual(check_document(other, root), ["docs/plans/hydrology.md:2: paragraph of 601 characters exceeds 600"])
             brief.write_text("Status: in progress\n" + "z" * 601 + "\n", encoding="utf-8")
-            self.assertEqual(len(check_document(brief, root)), 1)
+            brief_errors = check_document(brief, root)
+            self.assertEqual(len(brief_errors), 1)
+            self.assertIn("paragraph of 601 characters", brief_errors[0])
             plan.write_text("Status: in progress\n" + "z" * 900 + "\n", encoding="utf-8")
             self.assertEqual(check_document(plan, root), [])
 
