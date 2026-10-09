@@ -2,7 +2,7 @@
 
 Canopi is a field atlas for designing a living landscape on the map: parchment, ink and ochre floating over satellite or map, with dense, readable controls. Reasons: [ADR 0010](../docs/adr/0010-map-first-interface.md). The target is the design boards in [`boards/`](boards/README.md); the UI gallery shows what shipped.
 
-Read this file, then the pattern file for your surface:
+Read this, then your surface's pattern file:
 
 | Surface | Pattern |
 | --- | --- |
@@ -17,7 +17,7 @@ Read this file, then the pattern file for your surface:
 
 - Parchment, ink and ochre, in light and dark. Green never appears in chrome; it is plant data.
 - Floating surfaces (`--color-glass`, blur, soft shadow, 14 px radius) over a full-bleed map.
-- One meaning per colour: ochre = selected, active or primary; blue ring = keyboard focus; amber = warning; red = error or destruction. Never ochre for decoration or warnings.
+- One meaning per colour: ochre = selected, active or primary; blue = focus ring or water (raster ramps); amber = warning; red = error or destruction. Never ochre for decoration or warnings. Sole exception: the map's location dot, platform blue `#1A73E8`.
 - Type: Literata 600 for titles (28 display, 20 dialog, 18 panel), Source Sans 3 for UI (15 body, 14 controls, 12.5 captions), IBM Plex Mono 600 12 for species codes. Weights 400 and 600 only; nothing below 12 px (13 for CJK).
 
 ## Workspace layout
@@ -25,8 +25,8 @@ Read this file, then the pattern file for your surface:
 - Title bar (floating, 50 px): logo, menubar (File, Edit, View, Tools, Help), Design name (click to rename), save status with its one action, place search (Ctrl K), Help, Settings.
 - Left: tool rail (Select · Place plants, Plant a row, Place a stamp · Polygon, Rectangle, Ellipse, Line · Text note, Measure · Undo, Redo), labelled with keys until each tool is used once, then icons; in a short window the last tools fold into More tools, never Undo and Redo. Pan (H) is off the rail, in View and Tools.
 - Right: panel rail (Ctrl 1–9; folds into More in a short window) and one panel at a time: 380 px, or 440 px for Site data, Budget, Consortium and Stories; Calendar can Expand.
-- Bottom left: view chip with pressed toggles (Grid, Snap to grid). Bottom right: attribution pill, then zoom group (scale bar, −, scale ratio menu, +, Fit to Design, compass).
-- Tool cards sit top-left beside the rail (320 px). Status chips (40 px) sit top- or bottom-centre of the visible map area.
+- Bottom left: view chip with pressed toggles (Grid, Snap to grid). Bottom right: attribution pill, then zoom group (scale bar, −, ratio menu, +, Fit to Design, Show my location on Web, compass).
+- Tool cards sit top-left beside the rail (320 px). Status chips (40 px) sit top- or bottom-centre of the visible map.
 
 ## Tokens
 
@@ -72,4 +72,4 @@ Shared blocks live in `desktop/web/src/components/shared/` (`SurfaceHeader`, `Do
 
 ## Executable reference
 
-Boards: `python3 .interface-design/boards/build.py`, then `serve.py`. Gallery: `cd desktop/web && npm run dev:ui`, `http://127.0.0.1:1422/`; `?surface=workspace` mounts the Desktop workspace (add `edition=web` for Web); direct surfaces take `state=empty|mixed|long|located|dense|planting|zone|overview|max-zoom|lidar-progress`, `theme=dark` or `locale=fr`. `npm run check:ui` type-checks the gallery.
+Boards: `python3 .interface-design/boards/build.py`, then `serve.py`. Gallery: `cd desktop/web && npm run dev:ui`; `?surface=workspace` mounts the Desktop workspace (add `edition=web` for Web); direct surfaces take `state=` (see its README), `theme=dark` or `locale=fr`. `npm run check:ui` type-checks the gallery.
