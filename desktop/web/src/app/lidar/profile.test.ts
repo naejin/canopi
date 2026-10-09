@@ -212,6 +212,19 @@ describe('profile statistics', () => {
     })))
   })
 
+  it('Steepest on a line that is no whole number of cells long is measured over the sample nearest 2 m, not one more', async () => {
+    // 100.5 m over a 1 m grid: 102 points 0.995 m apart, so two steps fall 1 cm short of 2 m; a third would make it 3 m.
+    const { calls, owner } = profileOf([at(0, 0), at(100.5, 0)], [source('c', 'elevation', { resolutionM: 1 })])
+    const count = calls[0]!.request.points.length
+    expect(count).toBe(102)
+    // Flat but for one 30 cm step between points 50 and 51: 15 % over about 2 m, 10 % over about 3 m.
+    await calls[0]!.answer(() => values(...Array.from({ length: count }, (_, index) => (index > 50 ? 100.3 : 100))))
+    const stats = ready(owner.profile.value).curves[0]!.stats
+    if (stats.role !== 'elevation' || !stats.steepest) throw new Error('no steepest')
+    expect(stats.steepest.runM).toBeCloseTo((2 * 100.5) / 101, 6)
+    expect(stats.steepest.percent).toBeCloseTo((0.3 / ((2 * 100.5) / 101)) * 100, 6)
+  })
+
   it('Steepest on a line longer than 8,190 m is measured over the sampling step, its run', async () => {
     // 12 km at 4,096 points: 2.93 m between points over a 0.5 m DEM.
     const { calls, owner } = profileOf([at(0, 0), at(12_000, 0)], [source('c', 'elevation', { resolutionM: 0.5 })])

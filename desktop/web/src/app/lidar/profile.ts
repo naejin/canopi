@@ -155,7 +155,7 @@ function profileRise(values: readonly (number | null)[]): number | null {
 }
 
 /**
- * Steepest: the largest slope, in percent, between two points about `minRunM` apart (adjacent points when they are further
+ * Steepest: the largest slope, in percent, between two points nearest `minRunM` apart (adjacent points when they are further
  * apart than that), the point midway between them and the run between them; null with no such pair. The run is
  * max(2 m, the curve's own cell size): the sampler reads the nearest native cell, so a coarse grid read at a finer
  * curve's step is a staircase, and a shorter run across one of its cell edges reads the whole cell's jump. A start too
@@ -170,14 +170,17 @@ function profileSteepest(
   const minRunM = Math.max(STEEPEST_MIN_RUN_M, resolutionM ?? 0)
   let best: ProfileSteepest | null = null
   const last = values.length - 1
+  // The points are evenly spaced a little under the cell size, so a run of whole steps rarely lands on minRunM: the end
+  // is the point nearest to it (within half a step), never the one after, which would stretch a 2 m run to 3 m.
+  const shortest = minRunM - (last > 0 ? (distances[1]! - distances[0]!) / 2 : 0)
   let end = 0
   for (let start = 0; start < last; start += 1) {
     end = Math.max(end, start + 1)
-    while (end < last && distances[end]! - distances[start]! < minRunM - 1e-9) end += 1
+    while (end < last && distances[end]! - distances[start]! < shortest) end += 1
     const a = values[start]
     const b = values[end]
     const run = distances[end]! - distances[start]!
-    if (run < minRunM - 1e-9 && start > 0) break
+    if (run < shortest && start > 0) break
     if (a === null || a === undefined || b === null || b === undefined || run <= 0) continue
     const percent = (Math.abs(b - a) / run) * 100
     if (!best || percent > best.percent) best = { percent, index: Math.round((start + end) / 2), runM: run }
