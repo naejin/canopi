@@ -70,6 +70,8 @@ class SceneCanvasQueryRole implements SceneCanvasQuerySurface {
   readonly view: ViewReadSurface
   private readonly pointerWorldListeners = new Set<PointerWorldListener>()
   private stopPointerWorld: (() => void) | null = null
+  /** The point last published; a session that ends with one live publishes null, so nothing reads a point no cursor is at. */
+  private lastPointerWorld: PointerWorld | null = null
 
   constructor(private readonly options: SceneCanvasQuerySurfaceOptions) {
     // The frames place the Scene's metres; their ground is read on the Scene's plane.
@@ -85,9 +87,14 @@ class SceneCanvasQueryRole implements SceneCanvasQuerySurface {
 
   bindPointerWorld(source: ((listener: PointerWorldListener) => () => void) | null): void {
     this.stopPointerWorld?.()
-    this.stopPointerWorld = source?.((point) => {
-      for (const listener of [...this.pointerWorldListeners]) listener(point)
-    }) ?? null
+    this.stopPointerWorld = null
+    if (this.lastPointerWorld) this.publishPointerWorld(null)
+    this.stopPointerWorld = source?.((point) => this.publishPointerWorld(point)) ?? null
+  }
+
+  private publishPointerWorld(point: PointerWorld | null): void {
+    this.lastPointerWorld = point
+    for (const listener of [...this.pointerWorldListeners]) listener(point)
   }
 
   get revision(): CanvasQueryRevision { return this.options.revision }
