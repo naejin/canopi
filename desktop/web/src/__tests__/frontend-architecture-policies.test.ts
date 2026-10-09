@@ -2205,6 +2205,23 @@ const CANVAS_V2_POLICIES = [
     ],
     targets: ['src/web/**'],
   },
+  {
+    // ADR 0017: recognition sees no camera. View types may be named, and the pure navigation policy gives the
+    // rotate rate (ROTATE_DEG_PER_PX); no source file is excepted.
+    kind: 'forbid-imports',
+    name: 'P43 the input core stays camera-free and app-free',
+    from: ['src/canvas/runtime/input/**'],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    targets: [
+      'src/canvas/runtime/scene/**',
+      'src/canvas/runtime/renderers/**',
+      'src/canvas/runtime/chrome/**',
+      'src/canvas/runtime/view/**',
+      'src/app/**',
+    ],
+    exceptTargets: ['src/canvas/runtime/view/navigation-policy.ts'],
+    allowTypeOnlyTargets: ['src/canvas/runtime/view/**'],
+  },
 ] satisfies readonly ArchitecturePolicy[]
 
 /**
@@ -3504,6 +3521,7 @@ const P39 = '[P39 production modules form no value import cycle]'
 const P40 = '[P40 foundation layers import no app, component or edition code]'
 const P41 = '[P41 canvas imports no native or edition code]'
 const P42 = '[P42 shared app code imports no Web edition module]'
+const P43 = '[P43 the input core stays camera-free and app-free]'
 
 describe('2.0 guard policies (canopi-f47t.52.17)', () => {
   it('P39 rejects a production value cycle; type-only, dynamic and test cycles pass', () => {
@@ -3598,6 +3616,37 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
 
     expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P42'))).toEqual([
       `${P42} src/app/planted/module.ts:1:1 imports src/web/static-design-templates.ts via "../../web/static-design-templates" (static)`,
+    ])
+  })
+
+  it('P43 rejects input imports of the scene, renderers, chrome, view values and the app, the DOM input source included', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/scene/index.ts', ['export const scene = 1']),
+      plantedSource('src/canvas/runtime/renderers/layer.ts', ['export const layer = 1']),
+      plantedSource('src/canvas/runtime/chrome/handle-layer.ts', ['export const handles = 1']),
+      plantedSource('src/canvas/runtime/view/camera-driver.ts', ['export const driver = 1', 'export type Driver = number']),
+      plantedSource('src/canvas/runtime/view/navigation-policy.ts', ['export const ROTATE_DEG_PER_PX = 1']),
+      plantedSource('src/app/keyboard/arming.ts', ['export const arm = 1']),
+      plantedSource('src/canvas/runtime/input/planted.ts', [
+        "import { scene } from '../scene'",
+        "import type { layer } from '../renderers/layer'",
+        "import { handles } from '../chrome/handle-layer'",
+        "import { driver } from '../view/camera-driver'",
+        "import type { Driver } from '../view/camera-driver'",
+        "import { ROTATE_DEG_PER_PX } from '../view/navigation-policy'",
+        "import { arm } from '../../../app/keyboard/arming'",
+      ]),
+      plantedSource('src/canvas/runtime/input/dom-input-source.ts', ["import { driver } from '../view/camera-driver'"]),
+      plantedSource('src/canvas/runtime/input/planted.test.ts', ["import { scene } from '../scene'"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P43'))).toEqual([
+      `${P43} src/canvas/runtime/input/planted.ts:1:1 imports src/canvas/runtime/scene/index.ts via "../scene" (static)`,
+      `${P43} src/canvas/runtime/input/planted.ts:2:1 imports src/canvas/runtime/renderers/layer.ts via "../renderers/layer" (static)`,
+      `${P43} src/canvas/runtime/input/planted.ts:3:1 imports src/canvas/runtime/chrome/handle-layer.ts via "../chrome/handle-layer" (static)`,
+      `${P43} src/canvas/runtime/input/planted.ts:4:1 imports src/canvas/runtime/view/camera-driver.ts via "../view/camera-driver" (static)`,
+      `${P43} src/canvas/runtime/input/planted.ts:7:1 imports src/app/keyboard/arming.ts via "../../../app/keyboard/arming" (static)`,
+      `${P43} src/canvas/runtime/input/dom-input-source.ts:1:1 imports src/canvas/runtime/view/camera-driver.ts via "../view/camera-driver" (static)`,
     ])
   })
 })
