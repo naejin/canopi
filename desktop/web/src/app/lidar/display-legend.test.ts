@@ -21,9 +21,11 @@ const wasmPath = join(dirname(require.resolve('cog-tiler-wasm/wasm')), 'cog_tile
 
 const QUANTITIES = Object.keys(RASTER_QUANTITIES) as RasterQuantity[]
 
-/** The renderer colormap a ramp draws with, read through the style an entry gets. */
+/** The renderer colormap a ramp draws with, read through the style an entry of a kind offering it gets. */
 function colormapOf(ramp: LidarRamp): string {
-  return itemTypeStyle({ kind: 'Raster', quantity: 'OtherContinuous' }, { units: '', displayRange: null, ramp, reversed: false, range: null }).colormap
+  const quantity = QUANTITIES.find((candidate) => kindRamps({ kind: 'Raster', quantity: candidate }).includes(ramp))
+  if (!quantity) throw new Error(`no kind offers ${ramp}`)
+  return itemTypeStyle({ kind: 'Raster', quantity }, { units: '', displayRange: null, ramp, reversed: false, range: null }).colormap
 }
 
 const ALL_RAMPS: readonly LidarRamp[] = ['Terrain', 'Earth', 'Greens', 'YellowRed', 'Magma', 'Gray']
