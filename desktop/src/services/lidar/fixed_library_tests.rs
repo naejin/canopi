@@ -933,6 +933,55 @@ fn a_failed_import_frees_its_files_on_the_raster_lane() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// A catalogue from before Cancel deleted its item (version 24) can hold an
+/// import row in the retired state 'cancelled'. It is set aside and rebuilt
+/// from the originals (ADR 0021), so no item shows as preparing forever.
+#[test]
+fn a_catalogue_holding_a_cancelled_import_is_rebuilt_not_shown_preparing() {
+    let root = scratch("cancelled-row");
+    {
+        let library = LidarLibrary::open(&root).unwrap();
+        let (_, job_id) = library
+            .record_import_item(
+                "Orchard",
+                RasterQuantity::GroundElevation,
+                None,
+                false,
+                &[root.join("orchard.tif")],
+            )
+            .unwrap();
+        let connection = library.catalogue().unwrap();
+        connection
+            .execute(
+                "UPDATE lidar_import_jobs SET state = 'cancelled' WHERE id = ?1",
+                [&job_id],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "UPDATE lidar_catalogue_meta SET value = '24' WHERE key = 'schema_version'",
+                [],
+            )
+            .unwrap();
+    }
+
+    let reopened = LidarLibrary::open(&root).unwrap();
+    let preparing: Vec<_> = reopened
+        .library_snapshot()
+        .unwrap()
+        .items
+        .into_iter()
+        .filter(|item| item.state == LidarResultState::Preparing)
+        .map(|item| item.id)
+        .collect();
+    assert_eq!(preparing, Vec::<String>::new());
+    assert!(matches!(
+        reopened.inner.status,
+        recovery::LibraryOpenStatus::Recovered { .. }
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// Through the real commands: Cancel returns once the item is gone, while
 /// the cancelled job may still be settling under the heavy lease. Importing
 /// the same file then waits for that job to let go instead of refusing it
