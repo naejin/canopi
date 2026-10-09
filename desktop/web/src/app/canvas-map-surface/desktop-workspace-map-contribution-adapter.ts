@@ -15,10 +15,7 @@ export function createDesktopWorkspaceMapContributionAdapter(): WorkspaceMapCont
   return {
     loadTerrainSupport: loadMapLibreTerrainSupport,
     createRasterDisplay: (map, options) => createRasterDisplay(map, options),
-    readSiteHover: () => {
-      const hover = profileHover.value
-      return hover ? [hover.lon, hover.lat] : null
-    },
+    readSiteHover,
     read: (runtime) => readWorkspaceMapContributions(runtime, designSessionStore, () => ({
       lidar: lidarDisplayLayers(
         readCurrentLidarPresentation(),
@@ -31,8 +28,14 @@ export function createDesktopWorkspaceMapContributionAdapter(): WorkspaceMapCont
   }
 }
 
-/** The Site data pin and profile line in [lon, lat], or null with neither. */
-function readSiteMapOverlay(): SiteMapOverlay | null {
+/** The profile chart's hover point in [lon, lat], or null; the UI gallery, which stands in for Desktop, reads it too. */
+export function readSiteHover(): readonly [number, number] | null {
+  const hover = profileHover.value
+  return hover ? [hover.lon, hover.lat] : null
+}
+
+/** The Site data pin and profile line in [lon, lat], or null with neither; the UI gallery reads it too. */
+export function readSiteMapOverlay(): SiteMapOverlay | null {
   const point = pin.value
   const line = profileLine.value
   if (!point && !line) return null

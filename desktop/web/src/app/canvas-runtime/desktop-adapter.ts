@@ -5,7 +5,16 @@ import { speciesCatalogWorkbench } from '../plant-browser'
 import { finishSiteProfile } from '../lidar/profile'
 import { pinSiteDataPoint } from '../lidar/site-values'
 import { savedObjectStampWorkbench } from '../saved-object-stamps'
-import { createAppCanvasRuntimeAppAdapter } from './app-adapter'
+import { createAppCanvasRuntimeAppAdapter, type CanvasRuntimeAppCapabilities } from './app-adapter'
+
+/**
+ * Site data is Desktop's: a tap no tool uses pins, and Profile's finished line is profiled. The UI gallery, which stands
+ * in for Desktop, hands its canvas the same two.
+ */
+export const DESKTOP_SITE_DATA_CAPABILITIES: Pick<CanvasRuntimeAppCapabilities, 'pinAt' | 'finishProfile'> = Object.freeze({
+  pinAt: pinSiteDataPoint,
+  finishProfile: finishSiteProfile,
+})
 
 export function createDesktopCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter {
   return createAppCanvasRuntimeAppAdapter({
@@ -17,8 +26,6 @@ export function createDesktopCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter 
     savedObjectStamps: {
       saveCurrentSelection: (capture) => savedObjectStampWorkbench.saveSelection(capture),
     },
-    // Site data is Desktop's: a tap no tool uses pins, and Profile's finished line is profiled.
-    pinAt: pinSiteDataPoint,
-    finishProfile: finishSiteProfile,
+    ...DESKTOP_SITE_DATA_CAPABILITIES,
   })
 }

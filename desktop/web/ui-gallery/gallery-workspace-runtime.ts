@@ -21,6 +21,8 @@ import { createRasterDisplay } from '../src/maplibre/raster-display/adapter'
 import { savedObjectStampWorkbench } from '../src/app/saved-object-stamps'
 import type { CanopiFile } from '../src/types/design'
 import { createBrowserWorkspaceMapContributionAdapter } from '../src/web/browser-workspace-map-contribution-adapter'
+import { DESKTOP_SITE_DATA_CAPABILITIES } from '../src/app/canvas-runtime/desktop-adapter'
+import { readSiteHover, readSiteMapOverlay } from '../src/app/canvas-map-surface/desktop-workspace-map-contribution-adapter'
 import { frenchNames, species } from './fixtures'
 
 export interface GalleryWorkspaceRuntimeOptions extends WorkspaceRuntimeMountOptions {
@@ -42,13 +44,13 @@ export function createGalleryWorkspaceRuntimeComposition(
   // Each gallery canvas owns its Design generation; the map never waits on the
   // app's Design Session store.
   const store = { sessionIdentity: signal<object>(Object.freeze({})), hasCurrentDesign: () => true }
+  const params = new URLSearchParams(location.search)
+  const edition: GalleryEdition = params.get('edition') === 'web' ? 'web' : 'desktop'
   return createWorkspaceRuntimeComposition({
     ...mount,
-    appAdapter: createGalleryCanvasRuntimeAppAdapter(design),
+    appAdapter: createGalleryCanvasRuntimeAppAdapter(design, edition),
     targetPresentation: createAppSceneRuntimePanelTargetAdapter(),
-    mapContributions: new URLSearchParams(location.search).get('state') === 'lidar-raster'
-      ? createGalleryRasterContributionAdapter(store)
-      : createBrowserWorkspaceMapContributionAdapter(store),
+    mapContributions: createGalleryMapContributionAdapter(store, { state: params.get('state'), edition }),
     readSnapshot: (readInitialCenter) => readWorkspaceActivationSnapshot({
       store,
       readInitialCenter,
@@ -58,22 +60,40 @@ export function createGalleryWorkspaceRuntimeComposition(
   })
 }
 
+/** `edition=web` mounts the browser-safe registrations; otherwise the gallery stands in for Desktop. */
+type GalleryEdition = 'desktop' | 'web'
+
 /**
- * Desktop's raster seam over the memory backend: the Design's Site data as the app joins it, the descriptors the backend
- * serves (one Ready display COG) and the upstream renderer, so a display change (Reverse, a range) repaints real pixels.
+ * The gallery map's contributions. Web's hold no local data. As Desktop the map draws Desktop's Site data pin, profile
+ * line and chart hover ring; in `state=lidar-raster` it also draws Desktop's raster seam over the memory backend: the
+ * Design's Site data as the app joins it, the descriptors the backend serves (one Ready display COG) and the upstream
+ * renderer, so a display change (Reverse, a range) repaints real pixels.
  */
-function createGalleryRasterContributionAdapter(
+export function createGalleryMapContributionAdapter(
   store: Parameters<typeof readWorkspaceMapContributions>[1],
+  { state, edition }: { readonly state: string | null, readonly edition: GalleryEdition },
 ): WorkspaceMapContributionAdapter {
+  if (edition === 'web') return createBrowserWorkspaceMapContributionAdapter(store)
+  if (state !== 'lidar-raster') {
+    return {
+      readSiteHover,
+      read: (runtime) => readWorkspaceMapContributions(runtime, store, () => ({
+        lidar: [],
+        terrain: OFFLINE_TERRAIN,
+        site: readSiteMapOverlay(),
+      })),
+    }
+  }
   installLidarLibraryObserver()
   installLidarDisplayDescriptors()
   return {
     createRasterDisplay: (map, options) => createRasterDisplay(map, options),
+    readSiteHover,
     read: (runtime) => readWorkspaceMapContributions(runtime, store, () => ({
       // The memory backend's asset paths are already URLs the gallery server serves by range.
       lidar: lidarDisplayLayers(readCurrentLidarPresentation(), lidarDisplayDescriptors.value, null, (path) => path),
       terrain: OFFLINE_TERRAIN,
-      site: null,
+      site: readSiteMapOverlay(),
     })),
   }
 }
@@ -92,7 +112,8 @@ function readOfflineMapLayers(): MapLayersState {
   }
 }
 
-function createGalleryCanvasRuntimeAppAdapter(design: CanopiFile) {
+/** The gallery canvas's app adapter over the fixture Design; as Desktop it hands taps and Profile lines to Site data. */
+export function createGalleryCanvasRuntimeAppAdapter(design: CanopiFile, edition: GalleryEdition) {
   const names = new Map(design.plants.map(plant => [plant.canonical_name, plant.common_name]))
   // The catalog has names in English, and in French for a few species; every other species shows its English name, marked.
   const localized = (locale: string) => locale === 'en' ? names : new Map(locale === 'fr' ? Object.entries(frenchNames) : [])
@@ -109,5 +130,6 @@ function createGalleryCanvasRuntimeAppAdapter(design: CanopiFile) {
     savedObjectStamps: {
       saveCurrentSelection: capture => savedObjectStampWorkbench.saveSelection(capture),
     },
+    ...(edition === 'desktop' ? DESKTOP_SITE_DATA_CAPABILITIES : {}),
   })
 }

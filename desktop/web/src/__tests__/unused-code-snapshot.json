@@ -25,7 +25,6 @@
     "src/app/canvas-pdf/types.ts#PdfPrintArea",
     "src/app/canvas-pdf/workflow.ts#PdfWorkflowDependencies",
     "src/app/canvas-pdf/workflow.ts#PdfWorkflowState",
-    "src/app/canvas-runtime/app-adapter.ts#CanvasRuntimeAppCapabilities",
     "src/app/community/catalog.browser.ts#StaticDesignTemplateCatalog",
     "src/app/community/catalog.browser.ts#StaticDesignTemplateCatalogOptions",
     "src/app/contracts/document.ts#ComposeDocumentForSaveOptions",
