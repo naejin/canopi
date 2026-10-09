@@ -2274,6 +2274,20 @@ const CANVAS_V2_POLICIES = [
     targets: ['src/app/settings/state.ts', 'src/app/settings/projection.ts'],
     importedNames: ['googleMapsApiKey', 'activeGoogleMapsApiKey', 'snapshotSettingsProjection', '*'],
   },
+  {
+    // The document surface loads, replaces and destroys the canvas document; components read query and command
+    // surfaces instead.
+    kind: 'forbid-imports',
+    name: 'P47 components never hold the canvas document lifecycle',
+    from: ['src/components/**'],
+    exceptFrom: [
+      // Takes the whole surface only to attach the inspection; a one-member inspection surface in 2.1 (canopi-f47t.52.12).
+      'src/components/canvas/InspectionLens.tsx',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+    targets: ['src/canvas/session.ts'],
+    importedNames: ['currentCanvasDocumentSurface', 'getCurrentCanvasDocumentSurface', '*'],
+  },
 ] satisfies readonly ArchitecturePolicy[]
 
 /**
@@ -3577,6 +3591,7 @@ const P43 = '[P43 the input core stays camera-free and app-free]'
 const P44 = '[P44 settings and map-layer signals are written only by the projection]'
 const P45 = '[P45 only the presentation controller writes story overrides]'
 const P46 = '[P46 the Google key has reviewed readers]'
+const P47 = '[P47 components never hold the canvas document lifecycle]'
 
 describe('2.0 guard policies (canopi-f47t.52.17)', () => {
   it('P39 rejects a production value cycle; type-only, dynamic and test cycles pass', () => {
@@ -3798,6 +3813,37 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
       `${P46} src/app/planted.ts:2:1 imports src/app/settings/projection.ts via "./settings/projection" (static)`,
       `${P46} src/app/planted.ts:3:1 imports src/app/settings/state.ts via "./settings/state" (static)`,
       `${P46} src/components/shared/Planted.tsx:1:1 imports src/app/settings/state.ts via "../../app/settings/state" (reexport)`,
+    ])
+  })
+
+  it('P47 rejects a component import of the canvas document surface, but not the named lens or other session surfaces', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/session.ts', [
+        'export const currentCanvasDocumentSurface = 1',
+        'export function getCurrentCanvasDocumentSurface() {}',
+        'export const currentCanvasQuerySurface = 1',
+      ]),
+      plantedSource('src/components/canvas/Planted.tsx', [
+        "import { currentCanvasQuerySurface, currentCanvasDocumentSurface } from '../../canvas/session'",
+        "import { getCurrentCanvasDocumentSurface } from '../../canvas/session'",
+        "import * as session from '../../canvas/session'",
+        "import { currentCanvasQuerySurface as queries } from '../../canvas/session'",
+      ]),
+      plantedSource('src/components/canvas/InspectionLens.tsx', [
+        "import { currentCanvasDocumentSurface } from '../../canvas/session'",
+      ]),
+      plantedSource('src/app/canvas-map-surface/design-reveal.ts', [
+        "import { currentCanvasDocumentSurface } from '../../canvas/session'",
+      ]),
+      plantedSource('src/components/canvas/Planted.test.tsx', [
+        "import { currentCanvasDocumentSurface } from '../../canvas/session'",
+      ]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P47'))).toEqual([
+      `${P47} src/components/canvas/Planted.tsx:1:1 imports src/canvas/session.ts via "../../canvas/session" (static)`,
+      `${P47} src/components/canvas/Planted.tsx:2:1 imports src/canvas/session.ts via "../../canvas/session" (static)`,
+      `${P47} src/components/canvas/Planted.tsx:3:1 imports src/canvas/session.ts via "../../canvas/session" (static)`,
     ])
   })
 })
