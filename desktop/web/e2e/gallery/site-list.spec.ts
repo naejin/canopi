@@ -157,6 +157,34 @@ test.describe('missing and pending Site data', () => {
     await expect(panel.locator('[data-site-line="pending:lidar-slope-running-def"]').getByRole('button', { name: 'Cancel calculation' })).toBeVisible()
   })
 
+  test('Cancel import deletes the half-imported item: nothing left in Site data or the Data library', async ({ page }) => {
+    await openGallery(page, { surface: 'site-data', state: 'lidar-progress' })
+    const panel = siteData(page)
+    await panel.locator('[data-site-line="pending:import:lidar-canopy"]').getByRole('button', { name: 'Cancel import' }).click()
+    await expect.poll(() => lines(panel)).toEqual([
+      'lidar-ground', '  [pending:lidar-slope-running-def]', '  lidar-slope-percent', '  lidar-slope',
+    ])
+    await expect(panel.getByText('Canopy height 2024')).toHaveCount(0)
+
+    await openGallery(page, { surface: 'library', state: 'lidar-progress' })
+    const library = page.getByRole('dialog', { name: 'Data library' })
+    await library.getByRole('option', { name: /Canopy height 2024/ }).click()
+    await library.getByRole('button', { name: 'Cancel import' }).click()
+    await expect(library.getByRole('option', { name: /Canopy height 2024/ })).toHaveCount(0)
+  })
+
+  test('Cancel on a Retry puts the item back to failed, with Retry and Dismiss (U51)', async ({ page }) => {
+    await openGallery(page, { surface: 'library', state: 'lidar-progress' })
+    const library = page.getByRole('dialog', { name: 'Data library' })
+    await library.getByRole('option', { name: /Survey tile 0712/ }).click()
+    await library.getByRole('button', { name: 'Retry', exact: true }).click()
+    await library.getByRole('button', { name: 'Cancel import' }).click()
+    await expect(library.getByRole('option', { name: /Survey tile 0712/ })).toHaveCount(1)
+    await expect(library.getByText('The file is not a readable raster.')).toBeVisible()
+    await expect(library.getByRole('button', { name: 'Retry', exact: true })).toBeVisible()
+    await expect(library.getByRole('button', { name: 'Dismiss' })).toBeVisible()
+  })
+
   test('says when work started here could not join the Design', async ({ page }) => {
     await openGallery(page, { surface: 'site-data', state: 'lidar-failure' })
     await expect(siteData(page).getByRole('button', { name: 'Show in the Data library' })).toBeVisible()

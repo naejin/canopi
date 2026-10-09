@@ -746,6 +746,28 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(() => button('Show more')).toThrow()
     })
 
+    it('words a run in history by its state, showing a message only as a failure\'s reason', async () => {
+      const run = (job: string, state: 'Cancelled' | 'Failed', message: string) => ({
+        job_id: job, state, message, recipe_version: 1, tool: null, inputs: [],
+        created_at: '1790000000000', finished_at: null, outputs: [],
+      })
+      locale.value = 'fr'
+      actions.fetchProcessingHistory.mockResolvedValueOnce({
+        definition_id: 's-def', runs: [run('j2', 'Cancelled', 'analysis cancelled'), run('j1', 'Failed', 'engine stopped')], next_cursor: null,
+      })
+      lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', { name: 'Steepness' })])
+      act(() => {
+        openDataLibrary('s')
+        render(<DataDialogs />, container)
+      })
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 130)) })
+      await act(async () => {})
+      const [cancelled, failed] = Array.from(container.querySelectorAll('section[aria-label="Historique des traitements"] li'))
+      expect(cancelled!.textContent).toContain('Annulé')
+      expect(cancelled!.textContent).not.toContain('analysis cancelled')
+      expect(failed!.textContent).toContain('engine stopped')
+    })
+
     it('offers Cancel for a running calculation and cancels its job', async () => {
       lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', {
         generation_id: null, state: 'Preparing', name: 'Pending', run: { job_id: 'job-1', state: 'Preparing', message: null },
@@ -849,6 +871,25 @@ describe('Data library, Import and Analyze dialogs', () => {
       })
       await act(async () => { await Promise.resolve() })
       expect(container.textContent).toContain('Covers part of your site. The files span 800 m × 450 m. Part of this Design lies outside the files.')
+    })
+
+    it('accepts the same file under its default name again once its import was cancelled', async () => {
+      lidarLibrary.value = library([layer('one', 'one', {
+        generation_id: null, state: 'Preparing',
+        import_job: { job_id: 'job-one', layer_id: 'one', state: 'Staging', message: null, progress: null },
+      })])
+      // Cancel deletes the unpublished item, and the action reads the library again (user, 2026-10-09).
+      actions.cancelLibraryImport.mockImplementationOnce(async () => { lidarLibrary.value = library([]) })
+      mount()
+      await selectRow('one')
+      await click(button('Cancel import'))
+      expect(actions.cancelLibraryImport).toHaveBeenCalledWith('job-one')
+
+      await act(async () => { dataDialog.value = { kind: 'import', paths: ['/d/one.tif'] } })
+      expect(container.querySelector<HTMLInputElement>('input[required]')!.value).toBe('one')
+      await chooseFrom('What the values measure', 'Ground elevation (DTM)')
+      expect(container.textContent).not.toContain('already has data named')
+      expect(button('Import 1 file').disabled).toBe(false)
     })
 
     it('refuses a name the library already uses and suggests a free one', async () => {

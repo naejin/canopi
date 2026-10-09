@@ -53,6 +53,37 @@ pub(crate) fn crs_kind(reference: &str) -> Option<CrsKind> {
     crs::from_reference(reference).ok().map(|crs| crs.kind())
 }
 
+/// The ground size of one cell of `grid` in `crs_ref`, in metres: a metre
+/// grid's own pixel size; for degrees or Web Mercator's stretched metres, the
+/// side of a square with the cell's ground area at the grid's centre (on the
+/// WGS84 ellipsoid's local radii). `None` for a CRS Canopi does not place.
+pub(crate) fn cell_ground_size_m(grid: &RasterGrid, crs_ref: &str) -> Option<f64> {
+    let native = crs::from_reference(crs_ref).ok()?;
+    let (x, y) = grid.pixel_size();
+    let size = if native.kind() == CrsKind::ProjectedMetre {
+        (x * y).sqrt()
+    } else {
+        let to_wgs84 = crs::Transformer::new(&native, &crs::from_reference("EPSG:4326").ok()?);
+        let gt = grid.geotransform;
+        let centre_x = gt[0] + gt[1] * f64::from(grid.width) / 2.0;
+        let centre_y = gt[3] + gt[5] * f64::from(grid.height) / 2.0;
+        let (lon, lat) = to_wgs84.apply(centre_x, centre_y).ok()?;
+        let (east_lon, _) = to_wgs84.apply(centre_x + x, centre_y).ok()?;
+        let (_, north_lat) = to_wgs84.apply(centre_x, centre_y + y).ok()?;
+        // WGS84's meridional and prime-vertical radii at the centre's latitude.
+        const A: f64 = 6_378_137.0;
+        const E2: f64 = 0.006_694_379_990_14;
+        let phi = lat.to_radians();
+        let w = (1.0 - E2 * phi.sin().powi(2)).sqrt();
+        let meridional = A * (1.0 - E2) / w.powi(3);
+        let prime_vertical = A / w;
+        let east = (east_lon - lon).abs().to_radians() * prime_vertical * phi.cos();
+        let north = (north_lat - lat).abs().to_radians() * meridional;
+        (east * north).sqrt()
+    };
+    (size.is_finite() && size > 0.0).then_some(size)
+}
+
 /// The display zoom of an item whose parts are `grids` in `crs_ref`: every
 /// part's derivative is written at it, so the parts share one lattice (A2).
 pub(crate) fn display_zoom<'a>(

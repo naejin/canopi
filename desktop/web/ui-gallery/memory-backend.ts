@@ -37,6 +37,8 @@ const sampleDelayMs = Math.max(0, Number(params.get('sampleDelay')) || 0)
 const favoriteNames = new Set(state === 'empty' ? [] : species.map(plant => plant.canonical_name))
 const file = designFixture()
 let sequence = 3
+/** The failed import each running Retry replaced, restored if that Retry is cancelled. */
+const retriedImports = new Map<string, LidarImportJob>()
 let stamps: SavedObjectStamp[] = state === 'empty' ? [] : ['Orchard guild', 'Pollinator border'].map((name, index) => ({
   id: `stamp-${index}`, name: state === 'long' ? name + ' — a reusable arrangement with a particularly long descriptive name' : name, sort_order: index,
   // A current (v2) payload in metres about its anchor: three plants in a bed, so a turned stamp shows its angle.
@@ -406,13 +408,17 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
       result = { layer_id: id, job_id: `job-${id}` }
       break
     }
-    case 'lidar_retry_import':
-      updateItem(args.layerId, item => item.import_job
-        ? { ...item, state: 'Preparing', import_job: { ...item.import_job, state: 'Staging', message: null, progress: { phase: 'PreparingRaster', percent: 5 } } }
-        : item)
+    case 'lidar_retry_import': {
+      const jobId = `job-${sequence++}`
+      updateItem(args.layerId, item => {
+        if (!item.import_job) return item
+        retriedImports.set(jobId, item.import_job)
+        return { ...item, state: 'Preparing', import_job: { ...item.import_job, job_id: jobId, state: 'Staging', message: null, progress: { phase: 'PreparingRaster', percent: 5 } } }
+      })
       activity.value = 'Retried the import in memory.'
-      result = { layer_id: String(args.layerId), job_id: `job-${String(args.layerId)}` }
+      result = { layer_id: String(args.layerId), job_id: jobId }
       break
+    }
     case 'lidar_dismiss_import':
       lidarItems = lidarItems.filter(candidate => candidate.id !== args.layerId)
       activity.value = 'Removed the library item in memory.'
@@ -428,13 +434,20 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
       result = undefined
       break
     }
-    case 'lidar_cancel_import':
-      lidarItems = lidarItems.map(item => item.import_job && item.import_job.job_id === args.jobId
-        ? { ...item, state: 'Failed' as const, import_job: { ...item.import_job, state: 'Cancelled' as const, progress: null } }
-        : item)
-      activity.value = 'Cancelled the import without publishing.'
+    case 'lidar_cancel_import': {
+      // Cancel on a Retry puts the item back to Failed; Cancel on a first
+      // import deletes its unpublished item (U51, user 2026-10-09).
+      const earlier = retriedImports.get(String(args.jobId))
+      retriedImports.delete(String(args.jobId))
+      lidarItems = earlier
+        ? lidarItems.map(item => item.generation_id || item.import_job?.job_id !== args.jobId
+          ? item
+          : { ...item, state: 'Failed', import_job: earlier })
+        : lidarItems.filter(item => item.generation_id || item.import_job?.job_id !== args.jobId)
+      activity.value = earlier ? 'Cancelled the retry; the import is failed again.' : 'Cancelled the import and deleted its item.'
       result = undefined
       break
+    }
     case 'lidar_rename_item':
       updateItem(args.itemId, item => ({ ...item, name: String(args.name) }))
       result = undefined

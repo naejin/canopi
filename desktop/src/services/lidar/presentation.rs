@@ -11,6 +11,7 @@ use super::analyses::{self, FreshnessCheck, ItemFacts};
 use super::catalogue;
 use super::engine::RasterEngine;
 use super::geolibre::GeolibreTool;
+use super::rust_engine;
 use common_types::library::{
     AnalysisRunStatus, Freshness, LibraryEngines, LibraryItemRole, LibraryItemSummary,
     LibraryItemType, LibrarySnapshot, Provenance,
@@ -32,9 +33,9 @@ pub fn library_snapshot(
                 (
                     head.coverage_cells.map(|cells| cells.max(0) as u64),
                     display_range_of(head),
-                    manifest
-                        .as_ref()
-                        .map(|manifest| manifest.grid.pixel_size().0),
+                    manifest.as_ref().and_then(|manifest| {
+                        rust_engine::cell_ground_size_m(&manifest.grid, &manifest.crs_ref)
+                    }),
                     wgs84_bounds(&head.bounds_3857),
                     value_range(head.min_value, head.max_value),
                 )
@@ -156,7 +157,9 @@ pub fn library_snapshot(
             resolution_m: head
                 .as_ref()
                 .and_then(|head| analyses::read_derived_manifest(&head.manifest_json).ok())
-                .map(|manifest| manifest.grid.pixel_size().0),
+                .and_then(|manifest| {
+                    rust_engine::cell_ground_size_m(&manifest.grid, &manifest.crs_ref)
+                }),
             coverage_cells: head
                 .as_ref()
                 .and_then(|head| head.coverage_cells)
@@ -352,6 +355,72 @@ mod tests {
                 .map(|item| item.created_at),
             Some("1790000090000".to_owned()),
         );
+    }
+
+    /// The profile and the library read `resolution_m` as metres on the ground, so a grid in degrees or in Web
+    /// Mercator's stretched metres reports its cells' ground size, and a metre grid its own pixel size.
+    #[test]
+    fn resolution_is_the_cell_size_on_the_ground_in_metres() {
+        let root = crate::test_scratch::TestScratch::new("presentation-resolution");
+        let library = LidarLibrary::open(&root).unwrap();
+        let connection = library.catalogue().unwrap();
+        // One arc-second cells at 48° N; 1 m Web Mercator pixels there; IGN's 0.5 m Lambert-93 grid.
+        let arc_second = 1.0 / 3600.0;
+        for (id, crs, origin, pixel) in [
+            ("degrees", "EPSG:4326", [2.0, 48.0], arc_second),
+            ("mercator", "EPSG:3857", [222_639.0, 6_106_855.0], 1.0),
+            ("lambert", "EPSG:2154", [445_000.0, 6_806_000.0], 0.5),
+        ] {
+            let manifest = format!(
+                r#"{{"grid":{{"width":100,"height":100,"geotransform":[{},{pixel},0.0,{},0.0,{}]}},"nodata":-9999.0,"crs_ref":"{crs}","members":[],"engine_version":"test","created_at":"1"}}"#,
+                origin[0], origin[1], -pixel,
+            );
+            connection
+                .execute(
+                    "INSERT INTO lidar_source_layers(id, name, item_kind, quantity, units, created_at)
+                     VALUES (?1, ?1, 'raster', 'ground-elevation', 'm', '1')",
+                    [id],
+                )
+                .unwrap();
+            connection
+                .execute(
+                    "INSERT INTO lidar_layer_generations
+                        (id, layer_id, created_at, manifest_json, bounds_3857, crs_class)
+                     VALUES (?1, ?2, '1', ?3, '[0,0,1,1]', 'projected-metre')",
+                    rusqlite::params![format!("gen-{id}"), id, manifest],
+                )
+                .unwrap();
+            connection
+                .execute(
+                    "INSERT INTO lidar_layer_heads(layer_id, generation_id) VALUES (?1, ?2)",
+                    rusqlite::params![id, format!("gen-{id}")],
+                )
+                .unwrap();
+        }
+        drop(connection);
+
+        let snapshot = library.library_snapshot().unwrap();
+        let resolution = |id: &str| {
+            snapshot
+                .items
+                .iter()
+                .find(|item| item.id == id)
+                .and_then(|item| item.resolution_m)
+                .unwrap()
+        };
+        // 20.7 m east by 30.9 m north: the side of a square of the same ground area.
+        assert!(
+            (resolution("degrees") - 25.3).abs() < 0.1,
+            "{}",
+            resolution("degrees")
+        );
+        // cos 48° of a Mercator metre.
+        assert!(
+            (resolution("mercator") - 0.669).abs() < 0.002,
+            "{}",
+            resolution("mercator")
+        );
+        assert_eq!(resolution("lambert"), 0.5);
     }
 
     #[test]

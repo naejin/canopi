@@ -535,6 +535,15 @@ fn stage_managed_original(
         }
         let _ = std::fs::remove_file(&temporary);
     } else {
+        // Recorded first, so a job that stops after the rename still frees
+        // the original it created (`discard_job_files`).
+        let mut created = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(job_dir.join(CREATED_ORIGINALS))
+            .map_err(|e| format!("Failed to record the managed source: {e}"))?;
+        writeln!(created, "{sha256}")
+            .map_err(|e| format!("Failed to record the managed source: {e}"))?;
         std::fs::rename(&temporary, &managed_original)
             .map_err(|e| format!("Failed to publish managed source: {e}"))?;
     }
@@ -1075,6 +1084,118 @@ fn insert_promoted_references(
     Ok(())
 }
 
+/// The job-root file listing, one sha256 per line, the managed originals a
+/// job created rather than found.
+const CREATED_ORIGINALS: &str = "created-originals";
+
+/// Remove what one unpublished import job wrote: the managed originals it
+/// created, the source COGs it staged or promoted and their display
+/// derivatives, each with its catalogue rows and only while no published
+/// item or saved selection claims it, then the job root itself.
+///
+/// Called as the job settles, under its heavy lease, so no other import
+/// stages the same content meanwhile, and at startup before any job runs.
+pub(super) fn discard_job_files(library: &LidarLibrary, job_id: &str) -> Result<(), String> {
+    let paths = &library.inner.paths;
+    let job_dir = paths.job_dir(job_id);
+    let created: Vec<String> = match std::fs::read_to_string(job_dir.join(CREATED_ORIGINALS)) {
+        Ok(listing) => listing.lines().map(str::to_string).collect(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(error) => return Err(format!("Failed to read the job's originals: {error}")),
+    };
+    // Derivatives are prepared only once the staging record is written.
+    let staged: Vec<String> = read_staged_import(library, job_id)
+        .map(|staging| {
+            staging
+                .sources
+                .into_iter()
+                .map(|source| source.source_cog.sha256)
+                .collect()
+        })
+        .unwrap_or_default();
+    let (originals, cogs) = {
+        let connection = library.catalogue()?;
+        let transaction = connection
+            .unchecked_transaction()
+            .map_err(|e| e.to_string())?;
+        let originals = release_unclaimed_originals(&transaction, created)?;
+        transaction.commit().map_err(|e| e.to_string())?;
+        let referenced = catalogue::referenced_asset_digests(&connection)?;
+        let cogs: Vec<String> = staged
+            .into_iter()
+            .filter(|sha256| !referenced.contains(sha256))
+            .collect();
+        (originals, cogs)
+    };
+    for sha256 in &cogs {
+        remove_dir_if_present(&paths.asset_dir(sha256))?;
+        super::display_cog::forget_asset_derivatives(library, sha256)?;
+    }
+    remove_original_dirs(library, &originals)?;
+    remove_job_root(library, job_id)
+}
+
+/// Delete the catalogue rows of each managed original in `candidates` that no
+/// published item and no saved import selection claims, and return those
+/// originals; the caller commits, then removes them with
+/// [`remove_original_dirs`]. Run under the heavy lease, so no import stages
+/// the same content meanwhile.
+pub(super) fn release_unclaimed_originals(
+    transaction: &rusqlite::Connection,
+    candidates: Vec<String>,
+) -> Result<Vec<String>, String> {
+    let mut released = Vec::new();
+    for sha256 in candidates {
+        let claimed: bool = transaction
+            .query_row(
+                "SELECT EXISTS(
+                     SELECT 1 FROM lidar_collection_members AS member
+                     JOIN lidar_interpretations AS interpretation
+                       ON interpretation.id = member.interpretation_id
+                     WHERE interpretation.source_sha256 = ?1)
+                 OR EXISTS(
+                     SELECT 1 FROM lidar_import_jobs WHERE instr(request_json, ?1) > 0)",
+                [&sha256],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if claimed {
+            continue;
+        }
+        for sql in [
+            "DELETE FROM lidar_interpretation_cogs WHERE interpretation_id IN
+             (SELECT id FROM lidar_interpretations WHERE source_sha256 = ?1)",
+            "DELETE FROM lidar_interpretations WHERE source_sha256 = ?1",
+            "DELETE FROM lidar_sources WHERE sha256 = ?1",
+        ] {
+            transaction
+                .execute(sql, [&sha256])
+                .map_err(|e| e.to_string())?;
+        }
+        released.push(sha256);
+    }
+    Ok(released)
+}
+
+/// Remove the directories, original and `meta.json`, of released originals.
+pub(super) fn remove_original_dirs(
+    library: &LidarLibrary,
+    originals: &[String],
+) -> Result<(), String> {
+    for sha256 in originals {
+        remove_dir_if_present(&library.inner.paths.source_dir(sha256))?;
+    }
+    Ok(())
+}
+
+fn remove_dir_if_present(dir: &Path) -> Result<(), String> {
+    match std::fs::remove_dir_all(dir) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("Failed to remove {}: {error}", dir.display())),
+    }
+}
+
 /// Remove one settled job's root and everything it still holds.
 pub fn remove_job_root(library: &LidarLibrary, job_id: &str) -> Result<(), String> {
     let root = library.inner.paths.job_dir(job_id);
@@ -1325,11 +1446,7 @@ fn publish_applied_snapshot(
             )
             .map_err(|e| e.to_string())?;
         if job_state != "applying" {
-            return Err(if job_state == "cancelled" {
-                "cancelled".to_string()
-            } else {
-                format!("import job cannot publish from state {job_state}")
-            });
+            return Err(format!("import job cannot publish from state {job_state}"));
         }
         if catalogue::head_generation(&connection, &staging.layer_id)?.is_some() {
             return Err("this library item is already published and fixed".to_string());

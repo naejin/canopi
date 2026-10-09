@@ -43,10 +43,6 @@ const SYNC_COMMAND_ALLOWLIST: &[SyncCommandAllowance] = &[
         reason: "delivers a bounded in-memory cancellation signal that must bypass queued Catalog work",
     },
     SyncCommandAllowance {
-        path: "commands::lidar::lidar_cancel_import",
-        reason: "delivers a bounded in-memory cancellation flag that must bypass a busy Local raster queue",
-    },
-    SyncCommandAllowance {
         path: "commands::lidar::lidar_cancel_analysis_job",
         reason: "delivers a bounded in-memory cancellation flag that must bypass a busy Local raster queue",
     },
@@ -77,6 +73,26 @@ const STATE_ACCESS_ALLOWLIST: &[StateAccessAllowance] = &[
         path: "commands::lidar::lidar_sample_points",
         operation: "sampling_turn",
         reason: "refuses an over-cap request, then awaits the library's one in-memory sampling permit before a Local slot",
+    },
+    StateAccessAllowance {
+        path: "commands::lidar::lidar_cancel_import",
+        operation: "set_cancel_flag",
+        reason: "sets the job's in-memory cancellation flag before the item's deletion is queued",
+    },
+    StateAccessAllowance {
+        path: "commands::lidar::lidar_import_item",
+        operation: "await_cancelled_jobs",
+        reason: "awaits, with no executor permit held, until in-memory cancellation flags show no cancelled job still holding the heavy lease",
+    },
+    StateAccessAllowance {
+        path: "commands::lidar::lidar_retry_import",
+        operation: "await_cancelled_jobs",
+        reason: "awaits, with no executor permit held, until in-memory cancellation flags show no cancelled job still holding the heavy lease",
+    },
+    StateAccessAllowance {
+        path: "commands::lidar::lidar_dismiss_import",
+        operation: "await_cancelled_jobs",
+        reason: "awaits, with no executor permit held, until in-memory cancellation flags show no cancelled job still holding the heavy lease",
     },
     StateAccessAllowance {
         path: "commands::problem_report::create_problem_report",

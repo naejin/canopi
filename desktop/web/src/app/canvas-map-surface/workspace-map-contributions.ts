@@ -71,6 +71,8 @@ export class WorkspaceMapContributions {
   private siteHover: readonly [number, number] | null = null
   private unsubscribeSiteHover: (() => void) | null = null
   private rasterSkipped = false
+  /** The layer the rasters were last told to draw beneath (`syncRaster`). */
+  private rasterAnchor: string | undefined = undefined
 
   constructor(private readonly options: WorkspaceMapContributionsOptions) {}
 
@@ -80,7 +82,7 @@ export class WorkspaceMapContributions {
     // The raster renderer adds its layers asynchronously after its module and
     // headers load; each change re-establishes the semantic band order.
     this.raster = this.options.createRasterDisplay?.(context.map, {
-      onLayersChanged: () => this.reorderAfterRasterChange(),
+      onLayersChanged: () => this.restack(),
     }) ?? null
     this.siteHover = this.options.siteHover?.current() ?? null
     this.unsubscribeSiteHover = this.options.siteHover?.subscribe((hover) => this.setSiteHover(hover)) ?? null
@@ -232,11 +234,8 @@ export class WorkspaceMapContributions {
   /** Hand the desired band to the renderer, beneath the first higher Canopi layer. */
   private syncRaster(map: MapLibreMapInstance, layers: readonly Readonly<RasterDisplayLayer>[]): void {
     if (!this.raster) return
-    const order = map.getLayersOrder()
-    const anchor = createMapLayerStackDescriptors([])
-      .filter((descriptor) => descriptor.band !== 'basemap')
-      .map((descriptor) => descriptor.id)
-      .find((id) => order.includes(id))
+    const anchor = rasterAnchor(map)
+    this.rasterAnchor = anchor
     try {
       this.raster.sync(layers, anchor)
       this.rasterSkipped = false
@@ -324,8 +323,11 @@ export class WorkspaceMapContributions {
     return this.skippedOverlayKey !== null || this.skippedSiteKey !== null || this.rasterSkipped
   }
 
-  /** The renderer changed map layers asynchronously; restore the semantic order. */
-  private reorderAfterRasterChange(): void {
+  /**
+   * The map's layers changed outside the drain (the renderer added a raster, activation added the scene layer); restore
+   * the semantic order.
+   */
+  restack(): void {
     if (!this.live() || !this.styleReady || !this.snapshot || this.draining) return
     const revision = this.revision
     try {
@@ -408,6 +410,10 @@ export class WorkspaceMapContributions {
   }
 
   private reconcileOrder(map: MapLibreMapInstance, snapshot: WorkspaceMapContributionSnapshot): void {
+    // The renderer puts its layers back beneath their anchor on every style change, so a higher Canopi layer added
+    // since the last sync (a rebuilt map's scene layer, which comes after its first drain; terrain) re-anchors them
+    // first, or the rasters would return above it.
+    if (this.raster && rasterAnchor(map) !== this.rasterAnchor) this.syncRaster(map, snapshot.lidar)
     // Only layers the renderer has actually added take part; a layer still
     // loading its header is placed when it arrives.
     const present = this.raster?.layerIds() ?? []
@@ -464,6 +470,15 @@ export class WorkspaceMapContributions {
   private log(message: string, error: unknown): void {
     (this.options.logError ?? logMapError)(message, error)
   }
+}
+
+/** The first Canopi layer above the LiDAR band now on the map: the rasters draw beneath it. */
+function rasterAnchor(map: MapLibreMapInstance): string | undefined {
+  const order = map.getLayersOrder()
+  return createMapLayerStackDescriptors([])
+    .filter((descriptor) => descriptor.band !== 'basemap')
+    .map((descriptor) => descriptor.id)
+    .find((id) => order.includes(id))
 }
 
 const STALE_CONTRIBUTION = Symbol('stale-map-contribution')

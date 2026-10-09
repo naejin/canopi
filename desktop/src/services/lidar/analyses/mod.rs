@@ -763,12 +763,13 @@ fn publish(
     }
 }
 
-/// Settle a job that ended without publishing.
+/// Settle a job that ended without publishing. A cancel keeps no message:
+/// the state is the status, which the UI words; a failure keeps its reason.
 pub(crate) fn settle_unpublished(connection: &Connection, job_id: &str, error: &str) {
     let (state, message) = if error == "cancelled" {
-        ("cancelled", "analysis cancelled")
+        ("cancelled", None)
     } else {
-        ("failed", error)
+        ("failed", Some(error))
     };
     let now = now_iso();
     let _ = connection.execute(
@@ -780,19 +781,20 @@ pub(crate) fn settle_unpublished(connection: &Connection, job_id: &str, error: &
 
 /// Startup recovery: jobs interrupted by a restart fail explicitly so the UI
 /// never reports ghost activity; published data is unaffected, and nothing is
-/// recalculated because the app reopened.
+/// recalculated because the app reopened. They keep no message: the UI words
+/// the failed state.
 pub(crate) fn recover_interrupted_jobs(connection: &Connection) -> Result<(), String> {
     let now = now_iso();
     connection
         .execute(
-            "UPDATE lidar_import_jobs SET state = 'failed', message = 'interrupted by restart',
+            "UPDATE lidar_import_jobs SET state = 'failed', message = NULL,
              updated_at = ?1 WHERE state IN ('staging', 'applying')",
             [&now],
         )
         .map_err(|e| format!("Failed to recover import jobs: {e}"))?;
     connection
         .execute(
-            "UPDATE lidar_analysis_jobs SET state = 'failed', message = 'interrupted by restart',
+            "UPDATE lidar_analysis_jobs SET state = 'failed', message = NULL,
              finished_at = ?1, updated_at = ?1 WHERE state = 'preparing'",
             [&now],
         )

@@ -358,6 +358,10 @@ export type LibraryItemSummary = {
 	bounds: [number, number, number, number] | null,
 	value_range: [number, number] | null,
 	display_range: LidarDisplayRange | null,
+	/**
+	 *  One cell's size on the ground in metres, whatever the grid's units
+	 *  (degrees and Web Mercator converted at the grid's centre).
+	 */
 	resolution_m: number | null,
 	// Exact valid cells, `None` when not measured.
 	coverage_cells: string | null,
@@ -494,9 +498,10 @@ export type LidarImportJob = {
  *  Import job states.
  *
  *  `Staging` is preparation, `Applying` is publication, and the terminal states
- *  report the outcome.
+ *  report the outcome. A cancelled import has no state: Cancel deletes its
+ *  item.
  */
-export type LidarImportJobState = "Staging" | "Applying" | "Complete" | "Cancelled" | "Failed";
+export type LidarImportJobState = "Staging" | "Applying" | "Complete" | "Failed";
 
 export type LidarImportProgress = {
 	phase: LidarImportProgressPhase,

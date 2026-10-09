@@ -23,10 +23,6 @@ pub const SET_ASIDE_DIR: &str = "lidar-library.set-aside";
 /// Quantity of an original nothing describes: ground elevation in metres.
 const DEFAULT_QUANTITY_KEY: &str = common_types::library::RasterQuantity::GroundElevation.key();
 
-/// Message on the failed import job of every rebuilt item.
-pub const RECOVERED_IMPORT_MESSAGE: &str =
-    "Canopi rebuilt its Data library from the files it keeps; Retry prepares this item again.";
-
 /// What the catalogue file at the library root is, before it is opened.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CatalogueState {
@@ -441,15 +437,10 @@ fn insert_recovered_item(
     let request = super::import_request_json(&selection)?;
     connection
         .execute(
-            "INSERT INTO lidar_import_jobs(id, layer_id, state, message, request_json, created_at, updated_at)
-             VALUES(?1, ?2, 'failed', ?3, ?4, ?5, ?5)",
-            rusqlite::params![
-                new_id("imp"),
-                layer_id,
-                RECOVERED_IMPORT_MESSAGE,
-                request,
-                now
-            ],
+            // A failed import to retry; the Data library's banner says why.
+            "INSERT INTO lidar_import_jobs(id, layer_id, state, request_json, created_at, updated_at)
+             VALUES(?1, ?2, 'failed', ?3, ?4, ?4)",
+            rusqlite::params![new_id("imp"), layer_id, request, now],
         )
         .map_err(|e| format!("Failed to record a recovered import: {e}"))?;
     Ok(())

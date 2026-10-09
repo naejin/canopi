@@ -174,7 +174,8 @@ function ProcessingHistory({ definitionId }: { definitionId: string }) {
               <span className={styles.muted}>
                 {formatTimestamp(entry.created_at, language)}{entry.tool ? ` · ${entry.tool.version}` : ''} · {runOutputs(entry, language)}
               </span>
-              {entry.message && <span className={styles.muted}>{entry.message}</span>}
+              {/* The state words a run; a message is only a failure's reason. */}
+              {entry.state === 'Failed' && entry.message && <span className={styles.muted}>{entry.message}</span>}
             </li>
           ))}
         </ol>

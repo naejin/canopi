@@ -180,7 +180,7 @@ function SiteDataSummaryRow({ summary }: { readonly summary: SiteDataSummary }) 
             onClick={() => summary.setVisible(!summary.visible)}
           >
             <LayerVisibilityIcon open={summary.visible} />
-            <ButtonTooltip label={eyeLabel} side="left" />
+            <ButtonTooltip label={eyeLabel} side="right" />
           </button>
         ) : <span className={styles.lockSlot} aria-hidden="true" />}
         <button
@@ -194,8 +194,9 @@ function SiteDataSummaryRow({ summary }: { readonly summary: SiteDataSummary }) 
             <span>{name}</span>
             <small className={styles.caption}>{caption}</small>
           </span>
-          {/* The name and caption name the button; the tooltip only adds the shortcut. */}
-          <span aria-hidden="true"><ButtonTooltip label={summary.command.label} shortcut={summary.command.shortcut} side="left" /></span>
+          {/* The name and caption name the button; the tooltip only adds the shortcut. Below the row, inside the panel's
+              scroll box, which clips anything beside it. */}
+          <span aria-hidden="true"><ButtonTooltip label={summary.command.label} shortcut={summary.command.shortcut} side="bottom" /></span>
         </button>
         <button type="button" className={styles.lockBtn} aria-label={openLabel} onClick={summary.open}>
           <ControlIcon name="chevron-right" size={16} />
@@ -292,7 +293,7 @@ function LayerRow({ row, actions, caption }: {
           }}
         >
           <LayerVisibilityIcon open={row.visible} />
-          <ButtonTooltip label={eyeLabel} side="left" />
+          <ButtonTooltip label={eyeLabel} side="right" />
         </button>
         <button
           type="button"

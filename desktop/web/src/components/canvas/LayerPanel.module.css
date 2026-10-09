@@ -62,6 +62,11 @@
   min-width: 0;
 }
 
+/* The name and caption truncate themselves, so the button clips nothing: its shortcut tooltip opens below it. */
+.layerName.summaryName {
+  overflow: visible;
+}
+
 .glyph {
   display: inline-flex;
   flex-shrink: 0;
