@@ -103,7 +103,7 @@ describe('Scene runtime module boundaries', () => {
     const documentSource = readSource('../canvas/runtime/scene-runtime/document.ts')
     expect(documentSource).not.toContain('.updatePersisted(')
     expect(documentSource).not.toContain("from '../scene-history'")
-    expect(documentSource).toContain('this._authority.hydrate(file,')
+    expect(documentSource).toContain('this._authority.hydrate(file)')
     expect(documentSource).toContain('this._authority.replaceDocument(file, {')
     expect(documentSource).toContain('token: CanvasDocumentReplacementToken,')
     expect(documentSource).toContain('this._authority.replaceDocument(file, {\n      token,')
