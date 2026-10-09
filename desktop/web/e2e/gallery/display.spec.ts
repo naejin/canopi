@@ -124,11 +124,17 @@ test.describe('an open Site data item\'s settings', () => {
     await minimum.press('Enter')
     await expect(ground.getByRole('radio', { name: 'Personnalisée' })).toHaveAttribute('aria-checked', 'true')
     await expect(minimum).toHaveValue('140,5')
-    // A minimum above the maximum reverts.
+    // A minimum above the maximum stays a draft while focus moves to the other end,
+    // and reverts with it once focus leaves the pair with no valid pair.
     await minimum.fill('9999')
     await minimum.press('Tab')
+    await expect(maximum).toBeFocused()
+    await expect(minimum).toHaveValue('9999')
+    await maximum.press('Tab')
+    await expect(maximum).not.toBeFocused()
     await expect(minimum).toHaveValue('140,5')
     await expect(maximum).toHaveValue(top)
+    await expect(ground.getByRole('radio', { name: 'Personnalisée' })).toHaveAttribute('aria-checked', 'true')
   })
 
   test('keep the item open while its opacity is dragged', async ({ page }) => {
