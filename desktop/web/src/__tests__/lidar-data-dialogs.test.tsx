@@ -851,6 +851,25 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(container.textContent).toContain('Covers part of your site. The files span 800 m × 450 m. Part of this Design lies outside the files.')
     })
 
+    it('accepts the same file under its default name again once its import was cancelled', async () => {
+      lidarLibrary.value = library([layer('one', 'one', {
+        generation_id: null, state: 'Preparing',
+        import_job: { job_id: 'job-one', layer_id: 'one', state: 'Staging', message: null, progress: null },
+      })])
+      // Cancel deletes the unpublished item, and the action reads the library again (user, 2026-10-09).
+      actions.cancelLibraryImport.mockImplementationOnce(async () => { lidarLibrary.value = library([]) })
+      mount()
+      await selectRow('one')
+      await click(button('Cancel import'))
+      expect(actions.cancelLibraryImport).toHaveBeenCalledWith('job-one')
+
+      await act(async () => { dataDialog.value = { kind: 'import', paths: ['/d/one.tif'] } })
+      expect(container.querySelector<HTMLInputElement>('input[required]')!.value).toBe('one')
+      await chooseFrom('What the values measure', 'Ground elevation (DTM)')
+      expect(container.textContent).not.toContain('already has data named')
+      expect(button('Import 1 file').disabled).toBe(false)
+    })
+
     it('refuses a name the library already uses and suggests a free one', async () => {
       lidarLibrary.value = library([layer('a', 'Terrain')])
       act(() => {

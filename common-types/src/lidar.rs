@@ -20,14 +20,14 @@ pub enum LidarResultState {
 /// Import job states.
 ///
 /// `Staging` is preparation, `Applying` is publication, and the terminal states
-/// report the outcome.
+/// report the outcome. A cancelled import has no state: Cancel deletes its
+/// item.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub enum LidarImportJobState {
     Staging,
     Applying,
     Complete,
-    Cancelled,
     Failed,
 }
 

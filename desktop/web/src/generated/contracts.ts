@@ -494,9 +494,10 @@ export type LidarImportJob = {
  *  Import job states.
  *
  *  `Staging` is preparation, `Applying` is publication, and the terminal states
- *  report the outcome.
+ *  report the outcome. A cancelled import has no state: Cancel deletes its
+ *  item.
  */
-export type LidarImportJobState = "Staging" | "Applying" | "Complete" | "Cancelled" | "Failed";
+export type LidarImportJobState = "Staging" | "Applying" | "Complete" | "Failed";
 
 export type LidarImportProgress = {
 	phase: LidarImportProgressPhase,

@@ -154,8 +154,8 @@ fn an_import_is_one_unpublished_item_with_a_retryable_saved_request() {
 
     let refused = library.dismiss_import(&layer_id).unwrap_err();
     assert!(refused.contains("running"), "{refused}");
-    library.cancel_job(&retry_job);
-    library.dismiss_import(&layer_id).unwrap();
+    // Cancel deletes the item with every import it had.
+    library.cancel_import(&retry_job).unwrap();
     assert_eq!(
         count(&library, "SELECT COUNT(*) FROM lidar_source_layers"),
         0
@@ -226,9 +226,7 @@ fn await_import(library: &LidarLibrary, job_id: &str) -> LidarImportJobState {
         let job = library.get_import_job(job_id).unwrap().unwrap();
         if matches!(
             job.state,
-            LidarImportJobState::Complete
-                | LidarImportJobState::Failed
-                | LidarImportJobState::Cancelled
+            LidarImportJobState::Complete | LidarImportJobState::Failed
         ) && !library
             .inner
             .cancel_flags
@@ -573,27 +571,6 @@ fn retrying_an_import_whose_file_is_gone_is_refused_on_its_item_without_a_new_jo
     assert_eq!(count(&library, "SELECT COUNT(*) FROM lidar_import_jobs"), 1);
 }
 
-/// A cancelled import whose saved file has gone: the refused Retry turns its
-/// one job into a failed import carrying the refusal, with no new job row.
-#[test]
-fn retrying_a_cancelled_import_whose_file_is_gone_fails_that_import_with_the_reason() {
-    let root = scratch("retry-cancelled-missing");
-    let library = attached_library(&root);
-    let layer_id = failed_import(&library, root.join("gone.tif"), "first failure");
-    library
-        .catalogue()
-        .unwrap()
-        .execute(
-            "UPDATE lidar_import_jobs SET state = 'cancelled', message = NULL WHERE layer_id = ?1",
-            [&layer_id],
-        )
-        .unwrap();
-    let error = library.retry_import(&layer_id).unwrap_err();
-    assert!(error.contains("gone.tif cannot be found"), "{error}");
-    assert_eq!(row_message(&library, &layer_id), error);
-    assert_eq!(count(&library, "SELECT COUNT(*) FROM lidar_import_jobs"), 1);
-}
-
 /// A refused Retry whose reason cannot be written onto its item still returns
 /// the refusal itself, not the failed write.
 #[test]
@@ -802,4 +779,307 @@ fn import_and_retry_are_refused_with_nothing_recorded_while_a_raster_job_runs() 
         await_import(&library, &receipt.job_id),
         LidarImportJobState::Complete
     );
+}
+
+/// Every file under the library's sources, jobs, assets and display folders.
+fn library_files(library: &LidarLibrary) -> Vec<PathBuf> {
+    fn walk(dir: &Path, found: &mut Vec<PathBuf>) {
+        for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, found);
+            } else {
+                found.push(path);
+            }
+        }
+    }
+    let paths = &library.inner.paths;
+    let mut found = Vec::new();
+    for dir in [
+        paths.root().join("sources"),
+        paths.root().join("assets"),
+        paths.jobs_dir(),
+        paths.display_cog_dir(),
+    ] {
+        walk(&dir, &mut found);
+    }
+    found
+}
+
+/// The catalogue and display rows an import writes, by table.
+fn import_rows(library: &LidarLibrary) -> Vec<(&'static str, i64)> {
+    let mut rows: Vec<(&'static str, i64)> = [
+        "lidar_source_layers",
+        "lidar_import_jobs",
+        "lidar_sources",
+        "lidar_interpretations",
+        "lidar_raster_assets",
+    ]
+    .into_iter()
+    .map(|table| {
+        (
+            table,
+            count(library, &format!("SELECT COUNT(*) FROM {table}")),
+        )
+    })
+    .collect();
+    rows.push((
+        "display_cogs",
+        library
+            .display()
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM display_cogs", [], |row| row.get(0))
+            .unwrap(),
+    ));
+    rows
+}
+
+fn no_import_rows() -> Vec<(&'static str, i64)> {
+    [
+        "lidar_source_layers",
+        "lidar_import_jobs",
+        "lidar_sources",
+        "lidar_interpretations",
+        "lidar_raster_assets",
+        "display_cogs",
+    ]
+    .into_iter()
+    .map(|table| (table, 0))
+    .collect()
+}
+
+/// Waits until a job's own settlement has run (its cancel flag is gone).
+fn await_settled(library: &LidarLibrary, job_id: &str) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while library
+        .inner
+        .cancel_flags
+        .lock()
+        .unwrap()
+        .contains_key(job_id)
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "import {job_id} did not settle"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
+/// Cancel deletes the half-imported item at once, and the job's settlement
+/// removes every file it wrote: nothing is listed, nothing stays on disk,
+/// and the same file imports again under the same name (user, 2026-10-09).
+#[test]
+fn cancelling_an_import_deletes_its_item_and_every_file_it_wrote() {
+    let root = scratch("cancel-deletes");
+    let library = attached_library(&root);
+    let source = plane(&library, &root, "orchard", 445_000.0);
+    // Held, the display registry stops the job after preparation, when its
+    // original, staged COG and staging record are all on disk.
+    let display = library.display().unwrap();
+    let receipt = library
+        .import_item(
+            "Orchard",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            vec![source.clone()],
+        )
+        .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while library
+        .get_import_job(&receipt.job_id)
+        .unwrap()
+        .unwrap()
+        .state
+        != LidarImportJobState::Applying
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the import never prepared"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert!(!library_files(&library).is_empty(), "the job wrote files");
+
+    library.cancel_import(&receipt.job_id).unwrap();
+    assert!(
+        library.library_snapshot().unwrap().items.is_empty(),
+        "the item is gone at once"
+    );
+    drop(display);
+    await_settled(&library, &receipt.job_id);
+
+    assert_eq!(import_rows(&library), no_import_rows());
+    assert_eq!(library_files(&library), Vec::<PathBuf>::new());
+
+    let again = library
+        .import_item(
+            "Orchard",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            vec![source],
+        )
+        .unwrap();
+    assert_eq!(
+        await_import(&library, &again.job_id),
+        LidarImportJobState::Complete
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A cancel that reaches an import after it published leaves the finished
+/// item, never half of it.
+#[test]
+fn a_cancel_after_publication_keeps_the_finished_item() {
+    let root = scratch("cancel-after-publish");
+    let library = attached_library(&root);
+    let source = plane(&library, &root, "orchard", 445_000.0);
+    let receipt = library
+        .import_item(
+            "Orchard",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            vec![source],
+        )
+        .unwrap();
+    assert_eq!(
+        await_import(&library, &receipt.job_id),
+        LidarImportJobState::Complete
+    );
+    let files = library_files(&library);
+    let rows = import_rows(&library);
+
+    library.cancel_import(&receipt.job_id).unwrap();
+
+    let snapshot = library.library_snapshot().unwrap();
+    assert!(
+        item(&snapshot.items, &receipt.layer_id)
+            .generation_id
+            .is_some()
+    );
+    assert_eq!(import_rows(&library), rows);
+    assert_eq!(library_files(&library), files);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A cancel that lands just before publication commits wins: publication is
+/// refused and the settlement removes the staged originals, the promoted COG
+/// and the display derivatives the job prepared.
+#[test]
+fn a_cancel_before_the_publication_commits_leaves_nothing() {
+    let root = scratch("cancel-before-commit");
+    let library = attached_library(&root);
+    let source = plane(&library, &root, "orchard", 445_000.0);
+    let cancel = AtomicBool::new(false);
+    let (layer_id, job_id) = library
+        .record_import_item(
+            "Orchard",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            std::slice::from_ref(&source),
+        )
+        .unwrap();
+    import::stage_import(&library, &job_id, &layer_id, &[source], &cancel).unwrap();
+    let staging = import::read_staged_import(&library, &job_id).unwrap();
+    library.prepare_staged_display(&staging, &cancel).unwrap();
+    assert!(
+        import_rows(&library)
+            .iter()
+            .any(|(table, rows)| *table == "display_cogs" && *rows > 0),
+        "the job prepared its display derivative"
+    );
+
+    library.cancel_import(&job_id).unwrap();
+    import::apply_import(&library, &staging, &cancel)
+        .expect_err("a cancelled import never publishes");
+    library.discard_import_job_files(&job_id);
+
+    assert_eq!(import_rows(&library), no_import_rows());
+    assert_eq!(library_files(&library), Vec::<PathBuf>::new());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A cancelled import of a file another item already published frees only
+/// what it wrote itself: the published item's original, COG and display
+/// derivative stay.
+#[test]
+fn a_cancelled_import_keeps_the_files_a_published_item_shares() {
+    let root = scratch("cancel-shared");
+    let library = attached_library(&root);
+    let source = plane(&library, &root, "orchard", 445_000.0);
+    let first = library
+        .import_item(
+            "Orchard",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            vec![source.clone()],
+        )
+        .unwrap();
+    assert_eq!(
+        await_import(&library, &first.job_id),
+        LidarImportJobState::Complete
+    );
+    let files = library_files(&library);
+    let cancel = AtomicBool::new(false);
+    let (layer_id, job_id) = library
+        .record_import_item(
+            "Orchard again",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            std::slice::from_ref(&source),
+        )
+        .unwrap();
+    import::stage_import(&library, &job_id, &layer_id, &[source], &cancel).unwrap();
+    let staging = import::read_staged_import(&library, &job_id).unwrap();
+    library.prepare_staged_display(&staging, &cancel).unwrap();
+
+    library.cancel_import(&job_id).unwrap();
+    library.discard_import_job_files(&job_id);
+
+    assert_eq!(library_files(&library), files);
+    let snapshot = library.library_snapshot().unwrap();
+    assert_eq!(snapshot.items.len(), 1);
+    assert!(
+        item(&snapshot.items, &first.layer_id)
+            .generation_id
+            .is_some()
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A failed import keeps its item for Retry, but no file: once dismissed,
+/// nothing of it is left on disk or in the catalogue.
+#[test]
+fn dismissing_a_failed_import_leaves_no_file_behind() {
+    let root = scratch("dismiss-frees");
+    let library = attached_library(&root);
+    let west = plane(&library, &root, "west", 445_000.0);
+    // Half a cell off the first source's lattice: both originals are copied
+    // and prepared before the batch is refused.
+    let east = plane(&library, &root, "east", 445_064.5);
+    let receipt = library
+        .import_item(
+            "Pair",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            vec![west, east],
+        )
+        .unwrap();
+    assert_eq!(
+        await_import(&library, &receipt.job_id),
+        LidarImportJobState::Failed
+    );
+
+    library.dismiss_import(&receipt.layer_id).unwrap();
+
+    assert_eq!(import_rows(&library), no_import_rows());
+    assert_eq!(library_files(&library), Vec::<PathBuf>::new());
+    let _ = std::fs::remove_dir_all(&root);
 }

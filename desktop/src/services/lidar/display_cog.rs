@@ -720,6 +720,38 @@ impl LidarLibrary {
     }
 }
 
+/// Forget the derivatives of one source COG no item published, and remove
+/// their files: an unpublished import's (`import::discard_job_files`). No
+/// WebView reads them, since only a published item is drawn.
+pub(super) fn forget_asset_derivatives(library: &LidarLibrary, sha256: &str) -> Result<(), String> {
+    let prefix = format!("{DISPLAY_PROFILE}-asset-{sha256}-");
+    let files: Vec<String> = {
+        let display = library.display()?;
+        let files = display
+            .prepare("SELECT file FROM display_cogs WHERE instr(key, ?1) = 1 AND file != ''")
+            .map_err(|e| e.to_string())?
+            .query_map([&prefix], |row| row.get::<_, String>(0))
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        display
+            .execute(
+                "DELETE FROM display_cogs WHERE instr(key, ?1) = 1",
+                [&prefix],
+            )
+            .map_err(|e| e.to_string())?;
+        files
+    };
+    for file in files {
+        match std::fs::remove_file(library.inner.paths.display_cog_dir().join(&file)) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(format!("Failed to remove the derivative {file}: {error}")),
+        }
+    }
+    Ok(())
+}
+
 /// Remove staging leftovers, derivatives of an earlier profile and published
 /// files the registry does not own.
 ///

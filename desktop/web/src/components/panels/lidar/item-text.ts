@@ -34,7 +34,7 @@ export function itemStatusLabel(row: LibraryItem): string {
     const phase = row.importJob?.progress?.phase
     return phase ? t(`canvas.lidar.progressPhase.${phase}`) : t('canvas.lidar.library.preparing')
   }
-  if (row.importJob?.state === 'Cancelled' || row.run?.state === 'Cancelled') return t('canvas.lidar.library.cancelled')
+  if (row.run?.state === 'Cancelled') return t('canvas.lidar.library.cancelled')
   return row.role === 'Derived' ? t('canvas.lidar.library.calculationFailed') : t('canvas.lidar.library.importFailed')
 }
 

@@ -379,27 +379,32 @@ impl LidarLibrary {
         }
     }
 
+    /// Every import job root no running job owns: a settled job's, and one
+    /// whose item a cancel deleted before its job settled. Each frees the
+    /// files its job wrote that no item claims.
     fn prune_settled_job_roots(&self) -> Result<(), String> {
-        let connection = self.catalogue()?;
-        let settled: Vec<(String, String)> = {
+        let running: std::collections::HashSet<String> = {
+            let connection = self.catalogue()?;
             let mut statement = connection
                 .prepare(
-                    "SELECT id, state FROM lidar_import_jobs
-                     WHERE state != 'staging' AND state != 'applying'",
+                    "SELECT id FROM lidar_import_jobs
+                     WHERE state = 'staging' OR state = 'applying'",
                 )
                 .map_err(|e| e.to_string())?;
             statement
-                .query_map([], |row| {
-                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-                })
+                .query_map([], |row| row.get::<_, String>(0))
                 .map_err(|e| e.to_string())?
-                .collect::<Result<Vec<_>, _>>()
+                .collect::<Result<_, _>>()
                 .map_err(|e| e.to_string())?
         };
-        drop(connection);
-        for (job_id, _state) in settled {
-            if let Err(error) = import::remove_job_root(self, &job_id) {
-                tracing::warn!(job_id, %error, "a settled job root was kept until the next start");
+        for entry in std::fs::read_dir(self.inner.paths.jobs_dir())
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            let job_id = entry.file_name().to_string_lossy().into_owned();
+            if !running.contains(&job_id) {
+                self.discard_import_job_files(&job_id);
             }
         }
         Ok(())
@@ -843,12 +848,13 @@ impl LidarLibrary {
         }
     }
 
-    /// Cancel from the UI. Sets the job's flag on the caller's thread, a
-    /// bounded in-memory step, and moves the row update onto the executor's
-    /// `UserData` lane: the synchronous cancel commands must never wait for
-    /// the catalogue lock a running import or deletion holds. The flag is
-    /// registered before a job's receipt is returned, so a job that has not
-    /// started yet finds it set; the job settles its own row either way.
+    /// Cancel a calculation from the UI. Sets the job's flag on the caller's
+    /// thread, a bounded in-memory step, and moves the row update onto the
+    /// executor's `UserData` lane: the synchronous cancel command must never
+    /// wait for the catalogue lock a running import or deletion holds. The
+    /// flag is registered before a job's receipt is returned, so a job that
+    /// has not started yet finds it set; the job settles its own row either
+    /// way.
     pub fn signal_cancel(&self, job_id: &str) {
         self.set_cancel_flag(job_id);
         let Ok(executor) = self.executor() else {
@@ -880,7 +886,57 @@ impl LidarLibrary {
         self.mark_job_cancelled(job_id);
     }
 
-    fn set_cancel_flag(&self, job_id: &str) {
+    /// Cancel one import (user, 2026-10-09): the job stops at its next step
+    /// and its unpublished item is deleted at once, so the library no longer
+    /// lists it and the same file imports again under its default name; the
+    /// job's settlement removes the files it wrote. The deletion and a
+    /// publication are each one catalogue transaction, so an import that
+    /// published first keeps its finished item: a cancel leaves the whole
+    /// item or nothing.
+    pub fn cancel_import(&self, job_id: &str) -> Result<(), String> {
+        self.set_cancel_flag(job_id);
+        self.delete_unpublished_import(job_id)
+    }
+
+    /// Delete the unpublished item of one import job with all its jobs; a
+    /// published item, or a job the catalogue no longer has, is left alone.
+    fn delete_unpublished_import(&self, job_id: &str) -> Result<(), String> {
+        let deleted = {
+            let connection = self.catalogue()?;
+            let layer_id: Option<String> = connection
+                .query_row(
+                    "SELECT layer_id FROM lidar_import_jobs WHERE id = ?1",
+                    [job_id],
+                    |row| row.get(0),
+                )
+                .optional()
+                .map_err(|e| e.to_string())?;
+            let Some(layer_id) = layer_id else {
+                return Ok(());
+            };
+            let transaction = connection
+                .unchecked_transaction()
+                .map_err(|e| e.to_string())?;
+            let deleted = delete_unpublished_item_rows(&transaction, &layer_id)?;
+            transaction.commit().map_err(|e| e.to_string())?;
+            deleted
+        };
+        if deleted {
+            // A rebuilt item's meta names it until it is rewritten.
+            self.refresh_source_meta();
+        }
+        Ok(())
+    }
+
+    /// Remove what one unpublished import job wrote (`import::discard_job_files`),
+    /// best effort: a step that fails is logged, and startup tries again.
+    pub(super) fn discard_import_job_files(&self, job_id: &str) {
+        if let Err(error) = import::discard_job_files(self, job_id) {
+            tracing::warn!(job_id, %error, "an unpublished import kept files until the next start");
+        }
+    }
+
+    pub(crate) fn set_cancel_flag(&self, job_id: &str) {
         // The running job observes the flag between steps and kills its
         // engine processes.
         if let Ok(flags) = self.inner.cancel_flags.lock()
@@ -892,12 +948,6 @@ impl LidarLibrary {
 
     fn mark_job_cancelled(&self, job_id: &str) {
         if let Ok(connection) = self.catalogue() {
-            let _ = connection.execute(
-                "UPDATE lidar_import_jobs
-                 SET state = 'cancelled', message = 'import cancelled', updated_at = ?2
-                 WHERE id = ?1 AND state IN ('staging', 'applying')",
-                rusqlite::params![job_id, now_iso()],
-            );
             let _ = connection.execute(
                 "UPDATE lidar_analysis_jobs
                  SET state = 'cancelled', message = 'analysis cancelled', finished_at = ?2,
@@ -958,8 +1008,8 @@ impl LidarLibrary {
         Ok((layer_id, job_id))
     }
 
-    /// Record a new job for an unpublished item whose import failed or was
-    /// cancelled, reusing the item identity and its saved request.
+    /// Record a new job for an unpublished item whose import failed, reusing
+    /// the item identity and its saved request.
     pub fn record_import_retry(
         &self,
         layer_id: &str,
@@ -978,19 +1028,14 @@ impl LidarLibrary {
         Ok((layer_id.to_string(), job_id, paths))
     }
 
-    /// Remove an unpublished item whose import failed or was cancelled.
+    /// Remove an unpublished item whose import failed.
     ///
-    /// Only that operation's own metadata and scratch go; a published item is
+    /// Only that operation's own metadata and files go; a published item is
     /// deleted through the library deletion guard instead.
     pub fn dismiss_import(&self, layer_id: &str) -> Result<(), String> {
         self.ensure_writable()?;
-        let job_ids: Vec<String> = {
+        {
             let connection = self.catalogue()?;
-            if catalogue::head_generation(&connection, layer_id)?.is_some() {
-                return Err(
-                    "this item is published; delete it from the library instead".to_string()
-                );
-            }
             let running: bool = connection
                 .query_row(
                     "SELECT EXISTS(SELECT 1 FROM lidar_import_jobs WHERE layer_id = ?1
@@ -1002,40 +1047,19 @@ impl LidarLibrary {
             if running {
                 return Err("this import is still running; cancel it first".to_string());
             }
-            let mut statement = connection
-                .prepare("SELECT id FROM lidar_import_jobs WHERE layer_id = ?1")
+            let transaction = connection
+                .unchecked_transaction()
                 .map_err(|e| e.to_string())?;
-            statement
-                .query_map([layer_id], |row| row.get::<_, String>(0))
-                .map_err(|e| e.to_string())?
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| e.to_string())?
-        };
-        let connection = self.catalogue()?;
-        let transaction = connection
-            .unchecked_transaction()
-            .map_err(|e| e.to_string())?;
-        // Recheck inside the transaction: a publication that committed after
-        // the read above keeps its item.
-        if catalogue::head_generation(&transaction, layer_id)?.is_some() {
-            return Err("this item is published; delete it from the library instead".to_string());
-        }
-        transaction
-            .execute(
-                "DELETE FROM lidar_import_jobs WHERE layer_id = ?1",
-                [layer_id],
-            )
-            .map_err(|e| e.to_string())?;
-        transaction
-            .execute("DELETE FROM lidar_source_layers WHERE id = ?1", [layer_id])
-            .map_err(|e| e.to_string())?;
-        transaction.commit().map_err(|e| e.to_string())?;
-        drop(connection);
-        for job_id in job_ids {
-            if let Err(error) = import::remove_job_root(self, &job_id) {
-                tracing::warn!(job_id, error = %error, "dismissed import kept its root");
+            if !delete_unpublished_item_rows(&transaction, layer_id)? {
+                return Err(
+                    "this item is published; delete it from the library instead".to_string()
+                );
             }
+            transaction.commit().map_err(|e| e.to_string())?;
         }
+        // A failed import freed its files as it settled; one it kept goes at
+        // the next start.
+        self.refresh_source_meta();
         Ok(())
     }
 
@@ -1063,7 +1087,7 @@ impl LidarLibrary {
         self.start_recorded_import(lease, &layer_id, &job_id, paths)
     }
 
-    /// Retry a failed or cancelled unpublished import with its saved request.
+    /// Retry a failed unpublished import with its saved request.
     ///
     /// The saved files are checked as Import checks them before a job is
     /// recorded. A refusal adds no job: it becomes the latest import's
@@ -1153,14 +1177,14 @@ impl LidarLibrary {
     }
 
     /// A refused Retry's reason, kept as the failure of the item's latest
-    /// import (failed or cancelled) instead of a new job row. Best effort: the
-    /// caller returns the refusal whatever happens to this write.
+    /// import instead of a new job row. Best effort: the caller returns the
+    /// refusal whatever happens to this write.
     fn refuse_retry(&self, latest_job: &str, message: &str) {
         let written = self.catalogue().and_then(|connection| {
             connection
                 .execute(
                     "UPDATE lidar_import_jobs SET state = 'failed', message = ?2, updated_at = ?3
-                     WHERE id = ?1 AND state IN ('failed', 'cancelled')",
+                     WHERE id = ?1 AND state = 'failed'",
                     rusqlite::params![latest_job, message, now_iso()],
                 )
                 .map_err(|e| e.to_string())
@@ -1231,7 +1255,6 @@ impl LidarLibrary {
             let library_for_work = library.clone();
             let outcome = executor
                 .run(RASTER_WORK, "lidar import sources", move || {
-                    let _lease = lease;
                     // Prepare and validate every selected source. The head
                     // is captured inside this call, before preparation
                     // begins, and carried by the staged payload.
@@ -1260,7 +1283,10 @@ impl LidarLibrary {
                     })
                 })
                 .await;
+            // The lease is held through the settlement, so no other import
+            // stages the content a failed or cancelled one frees.
             library.finish_import_sources(&job_id_clone, outcome);
+            drop(lease);
         });
         Ok(())
     }
@@ -1294,27 +1320,27 @@ impl LidarLibrary {
                     // must describe.
                     self.refresh_source_meta();
                 }
+                Err(error) if error == "cancelled" => {
+                    // Cancel deletes the item; a job that stopped before the
+                    // cancel's own deletion ran deletes it here.
+                    drop(connection);
+                    if let Err(error) = self.delete_unpublished_import(job_id) {
+                        tracing::warn!(job_id, %error, "a cancelled import's item was not deleted");
+                    }
+                    self.discard_import_job_files(job_id);
+                }
                 Err(error) => {
-                    let (state, message) = if error == "cancelled" {
-                        ("cancelled", "import cancelled".to_string())
-                    } else {
-                        ("failed", error)
-                    };
+                    // A failed item stays for Retry, which reads the user's
+                    // files again, so none of its own are kept.
                     let _ = connection.execute(
                         "UPDATE lidar_import_jobs
-                         SET state = ?2, message = ?3, progress_phase = NULL,
-                             progress_percent = NULL, updated_at = ?4
+                         SET state = 'failed', message = ?2, progress_phase = NULL,
+                             progress_percent = NULL, updated_at = ?3
                          WHERE id = ?1 AND state IN ('staging', 'applying')",
-                        rusqlite::params![job_id, state, message, now_iso()],
+                        rusqlite::params![job_id, error, now_iso()],
                     );
                     drop(connection);
-                    if let Err(cleanup) = import::remove_job_root(self, job_id) {
-                        tracing::warn!(
-                            job_id,
-                            error = %cleanup,
-                            "failed import kept its root until the next start"
-                        );
-                    }
+                    self.discard_import_job_files(job_id);
                 }
             }
         }
@@ -1449,6 +1475,23 @@ fn string_column(connection: &Connection, sql: &str, key: &str) -> Result<Vec<St
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())
+}
+
+/// Delete an unpublished item and its import jobs; false, deleting nothing,
+/// once the item is published.
+fn delete_unpublished_item_rows(connection: &Connection, layer_id: &str) -> Result<bool, String> {
+    if catalogue::head_generation(connection, layer_id)?.is_some() {
+        return Ok(false);
+    }
+    for sql in [
+        "DELETE FROM lidar_import_jobs WHERE layer_id = ?1",
+        "DELETE FROM lidar_source_layers WHERE id = ?1",
+    ] {
+        connection
+            .execute(sql, [layer_id])
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(true)
 }
 
 fn delete_source_rows(connection: &Connection, layer_id: &str) -> Result<(), String> {
@@ -3003,7 +3046,7 @@ fn saved_retry(connection: &Connection, layer_id: &str) -> Result<SavedRetry, St
     let Some((latest_job, state, request)) = latest else {
         return Err("this item has no saved import to retry".to_string());
     };
-    if !matches!(state.as_str(), "failed" | "cancelled") {
+    if state != "failed" {
         return Err("this import is still running".to_string());
     }
     let request = request.ok_or_else(|| {
@@ -3046,7 +3089,6 @@ fn parse_import_state(raw: &str) -> LidarImportJobState {
     match raw {
         "applying" => LidarImportJobState::Applying,
         "complete" => LidarImportJobState::Complete,
-        "cancelled" => LidarImportJobState::Cancelled,
         "failed" => LidarImportJobState::Failed,
         _ => LidarImportJobState::Staging,
     }

@@ -79,12 +79,24 @@ pub async fn lidar_delete_item(
         .await
 }
 
-/// Bounded cancellation signal delivery; must bypass queued executor work so
-/// a busy Local class cannot make Cancel unresponsive. Only the in-memory
-/// flag is set here; the job row is updated on the executor.
+/// Cancel one import: its flag is set before any queued work, so the job
+/// stops at its next step however busy the executor is, then its unpublished
+/// item is deleted on `UserData` before Cancel returns.
 #[tauri::command]
-pub fn lidar_cancel_import(library: State<'_, LidarLibrary>, job_id: String) {
-    library.signal_cancel(&job_id);
+pub async fn lidar_cancel_import(
+    library: State<'_, LidarLibrary>,
+    executor: State<'_, NativeOperationExecutor>,
+    job_id: String,
+) -> Result<(), String> {
+    let library = library.inner().clone();
+    library.set_cancel_flag(&job_id);
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::UserData,
+            "lidar cancel import",
+            move || library.cancel_import(&job_id),
+        )
+        .await
 }
 
 /// Bounded cancellation signal delivery; must bypass queued executor work so
@@ -290,8 +302,8 @@ pub async fn lidar_library_disk_usage(
         .await
 }
 
-/// Retry a failed or cancelled import with its saved selection, keeping the
-/// same library item. A published item cannot be retried.
+/// Retry a failed import with its saved selection, keeping the same library
+/// item. A published item cannot be retried.
 #[tauri::command]
 pub async fn lidar_retry_import(
     library: State<'_, LidarLibrary>,
@@ -308,7 +320,7 @@ pub async fn lidar_retry_import(
         .await
 }
 
-/// Remove an unpublished item whose import failed or was cancelled.
+/// Remove an unpublished item whose import failed.
 #[tauri::command]
 pub async fn lidar_dismiss_import(
     library: State<'_, LidarLibrary>,

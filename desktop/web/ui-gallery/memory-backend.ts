@@ -429,10 +429,9 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
       break
     }
     case 'lidar_cancel_import':
-      lidarItems = lidarItems.map(item => item.import_job && item.import_job.job_id === args.jobId
-        ? { ...item, state: 'Failed' as const, import_job: { ...item.import_job, state: 'Cancelled' as const, progress: null } }
-        : item)
-      activity.value = 'Cancelled the import without publishing.'
+      // Cancel deletes the unpublished item at once (user, 2026-10-09).
+      lidarItems = lidarItems.filter(item => item.generation_id || item.import_job?.job_id !== args.jobId)
+      activity.value = 'Cancelled the import and deleted its item.'
       result = undefined
       break
     case 'lidar_rename_item':
