@@ -3,7 +3,8 @@
 // The Site data pin and profile line on the map (canopi-f47t.42, spec §1.10; plan §4 "Map overlay route"; stream C builds
 // it): a pure contract from the overlay snapshot's `site` (lon/lat) to one GeoJSON source and its layers in the
 // interaction-overlay band, drawn by the generalised overlay sync with its own skip key. The pin is a two-tone dot (ink
-// core, white ring), the line a light line on the draft casing with vertex dots, coloured from scene-visuals.ts. The chart
+// core, white ring) in fixed colours; the line, a light line on the draft casing with vertex dots, takes scene-visuals.ts's
+// guide colours. The chart
 // hover never rides the snapshot: it is one setData on its own source (WorkspaceMapContributions.setSiteHover). No
 // setters.
 
@@ -65,7 +66,12 @@ export function siteMapOverlayIds() {
 /** The profile line's width in CSS px; its casing is `OVERLAY_CASING_EXTRA_PX` wider, as guides and drafts. */
 const PROFILE_LINE_WIDTH_PX = 2
 const PROFILE_VERTEX_RADIUS_PX = 3
-/** The pin: an ink core inside a halo ring, so it reads on light maps and dark imagery alike. */
+/**
+ * The pin: an ink core inside a white ring, so it reads on light maps and dark imagery alike. Map overlays sit on imagery,
+ * so its two tones are fixed and never follow the theme or the backdrop (spec §1.10, the board's MAPINK).
+ */
+const PIN_CORE_COLOR = '#27231D'
+const PIN_RING_COLOR = '#FFFFFF'
 const PIN_CORE_RADIUS_PX = 4
 const PIN_RING_RADIUS_PX = 7
 const HOVER_RING_RADIUS_PX = 6
@@ -96,7 +102,6 @@ export function siteMapOverlayContract(site: SiteMapOverlay | null): SiteMapOver
     features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: pin }, properties: { role: 'pin' } })
   }
   const guide = getGuideLineVisual()
-  const ink = getMapBackdropInk()
   const [casing, profile, vertices, ring, core] = ids.layerIds
   return {
     source: { id: ids.sourceId, type: 'geojson', data: { type: 'FeatureCollection', features } },
@@ -132,14 +137,14 @@ export function siteMapOverlayContract(site: SiteMapOverlay | null): SiteMapOver
         source: ids.sourceId,
         type: 'circle',
         filter: roleFilter('pin'),
-        paint: { 'circle-radius': PIN_RING_RADIUS_PX, 'circle-color': ink.halo },
+        paint: { 'circle-radius': PIN_RING_RADIUS_PX, 'circle-color': PIN_RING_COLOR },
       },
       {
         id: core,
         source: ids.sourceId,
         type: 'circle',
         filter: roleFilter('pin'),
-        paint: { 'circle-radius': PIN_CORE_RADIUS_PX, 'circle-color': ink.text },
+        paint: { 'circle-radius': PIN_CORE_RADIUS_PX, 'circle-color': PIN_CORE_COLOR },
       },
     ],
     hasRenderableFeatures: features.length > 0,

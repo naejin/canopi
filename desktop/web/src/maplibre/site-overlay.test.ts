@@ -53,23 +53,22 @@ describe('the Site data map overlay', () => {
     expect(siteMapOverlayContract({ pin: null, profileLine: LINE }).hasRenderableFeatures).toBe(true)
   })
 
-  it('takes its colours from the canvas visuals: the guide line on its casing, a two-tone pin in the backdrop ink', () => {
+  it('takes the line from the canvas visuals and paints the pin an ink core in a white ring on every backdrop', () => {
     const contract = siteMapOverlayContract({ pin: PIN, profileLine: LINE })
     const guide = getGuideLineVisual()
-    const ink = getMapBackdropInk()
 
     expect(paintOf(contract, 'site-profile-casing')['line-color']).toBe(guide.casing)
     expect(paintOf(contract, 'site-profile-line')['line-color']).toBe(guide.color)
     expect(Number(paintOf(contract, 'site-profile-casing')['line-width']) - Number(paintOf(contract, 'site-profile-line')['line-width']))
       .toBe(OVERLAY_CASING_EXTRA_PX)
-    expect(paintOf(contract, 'site-pin-ring')['circle-color']).toBe(ink.halo)
-    expect(paintOf(contract, 'site-pin-core')['circle-color']).toBe(ink.text)
 
-    // Over satellite imagery the pin takes the dark backdrop's ink, so a re-sync repaints it.
-    setCanvasMapBackdrop('satellite')
-    const satellite = siteMapOverlayContract({ pin: PIN, profileLine: null })
-    expect(paintOf(satellite, 'site-pin-core')['circle-color']).toBe(getMapBackdropInk().text)
-    expect(paintOf(satellite, 'site-pin-core')['circle-color']).not.toBe(ink.text)
+    // Spec §1.10 and the board's MAPINK: the pin sits on imagery, so its two tones never follow the backdrop.
+    for (const backdrop of ['basemap', 'satellite'] as const) {
+      setCanvasMapBackdrop(backdrop)
+      const pinned = siteMapOverlayContract({ pin: PIN, profileLine: null })
+      expect(paintOf(pinned, 'site-pin-core')['circle-color']).toBe('#27231D')
+      expect(paintOf(pinned, 'site-pin-ring')['circle-color']).toBe('#FFFFFF')
+    }
   })
 
   it('draws no point that is not finite', () => {
