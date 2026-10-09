@@ -1,15 +1,7 @@
 {
-  "files": [
-    "src/app/lidar/value-format.ts",
-    "src/components/panels/lidar/ProfileChart.tsx",
-    "src/components/panels/lidar/RasterDisplayControls.tsx",
-    "src/app/lidar/sampler.ts"
-  ],
+  "files": [],
   "exports": [
-    "src/app/lidar/profile.ts#setProfileHover",
-    "src/components/panels/lidar/ProfileChart.tsx#ProfileChart",
-    "src/components/panels/lidar/RasterDisplayControls.tsx#RasterDisplayControls",
-    "src/app/lidar/sampler.ts#createSiteSampler"
+    "src/app/lidar/profile.ts#setProfileHover"
   ],
   "typeExports": [
     "src/app/analyses/model.ts#AnalysisOptionGroup",
@@ -238,23 +230,15 @@
     "src/app/lidar/display.ts#displayKey",
     "src/app/lidar/import-coverage.ts#compareCoverage",
     "src/app/lidar/import-coverage.ts#designGroundBox",
-    "src/app/lidar/library-store.ts#hasActiveLibraryWork",
-    "src/app/lidar/library-store.ts#readLidarPresentation",
-    "src/app/lidar/reference-tree.ts#filterKeepingAncestors",
-    "src/app/lidar/sampler.ts#createSiteSampler",
-    "src/app/lidar/site-transients.ts#clearProfile",
-    "src/app/lidar/site-transients.ts#endSiteDataTransients",
-    "src/app/lidar/site-transients.ts#unpin",
-    "src/app/lidar/site-values.ts#siteValues",
-    "src/app/lidar/value-format.ts#formatRowValue",
-    "src/app/lidar/inspection.ts#beginInspection",
-    "src/app/lidar/inspection.ts#hasInspectionPointerHandlerForTests",
-    "src/app/lidar/inspection.ts#interpretOutcome",
-    "src/app/lidar/inspection.ts#sampleInspectionPoint",
     "src/app/lidar/library-navigation.ts#activeSiteItemId",
     "src/app/lidar/library-navigation.ts#closeSiteDataDetails",
     "src/app/lidar/library-navigation.ts#openSiteDataDetails",
     "src/app/lidar/library-navigation.ts#siteDataDetails",
+    "src/app/lidar/library-store.ts#hasActiveLibraryWork",
+    "src/app/lidar/library-store.ts#readLidarPresentation",
+    "src/app/lidar/sampler.ts#createSiteSampler",
+    "src/app/lidar/site-transients.ts#clearProfile",
+    "src/app/lidar/site-transients.ts#endSiteDataTransients",
     "src/app/map-layers/state.ts#createDefaultMapLayers",
     "src/app/map-selection/summary.ts#readMapSelectionSummary",
     "src/app/panel-targets/presentation.ts#getCanvasHoveredSpeciesCanonical",
