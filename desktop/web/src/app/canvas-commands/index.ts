@@ -3,20 +3,14 @@ import {
   formatShortcut,
   isCharacterKeyShortcut,
 } from '../shell-commands/shortcut-text'
+import type { ToolId } from '../../canvas/runtime/tool-id'
 
-export type CanvasToolId =
-  | 'select'
-  | 'hand'
-  | 'plant-stamp'
-  | 'plant-spacing'
-  | 'object-stamp'
-  | 'polygon'
-  | 'rectangle'
-  | 'ellipse'
-  | 'line'
-  | 'text'
-  | 'measurement-guide'
-  | 'profile'                     // Desktop: armed from Site data and the palette, not on the rail (canopi-f47t.42)
+/**
+ * The tools a command arms: every tool but the saved stamp, which Favorites arms
+ * with its payload. Profile is Desktop's, armed from Site data and the palette,
+ * not on the rail (canopi-f47t.42).
+ */
+export type CanvasToolId = Exclude<ToolId, 'saved-object-stamp'>
 
 /** Tool rail groups, top to bottom. Only `zones` carries a heading. */
 type CanvasToolGroupId = 'navigate' | 'plant' | 'zones' | 'annotate'
