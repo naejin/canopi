@@ -1,4 +1,4 @@
-Status: in progress. Phases 0, F, 1, 2, 3 and R, the 2.0 bug fixes, the 2.0 cleanup, the U-crs redesign, the 2.0 polish batch and the Layers redesign are done (2026-10-02 to 2026-10-09). Next (U53: 2.0 ships this week): the step "2.0 live bugs, guards and location", planned and built in one session, then the release close. The architecture refactors (U52) are the first step of 2.1, planned after 2.0 ships. Deleted with the plan at the release close.
+Status: in progress. Phases 0, F, 1, 2, 3 and R, the 2.0 bug fixes, the 2.0 cleanup, the U-crs redesign, the 2.0 polish batch and the Layers redesign are done (2026-10-02 to 2026-10-09). Next (U53, U54): the step "2.0 live bugs, guards and location", planned and built in one session and pushed by Mon 12 October, then the release close on Tue 13 – Wed 14. The architecture refactors (U52) are the first step of 2.1, planned after 2.0 ships. Deleted with the plan at the release close.
 
 # Canvas v2: session brief
 
