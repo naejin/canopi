@@ -20,6 +20,7 @@ import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribut
 import type { RasterDisplay, RasterDisplayLayer } from '../../maplibre/raster-display/adapter'
 import type { SiteMapOverlay } from '../../maplibre/site-overlay'
 import type { UserLocationReading } from '../../maplibre/user-location-overlay'
+import { setStoryPresentationHidesEditingAids } from '../story-presentation/overrides'
 
 // Stream C draws the pin and line; here a pin draws as one point in two layers, so the site route can be seen and broken.
 vi.mock('../../maplibre/site-overlay', async (importOriginal) => {
@@ -805,6 +806,56 @@ describe('WorkspaceMapContributions', () => {
       expect(f.map.getLayer('panel-target-hover-zones-fill')).toBeTruthy()
       broken = false
       f.userLocation.push(FIX)
+      expect(f.map.getSource('user-location-source')).toBeTruthy()
+    })
+
+    it('reaches the map from the composition\'s own effect, never the contributions read, and hides during a story presentation (Q12)', async () => {
+      const reading = signal<UserLocationReading | null>(null)
+      const read = vi.fn(() => null)
+      const surfaces = createTestCanvasRuntimeSurfaces()
+      let feed: Parameters<typeof fixture>[2] | undefined
+      const composition = createWorkspaceRuntimeComposition({
+        container: document.createElement('div'),
+        appAdapter: createDetachedCanvasRuntimeAppAdapter(),
+        targetPresentation: createDetachedSceneRuntimePanelTargetAdapter(),
+        mapContributions: { read, readUserLocation: () => reading.value },
+        readSnapshot: () => null,
+      }, {
+        createRendererComposition: () => ({}) as SharedMapSceneRendererComposition,
+        createRuntime: () => ({
+          cameraHost: {} as never, commandSurface: surfaces.commands, querySurface: surfaces.queries,
+          documentSurface: surfaces.documents, init: vi.fn(), unmountRenderer: vi.fn(), remountRenderer: vi.fn(),
+          destroy: vi.fn(), connectRenderTarget: vi.fn(() => () => {}),
+        }) as never,
+        createControls: (options) => {
+          expect(options.contributions.siteHover, 'Web has no chart hover').toBeUndefined()
+          feed = options.contributions.userLocation as typeof feed
+          return { setAttributionCompact: vi.fn() } as never
+        },
+        createWorkspace: () => ({
+          requestGenerationDisconnect: vi.fn(async () => {}), activate: vi.fn(), teardown: vi.fn(async () => {}),
+          retry: vi.fn(() => false), canRetry: vi.fn(() => false), updateMapContributions: vi.fn(), updateBackgroundPresentation: vi.fn(),
+        }),
+      })
+      await composition.start()
+      const f = fixture(undefined, undefined, feed!)
+      f.manager.update(snapshot(f.identity))
+      f.manager.admitStyle()
+      const reads = read.mock.calls.length
+      reading.value = FIX
+      expect(f.map.getSource('user-location-source')).toBeTruthy()
+      expect(read).toHaveBeenCalledTimes(reads)
+      try {
+        setStoryPresentationHidesEditingAids(true)
+        expect(f.map.getSource('user-location-source')).toBeUndefined()
+        reading.value = MOVED
+        expect(f.map.getSource('user-location-source')).toBeUndefined()
+      } finally {
+        setStoryPresentationHidesEditingAids(false)
+      }
+      expect(f.map.getSource('user-location-source')).toBeTruthy()
+      await composition.dispose()
+      reading.value = null
       expect(f.map.getSource('user-location-source')).toBeTruthy()
     })
 

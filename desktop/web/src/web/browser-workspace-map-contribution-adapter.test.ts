@@ -5,6 +5,7 @@ import { createTestCanvasQuerySurface, type TestPlacement } from '../__tests__/s
 import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
 import { createBrowserWorkspaceMapContributionAdapter } from './browser-workspace-map-contribution-adapter'
 import { setCanvasMapBackdrop } from '../canvas/runtime/scene-visuals'
+import { myLocation } from '../app/my-location/session'
 
 afterEach(clearPanelOriginTargets)
 
@@ -79,6 +80,28 @@ describe('browser workspace map contribution adapter', () => {
     } finally {
       stop()
       setCanvasMapBackdrop('basemap')
+    }
+  })
+
+  it('feeds the map the location session\'s reading, outside the contributions read (canopi-f47t.53)', () => {
+    const adapter = createBrowserWorkspaceMapContributionAdapter({ sessionIdentity: signal({}), hasCurrentDesign: () => true })
+    expect(adapter.readUserLocation?.()).toBeNull()
+    let success!: PositionCallback
+    const geolocation = { watchPosition: vi.fn((onFix: PositionCallback) => { success = onFix; return 1 }), clearWatch: vi.fn() }
+    const descriptor = Object.getOwnPropertyDescriptor(navigator, 'geolocation')
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: geolocation })
+    try {
+      myLocation.press()
+      success({ coords: { longitude: 2.35, latitude: 48.85, accuracy: 12 }, timestamp: 1 } as GeolocationPosition)
+      expect(adapter.readUserLocation?.()).toEqual({ lon: 2.35, lat: 48.85, accuracy: 12, timestamp: 1, stale: false })
+      const snapshot = adapter.read(runtimeWithPlane(createSessionPlane({ lat: 48, lon: 2 })))
+      expect(JSON.stringify(snapshot?.overlays.location)).not.toContain('2.35')
+      myLocation.press()
+      expect(adapter.readUserLocation?.()).toBeNull()
+      expect(geolocation.clearWatch).toHaveBeenCalledOnce()
+    } finally {
+      if (descriptor) Object.defineProperty(navigator, 'geolocation', descriptor)
+      else delete (navigator as unknown as Record<string, unknown>).geolocation
     }
   })
 })
