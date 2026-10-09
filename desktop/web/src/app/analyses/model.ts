@@ -150,8 +150,7 @@ export function acceptsAnalysis(subject: Pick<AnalysisSubject, 'offers'>): boole
 /**
  * The Source Analyze opens with: the open item when an analysis accepts it,
  * else the open result's input, else the first eligible item in list order.
- * `sources` are the items Source lists (the eligible ones, and the item asked
- * for when no analysis accepts it); `items` every item, with a result's input.
+ * `sources` are the eligible items; `items` every item, with a result's input.
  */
 export function defaultAnalysisSource(
   sources: readonly { readonly id: string }[],

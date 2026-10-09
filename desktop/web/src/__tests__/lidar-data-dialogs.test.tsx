@@ -858,20 +858,18 @@ describe('Data library, Import and Analyze dialogs', () => {
       expect(button(/^Run$/).disabled).toBe(true)
     })
 
-    it('opens on the item asked for when no analysis accepts it, beside the eligible items', async () => {
+    it('opens an item no analysis accepts on the first eligible item, listing only eligible items (spec §1.10)', async () => {
       const refused = { reason: 'WrongInput' as const, expected: [{ kind: 'Raster' as const, quantity: 'GroundElevation' as const }] }
       lidarLibrary.value = library([layer('a', 'Ground'), layer('d', 'Surface', {
         item_type: { kind: 'Raster', quantity: 'SurfaceElevation' },
         offers: [{ analysis_id: 'terrain.slope', unavailable: refused }],
       })])
-      setDesign(design([{ kind: 'Source', id: 'a' }, { kind: 'Source', id: 'd' }]))
+      setDesign(design([{ kind: 'Source', id: 'd' }, { kind: 'Source', id: 'a' }]))
       openAnalyze('d')
-      // Not the Design's ground elevation in its place: the Source is the item asked for, with why slope cannot run on it.
-      expect(dropdownTrigger(container, 'Source')?.textContent).toContain('Surface')
-      expect(container.textContent).toContain('Needs Ground elevation (DTM).')
-      expect(button(/^Run$/).disabled).toBe(true)
-      await chooseFrom('Source', 'Ground')
+      expect(dropdownTrigger(container, 'Source')?.textContent).toContain('Ground')
       expect(container.textContent).not.toContain('Needs Ground elevation (DTM).')
+      await click(dropdownTrigger(container, 'Source')!)
+      expect(Array.from(document.querySelectorAll('[role="option"]')).map((option) => option.textContent)).toEqual(['Ground'])
     })
 
     it('waits for the library to load before deciding there is nothing to analyze', () => {
