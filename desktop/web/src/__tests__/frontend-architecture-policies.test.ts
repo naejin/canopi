@@ -1804,12 +1804,6 @@ const SYMBOL_OWNERSHIP_POLICIES = [
     names: ['setHoveredSpecies'],
   },
   {
-    kind: 'forbid-writes',
-    name: 'Web settings mutations cross the shared projection',
-    from: ['src/web/BrowserAppShell.tsx'],
-    targets: ['locale.value', 'theme.value'],
-  },
-  {
     kind: 'forbid-source-symbols',
     name: 'Browser Canvas Runtime does not rebuild shared app policy',
     from: ['src/web/browser-canvas-runtime.ts'],
@@ -1905,6 +1899,25 @@ const P2_PROJECTION_POLICY = {
 /**
  * Canvas v2 policies (docs/plans/canvas-v2-plan.md section 5). Each name starts with its P-id.
  */
+/** The signals the Settings Projection hydrates and persists (app/settings/projection.ts applyDraftToProjection). */
+const SETTINGS_PROJECTION_SIGNALS = [
+  'locale',
+  'theme',
+  'googleMapsApiKey',
+  'satelliteSource',
+  'snapToGridEnabled',
+  'plantSpacingIntervalM',
+  'lastView',
+  'sidePanelWidth',
+  'savedStampsFrameHeight',
+  'mapLayers',
+  'usedCanvasTools',
+  'toolNamesVisible',
+  'singleKeyShortcuts',
+  'scrollWheel',
+  'newDesignDefaults',
+] as const
+
 const CANVAS_V2_POLICIES = [
   {
     kind: 'forbid-calls',
@@ -2221,6 +2234,14 @@ const CANVAS_V2_POLICIES = [
     ],
     exceptTargets: ['src/canvas/runtime/view/navigation-policy.ts'],
     allowTypeOnlyTargets: ['src/canvas/runtime/view/**'],
+  },
+  {
+    // Every other writer calls mutateSettingsProjection, which persists the change; a direct write skips persistence.
+    kind: 'forbid-writes',
+    name: 'P44 settings and map-layer signals are written only by the projection',
+    from: ['src/**'],
+    exceptFrom: ['src/app/settings/projection.ts', ...TEST_SOURCE_PATTERNS],
+    targets: SETTINGS_PROJECTION_SIGNALS.flatMap((signal) => [`${signal}.value`, `*.${signal}.value`]),
   },
 ] satisfies readonly ArchitecturePolicy[]
 
@@ -3522,6 +3543,7 @@ const P40 = '[P40 foundation layers import no app, component or edition code]'
 const P41 = '[P41 canvas imports no native or edition code]'
 const P42 = '[P42 shared app code imports no Web edition module]'
 const P43 = '[P43 the input core stays camera-free and app-free]'
+const P44 = '[P44 settings and map-layer signals are written only by the projection]'
 
 describe('2.0 guard policies (canopi-f47t.52.17)', () => {
   it('P39 rejects a production value cycle; type-only, dynamic and test cycles pass', () => {
@@ -3647,6 +3669,32 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
       `${P43} src/canvas/runtime/input/planted.ts:4:1 imports src/canvas/runtime/view/camera-driver.ts via "../view/camera-driver" (static)`,
       `${P43} src/canvas/runtime/input/planted.ts:7:1 imports src/app/keyboard/arming.ts via "../../../app/keyboard/arming" (static)`,
       `${P43} src/canvas/runtime/input/dom-input-source.ts:1:1 imports src/canvas/runtime/view/camera-driver.ts via "../view/camera-driver" (static)`,
+    ])
+  })
+
+  it('P44 rejects a settings or map-layer signal write outside the projection, through a namespace too, not in tests', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/web/BrowserAppShell.tsx', ["locale.value = 'fr'", "theme.value = 'dark'"]),
+      plantedSource('src/app/planted.ts', [
+        'snapToGridEnabled.value = true',
+        'sidePanelWidth.value += 10',
+        'settings.googleMapsApiKey.value = null',
+        'mapLayers.value = next',
+        'scrollWheel.value++',
+        "if (locale.value === 'fr') void 0",
+      ]),
+      plantedSource('src/app/settings/projection.ts', ["locale.value = 'fr'", 'mapLayers.value = next']),
+      plantedSource('src/app/planted.test.ts', ["locale.value = 'fr'"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P44'))).toEqual([
+      `${P44} src/web/BrowserAppShell.tsx:1 writes locale.value = 'fr'`,
+      `${P44} src/web/BrowserAppShell.tsx:2 writes theme.value = 'dark'`,
+      `${P44} src/app/planted.ts:1 writes snapToGridEnabled.value = true`,
+      `${P44} src/app/planted.ts:2 writes sidePanelWidth.value = 10`,
+      `${P44} src/app/planted.ts:3 writes settings.googleMapsApiKey.value = null`,
+      `${P44} src/app/planted.ts:4 writes mapLayers.value = next`,
+      `${P44} src/app/planted.ts:5 writes scrollWheel.value = ++`,
     ])
   })
 })
