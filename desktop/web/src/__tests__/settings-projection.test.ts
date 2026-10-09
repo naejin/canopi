@@ -975,34 +975,4 @@ describe('settings projection', () => {
     expect(source).not.toContain('../../ipc/settings')
     expect(source).not.toContain('browser-app-data')
   })
-
-  it('keeps production settings-backed callers on the projection mutation seam', () => {
-    const sources = [
-      '../app/map-layers/actions.ts',
-      '../app/canvas-runtime/app-adapter.ts',
-      '../app/favorites/controller.ts',
-      '../app/shell/controller.ts',
-      '../components/shared/SettingsDialog.tsx',
-      '../app/workspace-commands/capabilities.ts',
-      '../app/tool-rail/learning.ts',
-      '../utils/theme.ts',
-    ].map(readSource)
-
-    for (const source of sources) {
-      expect(source).toContain('settings/projection')
-      expect(source).not.toContain('settings/persistence')
-      expect(source).not.toMatch(/\b(?:locale|theme|mapLayers|snapToGridEnabled|sidePanelWidth|googleMapsApiKey)\.value\s*=(?!=)/)
-    }
-
-    // The Layers presentation routes map rows through the map layer actions
-    // rather than writing the store or the projection itself.
-    const presentationSource = readSource('../app/canvas-layer-presentation/presentation.ts')
-    expect(presentationSource).toContain('map-layers/actions')
-    expect(presentationSource).not.toMatch(/\bmapLayers\.value\s*=(?!=)/)
-
-    const runtimeSource = readSource('../canvas/runtime/scene-runtime.ts')
-
-    expect(runtimeSource).not.toContain('settings/projection')
-    expect(runtimeSource).not.toContain('settings/persistence')
-  })
 })
