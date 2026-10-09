@@ -7,39 +7,20 @@
 // is DOM: each kind's ramps, Reset only off the default, Custom only for a valid pair with the fr comma, and an
 // opacity drag that keeps the item open. No baselines.
 import type { Locator, Page } from '@playwright/test'
-import { expect, openGallery, test } from '../support/gallery'
+import { expect, openGallery, recordRasterTiles, renderedRasterTiles as renderedTiles, settledRaster, test } from '../support/gallery'
 
 /** The map's pixels as PNG bytes, the dock panels over it masked (a pressed or focused control is not a repaint). */
 async function mapPixels(map: Locator): Promise<Buffer> {
   return map.screenshot({ animations: 'disabled', mask: [map.page().locator('aside')] })
 }
 
-/** Tiles the renderer's worker pool has rendered since the page opened. */
-async function renderedTiles(page: Page): Promise<number> {
-  return page.evaluate(() => {
-    const timeline = (window as { __CANOPI_RASTER_DIAGNOSTICS__?: { events: { kind: string }[] } }).__CANOPI_RASTER_DIAGNOSTICS__
-    return timeline?.events.filter((event) => event.kind === 'tile').length ?? 0
-  })
-}
-
-/**
- * Waits until the renderer has rendered tiles beyond `after`, then until two captures in a row agree (MapLibre draws
- * them on a later frame).
- */
+/** Waits until the renderer has rendered tiles beyond `after` and the map's picture holds still. */
 async function settled(page: Page, map: Locator, after: number): Promise<Buffer> {
-  await expect.poll(() => renderedTiles(page), { timeout: 20_000, message: 'the renderer renders tiles' }).toBeGreaterThan(after)
-  let drawn = await mapPixels(map)
-  await expect.poll(async () => {
-    const next = await mapPixels(map)
-    const same = next.equals(drawn)
-    drawn = next
-    return same
-  }, { timeout: 20_000 }).toBe(true)
-  return drawn
+  return settledRaster(page, () => mapPixels(map), after)
 }
 
 async function openRaster(page: Page): Promise<{ map: Locator }> {
-  await page.addInitScript(() => localStorage.setItem('canopi.rasterDiagnostics', '1'))
+  await recordRasterTiles(page)
   const cog = page.waitForResponse((response) => response.url().includes('rust-display-cog.tif') && response.ok())
   await openGallery(page, { surface: 'site-data', state: 'lidar-raster' })
   await cog
