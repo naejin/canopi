@@ -259,6 +259,27 @@ describe('the Site data panel', () => {
     expect(row('a').querySelector('[data-swatch]')).not.toBeNull()
   })
 
+  it('collapsing an analysis line closes an open item nested under one of its outputs', async () => {
+    const output = (id: string, key: string) => slopeItem(id, 'a', {
+      provenance: slopeProvenance(id, 'a', { definition_id: 'flow-def', output_key: key }),
+    })
+    lidarLibrary.value = library([sourceItem('a', 'Ground'), output('o1', 'slope'), output('o2', 'other'), slopeItem('n', 'o1')])
+    setDesign([
+      { kind: 'Source', id: 'a', order: 0 },
+      { kind: 'Derived', id: 'o1', order: 2 },
+      { kind: 'Derived', id: 'o2', order: 1 },
+      { kind: 'Derived', id: 'n', order: 3 },
+    ])
+    mount()
+    expect(lines()).toEqual(['a', '  [analysis:flow-def]', '    o1', '      n', '    o2'])
+    await click(row('n').querySelector<HTMLButtonElement>('button[aria-expanded]')!)
+    const view = siteDataViewFor(designSessionStore.sessionIdentity.value)
+    expect(view.openItem.value).toBe('n')
+    await click(button('Collapse Slope', container.querySelector<HTMLElement>('[data-site-line="analysis:flow-def"]')!))
+    expect(lines()).toEqual(['a', '  [analysis:flow-def]'])
+    expect(view.openItem.value).toBeNull()
+  })
+
   it('opens one item at a time under its row, with its settings and actions, and closes it on a second click', async () => {
     setDesign([{ kind: 'Source', id: 'a', order: 0 }, { kind: 'Source', id: 'b', order: 1 }])
     mount()

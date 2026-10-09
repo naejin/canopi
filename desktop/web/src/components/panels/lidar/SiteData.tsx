@@ -214,9 +214,12 @@ export function SiteDataList({ view }: { readonly view: SiteDataView }) {
             if (line.kind === 'pending') return <PendingLine key={`pending:${line.key}`} line={line} />
             const key = collapseKey(line)
             const expanded = !collapsed.has(key)
-            const descendants = line.kind === 'analysis'
-              ? line.members.map((member) => member.id)
-              : rows.filter((candidate) => isDescendant(rows, candidate, line.row.id)).map((candidate) => candidate.id)
+            // Every row the chevron hides: a run's outputs and all nested under them, or a row's descendants.
+            const heads = line.kind === 'analysis' ? line.members.map((member) => member.id) : [line.row.id]
+            const descendants = rows
+              .filter((candidate) => (line.kind === 'analysis' && heads.includes(candidate.id))
+                || heads.some((head) => isDescendant(rows, candidate, head)))
+              .map((candidate) => candidate.id)
             const chevron = line.collapsible && !filtering
               ? { expanded, toggle: () => toggleCollapsed(key, descendants) }
               : null
