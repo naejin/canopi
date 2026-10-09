@@ -2288,6 +2288,13 @@ const CANVAS_V2_POLICIES = [
     targets: ['src/canvas/session.ts'],
     importedNames: ['currentCanvasDocumentSurface', 'getCurrentCanvasDocumentSurface', '*'],
   },
+  {
+    // The recogniser's secondary click reaches the tool host, which opens the menu (S14); type-only edges count too.
+    kind: 'confine-importers',
+    name: 'P48 the tool host is the only canvas-menu opener',
+    targets: ['src/canvas/runtime/interaction/canvas-context-menu.ts'],
+    allowedFrom: ['src/canvas/runtime/tools/tool-host.ts', ...TEST_SOURCE_PATTERNS],
+  },
 ] satisfies readonly ArchitecturePolicy[]
 
 /**
@@ -3592,6 +3599,7 @@ const P44 = '[P44 settings and map-layer signals are written only by the project
 const P45 = '[P45 only the presentation controller writes story overrides]'
 const P46 = '[P46 the Google key has reviewed readers]'
 const P47 = '[P47 components never hold the canvas document lifecycle]'
+const P48 = '[P48 the tool host is the only canvas-menu opener]'
 
 describe('2.0 guard policies (canopi-f47t.52.17)', () => {
   it('P39 rejects a production value cycle; type-only, dynamic and test cycles pass', () => {
@@ -3844,6 +3852,29 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
       `${P47} src/components/canvas/Planted.tsx:1:1 imports src/canvas/session.ts via "../../canvas/session" (static)`,
       `${P47} src/components/canvas/Planted.tsx:2:1 imports src/canvas/session.ts via "../../canvas/session" (static)`,
       `${P47} src/components/canvas/Planted.tsx:3:1 imports src/canvas/session.ts via "../../canvas/session" (static)`,
+    ])
+  })
+
+  it('P48 rejects a canvas context menu import outside the tool host and tests', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/interaction/canvas-context-menu.ts', ['export function createCanvasContextMenu() {}']),
+      plantedSource('src/canvas/runtime/tools/tool-host.ts', [
+        "import { createCanvasContextMenu } from '../interaction/canvas-context-menu'",
+      ]),
+      plantedSource('src/canvas/runtime/interaction-session.ts', [
+        "import { createCanvasContextMenu } from './interaction/canvas-context-menu'",
+      ]),
+      plantedSource('src/app/canvas-context-menu/planted.ts', [
+        "import type { createCanvasContextMenu } from '../../canvas/runtime/interaction/canvas-context-menu'",
+      ]),
+      plantedSource('src/__tests__/planted.test.ts', [
+        "import { createCanvasContextMenu } from '../canvas/runtime/interaction/canvas-context-menu'",
+      ]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P48'))).toEqual([
+      `${P48} src/canvas/runtime/interaction-session.ts:1:1 imports src/canvas/runtime/interaction/canvas-context-menu.ts via "./interaction/canvas-context-menu" (static); allowed importers: src/canvas/runtime/tools/tool-host.ts, ${TEST_SOURCES}`,
+      `${P48} src/app/canvas-context-menu/planted.ts:1:1 imports src/canvas/runtime/interaction/canvas-context-menu.ts via "../../canvas/runtime/interaction/canvas-context-menu" (static); allowed importers: src/canvas/runtime/tools/tool-host.ts, ${TEST_SOURCES}`,
     ])
   })
 })
