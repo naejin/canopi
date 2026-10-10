@@ -2,8 +2,8 @@
 // map, whose style cannot load: the full-window presenter, modal over the map, draws the notice and its Retry in its
 // own layer, where a click and Enter both reach Retry, which asks for the basemap's style again. The canvas draws no
 // notice under the presenter; once Esc leaves, the canvas notice is back with Retry. The notice clears the presenter's
-// card and bar in a wide and a narrow window and on a phone either way up. Tab from the notice, which holds focus after
-// Retry, stays in the presenter. Both engines; no baselines.
+// card and bar, with room for its sentence, in a wide window, a narrow one, one just above phone width and on a phone
+// either way up. Tab from the notice, which holds focus after Retry, stays in the presenter. Both engines; no baselines.
 import { fileURLToPath } from 'node:url'
 import type { Locator, Page } from '@playwright/test'
 import { designMap, expectCanvasDrawn } from '../support/canvas'
@@ -12,10 +12,14 @@ import { expect, test } from '../support/offline'
 const FIXTURE = fileURLToPath(new URL('../fixtures/canvas-base.canopi', import.meta.url))
 const STYLE_REQUEST = /^https:\/\/tiles\.openfreemap\.org\/styles\//
 const NOTICE_FAILED = 'Basemap couldn’t load'
+/** The presenter's room for its notice never drops below this, or a longer locale's sentence stands as a tower of words. */
+const NOTICE_MIN_ROOM = 280
 
 const LAYOUTS = [
   { name: 'wide window', viewport: { width: 1400, height: 900 }, hasTouch: false },
   { name: 'narrow window', viewport: { width: 800, height: 700 }, hasTouch: false },
+  // Just above phone width, where the room right of the card would be too narrow for the notice's sentence.
+  { name: 'window just above phone width', viewport: { width: 640, height: 700 }, hasTouch: false },
   { name: 'phone portrait', viewport: { width: 390, height: 844 }, hasTouch: true },
   { name: 'phone landscape', viewport: { width: 844, height: 390 }, hasTouch: true },
 ] as const
@@ -44,6 +48,9 @@ for (const { name, viewport, hasTouch } of LAYOUTS) {
       const retry = notice.getByRole('button', { name: 'Retry', exact: true })
       await expectRetryHit(retry)
       expect(await coveredByNotice(notice), 'the notice covers none of the presenter\'s card and buttons').toEqual([])
+      expect(await roomOf(notice), 'the notice has room for its sentence beside Retry').toBeGreaterThanOrEqual(NOTICE_MIN_ROOM)
+      expect(await withTallCard(presentation, () => coveredByNotice(notice)), 'a card at its tallest stops short of the notice')
+        .toEqual([])
 
       // A click asks for the style again; offline it fails again and Retry comes back.
       let before = styleRequests
@@ -131,6 +138,26 @@ async function coveredByNotice(notice: Locator): Promise<string[]> {
       return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
     }).map((element) => element.getAttribute('aria-label') ?? element.textContent?.trim().slice(0, 40) ?? element.tagName)
   })
+}
+
+/** Fills the card past its greatest height, as a long step's text does, for the length of `check`. */
+async function withTallCard<T>(presentation: Locator, check: () => Promise<T>): Promise<T> {
+  await presentation.locator('[data-presenter-card]').evaluate((card) => {
+    const filler = document.createElement('div')
+    filler.dataset.tallCardFiller = ''
+    filler.style.height = '4000px'
+    card.append(filler)
+  })
+  try {
+    return await check()
+  } finally {
+    await presentation.locator('[data-tall-card-filler]').evaluate((filler) => filler.remove())
+  }
+}
+
+/** The width of the room the presenter gives its notice. */
+async function roomOf(notice: Locator): Promise<number> {
+  return await notice.evaluate((chip) => chip.parentElement!.getBoundingClientRect().width)
 }
 
 async function boxOf(locator: Locator): Promise<{ x: number, y: number, width: number, height: number }> {

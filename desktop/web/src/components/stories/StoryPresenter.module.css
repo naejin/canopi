@@ -93,6 +93,18 @@
   pointer-events: none;
 }
 
+/* Where that room would be under 280px (32 + 420 + 16 + 280 + 24 = 772), too narrow for a sentence beside Retry, the
+   notice spans the bottom of the window instead and the card stops short of it. The phone layouts below override both. */
+@media (max-width: 771px) {
+  .card {
+    max-height: calc(100vh - var(--space-8) - var(--space-6) - var(--space-12) - var(--space-4));
+  }
+
+  .notice {
+    left: var(--space-8);
+  }
+}
+
 .kicker {
   color: var(--color-text-muted);
   font-size: var(--text-xs);
