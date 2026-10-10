@@ -8,7 +8,10 @@ import { currentCanvasViewportCommandSurface } from '../../canvas/session'
  * one source of the visible map frame: fitting and temporary focus frame into
  * it (through the camera), status chips centre in it (through `--map-inset-*`
  * on the map area), and the map credits fold when the bottom band leaves them
- * too little room. Both rails also
+ * too little room. Status chrome that comes and goes with load state (the map
+ * notice) registers with `frames: false`: chips and credits avoid it, but the
+ * camera frames from the other chrome only, so a Design opened while it shows
+ * is framed as one opened after it goes. Both rails also
  * register the room they have above the chrome under their column (the view
  * chip under the tool rail; the inspection launcher and the zoom group under
  * the panel rail), so a short window folds their last entries into a More
@@ -33,6 +36,16 @@ export interface MapOccluderBox {
   readonly side?: MapOccluderSide
 }
 
+export interface MapOccluderOptions {
+  /** False for status chrome that comes and goes with load state: chips avoid it, the camera's framing does not. */
+  readonly frames?: boolean
+}
+
+interface Occluder {
+  readonly side: MapOccluderSide | undefined
+  readonly frames: boolean
+}
+
 /** The least map width the labelled tool rail may leave between itself and the right chrome. */
 const MIN_VISIBLE_MAP_WIDTH_PX = 360
 /**
@@ -54,6 +67,8 @@ const HORIZONTAL_BAND_SHARE = 0.6
 const INSET_PROPERTIES = ['top', 'right', 'bottom', 'left'] as const
 
 export const visibleMapFrame = signal<VisibleMapFrame>(NO_FRAME)
+/** The frame the camera fits into: `visibleMapFrame` without the chrome registered with `frames: false`. */
+const framingMapFrame = signal<VisibleMapFrame>(NO_FRAME)
 /** Whether the map credits fold into their (i) button (see `MAP_ATTRIBUTION_MIN_ROOM_PX`). */
 export const mapAttributionFolded = signal(false)
 /**
@@ -146,7 +161,7 @@ function inferSide(map: DOMRect, rect: DOMRect): MapOccluderSide {
 }
 
 let area: HTMLElement | null = null
-const occluders = new Map<HTMLElement, MapOccluderSide | undefined>()
+const occluders = new Map<HTMLElement, Occluder>()
 const rails: Record<ChromeRail, HTMLElement | null> = { tool: null, panel: null }
 const underRail: Record<ChromeRail, Set<HTMLElement>> = { tool: new Set(), panel: new Set() }
 let observer: ResizeObserver | null = null
@@ -157,8 +172,9 @@ let stopCameraSync: (() => void) | null = null
 function recompute(): void {
   if (!area) return
   const map = area.getBoundingClientRect()
-  const boxes = [...occluders].map(([element, side]) => ({ rect: element.getBoundingClientRect(), side }))
+  const boxes = [...occluders].map(([element, { side, frames }]) => ({ rect: element.getBoundingClientRect(), side, frames }))
   const next = measureVisibleMapFrame(map, boxes)
+  publishFrame(framingMapFrame, measureVisibleMapFrame(map, boxes.filter(({ frames }) => frames)))
   const folded = map.width > 0 && measureBottomBandRoom(map, boxes) < MAP_ATTRIBUTION_MIN_ROOM_PX
   if (mapAttributionFolded.peek() !== folded) mapAttributionFolded.value = folded
   for (const edge of INSET_PROPERTIES) area.style.setProperty(`--map-inset-${edge}`, `${next[edge]}px`)
@@ -169,11 +185,15 @@ function recompute(): void {
     )
     if (RAIL_ROOM[kind].peek() !== room) RAIL_ROOM[kind].value = room
   }
-  const current = visibleMapFrame.peek()
+  publishFrame(visibleMapFrame, next)
+}
+
+function publishFrame(target: typeof visibleMapFrame, next: VisibleMapFrame): void {
+  const current = target.peek()
   if (
     current.width !== next.width || current.height !== next.height || current.top !== next.top
     || current.right !== next.right || current.bottom !== next.bottom || current.left !== next.left
-  ) visibleMapFrame.value = next
+  ) target.value = next
 }
 
 /**
@@ -203,7 +223,7 @@ function startWatching(): void {
   }
   window.addEventListener('resize', recompute)
   stopCameraSync = effect(() => {
-    const frame = visibleMapFrame.value
+    const frame = framingMapFrame.value
     currentCanvasViewportCommandSurface.value?.setFramingInsets({
       top: frame.top,
       right: frame.right,
@@ -238,14 +258,15 @@ function releaseArea(element: HTMLElement): void {
   area = null
   stopWatching()
   visibleMapFrame.value = NO_FRAME
+  framingMapFrame.value = NO_FRAME
   mapAttributionFolded.value = false
   panelRailRoom.value = null
   toolRailRoom.value = null
 }
 
 /** Floating chrome over the map; returns its release. */
-export function registerMapOccluder(element: HTMLElement, side?: MapOccluderSide): () => void {
-  occluders.set(element, side)
+export function registerMapOccluder(element: HTMLElement, side?: MapOccluderSide, options: MapOccluderOptions = {}): () => void {
+  occluders.set(element, { side, frames: options.frames ?? true })
   observe(element)
   recompute()
   return () => {

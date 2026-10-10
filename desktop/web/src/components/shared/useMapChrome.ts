@@ -7,6 +7,7 @@ import {
   registerRail,
   registerUnderRail,
   type ChromeRail,
+  type MapOccluderOptions,
   type MapOccluderSide,
 } from '../../app/shell/visible-map-area'
 
@@ -21,13 +22,20 @@ export function useMapArea(ref: RefObject<HTMLElement>): void {
 /**
  * Registers floating chrome that covers an edge of the map (inferred from its
  * box when `side` is absent); `covers` false leaves it out, for chrome placed
- * from the visible map frame itself (the phone zoom group).
+ * from the visible map frame itself (the phone zoom group). `frames: false`
+ * keeps status chrome that comes and goes with load state out of the camera's
+ * framing (see `MapOccluderOptions`).
  */
-export function useMapOccluder(ref: RefObject<HTMLElement>, side?: MapOccluderSide, covers = true): void {
+export function useMapOccluder(
+  ref: RefObject<HTMLElement>,
+  side?: MapOccluderSide,
+  covers = true,
+  { frames = true }: MapOccluderOptions = {},
+): void {
   useLayoutEffect(() => {
     const element = covers ? ref.current : null
-    return element ? registerMapOccluder(element, side) : undefined
-  }, [ref, side, covers])
+    return element ? registerMapOccluder(element, side, { frames }) : undefined
+  }, [ref, side, covers, frames])
 }
 
 /** Registers a rail, which covers its edge and folds its last entries into More when short. */
