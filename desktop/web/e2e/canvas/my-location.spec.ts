@@ -9,8 +9,8 @@
 // request fails with code 1 and design check A4's rule applies to the permission state the engine reports: 'denied'
 // is Blocked (aria-disabled; Playwright WebKit), anything else is Off (Chromium reports 'prompt'). A touch screen has no
 // hover, so a tap while Blocked shows the tooltip's reason for a few seconds (Q16), whole inside a phone's window in the
-// longest locales and undimmed by the disabled button. The dot's core is platform blue #1A73E8 (U54 Q11) over an
-// accuracy polygon of the fix's accuracy radius.
+// longest locales, undimmed by the disabled button and drawn inside its background (a long label wraps too). The dot's
+// core is platform blue #1A73E8 (U54 Q11) over an accuracy polygon of the fix's accuracy radius.
 // Chromium sends a code 2 error to a running watch before each setGeolocation fix (design check §6); every check after a
 // new fix polls until that fix's longitude has been delivered (a count would pass on an earlier second read), and a
 // single code 2 never ends Following. The moved fix has a wider accuracy than the first, so the moved fix being drawn
@@ -197,6 +197,20 @@ test.describe('phone portrait, touch', () => {
       await expectReasonReadable(page, button.locator('[role="tooltip"]'), locale)
     })
   }
+
+  // Some tooltips' labels are whole sentences with no description, such as French Site data's "Affichez un calque
+  // d’altitude ou de hauteur pour tracer un profil" (334 px on one line): the label wraps at the tooltip's measure too.
+  test('a label longer than the tooltip\'s measure wraps inside its box', async ({ page }) => {
+    await denyGeolocationPermission(page)
+    await openBaseFixture(page)
+    const tooltip = locationButton(page).locator('[role="tooltip"]')
+    await locationButton(page).tap()
+    await expect(locationButton(page), 'a denied permission is Blocked (A4)').toHaveAttribute('aria-disabled', 'true')
+    const fr = JSON.parse(await readFile(fileURLToPath(new URL('../../src/i18n/fr.json', import.meta.url)), 'utf8'))
+    await tooltip.locator('span').first().evaluate((label, text: string) => { label.textContent = text }, fr.siteData.profileNeedsLayer)
+    await expect(tooltip).toContainText(fr.siteData.profileNeedsLayer)
+    await expectTextInsideBox(tooltip)
+  })
 })
 
 /** Both engines answer the refused request with code 1; with the permission reading 'denied' in both, it is Blocked. */
@@ -218,11 +232,22 @@ async function expectReasonReadable(page: Page, tooltip: Locator, locale: string
   const box = await boxOf(tooltip)
   expect(box.x, 'the reason starts in the window').toBeGreaterThanOrEqual(0)
   expect(box.x + box.width, 'the reason ends in the window').toBeLessThanOrEqual(page.viewportSize()!.width)
+  await expectTextInsideBox(tooltip)
   await expect.poll(async () => tooltip.evaluate((element) => {
     let opacity = 1
     for (let node: Element | null = element; node; node = node.parentElement) opacity *= Number(getComputedStyle(node).opacity)
     return opacity
   }), { message: 'the reason is drawn at full opacity', timeout: 3_000 }).toBe(1)
+}
+
+/** Every line of the tooltip's text is drawn inside its background, none past its end edge. */
+async function expectTextInsideBox(tooltip: Locator): Promise<void> {
+  const overflow = await tooltip.evaluate((element) => {
+    const box = element.getBoundingClientRect()
+    const lines = [...element.querySelectorAll('span')].flatMap((span) => [...span.getClientRects()])
+    return { scroll: element.scrollWidth - element.clientWidth, past: Math.max(0, ...lines.map((line) => line.right - box.right)) }
+  })
+  expect(overflow, 'the text stays inside the tooltip\'s background').toEqual({ scroll: 0, past: 0 })
 }
 
 /** Records the fixes' longitudes and the error codes the page's geolocation delivers, without changing them. */
