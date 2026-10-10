@@ -167,10 +167,10 @@ class FailingSetDataMap implements MapLibreMapInstance {
   }
 }
 
-function emptySnapshot(identity: object): WorkspaceMapContributionSnapshot {
+function emptySnapshot(): WorkspaceMapContributionSnapshot {
   const scene = createDefaultScenePersistedState()
   return {
-    sessionIdentity: identity,
+    sessionIdentity: {},
     lidar: [],
     terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
     overlays: { runtime: { getSceneSnapshot: () => scene }, location: { lat: 48, lon: 2 }, hoveredTargets: [], selectedTargets: [], site: null },
@@ -196,7 +196,7 @@ describe('a location reading never reaches a log', () => {
     const map = new FailingSetDataMap()
     const contributions = new WorkspaceMapContributions({ onFailure: () => {} })
     contributions.attach({ map, maplibre: {} as MapLibreApi, lifetime: { on() {}, off() {}, addCleanup() {} }, isCurrent: () => true })
-    contributions.update(emptySnapshot({}))
+    contributions.update(emptySnapshot())
     contributions.admitStyle()
 
     contributions.setUserLocation(FIX)
