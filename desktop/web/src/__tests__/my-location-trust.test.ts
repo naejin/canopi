@@ -27,7 +27,7 @@ const TEST_SOURCE_PATTERNS = [
   'src/**/*.test.tsx',
 ] as const
 
-const P52 = 'P52 only the location button, the Web wiring and the composition feed import the location session'
+const P52 = 'P52 only the location button and the Web wiring import the location session'
 const P53 = 'P53 only the geolocation module calls watchPosition, getCurrentPosition or clearWatch'
 
 const MY_LOCATION_TRUST_POLICIES = [
@@ -38,7 +38,6 @@ const MY_LOCATION_TRUST_POLICIES = [
     allowedFrom: [
       'src/components/canvas/MyLocationButton.tsx',
       'src/web/browser-workspace-map-contribution-adapter.ts',
-      'src/app/canvas-map-surface/workspace-runtime-composition.ts',
       ...TEST_SOURCE_PATTERNS,
     ],
   },
@@ -79,12 +78,11 @@ describe('location trust policies on the real source graph', () => {
 describe('location trust policies on planted sources', () => {
   const SESSION = plantedSource('src/app/my-location/session.ts', ['export function startMyLocation() {}'])
 
-  it('P52 rejects a session importer outside the button, the Web wiring, the composition feed and tests', () => {
+  it('P52 rejects a session importer outside the button, the Web wiring and tests', () => {
     const graph = createTypeScriptSourceGraph([
       SESSION,
       plantedSource('src/components/canvas/MyLocationButton.tsx', ["import { startMyLocation } from '../../app/my-location/session'"]),
       plantedSource('src/web/browser-workspace-map-contribution-adapter.ts', ["import { startMyLocation } from '../app/my-location/session'"]),
-      plantedSource('src/app/canvas-map-surface/workspace-runtime-composition.ts', ["import { startMyLocation } from '../my-location/session'"]),
       plantedSource('src/app/my-location/session.test.ts', ["import { startMyLocation } from './session'"]),
       plantedSource('src/app/document-session/store.ts', ["import { startMyLocation } from '../my-location/session'"]),
       plantedSource('src/components/panels/ViewsPanel.tsx', ["import type { startMyLocation } from '../../app/my-location/session'"]),

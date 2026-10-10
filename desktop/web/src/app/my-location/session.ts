@@ -1,8 +1,8 @@
 // The location session (canopi-f47t.53; U54 Q13, Q16, Q17; design check A3, A4): the one owner of Show my location's
-// watch, its follow mode and the device reading. Only the button, the Web wiring and the composition feed import it
-// (plan P52). The reading (dot, accuracy, time) is the user's whereabouts: it goes from here to the map's dot and
-// nowhere else, never into a Design, Draft, export, snapshot, log or diagnostics. A camera saved while following is a
-// view the user chose, saved like any other (Q10).
+// watch, its follow mode and the device reading. Only the button and the Web wiring import it (plan P52). The reading
+// (dot, accuracy, time) is the user's whereabouts: it goes from here to the map's dot and nowhere else, never into a
+// Design, Draft, export, snapshot, log or diagnostics. A camera saved while following is a view the user chose, saved
+// like any other (Q10).
 //
 // Location runs only while a Design is open, as its button does: closing the Design turns it off.
 //
@@ -19,8 +19,6 @@ import { designSessionStore } from '../document-session/store'
 import { storyPresentationHidesEditingAids } from '../story-presentation/overrides'
 import { startCameraFollow, type CameraFollow, type FollowView } from './follow'
 import { queryGeolocationPermission, watchDevicePosition, type DeviceFix, type GeolocationErrorCode } from './geolocation'
-
-export type { UserLocationReading }
 
 export type MyLocationMode = 'off' | 'following' | 'moved-away' | 'blocked'
 
