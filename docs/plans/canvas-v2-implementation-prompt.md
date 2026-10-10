@@ -16,18 +16,18 @@ One owner per rule; point agents at these instead of restating them.
 - [`canvas-v2-plan.md`](canvas-v2-plan.md): section 1 indexes the user's decisions (U1–U56) and where each lives; section 4 holds each step's goal, items and exit; section 7 the open beads.
 - ADRs 0015–0020 (canvas) and 0021 (stored data); [`canvas-v2-spec.md`](canvas-v2-spec.md) for contracts, read by section only when a step touches it.
 
-## 2. Read path for the 2.0 release close
+## 2. Read path for the 2.0 plant along a path step
 
 About 12k tokens; nothing else is read up front.
 
 1. `AGENTS.md`.
 2. `docs/guides/agentic-delivery.md`.
-3. The `phased-agentic-delivery` skill (`SKILL.md`, then `references/review-protocol.md` when the step reaches it).
-4. Plan section 1, the lines for U33, U41, U53 and U54.
-5. Plan section 4, "2.0 release close": the goal, entry, steps 1–10, the exit and the definition of done; the "Changed for users" and "For the release close" lines of each done step, read at steps 2 and 5.
-6. `bd show` for canopi-f47t.29, canopi-k94s, canopi-f47t.52.23, canopi-er58, canopi-2v5a and canopi-fxil.12.
+3. The `phased-agentic-delivery` skill (`SKILL.md`, then `references/workflow-step.js`, `references/gotchas.md`, and `references/review-protocol.md` when the step reaches it).
+4. Plan section 1, the lines for U39, U53, U54, U55 and U57.
+5. Plan section 4, "2.0 plant along a path": goal, agreed UX, the questions it carries, procedure, exit; `bd show canopi-f47t.54` (the full agreed design).
+6. The current Plant a row (`desktop/web/src/canvas/runtime/tools/plant-row.ts`, `plant-spacing-sequence.ts` and their tests) and ADRs 0002 and 0015–0021 by section when the design check reaches them.
 
-Plan section 4, "2.1 architecture", is not read until 2.1's planning.
+The release close's read path (plan section 4, "2.0 release close", with U33, U41 and its question-batch adds) is read after this step closes. Plan section 4, "2.1 architecture", waits for 2.1's planning.
 
 ## 3. Phase order
 
