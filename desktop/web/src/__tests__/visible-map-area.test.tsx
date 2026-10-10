@@ -428,13 +428,14 @@ describe('visible map area', () => {
     ])).toBe(400)
   })
 
-  it('the map notice stays in the bottom row, placed from the widths the zoom group and the view chip publish', () => {
-    // jsdom has no layout (e2e/canvas/map-notice-layout.spec.ts hit-tests Retry in both engines): in the wide layout the
-    // notice's rule keeps it at the row's height, so its box never raises the bottom inset the opening framing reads,
-    // and moves it clear of the zoom group (with the folded credits' (i) beside it) and the view chip.
+  it('in a wide window the map notice stays in the bottom row, placed from the widths the zoom group and the view chip publish', () => {
+    // jsdom has no layout (e2e/canvas/map-notice-layout.spec.ts hit-tests Retry and measures both places in both
+    // engines): a window wide enough for the widest notice keeps it in the row, clear of the zoom group (with the folded
+    // credits' (i) beside it) and the view chip; a narrower one stands it above the row.
     const css = readFileSync('src/components/panels/Panels.module.css', 'utf8')
     const notice = /\n\.basemapFeedback\s*\{(?<body>[^}]*)\}/.exec(css)?.groups?.body ?? ''
     expect(notice).toMatch(/bottom:\s*var\(--chrome-inset\);/)
+    expect(css).toMatch(/@media \(max-width: 1199px\) \{\s*\.basemapFeedback \{[^}]*bottom: calc\(2 \* var\(--chrome-inset\) \+ var\(--control-size-3xl\)\);/)
     expect(notice).toMatch(/var\(--zoom-group-width/)
     expect(notice).toMatch(/var\(--view-chip-width/)
     expect(notice).toMatch(/left:\s*clamp\(/)
