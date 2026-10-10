@@ -10,6 +10,7 @@ import { WorkspaceMapContributions } from '../app/canvas-map-surface/workspace-m
 import type { WorkspaceMapContributionSnapshot } from '../app/canvas-map-surface/workspace-map-contribution-adapter'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import type { MapLibreApi, MapLibreMapInstance } from '../maplibre/loader'
+import type { UserLocationReading } from '../maplibre/user-location-overlay'
 import {
   createTypeScriptSourceGraph,
   discoverTypeScriptSourceGraph,
@@ -118,15 +119,9 @@ describe('location trust policies on planted sources', () => {
   })
 })
 
-/**
- * The fix every trust case plants: its digits must never leave the session's reading. The contributions' writer is
- * `setUserLocation` (design check, stream D row); the reading's shape below is this file's assumption, which the
- * location stream adjusts to its own type while keeping the assertions.
- */
-const FIX = { lon: 12.3456789, lat: 45.6789012, accuracy: 30, timestamp: 1_760_000_000_000, stale: false } as const
+/** The fix every trust case plants: its digits must never leave the session's reading. */
+const FIX: UserLocationReading = { lon: 12.3456789, lat: 45.6789012, accuracy: 30, timestamp: 1_760_000_000_000, stale: false }
 const FIX_DIGITS = '12.3456789'
-
-type UserLocationWriter = { setUserLocation?: (reading: typeof FIX | null) => void }
 
 /** A map whose GeoJSON writes fail the way a validation error can: by echoing the data it was given. */
 class FailingSetDataMap implements MapLibreMapInstance {
@@ -199,13 +194,12 @@ describe('a location reading never reaches a log', () => {
     const spies = (['log', 'info', 'warn', 'error', 'debug', 'trace'] as const)
       .map((method) => vi.spyOn(console, method).mockImplementation(() => {}))
     const map = new FailingSetDataMap()
-    const contributions = new WorkspaceMapContributions({ onFailure: () => {} }) as WorkspaceMapContributions & UserLocationWriter
+    const contributions = new WorkspaceMapContributions({ onFailure: () => {} })
     contributions.attach({ map, maplibre: {} as MapLibreApi, lifetime: { on() {}, off() {}, addCleanup() {} }, isCurrent: () => true })
     contributions.update(emptySnapshot({}))
     contributions.admitStyle()
 
-    expect(contributions.setUserLocation, 'the map contributions draw the user location').toBeTypeOf('function')
-    contributions.setUserLocation?.(FIX)
+    contributions.setUserLocation(FIX)
 
     expect(map.fixWrites, 'the reading reached the map, and its write failed').not.toEqual([])
     expect(consoleText(spies), 'no console output carries the fix').not.toContain(FIX_DIGITS)
