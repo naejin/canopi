@@ -941,7 +941,7 @@ mod tests {
     /// refused as older (ADR 0021). Run with `--ignored`; the files are
     /// private and never enter the repository.
     #[test]
-    #[ignore = "needs CANOPI_REAL_DESIGNS_DIR with the user's Designs"]
+    #[ignore = "local fixture: the user's Designs in CANOPI_REAL_DESIGNS_DIR"]
     fn real_designs_open_or_are_refused_as_older() {
         let Ok(dir) = std::env::var("CANOPI_REAL_DESIGNS_DIR") else {
             panic!("set CANOPI_REAL_DESIGNS_DIR");

@@ -494,6 +494,7 @@ mod tests {
                 "src/db/plant_db.rs",
                 "fn sizes() -> Vec<u8> { vec![crate::services::lidar::grid::CELL; 4] }",
             ),
+            ("src/design/stamps.rs", "use crate::services::x::*;"),
         ]);
 
         assert_eq!(
@@ -506,6 +507,7 @@ mod tests {
                 "design and db code must not name crate::services: src/design/format.rs names crate::services::lidar::grid::sha256_hex",
                 "design and db code must not name crate::services: src/design/mod.rs names crate::services::export::digest",
                 "design and db code must not name crate::services: src/design/preview.rs names crate::services::export::label",
+                "design and db code must not name crate::services: src/design/stamps.rs names crate::services::x::*",
             ]
         );
     }
