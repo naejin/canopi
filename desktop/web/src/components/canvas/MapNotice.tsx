@@ -2,7 +2,6 @@ import type { RefObject } from 'preact'
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import { t } from '../../i18n'
 import type { MapNoticeReadModel } from '../../app/canvas-map-surface/map-notice'
-import { phoneLayout } from '../../app/shell/phone-layout'
 import { storyPresentationActive } from '../../app/story-presentation'
 import { useMapOccluder } from '../shared/useMapChrome'
 import styles from '../panels/Panels.module.css'
@@ -22,13 +21,13 @@ interface MapNoticeProps {
  * it loading, or Retry is refused), so focus moves to the chip first instead of falling to the page; when the chip
  * itself goes while holding focus (the map recovered), focus moves to the map. It stands above the bottom row, so it
  * takes none of the map credits' room. While it shows it is bottom chrome on the visible-map-area seam only so the
- * selection chip stands above it; it comes and goes with load state, so it registers with `frames: false` and never
- * moves the camera's framing. On a phone it is placed from the visible map frame itself, so it registers nothing there.
+ * selection chip stands above it, phones included; it comes and goes with load state, so it registers with
+ * `frames: false` and never moves the camera's framing.
  */
 export function MapNotice({ notice, onRetry, canvasRef }: MapNoticeProps) {
   const chip = useRef<HTMLDivElement>(null)
   const handOff = useRef(false)
-  useMapOccluder(chip, 'bottom', notice.visible && phoneLayout.value === null, { frames: false })
+  useMapOccluder(chip, 'bottom', notice.visible, { frames: false })
   // Read before the commit removes the chip: afterwards focus has already fallen to the page.
   if (!notice.visible && chip.current?.contains(document.activeElement)) handOff.current = true
   useLayoutEffect(() => {
