@@ -212,6 +212,27 @@ describe('Plant a row tool', () => {
     expect(h.store.persisted.plants.map((plant) => plant.id)).toEqual(['source'])
   })
 
+  it('a Species Key recolour after the pick reaches the card glyph and the row\'s new plants', () => {
+    const { h } = rowHarness({ intervalM: 2, plants: [sourcePlant({ x: 20, y: 30 }, { color: '#884422' })] })
+    h.click({ x: 20, y: 30 })
+    h.hover({ x: 26, y: 30 })
+    expect(row(h).glyph?.color).toBe('#884422')
+
+    // The Species Key's swatch: one Scene Edit recolours the species and its plants; the runtime tells the host.
+    h.edits.run('set-plant-color-for-species', (tx) => {
+      tx.mutate((draft) => {
+        draft.plants = draft.plants.map((plant) => ({ ...plant, color: '#2F6F4E' }))
+        draft.plantSpeciesColors = { 'Malus domestica': '#2F6F4E' }
+      })
+    })
+    h.host.sceneChanged()
+
+    expect(row(h).glyph?.color).toBe('#2F6F4E')
+    h.click({ x: 26, y: 30 })
+    expect(h.store.persisted.plants.filter((plant) => plant.id !== 'source').map((plant) => plant.color))
+      .toEqual(['#2F6F4E', '#2F6F4E', '#2F6F4E'])
+  })
+
   it('a row whose source became unavailable commits nothing and returns to picking', () => {
     const blockers: Record<string, (h: ToolHarness) => void> = {
       'a locked source': (h) => h.store.updatePersisted((draft) => {

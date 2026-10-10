@@ -6,7 +6,8 @@ import {
   type MapLibreCanvasSurfaceState,
 } from '../../maplibre/canvas-surface-state'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
-import { hasVisibleMapLayer, mapLayers } from '../../app/map-layers/state'
+import { hasVisibleMapLayer } from '../../app/map-layers/state'
+import { presentedMapLayers } from '../../app/story-presentation/overrides'
 import { getMapNoticeReadModel } from '../../app/canvas-map-surface/map-notice'
 import { useDesignReveal } from '../../app/canvas-map-surface/design-reveal'
 import { currentDesign } from '../../app/document-session/store'
@@ -37,7 +38,8 @@ export function CanvasPanel() {
   const reveal = useDesignReveal(hasDesign, basemapState)
   const mapNotice = getMapNoticeReadModel({
     hasDesign,
-    mapVisible: hasVisibleMapLayer(mapLayers.value),
+    // The map the workspace draws: a presented story step's layers, else the user's own.
+    mapVisible: hasVisibleMapLayer(presentedMapLayers()),
     mapSurface: basemapState,
     t,
   })

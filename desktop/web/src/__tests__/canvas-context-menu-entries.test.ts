@@ -16,6 +16,8 @@ import { t } from '../i18n'
 import { applyRotateSelection, rotateSelectionDialog } from '../app/rotate-selection/state'
 import { applyRenameZone, closeRenameZoneDialog, renameZoneDialog } from '../app/rename-zone/state'
 import type { MapSelectionSummary } from '../app/map-selection/summary'
+import { createCanvasCommandProjection } from '../app/canvas-commands'
+import { selectionCommandAvailability } from '../canvas/runtime/interaction/contextual-selection-actions'
 
 function createCommands(overrides: Partial<CanvasContextMenuCommands> = {}): CanvasContextMenuCommands {
   return {
@@ -87,6 +89,8 @@ function build(
     readonly turnViewToEdge?: () => void
     readonly finishShape?: () => void
     readonly profileLine?: CanvasContextMenuEntryOptions['profileLine']
+    /** The re-origin hold at the open (U39). */
+    readonly held?: boolean
   } = {},
 ) {
   const commands = options.commands ?? createCommands()
@@ -103,6 +107,7 @@ function build(
     placePlantsAt: vi.fn(),
     ...(options.turnViewToEdge ? { turnViewToEdge: options.turnViewToEdge } : {}),
     ...(options.finishShape ? { finishShape: options.finishShape } : {}),
+    ...(options.held ? { holdsSelectionDeletes: true as const } : {}),
     returnFocus: options.returnFocus ?? vi.fn(),
   }
   const entries = buildCanvasContextMenuEntries(request, {
@@ -480,6 +485,55 @@ describe('canvas context menu entries', () => {
     expect(item(group, 'group').disabled).toBe(true)
     expect(item(group, 'ungroup').disabled).toBe(false)
   })
+  it('greys exactly what the menu bar greys, Paste the one difference, during a draft too (S3b)', () => {
+    const lockedApple = selection({
+      editableTargets: [{ kind: 'zone', id: 'zone-1' }],
+      lockedTargets: [{ kind: 'plant', id: 'locked-apple' }],
+      blockedTargets: [{ target: { kind: 'plant', id: 'locked-apple' }, reason: 'locked-design-object' }],
+      plantNamePinning: { plantIds: [], allPinned: false },
+    })
+    const cases = [
+      { model: TWO_APPLES, held: false },
+      { model: TWO_APPLES, held: true },
+      { model: ONE_ZONE, held: true },
+      { model: PLANT_AND_ZONE, held: false },
+      { model: lockedApple, held: false },
+    ]
+    for (const { model, held } of cases) {
+      const menu = commandsOf(build(model, {
+        held,
+        commands: createCommands({ canPaste: () => false }),
+        saveSelectionAsObjectStamp: vi.fn(),
+      }).entries)
+      const menuBar = createCanvasCommandProjection({
+        state: {
+          activeTool: 'polygon',
+          canvasAvailable: true,
+          spatialEditingAvailable: true,
+          selection: selectionCommandAvailability(model),
+          held,
+          lockedObjectsPresent: false,
+          canUndo: false,
+          canRedo: false,
+          gridVisible: false,
+          snapToGridEnabled: false,
+        },
+        run: vi.fn(),
+        translate: t,
+        characterKeys: true,
+      }).editActions
+      const greyed = (id: string) => menuBar.find((command) => command.id === id)?.disabled
+      const shared = menu.filter((command) => command.id !== 'paste' && menuBar.some((edit) => edit.id === command.id))
+      expect(shared.map((command) => [command.id, command.disabled]))
+        .toEqual(shared.map((command) => [command.id, greyed(command.id)]))
+      // The canvas menu follows the clipboard; the menu bar keeps Paste enabled as a no-op (U54 Q5).
+      expect([item(build(model).entries, 'paste').disabled, greyed('paste')]).toEqual([false, false])
+      expect(item(menu, 'paste').disabled).toBe(true)
+    }
+    expect(item(build(TWO_APPLES, { held: true }).entries, 'cut').disabled).toBe(true)
+    expect(item(build(TWO_APPLES, { held: true }).entries, 'copy').disabled).toBe(false)
+  })
+
   describe('Profile this line (Desktop, U49 Q29)', () => {
     const LINE_SUMMARY: MapSelectionSummary = {
       ...APPLE_SUMMARY, plantCount: 0, species: [], plantSpacingM: null,

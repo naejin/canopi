@@ -5,6 +5,7 @@ import {
   type CanvasEditAction,
   type CanvasEditCommandDefinition,
 } from '../canvas-commands'
+import { canvasEditAvailable } from '../canvas-commands/edit-availability'
 import { formatShortcut } from '../shell-commands/shortcut-text'
 import type { CanvasContextMenuRequest } from '../../canvas/runtime/app-adapter'
 import type { CanvasDesignObjectSelectionModel } from '../../canvas/runtime/runtime'
@@ -91,18 +92,30 @@ const SEPARATOR = { separator: true } as const
  * Every command runs on the request's scene-edit surface. During a polygon
  * draft that can finish, Finish shape leads every menu. On a zone's edge,
  * Turn view to this edge leads the empty map's menu and comes before Lock in
- * the selection's. While a gesture or tool transient is live, Cut and Delete
- * are disabled (U39). Where there is Site data, a lone Line zone or Measure
- * guide offers Profile this line after the zone's own entries.
+ * the selection's. The edit commands grey by the table the menu bar reads
+ * (`canvas-commands/edit-availability.ts`): while a gesture or tool transient
+ * is live, Cut and Delete are disabled (U39). Where there is Site data, a
+ * lone Line zone or Measure guide offers Profile this line after the zone's
+ * own entries.
  */
 export function buildCanvasContextMenuEntries(
   request: CanvasContextMenuRequest,
   options: CanvasContextMenuEntryOptions,
 ): readonly CanvasContextMenuEntry[] {
   const { commands, selection, world } = request
-  const edit = (id: CanvasEditAction, disabled: boolean, run: () => void, extra: Partial<CanvasContextMenuCommand> = {}) =>
-    editCommand(id, disabled, run, options.translate, options.characterKeyShortcuts, extra)
-  const paste = edit('paste', !commands.canPaste(), () => commands.pasteAt(world))
+  // The table the menu bar greys with (S3b). The menu never opens in overview, and Unlock all is not in it.
+  const can = selection ? selectionCommandAvailability(selection) : null
+  const availability = {
+    canvasAvailable: true,
+    overview: false,
+    selection: can,
+    held: request.holdsSelectionDeletes === true,
+    lockedObjectsPresent: false,
+    canPaste: commands.canPaste(),
+  }
+  const edit = (id: CanvasEditAction, run: () => void, extra: Partial<CanvasContextMenuCommand> = {}) =>
+    editCommand(id, !canvasEditAvailable(id, availability), run, options.translate, options.characterKeyShortcuts, extra)
+  const paste = edit('paste', () => commands.pasteAt(world))
   // Turn view to this edge (spec §4.16): only when the menu opened on a zone's edge; it moves the view, never an object,
   // so a locked zone keeps it enabled.
   const turnViewToEdge = request.turnViewToEdge
@@ -125,7 +138,7 @@ export function buildCanvasContextMenuEntries(
       }, SEPARATOR]
     : []
 
-  if (!selection) {
+  if (!selection || !can) {
     const placePlantsAt = request.placePlantsAt
     return [
       ...finishEntries,
@@ -139,13 +152,10 @@ export function buildCanvasContextMenuEntries(
           }, SEPARATOR]
         : [],
       paste,
-      edit('select-all', false, () => commands.selectAll()),
+      edit('select-all', () => commands.selectAll()),
     ]
   }
 
-  const can = selectionCommandAvailability(selection)
-  // Cut and Delete wait while a gesture or tool transient is live, as Delete and Ctrl+X do (U39).
-  const deletable = can.copy && !request.holdsSelectionDeletes
   const appearance = (kind: PlantAppearanceKind, labelKey: string): CanvasContextMenuCommand => ({
     id: kind === 'color' ? 'plant-color' : 'plant-symbol',
     label: options.translate(labelKey),
@@ -184,7 +194,7 @@ export function buildCanvasContextMenuEntries(
   ]
   const plantEntries: readonly CanvasContextMenuEntry[] = plants
     ? [
-        edit('select-same-species', !can.selectSameSpecies, () => commands.selectSameSpecies()),
+        edit('select-same-species', () => commands.selectSameSpecies()),
         appearance('color', 'canvas.plantColor.label'),
         appearance('symbol', 'canvas.plantSymbol.label'),
         {
@@ -235,22 +245,22 @@ export function buildCanvasContextMenuEntries(
     : []
 
   const arrange = [
-    edit('bring-to-front', !can.edit, () => commands.bringToFront()),
-    edit('send-to-back', !can.edit, () => commands.sendToBack()),
+    edit('bring-to-front', () => commands.bringToFront()),
+    edit('send-to-back', () => commands.sendToBack()),
     SEPARATOR,
-    edit('group', !can.group, () => commands.groupSelected()),
-    edit('ungroup', !can.ungroup, () => commands.ungroupSelected()),
+    edit('group', () => commands.groupSelected()),
+    edit('ungroup', () => commands.ungroupSelected()),
   ]
 
   return [
     ...finishEntries,
-    edit('cut', !deletable, () => {
+    edit('cut', () => {
       commands.copy()
       commands.deleteSelected()
     }),
-    edit('copy', !can.copy, () => commands.copy()),
+    edit('copy', () => commands.copy()),
     paste,
-    edit('duplicate', !can.edit, () => commands.duplicateSelected()),
+    edit('duplicate', () => commands.duplicateSelected()),
     SEPARATOR,
     ...plantEntries,
     ...zoneEntries,
@@ -262,19 +272,19 @@ export function buildCanvasContextMenuEntries(
       disabled: arrange.every((entry) => 'separator' in entry || entry.disabled),
       submenu: arrange,
     },
-    edit('rotate', !can.rotate, () => openRotateSelectionDialog({
+    edit('rotate', () => openRotateSelectionDialog({
       rotate: (degrees) => commands.rotateSelected(degrees),
       returnFocus: () => request.returnFocus(),
     })),
     ...request.saveSelectionAsObjectStamp
-      ? [edit('save-as-stamp', !can.saveAsStamp, request.saveSelectionAsObjectStamp)]
+      ? [edit('save-as-stamp', request.saveSelectionAsObjectStamp)]
       : [],
     SEPARATOR,
     ...edgeEntries,
-    edit('lock', !can.edit, () => commands.lockSelected()),
-    edit('unlock', !can.unlock, () => commands.unlockSelected()),
+    edit('lock', () => commands.lockSelected()),
+    edit('unlock', () => commands.unlockSelected()),
     SEPARATOR,
-    edit('delete', !deletable, () => commands.deleteSelected(), { danger: true }),
+    edit('delete', () => commands.deleteSelected(), { danger: true }),
   ]
 }
 

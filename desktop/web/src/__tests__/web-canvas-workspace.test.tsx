@@ -941,6 +941,7 @@ function fakeQuerySurface(): CanvasQuerySurface {
     revision: {
       scene: signal(0),
       plantNames: signal(0),
+      transientHistory: signal(0),
     },
     sessionPlane: signal<SessionPlane | null>(createSessionPlane(TEST_GEO_ORIGIN)),
     view: createTestViewReadSurface(),

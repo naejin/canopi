@@ -20,7 +20,7 @@ import {
 } from './satellite-bind'
 import type { SatelliteViewport } from './satellite-provider-session'
 
-/** The background band's inputs, read from the map layer store and settings. */
+/** The background band's inputs, read from the map layer store and settings. It holds no Google key: it is captured for saved-view thumbnails and compared between frames (P46 guards the key's readers). */
 export interface MapBackgroundPresentation {
   readonly basemap: {
     readonly style: BasemapStyle

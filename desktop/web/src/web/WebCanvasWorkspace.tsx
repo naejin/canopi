@@ -24,7 +24,8 @@ import {
 } from '../maplibre/canvas-surface-state'
 import { getMapNoticeReadModel } from '../app/canvas-map-surface/map-notice'
 import { useDesignReveal } from '../app/canvas-map-surface/design-reveal'
-import { hasVisibleMapLayer, mapLayers } from '../app/map-layers/state'
+import { hasVisibleMapLayer } from '../app/map-layers/state'
+import { presentedMapLayers } from '../app/story-presentation/overrides'
 import { MapNotice } from '../components/canvas/MapNotice'
 import { t } from '../i18n'
 import { WebWelcomeScreen } from './WebWelcomeScreen'
@@ -220,7 +221,8 @@ export function WebCanvasWorkspace({
   const mapSurface = mapState ?? IDLE_MAPLIBRE_CANVAS_SURFACE_STATE
   const mapNotice = getMapNoticeReadModel({
     hasDesign,
-    mapVisible: hasVisibleMapLayer(mapLayers.value),
+    // The map the workspace draws: a presented story step's layers, else the user's own.
+    mapVisible: hasVisibleMapLayer(presentedMapLayers()),
     mapSurface,
     t,
   })

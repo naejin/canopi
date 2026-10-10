@@ -144,6 +144,7 @@ export function createSceneRuntimeConstruction(
   const revision: CanvasQueryRevision = {
     scene: sceneRevision,
     plantNames: plantNamesQueryRevision,
+    transientHistory: transientHistoryRevision,
   }
   const history = new SceneHistory({
     reportCleanState: (clean) => appAdapter.cleanState.setCanvasClean(clean),

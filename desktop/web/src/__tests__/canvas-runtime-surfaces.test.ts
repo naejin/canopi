@@ -26,7 +26,7 @@ import { createTestViewReadSurface } from './support/canvas-query-surface'
 
 function createQuerySurface() {
   return {
-    revision: { scene: signal(0), plantNames: signal(0) },
+    revision: { scene: signal(0), plantNames: signal(0), transientHistory: signal(0) },
     sessionPlane: signal(createSessionPlane(DEFAULT_NEW_DESIGN_VIEW)),
     view: createTestViewReadSurface(),
     getSpeciesFocus: () => ({ canonicalName: null }),

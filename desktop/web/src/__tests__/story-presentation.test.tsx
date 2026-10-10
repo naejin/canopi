@@ -40,6 +40,8 @@ import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { replaceCurrentDesignState } from './support/design-session-state'
 import { TEST_GEO_ORIGIN } from './support/geo-design'
 import { framedCornersOnScreen, groundSizeShown } from './support/saved-view-frame'
+import { describeSavedViewSnapshot, VIEW_SNAPSHOT_THUMBNAIL } from '../app/saved-views/snapshot'
+import { readWorkspaceBackgroundPresentation } from '../app/canvas-map-surface/workspace-activation-snapshot'
 
 function view(id: string, overrides: Partial<SavedView['visible_layers']> = {}, species: string[] = []): SavedView {
   return {
@@ -383,6 +385,45 @@ describe('presenting a story', () => {
     } finally {
       release()
     }
+  })
+})
+
+describe('a story step and its view’s thumbnail', () => {
+  it('draw the same background band over the user’s own opacities, style and locale', () => {
+    const views = [
+      view('satellite'),
+      view('dark', { background: { kind: 'basemap', style: 'dark' } }),
+      view('retired', { background: { kind: 'basemap', style: 'retired' } }),
+      view('none', { background: { kind: 'none' }, terrain: { contours: false, hillshade: true } }),
+    ]
+    replaceCurrentDesignState({
+      ...design(),
+      views,
+      stories: [{
+        id: 'all',
+        name: 'Every background',
+        steps: views.map((shown, index) => ({ id: `s${index}`, view_id: shown.id, title: '', text: [], images: [] })),
+      }],
+    }, null, 'Stories')
+    const defaults = createDefaultMapLayers()
+    mapLayers.value = {
+      ...defaults,
+      basemap: { style: 'positron', visible: false, opacity: 0.7 },
+      satellite: { visible: true, opacity: 0.6 },
+      softenBackground: true,
+    }
+    locale.value = 'de'
+
+    views.forEach((shown, index) => {
+      expect(presentStory('all', index)).toBe(true)
+      const thumbnail = describeSavedViewSnapshot(shown, VIEW_SNAPSHOT_THUMBNAIL, {
+        queries: mapQueries,
+        mapLayers: mapLayers.value,
+        locale: locale.value,
+        plantLabels: 'names',
+      })
+      expect(readWorkspaceBackgroundPresentation(), shown.id).toEqual(thumbnail?.background)
+    })
   })
 })
 

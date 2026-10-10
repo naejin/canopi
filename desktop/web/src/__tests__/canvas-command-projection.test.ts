@@ -6,6 +6,8 @@ import {
 } from '../app/canvas-commands'
 import { ariaKeyShortcuts, formatShortcut } from '../app/shell-commands/shortcut-text'
 import { t } from '../i18n'
+import type { CanvasEditSelectionAvailability } from '../app/canvas-commands/edit-availability'
+import { selectionCommandAvailability } from '../canvas/runtime/interaction/contextual-selection-actions'
 
 /** Every tool, in rail order. */
 const projectedCanvasTools = (projection: CanvasCommandProjection) =>
@@ -16,9 +18,8 @@ function state(overrides: Partial<CanvasCommandProjectionState> = {}): CanvasCom
     activeTool: 'select',
     canvasAvailable: true,
     spatialEditingAvailable: true,
-    hasSelection: false,
-    sameSpeciesSelectionAvailable: false,
-    rotateAvailable: false,
+    selection: null,
+    held: false,
     lockedObjectsPresent: false,
     canUndo: false,
     canRedo: false,
@@ -26,6 +27,28 @@ function state(overrides: Partial<CanvasCommandProjectionState> = {}): CanvasCom
     snapToGridEnabled: true,
     ...overrides,
   }
+}
+
+/** A lone editable plant: it cannot turn, group, unlock or name one species to select. */
+const LONE_PLANT = selectionCommandAvailability({
+  editableTargets: [{ kind: 'plant', id: 'apple-1' }],
+  lockedTargets: [],
+  blockedTargets: [],
+  bounds: null,
+  sameSpeciesReferenceCanonicalName: null,
+  plantNamePinning: { plantIds: ['apple-1'], allPinned: false },
+})
+
+/** A selection every selection command applies to. */
+const EVERYTHING: CanvasEditSelectionAvailability = {
+  copy: true,
+  edit: true,
+  group: true,
+  ungroup: true,
+  rotate: true,
+  unlock: true,
+  selectSameSpecies: true,
+  saveAsStamp: true,
 }
 
 const KEY_NAMES: Record<string, string> = {
@@ -88,7 +111,7 @@ describe('Canvas Command Projection', () => {
   it('keeps Select and Pan while overview disables every editing tool and mutating edit', () => {
     const run = vi.fn()
     const projection = createCanvasCommandProjection({
-      state: state({ spatialEditingAvailable: false, hasSelection: true }),
+      state: state({ spatialEditingAvailable: false, selection: EVERYTHING }),
       run,
       translate: (k) => k,
       characterKeys: true,
@@ -103,20 +126,20 @@ describe('Canvas Command Projection', () => {
     expect(projection.viewActions.every((view) => !view.disabled)).toBe(true)
   })
 
-  it('enables selection edits only with a selection, and same-species only for one species', () => {
+  it('enables selection edits from what the selection can do, and none without one', () => {
     const empty = createCanvasCommandProjection({ state: state(), run: vi.fn(), translate: (k) => k, characterKeys: true })
     const disabled = (projection: typeof empty) => projection.editActions.filter((edit) => edit.disabled).map((edit) => edit.id)
     expect(disabled(empty)).toEqual([
       'cut', 'copy', 'duplicate', 'delete', 'select-same-species', 'deselect', 'group', 'ungroup',
       'bring-to-front', 'send-to-back', 'rotate', 'lock', 'unlock', 'unlock-all', 'save-as-stamp',
     ])
-    const onePlant = createCanvasCommandProjection({ state: state({ hasSelection: true }), run: vi.fn(), translate: (k) => k, characterKeys: true })
-    // A single plant, a measurement or a locked object cannot turn.
-    expect(disabled(onePlant)).toEqual(['select-same-species', 'rotate', 'unlock-all'])
+    const onePlant = createCanvasCommandProjection({ state: state({ selection: LONE_PLANT }), run: vi.fn(), translate: (k) => k, characterKeys: true })
+    // The selection's own availability decides, as in the canvas menu (S3b): a lone plant cannot turn or group.
+    expect(disabled(onePlant)).toEqual(['select-same-species', 'group', 'ungroup', 'rotate', 'unlock', 'unlock-all'])
 
     const run = vi.fn()
     const selected = createCanvasCommandProjection({
-      state: state({ hasSelection: true, sameSpeciesSelectionAvailable: true, rotateAvailable: true, lockedObjectsPresent: true }),
+      state: state({ selection: EVERYTHING, lockedObjectsPresent: true }),
       run,
       translate: (k) => k,
       characterKeys: true,
@@ -188,7 +211,7 @@ describe('Canvas Command Projection', () => {
     expect(view('fit-to-design').ariaShortcut).toBe('Shift+F Control+0 Meta+0 Home')
     // Zoom to selection needs a selection.
     expect(view('zoom-to-selection').disabled).toBe(true)
-    expect(createCanvasCommandProjection({ state: state({ hasSelection: true }), run, translate: tagged, characterKeys: true })
+    expect(createCanvasCommandProjection({ state: state({ selection: LONE_PLANT }), run, translate: tagged, characterKeys: true })
       .viewActions.find((command) => command.id === 'zoom-to-selection')!.disabled).toBe(false)
     view('zoom-to-selection').action()
     expect(run).not.toHaveBeenCalled()
