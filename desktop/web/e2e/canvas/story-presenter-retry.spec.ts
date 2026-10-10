@@ -2,7 +2,8 @@
 // map, whose style cannot load: the full-window presenter, modal over the map, draws the notice and its Retry in its
 // own layer, where a click and Enter both reach Retry, which asks for the basemap's style again. The canvas draws no
 // notice under the presenter; once Esc leaves, the canvas notice is back with Retry. The notice clears the presenter's
-// card and bar in a wide and a narrow window and on a phone either way up. Both engines; no baselines.
+// card and bar in a wide and a narrow window and on a phone either way up. Tab from the notice, which holds focus after
+// Retry, stays in the presenter. Both engines; no baselines.
 import { fileURLToPath } from 'node:url'
 import type { Locator, Page } from '@playwright/test'
 import { designMap, expectCanvasDrawn } from '../support/canvas'
@@ -50,11 +51,27 @@ for (const { name, viewport, hasTouch } of LAYOUTS) {
       await expect.poll(() => styleRequests, 'a click on Retry asks for the basemap style again').toBeGreaterThan(before)
       await expect(retry).toBeVisible()
 
-      // So does Enter on the focused Retry.
+      // So does Enter on the focused Retry. Held, the request leaves the basemap loading with no Retry, so focus is on
+      // the notice, after every control: Tab wraps to the first shown control instead of leaving the page, so the
+      // presenter's keys (Esc below) still reach it. Let go, the request fails offline and Retry comes back.
+      let letGo!: () => void
+      const held = new Promise<void>((resolve) => { letGo = resolve })
+      await page.route(STYLE_REQUEST, async (route) => {
+        await held
+        await route.fallback()
+      })
       before = styleRequests
       await retry.focus()
       await page.keyboard.press('Enter')
       await expect.poll(() => styleRequests, 'Enter on Retry asks for the basemap style again').toBeGreaterThan(before)
+      await expect(retry).toBeHidden()
+      await expect(notice).toBeFocused()
+      await page.keyboard.press('Tab')
+      expect(await presentation.evaluate((presenter) => {
+        const first = [...presenter.querySelectorAll('button, a[href]')].find((element) => element.getClientRects().length > 0)
+        return first !== undefined && document.activeElement === first
+      }), 'Tab from the notice reaches the presenter\'s first control').toBe(true)
+      letGo()
       await expect(retry).toBeVisible()
       await expect(presentation, 'the presentation goes on').toBeVisible()
 

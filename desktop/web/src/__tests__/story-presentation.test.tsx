@@ -663,6 +663,31 @@ describe('the presenter', () => {
       expect(presenter.contains(retry)).toBe(true)
     })
 
+    it('keeps Tab inside the presenter from the notice that holds focus after Retry, and Shift+Tab from the presenter itself', async () => {
+      await act(async () => { render(workspace(failed(), () => {}), container) })
+      await act(async () => { presentStory('tour', 0) })
+      const presenter = container.querySelector<HTMLElement>('[data-story-presenter]')!
+      const button = retryIn(presenter)!
+      button.focus()
+      await act(async () => { button.click() })
+      await act(async () => { render(workspace(loading(), () => {}), container) })
+      const chip = presenter.querySelector<HTMLElement>('[data-map-notice]')!
+      expect(document.activeElement).toBe(chip)
+      const controls = [...presenter.querySelectorAll<HTMLElement>('button, a[href]')]
+
+      // The chip follows every control, so Tab would leave the page: it wraps to the first control instead.
+      let event!: KeyboardEvent
+      await act(async () => { event = key(chip, 'Tab') })
+      expect(event.defaultPrevented).toBe(true)
+      expect(document.activeElement).toBe(controls[0])
+
+      // The presenter itself (focused after a press on the map) precedes every control, so Shift+Tab wraps to the last.
+      presenter.focus()
+      await act(async () => { event = key(presenter, 'Tab', { shiftKey: true }) })
+      expect(event.defaultPrevented).toBe(true)
+      expect(document.activeElement).toBe(controls.at(-1))
+    })
+
     it('keeps focus in the presenter when Retry goes away, and when the notice goes once the map recovers', async () => {
       const retry = vi.fn()
       await act(async () => { render(workspace(failed(), retry), container) })
