@@ -3,7 +3,9 @@ import { useEffect } from 'preact/hooks'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
+import { createDefaultMapLayers, mapLayers, type MapLayersState } from '../app/map-layers/state'
+import { setStoryPresentationOverrides } from '../app/story-presentation/overrides'
+import { t } from '../i18n'
 import { CanvasPanel } from '../components/panels/CanvasPanel'
 import { WebCanvasWorkspace } from '../web/WebCanvasWorkspace'
 import { profileLineMenu } from '../app/lidar/profile'
@@ -76,6 +78,39 @@ describe('CanvasPanel basemap feedback', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
+    setStoryPresentationOverrides(null)
+  })
+
+  it('shows the basemap failure with Retry while a story step shows Street map over the user\'s None', async () => {
+    designSessionFixture.file = demoDesign()
+    mapLayers.value = mapLayersShowing('none')
+    presentStepShowing('basemap')
+    mockBasemapState = { ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'ready', basemapStatus: 'failed' }
+
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+
+    const notice = container.querySelector<HTMLElement>('[data-map-notice]')
+    expect(notice?.querySelector('[role="status"]')?.textContent).toBe(t('canvas.layers.basemapFailed'))
+    const retry = [...notice!.querySelectorAll('button')].find((button) => button.textContent === t('canvas.layers.retryMap'))
+    await act(async () => { retry!.click() })
+    expect(retryMap).toHaveBeenCalledOnce()
+    expect(container.querySelector('[data-map-active="true"]')).not.toBeNull()
+  })
+
+  it('shows no basemap notice while a story step shows None over the user\'s visible basemap', async () => {
+    designSessionFixture.file = demoDesign()
+    mapLayers.value = mapLayersShowing('basemap')
+    presentStepShowing('none')
+    mockBasemapState = { ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'ready', basemapStatus: 'failed' }
+
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+
+    expect(container.querySelector('[data-map-notice]')).toBeNull()
+    expect(container.querySelector('[data-map-active="true"]')).toBeNull()
   })
 
   it('does not show a Map Notice or activate the map surface without an open Design', async () => {
@@ -401,6 +436,50 @@ describe('WebCanvasWorkspace map notice', () => {
     await act(async () => { render(null, container) })
     container.remove()
     designSessionFixture.file = null
+    setStoryPresentationOverrides(null)
+  })
+
+  function failingBasemapComposition(retry: () => void) {
+    return vi.fn((options: { onMapStateChange?: (state: MapLibreCanvasSurfaceState) => void }) => {
+      options.onMapStateChange?.({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'ready', basemapStatus: 'failed' })
+      return {
+        surfaces: {} as never,
+        start: () => new Promise<never>(() => {}),
+        dispose: async () => {},
+        retryMap: retry,
+      } satisfies WorkspaceRuntimeComposition
+    })
+  }
+
+  it('shows the basemap failure with Retry while a story step shows Street map over the user\'s None', async () => {
+    mapLayers.value = mapLayersShowing('none')
+    presentStepShowing('basemap')
+    const retry = vi.fn()
+    const createRuntimeComposition = failingBasemapComposition(retry)
+
+    await act(async () => {
+      render(<WebCanvasWorkspace createRuntimeComposition={createRuntimeComposition} />, container)
+    })
+    await act(async () => { await vi.waitFor(() => expect(createRuntimeComposition).toHaveBeenCalledOnce()) })
+
+    const notice = container.querySelector<HTMLElement>('[data-map-notice]')
+    expect(notice?.querySelector('[role="status"]')?.textContent).toBe(t('canvas.layers.basemapFailed'))
+    const button = [...notice!.querySelectorAll('button')].find((candidate) => candidate.textContent === t('canvas.layers.retryMap'))
+    await act(async () => { button!.click() })
+    expect(retry).toHaveBeenCalledOnce()
+  })
+
+  it('shows no basemap notice while a story step shows None over the user\'s visible basemap', async () => {
+    mapLayers.value = mapLayersShowing('basemap')
+    presentStepShowing('none')
+    const createRuntimeComposition = failingBasemapComposition(() => {})
+
+    await act(async () => {
+      render(<WebCanvasWorkspace createRuntimeComposition={createRuntimeComposition} />, container)
+    })
+    await act(async () => { await vi.waitFor(() => expect(createRuntimeComposition).toHaveBeenCalledOnce()) })
+
+    expect(container.querySelector('[data-map-notice]')).toBeNull()
   })
 
   it('shows the same basemap notice as the desktop and Retry reaches its composition', async () => {
@@ -468,6 +547,28 @@ describe('WebCanvasWorkspace map notice', () => {
     expect(text).not.toMatch(/text-overflow:\s*ellipsis/)
   })
 })
+
+/** The user's own map layers with only the given background, terrain off. */
+function mapLayersShowing(background: 'basemap' | 'none'): MapLayersState {
+  const defaults = createDefaultMapLayers()
+  return {
+    ...defaults,
+    basemap: { ...defaults.basemap, visible: background === 'basemap' },
+    satellite: { ...defaults.satellite, visible: false },
+    contours: { ...defaults.contours, visible: false },
+    hillshade: { ...defaults.hillshade, visible: false },
+  }
+}
+
+/** A presented story step whose view shows the given background. */
+function presentStepShowing(background: 'basemap' | 'none'): void {
+  setStoryPresentationOverrides({
+    mapLayers: mapLayersShowing(background),
+    siteDataIds: new Set(),
+    plantLabels: 'none',
+    targets: [],
+  })
+}
 
 function demoDesign(): CanopiFile {
   return {
