@@ -17,10 +17,9 @@ interface MapNoticeProps {
  * The map's status chip, the same in both editions: a fixed sentence, with Retry when the map or basemap can be
  * rebuilt. Only the sentence is the live region. A press on Retry always takes Retry away (the map or basemap shows
  * it loading, or Retry is refused), so focus moves to the chip first instead of falling to the page; when the chip
- * itself goes while holding focus (the map recovered), focus moves to the map. While it shows, the chip is bottom chrome
- * on the visible-map-area seam wherever it sits, risen above the row or not (Panels.module.css): the map credits fold into
- * their (i) button instead of sitting under it, and framing and the selection chip keep above it. On a phone it is placed
- * from the visible map frame itself, so it registers nothing there.
+ * itself goes while holding focus (the map recovered), focus moves to the map. While it shows it is bottom chrome on the
+ * visible-map-area seam, so the map credits fold into their (i) button instead of sitting under it; on a phone it is
+ * placed from the visible map frame itself, so it registers nothing there.
  */
 export function MapNotice({ notice, onRetry, canvasRef }: MapNoticeProps) {
   const chip = useRef<HTMLDivElement>(null)

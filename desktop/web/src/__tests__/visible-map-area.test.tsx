@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { signal } from '@preact/signals'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -397,25 +396,6 @@ describe('visible map area', () => {
       { rect: rect({ left: 1540, top: 744, width: 368, height: 44 }), side: 'bottom' },
       { rect: rect({ left: 780, top: 748, width: 360, height: 40 }), side: 'bottom' },
     ])).toBe(400)
-  })
-
-  it('the map notice keeps clear of the zoom group\'s published width in the wide layout, rising above the row without room', () => {
-    // jsdom has no layout (e2e/canvas/map-notice-layout.spec.ts hit-tests Retry in both engines): the notice's rule must
-    // place it from the widths the zoom group and the view chip publish, not from the window's width.
-    const css = readFileSync('src/components/panels/Panels.module.css', 'utf8')
-    const notice = /\.basemapFeedback\s*\{(?<body>[^}]*)\}/.exec(css)?.groups?.body ?? ''
-    expect(notice).toMatch(/var\(--zoom-group-width/)
-    expect(notice).toMatch(/var\(--view-chip-width/)
-    expect(notice).toMatch(/bottom:\s*clamp\(/)
-    expect(css, 'no window-width rule moves the notice').not.toMatch(/@media \(max-width:[^)]*\)\s*\{\s*\.basemapFeedback/)
-    // Risen above the row, the notice takes none of the credits' room between the view chip and the zoom group, and the
-    // visible map frame ends above it, so framing and the selection chip keep clear of it.
-    const map = rect({ left: 0, top: 0, width: 1024, height: 768 })
-    const viewChip = { rect: rect({ left: 12, top: 716, width: 280, height: 40 }), side: 'bottom' as const }
-    const zoomGroup = { rect: rect({ left: 622, top: 716, width: 390, height: 40 }), side: 'bottom' as const }
-    const risen = { rect: rect({ left: 347, top: 664, width: 330, height: 40 }), side: 'bottom' as const }
-    expect(measureBottomBandRoom(map, [viewChip, zoomGroup, risen])).toBe(622 - 292)
-    expect(measureVisibleMapFrame(map, [viewChip, zoomGroup, risen]).bottom).toBe(768 - 664)
   })
 
   it('measures the room the panel rail has above the chrome under its column', () => {
