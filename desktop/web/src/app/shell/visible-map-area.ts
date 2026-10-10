@@ -11,7 +11,9 @@ import { currentCanvasViewportCommandSurface } from '../../canvas/session'
  * too little room. Status chrome that comes and goes with load state (the map
  * notice) registers with `frames: false`: chips and credits avoid it, but the
  * camera frames from the other chrome only, so a Design opened while it shows
- * is framed as one opened after it goes. Both rails also
+ * is framed as one opened after it goes. That framing frame is also published
+ * as `--map-framing-inset-*`, where status chrome places itself: clear of all
+ * other chrome, and never standing on its own box. Both rails also
  * register the room they have above the chrome under their column (the view
  * chip under the tool rail; the inspection launcher and the zoom group under
  * the panel rail), so a short window folds their last entries into a More
@@ -67,7 +69,7 @@ const HORIZONTAL_BAND_SHARE = 0.6
 const INSET_PROPERTIES = ['top', 'right', 'bottom', 'left'] as const
 
 export const visibleMapFrame = signal<VisibleMapFrame>(NO_FRAME)
-/** The frame the camera fits into: `visibleMapFrame` without the chrome registered with `frames: false`. */
+/** The frame the camera fits into and status chrome stands in: `visibleMapFrame` without the chrome registered with `frames: false`. */
 const framingMapFrame = signal<VisibleMapFrame>(NO_FRAME)
 /** Whether the map credits fold into their (i) button (see `MAP_ATTRIBUTION_MIN_ROOM_PX`). */
 export const mapAttributionFolded = signal(false)
@@ -174,10 +176,13 @@ function recompute(): void {
   const map = area.getBoundingClientRect()
   const boxes = [...occluders].map(([element, { side, frames }]) => ({ rect: element.getBoundingClientRect(), side, frames }))
   const next = measureVisibleMapFrame(map, boxes)
-  publishFrame(framingMapFrame, measureVisibleMapFrame(map, boxes.filter(({ frames }) => frames)))
+  const framing = measureVisibleMapFrame(map, boxes.filter(({ frames }) => frames))
   const folded = map.width > 0 && measureBottomBandRoom(map, boxes) < MAP_ATTRIBUTION_MIN_ROOM_PX
   if (mapAttributionFolded.peek() !== folded) mapAttributionFolded.value = folded
-  for (const edge of INSET_PROPERTIES) area.style.setProperty(`--map-inset-${edge}`, `${next[edge]}px`)
+  for (const edge of INSET_PROPERTIES) {
+    area.style.setProperty(`--map-inset-${edge}`, `${next[edge]}px`)
+    area.style.setProperty(`--map-framing-inset-${edge}`, `${framing[edge]}px`)
+  }
   for (const kind of ['tool', 'panel'] as const) {
     const room = measureRailRoom(
       rails[kind]?.getBoundingClientRect() ?? null,
@@ -185,6 +190,7 @@ function recompute(): void {
     )
     if (RAIL_ROOM[kind].peek() !== room) RAIL_ROOM[kind].value = room
   }
+  publishFrame(framingMapFrame, framing)
   publishFrame(visibleMapFrame, next)
 }
 
@@ -254,7 +260,10 @@ export function registerMapArea(element: HTMLElement): () => void {
 
 function releaseArea(element: HTMLElement): void {
   if (area !== element) return
-  for (const edge of INSET_PROPERTIES) element.style.removeProperty(`--map-inset-${edge}`)
+  for (const edge of INSET_PROPERTIES) {
+    element.style.removeProperty(`--map-inset-${edge}`)
+    element.style.removeProperty(`--map-framing-inset-${edge}`)
+  }
   area = null
   stopWatching()
   visibleMapFrame.value = NO_FRAME

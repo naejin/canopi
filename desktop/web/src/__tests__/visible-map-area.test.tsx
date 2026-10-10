@@ -196,17 +196,21 @@ describe('visible map area', () => {
       const releaseNotice = registerMapOccluder(element({ left: 400, top: 702, width: 480, height: 50 }), 'bottom', { frames: false })
       expect(area.style.getPropertyValue('--map-inset-bottom')).toBe('98px')
       expect(visibleMapFrame.value.bottom).toBe(98)
+      // The notice places itself in the framing frame, published apart, so it never stands on its own box.
+      expect(area.style.getPropertyValue('--map-framing-inset-bottom')).toBe('56px')
       releaseNotice()
       expect(area.style.getPropertyValue('--map-inset-bottom')).toBe('56px')
       expect(setFramingInsets, 'the notice coming and going never reframes').toHaveBeenCalledTimes(calls)
-      // Framing chrome still frames: the dock opening beside it moves the camera's framing.
+      // Framing chrome still frames: the dock opening beside it moves the camera's framing, and the notice keeps left of it.
       const releaseDock = registerMapOccluder(element(DOCK))
       expect(setFramingInsets).toHaveBeenLastCalledWith({ top: 0, right: 456, bottom: 56, left: 0 })
+      expect(area.style.getPropertyValue('--map-framing-inset-right')).toBe('456px')
       releaseDock()
     } finally {
       releaseZoom()
       releaseArea()
     }
+    expect(area.style.getPropertyValue('--map-framing-inset-right')).toBe('')
   })
 
   it('the open inspection lens covers the map\'s left edge, so Home and Fit frame the Design right of it', async () => {
