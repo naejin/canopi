@@ -8,6 +8,7 @@ import { setStoryPresentationOverrides } from '../app/story-presentation/overrid
 import { storyPresentationActive } from '../app/story-presentation'
 import { t } from '../i18n'
 import { CanvasPanel } from '../components/panels/CanvasPanel'
+import { PresentedMapNotice } from '../components/canvas/MapNotice'
 import { WebCanvasWorkspace } from '../web/WebCanvasWorkspace'
 import { profileLineMenu } from '../app/lidar/profile'
 import {
@@ -36,6 +37,7 @@ vi.mock('../components/canvas/CanvasChrome', () => ({
 }))
 
 // Whether a story is presented: the real controller needs a Design with a story and a map; the notice reads only this.
+// The presenter's own notice is `PresentedMapNotice` (story-presentation.test.tsx draws it in the real presenter).
 vi.mock('../app/story-presentation', async (importOriginal) => {
   const { signal: presentationSignal } = await import('@preact/signals')
   return { ...await importOriginal<typeof import('../app/story-presentation')>(), storyPresentationActive: presentationSignal(false) }
@@ -88,22 +90,21 @@ describe('CanvasPanel basemap feedback', () => {
     leavePresentation()
   })
 
-  it('shows the basemap failure without Retry while a story step shows Street map over the user\'s None: the presenter would cover it', async () => {
+  it('shows the basemap failure with a Retry that retries this map in the presenter while a story step shows Street map over the user\'s None', async () => {
     designSessionFixture.file = demoDesign()
     mapLayers.value = mapLayersShowing('none')
     presentStepShowing('basemap')
     mockBasemapState = { ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'ready', basemapStatus: 'failed' }
 
     await act(async () => {
-      render(<CanvasPanel />, container)
+      render(<><CanvasPanel />{presenterLayer()}</>, container)
     })
 
-    const notice = container.querySelector<HTMLElement>('[data-map-notice]')
-    expect(notice?.querySelector('[role="status"]')?.textContent).toBe(t('canvas.layers.basemapFailed'))
-    expect(notice!.querySelector('button')).toBeNull()
+    expect(canvasNotices(container), 'the canvas draws no notice under the presenter').toEqual([])
+    await expectPresentedFailureRetries(container, retryMap)
     expect(container.querySelector('[data-map-active="true"]')).not.toBeNull()
 
-    // Leaving the presentation shows the user's None again: no notice; over a visible basemap Retry is back (below).
+    // Leaving the presentation shows the user's None again: no notice anywhere.
     await act(async () => { leavePresentation() })
     expect(container.querySelector('[data-map-notice]')).toBeNull()
   })
@@ -460,24 +461,22 @@ describe('WebCanvasWorkspace map notice', () => {
     })
   }
 
-  it('shows the basemap failure without Retry while a story step shows Street map over the user\'s None: the presenter would cover it', async () => {
+  it('shows the basemap failure with a Retry that reaches its composition in the presenter while a story step shows Street map over the user\'s None', async () => {
     mapLayers.value = mapLayersShowing('none')
     presentStepShowing('basemap')
     const retry = vi.fn()
     const createRuntimeComposition = failingBasemapComposition(retry)
 
     await act(async () => {
-      render(<WebCanvasWorkspace createRuntimeComposition={createRuntimeComposition} />, container)
+      render(<><WebCanvasWorkspace createRuntimeComposition={createRuntimeComposition} />{presenterLayer()}</>, container)
     })
     await act(async () => { await vi.waitFor(() => expect(createRuntimeComposition).toHaveBeenCalledOnce()) })
 
-    const notice = container.querySelector<HTMLElement>('[data-map-notice]')
-    expect(notice?.querySelector('[role="status"]')?.textContent).toBe(t('canvas.layers.basemapFailed'))
-    expect(notice!.querySelector('button')).toBeNull()
+    expect(canvasNotices(container), 'the canvas draws no notice under the presenter').toEqual([])
+    await expectPresentedFailureRetries(container, retry)
 
     await act(async () => { leavePresentation() })
     expect(container.querySelector('[data-map-notice]')).toBeNull()
-    expect(retry).not.toHaveBeenCalled()
   })
 
   it('shows no basemap notice while a story step shows None over the user\'s visible basemap', async () => {
@@ -580,6 +579,23 @@ function presentStepShowing(background: 'basemap' | 'none'): void {
     plantLabels: 'none',
     targets: [],
   })
+}
+
+/** The story presenter's layer, as far as the notice goes: the presenter draws the canvas's notice there. */
+function presenterLayer() {
+  return <div data-presenter-layer><PresentedMapNotice focusHome={{ current: null }} /></div>
+}
+
+function canvasNotices(container: HTMLElement): Element[] {
+  return [...container.querySelectorAll('[data-map-notice]')].filter((notice) => !notice.closest('[data-presenter-layer]'))
+}
+
+async function expectPresentedFailureRetries(container: HTMLElement, retry: () => void): Promise<void> {
+  const notice = container.querySelector<HTMLElement>('[data-presenter-layer] [data-map-notice]')
+  expect(notice?.querySelector('[role="status"]')?.textContent).toBe(t('canvas.layers.basemapFailed'))
+  const button = [...notice!.querySelectorAll('button')].find((candidate) => candidate.textContent === t('canvas.layers.retryMap'))
+  await act(async () => { button!.click() })
+  expect(retry).toHaveBeenCalledOnce()
 }
 
 function leavePresentation(): void {

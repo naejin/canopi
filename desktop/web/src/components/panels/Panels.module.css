@@ -104,6 +104,13 @@
 }
 
 /* The dot and the sentence: Retry stays beside them while they keep this width, and wraps below them otherwise. */
+/* In the story presenter, which places the notice clear of its bar and card (StoryPresenter.module.css). */
+.basemapFeedback[data-layer="presenter"] {
+  position: static;
+  max-width: 100%;
+  transform: none;
+}
+
 .basemapFeedbackLead {
   display: flex;
   flex: 1 1 15em;

@@ -82,6 +82,17 @@
   backdrop-filter: blur(16px);
 }
 
+/* The map's notice: centred at the bottom of the room right of the card. */
+.notice {
+  position: absolute;
+  right: var(--space-6);
+  bottom: var(--space-6);
+  left: calc(var(--space-8) + min(420px, calc(100vw - 2 * var(--space-8))) + var(--space-4));
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
 .kicker {
   color: var(--color-text-muted);
   font-size: var(--text-xs);
@@ -324,6 +335,14 @@
     border-radius: var(--radius-panel) var(--radius-panel) 0 0;
   }
 
+  /* Under the bar, above the bottom sheet. */
+  .notice {
+    top: calc(var(--space-2) + env(safe-area-inset-top) + 52px + var(--space-2));
+    right: calc(var(--space-2) + env(safe-area-inset-right));
+    bottom: auto;
+    left: calc(var(--space-2) + env(safe-area-inset-left));
+  }
+
   .kicker {
     display: none;
   }
@@ -383,5 +402,12 @@
 
   .image {
     max-height: 96px;
+  }
+
+  /* At the bottom of the room right of the card. */
+  .notice {
+    top: auto;
+    bottom: calc(var(--space-2) + env(safe-area-inset-bottom));
+    left: calc(var(--space-2) + env(safe-area-inset-left) + min(400px, 50%) + var(--space-2));
   }
 }

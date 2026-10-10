@@ -12,6 +12,7 @@ import {
 } from '../../app/story-presentation'
 import { highlightedSpeciesSummary } from '../../app/stories'
 import { t } from '../../i18n'
+import { PresentedMapNotice } from '../canvas/MapNotice'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import { ControlIcon } from '../shared/ControlIcon'
 import { useModalLayer } from '../shared/useModalLayer'
@@ -25,7 +26,8 @@ const SWIPE_MIN_PX = 48
  * A story presented full-window over the map (boards StoryPresent and
  * StoryPhone): a floating text card, step dots, Previous and Next, full screen
  * and Leave. It is modal: the workspace behind it is inert, so no editing
- * command or tool key reaches the map, and Tab stays in the presenter.
+ * command or tool key reaches the map, and Tab stays in the presenter. The
+ * map's notice, and its Retry, show in the presenter's own layer and Tab cycle.
  */
 export function StoryPresenter() {
   const presented = presentedStep.value
@@ -233,6 +235,10 @@ function StoryPresenterContent({ presented }: { readonly presented: PresentedSte
         <span className={styles.hint} data-hint="keys">{t('presentation.keysHint')}</span>
         <span className={styles.hint} data-hint="swipe">{t('presentation.swipeHint')}</span>
       </article>
+      {/* Clear of the bar and the card, where the canvas would have shown it under the presenter. */}
+      <div className={styles.notice}>
+        <PresentedMapNotice focusHome={root} />
+      </div>
       <div className={styles.srOnly} role="status" aria-live="polite" aria-atomic="true">
         {t('presentation.announce', { number, count, title })}
       </div>
