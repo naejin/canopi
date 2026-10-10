@@ -12,6 +12,7 @@ import {
 } from '../../app/story-presentation'
 import { highlightedSpeciesSummary } from '../../app/stories'
 import { t } from '../../i18n'
+import { PresentedMapNotice } from '../canvas/MapNotice'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import { ControlIcon } from '../shared/ControlIcon'
 import { useModalLayer } from '../shared/useModalLayer'
@@ -25,7 +26,8 @@ const SWIPE_MIN_PX = 48
  * A story presented full-window over the map (boards StoryPresent and
  * StoryPhone): a floating text card, step dots, Previous and Next, full screen
  * and Leave. It is modal: the workspace behind it is inert, so no editing
- * command or tool key reaches the map, and Tab stays in the presenter.
+ * command or tool key reaches the map, and Tab stays in the presenter. The
+ * map's notice, and its Retry, show in the presenter's own layer and Tab cycle.
  */
 export function StoryPresenter() {
   const presented = presentedStep.value
@@ -107,16 +109,15 @@ function StoryPresenterContent({ presented }: { readonly presented: PresentedSte
     // Controls a narrow layout hides take no part (a layout-less DOM keeps them all).
     const shown = all.filter((element) => element.getClientRects().length > 0)
     const focusables = shown.length > 0 ? shown : all
-    if (focusables.length === 0) return
-    const firstElement = focusables[0]!
-    const lastElement = focusables.at(-1)!
-    if (event.shiftKey && document.activeElement === firstElement) {
-      event.preventDefault()
-      lastElement.focus()
-    } else if (!event.shiftKey && document.activeElement === lastElement) {
-      event.preventDefault()
-      firstElement.focus()
-    }
+    const active = document.activeElement
+    if (focusables.length === 0 || !active) return
+    // Wrap when no control lies ahead of focus in the Tab direction, wherever focus sits: on the last control, on the
+    // map notice that holds focus after Retry, or on the presenter itself. Otherwise focus would leave the page.
+    const ahead = event.shiftKey ? Node.DOCUMENT_POSITION_PRECEDING : Node.DOCUMENT_POSITION_FOLLOWING
+    if (focusables.some((element) => (active.compareDocumentPosition(element) & ahead) !== 0)) return
+    event.preventDefault()
+    const wrapTo = event.shiftKey ? focusables.at(-1)! : focusables[0]!
+    wrapTo.focus()
   }
 
   return (
@@ -233,6 +234,10 @@ function StoryPresenterContent({ presented }: { readonly presented: PresentedSte
         <span className={styles.hint} data-hint="keys">{t('presentation.keysHint')}</span>
         <span className={styles.hint} data-hint="swipe">{t('presentation.swipeHint')}</span>
       </article>
+      {/* Clear of the bar and the card, where the canvas would have shown it under the presenter. */}
+      <div className={styles.notice}>
+        <PresentedMapNotice focusHome={root} />
+      </div>
       <div className={styles.srOnly} role="status" aria-live="polite" aria-atomic="true">
         {t('presentation.announce', { number, count, title })}
       </div>

@@ -22,7 +22,7 @@ Read the [design system](../system.md) first. Boards: DesignSystem, DesignSystem
 - Dialogs: Literata 20 title, body 14.5, footer actions right-aligned and wrapping, a leading ghost action aligned with the text. Modal, focus-trapped, Esc closes and returns focus. Everything under the scrim is inert: no press, focus, key or shortcut reaches it.
 - Saved views: Save current view… has Name (selected, default "View n") and an optional Title. Manage views… lists each view with its thumbnail (64 × 40), Go to, Rename in place (Enter keeps, Esc cancels only the rename) and Delete.
 - Notices: info (surface-alt), warning (amber), error (red, alert). Toasts are dark, carry Undo when it applies, and wait while hovered or focused.
-- Notices never cover controls. An app-wide notice (catalog database missing or damaged; Data library refused; earlier data set aside, dismissible; a Web shell notice) takes its own row under the title bar and lowers `--chrome-rail-top` while it shows.
+- Notices never cover controls. An app-wide notice (catalog database missing or damaged; Data library refused; earlier data set aside, dismissible; a Web shell notice) takes its own row under the title bar.
 - Empty states say what goes here and give the action to start. Loading keeps the frame: inline "Searching…", row skeletons, a progress bar for long opens. Errors say what happened, what is safe and the next step.
 
 ## Settings
@@ -45,17 +45,17 @@ Displacement stays on the preview (drag, or arrows on the focused page). No map 
 
 ## Controls
 
-- Dropdown (`components/shared/Dropdown.tsx`), never a native `<select>`; its accessible name includes the current value. DatePicker, never `<input type="date">`.
+- Dropdown, never a native `<select>`; its accessible name includes the current value. DatePicker, never `<input type="date">`.
 - Segmented controls are radio groups; the selected segment has an ink edge. Switches are checkboxes with `role="switch"`. Radios are custom with a visible ring.
 - Sliders show their value and carry accessible names.
-- Touch screens: tooltips show only on keyboard focus; menu rows are 44 px.
+- Touch screens: tooltips show only on keyboard focus, except Show my location's Blocked or unavailable reason, for 4 s after a tap; menu rows are 44 px.
 
 ## Web on phones
 
 - Phone sizes: narrower than 640 px, or wider than tall, shorter than 480 px and narrower than 960 px. Wider windows keep the rails and dock; the 760 px narrow rules apply between 640 and 760 px. Safe-area insets apply; inputs are 16 px.
 - Top bar: 8 px from the edges and below the notch, 52 px tall with 44 px buttons: Menu, the Design name over its save status (the status action waits in File), Undo, and Search a place (a card over the bar with Back and the field; Ctrl K).
 - Tool strip (left): Select, Pan, Place plants and Polygon zone as 44 px buttons, then More tools (a soft accent while it holds the active tool). Undo is in the top bar, Redo in Edit; Grid and Snap in View.
-- Zoom: a column on the right, midway down the visible map: zoom in, zoom out, Fit to Design, the compass (no ratio); the inspection button beside it.
+- Zoom: a column on the right, midway down the visible map ([canvas navigation](canvas-navigation.md#phones)); the inspection button beside it.
 - Sheet: across the bottom, resting at peek (handle and tabs), half, or full up to the top bar. The 44 px handle steps peek, half, full; ArrowUp/Down, PageUp/Down, Home and End move between heights. Three text tabs (Layers, Plants, Catalog), then More with the other panels; a second press on the open tab rests the sheet at peek and closes the panel.
 - Landscape: the sheet rests at peek in the bottom right corner and opens along the right edge below the top bar (half 360 px, full up to 560 px wide).
 - The sheet covers the map's bottom (or right) edge in the visible map frame, so fitting, the selection chip, legend and credits keep above it.

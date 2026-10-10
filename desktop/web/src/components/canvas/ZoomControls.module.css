@@ -159,8 +159,9 @@
 /* Phones: a column on the right of the visible map, above the panel sheet
    (or left of the side sheet), placed from the visible map frame. */
 .phone {
-  /* Midway down the visible map, clear of the top chips and the selection chip. */
-  top: calc((var(--chrome-rail-top) + 100% - var(--map-inset-bottom, 0px)) / 2);
+  /* Midway down the framing frame, clear of the top chips and the selection chip; status chrome
+     (the map notice, frames: false) raises only the chips' inset, so it never moves the column. */
+  top: calc((var(--chrome-rail-top) + 100% - var(--map-framing-inset-bottom, 0px)) / 2);
   right: max(calc(var(--map-inset-right, 0px) + var(--space-2)), calc(var(--chrome-inset) + env(safe-area-inset-right)));
   bottom: auto;
   transform: translateY(-50%);
@@ -180,7 +181,7 @@
    so the column closes its gaps and centres on that whole room. */
 @container (max-height: 480px) {
   .phone {
-    top: calc((var(--chrome-top) + var(--title-bar-height) + 100% - var(--map-inset-bottom, 0px)) / 2);
+    top: calc((var(--chrome-top) + var(--title-bar-height) + 100% - var(--map-framing-inset-bottom, 0px)) / 2);
     gap: 0;
     padding: var(--space-0-5);
   }

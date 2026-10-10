@@ -7,7 +7,8 @@
 // below the sentence, which keeps the notice's width and takes at most three lines, never a tower. The notice is
 // status chrome on the seam, registered with frames: false: with everything selected the selection chip sits above it,
 // but it never moves the camera's framing, so a Design opened while the notice shows opens in the same frame as one
-// opened with the basemap hidden, when no notice shows. Both engines; no baselines.
+// opened with the basemap hidden, when no notice shows. On phones too the selection chip stands above it, and the zoom
+// column stays where the framing frame puts it. Both engines; no baselines.
 import { fileURLToPath } from 'node:url'
 import type { Locator, Page } from '@playwright/test'
 import { pressMod } from '../support/canvas'
@@ -126,23 +127,65 @@ for (const viewport of [{ width: 1024, height: 768 }, { width: 800, height: 700 
   })
 }
 
-test.describe('phone portrait', () => {
-  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true })
+test.describe('700x500 bottom sheet closing', () => {
+  test.use({ viewport: { width: 700, height: 500 } })
 
-  test('Retry takes the tap at its centre and the notice clears the zoom column and the panel sheet', async ({ page }) => {
+  test('closing the bottom sheet brings the selection chip back just above the notice, not where the sheet was', async ({ page }) => {
+    // The sheet's release is one measure; the notice then moves down without resizing, so nothing observes it again.
     await openBaseFixture(page)
-    const { notice, retry } = await expectNoticeWithRetry(page)
-    await expectRetryHit(retry)
+    const { notice } = await expectNoticeWithRetry(page)
+    await selectAll(page)
+    const panel = page.locator('[data-panel-rail] [data-panel]').first()
+    await panel.click()
+    const dock = page.locator('[data-key-region="dock"]')
+    await expect(dock).toBeVisible()
+    await nextFrames(page)
+    await panel.click()
+    await expect(dock).toHaveCount(0)
+    await nextFrames(page)
     const noticeBox = await boxOf(notice)
-    for (const [name, chrome] of [
-      ['the zoom column', page.getByRole('group', { name: 'Zoom' })],
-      ['the panel sheet', page.getByRole('region', { name: 'Panels' })],
-    ] as const) {
-      await expect(chrome).toBeVisible()
-      expect(overlap(noticeBox, await boxOf(chrome)), `the notice clears ${name}`).toBe(false)
-    }
+    const selection = await boxOf(page.locator('[data-selection-chip]'))
+    const gap = noticeBox.y - (selection.y + selection.height)
+    expect(gap, 'the selection chip stands above the notice').toBeGreaterThanOrEqual(-0.5)
+    expect(gap, 'the selection chip stands just above the notice').toBeLessThanOrEqual(CHROME_INSET_PX)
   })
 })
+
+for (const [name, viewport] of [
+  ['phone portrait', { width: 390, height: 844 }],
+  ['phone landscape', { width: 844, height: 390 }],
+] as const) {
+  test.describe(name, () => {
+    test.use({ viewport, hasTouch: true })
+
+    test('Retry takes the tap at its centre and the notice clears the zoom column and the panel sheet', async ({ page }) => {
+      await openBaseFixture(page)
+      const { notice, retry } = await expectNoticeWithRetry(page)
+      await expectRetryHit(retry)
+      const noticeBox = await boxOf(notice)
+      for (const [chromeName, chrome] of [
+        ['the zoom column', page.getByRole('group', { name: 'Zoom' })],
+        ['the panel sheet', page.getByRole('region', { name: 'Panels' })],
+      ] as const) {
+        await expect(chrome).toBeVisible()
+        expect(overlap(noticeBox, await boxOf(chrome)), `the notice clears ${chromeName}`).toBe(false)
+      }
+    })
+
+    test('with a selection, the selection chip stands above the notice and Retry still takes the tap', async ({ page }) => {
+      await openBaseFixture(page)
+      const { notice, retry } = await expectNoticeWithRetry(page)
+      await selectAll(page)
+      const selection = page.locator('[data-selection-chip]')
+      await expect(selection).toBeVisible()
+      await nextFrames(page)
+      await expectRetryHit(retry)
+      const noticeBox = await boxOf(notice)
+      expect(overlap(noticeBox, await boxOf(selection)), 'the notice clears the selection chip').toBe(false)
+      expect((await chipFrame(page)).bottom, 'the chips\' visible map frame ends above the notice').toBeLessThanOrEqual(Math.ceil(noticeBox.y))
+    })
+  })
+}
 
 /**
  * The zoom group's buttons once Show my location has joined it: zoom out, the scale, zoom in, Fit, Show my location and

@@ -3,6 +3,7 @@ import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MapNoticeReadModel } from '../../app/canvas-map-surface/map-notice'
 import { locale } from '../../app/settings/state'
+import { phoneLayout } from '../../app/shell/phone-layout'
 import { registerMapArea, registerMapOccluder } from '../../app/shell/visible-map-area'
 import { setCurrentCanvasSession } from '../../canvas/session'
 import { createTestCanvasRuntimeSurfaces } from '../../__tests__/support/canvas-runtime-surfaces'
@@ -91,9 +92,15 @@ describe('MapNotice', () => {
 })
 
 describe('MapNotice on the visible-map-area seam', () => {
-  it('raises the chips\' bottom inset above itself, but never moves the camera\'s framing', async () => {
+  it.each([
+    ['in a window', null],
+    ['on a phone held upright', 'portrait'],
+    ['on a phone on its side', 'landscape'],
+  ] as const)('raises the chips\' bottom inset above itself, but never moves the camera\'s framing, %s', async (_name, phone) => {
     // Standing above the bottom row, the notice is under the selection chip's inset; it comes and goes with load state,
-    // so a Design opened while it shows is framed as one opened after it goes, and it stands in that framing frame.
+    // so a Design opened while it shows is framed as one opened after it goes, and it stands in that framing frame. On a
+    // phone it stands where the selection chip would, so it registers there too.
+    phoneLayout.value = phone
     const surfaces = createTestCanvasRuntimeSurfaces()
     const setFramingInsets = vi.spyOn(surfaces.commands.viewport, 'setFramingInsets')
     setCurrentCanvasSession(surfaces)
@@ -124,6 +131,7 @@ describe('MapNotice on the visible-map-area seam', () => {
       await act(async () => { render(null, container) })
       for (const release of releases.reverse()) release()
       setCurrentCanvasSession(null)
+      phoneLayout.value = null
       vi.restoreAllMocks()
       document.body.innerHTML = ''
     }

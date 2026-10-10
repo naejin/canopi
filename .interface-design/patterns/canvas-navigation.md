@@ -34,7 +34,7 @@ Read the [design system](../system.md) first. Decisions: [ADR 0015](../../docs/a
 
 - Web only in 2.0, with a secure context and geolocation: a ghost icon button (44 px on touch) before the compass, named "Show my location" in every state.
 - A click from Off shows the dot and follows it: the camera jumps to the fix at max(zoom, 17), centred on the whole map. Pressed only while following; a click then turns it off, as does closing the Design. Any other move (a pan, a pointer zoom, a Design, view or story) is Moved away: the dot stays and a click re-centres.
-- Blocked (permission denied): disabled; the tooltip says how to allow it. Lost signal: a hollow dot, "unavailable" in the tooltip, still watching.
+- Blocked (permission denied): disabled; the tooltip says how to allow it. Lost signal: a hollow dot, "unavailable" in the tooltip, still watching. On touch screens a tap shows either reason for 4 s.
 - The dot: a platform blue core in a cream ring over its accuracy area, above every map overlay, hidden while a story is presented; never stored (map workspace guide).
 
 ## Settings › Canvas
@@ -45,7 +45,7 @@ One setting: Pointing device as a segmented Mouse: the wheel zooms / Trackpad: t
 
 - Keys: the tools heading reads "(anywhere except text fields)"; Map and workspace adds Turn the view 15° (Shift ← · Shift →), Reset north (N · Shift N · Shift ↑), nudge 10 cm on screen (arrows) and 1 m (Ctrl or Cmd + arrows), Labels (Shift L), zoom one step (+ · −), Fit the Design (Home · Shift F · Ctrl 0), Zoom to selection (Shift 2).
 - Mouse, trackpad and pen, then Touch (on every device): one row per gesture above (pan, turn with its 15° step, compass, menu, zoom, Alt + click; one finger, two fingers, press and hold).
-- Notes under the lists: "Shift N works even when single-key shortcuts are off."; the Linux pinch note on Linux only. The rows are a static list, not read from bindings.
+- Notes under the lists: "Shift N works even when single-key shortcuts are off."; the Linux pinch note on Linux only.
 
 ## Export planting plan
 

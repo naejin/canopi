@@ -176,6 +176,56 @@ describe('MenuBar keyboard and semantics', () => {
     expect(openMenu()).not.toBeNull()
   })
 
+  it('entered from a menu button, an Esc or a command gives focus to the button of the menu open last (APG)', async () => {
+    await act(async () => { render(<MenuBar menus={items} label="Menus" />, container) })
+    trigger('file').focus()
+    await key(trigger('file'), 'Enter')
+    await key(openMenu()!, 'ArrowRight')
+    expect(trigger('view').getAttribute('aria-expanded')).toBe('true')
+    await key(openMenu()!, 'Escape')
+    expect(openMenu()).toBeNull()
+    expect(document.activeElement, 'View\'s menu closed, so its button has focus').toBe(trigger('view'))
+
+    // Left and Right on the buttons while a menu is open move the open menu with them.
+    await key(trigger('view'), 'ArrowDown')
+    trigger('view').focus()
+    await key(trigger('view'), 'ArrowRight')
+    expect(trigger('help').getAttribute('aria-expanded')).toBe('true')
+    await key(trigger('help'), 'Escape')
+    expect(document.activeElement).toBe(trigger('help'))
+
+    // A command run from a sibling menu reached by keyboard returns focus to that menu's button.
+    await key(trigger('help'), 'ArrowLeft')
+    await key(trigger('view'), 'ArrowDown')
+    await key(openMenu()!, 'ArrowLeft')
+    expect(trigger('file').getAttribute('aria-expanded')).toBe('true')
+    await key(openMenu()!, 'ArrowRight')
+    await act(async () => { openMenu()!.querySelector<HTMLButtonElement>('[data-command-id="grid"]')!.click() })
+    expect(openMenu()).toBeNull()
+    expect(document.activeElement).toBe(trigger('view'))
+  })
+
+  it('opened by a click from outside the bar, an Esc after moving to another menu gives focus back to where it was', async () => {
+    const outside = document.createElement('button')
+    document.body.appendChild(outside)
+    try {
+      await act(async () => { render(<MenuBar menus={items} label="Menus" />, container) })
+      outside.focus()
+      await act(async () => {
+        trigger('file').dispatchEvent(new Event('pointerdown', { bubbles: true }))
+        trigger('file').focus()
+        trigger('file').click()
+      })
+      await act(async () => { trigger('help').dispatchEvent(new MouseEvent('mouseenter')) })
+      expect(trigger('help').getAttribute('aria-expanded')).toBe('true')
+      await key(openMenu()!, 'Escape')
+      expect(openMenu()).toBeNull()
+      expect(document.activeElement).toBe(outside)
+    } finally {
+      outside.remove()
+    }
+  })
+
   it('runs an enabled item, closes and returns focus; disabled items stay put', async () => {
     await act(async () => { render(<MenuBar menus={items} label="Menus" />, container) })
     await act(async () => { trigger('file').click() })

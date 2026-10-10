@@ -108,7 +108,7 @@ test('open, pan, zoom, Present and PDF', async ({ page }) => {
     const presentation = page.getByRole('dialog', { name: 'Presenting Tour' })
     await expect(presentation).toBeVisible()
     await expect(presentation.getByRole('heading', { name: 'Overview' })).toBeVisible()
-    await expect(presentation.getByRole('status')).toHaveText('Step 1 of 1: Overview')
+    await expect(presentation.getByRole('status').filter({ hasText: /^Step \d/ })).toHaveText('Step 1 of 1: Overview')
     await page.mouse.move(NEUTRAL.x, NEUTRAL.y)
     await expectCanvasDrawn(page)
     await expect(page).toHaveScreenshot('base-04-present.png')

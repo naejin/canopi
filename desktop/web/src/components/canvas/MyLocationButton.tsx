@@ -1,4 +1,4 @@
-import { useId } from 'preact/hooks'
+import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { geolocationSupported } from '../../app/my-location/geolocation'
 import { myLocation, type MyLocationMode } from '../../app/my-location/session'
 import { t } from '../../i18n'
@@ -11,7 +11,7 @@ import styles from './MyLocationButton.module.css'
  * `navigator.geolocation` (design check A1). A click runs the location session's press: from Off it shows the dot and
  * follows it, while Following it turns location off, while Moved away it re-centres and follows again. It is pressed
  * only while Following; Blocked disables it with the reason in its tooltip, and a stale fix says location is
- * unavailable.
+ * unavailable. A touch screen has no hover, so a tap shows that tooltip for a few seconds while it has a reason to give.
  */
 export function MyLocationButton() {
   if (!geolocationSupported()) return null
@@ -23,6 +23,9 @@ export function MyLocationButton() {
     />
   )
 }
+
+/** How long a tap shows the tooltip's reason on a touch screen. */
+const TAP_TOOLTIP_MS = 4000
 
 /** The button for a given state, so the UI gallery can show each one without a device location. */
 export function MyLocationButtonView({ mode, unavailable, onPress }: {
@@ -38,6 +41,13 @@ export function MyLocationButtonView({ mode, unavailable, onPress }: {
   const description = blocked
     ? t('canvas.myLocation.blocked')
     : unavailable && mode !== 'off' ? t('canvas.myLocation.unavailable') : null
+  const touchPress = useRef(false)
+  const [tapped, setTapped] = useState(0)
+  useEffect(() => {
+    if (tapped === 0) return
+    const timer = setTimeout(() => setTapped(0), TAP_TOOLTIP_MS)
+    return () => clearTimeout(timer)
+  }, [tapped])
   return (
     <>
       <button
@@ -48,14 +58,19 @@ export function MyLocationButtonView({ mode, unavailable, onPress }: {
         aria-pressed={following ? true : undefined}
         aria-disabled={blocked ? true : undefined}
         aria-describedby={description ? descriptionId : undefined}
-        onClick={() => { if (!blocked) onPress() }}
+        onPointerDown={(event) => { touchPress.current = event.pointerType === 'touch' }}
+        onClick={() => {
+          if (touchPress.current) setTapped((count) => count + 1)
+          touchPress.current = false
+          if (!blocked) onPress()
+        }}
       >
         <svg className={styles.glyph} width={20} height={20} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
           <circle cx="10" cy="10" r="5.5" />
           <path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3" />
           <circle className={following ? styles.centreOn : styles.centre} cx="10" cy="10" r="2.2" />
         </svg>
-        <ButtonTooltip label={label} description={description ?? undefined} side="top" />
+        <ButtonTooltip label={label} description={description ?? undefined} side="top" shown={tapped > 0 && description !== null} />
       </button>
       {description && <span id={descriptionId} className={styles.description}>{description}</span>}
     </>

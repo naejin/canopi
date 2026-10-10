@@ -212,6 +212,40 @@ describe('visible map area', () => {
     expect(area.style.getPropertyValue('--map-framing-inset-right')).toBe('')
   })
 
+  it('measures status chrome where the framing insets just written place it, so the chips\' inset never lags a step', () => {
+    // A narrow window's bottom sheet closes while the map notice shows: the one pass the release runs moves the notice
+    // down (it stands from --map-framing-inset-bottom) without resizing it, so no observation follows to correct a stale
+    // measure, and the selection chip would float where the sheet was.
+    const area = element(WINDOW)
+    const notice = document.createElement('div')
+    document.body.appendChild(notice)
+    const NOTICE_HEIGHT = 50
+    const GAP = 8
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this !== notice) return rect(boxes.get(this) ?? { left: 0, top: 0, width: 0, height: 0 })
+      const framingBottom = Number.parseFloat(area.style.getPropertyValue('--map-framing-inset-bottom')) || 0
+      return rect({ left: 400, top: WINDOW.height - framingBottom - GAP - NOTICE_HEIGHT, width: 480, height: NOTICE_HEIGHT })
+    })
+    const releaseArea = registerMapArea(area)
+    const releaseZoom = registerMapOccluder(element(ZOOM_GROUP), 'bottom')
+    const releaseNotice = registerMapOccluder(notice, 'bottom', { frames: false })
+    try {
+      expect(area.style.getPropertyValue('--map-inset-bottom')).toBe(`${56 + GAP + NOTICE_HEIGHT}px`)
+      const releaseSheet = registerMapOccluder(element({ left: 12, top: 800 - 330, width: 1256, height: 274 }), 'bottom')
+      expect(area.style.getPropertyValue('--map-framing-inset-bottom')).toBe('330px')
+      expect(area.style.getPropertyValue('--map-inset-bottom'), 'the notice above the open sheet').toBe(`${330 + GAP + NOTICE_HEIGHT}px`)
+      releaseSheet()
+      expect(area.style.getPropertyValue('--map-framing-inset-bottom')).toBe('56px')
+      expect(area.style.getPropertyValue('--map-inset-bottom'), 'the notice back above the bottom row').toBe(`${56 + GAP + NOTICE_HEIGHT}px`)
+      expect(visibleMapFrame.value.bottom).toBe(56 + GAP + NOTICE_HEIGHT)
+    } finally {
+      releaseNotice()
+      releaseZoom()
+      releaseArea()
+      notice.remove()
+    }
+  })
+
   it('the open inspection lens covers the map\'s left edge, so Home and Fit frame the Design right of it', async () => {
     const view = lensView({ width: 430, height: 390 })
     const surfaces = createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ attachInspectionTo: () => view }) })

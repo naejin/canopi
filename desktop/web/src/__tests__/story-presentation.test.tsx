@@ -17,6 +17,9 @@ import {
   storyPresentationOverrides,
 } from '../app/story-presentation/overrides'
 import { StoryPresenter } from '../components/stories/StoryPresenter'
+import { MapNotice } from '../components/canvas/MapNotice'
+import type { MapNoticeReadModel } from '../app/canvas-map-surface/map-notice'
+import { t } from '../i18n'
 import { PanelRail } from '../components/shared/PanelRail'
 import { currentDesign, designSessionStore } from '../app/document-session/store'
 import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
@@ -601,6 +604,105 @@ describe('the presenter', () => {
     expect(document.activeElement).toBe(controls[0])
     await act(async () => { key(controls[0]!, 'Tab', { shiftKey: true }) })
     expect(document.activeElement).toBe(controls.at(-1))
+  })
+
+  describe('over a map notice', () => {
+    const failed = (): MapNoticeReadModel => ({
+      visible: true, mapSurfaceVisible: true, tone: 'error', statusText: t('canvas.layers.basemapFailed'), retry: true,
+    })
+    const loading = (): MapNoticeReadModel => ({ ...failed(), tone: 'loading', statusText: t('canvas.layers.basemapLoading'), retry: false })
+    const hidden = (): MapNoticeReadModel => ({ ...loading(), visible: false, tone: 'ready', statusText: '' })
+
+    /** The canvas's notice (either edition passes its own map's retry) beside the presenter, as the workspace draws them. */
+    function workspace(notice: MapNoticeReadModel, retry: () => void) {
+      const canvas = { current: document.body as HTMLElement }
+      return (
+        <>
+          <div data-canvas><MapNotice notice={notice} onRetry={retry} canvasRef={canvas} /></div>
+          <StoryPresenter />
+        </>
+      )
+    }
+
+    function retryIn(scope: Element | null): HTMLButtonElement | undefined {
+      return [...scope?.querySelectorAll<HTMLButtonElement>('[data-map-notice] button') ?? []]
+        .find((button) => button.textContent === t('canvas.layers.retryMap'))
+    }
+
+    it('draws the notice and a working Retry inside its own layer while the canvas draws none, and gives it back on leaving', async () => {
+      const retry = vi.fn()
+      await act(async () => { render(workspace(failed(), retry), container) })
+      expect(retryIn(container.querySelector('[data-canvas]'))).toBeDefined()
+
+      await act(async () => { presentStory('tour', 0) })
+      const presenter = container.querySelector<HTMLElement>('[data-story-presenter]')!
+      expect(container.querySelector('[data-canvas] [data-map-notice]'), 'the canvas draws no notice under the presenter').toBeNull()
+      const notice = presenter.querySelector<HTMLElement>('[data-map-notice]')
+      expect(notice?.querySelector('[role="status"]')?.textContent).toBe(t('canvas.layers.basemapFailed'))
+      await act(async () => { retryIn(presenter)!.click() })
+      expect(retry).toHaveBeenCalledOnce()
+
+      await act(async () => { key(presenter, 'Escape') })
+      expect(container.querySelector('[data-story-presenter]')).toBeNull()
+      expect(retryIn(container.querySelector('[data-canvas]')), 'Retry is back on the canvas').toBeDefined()
+    })
+
+    it('keeps Retry inside its Tab cycle', async () => {
+      await act(async () => { render(workspace(failed(), () => {}), container) })
+      await act(async () => { presentStory('tour', 0) })
+      const presenter = container.querySelector<HTMLElement>('[data-story-presenter]')!
+      const controls = [...presenter.querySelectorAll<HTMLElement>('button, a[href]')]
+      const retry = retryIn(presenter)!
+      expect(controls).toContain(retry)
+      // Tab from the cycle's last control returns to its first, and Shift+Tab from the first reaches the last.
+      controls.at(-1)!.focus()
+      await act(async () => { key(controls.at(-1)!, 'Tab') })
+      expect(document.activeElement).toBe(controls[0])
+      await act(async () => { key(controls[0]!, 'Tab', { shiftKey: true }) })
+      expect(document.activeElement).toBe(controls.at(-1))
+      expect(presenter.contains(retry)).toBe(true)
+    })
+
+    it('keeps Tab inside the presenter from the notice that holds focus after Retry, and Shift+Tab from the presenter itself', async () => {
+      await act(async () => { render(workspace(failed(), () => {}), container) })
+      await act(async () => { presentStory('tour', 0) })
+      const presenter = container.querySelector<HTMLElement>('[data-story-presenter]')!
+      const button = retryIn(presenter)!
+      button.focus()
+      await act(async () => { button.click() })
+      await act(async () => { render(workspace(loading(), () => {}), container) })
+      const chip = presenter.querySelector<HTMLElement>('[data-map-notice]')!
+      expect(document.activeElement).toBe(chip)
+      const controls = [...presenter.querySelectorAll<HTMLElement>('button, a[href]')]
+
+      // The chip follows every control, so Tab would leave the page: it wraps to the first control instead.
+      let event!: KeyboardEvent
+      await act(async () => { event = key(chip, 'Tab') })
+      expect(event.defaultPrevented).toBe(true)
+      expect(document.activeElement).toBe(controls[0])
+
+      // The presenter itself (focused after a press on the map) precedes every control, so Shift+Tab wraps to the last.
+      presenter.focus()
+      await act(async () => { event = key(presenter, 'Tab', { shiftKey: true }) })
+      expect(event.defaultPrevented).toBe(true)
+      expect(document.activeElement).toBe(controls.at(-1))
+    })
+
+    it('keeps focus in the presenter when Retry goes away, and when the notice goes once the map recovers', async () => {
+      const retry = vi.fn()
+      await act(async () => { render(workspace(failed(), retry), container) })
+      await act(async () => { presentStory('tour', 0) })
+      const presenter = container.querySelector<HTMLElement>('[data-story-presenter]')!
+      const button = retryIn(presenter)!
+      button.focus()
+      await act(async () => { button.click() })
+      await act(async () => { render(workspace(loading(), retry), container) })
+      expect(document.activeElement).toBe(presenter.querySelector('[data-map-notice]'))
+
+      await act(async () => { render(workspace(hidden(), retry), container) })
+      expect(presenter.querySelector('[data-map-notice]')).toBeNull()
+      expect(document.activeElement).toBe(presenter)
+    })
   })
 
   it('moves by swiping on a touch screen', async () => {
