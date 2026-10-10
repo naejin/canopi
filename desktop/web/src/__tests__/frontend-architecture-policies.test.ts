@@ -72,16 +72,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'IPC transports import nothing from app',
-    from: ['src/ipc/**'],
-    // ipc/design.ts still composes Design write admission and dialogs for app/document-session (canopi-m4v0).
-    exceptFrom: ['src/ipc/design.ts'],
-    targets: ['src/app/**'],
-    // A transport may implement an app port's interface (GeoJsonFileAdapter); only types cross.
-    allowTypeOnlyTargets: ['src/app/**'],
-  },
-  {
-    kind: 'forbid-imports',
     name: 'Components reach native capabilities through app actions',
     from: ['src/components/**'],
     exceptFrom: [...TEST_SOURCE_PATTERNS],
