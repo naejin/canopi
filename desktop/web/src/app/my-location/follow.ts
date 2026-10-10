@@ -16,7 +16,7 @@ export interface FollowView {
   readonly settledCamera: ReadonlySignal<ViewCamera>
   /** The live frame's camera. */
   captureCamera(): ViewCamera
-  showPlace(place: GeoPoint, zoom: number, options: { readonly motion: 'jump' }): boolean
+  showPlace(place: GeoPoint, zoom: number, options: { readonly motion: 'jump' }): void
   showCamera(camera: ViewCamera, options: { readonly motion: 'jump' }): void
 }
 
@@ -34,10 +34,10 @@ interface CameraFollowOptions {
 export interface CameraFollow {
   /**
    * Centres the camera on the fix, keeping its bearing. `recentre` is the click that starts or resumes following: it also
-   * zooms in to max(zoom, 17), the place-search zoom (Q15); later fixes keep the zoom. False once follow has ended,
-   * including when this fix finds the camera moved away since the click or follow's last jump.
+   * zooms in to max(zoom, 17), the place-search zoom (Q15); later fixes keep the zoom. A fix that finds the camera moved
+   * away since the click or follow's last jump ends follow instead.
    */
-  follow(fix: GeoPoint, recentre: boolean): boolean
+  follow(fix: GeoPoint, recentre: boolean): void
   /** Stops watching without calling `onEnd`. */
   dispose(): void
 }
@@ -89,18 +89,17 @@ export function startCameraFollow(options: CameraFollowOptions): CameraFollow {
 
   return {
     follow(fix, recentre) {
-      if (!live) return false
+      if (!live) return
       const view = options.view.peek()
-      if (!view) return true
+      if (!view) return
       const camera = view.captureCamera()
       if (movedAway(camera)) {
         end()
-        return false
+        return
       }
       settledAtJump = view.settledCamera.peek()
       view.showPlace(fix, recentre ? Math.max(camera.zoom, PLACE_SEARCH_ZOOM) : camera.zoom, { motion: 'jump' })
       centres = [view.captureCamera().center, fix]
-      return true
     },
     dispose,
   }
