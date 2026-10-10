@@ -32,8 +32,8 @@ Read the [design system](../system.md) first. Decisions: [ADR 0015](../../docs/a
 
 ## Show my location
 
-- Web only in 2.0, with a secure context and geolocation: a ghost icon button (44 px on touch) before the compass in the group's registration, named "Show my location" in every state.
-- A click from Off shows the dot and follows it: the camera jumps to the fix at max(zoom, 17), centred on the whole map. Pressed only while following; a click then turns it off. Any other move (a pan, a pointer zoom, a Design, view or story) is Moved away: the dot stays and a click re-centres.
+- Web only in 2.0, with a secure context and geolocation: a ghost icon button (44 px on touch) before the compass, named "Show my location" in every state.
+- A click from Off shows the dot and follows it: the camera jumps to the fix at max(zoom, 17), centred on the whole map. Pressed only while following; a click then turns it off, as does closing the Design. Any other move (a pan, a pointer zoom, a Design, view or story) is Moved away: the dot stays and a click re-centres.
 - Blocked (permission denied): disabled; the tooltip says how to allow it. Lost signal: a hollow dot, "unavailable" in the tooltip, still watching.
 - The dot: a platform blue core in a cream ring over its accuracy area, above every map overlay, hidden while a story is presented; never stored (map workspace guide).
 
