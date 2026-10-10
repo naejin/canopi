@@ -40,7 +40,7 @@ export function MyLocationButtonView({ mode, unavailable, onPress }: {
   const following = mode === 'following'
   const description = blocked
     ? t('canvas.myLocation.blocked')
-    : unavailable && mode !== 'off' ? t('canvas.myLocation.unavailable') : null
+    : unavailable ? t('canvas.myLocation.unavailable') : null
   const touchPress = useRef(false)
   const [tapped, setTapped] = useState(0)
   useEffect(() => {
