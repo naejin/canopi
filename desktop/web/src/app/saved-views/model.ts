@@ -1,8 +1,9 @@
 import type { SceneDesignObjectTarget } from '../../canvas/runtime/scene'
 import type { GeographicView } from '../../canvas/session-plane'
 import { savedViewCameraOf } from '../../canvas/saved-view-framing'
-import type { CanopiFile, SavedView, SavedViewBackground, SavedViewObject } from '../../types/design'
-import { mapBackgroundOf, type MapLayersState } from '../map-layers/state'
+import type { CanopiFile, SavedView, SavedViewObject } from '../../types/design'
+import type { MapLayersState } from '../map-layers/state'
+import { viewMapLayersOf } from '../map-layers/background-presentation'
 
 export interface SavedViewCaptureInput {
   readonly id: string
@@ -25,11 +26,7 @@ export function composeSavedView(input: SavedViewCaptureInput): SavedView {
     name: input.name,
     camera: savedViewCameraOf(input.view, input.screen),
     visible_layers: {
-      background: backgroundOf(input.mapLayers),
-      terrain: {
-        contours: input.mapLayers.contours.visible,
-        hillshade: input.mapLayers.hillshade.visible,
-      },
+      ...viewMapLayersOf(input.mapLayers),
       scene_layers: input.sceneLayers.filter((layer) => layer.visible).map((layer) => layer.name),
       site_data: input.siteData.filter((entry) => entry.visible).map((entry) => entry.id),
     },
@@ -47,17 +44,6 @@ export function storiesShowingView(design: CanopiFile | null, viewId: string): s
   return (design?.stories ?? [])
     .filter((story) => story.steps.some((step) => step.view_id === viewId))
     .map((story) => story.name)
-}
-
-function backgroundOf(state: MapLayersState): SavedViewBackground {
-  switch (mapBackgroundOf(state)) {
-    case 'satellite':
-      return { kind: 'satellite' }
-    case 'basemap':
-      return { kind: 'basemap', style: state.basemap.style }
-    case 'none':
-      return { kind: 'none' }
-  }
 }
 
 function savedViewObjectOf(target: SceneDesignObjectTarget): SavedViewObject {

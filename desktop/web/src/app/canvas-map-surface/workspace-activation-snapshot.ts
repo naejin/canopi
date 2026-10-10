@@ -1,11 +1,9 @@
 import { designSessionStore, type DesignSessionStore } from '../document-session/store'
 import { locale } from '../settings/state'
-import { effectiveBackgroundOpacity, type MapLayersState } from '../map-layers/state'
+import type { MapLayersState } from '../map-layers/state'
+import { backgroundPresentationOf } from '../map-layers/background-presentation'
 import { presentedMapLayers } from '../story-presentation/overrides'
-import {
-  captureMapBackgroundPresentation,
-  type MapBackgroundPresentation,
-} from '../../maplibre/map-background'
+import type { MapBackgroundPresentation } from '../../maplibre/map-background'
 import type { WorkspaceActivationSnapshot } from './workspace-activation'
 
 export interface WorkspaceActivationSnapshotReaderOptions {
@@ -17,13 +15,7 @@ export interface WorkspaceActivationSnapshotReaderOptions {
 export function readWorkspaceBackgroundPresentation(
   options: WorkspaceActivationSnapshotReaderOptions = {},
 ): MapBackgroundPresentation {
-  const layers = (options.readMapLayers ?? presentedMapLayers)()
-  // Soften background dims the band itself; the plants above keep their colours.
-  return captureMapBackgroundPresentation({
-    basemap: { ...layers.basemap, opacity: effectiveBackgroundOpacity(layers, 'basemap') },
-    satellite: { ...layers.satellite, opacity: effectiveBackgroundOpacity(layers, 'satellite') },
-    locale: locale.value,
-  })
+  return backgroundPresentationOf((options.readMapLayers ?? presentedMapLayers)(), locale.value)
 }
 
 export function readWorkspaceActivationSnapshot(

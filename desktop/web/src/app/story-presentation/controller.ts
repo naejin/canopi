@@ -6,7 +6,8 @@ import type { PanelTarget, SavedView, Story, StoryStep } from '../../types/desig
 import { currentDesign, designSessionStore } from '../document-session/store'
 import { mapLayers, type MapLayersState } from '../map-layers/state'
 import { goToSavedView } from '../saved-views/current-view'
-import { isBasemapStyle, savedViewPresentedLabels } from '../saved-views/snapshot'
+import { savedViewPresentedLabels } from '../saved-views/snapshot'
+import { mapLayersOfView } from '../map-layers/background-presentation'
 import { focusOwner } from '../keyboard/focus-owner'
 import {
   setStoryPresentationHidesEditingAids,
@@ -281,19 +282,8 @@ function applyStep({ view }: PresentedStep): void {
 
 /** What a view shows, over the user's own map layer settings (opacities, style choices). */
 function stepOverrides(view: SavedView, layers: MapLayersState, plantLabels: PlantLabelMode): StoryPresentationOverrides {
-  const background = view.visible_layers.background
   return {
-    mapLayers: {
-      ...layers,
-      basemap: {
-        ...layers.basemap,
-        visible: background.kind === 'basemap',
-        ...(background.kind === 'basemap' && isBasemapStyle(background.style) ? { style: background.style } : {}),
-      },
-      satellite: { ...layers.satellite, visible: background.kind === 'satellite' },
-      contours: { ...layers.contours, visible: view.visible_layers.terrain.contours },
-      hillshade: { ...layers.hillshade, visible: view.visible_layers.terrain.hillshade },
-    },
+    mapLayers: mapLayersOfView(view, layers),
     siteDataIds: new Set(view.visible_layers.site_data),
     plantLabels,
     targets: highlightTargets(view),

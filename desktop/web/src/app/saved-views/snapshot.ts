@@ -1,7 +1,5 @@
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import type { CanvasQuerySurface } from '../../canvas/runtime/runtime'
-import { SETTINGS_BASEMAP_STYLES } from '../../generated/settings'
-import { captureMapBackgroundPresentation, type MapBackgroundPresentation } from '../../maplibre/map-background'
 import {
   createViewSnapshotMap,
   type ViewSnapshotCapture,
@@ -9,10 +7,10 @@ import {
   type ViewSnapshotMap,
   type ViewSnapshotRequest,
 } from '../../maplibre/view-snapshot-map'
-import type { BasemapStyle } from '../../generated/contracts'
 import type { SavedView } from '../../types/design'
 import { locale } from '../settings/state'
-import { effectiveBackgroundOpacity, mapLayers, type MapLayersState } from '../map-layers/state'
+import { mapLayers, type MapLayersState } from '../map-layers/state'
+import { backgroundPresentationOf, mapLayersOfView } from '../map-layers/background-presentation'
 import { savedViewPlantLabels } from '../design-edit/views'
 import { currentDesign } from '../document-session/store'
 import { currentPlantDisplay } from '../plant-display/state'
@@ -74,7 +72,7 @@ export function describeSavedViewSnapshot(
     width: options.width,
     height: options.height,
     ...(options.pixelRatio === undefined ? {} : { pixelRatio: options.pixelRatio }),
-    background: savedViewBackgroundPresentation(view, context.mapLayers, context.locale),
+    background: backgroundPresentationOf(mapLayersOfView(view, context.mapLayers), context.locale),
     scene: {
       origin: plane.origin,
       build(view) {
@@ -103,22 +101,6 @@ export class ViewSnapshotSceneBusyError extends Error {
 /** The labels a view is presented with: those recorded with it, else the Design's current choice. */
 export function savedViewPresentedLabels(view: Pick<SavedView, 'id'>): PlantLabelMode {
   return savedViewPlantLabels(currentDesign.peek(), view.id) ?? currentPlantDisplay.peek().labels
-}
-
-export function savedViewBackgroundPresentation(
-  view: SavedView,
-  layers: MapLayersState,
-  activeLocale: string,
-): MapBackgroundPresentation {
-  const background = view.visible_layers.background
-  const style = background.kind === 'basemap' && isBasemapStyle(background.style)
-    ? background.style
-    : layers.basemap.style
-  return captureMapBackgroundPresentation({
-    basemap: { style, visible: background.kind === 'basemap', opacity: effectiveBackgroundOpacity(layers, 'basemap') },
-    satellite: { visible: background.kind === 'satellite', opacity: effectiveBackgroundOpacity(layers, 'satellite') },
-    locale: activeLocale,
-  })
 }
 
 let owner: ViewSnapshotMap | null = null
@@ -151,11 +133,6 @@ export async function disposeViewSnapshots(): Promise<void> {
   const current = owner
   owner = null
   await current?.dispose()
-}
-
-/** Whether a saved view's basemap style name is one the settings know. */
-export function isBasemapStyle(style: string): style is BasemapStyle {
-  return (SETTINGS_BASEMAP_STYLES as readonly string[]).includes(style)
 }
 
 if (import.meta.hot) {

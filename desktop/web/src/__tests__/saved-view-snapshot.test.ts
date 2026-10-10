@@ -36,7 +36,6 @@ import {
   captureSavedViewSnapshot,
   describeSavedViewSnapshot,
   disposeViewSnapshots,
-  savedViewBackgroundPresentation,
   VIEW_SNAPSHOT_DEFAULT_TIMEOUT_MS,
   VIEW_SNAPSHOT_THUMBNAIL,
   ViewSnapshotSceneBusyError,
@@ -166,18 +165,20 @@ describe('saved view snapshot request', () => {
       basemap: { style: 'positron' as const, visible: false, opacity: 0.4 },
       satellite: { visible: false, opacity: 0.6 },
     }
-    expect(savedViewBackgroundPresentation(withBackground({ kind: 'basemap', style: 'dark' }), layers, 'en')).toEqual({
+    const context = { queries: queries(), mapLayers: layers, locale: 'en', plantLabels: 'names' as const }
+    const backgroundOf = (background: SavedView['visible_layers']['background']) =>
+      describeSavedViewSnapshot(withBackground(background), VIEW_SNAPSHOT_THUMBNAIL, context)!.background
+    expect(backgroundOf({ kind: 'basemap', style: 'dark' })).toEqual({
       basemap: { style: 'dark', visible: true, opacity: 0.4 },
       satellite: { visible: false, opacity: 0.6 },
       locale: 'en',
     })
-    expect(savedViewBackgroundPresentation(withBackground({ kind: 'basemap', style: 'retired' }), layers, 'en').basemap.style)
-      .toBe('positron')
-    expect(savedViewBackgroundPresentation(withBackground({ kind: 'satellite' }), layers, 'en')).toMatchObject({
+    expect(backgroundOf({ kind: 'basemap', style: 'retired' }).basemap.style).toBe('positron')
+    expect(backgroundOf({ kind: 'satellite' })).toMatchObject({
       basemap: { visible: false },
       satellite: { visible: true, opacity: 0.6 },
     })
-    expect(savedViewBackgroundPresentation(withBackground({ kind: 'none' }), layers, 'en')).toMatchObject({
+    expect(backgroundOf({ kind: 'none' })).toMatchObject({
       basemap: { visible: false },
       satellite: { visible: false },
     })
