@@ -8,6 +8,7 @@ import {
   type MenuItemThumbnail,
 } from '../../app/shell-commands/menus'
 import { modalLayerOpen } from '../../app/shell/modal-layer'
+import { ESCAPE_PRIORITY, registerEscapeLayer } from '../../app/keyboard/escape-chain'
 import { ButtonTooltip } from './ButtonTooltip'
 import { ControlIcon } from './ControlIcon'
 import { ThumbnailFrame } from './SavedViewThumbnail'
@@ -33,6 +34,10 @@ interface MenuBarProps {
  * The title-bar menu bar: a `menubar` of menu buttons, each opening a `menu`
  * of commands with their shortcuts. Checkable items are `menuitemcheckbox`
  * or `menuitemradio`, and a check column is reserved when a menu has any.
+ * An open menu is the Esc chain's popover layer, so an Esc from anywhere
+ * outside it (the map, where Safari leaves focus after a click) closes the
+ * menu and nothing else; closing it with a key or a command gives focus back
+ * to where it was before the menu opened.
  */
 export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: MenuBarProps) {
   // Narrow windows get one menu whose submenus are File, Edit, View, Tools and Help.
@@ -54,10 +59,26 @@ export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: M
   const triggerRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const submenuTriggerRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const submenuRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  /** Where focus was before the open menu opened; a press on a menu button records it before the press moves focus. */
+  const focusBeforeOpen = useRef<Element | null>(null)
+  const focusAtPress = useRef<Element | null>(null)
 
   // A modal dialog makes the bar inert; a menu open under it closes.
   useSignalEffect(() => {
     if (modalLayerOpen.value && openMenuId.peek() !== null) closeAll(false)
+  })
+
+  // An Esc from outside the open menu closes it before the map's draft or tool hears it (inside, its own handler runs).
+  useSignalEffect(() => {
+    if (!openMenuId.value) return
+    return registerEscapeLayer({
+      priority: ESCAPE_PRIORITY.popover,
+      isActive: () => true,
+      escape: () => {
+        closeAll(true)
+        return true
+      },
+    })
   })
 
   useSignalEffect(() => {
@@ -88,8 +109,10 @@ export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: M
     })
   }
 
-  function openRootMenu(menuId: string): void {
+  /** Opens a menu; `focusBefore` is where focus was before it, kept while the bar moves between menus. */
+  function openRootMenu(menuId: string, focusBefore: Element | null = document.activeElement): void {
     if (modalLayerOpen.peek()) return
+    if (openMenuId.peek() === null) focusBeforeOpen.current = focusBefore
     openMenuId.value = menuId
     openSubmenuId.value = null
     onMenuOpen?.(menuId === 'compact' ? 'file' : menuId)
@@ -97,9 +120,13 @@ export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: M
 
   function closeAll(returnFocus: boolean): void {
     const triggerId = openMenuId.value
+    const before = focusBeforeOpen.current
+    focusBeforeOpen.current = null
     openMenuId.value = null
     openSubmenuId.value = null
-    if (returnFocus && triggerId) triggerRefs.current.get(triggerId)?.focus()
+    if (!returnFocus || !triggerId) return
+    if (before instanceof HTMLElement && before.isConnected && before !== document.body) before.focus({ preventScroll: true })
+    else triggerRefs.current.get(triggerId)?.focus()
   }
 
   function moveToSiblingMenu(menuId: string, direction: -1 | 1): void {
@@ -358,7 +385,13 @@ export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: M
             role="menuitem"
             data-menu-id={compact ? undefined : menu.id}
             aria-label={compact ? menu.label : undefined}
-            onClick={() => { if (isOpen) closeAll(false); else openRootMenu(key) }}
+            onPointerDown={() => { focusAtPress.current = document.activeElement }}
+            onClick={() => {
+              const focusBefore = focusAtPress.current ?? document.activeElement
+              focusAtPress.current = null
+              if (isOpen) closeAll(false)
+              else openRootMenu(key, focusBefore)
+            }}
             onMouseEnter={() => { if (openMenuId.value !== null && openMenuId.value !== key) openRootMenu(key) }}
             onKeyDown={(event) => handleTriggerKeyDown(event, key)}
             aria-expanded={isOpen}

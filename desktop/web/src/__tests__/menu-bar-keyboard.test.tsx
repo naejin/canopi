@@ -6,7 +6,12 @@ import { MenuBar } from '../components/shared/MenuBar'
 import { appCommandGraphChromeProjection } from '../commands/graph/projections'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { currentCanvasTool } from '../canvas/session-state'
-import { createTestCanvasCommandSurface, createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
+import {
+  createTestCanvasCommandSurface,
+  createTestCanvasKeyboardPort,
+  createTestCanvasRuntimeSurfaces,
+} from './support/canvas-runtime-surfaces'
+import { installCanvasKeyRouter, pressKey } from './support/key-router'
 
 function action(id: string, overrides: Partial<MenuAction> = {}): MenuAction {
   return { type: 'action', id, label: id, disabled: false, action: vi.fn(), ...overrides }
@@ -208,6 +213,53 @@ describe('MenuBar keyboard and semantics', () => {
     expect(document.activeElement).toBe(trigger('help'))
     await key(trigger('help'), 'ArrowLeft')
     expect(document.activeElement).toBe(trigger('view'))
+  })
+
+  it('an Esc from the map closes a menu opened by click, never reaches the canvas, and gives the map its focus back', async () => {
+    const map = document.createElement('div')
+    map.tabIndex = -1
+    document.body.appendChild(map)
+    const escape = vi.fn()
+    const port = createTestCanvasKeyboardPort({ host: map, escapeLayers: () => ['tool-transient', 'tool'], escape })
+    const keys = installCanvasKeyRouter(() => port)
+    try {
+      await act(async () => { render(<MenuBar menus={items} label="Menus" />, container) })
+      // A polygon draft is live on the focused map; a click opens File. Safari and WKWebView leave focus on the map.
+      map.focus()
+      const openByClick = async (focusesButton: boolean) => {
+        await act(async () => {
+          trigger('file').dispatchEvent(new Event('pointerdown', { bubbles: true }))
+          if (focusesButton) trigger('file').focus()
+          trigger('file').click()
+        })
+        expect(openMenu()).not.toBeNull()
+      }
+      await openByClick(false)
+      expect(document.activeElement).toBe(map)
+
+      const first = pressKey({ key: 'Escape' }, map)
+      await act(async () => { await frame() })
+      expect(openMenu()).toBeNull()
+      expect(first.defaultPrevented).toBe(true)
+      expect(escape).not.toHaveBeenCalled()
+      expect(document.activeElement).toBe(map)
+
+      // Chromium focuses the button on press; its Esc still hands focus back to the map, not to the button.
+      await openByClick(true)
+      const second = pressKey({ key: 'Escape' }, trigger('file'))
+      await act(async () => { await frame() })
+      expect(openMenu()).toBeNull()
+      expect(second.defaultPrevented).toBe(true)
+      expect(escape).not.toHaveBeenCalled()
+      expect(document.activeElement).toBe(map)
+
+      // With the menu closed, Esc is the canvas's again.
+      pressKey({ key: 'Escape' }, map)
+      expect(escape).toHaveBeenCalledWith('tool-transient')
+    } finally {
+      keys.dispose()
+      map.remove()
+    }
   })
 
   it('marks radio submenu items with menuitemradio', async () => {
