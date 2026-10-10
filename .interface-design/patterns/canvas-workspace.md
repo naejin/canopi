@@ -50,6 +50,6 @@ A view-only magnified preview with recentre, widen and magnify controls, collisi
 
 ## Presenting a story
 
-The map fills the window without editing chrome. A floating glass card (420 px, top left): "<story> · Step n of m" in muted caption, the title in Literata 28, the text at 18 px, images, tags for the highlighted species, then Previous, step dots (the current one a wide ochre bar, `aria-current="step"`), Next (primary) and the key hint. Top right, a glass pill: story name, Full screen (F), Leave presentation (Esc). The map flies to each step's view and bearing and rings what it highlights.
+The map fills the window; no editing chrome. A glass card (420 px, top left): muted "<story> · Step n of m", Literata 28 title, text, images, species tags, then Previous, dots (current wide, ochre), Next, key hint. Top right, a glass pill: name, Full screen (F), Leave (Esc). The map's notice, with Retry, sits centred at the bottom of the room right of the card; below 772 px wide it spans the window's bottom and the card stops short of it. The map flies to each step's view and bearing, ringing highlights.
 
-On phones: a top bar with "Step n of m", small dots and Leave (44 px), and the card as a bottom sheet with full-width Previous and Next that stay in reach while the text scrolls, swipe to move, safe-area insets.
+On phones: a top bar ("Step n of m", dots, 44 px Leave), the map's notice under the bar (on its side: bottom right of the card), the card a bottom sheet, full-width Previous/Next in reach as text scrolls, swipe, safe-area insets.
