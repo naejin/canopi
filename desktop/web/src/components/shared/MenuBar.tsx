@@ -59,7 +59,10 @@ export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: M
   const triggerRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const submenuTriggerRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const submenuRefs = useRef<Map<string, HTMLDivElement>>(new Map())
-  /** Where focus was before the open menu opened; a press on a menu button records it before the press moves focus. */
+  /**
+   * Where focus was before the open menu opened; a press on a menu button records it before the press moves focus. A
+   * menu button there means the bar was entered from it, and closing focuses the current menu's button instead.
+   */
   const focusBeforeOpen = useRef<Element | null>(null)
   const focusAtPress = useRef<Element | null>(null)
 
@@ -125,7 +128,10 @@ export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: M
     openMenuId.value = null
     openSubmenuId.value = null
     if (!returnFocus || !triggerId) return
-    if (before instanceof HTMLElement && before.isConnected && before !== document.body) before.focus({ preventScroll: true })
+    // Entered from a menu button, the bar gives focus to the button of the menu open last (APG menubar); otherwise back to
+    // where it was before a click opened the menu.
+    const fromBar = before instanceof Node && barRef.current?.contains(before) === true
+    if (!fromBar && before instanceof HTMLElement && before.isConnected && before !== document.body) before.focus({ preventScroll: true })
     else triggerRefs.current.get(triggerId)?.focus()
   }
 
