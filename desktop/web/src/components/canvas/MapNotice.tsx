@@ -40,8 +40,10 @@ export function MapNotice({ notice, onRetry, canvasRef }: MapNoticeProps) {
   }
   return (
     <div ref={chip} className={styles.basemapFeedback} data-map-notice="" data-tone={notice.tone} tabIndex={-1}>
-      <span className={styles.basemapFeedbackDot} aria-hidden="true" />
-      <span className={styles.basemapFeedbackText} role="status" aria-live="polite">{notice.statusText}</span>
+      <span className={styles.basemapFeedbackLead}>
+        <span className={styles.basemapFeedbackDot} aria-hidden="true" />
+        <span className={styles.basemapFeedbackText} role="status" aria-live="polite">{notice.statusText}</span>
+      </span>
       {notice.retry && (
         <button type="button" className={styles.basemapFeedbackRetry} onClick={retry}>
           {t('canvas.layers.retryMap')}

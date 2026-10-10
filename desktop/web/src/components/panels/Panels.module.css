@@ -74,9 +74,10 @@
 
 /* Map status: a quiet chip above the bottom row, centred in the part of the map the other chrome leaves visible
    (`--map-framing-inset-*`, published by app/shell/visible-map-area.ts), so the bottom row, the rails and an open dock
-   or bottom sheet never cover it, in every window and locale; on a phone it keeps clear of the home indicator. Its own
-   box is status chrome on that seam (frames: false): the selection chip stands above it, and it never moves the
-   Design's framing. */
+   or bottom sheet never cover it, in every window and locale; on a phone it keeps clear of the home indicator. Beside
+   an open dock in a narrow window that map is narrower than the notice's widest place: Retry then wraps below the
+   sentence rather than squeeze it into a tower of single words. Its own box is status chrome on that seam
+   (frames: false): the selection chip stands above it, and it never moves the Design's framing. */
 .basemapFeedback {
   --map-notice-room-left: calc(var(--map-framing-inset-left, 0px) + var(--chrome-inset));
   --map-notice-room-right: calc(var(--map-framing-inset-right, 0px) + var(--chrome-inset));
@@ -85,6 +86,7 @@
   left: calc(var(--map-notice-room-left) + (100% - var(--map-notice-room-left) - var(--map-notice-room-right)) / 2);
   z-index: 18;
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1-5);
   /* max-content: centred at its left edge, the chip would otherwise wrap at the room right of that edge. */
@@ -99,6 +101,15 @@
   box-shadow: var(--shadow-float);
   transform: translateX(-50%);
   pointer-events: none;
+}
+
+/* The dot and the sentence: Retry stays beside them while they keep this width, and wraps below them otherwise. */
+.basemapFeedbackLead {
+  display: flex;
+  flex: 1 1 15em;
+  align-items: center;
+  gap: var(--space-1-5);
+  min-width: 0;
 }
 
 .basemapFeedbackDot {

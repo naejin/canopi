@@ -2,7 +2,9 @@
 // shows "Basemap couldn't load" with Retry. The notice stands above the bottom row, centred in the part of the map the
 // other chrome leaves visible (the visible-map-area seam's framing frame), so the zoom group, the view chip, the rails
 // and an open dock or bottom sheet never cover it: it is at most two lines tall with no panel open (never a tower of
-// single words), Retry is what a click at its centre reaches, and it shares no pixel with that chrome. The notice is
+// single words), Retry is what a click at its centre reaches, and it shares no pixel with that chrome. Beside an open
+// dock in a window under about 900 px the visible map is narrower than the notice's widest place: Retry then stands
+// below the sentence, which keeps the notice's width and takes at most three lines, never a tower. The notice is
 // status chrome on the seam, registered with frames: false: with everything selected the selection chip sits above it,
 // but it never moves the camera's framing, so a Design opened while the notice shows opens in the same frame as one
 // opened with the basemap hidden, when no notice shows. Both engines; no baselines.
@@ -31,6 +33,7 @@ const LAYOUTS: ReadonlyArray<{ readonly width: number, readonly height: number, 
   { width: 900, height: 700 },
   { width: 800, height: 700 },
   { width: 761, height: 700 },
+  { width: 761, height: 700, locale: 'de' },
   // The narrowest window that keeps the wide layout; an open panel is a bottom sheet there.
   { width: 700, height: 500 },
 ]
@@ -59,14 +62,18 @@ for (const { width, height, locale = 'en' } of LAYOUTS) {
       expect(Math.abs(noticeBox.x + noticeBox.width / 2 - (frame.left + frame.right) / 2), 'the notice is centred in the visible map').toBeLessThanOrEqual(1)
     })
 
-    test('with a panel open, the notice stands clear of the dock and Retry takes the click at its centre', async ({ page }) => {
+    test('with a panel open, the notice stands clear of the dock, never a tower of single words, and Retry takes the click at its centre', async ({ page }) => {
       await openBaseFixture(page, { locale })
       await page.locator('[data-panel-rail] [data-panel]').first().click()
       const dock = page.locator('[data-key-region="dock"]')
       await expect(dock).toBeVisible()
       const { notice, retry } = await expectNoticeWithRetry(page)
       await expectRetryHit(retry)
-      expect(overlap(await boxOf(notice), await boxOf(dock)), 'the notice clears the dock').toBe(false)
+      const noticeBox = await boxOf(notice)
+      expect(overlap(noticeBox, await boxOf(dock)), 'the notice clears the dock').toBe(false)
+      // At its widest place the sentence wraps beside Retry; narrower, Retry stands below it rather than squeeze it.
+      const atWidest = noticeBox.width >= NOTICE_MAX_WIDTH_PX - 0.5
+      expect(await lineCount(notice), 'the sentence never becomes a tower of single words').toBeLessThanOrEqual(atWidest ? 2 : 3)
     })
 
     test('the selection chip and the chips\' visible map frame clear the notice', async ({ page }) => {
