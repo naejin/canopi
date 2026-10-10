@@ -9,11 +9,13 @@ import { currentCanvasViewportCommandSurface } from '../../canvas/session'
  * it (through the camera), status chips centre in it (through `--map-inset-*`
  * on the map area), and the map credits fold when the bottom band leaves them
  * too little room. Status chrome that comes and goes with load state (the map
- * notice) registers with `frames: false`: chips and credits avoid it, but the
- * camera frames from the other chrome only, so a Design opened while it shows
- * is framed as one opened after it goes. That framing frame is also published
- * as `--map-framing-inset-*`, where status chrome places itself: clear of all
- * other chrome, and never standing on its own box. Both rails also
+ * notice) registers with `frames: false`: chips avoid it, but the camera
+ * frames from the other chrome only, so a Design opened while it shows is
+ * framed as one opened after it goes. That framing frame is also published as
+ * `--map-framing-inset-*`, where status chrome places itself: clear of all
+ * other chrome, and never standing on its own box. The credits' fold measures
+ * only the bottom band, so status chrome standing above it takes none of
+ * their room. Both rails also
  * register the room they have above the chrome under their column (the view
  * chip under the tool rail; the inspection launcher and the zoom group under
  * the panel rail), so a short window folds their last entries into a More
