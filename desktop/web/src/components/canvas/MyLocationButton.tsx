@@ -13,10 +13,11 @@ import styles from './MyLocationButton.module.css'
  * only while Following; Blocked disables it with the reason in its tooltip, and a stale fix says location is
  * unavailable. A touch screen has no hover, so a tap shows that tooltip for a few seconds while it has a reason to give.
  */
-export function MyLocationButton() {
+export function MyLocationButton({ className }: { readonly className: string | undefined }) {
   if (!geolocationSupported()) return null
   return (
     <MyLocationButtonView
+      className={className}
       mode={myLocation.mode.value}
       unavailable={myLocation.unavailable.value}
       onPress={() => myLocation.press()}
@@ -28,7 +29,9 @@ export function MyLocationButton() {
 const TAP_TOOLTIP_MS = 4000
 
 /** The button for a given state, so the UI gallery can show each one without a device location. */
-export function MyLocationButtonView({ mode, unavailable, onPress }: {
+export function MyLocationButtonView({ className, mode, unavailable, onPress }: {
+  /** The zoom group's button class, which gives the button its size, hover and focus. */
+  readonly className: string | undefined
   readonly mode: MyLocationMode
   /** The browser reported the position unavailable or timed out since the last fix. */
   readonly unavailable: boolean
@@ -52,7 +55,7 @@ export function MyLocationButtonView({ mode, unavailable, onPress }: {
     <>
       <button
         type="button"
-        className={styles.button}
+        className={[className, styles.location].filter(Boolean).join(' ')}
         data-my-location={mode}
         aria-label={label}
         aria-pressed={following ? true : undefined}
@@ -68,7 +71,7 @@ export function MyLocationButtonView({ mode, unavailable, onPress }: {
         <svg className={styles.glyph} width={20} height={20} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
           <circle cx="10" cy="10" r="5.5" />
           <path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3" />
-          <circle className={following ? styles.centreOn : styles.centre} cx="10" cy="10" r="2.2" />
+          <circle className={following ? styles.centreOn : undefined} cx="10" cy="10" r="2.2" />
         </svg>
         <ButtonTooltip label={label} description={description ?? undefined} side="top" shown={tapped > 0 && description !== null} />
       </button>

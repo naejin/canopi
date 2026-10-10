@@ -28,8 +28,9 @@ import styles from './gallery.module.css'
 import { GALLERY_LOCATION_STATES, parseGalleryLocationState, type GalleryLocationState } from './surface-routing'
 
 /** Show my location in each state the `location` surface reviews; one component per state, so a re-render keeps it. */
-const GALLERY_LOCATION_BUTTONS = new Map<GalleryLocationState, FunctionComponent>(GALLERY_LOCATION_STATES.map((state) => [state, () => (
+const GALLERY_LOCATION_BUTTONS = new Map<GalleryLocationState, FunctionComponent<{ readonly className: string | undefined }>>(GALLERY_LOCATION_STATES.map((state) => [state, ({ className }) => (
   <MyLocationButtonView
+    className={className}
     mode={state === 'stale' ? 'following' : state}
     unavailable={state === 'stale'}
     onPress={() => { activity.value = `Show my location pressed (${state}).` }}

@@ -387,7 +387,7 @@ describe('ZoomControls', () => {
     it('a tap while the reading is stale re-centres and shows that location is unavailable; a tap with nothing to say shows no tooltip', async () => {
       const onPress = vi.fn()
       const mount = async (mode: MyLocationMode, unavailable: boolean) => {
-        await act(async () => { render(<MyLocationButtonView mode={mode} unavailable={unavailable} onPress={onPress} />, container) })
+        await act(async () => { render(<MyLocationButtonView className={undefined} mode={mode} unavailable={unavailable} onPress={onPress} />, container) })
       }
       await mount('moved-away', true)
       await tap(location())

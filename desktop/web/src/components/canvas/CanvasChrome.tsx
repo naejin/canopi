@@ -34,7 +34,7 @@ export function CanvasChrome({ projection, canvasRef, stampChooser, myLocation, 
   /** Place a stamp's saved-stamp chooser (Desktop, where stamps are saved). */
   readonly stampChooser?: FunctionComponent<StampChooserProps>
   /** Show my location, a button of the zoom group before the compass (Web, U54 Q9). */
-  readonly myLocation?: FunctionComponent
+  readonly myLocation?: FunctionComponent<{ readonly className: string | undefined }>
   /** The canvas menu's "Profile this line" (Desktop, where Site data is). */
   readonly profileLine?: CanvasContextMenuProfileLine
   /** Edition-only chrome (Desktop: raster inspection). */
@@ -54,7 +54,7 @@ function CanvasChromeContent({ projection, canvasRef, stampChooser, myLocation, 
   readonly projection: CanvasCommandProjection
   readonly canvasRef: RefObject<HTMLDivElement>
   readonly stampChooser?: FunctionComponent<StampChooserProps>
-  readonly myLocation?: FunctionComponent
+  readonly myLocation?: FunctionComponent<{ readonly className: string | undefined }>
   readonly profileLine?: CanvasContextMenuProfileLine
   readonly children?: ComponentChildren
 }) {
