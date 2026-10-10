@@ -35,6 +35,11 @@ for (const viewport of WIDE_LAYOUTS) {
         await expect(chrome).toBeVisible()
         expect(overlap(noticeBox, await boxOf(chrome)), `the notice clears ${name}`).toBe(false)
       }
+      // The seam reads the notice's place in the bottom row, which stays there when the chip rises, so the Design's
+      // framing never moves for the notice.
+      const place = await boxOf(page.locator('[data-map-notice-place]'))
+      const zoom = await boxOf(page.getByRole('group', { name: 'Zoom' }))
+      expect(Math.round(place.y + place.height), 'the notice\'s place ends with the bottom row').toBe(Math.round(zoom.y + zoom.height))
     })
   })
 }

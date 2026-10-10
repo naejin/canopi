@@ -72,31 +72,41 @@
   pointer-events: none;
 }
 
-/* Map status: a quiet chip at the bottom centre, between the view chip and the zoom group. The row keeps it only while
-   its widest form fits either side of the centre, clear of the zoom group (with the folded credits' (i) beside it) and
-   of the view chip, from the widths they publish; otherwise it rises above the row. Both readings stay in this rule,
-   so a window, a locale or Show my location that widens the zoom group can never put it over Retry. */
+/* Map status: a quiet chip at the bottom centre, between the view chip and the zoom group. This box is the notice's
+   place in the bottom row, the chrome the visible-map-area seam reads (the credits fold beside it; framing never moves
+   for the notice); the chip inside it is the notice. */
 .basemapFeedback {
   --map-notice-max-width: 480px;
+  /* The room the row's chrome takes either side of the centre: the zoom group with the folded credits' (i) beside it,
+     and the view chip, from the widths they publish. */
   --map-notice-row-clearance: max(
     calc(var(--chrome-inset) + var(--zoom-group-width, 0px) + var(--space-2) + var(--control-size-sm) + var(--space-2)),
     calc(var(--chrome-inset) + var(--view-chip-width, 0px) + var(--space-2))
   );
   position: absolute;
-  /* A step, not a slide: any shortfall of room, times 10000, reaches the risen place. */
-  bottom: clamp(
-    var(--chrome-inset),
-    calc(var(--chrome-inset) + (var(--map-notice-max-width) - (100cqw - 2 * var(--map-notice-row-clearance))) * 10000),
-    calc(2 * var(--chrome-inset) + var(--control-size-3xl))
-  );
+  bottom: var(--chrome-inset);
   left: 50%;
   z-index: 18;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1-5);
   /* max-content: centred at left 50%, the chip would otherwise wrap at half the canvas width. */
   width: max-content;
   max-width: min(var(--map-notice-max-width), calc(100% - 2 * var(--chrome-inset)));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* The chip stays in the row only while its widest form fits either side of the centre; otherwise it rises above the
+   row, so a window, a locale or Show my location that widens the zoom group never puts the zoom group over Retry. A
+   step, not a slide: any shortfall of room, times 10000, reaches the risen place. */
+.basemapFeedbackChip {
+  position: relative;
+  bottom: clamp(
+    0px,
+    calc((var(--map-notice-max-width) - (100cqw - 2 * var(--map-notice-row-clearance))) * 10000),
+    calc(var(--chrome-inset) + var(--control-size-3xl))
+  );
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
   min-height: var(--control-size-lg);
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--color-border);
@@ -104,8 +114,6 @@
   border-radius: var(--radius-lg);
   background: var(--color-glass);
   box-shadow: var(--shadow-float);
-  transform: translateX(-50%);
-  pointer-events: none;
 }
 
 .basemapFeedbackDot {
@@ -116,15 +124,15 @@
   flex-shrink: 0;
 }
 
-.basemapFeedback[data-tone="ready"] .basemapFeedbackDot {
+.basemapFeedbackChip[data-tone="ready"] .basemapFeedbackDot {
   background: var(--color-accent);
 }
 
-.basemapFeedback[data-tone="error"] .basemapFeedbackDot {
+.basemapFeedbackChip[data-tone="error"] .basemapFeedbackDot {
   background: var(--color-danger);
 }
 
-.basemapFeedback[data-tone="loading"] .basemapFeedbackDot {
+.basemapFeedbackChip[data-tone="loading"] .basemapFeedbackDot {
   background: var(--color-text-muted);
   animation: basemapPulse 1.1s ease-in-out infinite;
 }
@@ -156,7 +164,7 @@
   background: var(--color-control-hover);
 }
 
-.basemapFeedback:focus-visible,
+.basemapFeedbackChip:focus-visible,
 .basemapFeedbackRetry:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 1px;
@@ -169,7 +177,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .basemapFeedback[data-tone="loading"] .basemapFeedbackDot {
+  .basemapFeedbackChip[data-tone="loading"] .basemapFeedbackDot {
     animation: none;
   }
 }
@@ -214,4 +222,9 @@
 
 :global([data-phone-layout]) .basemapFeedback {
   bottom: max(calc(var(--map-inset-bottom, 0px) + var(--space-2)), calc(var(--chrome-inset) + env(safe-area-inset-bottom)));
+}
+
+/* On a phone the notice is placed from the visible map frame, clear of the zoom column and the sheet: it never rises. */
+:global([data-phone-layout]) .basemapFeedbackChip {
+  bottom: 0;
 }
