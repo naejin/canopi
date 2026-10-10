@@ -118,7 +118,6 @@ export class MyLocationSession {
       ...this.options,
       onEnd: () => {
         ended = true
-        if (this.follow !== null && this.follow !== follow) return
         this.follow = null
         if (this.currentMode.peek() === 'following') this.currentMode.value = 'moved-away'
       },
