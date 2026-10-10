@@ -32,9 +32,13 @@
   color: var(--color-accent-ink);
 }
 
+/* Blocked dims the glyph only: the tooltip is the button's child, and its reason must stay readable. */
 .button[aria-disabled="true"] {
-  opacity: 0.38;
   cursor: default;
+}
+
+.button[aria-disabled="true"] .glyph {
+  opacity: 0.38;
 }
 
 .button:focus-visible {

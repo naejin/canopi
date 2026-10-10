@@ -9,8 +9,8 @@
 // request fails with code 1 and design check A4's rule applies to the permission state the engine reports: 'denied'
 // is Blocked (aria-disabled; Playwright WebKit), anything else is Off (Chromium reports 'prompt'). A touch screen has no
 // hover, so a tap while Blocked shows the tooltip's reason for a few seconds (Q16), whole inside a phone's window in the
-// longest locales. The dot's core is platform blue #1A73E8 (U54 Q11) over an accuracy polygon of the fix's accuracy
-// radius.
+// longest locales and undimmed by the disabled button. The dot's core is platform blue #1A73E8 (U54 Q11) over an
+// accuracy polygon of the fix's accuracy radius.
 // Chromium sends a code 2 error to a running watch before each setGeolocation fix (design check §6); every check after a
 // new fix polls until that fix's longitude has been delivered (a count would pass on an earlier second read), and a
 // single code 2 never ends Following. The moved fix has a wider accuracy than the first, so the moved fix being drawn
@@ -210,7 +210,7 @@ async function denyGeolocationPermission(page: Page): Promise<void> {
   })
 }
 
-/** The Blocked reason is shown in `locale`, wholly inside the window. */
+/** The Blocked reason is shown in `locale`, wholly inside the 390 px window and at full opacity (a dimmed button does not dim it). */
 async function expectReasonReadable(page: Page, tooltip: Locator, locale: string): Promise<void> {
   const messages = JSON.parse(await readFile(fileURLToPath(new URL(`../../src/i18n/${locale}.json`, import.meta.url)), 'utf8'))
   await expect(tooltip).toBeVisible()
@@ -218,6 +218,11 @@ async function expectReasonReadable(page: Page, tooltip: Locator, locale: string
   const box = await boxOf(tooltip)
   expect(box.x, 'the reason starts in the window').toBeGreaterThanOrEqual(0)
   expect(box.x + box.width, 'the reason ends in the window').toBeLessThanOrEqual(page.viewportSize()!.width)
+  await expect.poll(async () => tooltip.evaluate((element) => {
+    let opacity = 1
+    for (let node: Element | null = element; node; node = node.parentElement) opacity *= Number(getComputedStyle(node).opacity)
+    return opacity
+  }), { message: 'the reason is drawn at full opacity', timeout: 3_000 }).toBe(1)
 }
 
 /** Records the fixes' longitudes and the error codes the page's geolocation delivers, without changing them. */
