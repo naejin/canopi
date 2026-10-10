@@ -174,15 +174,23 @@ let stopCameraSync: (() => void) | null = null
 function recompute(): void {
   if (!area) return
   const map = area.getBoundingClientRect()
-  const boxes = [...occluders].map(([element, { side, frames }]) => ({ rect: element.getBoundingClientRect(), side, frames }))
-  const next = measureVisibleMapFrame(map, boxes)
+  const measure = () => [...occluders].map(([element, { side, frames }]) => ({ rect: element.getBoundingClientRect(), side, frames }))
+  let boxes = measure()
   const framing = measureVisibleMapFrame(map, boxes.filter(({ frames }) => frames))
+  let framingMoved = false
+  for (const edge of INSET_PROPERTIES) {
+    const value = `${framing[edge]}px`
+    if (area.style.getPropertyValue(`--map-framing-inset-${edge}`) === value) continue
+    area.style.setProperty(`--map-framing-inset-${edge}`, value)
+    framingMoved = true
+  }
+  // Status chrome stands from the framing insets just written; measured before them, it would be where it stood, and
+  // moving without resizing it brings no observation to correct the chips' insets.
+  if (framingMoved && boxes.some(({ frames }) => !frames)) boxes = measure()
+  const next = measureVisibleMapFrame(map, boxes)
   const folded = map.width > 0 && measureBottomBandRoom(map, boxes) < MAP_ATTRIBUTION_MIN_ROOM_PX
   if (mapAttributionFolded.peek() !== folded) mapAttributionFolded.value = folded
-  for (const edge of INSET_PROPERTIES) {
-    area.style.setProperty(`--map-inset-${edge}`, `${next[edge]}px`)
-    area.style.setProperty(`--map-framing-inset-${edge}`, `${framing[edge]}px`)
-  }
+  for (const edge of INSET_PROPERTIES) area.style.setProperty(`--map-inset-${edge}`, `${next[edge]}px`)
   for (const kind of ['tool', 'panel'] as const) {
     const room = measureRailRoom(
       rails[kind]?.getBoundingClientRect() ?? null,

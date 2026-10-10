@@ -126,6 +126,30 @@ for (const viewport of [{ width: 1024, height: 768 }, { width: 800, height: 700 
   })
 }
 
+test.describe('700x500 bottom sheet closing', () => {
+  test.use({ viewport: { width: 700, height: 500 } })
+
+  test('closing the bottom sheet brings the selection chip back just above the notice, not where the sheet was', async ({ page }) => {
+    // The sheet's release is one measure; the notice then moves down without resizing, so nothing observes it again.
+    await openBaseFixture(page)
+    const { notice } = await expectNoticeWithRetry(page)
+    await selectAll(page)
+    const panel = page.locator('[data-panel-rail] [data-panel]').first()
+    await panel.click()
+    const dock = page.locator('[data-key-region="dock"]')
+    await expect(dock).toBeVisible()
+    await nextFrames(page)
+    await panel.click()
+    await expect(dock).toHaveCount(0)
+    await nextFrames(page)
+    const noticeBox = await boxOf(notice)
+    const selection = await boxOf(page.locator('[data-selection-chip]'))
+    const gap = noticeBox.y - (selection.y + selection.height)
+    expect(gap, 'the selection chip stands above the notice').toBeGreaterThanOrEqual(-0.5)
+    expect(gap, 'the selection chip stands just above the notice').toBeLessThanOrEqual(CHROME_INSET_PX)
+  })
+})
+
 test.describe('phone portrait', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true })
 
