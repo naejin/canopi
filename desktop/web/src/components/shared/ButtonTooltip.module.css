@@ -12,6 +12,10 @@
   line-height: var(--line-height);
   text-align: left;
   white-space: nowrap;
+  /* As wide as its longest line, up to a reading measure that fits a phone's window: a top or bottom tooltip grows
+     from the button's end edge, so a long description on one line would run past the window's start. */
+  width: max-content;
+  max-width: min(22em, calc(100vw - 2 * var(--space-4)));
   pointer-events: none;
   z-index: var(--z-tooltip);
   opacity: 0;
@@ -73,6 +77,7 @@ button:focus-visible .tooltip {
 }
 
 .tooltipDesc {
+  white-space: normal;
   font-size: var(--text-xs);
   color: var(--color-on-tip);
   opacity: 0.78;

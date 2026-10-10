@@ -8,8 +8,9 @@
 // click re-centres and follows again. A click while Following turns location off (no dot). Without permission the
 // request fails with code 1 and design check A4's rule applies to the permission state the engine reports: 'denied'
 // is Blocked (aria-disabled; Playwright WebKit), anything else is Off (Chromium reports 'prompt'). A touch screen has no
-// hover, so a tap while Blocked shows the tooltip's reason for a few seconds (Q16). The dot's core is platform blue #1A73E8 (U54 Q11)
-// over an accuracy polygon of the fix's accuracy radius.
+// hover, so a tap while Blocked shows the tooltip's reason for a few seconds (Q16), whole inside a phone's window in the
+// longest locales. The dot's core is platform blue #1A73E8 (U54 Q11) over an accuracy polygon of the fix's accuracy
+// radius.
 // Chromium sends a code 2 error to a running watch before each setGeolocation fix (design check §6); every check after a
 // new fix polls until that fix's longitude has been delivered (a count would pass on an earlier second read), and a
 // single code 2 never ends Following. The moved fix has a wider accuracy than the first, so the moved fix being drawn
@@ -21,7 +22,7 @@
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { Locator, Page } from '@playwright/test'
-import { designMap, expectCanvasDrawn } from '../support/canvas'
+import { designMap } from '../support/canvas'
 import { expect, test } from '../support/offline'
 
 const FIXTURE = fileURLToPath(new URL('../fixtures/canvas-base.canopi', import.meta.url))
@@ -171,14 +172,7 @@ test.describe('phone portrait, touch', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
 
   test('a tap while Blocked shows the tooltip\'s reason for a few seconds, inside the window (Q16)', async ({ page }) => {
-    // Both engines answer the refused request with code 1; the permission reads 'denied' here in both, so it is Blocked.
-    await page.addInitScript(() => {
-      const query = Permissions.prototype.query
-      Permissions.prototype.query = function (this: Permissions, descriptor: PermissionDescriptor) {
-        if (descriptor.name !== 'geolocation') return query.call(this, descriptor)
-        return Promise.resolve(Object.assign(new EventTarget(), { name: 'geolocation', state: 'denied', onchange: null }) as unknown as PermissionStatus)
-      }
-    })
+    await denyGeolocationPermission(page)
     await openBaseFixture(page)
     const tooltip = locationButton(page).locator('[role="tooltip"]')
     await locationButton(page).tap()
@@ -187,14 +181,44 @@ test.describe('phone portrait, touch', () => {
 
     // A Blocked button is aria-disabled, which Playwright's actionability wait reads as disabled; a finger still taps it.
     await locationButton(page).tap({ force: true })
-    await expect(tooltip).toBeVisible()
-    await expect(tooltip).toContainText('Location is blocked')
-    const box = await boxOf(tooltip)
-    expect(box.x, 'the reason starts in the window').toBeGreaterThanOrEqual(0)
-    expect(box.x + box.width, 'the reason ends in the window').toBeLessThanOrEqual(390)
+    await expectReasonReadable(page, tooltip, 'en')
     await expect(tooltip, 'and leaves again').toBeHidden({ timeout: 8_000 })
   })
+
+  // The longest Blocked reasons: German's and Russian's run past 500 px on one line.
+  for (const locale of ['de', 'ru'] as const) {
+    test(`in ${locale}, a tap while Blocked shows the whole reason inside the window`, async ({ page }) => {
+      await denyGeolocationPermission(page)
+      await openBaseFixture(page, locale)
+      const button = page.locator('[data-zoom-group] [data-my-location]')
+      await button.tap()
+      await expect(button, 'a denied permission is Blocked (A4)').toHaveAttribute('aria-disabled', 'true')
+      await button.tap({ force: true })
+      await expectReasonReadable(page, button.locator('[role="tooltip"]'), locale)
+    })
+  }
 })
+
+/** Both engines answer the refused request with code 1; with the permission reading 'denied' in both, it is Blocked. */
+async function denyGeolocationPermission(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const query = Permissions.prototype.query
+    Permissions.prototype.query = function (this: Permissions, descriptor: PermissionDescriptor) {
+      if (descriptor.name !== 'geolocation') return query.call(this, descriptor)
+      return Promise.resolve(Object.assign(new EventTarget(), { name: 'geolocation', state: 'denied', onchange: null }) as unknown as PermissionStatus)
+    }
+  })
+}
+
+/** The Blocked reason is shown in `locale`, wholly inside the window. */
+async function expectReasonReadable(page: Page, tooltip: Locator, locale: string): Promise<void> {
+  const messages = JSON.parse(await readFile(fileURLToPath(new URL(`../../src/i18n/${locale}.json`, import.meta.url)), 'utf8'))
+  await expect(tooltip).toBeVisible()
+  await expect(tooltip).toContainText(messages.canvas.myLocation.blocked)
+  const box = await boxOf(tooltip)
+  expect(box.x, 'the reason starts in the window').toBeGreaterThanOrEqual(0)
+  expect(box.x + box.width, 'the reason ends in the window').toBeLessThanOrEqual(page.viewportSize()!.width)
+}
 
 /** Records the fixes' longitudes and the error codes the page's geolocation delivers, without changing them. */
 async function recordGeolocation(page: Page): Promise<void> {
@@ -220,16 +244,25 @@ async function geolocationRecord(page: Page): Promise<GeolocationRecord> {
   return page.evaluate(() => window.__geolocation ?? { longitudes: [], errors: [] })
 }
 
-async function openBaseFixture(page: Page): Promise<void> {
+/** Opens the base fixture; with `locale`, in a fresh browser whose Web Edition settings take that language. */
+async function openBaseFixture(page: Page, locale?: string): Promise<void> {
+  if (locale) {
+    await page.addInitScript((chosen) => {
+      localStorage.clear()
+      // The Web Edition's settings record (web/browser-app-data.ts), with the language chosen.
+      localStorage.setItem('canopi:web-app-data:v2:settings', JSON.stringify({ version: 2, settings: { locale: chosen } }))
+    }, locale)
+  }
   await page.goto('')
   const [chooser] = await Promise.all([
     page.waitForEvent('filechooser'),
-    page.getByRole('button', { name: /Open a \.canopi file…/ }).first().click(),
+    page.locator('[data-start-screen] button').filter({ hasText: /\.canopi/ }).first().click(),
   ])
   await chooser.setFiles(FIXTURE)
-  await expect(designMap(page)).toBeVisible()
-  await expect(page.getByRole('toolbar', { name: 'Tools' })).toBeVisible()
-  await expectCanvasDrawn(page)
+  // The map host by role alone: its name follows the page's language.
+  const map = page.getByRole('application').first()
+  await expect(map).toBeVisible()
+  await expect(map, 'the canvas has drawn the opened Design').not.toHaveAttribute('aria-busy')
 }
 
 function zoomGroup(page: Page) {
