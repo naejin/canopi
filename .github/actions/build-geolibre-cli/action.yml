@@ -1,0 +1,34 @@
+name: Build the pinned GeoLibre CLI
+description: >-
+  Build (or restore from cache) the GeoLibre CLI at the revision pinned in
+  scripts/build-geolibre-cli.sh into desktop/binaries/geolibre-<host triple>,
+  the sidecar name Tauri bundles beside the application executable.
+
+runs:
+  using: composite
+  steps:
+    - name: Cache the pinned GeoLibre CLI
+      id: geolibre-cache
+      uses: actions/cache@v4
+      with:
+        path: desktop/binaries
+        key: geolibre-cli-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-geolibre-cli.sh') }}
+
+    - name: Build the pinned GeoLibre CLI
+      if: steps.geolibre-cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        GEOLIBRE_RUST_SRC: ${{ runner.temp }}/geolibre-rust
+        GEOLIBRE_TARGET_DIR: ${{ runner.temp }}/geolibre-target
+      run: scripts/build-geolibre-cli.sh
+
+    - name: Sidecar present for this host
+      shell: bash
+      run: |
+        set -euo pipefail
+        triple="$(rustc -vV | sed -n 's/^host: //p')"
+        ext=""
+        case "$triple" in *windows*) ext=".exe" ;; esac
+        sidecar="desktop/binaries/geolibre-$triple$ext"
+        test -x "$sidecar"
+        "$sidecar" version

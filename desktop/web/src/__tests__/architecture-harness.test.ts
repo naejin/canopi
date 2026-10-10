@@ -106,6 +106,7 @@ describe('TypeScript architecture source facts', () => {
           import '../shared/module'
           import './settings.browser'
           import '#platform'
+          import Worker from './worker?worker&inline'
         `,
       },
       { path: 'src/canvas/command.ts', source: 'export const command = 1' },
@@ -113,6 +114,7 @@ describe('TypeScript architecture source facts', () => {
       { path: 'src/shared/lazy.tsx', source: 'export const lazy = 1' },
       { path: 'src/shared/module.mts', source: 'export const moduleValue = 1' },
       { path: 'src/app/settings.browser.ts', source: 'export const settings = 1' },
+      { path: 'src/app/worker.ts', source: 'export {}' },
     ])
 
     expect(graph[0]?.imports.map((edge) => edge.target)).toEqual([
@@ -122,6 +124,7 @@ describe('TypeScript architecture source facts', () => {
       'src/shared/module.mts',
       'src/app/settings.browser.ts',
       '#platform',
+      'src/app/worker.ts',
     ])
   })
 
@@ -307,6 +310,53 @@ describe('TypeScript architecture source facts', () => {
     ])
   })
 
+  it('rejects value import cycles but not type-only, dynamic or exempted ones', () => {
+    const graph = createTypeScriptSourceGraph([
+      { path: 'src/value/a.ts', source: "import { b } from './b'\nexport const a = b" },
+      { path: 'src/value/b.ts', source: "export * from './c'\nexport const b = 1" },
+      { path: 'src/value/c.ts', source: "import { type A, a } from './a'\nexport type C = A\nvoid a" },
+      { path: 'src/value/self.ts', source: "import './self'" },
+      { path: 'src/value/side.ts', source: "import './side-effect'" },
+      { path: 'src/value/side-effect.ts', source: "import './side'" },
+      { path: 'src/types/a.ts', source: "import type { B } from './b'\nexport type A = B" },
+      { path: 'src/types/b.ts', source: "import { type A } from './a'\nexport type B = A\nexport type { A }" },
+      { path: 'src/types/c.ts', source: "export type { D } from './d'" },
+      { path: 'src/types/d.ts', source: "import type { C } from './c'\nexport type D = C" },
+      { path: 'src/lazy/a.ts', source: "export const load = () => import('./b')" },
+      { path: 'src/lazy/b.ts', source: "import { load } from './a'\nvoid load" },
+      { path: 'src/exempt/module.ts', source: "import './module.test'" },
+      { path: 'src/exempt/module.test.ts', source: "import './module'" },
+      { path: 'src/outside/a.ts', source: "import '../value/a'" },
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, [{
+      kind: 'forbid-cycles',
+      name: 'No value cycle',
+      from: ['src/**'],
+      exceptFrom: ['src/**/*.test.ts'],
+    }])).toEqual([
+      '[No value cycle] src/value/a.ts is in a value import cycle with src/value/b.ts, src/value/c.ts',
+      '[No value cycle] src/value/b.ts is in a value import cycle with src/value/a.ts, src/value/c.ts',
+      '[No value cycle] src/value/c.ts is in a value import cycle with src/value/a.ts, src/value/b.ts',
+      '[No value cycle] src/value/self.ts is in a value import cycle with src/value/self.ts',
+      '[No value cycle] src/value/side-effect.ts is in a value import cycle with src/value/side.ts',
+      '[No value cycle] src/value/side.ts is in a value import cycle with src/value/side-effect.ts',
+    ])
+  })
+
+  it('checks import cycles only among the sources a cycle rule covers', () => {
+    const graph = createTypeScriptSourceGraph([
+      { path: 'src/inside/a.ts', source: "import '../outside/b'" },
+      { path: 'src/outside/b.ts', source: "import '../inside/a'" },
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, [{
+      kind: 'forbid-cycles',
+      name: 'Inside forms no cycle',
+      from: ['src/inside/**'],
+    }])).toEqual([])
+  })
+
   it('reports named declarative policy violations with importer and target context', () => {
     const graph = createTypeScriptSourceGraph([
       {
@@ -487,6 +537,24 @@ describe('TypeScript architecture source facts', () => {
       '[Tests use public runtime member surfaces] src/__tests__/consumer.test.ts:3 calls runtime.getSceneStore',
       '[Tests use public runtime member surfaces] src/__tests__/consumer.test.ts:4 calls runtime[\'getSceneStore\']',
       '[Tests use public runtime direct surfaces] src/__tests__/consumer.test.ts:6 calls getSceneStore',
+    ])
+  })
+
+  it('records the member name of a non-null or parenthesised callee', () => {
+    const facts = parseTypeScriptSource('src/maplibre/consumer.ts', `
+      map.flyTo!(target);
+      (map.easeTo)(target);
+      ((map.jumpTo!))(target);
+      map!.stop();
+      jumpTo(target);
+    `)
+
+    expect(facts.calls.map(({ target, property }) => ({ target, property }))).toEqual([
+      { target: 'map.flyTo!', property: 'flyTo' },
+      { target: '(map.easeTo)', property: 'easeTo' },
+      { target: '((map.jumpTo!))', property: 'jumpTo' },
+      { target: 'map!.stop', property: 'stop' },
+      { target: 'jumpTo', property: null },
     ])
   })
 })

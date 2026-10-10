@@ -9,7 +9,7 @@ import {
   type SceneDesignObjectTarget,
 } from './design-object-targets'
 
-export function cloneSceneObjectGroupMember(
+function cloneSceneObjectGroupMember(
   member: SceneObjectGroupMember,
 ): SceneObjectGroupMember {
   return { ...member }
@@ -52,7 +52,7 @@ export function dedupeSceneObjectGroupMembers(
   return deduped
 }
 
-export function resolveSceneObjectGroupMember(
+function resolveSceneObjectGroupMember(
   scene: ScenePersistedState,
   member: SceneObjectGroupMember,
 ): SceneConcreteDesignObjectTarget | null {
@@ -60,7 +60,7 @@ export function resolveSceneObjectGroupMember(
     return scene.plants.some((plant) => plant.id === member.id) ? { kind: 'plant', id: member.id } : null
   }
   if (member.kind === 'zone') {
-    return scene.zones.some((zone) => zone.name === member.id) ? { kind: 'zone', id: member.id } : null
+    return scene.zones.some((zone) => zone.id === member.id) ? { kind: 'zone', id: member.id } : null
   }
   return scene.annotations.some((annotation) => annotation.id === member.id)
     ? { kind: 'annotation', id: member.id }
@@ -74,6 +74,30 @@ export function resolveSceneObjectGroupMembers(
   return group.members
     .map((member) => resolveSceneObjectGroupMember(scene, member))
     .filter((target): target is SceneConcreteDesignObjectTarget => target !== null)
+}
+
+/** Whether the Scene holds `target`, by kind and id. */
+export function sceneContainsTarget(scene: ScenePersistedState, target: SceneDesignObjectTarget): boolean {
+  if (target.kind === 'group') return scene.groups.some((group) => group.id === target.id)
+  if (target.kind === 'plant') return scene.plants.some((plant) => plant.id === target.id)
+  if (target.kind === 'zone') return scene.zones.some((zone) => zone.id === target.id)
+  if (target.kind === 'annotation') return scene.annotations.some((annotation) => annotation.id === target.id)
+  return scene.measurementGuides.some((guide) => guide.id === target.id)
+}
+
+/** The layers `target` sits on: its own, or a group's distinct member layers in member order (missing members skipped). */
+export function sceneTargetLayerNames(scene: ScenePersistedState, target: SceneDesignObjectTarget): string[] {
+  if (target.kind === 'measurement-guide') return ['measurement-guides']
+  if (target.kind !== 'group') return [sceneObjectGroupMemberLayerName(target)]
+  const group = scene.groups.find((entry) => entry.id === target.id)
+  if (!group) return []
+  return [...new Set(resolveSceneObjectGroupMembers(scene, group).map(sceneObjectGroupMemberLayerName))]
+}
+
+/** Whether any layer `target` sits on is locked. */
+export function isSceneTargetLayerLocked(scene: ScenePersistedState, target: SceneDesignObjectTarget): boolean {
+  return sceneTargetLayerNames(scene, target)
+    .some((layerName) => scene.layers.find((layer) => layer.name === layerName)?.locked === true)
 }
 
 export function getSceneGroupedMemberKeys(scene: ScenePersistedState): Map<string, string> {

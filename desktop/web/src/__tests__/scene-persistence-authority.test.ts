@@ -4,7 +4,6 @@ import { SceneHistory } from '../canvas/runtime/scene-history'
 import { SceneStore } from '../canvas/runtime/scene'
 import { CanvasAuthorityBusyError } from '../canvas/runtime/runtime'
 import { SceneRuntimeEditCoordinator } from '../canvas/runtime/scene-runtime/transactions'
-import type { CanopiFile } from '../types/design'
 
 function createAuthority() {
   const store = new SceneStore()
@@ -139,7 +138,7 @@ describe('Settled Scene persistence authority', () => {
     expect(history.isClean).toBe(false)
   })
 
-  it('rejects capture while a partially applied history replay is quarantined', () => {
+  it('captures the undone state at once after an undo whose selection replay throws', () => {
     const store = new SceneStore()
     const history = new SceneHistory()
     let selectionFailures = 0
@@ -167,9 +166,8 @@ describe('Settled Scene persistence authority', () => {
     selectionFailures = 1
     expect(() => authority.undo()).toThrow('selection replay failed')
     expect(store.persisted.plantSpeciesColors['Malus domestica']).toBeUndefined()
-    expect(() => authority.capturePersistence()).toThrow('scene-history-undo')
 
-    expect(authority.undo()).toBe(true)
+    // The undo kept its step and released the Scene: nothing waits to be resumed.
     const capture = authority.capturePersistence()
     expect(capture.acknowledgeSaved()).toBe('applied')
     expect(history.isClean).toBe(true)
@@ -210,37 +208,5 @@ describe('Settled Scene persistence authority', () => {
     authority.disposePersistence()
 
     expect(() => authority.capturePersistence()).toThrow('runtime-disposed')
-  })
-
-  it('invalidates exact persisted projection identity when presentation backfills apply', () => {
-    const { authority, store } = createAuthority()
-    const file = store.toCanopiFile()
-    file.plants = [{
-      id: 'plant-1',
-      canonical_name: 'Malus domestica',
-      common_name: 'Apple',
-      color: null,
-      position: { x: 10, y: 10 },
-      rotation: null,
-      scale: null,
-      notes: null,
-      planted_date: null,
-      quantity: 1,
-      locked: false,
-    } as CanopiFile['plants'][number]]
-    authority.hydrate(file)
-    const ticket = authority.issueTicket()
-    const capture = authority.capturePersistence()
-
-    expect(authority.applyBackfills(ticket, [{
-      plantId: 'plant-1',
-      canonicalName: 'Malus domestica',
-      stratum: 'canopy',
-      canopySpreadM: 4,
-      scale: 4,
-    }])).toBe('applied')
-
-    expect(capture.isCurrent()).toBe(false)
-    expect(capture.acknowledgeSaved()).toBe('applied')
   })
 })

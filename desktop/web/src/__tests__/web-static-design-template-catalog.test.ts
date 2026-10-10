@@ -10,7 +10,7 @@ const TEMPLATE: TemplateMeta = {
   title: 'Forest Edge',
   author: 'Canopi',
   description: 'A static bundled template',
-  location: { lat: 45.5, lon: -73.6, altitude_m: null },
+  location: { lat: 45.5, lon: -73.6 },
   plant_count: 18,
   climate_zone: 'Temperate',
   tags: ['forest'],

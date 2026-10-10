@@ -1,8 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { message } from '@tauri-apps/plugin-dialog'
-import { saveCurrentDesign } from "../document-session/actions";
-import { designDirty } from "../document-session/store";
-import { t } from '../../i18n'
+import { designContinuousSave } from "../document-session/transition";
+import { requestSaveProblemDecision } from "../document-session/save-problem";
 import { flushSettingsProjection } from "../settings/projection";
 
 export interface CloseGuardLifetime {
@@ -12,33 +10,15 @@ export interface CloseGuardLifetime {
 interface ActiveCloseGuard {
   disposed: boolean;
   closePromise: Promise<void> | null;
-  unlisten: (() => void) | null;
+  unlisteners: (() => void)[];
 }
 
 let activeCloseGuard: ActiveCloseGuard | null = null;
 
-export type CloseDecision = 'save' | 'discard' | 'cancel'
-
-export async function confirmCloseWithUnsavedChanges(): Promise<CloseDecision> {
-  const saveLabel = t('canvas.file.save')
-  const discardLabel = t('canvas.file.dontSave')
-  const cancelLabel = t('canvas.file.cancel')
-
-  const result = await message(t('canvas.file.saveBeforeCloseMessage'), {
-    title: t('canvas.file.saveBeforeClose'),
-    kind: 'warning',
-    buttons: {
-      yes: saveLabel,
-      no: discardLabel,
-      cancel: cancelLabel,
-    },
-  })
-
-  if (result === saveLabel) return 'save'
-  if (result === discardLabel) return 'discard'
-  return 'cancel'
-}
-
+/**
+ * Close writes the current Design to its home first. Only a failed write asks
+ * the user anything: Retry, Close without saving, or Cancel.
+ */
 async function runCloseWorkflow(
   closeGuard: ActiveCloseGuard,
   currentWindow: ReturnType<typeof getCurrentWindow>,
@@ -51,38 +31,49 @@ async function runCloseWorkflow(
   }
   if (closeGuard.disposed) return;
 
-  if (!designDirty.value) {
-    await currentWindow.destroy();
-    return;
-  }
-
-  const decision = await confirmCloseWithUnsavedChanges();
-  if (closeGuard.disposed) return;
-  if (decision === "cancel") return;
-
-  if (decision === "save") {
-    try {
-      const settlement = await saveCurrentDesign();
-      if (settlement?.status !== 'applied' || designDirty.value) return;
-    } catch {
-      return;
-    }
+  for (;;) {
+    const written = await designContinuousSave.flush();
     if (closeGuard.disposed) return;
+    if (written) break;
+    const choice = await requestSaveProblemDecision({
+      kind: "flush-failed",
+      purpose: "close",
+      conflict: designContinuousSave.conflict.peek() !== null,
+    });
+    if (closeGuard.disposed || choice === "cancel") return;
+    if (choice === "discard") break;
   }
 
   await currentWindow.destroy();
 }
 
+/**
+ * The Desktop window guard: flushes the current Design when the window loses
+ * focus and before it closes.
+ */
 export function registerCloseGuard(): CloseGuardLifetime {
   if (activeCloseGuard) disposeCloseGuard(activeCloseGuard);
 
   const closeGuard: ActiveCloseGuard = {
     disposed: false,
     closePromise: null,
-    unlisten: null,
+    unlisteners: [],
   };
   activeCloseGuard = closeGuard;
   const currentWindow = getCurrentWindow();
+
+  const keepListener = (unlisten: () => void) => {
+    if (closeGuard.disposed || activeCloseGuard !== closeGuard) {
+      unlisten();
+      return;
+    }
+    closeGuard.unlisteners.push(unlisten);
+  };
+  const reportRegistrationFailure = (error: unknown) => {
+    if (!closeGuard.disposed && activeCloseGuard === closeGuard) {
+      console.error("Failed to register close guard:", error);
+    }
+  };
 
   void currentWindow
     .onCloseRequested((event) => {
@@ -94,28 +85,23 @@ export function registerCloseGuard(): CloseGuardLifetime {
         console.error("Failed to complete close workflow:", error);
       });
       closeGuard.closePromise = closePromise;
-      void closePromise.then(
-        () => {
-          if (closeGuard.closePromise === closePromise) closeGuard.closePromise = null;
-        },
-        () => {
-          if (closeGuard.closePromise === closePromise) closeGuard.closePromise = null;
-        },
-      );
+      void closePromise.then(() => {
+        if (closeGuard.closePromise === closePromise) closeGuard.closePromise = null;
+      });
       return closePromise;
     })
-    .then((nextUnlisten) => {
-      if (closeGuard.disposed || activeCloseGuard !== closeGuard) {
-        nextUnlisten();
-        return;
-      }
-      closeGuard.unlisten = nextUnlisten;
+    .then(keepListener)
+    .catch(reportRegistrationFailure);
+
+  void currentWindow
+    .onFocusChanged(({ payload: focused }) => {
+      if (focused || closeGuard.disposed) return;
+      void designContinuousSave.flush().catch((error: unknown) => {
+        console.error("Failed to save the Design when the window lost focus:", error);
+      });
     })
-    .catch((error) => {
-      if (!closeGuard.disposed && activeCloseGuard === closeGuard) {
-        console.error("Failed to register close guard:", error);
-      }
-    });
+    .then(keepListener)
+    .catch(reportRegistrationFailure);
 
   return {
     dispose: () => disposeCloseGuard(closeGuard),
@@ -125,8 +111,7 @@ export function registerCloseGuard(): CloseGuardLifetime {
 function disposeCloseGuard(closeGuard: ActiveCloseGuard): void {
   if (closeGuard.disposed) return;
   closeGuard.disposed = true;
-  closeGuard.unlisten?.();
-  closeGuard.unlisten = null;
+  for (const unlisten of closeGuard.unlisteners.splice(0)) unlisten();
   if (activeCloseGuard === closeGuard) activeCloseGuard = null;
 }
 

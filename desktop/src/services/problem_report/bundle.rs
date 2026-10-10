@@ -35,8 +35,7 @@ pub(crate) fn build_diagnostic_bundle(
         ]
     } else {
         vec![
-            "Design contents excluded",
-            "Precise Location excluded",
+            "Design contents excluded, including object coordinates",
             "Screenshots excluded",
             "Filesystem paths sanitized",
         ]
@@ -61,7 +60,6 @@ pub(crate) fn build_diagnostic_bundle(
         "settings": settings_summary(context),
         "privacy": {
             "includes_design_contents": includes_current_design,
-            "includes_precise_location": includes_current_design,
             "includes_screenshot": false,
             "filesystem_paths_sanitized": true,
         },
@@ -119,9 +117,9 @@ fn settings_summary(context: &ProblemReportContext) -> serde_json::Value {
         json!({
             "locale": settings.locale,
             "theme": settings.theme,
-            "auto_save_interval_s": settings.auto_save_interval_s,
-            "map_style": settings.map_style,
-            "map_layer_visible": settings.map_layer_visible,
+            "basemap_style": settings.basemap_style,
+            "basemap_visible": settings.basemap_visible,
+            "satellite_visible": settings.satellite_visible,
             "contour_visible": settings.contour_visible,
             "hillshade_visible": settings.hillshade_visible,
             "plant_spacing_interval_m": settings.plant_spacing_interval_m,

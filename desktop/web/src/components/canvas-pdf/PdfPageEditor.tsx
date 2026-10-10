@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import type { PrintBounds, PrintPoint } from '../../canvas/print'
 import type { PdfPage, PdfPlan } from '../../app/canvas-pdf/types'
+import { areaFromFrame, pageFrame } from '../../app/canvas-pdf/page-frame'
+import { detectPlatform } from '../../canvas/runtime/input/platform'
 import { t } from '../../i18n'
 import { PdfPageArtwork } from './PdfPagePreview'
 
@@ -12,10 +14,17 @@ interface EditorProps {
   readonly inspecting?: boolean
   readonly navigationOnly?: boolean
   readonly highlightedPage?: string | null
+  /** Find in key: the matching key entries on this page, ringed. */
+  readonly keyMatches?: readonly PrintBounds[]
+  /** The entry Find in key showed last, ringed more strongly and scrolled into view. */
+  readonly keyCurrent?: PrintBounds | null
+  /** The drawn area in plan metres: an unturned box about its centre (`PdfPrintArea`). */
   readonly onPrintArea?: (bounds: PrintBounds) => void
   readonly onPage?: (id: string) => void
-  /** Delta of the view centre in metres, committed once per completed gesture. */
+  /** Delta of the view centre in plan metres, committed once per completed gesture or arrow press. */
   readonly onMove?: (delta: PrintPoint) => void
+  /** Cmd is mod on a Mac, else Ctrl; defaults to the browser's platform. */
+  readonly mac?: boolean
 }
 interface Gesture {
   readonly start: PrintPoint
@@ -24,11 +33,18 @@ interface Gesture {
   readonly pageId?: string
 }
 export function PdfPageEditor({ page, plan, adding = false, disabled = false, inspecting = false, navigationOnly = false, highlightedPage,
-  onPrintArea, onPage, onMove }: EditorProps) {
+  keyMatches = NO_KEY_MATCHES, keyCurrent = null, onPrintArea, onPage, onMove, mac = MAC }: EditorProps) {
   const root = useRef<SVGSVGElement>(null)
+  const currentKeyMatch = useRef<SVGRectElement>(null)
+  useEffect(() => {
+    currentKeyMatch.current?.scrollIntoView?.({ block: 'center', inline: 'center' })
+  }, [keyCurrent?.x, keyCurrent?.y, page.id, inspecting])
   const drag = useRef<Gesture | null>(null)
   const [selection, setSelection] = useState<PrintBounds | null>(null)
   const clipId = useId()
+  // Page grounds are in the layout's turned frame; what the editor reports goes back to plan metres.
+  const frame = pageFrame(plan.angleDeg)
+  const move = (x: number, y: number) => onMove?.(frame.fromFrame({ x: x / page.pointsPerMeter, y: y / page.pointsPerMeter }))
   const interactive = !disabled && !inspecting && page.kind !== 'legend'
   function cancel() {
     const previous = drag.current; drag.current = null; setSelection(null)
@@ -82,10 +98,10 @@ export function PdfPageEditor({ page, plan, adding = false, disabled = false, in
     if (navigationOnly) return
     if (adding) {
       if (bounds.width < 2 || bounds.height < 2) return
-      onPrintArea?.({ x: page.ground.x + (bounds.x - page.frame.x) / page.pointsPerMeter,
+      onPrintArea?.(areaFromFrame(frame, { x: page.ground.x + (bounds.x - page.frame.x) / page.pointsPerMeter,
         y: page.ground.y + (bounds.y - page.frame.y) / page.pointsPerMeter,
-        width: bounds.width / page.pointsPerMeter, height: bounds.height / page.pointsPerMeter })
-    } else onMove?.({ x: (gesture.start.x - end.x) / page.pointsPerMeter, y: (gesture.start.y - end.y) / page.pointsPerMeter })
+        width: bounds.width / page.pointsPerMeter, height: bounds.height / page.pointsPerMeter }))
+    } else move(gesture.start.x - end.x, gesture.start.y - end.y)
   }
   return <svg ref={root} xmlns="http://www.w3.org/2000/svg" viewBox={`0 0 ${page.width} ${page.height}`}
     role="group" tabindex={0} aria-label={t('pdf.pageCount', { page: page.number, count: plan.pages.length })}
@@ -95,10 +111,13 @@ export function PdfPageEditor({ page, plan, adding = false, disabled = false, in
     onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={cancel} onLostPointerCapture={cancel}
     onKeyDown={(event) => {
       if (event.key === 'Escape' && drag.current) { event.preventDefault(); event.stopPropagation(); cancel(); return }
-      if (!interactive || navigationOnly || adding || event.altKey || event.ctrlKey || event.metaKey) return
-      const delta = event.shiftKey ? 30 : 5
+      // Arrows move the content their way, as a drag does (U12); mod is the large step, and Shift, Alt and the other
+      // of Ctrl and Cmd do nothing (spec §4.12).
+      const mod = mac ? event.metaKey : event.ctrlKey, other = mac ? event.ctrlKey : event.metaKey
+      if (!interactive || navigationOnly || adding || event.altKey || event.shiftKey || other) return
+      const delta = mod ? 30 : 5
       const direction = { ArrowLeft: [delta, 0], ArrowRight: [-delta, 0], ArrowUp: [0, delta], ArrowDown: [0, -delta] }[event.key]
-      if (direction) { event.preventDefault(); onMove?.({ x: direction[0]! / page.pointsPerMeter, y: direction[1]! / page.pointsPerMeter }) }
+      if (direction) { event.preventDefault(); move(direction[0]!, direction[1]!) }
     }}>
     <desc>{page.legend.map((entry) => entry.name).join('; ')}</desc>
     <PdfPageArtwork page={page} plan={plan} />
@@ -112,5 +131,16 @@ export function PdfPageEditor({ page, plan, adding = false, disabled = false, in
         <title>{detail.areaName}</title></rect>)}
       {selection && <rect data-print-area-draft {...selection} fill="var(--color-primary-bg)" stroke="var(--color-primary)" stroke-width="1" stroke-dasharray="4 2" pointer-events="none" />}
     </g>
+    {keyMatches.map((bounds) => {
+      const current = keyCurrent !== null && bounds.x === keyCurrent.x && bounds.y === keyCurrent.y
+      return <rect key={`${bounds.x}:${bounds.y}`} ref={current ? currentKeyMatch : undefined} data-pdf-key-match={current ? 'current' : 'match'}
+        x={bounds.x} y={bounds.y} width={bounds.width} height={bounds.height} rx="2"
+        fill={current ? 'var(--color-accent-soft)' : 'none'} stroke="var(--color-accent)" stroke-width={current ? 2 : 1}
+        vector-effect="non-scaling-stroke" pointer-events="none" />
+    })}
   </svg>
 }
+
+const NO_KEY_MATCHES: readonly PrintBounds[] = []
+const MAC = typeof navigator !== 'undefined'
+  && ['mac', 'ios'].includes(detectPlatform(navigator, window as unknown as { readonly GestureEvent?: unknown }).os)

@@ -1,0 +1,42 @@
+/* Show my location (pattern canvas-navigation.md): a button of the zoom group, which gives it the group's button class
+   (size, hover, focus, 44 px in the phone column). Only what differs is here, doubled where it must beat the group's
+   rules whatever the stylesheet order. Pressed while Following, in the pressed-toggle ochre: the platform blue is the
+   map dot's only (system.md). */
+
+.location[aria-pressed="true"],
+.location.location[aria-pressed="true"]:hover {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+}
+
+/* Blocked dims the glyph only, not the group's whole button: the tooltip is the button's child, and its reason must
+   stay readable. */
+.location.location[aria-disabled="true"] {
+  opacity: 1;
+}
+
+.location[aria-disabled="true"] .glyph {
+  opacity: 0.38;
+}
+
+.glyph {
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.centreOn {
+  fill: currentColor;
+}
+
+/* The reason the button's aria-describedby names (Blocked, unavailable): read, not shown. */
+.description {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

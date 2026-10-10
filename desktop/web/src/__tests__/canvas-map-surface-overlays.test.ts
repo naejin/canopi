@@ -3,9 +3,12 @@ import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import {
   clearCanvasMapSurfaceOverlays,
   syncCanvasMapSurfaceOverlays,
+  syncCanvasMapSurfaceSiteHover,
+  syncCanvasMapSurfaceSiteOverlay,
   type CanvasMapSurfaceOverlaySnapshot,
 } from '../app/canvas-map-surface/overlays'
 import type { MapLibreOverlayMap } from '../maplibre/panel-target-overlay-sync'
+import { siteMapOverlayIds } from '../maplibre/site-overlay'
 
 class FakeOverlayMap implements MapLibreOverlayMap {
   readonly addSource = vi.fn((id: string, source: Record<string, unknown>) => {
@@ -22,6 +25,7 @@ class FakeOverlayMap implements MapLibreOverlayMap {
   readonly removeLayer = vi.fn((id: string) => {
     this.layers.delete(id)
   })
+  readonly setPaintProperty = vi.fn()
 
   readonly sources = new Map<string, { source: Record<string, unknown>; setData(data: unknown): void }>()
   readonly layers = new Set<string>()
@@ -37,11 +41,9 @@ function createOverlayScene() {
       canonicalName: 'Malus domestica',
       commonName: 'Apple',
       color: null,
-      stratum: null,
       canopySpreadM: null,
       position: { x: 0, y: 0 },
       rotationDeg: null,
-      scale: null,
       notes: null,
       plantedDate: null,
       quantity: null,
@@ -51,7 +53,7 @@ function createOverlayScene() {
     {
       kind: 'zone',
       locked: false,
-      name: 'orchard',
+      id: 'orchard', name: 'orchard',
       zoneType: 'polygon',
       rotationDeg: 0,
       points: [
@@ -75,9 +77,9 @@ function createSnapshot(
       getSceneSnapshot: () => scene,
     },
     location: { lat: 48.8566, lon: 2.3522 },
-    northBearingDeg: 12,
-    hoveredTargets: [{ kind: 'zone', zone_name: 'orchard' }],
+    hoveredTargets: [{ kind: 'zone', zone_id: 'orchard' }],
     selectedTargets: [{ kind: 'placed_plant', plant_id: 'plant-1' }],
+    site: null,
     ...overrides,
   }
 }
@@ -85,11 +87,11 @@ function createSnapshot(
 describe('canvas map surface overlay sync', () => {
   it('clears empty overlays without reading Scene geometry', () => {
     const map = new FakeOverlayMap()
-    syncCanvasMapSurfaceOverlays(map, createSnapshot(), true)
+    syncCanvasMapSurfaceOverlays(map, createSnapshot())
     const read = vi.fn(() => createOverlayScene())
     syncCanvasMapSurfaceOverlays(map, createSnapshot({
       runtime: { getSceneSnapshot: read }, hoveredTargets: [], selectedTargets: [],
-    }), true)
+    }))
     expect(read).not.toHaveBeenCalled()
     expect(map.removeSource).toHaveBeenCalledWith('panel-target-selection-source')
     expect(map.removeSource).toHaveBeenCalledWith('panel-target-hover-source')
@@ -98,7 +100,7 @@ describe('canvas map surface overlay sync', () => {
   it('projects panel targets from the lifecycle snapshot into MapLibre overlay contracts', () => {
     const map = new FakeOverlayMap()
 
-    syncCanvasMapSurfaceOverlays(map, createSnapshot(), true)
+    syncCanvasMapSurfaceOverlays(map, createSnapshot())
 
     expect(map.addSource).toHaveBeenCalledWith(
       'panel-target-selection-source',
@@ -112,44 +114,39 @@ describe('canvas map surface overlay sync', () => {
     expect(map.addLayer).toHaveBeenCalledWith(expect.objectContaining({ id: 'panel-target-hover-zones-fill' }))
   })
 
-  it('clears hover and selection overlays when the lifecycle disables overlays', () => {
-    const map = new FakeOverlayMap()
-    syncCanvasMapSurfaceOverlays(map, createSnapshot(), true)
-    map.removeLayer.mockClear()
-    map.removeSource.mockClear()
-
-    syncCanvasMapSurfaceOverlays(map, createSnapshot(), false)
-
-    expect(map.removeLayer).toHaveBeenCalledWith('panel-target-hover-zones-fill')
-    expect(map.removeLayer).toHaveBeenCalledWith('panel-target-selection-plants')
-    expect(map.removeSource).toHaveBeenCalledWith('panel-target-hover-source')
-    expect(map.removeSource).toHaveBeenCalledWith('panel-target-selection-source')
-  })
-
-  it('clears overlays when a snapshot lacks map authority inputs', () => {
-    const map = new FakeOverlayMap()
-    syncCanvasMapSurfaceOverlays(map, createSnapshot(), true)
-    map.removeSource.mockClear()
-
-    syncCanvasMapSurfaceOverlays(map, createSnapshot({ runtime: null }), true)
-    expect(map.removeSource).toHaveBeenCalledWith('panel-target-hover-source')
-    expect(map.removeSource).toHaveBeenCalledWith('panel-target-selection-source')
-
-    syncCanvasMapSurfaceOverlays(map, createSnapshot(), true)
-    map.removeSource.mockClear()
-    syncCanvasMapSurfaceOverlays(map, createSnapshot({ location: null }), true)
-    expect(map.removeSource).toHaveBeenCalledWith('panel-target-hover-source')
-    expect(map.removeSource).toHaveBeenCalledWith('panel-target-selection-source')
-  })
-
   it('exposes explicit clearing for lifecycle teardown and pre-ready errors', () => {
     const map = new FakeOverlayMap()
-    syncCanvasMapSurfaceOverlays(map, createSnapshot(), true)
+    syncCanvasMapSurfaceOverlays(map, createSnapshot())
     map.removeSource.mockClear()
 
     clearCanvasMapSurfaceOverlays(map)
 
     expect(map.removeSource).toHaveBeenCalledWith('panel-target-hover-source')
     expect(map.removeSource).toHaveBeenCalledWith('panel-target-selection-source')
+  })
+
+  it('paints the Site data pin and line through their contract, again on the map a Retry rebuilds, and clears with neither', () => {
+    const ids = siteMapOverlayIds()
+    const site = { pin: [2.35, 48.85] as const, profileLine: [[2.35, 48.85], [2.36, 48.86]] as const }
+    const map = new FakeOverlayMap()
+    syncCanvasMapSurfaceSiteOverlay(map, site)
+    syncCanvasMapSurfaceSiteHover(map, [2.355, 48.855])
+
+    expect([...map.layers]).toEqual([...ids.layerIds, ...ids.hover.layerIds])
+    expect(map.sources.get(ids.sourceId)?.source).toMatchObject({ type: 'geojson' })
+    // The same pin again changes nothing on the map.
+    map.addLayer.mockClear()
+    syncCanvasMapSurfaceSiteOverlay(map, site)
+    expect(map.addLayer).not.toHaveBeenCalled()
+    expect(map.sources.get(ids.sourceId)?.setData).not.toHaveBeenCalled()
+
+    // Retry builds a new map: the next drain paints the same pin there.
+    const rebuilt = new FakeOverlayMap()
+    syncCanvasMapSurfaceSiteOverlay(rebuilt, site)
+    expect([...rebuilt.layers]).toEqual([...ids.layerIds])
+
+    syncCanvasMapSurfaceSiteOverlay(map, { pin: null, profileLine: null })
+    expect(map.layers.size).toBe(0)
+    expect(map.sources.size).toBe(0)
   })
 })

@@ -4,9 +4,16 @@ import { useSignal, useSignalEffect } from '@preact/signals'
 import type { RefObject } from 'preact'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
-import { toISODate } from '../../canvas/timeline-math'
 import { computeFloatingDirection, shouldAlignRight } from '../../utils/floating-position'
 import styles from './DatePicker.module.css'
+
+/** Format a Date as ISO 8601 date string (YYYY-MM-DD). */
+function toISODate(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
 
 // ---------------------------------------------------------------------------
 // Intl.DateTimeFormat cache
@@ -160,7 +167,7 @@ export function DatePicker({
     }
   }
 
-  // Click-outside (pointerup, mirrors Dropdown.tsx)
+  // Click-outside (pointerup) and focus leaving for another control, mirrors Dropdown.tsx
   useSignalEffect(() => {
     if (!open.value) return
     const handleOutside = (e: Event) => {
@@ -170,10 +177,12 @@ export function DatePicker({
     }
     const dismissFloating = () => { if (floating) open.value = false }
     document.addEventListener('pointerup', handleOutside)
+    document.addEventListener('focusin', handleOutside)
     window.addEventListener('resize', dismissFloating)
     window.addEventListener('scroll', dismissFloating, true)
     return () => {
       document.removeEventListener('pointerup', handleOutside)
+      document.removeEventListener('focusin', handleOutside)
       window.removeEventListener('resize', dismissFloating)
       window.removeEventListener('scroll', dismissFloating, true)
     }

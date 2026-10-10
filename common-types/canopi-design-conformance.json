@@ -1,9 +1,8 @@
 {
   "contract_version": 1,
   "facts": {
-    "current_version": 6,
+    "current_version": 9,
     "missing_version": 1,
-    "minimum_supported_version": 6,
     "future_version_policy": "reject",
     "error_kinds": [
       "invalid_version",
@@ -13,18 +12,9 @@
   },
   "accepted_documents": {
     "empty-current": {
-      "version": 6,
+      "version": 9,
       "name": "Conformance Garden",
       "description": null,
-      "spatial_frame": {
-        "anchor_longitude_deg": 13.0,
-        "anchor_latitude_deg": 23.0,
-        "north_bearing_deg": 0.0,
-        "placement_status": "provisional",
-        "location_metadata": {
-          "altitude_m": null
-        }
-      },
       "plant_species_colors": {},
       "plant_species_symbols": {},
       "plant_species_codes": {},
@@ -38,94 +28,1303 @@
       "timeline": [],
       "budget": [],
       "budget_currency": "EUR",
-      "created_at": "2026-07-15T00:00:00.000Z",
-      "updated_at": "2026-07-15T00:00:00.000Z",
+      "views": [],
+      "stories": [],
+      "created_at": "2026-09-25T00:00:00.000Z",
+      "updated_at": "2026-09-25T00:00:00.000Z",
       "extra": {}
     },
-    "normalized-bearing": {
-      "version": 6,
-      "name": "Bearing Garden",
+    "geolocated-objects": {
+      "version": 9,
+      "name": "Geolocated Garden",
       "description": null,
-      "spatial_frame": {
-        "anchor_longitude_deg": -180.0,
-        "anchor_latitude_deg": 85.0511287798066,
-        "north_bearing_deg": 270.0,
-        "placement_status": "confirmed",
-        "location_metadata": {
-          "altitude_m": 42.5
-        }
-      },
       "plant_species_colors": {},
       "plant_species_symbols": {},
       "plant_species_codes": {},
       "layers": [],
-      "plants": [],
-      "zones": [],
-      "annotations": [],
-      "measurement_guides": [],
+      "plants": [
+        {
+          "id": "plant-1",
+          "locked": false,
+          "canonical_name": "Malus domestica",
+          "common_name": null,
+          "color": null,
+          "symbol": null,
+          "pinned_name": false,
+          "position": {
+            "lon": 2.294481234,
+            "lat": 48.858370123
+          },
+          "rotation": null,
+          "scale": null,
+          "notes": null,
+          "planted_date": null,
+          "quantity": null
+        }
+      ],
+      "zones": [
+        {
+          "id": "zone-north",
+          "name": "North bed",
+          "locked": false,
+          "zone_type": "ellipse",
+          "points": [
+            {
+              "lon": -180.0,
+              "lat": 85.0511287798066
+            },
+            {
+              "lon": 180.0,
+              "lat": -85.0511287798066
+            }
+          ],
+          "rotation": 30.0,
+          "fill_color": null,
+          "notes": null
+        },
+        {
+          "id": "zone-path",
+          "name": null,
+          "locked": false,
+          "zone_type": "line",
+          "points": [
+            {
+              "lon": 13.0,
+              "lat": 23.0
+            },
+            {
+              "lon": 13.0001,
+              "lat": 23.0
+            }
+          ],
+          "rotation": 0.0,
+          "fill_color": null,
+          "notes": null
+        }
+      ],
+      "annotations": [
+        {
+          "id": "note-1",
+          "locked": false,
+          "annotation_type": "text",
+          "position": {
+            "lon": 13.0,
+            "lat": 23.0
+          },
+          "text": "Well",
+          "font_size": 14.0,
+          "rotation": null
+        }
+      ],
+      "measurement_guides": [
+        {
+          "id": "guide-1",
+          "locked": false,
+          "start": {
+            "lon": 13.0,
+            "lat": 23.0
+          },
+          "end": {
+            "lon": 13.0001,
+            "lat": 23.0001
+          }
+        }
+      ],
       "consortiums": [],
       "groups": [],
       "timeline": [],
       "budget": [],
       "budget_currency": "EUR",
-      "created_at": "2026-07-15T00:00:00.000Z",
-      "updated_at": "2026-07-15T00:00:00.000Z",
+      "views": [],
+      "stories": [],
+      "created_at": "2026-09-25T00:00:00.000Z",
+      "updated_at": "2026-09-25T00:00:00.000Z",
       "extra": {
         "future_top_level": {
           "enabled": true
         }
       }
+    },
+    "views-and-stories": {
+      "version": 9,
+      "name": "Story Garden",
+      "description": null,
+      "plant_species_colors": {},
+      "plant_species_symbols": {},
+      "plant_species_codes": {},
+      "layers": [],
+      "plants": [],
+      "zones": [],
+      "annotations": [],
+      "measurement_guides": [],
+      "consortiums": [],
+      "groups": [],
+      "timeline": [],
+      "budget": [],
+      "budget_currency": "EUR",
+      "lidar": {
+        "schema_version": 1,
+        "visible": true,
+        "entries": [
+          {
+            "kind": "Source",
+            "id": "lidar-dtm-1",
+            "name": "Terrain model",
+            "visible": true,
+            "opacity": 1.0,
+            "order": 0,
+            "ramp": null,
+            "reversed": false,
+            "range": null
+          },
+          {
+            "kind": "Derived",
+            "id": "slope-1",
+            "name": "Slope",
+            "visible": true,
+            "opacity": 0.5,
+            "order": 1,
+            "ramp": null,
+            "reversed": false,
+            "range": null
+          }
+        ]
+      },
+      "views": [
+        {
+          "id": "view-berries",
+          "name": "Berry hedges",
+          "camera": {
+            "lon": 2.2944812345,
+            "lat": 48.8583701234,
+            "zoom": 19.25,
+            "bearing": 0.0,
+            "ground_size_m": {
+              "width": 312.5,
+              "height": 187.5
+            }
+          },
+          "visible_layers": {
+            "background": {
+              "kind": "basemap",
+              "style": "liberty"
+            },
+            "terrain": {
+              "contours": false,
+              "hillshade": true
+            },
+            "scene_layers": [
+              "plants",
+              "zones"
+            ],
+            "site_data": [
+              "lidar-dtm-1"
+            ]
+          },
+          "highlighted": {
+            "species": [
+              "Lycium barbarum"
+            ],
+            "objects": [
+              {
+                "kind": "plant",
+                "id": "plant-1"
+              },
+              {
+                "kind": "measurement_guide",
+                "id": "guide-1"
+              }
+            ]
+          },
+          "title": "Berry hedges",
+          "text": [
+            {
+              "kind": "paragraph",
+              "spans": [
+                {
+                  "text": "Two hedges ",
+                  "bold": true,
+                  "italic": false,
+                  "link": null
+                },
+                {
+                  "text": "shelter",
+                  "bold": false,
+                  "italic": true,
+                  "link": "https://example.org"
+                }
+              ]
+            },
+            {
+              "kind": "bullets",
+              "items": [
+                {
+                  "spans": [
+                    {
+                      "text": "Year one",
+                      "bold": false,
+                      "italic": false,
+                      "link": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "view-pond",
+          "name": "Pond",
+          "camera": {
+            "lon": 2.2951,
+            "lat": 48.8579,
+            "zoom": 18.0,
+            "bearing": 45.0,
+            "ground_size_m": null
+          },
+          "visible_layers": {
+            "background": {
+              "kind": "basemap",
+              "style": "liberty"
+            },
+            "terrain": {
+              "contours": false,
+              "hillshade": true
+            },
+            "scene_layers": [
+              "plants",
+              "zones"
+            ],
+            "site_data": [
+              "lidar-dtm-1"
+            ]
+          },
+          "highlighted": {
+            "species": [],
+            "objects": []
+          },
+          "title": null,
+          "text": []
+        }
+      ],
+      "stories": [
+        {
+          "id": "story-visit",
+          "name": "Client visit",
+          "steps": [
+            {
+              "id": "step-1",
+              "view_id": "view-berries",
+              "title": "Berry hedges",
+              "text": [
+                {
+                  "kind": "paragraph",
+                  "spans": [
+                    {
+                      "text": "They crop from year two.",
+                      "bold": false,
+                      "italic": false,
+                      "link": null
+                    }
+                  ]
+                }
+              ],
+              "images": [
+                {
+                  "src": "https://example.org/hedge.jpg",
+                  "alt": "The hedge in June"
+                },
+                {
+                  "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+                  "alt": "A pixel"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "created_at": "2026-09-25T00:00:00.000Z",
+      "updated_at": "2026-09-25T00:00:00.000Z",
+      "extra": {}
+    },
+    "generated-ids": {
+      "version": 9,
+      "name": "Conformance Garden",
+      "description": null,
+      "plant_species_colors": {},
+      "plant_species_symbols": {},
+      "plant_species_codes": {},
+      "layers": [],
+      "plants": [
+        {
+          "id": "plant-1",
+          "locked": false,
+          "canonical_name": "Malus domestica",
+          "common_name": null,
+          "color": null,
+          "symbol": null,
+          "pinned_name": false,
+          "position": {
+            "lon": 13.0,
+            "lat": 23.0
+          },
+          "rotation": null,
+          "scale": null,
+          "notes": null,
+          "planted_date": null,
+          "quantity": null
+        },
+        {
+          "id": "plant-2",
+          "locked": false,
+          "canonical_name": "Malus domestica",
+          "common_name": null,
+          "color": null,
+          "symbol": null,
+          "pinned_name": false,
+          "position": {
+            "lon": 13.0,
+            "lat": 23.0
+          },
+          "rotation": null,
+          "scale": null,
+          "notes": null,
+          "planted_date": null,
+          "quantity": null
+        },
+        {
+          "id": "plant-3",
+          "locked": false,
+          "canonical_name": "Malus domestica",
+          "common_name": null,
+          "color": null,
+          "symbol": null,
+          "pinned_name": false,
+          "position": {
+            "lon": 13.0,
+            "lat": 23.0
+          },
+          "rotation": null,
+          "scale": null,
+          "notes": null,
+          "planted_date": null,
+          "quantity": null
+        }
+      ],
+      "zones": [],
+      "annotations": [],
+      "measurement_guides": [
+        {
+          "id": "measurement-guide-1",
+          "locked": false,
+          "start": {
+            "lon": 13.0,
+            "lat": 23.0
+          },
+          "end": {
+            "lon": 13.001,
+            "lat": 23.0
+          }
+        }
+      ],
+      "consortiums": [],
+      "groups": [],
+      "timeline": [],
+      "budget": [],
+      "budget_currency": "EUR",
+      "views": [],
+      "stories": [],
+      "created_at": "2026-09-25T00:00:00.000Z",
+      "updated_at": "2026-09-25T00:00:00.000Z",
+      "extra": {}
+    },
+    "generated-ids-before-explicit-ids": {
+      "version": 9,
+      "name": "Conformance Garden",
+      "description": null,
+      "plant_species_colors": {},
+      "plant_species_symbols": {},
+      "plant_species_codes": {},
+      "layers": [],
+      "plants": [
+        {
+          "id": "plant-1",
+          "locked": false,
+          "canonical_name": "Malus domestica",
+          "common_name": null,
+          "color": null,
+          "symbol": null,
+          "pinned_name": false,
+          "position": {
+            "lon": 13.0,
+            "lat": 23.0
+          },
+          "rotation": null,
+          "scale": null,
+          "notes": null,
+          "planted_date": null,
+          "quantity": null
+        },
+        {
+          "id": "plant-3",
+          "locked": false,
+          "canonical_name": "Prunus avium",
+          "common_name": null,
+          "color": null,
+          "symbol": null,
+          "pinned_name": false,
+          "position": {
+            "lon": 13.0,
+            "lat": 23.0
+          },
+          "rotation": null,
+          "scale": null,
+          "notes": null,
+          "planted_date": null,
+          "quantity": null
+        },
+        {
+          "id": "plant-2",
+          "locked": false,
+          "canonical_name": "Pyrus communis",
+          "common_name": null,
+          "color": null,
+          "symbol": null,
+          "pinned_name": false,
+          "position": {
+            "lon": 13.0,
+            "lat": 23.0
+          },
+          "rotation": null,
+          "scale": null,
+          "notes": null,
+          "planted_date": null,
+          "quantity": null
+        }
+      ],
+      "zones": [],
+      "annotations": [],
+      "measurement_guides": [
+        {
+          "id": "measurement-guide-2",
+          "locked": false,
+          "start": {
+            "lon": 13.0,
+            "lat": 23.0
+          },
+          "end": {
+            "lon": 13.001,
+            "lat": 23.0
+          }
+        },
+        {
+          "id": "measurement-guide-1",
+          "locked": false,
+          "start": {
+            "lon": 13.0,
+            "lat": 23.0
+          },
+          "end": {
+            "lon": 13.002,
+            "lat": 23.0
+          }
+        }
+      ],
+      "consortiums": [],
+      "groups": [],
+      "timeline": [],
+      "budget": [],
+      "budget_currency": "EUR",
+      "views": [],
+      "stories": [],
+      "created_at": "2026-09-25T00:00:00.000Z",
+      "updated_at": "2026-09-25T00:00:00.000Z",
+      "extra": {}
+    },
+    "map-view": {
+      "version": 9,
+      "name": "Reopened Garden",
+      "description": null,
+      "plant_species_colors": {},
+      "plant_species_symbols": {},
+      "plant_species_codes": {},
+      "layers": [],
+      "plants": [],
+      "zones": [],
+      "annotations": [],
+      "measurement_guides": [],
+      "consortiums": [],
+      "groups": [],
+      "timeline": [],
+      "budget": [],
+      "budget_currency": "EUR",
+      "views": [],
+      "stories": [],
+      "map_view": {
+        "lon": 2.2944812345,
+        "lat": 48.8583701234,
+        "zoom": 19.25,
+        "bearing": 30.5,
+        "ground_size_m": {
+          "width": 312.5,
+          "height": 187.5
+        }
+      },
+      "created_at": "2026-09-25T00:00:00.000Z",
+      "updated_at": "2026-09-25T00:00:00.000Z",
+      "extra": {}
+    },
+    "lidar-display": {
+      "version": 9,
+      "name": "Conformance Garden",
+      "description": null,
+      "plant_species_colors": {},
+      "plant_species_symbols": {},
+      "plant_species_codes": {},
+      "layers": [],
+      "plants": [],
+      "zones": [],
+      "annotations": [],
+      "measurement_guides": [],
+      "consortiums": [],
+      "groups": [],
+      "timeline": [],
+      "budget": [],
+      "budget_currency": "EUR",
+      "lidar": {
+        "schema_version": 1,
+        "visible": false,
+        "entries": [
+          {
+            "kind": "Source",
+            "id": "dem-1",
+            "name": "Terrain model",
+            "visible": true,
+            "opacity": 1.0,
+            "order": 0,
+            "ramp": "Magma",
+            "reversed": true,
+            "range": {
+              "mode": "Custom",
+              "min": 120.5,
+              "max": 182.0
+            }
+          },
+          {
+            "kind": "Derived",
+            "id": "slope-1",
+            "name": "Slope",
+            "visible": true,
+            "opacity": 0.5,
+            "order": 1,
+            "ramp": "YellowRed",
+            "reversed": false,
+            "range": {
+              "mode": "CutOutliers"
+            }
+          }
+        ]
+      },
+      "views": [],
+      "stories": [],
+      "created_at": "2026-09-25T00:00:00.000Z",
+      "updated_at": "2026-09-25T00:00:00.000Z",
+      "extra": {}
     }
   },
   "cases": [
     {
       "id": "accept-current-minimal",
       "input": {
-        "version": 6,
+        "version": 9,
         "name": "Conformance Garden",
-        "spatial_frame": {
-          "anchor_longitude_deg": 13.0,
-          "anchor_latitude_deg": 23.0,
-          "north_bearing_deg": 0.0,
-          "placement_status": "provisional",
-          "location_metadata": {
-            "altitude_m": null
-          }
-        },
         "plant_species_colors": {},
         "layers": [],
         "plants": [],
         "zones": [],
-        "created_at": "2026-07-15T00:00:00.000Z",
-        "updated_at": "2026-07-15T00:00:00.000Z"
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
       },
       "accepted": "empty-current"
     },
     {
-      "id": "accept-and-normalize-bearing",
+      "id": "accept-geolocated-objects",
       "input": {
-        "version": 6,
-        "name": "Bearing Garden",
-        "spatial_frame": {
-          "anchor_longitude_deg": -180.0,
-          "anchor_latitude_deg": 85.0511287798066,
-          "north_bearing_deg": -90.0,
-          "placement_status": "confirmed",
-          "location_metadata": {
-            "altitude_m": 42.5
-          }
-        },
+        "version": 9,
+        "name": "Geolocated Garden",
         "plant_species_colors": {},
         "layers": [],
-        "plants": [],
-        "zones": [],
-        "created_at": "2026-07-15T00:00:00.000Z",
-        "updated_at": "2026-07-15T00:00:00.000Z",
+        "plants": [
+          {
+            "id": "plant-1",
+            "canonical_name": "Malus domestica",
+            "position": {
+              "lon": 2.294481234,
+              "lat": 48.858370123
+            }
+          }
+        ],
+        "zones": [
+          {
+            "id": "zone-north",
+            "name": "North bed",
+            "zone_type": "ellipse",
+            "points": [
+              {
+                "lon": -180.0,
+                "lat": 85.0511287798066
+              },
+              {
+                "lon": 180.0,
+                "lat": -85.0511287798066
+              }
+            ],
+            "rotation": 30.0
+          },
+          {
+            "id": "zone-path",
+            "zone_type": "line",
+            "points": [
+              {
+                "lon": 13.0,
+                "lat": 23.0
+              },
+              {
+                "lon": 13.0001,
+                "lat": 23.0
+              }
+            ]
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "annotations": [
+          {
+            "id": "note-1",
+            "annotation_type": "text",
+            "position": {
+              "lon": 13.0,
+              "lat": 23.0
+            },
+            "text": "Well",
+            "font_size": 14.0
+          }
+        ],
+        "measurement_guides": [
+          {
+            "id": "guide-1",
+            "start": {
+              "lon": 13.0,
+              "lat": 23.0
+            },
+            "end": {
+              "lon": 13.0001,
+              "lat": 23.0001
+            }
+          }
+        ],
         "future_top_level": {
           "enabled": true
         }
       },
-      "accepted": "normalized-bearing"
+      "accepted": "geolocated-objects"
+    },
+    {
+      "id": "accept-views-and-stories",
+      "input": {
+        "version": 9,
+        "name": "Story Garden",
+        "description": null,
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "plant_species_codes": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "annotations": [],
+        "measurement_guides": [],
+        "consortiums": [],
+        "groups": [],
+        "timeline": [],
+        "budget": [],
+        "budget_currency": "EUR",
+        "views": [
+          {
+            "id": "view-berries",
+            "name": "Berry hedges",
+            "camera": {
+              "lon": 2.2944812345,
+              "lat": 48.8583701234,
+              "zoom": 19.25,
+              "bearing": 0.0,
+              "ground_size_m": {
+                "width": 312.5,
+                "height": 187.5
+              }
+            },
+            "visible_layers": {
+              "background": {
+                "kind": "basemap",
+                "style": "liberty"
+              },
+              "terrain": {
+                "contours": false,
+                "hillshade": true
+              },
+              "scene_layers": [
+                "plants",
+                "zones"
+              ],
+              "site_data": [
+                "lidar-dtm-1"
+              ]
+            },
+            "highlighted": {
+              "species": [
+                "Lycium barbarum"
+              ],
+              "objects": [
+                {
+                  "kind": "plant",
+                  "id": "plant-1"
+                },
+                {
+                  "kind": "measurement_guide",
+                  "id": "guide-1"
+                }
+              ]
+            },
+            "title": "Berry hedges",
+            "text": [
+              {
+                "kind": "paragraph",
+                "spans": [
+                  {
+                    "text": "Two hedges ",
+                    "bold": true,
+                    "italic": false,
+                    "link": null
+                  },
+                  {
+                    "text": "shelter",
+                    "bold": false,
+                    "italic": true,
+                    "link": "https://example.org"
+                  }
+                ]
+              },
+              {
+                "kind": "bullets",
+                "items": [
+                  {
+                    "spans": [
+                      {
+                        "text": "Year one",
+                        "bold": false,
+                        "italic": false,
+                        "link": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "view-pond",
+            "name": "Pond",
+            "camera": {
+              "lon": 2.2951,
+              "lat": 48.8579,
+              "zoom": 18.0,
+              "bearing": 45.0
+            },
+            "visible_layers": {
+              "background": {
+                "kind": "basemap",
+                "style": "liberty"
+              },
+              "terrain": {
+                "contours": false,
+                "hillshade": true
+              },
+              "scene_layers": [
+                "plants",
+                "zones"
+              ],
+              "site_data": [
+                "lidar-dtm-1"
+              ]
+            },
+            "highlighted": {
+              "species": [],
+              "objects": []
+            },
+            "title": null,
+            "text": [],
+            "extent": {
+              "west": 2.2941,
+              "south": 48.8573,
+              "east": 2.2961,
+              "north": 48.8585
+            }
+          }
+        ],
+        "stories": [
+          {
+            "id": "story-visit",
+            "name": "Client visit",
+            "steps": [
+              {
+                "id": "step-1",
+                "view_id": "view-berries",
+                "title": "Berry hedges",
+                "text": [
+                  {
+                    "kind": "paragraph",
+                    "spans": [
+                      {
+                        "text": "They crop from year two."
+                      }
+                    ]
+                  }
+                ],
+                "images": [
+                  {
+                    "src": "https://example.org/hedge.jpg",
+                    "alt": "The hedge in June"
+                  },
+                  {
+                    "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+                    "alt": "A pixel"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "lidar": {
+          "schema_version": 1,
+          "visible": true,
+          "entries": [
+            {
+              "kind": "Source",
+              "id": "lidar-dtm-1",
+              "name": "Terrain model",
+              "visible": true,
+              "opacity": 1.0,
+              "order": 0,
+              "ramp": null,
+              "reversed": false,
+              "range": null
+            },
+            {
+              "kind": "Derived",
+              "id": "slope-1",
+              "name": "Slope",
+              "visible": true,
+              "opacity": 0.5,
+              "order": 1,
+              "ramp": null,
+              "reversed": false,
+              "range": null
+            }
+          ]
+        }
+      },
+      "accepted": "views-and-stories"
+    },
+    {
+      "id": "accept-map-view",
+      "input": {
+        "version": 9,
+        "name": "Reopened Garden",
+        "description": null,
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "plant_species_codes": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "annotations": [],
+        "measurement_guides": [],
+        "consortiums": [],
+        "groups": [],
+        "timeline": [],
+        "budget": [],
+        "budget_currency": "EUR",
+        "views": [],
+        "stories": [],
+        "map_view": {
+          "lon": 2.2944812345,
+          "lat": 48.8583701234,
+          "zoom": 19.25,
+          "bearing": 30.5,
+          "ground_size_m": {
+            "width": 312.5,
+            "height": 187.5
+          }
+        },
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "accepted": "map-view"
+    },
+    {
+      "id": "accept-plants-and-guides-without-ids-get-generated-ids",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [
+          {
+            "id": "",
+            "canonical_name": "Malus domestica",
+            "position": {
+              "lon": 13.0,
+              "lat": 23.0
+            }
+          },
+          {
+            "id": "plant-2",
+            "canonical_name": "Malus domestica",
+            "position": {
+              "lon": 13.0,
+              "lat": 23.0
+            }
+          },
+          {
+            "id": "",
+            "canonical_name": "Malus domestica",
+            "position": {
+              "lon": 13.0,
+              "lat": 23.0
+            }
+          }
+        ],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "measurement_guides": [
+          {
+            "start": {
+              "lon": 13.0,
+              "lat": 23.0
+            },
+            "end": {
+              "lon": 13.001,
+              "lat": 23.0
+            }
+          }
+        ]
+      },
+      "accepted": "generated-ids"
+    },
+    {
+      "id": "accept-generated-ids-avoid-later-explicit-ids",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [
+          {
+            "canonical_name": "Malus domestica",
+            "position": {
+              "lon": 13.0,
+              "lat": 23.0
+            }
+          },
+          {
+            "id": "",
+            "canonical_name": "Prunus avium",
+            "position": {
+              "lon": 13.0,
+              "lat": 23.0
+            }
+          },
+          {
+            "id": "plant-2",
+            "canonical_name": "Pyrus communis",
+            "position": {
+              "lon": 13.0,
+              "lat": 23.0
+            }
+          }
+        ],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "measurement_guides": [
+          {
+            "start": {
+              "lon": 13.0,
+              "lat": 23.0
+            },
+            "end": {
+              "lon": 13.001,
+              "lat": 23.0
+            }
+          },
+          {
+            "id": "measurement-guide-1",
+            "start": {
+              "lon": 13.0,
+              "lat": 23.0
+            },
+            "end": {
+              "lon": 13.002,
+              "lat": 23.0
+            }
+          }
+        ]
+      },
+      "accepted": "generated-ids-before-explicit-ids"
+    },
+    {
+      "id": "accept-lidar-display-settings",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "lidar": {
+          "schema_version": 1,
+          "visible": false,
+          "entries": [
+            {
+              "kind": "Source",
+              "id": "dem-1",
+              "name": "Terrain model",
+              "visible": true,
+              "opacity": 1.0,
+              "order": 0,
+              "ramp": "Magma",
+              "reversed": true,
+              "range": {
+                "mode": "Custom",
+                "min": 120.5,
+                "max": 182.0
+              }
+            },
+            {
+              "kind": "Derived",
+              "id": "slope-1",
+              "name": "Slope",
+              "visible": true,
+              "opacity": 0.5,
+              "order": 1,
+              "ramp": "YellowRed",
+              "reversed": false,
+              "range": {
+                "mode": "CutOutliers"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": "lidar-display"
+    },
+    {
+      "id": "reject-v7-preview-as-older-version",
+      "input": {
+        "version": 7,
+        "name": "Preview garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [
+          {
+            "id": "plant-1",
+            "canonical_name": "Malus domestica",
+            "position": {
+              "lon": 2.294481234,
+              "lat": 48.858370123
+            }
+          }
+        ],
+        "zones": [
+          {
+            "name": "Hedge",
+            "zone_type": "line",
+            "points": [
+              {
+                "lon": 13.0,
+                "lat": 23.0
+              },
+              {
+                "lon": 13.0001,
+                "lat": 23.0
+              }
+            ]
+          }
+        ],
+        "timeline": [
+          {
+            "id": "action-1",
+            "action_type": "prune",
+            "description": "Prune",
+            "targets": [
+              {
+                "kind": "zone",
+                "zone_name": "Hedge"
+              }
+            ],
+            "completed": false,
+            "order": 0
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "error_kind": "unsupported_version"
+    },
+    {
+      "id": "reject-v8-preview-as-older-version",
+      "input": {
+        "version": 8,
+        "name": "Story garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [
+          {
+            "name": "North bed",
+            "zone_type": "rect",
+            "points": [
+              {
+                "lon": 13.0,
+                "lat": 23.0
+              },
+              {
+                "lon": 13.0001,
+                "lat": 22.9999
+              }
+            ]
+          },
+          {
+            "name": "zone-0ba8349a-6cff-46cc-8b53-a357fc976eee",
+            "zone_type": "rect",
+            "points": [
+              {
+                "lon": 13.0,
+                "lat": 23.0
+              },
+              {
+                "lon": 13.0001,
+                "lat": 22.9999
+              }
+            ]
+          },
+          {
+            "name": "North bed",
+            "zone_type": "ellipse",
+            "points": [
+              {
+                "lon": 13.0,
+                "lat": 23.0
+              },
+              {
+                "lon": 13.0001,
+                "lat": 22.9999
+              }
+            ]
+          }
+        ],
+        "budget": [
+          {
+            "target": {
+              "kind": "zone",
+              "zone_name": "North bed"
+            },
+            "category": "plants",
+            "description": "Bed",
+            "quantity": 1.0,
+            "unit_cost": 1.0,
+            "currency": "EUR"
+          }
+        ],
+        "lidar": {
+          "schema_version": 1,
+          "visible": true,
+          "entries": [
+            {
+              "kind": "Analysis",
+              "id": "slope-1",
+              "name": "Slope",
+              "visible": true,
+              "opacity": 1.0,
+              "order": 0,
+              "ramp": null,
+              "reversed": false,
+              "range": null
+            },
+            {
+              "kind": "Source",
+              "id": "dem-1",
+              "name": "Terrain model",
+              "visible": true,
+              "opacity": 0.5,
+              "order": 1,
+              "ramp": null,
+              "reversed": false,
+              "range": null
+            }
+          ]
+        },
+        "views": [
+          {
+            "id": "view-1",
+            "name": "Beds",
+            "camera": {
+              "lon": 13.0,
+              "lat": 23.0,
+              "zoom": 18.0,
+              "bearing": 0.0
+            },
+            "visible_layers": {
+              "background": {
+                "kind": "satellite"
+              },
+              "terrain": {
+                "contours": false,
+                "hillshade": false
+              },
+              "scene_layers": [
+                "zones"
+              ],
+              "site_data": []
+            },
+            "highlighted": {
+              "species": [],
+              "objects": [
+                {
+                  "kind": "zone",
+                  "id": "North bed"
+                }
+              ]
+            },
+            "title": null,
+            "text": [],
+            "extent": {
+              "west": 12.999,
+              "south": 22.999,
+              "east": 13.001,
+              "north": 23.001
+            }
+          }
+        ],
+        "stories": [],
+        "created_at": "2026-09-27T00:00:00.000Z",
+        "updated_at": "2026-09-27T00:00:00.000Z"
+      },
+      "error_kind": "unsupported_version"
     },
     {
       "id": "reject-missing-version",
@@ -134,122 +1333,3040 @@
     },
     {
       "id": "reject-version-one",
-      "input": { "version": 1 },
+      "input": {
+        "version": 1
+      },
       "error_kind": "unsupported_version"
     },
     {
-      "id": "reject-version-five",
-      "input": { "version": 5 },
+      "id": "reject-version-four-as-older-version",
+      "input": {
+        "version": 4
+      },
+      "error_kind": "unsupported_version"
+    },
+    {
+      "id": "reject-canopi-1-2-design-as-older-version",
+      "input": {
+        "version": 6,
+        "spatial_frame": {
+          "anchor_longitude_deg": -73.5,
+          "anchor_latitude_deg": 45.5,
+          "north_bearing_deg": 90.0,
+          "placement_status": "confirmed",
+          "location_metadata": {
+            "altitude_m": null
+          }
+        },
+        "name": "Canopi 1.2 garden",
+        "description": "Refused, never read past its version",
+        "plant_species_colors": {
+          "Malus domestica": "#70814B"
+        },
+        "plant_species_symbols": {
+          "Malus domestica": "canopy"
+        },
+        "layers": [
+          {
+            "name": "base",
+            "visible": false,
+            "locked": false,
+            "opacity": 1.0
+          },
+          {
+            "name": "contours",
+            "visible": false,
+            "locked": false,
+            "opacity": 1.0
+          },
+          {
+            "name": "plants",
+            "visible": true,
+            "locked": false,
+            "opacity": 1.0
+          }
+        ],
+        "plants": [
+          {
+            "id": "plant-1",
+            "canonical_name": "Malus domestica",
+            "common_name": "Apple",
+            "position": {
+              "x": 100.0,
+              "y": -50.0
+            },
+            "rotation": 45.0,
+            "scale": 1.5,
+            "quantity": 2
+          }
+        ],
+        "zones": [
+          {
+            "name": "Orchard",
+            "zone_type": "rect",
+            "points": [
+              {
+                "x": 0.0,
+                "y": 0.0
+              },
+              {
+                "x": 20.0,
+                "y": 10.0
+              }
+            ],
+            "rotation": 30.0,
+            "fill_color": "#AABBCC"
+          },
+          {
+            "name": "zone-12df7cef-c856-47a2-a4d0-63a5bfcff9d4 copy",
+            "zone_type": "polygon",
+            "points": [
+              {
+                "x": -10.0,
+                "y": 0.0
+              },
+              {
+                "x": -10.0,
+                "y": 10.0
+              },
+              {
+                "x": -20.0,
+                "y": 10.0
+              }
+            ]
+          }
+        ],
+        "annotations": [
+          {
+            "id": "note-1",
+            "annotation_type": "text",
+            "position": {
+              "x": 5.0,
+              "y": 5.0
+            },
+            "text": "Well",
+            "font_size": 14.0,
+            "rotation": 90.0
+          }
+        ],
+        "measurement_guides": [
+          {
+            "id": "guide-1",
+            "start": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "end": {
+              "x": 10.0,
+              "y": 0.0
+            }
+          }
+        ],
+        "guides": [
+          {
+            "id": "ruler-h",
+            "axis": "h",
+            "position": 40.0
+          },
+          {
+            "id": "ruler-v",
+            "axis": "v",
+            "position": -30.0
+          }
+        ],
+        "groups": [
+          {
+            "id": "group-1",
+            "name": null,
+            "members": [
+              {
+                "kind": "plant",
+                "id": "plant-1"
+              },
+              {
+                "kind": "zone",
+                "id": "Orchard"
+              }
+            ]
+          }
+        ],
+        "timeline": [
+          {
+            "id": "action-1",
+            "action_type": "plant",
+            "description": "Plant the orchard",
+            "targets": [
+              {
+                "kind": "zone",
+                "zone_name": "Orchard"
+              },
+              {
+                "kind": "placed_plant",
+                "plant_id": "plant-1"
+              }
+            ],
+            "completed": false,
+            "order": 0
+          }
+        ],
+        "budget": [
+          {
+            "target": {
+              "kind": "zone",
+              "zone_name": "Orchard"
+            },
+            "category": "plants",
+            "description": "Apples",
+            "quantity": 2.0,
+            "unit_cost": 12.0,
+            "currency": "EUR"
+          }
+        ],
+        "budget_currency": "EUR",
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z",
+        "future_top_level": {
+          "enabled": true
+        }
+      },
       "error_kind": "unsupported_version"
     },
     {
       "id": "reject-future-version",
-      "input": { "version": 7 },
+      "input": {
+        "version": 10
+      },
       "error_kind": "unsupported_version"
     },
     {
       "id": "reject-zero-version",
-      "input": { "version": 0 },
+      "input": {
+        "version": 0
+      },
       "error_kind": "invalid_version"
     },
     {
       "id": "reject-fractional-version",
-      "input": { "version": 6.5 },
+      "input": {
+        "version": 9.5
+      },
       "error_kind": "invalid_version"
     },
     {
-      "id": "reject-missing-spatial-frame",
-      "input": { "version": 6, "name": "Missing frame" },
-      "error_kind": "invalid_document"
-    },
-    {
-      "id": "reject-obsolete-root-location-authority",
+      "id": "reject-obsolete-root-spatial-frame",
       "input": {
-        "version": 6,
-        "name": "Duplicate authority",
-        "location": null,
+        "version": 9,
+        "name": "Anchored",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
         "spatial_frame": {
           "anchor_longitude_deg": 13.0,
           "anchor_latitude_deg": 23.0,
           "north_bearing_deg": 0.0,
           "placement_status": "provisional",
-          "location_metadata": { "altitude_m": null }
+          "location_metadata": {
+            "altitude_m": null
+          }
         }
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-obsolete-root-location",
+      "input": {
+        "version": 9,
+        "name": "Located",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "location": null
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-root-extra",
+      "input": {
+        "version": 9,
+        "name": "Nested extra",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "extra": {
+          "preserved": "no"
+        }
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-obsolete-root-north-bearing",
+      "input": {
+        "version": 9,
+        "name": "Bearing",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "north_bearing_deg": 0.0
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-local-metre-position",
+      "input": {
+        "version": 9,
+        "name": "Metres",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [
+          {
+            "id": "plant-1",
+            "canonical_name": "Malus domestica",
+            "position": {
+              "x": 1.0,
+              "y": 2.0
+            }
+          }
+        ],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
       },
       "error_kind": "invalid_document"
     },
     {
       "id": "reject-longitude-outside-wgs84",
       "input": {
-        "version": 6,
+        "version": 9,
         "name": "Bad longitude",
-        "spatial_frame": {
-          "anchor_longitude_deg": 180.0001,
-          "anchor_latitude_deg": 23.0,
-          "north_bearing_deg": 0.0,
-          "placement_status": "provisional",
-          "location_metadata": { "altitude_m": null }
-        }
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [
+          {
+            "id": "plant-1",
+            "canonical_name": "Malus domestica",
+            "position": {
+              "lon": 180.0001,
+              "lat": 23.0
+            }
+          }
+        ],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
       },
       "error_kind": "invalid_document"
     },
     {
       "id": "reject-latitude-outside-web-mercator",
       "input": {
-        "version": 6,
+        "version": 9,
         "name": "Bad latitude",
-        "spatial_frame": {
-          "anchor_longitude_deg": 13.0,
-          "anchor_latitude_deg": 85.0511287798067,
-          "north_bearing_deg": 0.0,
-          "placement_status": "provisional",
-          "location_metadata": { "altitude_m": null }
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [
+          {
+            "id": "plant-1",
+            "canonical_name": "Malus domestica",
+            "position": {
+              "lon": 13.0,
+              "lat": 85.0511287798067
+            }
+          }
+        ],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-zone-point-outside-web-mercator",
+      "input": {
+        "version": 9,
+        "name": "Bad zone",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [
+          {
+            "id": "z",
+            "zone_type": "polygon",
+            "points": [
+              {
+                "lon": 13.0,
+                "lat": -85.0511287798067
+              }
+            ]
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-zone-named-by-its-identity",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [
+          {
+            "name": "North bed",
+            "zone_type": "rect",
+            "points": [
+              {
+                "lon": 13.0,
+                "lat": 23.0
+              },
+              {
+                "lon": 13.0001,
+                "lat": 22.9999
+              }
+            ]
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-zone-target-by-name",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "timeline": [
+          {
+            "id": "task-1",
+            "action_type": "planting",
+            "description": "Mulch",
+            "start_date": null,
+            "end_date": null,
+            "recurrence": null,
+            "targets": [
+              {
+                "kind": "zone",
+                "zone_name": "North bed"
+              }
+            ],
+            "depends_on": null,
+            "completed": false,
+            "order": 0
+          }
+        ]
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-lidar-entry-kind-analysis",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "lidar": {
+          "schema_version": 1,
+          "visible": true,
+          "entries": [
+            {
+              "kind": "Analysis",
+              "id": "slope-1",
+              "name": "Slope",
+              "visible": true,
+              "opacity": 1.0,
+              "order": 0,
+              "ramp": null,
+              "reversed": false,
+              "range": null
+            }
+          ]
         }
       },
       "error_kind": "invalid_document"
     },
     {
-      "id": "reject-invalid-placement-status",
+      "id": "reject-guide-endpoint-outside-wgs84",
       "input": {
-        "version": 6,
-        "name": "Bad placement",
-        "spatial_frame": {
-          "anchor_longitude_deg": 13.0,
-          "anchor_latitude_deg": 23.0,
-          "north_bearing_deg": 0.0,
-          "placement_status": "unknown",
-          "location_metadata": { "altitude_m": null }
+        "version": 9,
+        "name": "Bad guide",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "measurement_guides": [
+          {
+            "id": "g",
+            "start": {
+              "lon": 13.0,
+              "lat": 23.0
+            },
+            "end": {
+              "lon": -180.0001,
+              "lat": 23.0
+            }
+          }
+        ]
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-view-camera-outside-web-mercator",
+      "input": {
+        "version": 9,
+        "name": "Story Garden",
+        "description": null,
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "plant_species_codes": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "annotations": [],
+        "measurement_guides": [],
+        "consortiums": [],
+        "groups": [],
+        "timeline": [],
+        "budget": [],
+        "budget_currency": "EUR",
+        "views": [
+          {
+            "id": "view-berries",
+            "name": "Berry hedges",
+            "camera": {
+              "lon": 2.2944812345,
+              "lat": 86.0,
+              "zoom": 19.25,
+              "bearing": 0.0
+            },
+            "visible_layers": {
+              "background": {
+                "kind": "basemap",
+                "style": "liberty"
+              },
+              "terrain": {
+                "contours": false,
+                "hillshade": true
+              },
+              "scene_layers": [
+                "plants",
+                "zones"
+              ],
+              "site_data": [
+                "lidar-dtm-1"
+              ]
+            },
+            "highlighted": {
+              "species": [
+                "Lycium barbarum"
+              ],
+              "objects": [
+                {
+                  "kind": "plant",
+                  "id": "plant-1"
+                },
+                {
+                  "kind": "measurement_guide",
+                  "id": "guide-1"
+                }
+              ]
+            },
+            "title": "Berry hedges",
+            "text": [
+              {
+                "kind": "paragraph",
+                "spans": [
+                  {
+                    "text": "Two hedges ",
+                    "bold": true,
+                    "italic": false,
+                    "link": null
+                  },
+                  {
+                    "text": "shelter",
+                    "bold": false,
+                    "italic": true,
+                    "link": "https://example.org"
+                  }
+                ]
+              },
+              {
+                "kind": "bullets",
+                "items": [
+                  {
+                    "spans": [
+                      {
+                        "text": "Year one",
+                        "bold": false,
+                        "italic": false,
+                        "link": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "stories": [
+          {
+            "id": "story-visit",
+            "name": "Client visit",
+            "steps": [
+              {
+                "id": "step-1",
+                "view_id": "view-berries",
+                "title": "Berry hedges",
+                "text": [
+                  {
+                    "kind": "paragraph",
+                    "spans": [
+                      {
+                        "text": "They crop from year two.",
+                        "bold": false,
+                        "italic": false,
+                        "link": null
+                      }
+                    ]
+                  }
+                ],
+                "images": [
+                  {
+                    "src": "https://example.org/hedge.jpg",
+                    "alt": "The hedge in June"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-view-zoom-above-map-maximum",
+      "input": {
+        "version": 9,
+        "name": "Story Garden",
+        "description": null,
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "plant_species_codes": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "annotations": [],
+        "measurement_guides": [],
+        "consortiums": [],
+        "groups": [],
+        "timeline": [],
+        "budget": [],
+        "budget_currency": "EUR",
+        "views": [
+          {
+            "id": "view-berries",
+            "name": "Berry hedges",
+            "camera": {
+              "lon": 2.2944812345,
+              "lat": 48.8583701234,
+              "zoom": 28,
+              "bearing": 0.0
+            },
+            "visible_layers": {
+              "background": {
+                "kind": "basemap",
+                "style": "liberty"
+              },
+              "terrain": {
+                "contours": false,
+                "hillshade": true
+              },
+              "scene_layers": [
+                "plants",
+                "zones"
+              ],
+              "site_data": [
+                "lidar-dtm-1"
+              ]
+            },
+            "highlighted": {
+              "species": [
+                "Lycium barbarum"
+              ],
+              "objects": [
+                {
+                  "kind": "plant",
+                  "id": "plant-1"
+                },
+                {
+                  "kind": "measurement_guide",
+                  "id": "guide-1"
+                }
+              ]
+            },
+            "title": "Berry hedges",
+            "text": [
+              {
+                "kind": "paragraph",
+                "spans": [
+                  {
+                    "text": "Two hedges ",
+                    "bold": true,
+                    "italic": false,
+                    "link": null
+                  },
+                  {
+                    "text": "shelter",
+                    "bold": false,
+                    "italic": true,
+                    "link": "https://example.org"
+                  }
+                ]
+              },
+              {
+                "kind": "bullets",
+                "items": [
+                  {
+                    "spans": [
+                      {
+                        "text": "Year one",
+                        "bold": false,
+                        "italic": false,
+                        "link": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "stories": [
+          {
+            "id": "story-visit",
+            "name": "Client visit",
+            "steps": [
+              {
+                "id": "step-1",
+                "view_id": "view-berries",
+                "title": "Berry hedges",
+                "text": [
+                  {
+                    "kind": "paragraph",
+                    "spans": [
+                      {
+                        "text": "They crop from year two.",
+                        "bold": false,
+                        "italic": false,
+                        "link": null
+                      }
+                    ]
+                  }
+                ],
+                "images": [
+                  {
+                    "src": "https://example.org/hedge.jpg",
+                    "alt": "The hedge in June"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-view-ground-size-zero-width",
+      "input": {
+        "version": 9,
+        "name": "Story Garden",
+        "description": null,
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "plant_species_codes": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "annotations": [],
+        "measurement_guides": [],
+        "consortiums": [],
+        "groups": [],
+        "timeline": [],
+        "budget": [],
+        "budget_currency": "EUR",
+        "views": [
+          {
+            "id": "view-berries",
+            "name": "Berry hedges",
+            "camera": {
+              "lon": 2.2944812345,
+              "lat": 48.8583701234,
+              "zoom": 19.25,
+              "bearing": 0.0,
+              "ground_size_m": {
+                "width": 0.0,
+                "height": 187.5
+              }
+            },
+            "visible_layers": {
+              "background": {
+                "kind": "basemap",
+                "style": "liberty"
+              },
+              "terrain": {
+                "contours": false,
+                "hillshade": true
+              },
+              "scene_layers": [
+                "plants",
+                "zones"
+              ],
+              "site_data": [
+                "lidar-dtm-1"
+              ]
+            },
+            "highlighted": {
+              "species": [
+                "Lycium barbarum"
+              ],
+              "objects": [
+                {
+                  "kind": "plant",
+                  "id": "plant-1"
+                },
+                {
+                  "kind": "measurement_guide",
+                  "id": "guide-1"
+                }
+              ]
+            },
+            "title": "Berry hedges",
+            "text": [
+              {
+                "kind": "paragraph",
+                "spans": [
+                  {
+                    "text": "Two hedges ",
+                    "bold": true,
+                    "italic": false,
+                    "link": null
+                  },
+                  {
+                    "text": "shelter",
+                    "bold": false,
+                    "italic": true,
+                    "link": "https://example.org"
+                  }
+                ]
+              },
+              {
+                "kind": "bullets",
+                "items": [
+                  {
+                    "spans": [
+                      {
+                        "text": "Year one",
+                        "bold": false,
+                        "italic": false,
+                        "link": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "stories": [
+          {
+            "id": "story-visit",
+            "name": "Client visit",
+            "steps": [
+              {
+                "id": "step-1",
+                "view_id": "view-berries",
+                "title": "Berry hedges",
+                "text": [
+                  {
+                    "kind": "paragraph",
+                    "spans": [
+                      {
+                        "text": "They crop from year two."
+                      }
+                    ]
+                  }
+                ],
+                "images": [
+                  {
+                    "src": "https://example.org/hedge.jpg",
+                    "alt": "The hedge in June"
+                  },
+                  {
+                    "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+                    "alt": "A pixel"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "lidar": {
+          "schema_version": 1,
+          "visible": true,
+          "entries": [
+            {
+              "kind": "Source",
+              "id": "lidar-dtm-1",
+              "name": "Terrain model",
+              "visible": true,
+              "opacity": 1.0,
+              "order": 0,
+              "ramp": null,
+              "reversed": false,
+              "range": null
+            },
+            {
+              "kind": "Derived",
+              "id": "slope-1",
+              "name": "Slope",
+              "visible": true,
+              "opacity": 0.5,
+              "order": 1,
+              "ramp": null,
+              "reversed": false,
+              "range": null
+            }
+          ]
         }
       },
       "error_kind": "invalid_document"
     },
     {
-      "id": "reject-invalid-altitude",
+      "id": "reject-view-ground-size-negative-height",
       "input": {
-        "version": 6,
-        "name": "Bad altitude",
-        "spatial_frame": {
-          "anchor_longitude_deg": 13.0,
-          "anchor_latitude_deg": 23.0,
-          "north_bearing_deg": 0.0,
-          "placement_status": "provisional",
-          "location_metadata": { "altitude_m": "high" }
+        "version": 9,
+        "name": "Story Garden",
+        "description": null,
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "plant_species_codes": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "annotations": [],
+        "measurement_guides": [],
+        "consortiums": [],
+        "groups": [],
+        "timeline": [],
+        "budget": [],
+        "budget_currency": "EUR",
+        "views": [
+          {
+            "id": "view-berries",
+            "name": "Berry hedges",
+            "camera": {
+              "lon": 2.2944812345,
+              "lat": 48.8583701234,
+              "zoom": 19.25,
+              "bearing": 0.0,
+              "ground_size_m": {
+                "width": 312.5,
+                "height": -1.0
+              }
+            },
+            "visible_layers": {
+              "background": {
+                "kind": "basemap",
+                "style": "liberty"
+              },
+              "terrain": {
+                "contours": false,
+                "hillshade": true
+              },
+              "scene_layers": [
+                "plants",
+                "zones"
+              ],
+              "site_data": [
+                "lidar-dtm-1"
+              ]
+            },
+            "highlighted": {
+              "species": [
+                "Lycium barbarum"
+              ],
+              "objects": [
+                {
+                  "kind": "plant",
+                  "id": "plant-1"
+                },
+                {
+                  "kind": "measurement_guide",
+                  "id": "guide-1"
+                }
+              ]
+            },
+            "title": "Berry hedges",
+            "text": [
+              {
+                "kind": "paragraph",
+                "spans": [
+                  {
+                    "text": "Two hedges ",
+                    "bold": true,
+                    "italic": false,
+                    "link": null
+                  },
+                  {
+                    "text": "shelter",
+                    "bold": false,
+                    "italic": true,
+                    "link": "https://example.org"
+                  }
+                ]
+              },
+              {
+                "kind": "bullets",
+                "items": [
+                  {
+                    "spans": [
+                      {
+                        "text": "Year one",
+                        "bold": false,
+                        "italic": false,
+                        "link": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "stories": [
+          {
+            "id": "story-visit",
+            "name": "Client visit",
+            "steps": [
+              {
+                "id": "step-1",
+                "view_id": "view-berries",
+                "title": "Berry hedges",
+                "text": [
+                  {
+                    "kind": "paragraph",
+                    "spans": [
+                      {
+                        "text": "They crop from year two."
+                      }
+                    ]
+                  }
+                ],
+                "images": [
+                  {
+                    "src": "https://example.org/hedge.jpg",
+                    "alt": "The hedge in June"
+                  },
+                  {
+                    "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+                    "alt": "A pixel"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "lidar": {
+          "schema_version": 1,
+          "visible": true,
+          "entries": [
+            {
+              "kind": "Source",
+              "id": "lidar-dtm-1",
+              "name": "Terrain model",
+              "visible": true,
+              "opacity": 1.0,
+              "order": 0,
+              "ramp": null,
+              "reversed": false,
+              "range": null
+            },
+            {
+              "kind": "Derived",
+              "id": "slope-1",
+              "name": "Slope",
+              "visible": true,
+              "opacity": 0.5,
+              "order": 1,
+              "ramp": null,
+              "reversed": false,
+              "range": null
+            }
+          ]
         }
       },
       "error_kind": "invalid_document"
     },
     {
-      "id": "reject-missing-altitude",
+      "id": "reject-map-view-zoom-above-map-maximum",
       "input": {
-        "version": 6,
-        "name": "Missing altitude",
-        "spatial_frame": {
-          "anchor_longitude_deg": 13.0,
-          "anchor_latitude_deg": 23.0,
-          "north_bearing_deg": 0.0,
-          "placement_status": "provisional",
-          "location_metadata": {}
+        "version": 9,
+        "name": "Reopened Garden",
+        "description": null,
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "plant_species_codes": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "annotations": [],
+        "measurement_guides": [],
+        "consortiums": [],
+        "groups": [],
+        "timeline": [],
+        "budget": [],
+        "budget_currency": "EUR",
+        "views": [],
+        "stories": [],
+        "map_view": {
+          "lon": 2.2944812345,
+          "lat": 48.8583701234,
+          "zoom": 28,
+          "bearing": 30.5,
+          "ground_size_m": {
+            "width": 312.5,
+            "height": 187.5
+          }
+        },
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-map-view-ground-size-zero-width",
+      "input": {
+        "version": 9,
+        "name": "Reopened Garden",
+        "description": null,
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "plant_species_codes": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "annotations": [],
+        "measurement_guides": [],
+        "consortiums": [],
+        "groups": [],
+        "timeline": [],
+        "budget": [],
+        "budget_currency": "EUR",
+        "views": [],
+        "stories": [],
+        "map_view": {
+          "lon": 2.2944812345,
+          "lat": 48.8583701234,
+          "zoom": 19.25,
+          "bearing": 30.5,
+          "ground_size_m": {
+            "width": 0.0,
+            "height": 187.5
+          }
+        },
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-story-step-without-saved-view",
+      "input": {
+        "version": 9,
+        "name": "Story Garden",
+        "description": null,
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "plant_species_codes": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "annotations": [],
+        "measurement_guides": [],
+        "consortiums": [],
+        "groups": [],
+        "timeline": [],
+        "budget": [],
+        "budget_currency": "EUR",
+        "views": [
+          {
+            "id": "view-berries",
+            "name": "Berry hedges",
+            "camera": {
+              "lon": 2.2944812345,
+              "lat": 48.8583701234,
+              "zoom": 19.25,
+              "bearing": 0.0
+            },
+            "visible_layers": {
+              "background": {
+                "kind": "basemap",
+                "style": "liberty"
+              },
+              "terrain": {
+                "contours": false,
+                "hillshade": true
+              },
+              "scene_layers": [
+                "plants",
+                "zones"
+              ],
+              "site_data": [
+                "lidar-dtm-1"
+              ]
+            },
+            "highlighted": {
+              "species": [
+                "Lycium barbarum"
+              ],
+              "objects": [
+                {
+                  "kind": "plant",
+                  "id": "plant-1"
+                },
+                {
+                  "kind": "measurement_guide",
+                  "id": "guide-1"
+                }
+              ]
+            },
+            "title": "Berry hedges",
+            "text": [
+              {
+                "kind": "paragraph",
+                "spans": [
+                  {
+                    "text": "Two hedges ",
+                    "bold": true,
+                    "italic": false,
+                    "link": null
+                  },
+                  {
+                    "text": "shelter",
+                    "bold": false,
+                    "italic": true,
+                    "link": "https://example.org"
+                  }
+                ]
+              },
+              {
+                "kind": "bullets",
+                "items": [
+                  {
+                    "spans": [
+                      {
+                        "text": "Year one",
+                        "bold": false,
+                        "italic": false,
+                        "link": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "stories": [
+          {
+            "id": "story-visit",
+            "name": "Client visit",
+            "steps": [
+              {
+                "id": "step-1",
+                "view_id": "view-missing",
+                "title": "Berry hedges",
+                "text": [
+                  {
+                    "kind": "paragraph",
+                    "spans": [
+                      {
+                        "text": "They crop from year two.",
+                        "bold": false,
+                        "italic": false,
+                        "link": null
+                      }
+                    ]
+                  }
+                ],
+                "images": [
+                  {
+                    "src": "https://example.org/hedge.jpg",
+                    "alt": "The hedge in June"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-duplicate-saved-view-id",
+      "input": {
+        "version": 9,
+        "name": "Story Garden",
+        "description": null,
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "plant_species_codes": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "annotations": [],
+        "measurement_guides": [],
+        "consortiums": [],
+        "groups": [],
+        "timeline": [],
+        "budget": [],
+        "budget_currency": "EUR",
+        "views": [
+          {
+            "id": "view-berries",
+            "name": "Berry hedges",
+            "camera": {
+              "lon": 2.2944812345,
+              "lat": 48.8583701234,
+              "zoom": 19.25,
+              "bearing": 0.0
+            },
+            "visible_layers": {
+              "background": {
+                "kind": "basemap",
+                "style": "liberty"
+              },
+              "terrain": {
+                "contours": false,
+                "hillshade": true
+              },
+              "scene_layers": [
+                "plants",
+                "zones"
+              ],
+              "site_data": [
+                "lidar-dtm-1"
+              ]
+            },
+            "highlighted": {
+              "species": [
+                "Lycium barbarum"
+              ],
+              "objects": [
+                {
+                  "kind": "plant",
+                  "id": "plant-1"
+                },
+                {
+                  "kind": "measurement_guide",
+                  "id": "guide-1"
+                }
+              ]
+            },
+            "title": "Berry hedges",
+            "text": [
+              {
+                "kind": "paragraph",
+                "spans": [
+                  {
+                    "text": "Two hedges ",
+                    "bold": true,
+                    "italic": false,
+                    "link": null
+                  },
+                  {
+                    "text": "shelter",
+                    "bold": false,
+                    "italic": true,
+                    "link": "https://example.org"
+                  }
+                ]
+              },
+              {
+                "kind": "bullets",
+                "items": [
+                  {
+                    "spans": [
+                      {
+                        "text": "Year one",
+                        "bold": false,
+                        "italic": false,
+                        "link": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "view-berries",
+            "name": "Berry hedges",
+            "camera": {
+              "lon": 2.2944812345,
+              "lat": 48.8583701234,
+              "zoom": 19.25,
+              "bearing": 0.0
+            },
+            "visible_layers": {
+              "background": {
+                "kind": "basemap",
+                "style": "liberty"
+              },
+              "terrain": {
+                "contours": false,
+                "hillshade": true
+              },
+              "scene_layers": [
+                "plants",
+                "zones"
+              ],
+              "site_data": [
+                "lidar-dtm-1"
+              ]
+            },
+            "highlighted": {
+              "species": [
+                "Lycium barbarum"
+              ],
+              "objects": [
+                {
+                  "kind": "plant",
+                  "id": "plant-1"
+                },
+                {
+                  "kind": "measurement_guide",
+                  "id": "guide-1"
+                }
+              ]
+            },
+            "title": "Berry hedges",
+            "text": [
+              {
+                "kind": "paragraph",
+                "spans": [
+                  {
+                    "text": "Two hedges ",
+                    "bold": true,
+                    "italic": false,
+                    "link": null
+                  },
+                  {
+                    "text": "shelter",
+                    "bold": false,
+                    "italic": true,
+                    "link": "https://example.org"
+                  }
+                ]
+              },
+              {
+                "kind": "bullets",
+                "items": [
+                  {
+                    "spans": [
+                      {
+                        "text": "Year one",
+                        "bold": false,
+                        "italic": false,
+                        "link": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "stories": [
+          {
+            "id": "story-visit",
+            "name": "Client visit",
+            "steps": [
+              {
+                "id": "step-1",
+                "view_id": "view-berries",
+                "title": "Berry hedges",
+                "text": [
+                  {
+                    "kind": "paragraph",
+                    "spans": [
+                      {
+                        "text": "They crop from year two."
+                      }
+                    ]
+                  }
+                ],
+                "images": [
+                  {
+                    "src": "https://example.org/hedge.jpg",
+                    "alt": "The hedge in June"
+                  },
+                  {
+                    "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+                    "alt": "A pixel"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-story-step-duplicate-id",
+      "input": {
+        "version": 9,
+        "name": "Story Garden",
+        "description": null,
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "plant_species_codes": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "annotations": [],
+        "measurement_guides": [],
+        "consortiums": [],
+        "groups": [],
+        "timeline": [],
+        "budget": [],
+        "budget_currency": "EUR",
+        "views": [
+          {
+            "id": "view-berries",
+            "name": "Berry hedges",
+            "camera": {
+              "lon": 2.2944812345,
+              "lat": 48.8583701234,
+              "zoom": 19.25,
+              "bearing": 0.0
+            },
+            "visible_layers": {
+              "background": {
+                "kind": "basemap",
+                "style": "liberty"
+              },
+              "terrain": {
+                "contours": false,
+                "hillshade": true
+              },
+              "scene_layers": [
+                "plants",
+                "zones"
+              ],
+              "site_data": [
+                "lidar-dtm-1"
+              ]
+            },
+            "highlighted": {
+              "species": [
+                "Lycium barbarum"
+              ],
+              "objects": [
+                {
+                  "kind": "plant",
+                  "id": "plant-1"
+                },
+                {
+                  "kind": "measurement_guide",
+                  "id": "guide-1"
+                }
+              ]
+            },
+            "title": "Berry hedges",
+            "text": [
+              {
+                "kind": "paragraph",
+                "spans": [
+                  {
+                    "text": "Two hedges ",
+                    "bold": true,
+                    "italic": false,
+                    "link": null
+                  },
+                  {
+                    "text": "shelter",
+                    "bold": false,
+                    "italic": true,
+                    "link": "https://example.org"
+                  }
+                ]
+              },
+              {
+                "kind": "bullets",
+                "items": [
+                  {
+                    "spans": [
+                      {
+                        "text": "Year one",
+                        "bold": false,
+                        "italic": false,
+                        "link": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "stories": [
+          {
+            "id": "story-visit",
+            "name": "Client visit",
+            "steps": [
+              {
+                "id": "step-1",
+                "view_id": "view-berries",
+                "title": "Berry hedges",
+                "text": [
+                  {
+                    "kind": "paragraph",
+                    "spans": [
+                      {
+                        "text": "They crop from year two."
+                      }
+                    ]
+                  }
+                ],
+                "images": [
+                  {
+                    "src": "https://example.org/hedge.jpg",
+                    "alt": "The hedge in June"
+                  },
+                  {
+                    "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+                    "alt": "A pixel"
+                  }
+                ]
+              },
+              {
+                "id": "step-1",
+                "view_id": "view-berries",
+                "title": "Berry hedges",
+                "text": [
+                  {
+                    "kind": "paragraph",
+                    "spans": [
+                      {
+                        "text": "They crop from year two."
+                      }
+                    ]
+                  }
+                ],
+                "images": [
+                  {
+                    "src": "https://example.org/hedge.jpg",
+                    "alt": "The hedge in June"
+                  },
+                  {
+                    "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+                    "alt": "A pixel"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-rich-text-script-link",
+      "input": {
+        "version": 9,
+        "name": "Story Garden",
+        "description": null,
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "plant_species_codes": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "annotations": [],
+        "measurement_guides": [],
+        "consortiums": [],
+        "groups": [],
+        "timeline": [],
+        "budget": [],
+        "budget_currency": "EUR",
+        "views": [
+          {
+            "id": "view-berries",
+            "name": "Berry hedges",
+            "camera": {
+              "lon": 2.2944812345,
+              "lat": 48.8583701234,
+              "zoom": 19.25,
+              "bearing": 0.0
+            },
+            "visible_layers": {
+              "background": {
+                "kind": "basemap",
+                "style": "liberty"
+              },
+              "terrain": {
+                "contours": false,
+                "hillshade": true
+              },
+              "scene_layers": [
+                "plants",
+                "zones"
+              ],
+              "site_data": [
+                "lidar-dtm-1"
+              ]
+            },
+            "highlighted": {
+              "species": [
+                "Lycium barbarum"
+              ],
+              "objects": [
+                {
+                  "kind": "plant",
+                  "id": "plant-1"
+                },
+                {
+                  "kind": "measurement_guide",
+                  "id": "guide-1"
+                }
+              ]
+            },
+            "title": "Berry hedges",
+            "text": [
+              {
+                "kind": "paragraph",
+                "spans": [
+                  {
+                    "text": "Two hedges ",
+                    "bold": true,
+                    "italic": false,
+                    "link": null
+                  },
+                  {
+                    "text": "shelter",
+                    "bold": false,
+                    "italic": true,
+                    "link": "javascript:alert(1)"
+                  }
+                ]
+              },
+              {
+                "kind": "bullets",
+                "items": [
+                  {
+                    "spans": [
+                      {
+                        "text": "Year one",
+                        "bold": false,
+                        "italic": false,
+                        "link": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "stories": [
+          {
+            "id": "story-visit",
+            "name": "Client visit",
+            "steps": [
+              {
+                "id": "step-1",
+                "view_id": "view-berries",
+                "title": "Berry hedges",
+                "text": [
+                  {
+                    "kind": "paragraph",
+                    "spans": [
+                      {
+                        "text": "They crop from year two."
+                      }
+                    ]
+                  }
+                ],
+                "images": [
+                  {
+                    "src": "https://example.org/hedge.jpg",
+                    "alt": "The hedge in June"
+                  },
+                  {
+                    "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+                    "alt": "A pixel"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-story-image-svg-data",
+      "input": {
+        "version": 9,
+        "name": "Story Garden",
+        "description": null,
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "plant_species_codes": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "annotations": [],
+        "measurement_guides": [],
+        "consortiums": [],
+        "groups": [],
+        "timeline": [],
+        "budget": [],
+        "budget_currency": "EUR",
+        "views": [
+          {
+            "id": "view-berries",
+            "name": "Berry hedges",
+            "camera": {
+              "lon": 2.2944812345,
+              "lat": 48.8583701234,
+              "zoom": 19.25,
+              "bearing": 0.0
+            },
+            "visible_layers": {
+              "background": {
+                "kind": "basemap",
+                "style": "liberty"
+              },
+              "terrain": {
+                "contours": false,
+                "hillshade": true
+              },
+              "scene_layers": [
+                "plants",
+                "zones"
+              ],
+              "site_data": [
+                "lidar-dtm-1"
+              ]
+            },
+            "highlighted": {
+              "species": [
+                "Lycium barbarum"
+              ],
+              "objects": [
+                {
+                  "kind": "plant",
+                  "id": "plant-1"
+                },
+                {
+                  "kind": "measurement_guide",
+                  "id": "guide-1"
+                }
+              ]
+            },
+            "title": "Berry hedges",
+            "text": [
+              {
+                "kind": "paragraph",
+                "spans": [
+                  {
+                    "text": "Two hedges ",
+                    "bold": true,
+                    "italic": false,
+                    "link": null
+                  },
+                  {
+                    "text": "shelter",
+                    "bold": false,
+                    "italic": true,
+                    "link": "https://example.org"
+                  }
+                ]
+              },
+              {
+                "kind": "bullets",
+                "items": [
+                  {
+                    "spans": [
+                      {
+                        "text": "Year one",
+                        "bold": false,
+                        "italic": false,
+                        "link": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "stories": [
+          {
+            "id": "story-visit",
+            "name": "Client visit",
+            "steps": [
+              {
+                "id": "step-1",
+                "view_id": "view-berries",
+                "title": "Berry hedges",
+                "text": [
+                  {
+                    "kind": "paragraph",
+                    "spans": [
+                      {
+                        "text": "They crop from year two."
+                      }
+                    ]
+                  }
+                ],
+                "images": [
+                  {
+                    "src": "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
+                    "alt": "The hedge in June"
+                  },
+                  {
+                    "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+                    "alt": "A pixel"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-story-image-plain-http",
+      "input": {
+        "version": 9,
+        "name": "Story Garden",
+        "description": null,
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "plant_species_codes": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "annotations": [],
+        "measurement_guides": [],
+        "consortiums": [],
+        "groups": [],
+        "timeline": [],
+        "budget": [],
+        "budget_currency": "EUR",
+        "views": [
+          {
+            "id": "view-berries",
+            "name": "Berry hedges",
+            "camera": {
+              "lon": 2.2944812345,
+              "lat": 48.8583701234,
+              "zoom": 19.25,
+              "bearing": 0.0
+            },
+            "visible_layers": {
+              "background": {
+                "kind": "basemap",
+                "style": "liberty"
+              },
+              "terrain": {
+                "contours": false,
+                "hillshade": true
+              },
+              "scene_layers": [
+                "plants",
+                "zones"
+              ],
+              "site_data": [
+                "lidar-dtm-1"
+              ]
+            },
+            "highlighted": {
+              "species": [
+                "Lycium barbarum"
+              ],
+              "objects": [
+                {
+                  "kind": "plant",
+                  "id": "plant-1"
+                },
+                {
+                  "kind": "measurement_guide",
+                  "id": "guide-1"
+                }
+              ]
+            },
+            "title": "Berry hedges",
+            "text": [
+              {
+                "kind": "paragraph",
+                "spans": [
+                  {
+                    "text": "Two hedges ",
+                    "bold": true,
+                    "italic": false,
+                    "link": null
+                  },
+                  {
+                    "text": "shelter",
+                    "bold": false,
+                    "italic": true,
+                    "link": "https://example.org"
+                  }
+                ]
+              },
+              {
+                "kind": "bullets",
+                "items": [
+                  {
+                    "spans": [
+                      {
+                        "text": "Year one",
+                        "bold": false,
+                        "italic": false,
+                        "link": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "stories": [
+          {
+            "id": "story-visit",
+            "name": "Client visit",
+            "steps": [
+              {
+                "id": "step-1",
+                "view_id": "view-berries",
+                "title": "Berry hedges",
+                "text": [
+                  {
+                    "kind": "paragraph",
+                    "spans": [
+                      {
+                        "text": "They crop from year two."
+                      }
+                    ]
+                  }
+                ],
+                "images": [
+                  {
+                    "src": "http://example.org/hedge.jpg",
+                    "alt": "The hedge in June"
+                  },
+                  {
+                    "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+                    "alt": "A pixel"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-view-highlight-unknown-object-kind",
+      "input": {
+        "version": 9,
+        "name": "Story Garden",
+        "description": null,
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "plant_species_codes": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "annotations": [],
+        "measurement_guides": [],
+        "consortiums": [],
+        "groups": [],
+        "timeline": [],
+        "budget": [],
+        "budget_currency": "EUR",
+        "views": [
+          {
+            "id": "view-berries",
+            "name": "Berry hedges",
+            "camera": {
+              "lon": 2.2944812345,
+              "lat": 48.8583701234,
+              "zoom": 19.25,
+              "bearing": 0.0
+            },
+            "visible_layers": {
+              "background": {
+                "kind": "basemap",
+                "style": "liberty"
+              },
+              "terrain": {
+                "contours": false,
+                "hillshade": true
+              },
+              "scene_layers": [
+                "plants",
+                "zones"
+              ],
+              "site_data": [
+                "lidar-dtm-1"
+              ]
+            },
+            "highlighted": {
+              "species": [
+                "Lycium barbarum"
+              ],
+              "objects": [
+                {
+                  "kind": "tree",
+                  "id": "plant-1"
+                },
+                {
+                  "kind": "measurement_guide",
+                  "id": "guide-1"
+                }
+              ]
+            },
+            "title": "Berry hedges",
+            "text": [
+              {
+                "kind": "paragraph",
+                "spans": [
+                  {
+                    "text": "Two hedges ",
+                    "bold": true,
+                    "italic": false,
+                    "link": null
+                  },
+                  {
+                    "text": "shelter",
+                    "bold": false,
+                    "italic": true,
+                    "link": "https://example.org"
+                  }
+                ]
+              },
+              {
+                "kind": "bullets",
+                "items": [
+                  {
+                    "spans": [
+                      {
+                        "text": "Year one",
+                        "bold": false,
+                        "italic": false,
+                        "link": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "stories": [
+          {
+            "id": "story-visit",
+            "name": "Client visit",
+            "steps": [
+              {
+                "id": "step-1",
+                "view_id": "view-berries",
+                "title": "Berry hedges",
+                "text": [
+                  {
+                    "kind": "paragraph",
+                    "spans": [
+                      {
+                        "text": "They crop from year two.",
+                        "bold": false,
+                        "italic": false,
+                        "link": null
+                      }
+                    ]
+                  }
+                ],
+                "images": [
+                  {
+                    "src": "https://example.org/hedge.jpg",
+                    "alt": "The hedge in June"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-non-object-root",
+      "input": [],
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-missing-root-fields",
+      "input": {
+        "version": 9
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-duplicate-zone-id",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [
+          {
+            "id": "bed",
+            "zone_type": "rect",
+            "points": [
+              {
+                "lon": 13.0,
+                "lat": 23.0
+              },
+              {
+                "lon": 13.0001,
+                "lat": 22.9999
+              }
+            ]
+          },
+          {
+            "id": "bed",
+            "zone_type": "rect",
+            "points": [
+              {
+                "lon": 13.0,
+                "lat": 23.0
+              },
+              {
+                "lon": 13.0001,
+                "lat": 22.9999
+              }
+            ]
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-empty-zone-id",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [
+          {
+            "id": "",
+            "zone_type": "rect",
+            "points": [
+              {
+                "lon": 13.0,
+                "lat": 23.0
+              },
+              {
+                "lon": 13.0001,
+                "lat": 22.9999
+              }
+            ]
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-duplicate-plant-id",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [
+          {
+            "id": "plant-1",
+            "canonical_name": "Malus domestica",
+            "position": {
+              "lon": 13.0,
+              "lat": 23.0
+            }
+          },
+          {
+            "id": "plant-1",
+            "canonical_name": "Malus domestica",
+            "position": {
+              "lon": 13.0,
+              "lat": 23.0
+            }
+          }
+        ],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-duplicate-annotation-id",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "annotations": [
+          {
+            "id": "n",
+            "annotation_type": "text",
+            "position": {
+              "lon": 13.0,
+              "lat": 23.0
+            },
+            "text": "Note",
+            "font_size": 14.0
+          },
+          {
+            "id": "n",
+            "annotation_type": "text",
+            "position": {
+              "lon": 13.0,
+              "lat": 23.0
+            },
+            "text": "Note",
+            "font_size": 14.0
+          }
+        ]
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-duplicate-group-id",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "groups": [
+          {
+            "id": "g",
+            "name": null,
+            "members": []
+          },
+          {
+            "id": "g",
+            "name": null,
+            "members": []
+          }
+        ]
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-layer-opacity-above-one",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [
+          {
+            "name": "plants",
+            "visible": true,
+            "locked": false,
+            "opacity": 1.5
+          }
+        ],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-plant-scale-zero",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [
+          {
+            "id": "plant-1",
+            "canonical_name": "Malus domestica",
+            "position": {
+              "lon": 13.0,
+              "lat": 23.0
+            },
+            "scale": 0.0
+          }
+        ],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-annotation-font-size-zero",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "annotations": [
+          {
+            "id": "n",
+            "annotation_type": "text",
+            "position": {
+              "lon": 13.0,
+              "lat": 23.0
+            },
+            "text": "Note",
+            "font_size": 0.0
+          }
+        ]
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-lidar-schema-version",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "lidar": {
+          "schema_version": 2,
+          "visible": true,
+          "entries": []
         }
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-lidar-entry-opacity-above-one",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "lidar": {
+          "schema_version": 1,
+          "visible": true,
+          "entries": [
+            {
+              "kind": "Source",
+              "id": "dem-1",
+              "name": "Terrain model",
+              "visible": true,
+              "opacity": 1.2,
+              "order": 0,
+              "ramp": null,
+              "reversed": false,
+              "range": null
+            }
+          ]
+        }
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-lidar-custom-range-min-not-below-max",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "lidar": {
+          "schema_version": 1,
+          "visible": true,
+          "entries": [
+            {
+              "kind": "Source",
+              "id": "dem-1",
+              "name": "Terrain model",
+              "visible": true,
+              "opacity": 1.0,
+              "order": 0,
+              "ramp": null,
+              "reversed": false,
+              "range": {
+                "mode": "Custom",
+                "min": 30.0,
+                "max": 30.0
+              }
+            }
+          ]
+        }
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-lidar-custom-range-non-finite-min",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "lidar": {
+          "schema_version": 1,
+          "visible": true,
+          "entries": [
+            {
+              "kind": "Source",
+              "id": "dem-1",
+              "name": "Terrain model",
+              "visible": true,
+              "opacity": 1.0,
+              "order": 0,
+              "ramp": null,
+              "reversed": false,
+              "range": {
+                "mode": "Custom",
+                "min": null,
+                "max": 30.0
+              }
+            }
+          ]
+        }
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-lidar-entry-empty-name",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "lidar": {
+          "schema_version": 1,
+          "visible": true,
+          "entries": [
+            {
+              "kind": "Source",
+              "id": "dem-1",
+              "name": "  ",
+              "visible": true,
+              "opacity": 1.0,
+              "order": 0,
+              "ramp": null,
+              "reversed": false,
+              "range": null
+            }
+          ]
+        }
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-lidar-entry-without-name",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "lidar": {
+          "schema_version": 1,
+          "visible": true,
+          "entries": [
+            {
+              "kind": "Source",
+              "id": "dem-1",
+              "visible": true,
+              "opacity": 1.0,
+              "order": 0,
+              "ramp": null,
+              "reversed": false,
+              "range": null
+            }
+          ]
+        }
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-lidar-section-without-visible",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "lidar": {
+          "schema_version": 1,
+          "entries": [
+            {
+              "kind": "Source",
+              "id": "dem-1",
+              "name": "Terrain model",
+              "visible": true,
+              "opacity": 1.0,
+              "order": 0,
+              "ramp": null,
+              "reversed": false,
+              "range": null
+            }
+          ]
+        }
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-view-bearing-above-360",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "views": [
+          {
+            "id": "view-1",
+            "name": "View",
+            "camera": {
+              "lon": 13.0,
+              "lat": 23.0,
+              "zoom": 18.0,
+              "bearing": 361.0
+            },
+            "visible_layers": {
+              "background": {
+                "kind": "satellite"
+              },
+              "terrain": {
+                "contours": false,
+                "hillshade": false
+              },
+              "scene_layers": [],
+              "site_data": []
+            },
+            "highlighted": {
+              "species": [],
+              "objects": []
+            },
+            "title": null,
+            "text": []
+          }
+        ]
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-view-ground-size-above-1e8-metres",
+      "input": {
+        "version": 9,
+        "name": "Story Garden",
+        "description": null,
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "plant_species_codes": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "annotations": [],
+        "measurement_guides": [],
+        "consortiums": [],
+        "groups": [],
+        "timeline": [],
+        "budget": [],
+        "budget_currency": "EUR",
+        "views": [
+          {
+            "id": "view-berries",
+            "name": "Berry hedges",
+            "camera": {
+              "lon": 2.2944812345,
+              "lat": 48.8583701234,
+              "zoom": 19.25,
+              "bearing": 0.0,
+              "ground_size_m": {
+                "width": 100000001.0,
+                "height": 187.5
+              }
+            },
+            "visible_layers": {
+              "background": {
+                "kind": "basemap",
+                "style": "liberty"
+              },
+              "terrain": {
+                "contours": false,
+                "hillshade": true
+              },
+              "scene_layers": [
+                "plants",
+                "zones"
+              ],
+              "site_data": [
+                "lidar-dtm-1"
+              ]
+            },
+            "highlighted": {
+              "species": [
+                "Lycium barbarum"
+              ],
+              "objects": [
+                {
+                  "kind": "plant",
+                  "id": "plant-1"
+                },
+                {
+                  "kind": "measurement_guide",
+                  "id": "guide-1"
+                }
+              ]
+            },
+            "title": "Berry hedges",
+            "text": [
+              {
+                "kind": "paragraph",
+                "spans": [
+                  {
+                    "text": "Two hedges ",
+                    "bold": true,
+                    "italic": false,
+                    "link": null
+                  },
+                  {
+                    "text": "shelter",
+                    "bold": false,
+                    "italic": true,
+                    "link": "https://example.org"
+                  }
+                ]
+              },
+              {
+                "kind": "bullets",
+                "items": [
+                  {
+                    "spans": [
+                      {
+                        "text": "Year one",
+                        "bold": false,
+                        "italic": false,
+                        "link": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "stories": [
+          {
+            "id": "story-visit",
+            "name": "Client visit",
+            "steps": [
+              {
+                "id": "step-1",
+                "view_id": "view-berries",
+                "title": "Berry hedges",
+                "text": [
+                  {
+                    "kind": "paragraph",
+                    "spans": [
+                      {
+                        "text": "They crop from year two."
+                      }
+                    ]
+                  }
+                ],
+                "images": [
+                  {
+                    "src": "https://example.org/hedge.jpg",
+                    "alt": "The hedge in June"
+                  },
+                  {
+                    "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+                    "alt": "A pixel"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "lidar": {
+          "schema_version": 1,
+          "visible": true,
+          "entries": [
+            {
+              "kind": "Source",
+              "id": "lidar-dtm-1",
+              "name": "Terrain model",
+              "visible": true,
+              "opacity": 1.0,
+              "order": 0,
+              "ramp": null,
+              "reversed": false,
+              "range": null
+            },
+            {
+              "kind": "Derived",
+              "id": "slope-1",
+              "name": "Slope",
+              "visible": true,
+              "opacity": 0.5,
+              "order": 1,
+              "ramp": null,
+              "reversed": false,
+              "range": null
+            }
+          ]
+        }
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-duplicate-story-id",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "views": [
+          {
+            "id": "view-1",
+            "name": "View",
+            "camera": {
+              "lon": 13.0,
+              "lat": 23.0,
+              "zoom": 18.0,
+              "bearing": 0.0
+            },
+            "visible_layers": {
+              "background": {
+                "kind": "satellite"
+              },
+              "terrain": {
+                "contours": false,
+                "hillshade": false
+              },
+              "scene_layers": [],
+              "site_data": []
+            },
+            "highlighted": {
+              "species": [],
+              "objects": []
+            },
+            "title": null,
+            "text": []
+          }
+        ],
+        "stories": [
+          {
+            "id": "story-1",
+            "name": "Story",
+            "steps": [
+              {
+                "id": "story-1-step",
+                "view_id": "view-1",
+                "title": null,
+                "text": [],
+                "images": []
+              }
+            ]
+          },
+          {
+            "id": "story-1",
+            "name": "Story",
+            "steps": [
+              {
+                "id": "story-1-step",
+                "view_id": "view-1",
+                "title": null,
+                "text": [],
+                "images": []
+              }
+            ]
+          }
+        ]
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-story-image-bad-base64",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "views": [
+          {
+            "id": "view-1",
+            "name": "View",
+            "camera": {
+              "lon": 13.0,
+              "lat": 23.0,
+              "zoom": 18.0,
+              "bearing": 0.0
+            },
+            "visible_layers": {
+              "background": {
+                "kind": "satellite"
+              },
+              "terrain": {
+                "contours": false,
+                "hillshade": false
+              },
+              "scene_layers": [],
+              "site_data": []
+            },
+            "highlighted": {
+              "species": [],
+              "objects": []
+            },
+            "title": null,
+            "text": []
+          }
+        ],
+        "stories": [
+          {
+            "id": "story-1",
+            "name": "Story",
+            "steps": [
+              {
+                "id": "story-1-step",
+                "view_id": "view-1",
+                "title": null,
+                "text": [],
+                "images": [
+                  {
+                    "src": "data:image/png;base64,@@@@",
+                    "alt": "x"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       },
       "error_kind": "invalid_document"
     }

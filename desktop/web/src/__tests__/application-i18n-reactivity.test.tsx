@@ -36,13 +36,13 @@ describe('application translation authority', () => {
       render(<DegradedBanner />, container)
     })
 
-    expect(container.textContent).toContain('Plant database not found')
+    expect(container.textContent).toContain("The plant catalog's database file is missing")
 
     await act(async () => {
       locale.value = 'fr'
     })
 
-    expect(container.textContent).toContain('Base de données végétale introuvable')
+    expect(container.textContent).toContain('Le fichier de base de données du catalogue des plantes est introuvable')
   })
 
   it('pins interpolation, count, and fallback reads to the observed locale synchronously', () => {
@@ -54,7 +54,7 @@ describe('application translation authority', () => {
 
     expect(changeLanguage).toHaveBeenCalledWith('fr')
     expect(t('plantDb.placeSpecies', { name: 'Poirier' })).toBe('Placer Poirier')
-    expect(t('worldMap.plantCount', { count: 4 })).toBe('4 plantes')
+    expect(t('plantFinder.plants', { count: 4 })).toBe('4 plantes')
     expect(t('missing.test.key', 'Fallback label')).toBe('Fallback label')
   })
 
@@ -65,8 +65,10 @@ describe('application translation authority', () => {
     })
 
     expect(container.querySelector('[role="dialog"]')?.getAttribute('aria-label'))
-      .toBe('Command Palette')
+      .toBe('Command palette')
     expect(container.textContent).toContain('New Design')
+    const shortcutOf = (id: string) => container.querySelector(`[id="cmd-${id}"] span:last-child`)?.textContent
+    expect(shortcutOf('file.saveAs')).toBe('Ctrl Shift S')
 
     await act(async () => {
       locale.value = 'fr'
@@ -74,6 +76,8 @@ describe('application translation authority', () => {
 
     expect(container.querySelector('[role="dialog"]')?.getAttribute('aria-label'))
       .toBe('Palette de commandes')
-    expect(container.textContent).toContain('Nouveau design')
+    expect(container.textContent).toContain('Nouveau Design')
+    // Shell shortcuts are read when shown, like canvas ones: "Maj" in French.
+    expect(shortcutOf('file.saveAs')).toBe('Ctrl Maj S')
   })
 })

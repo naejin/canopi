@@ -1,5 +1,4 @@
 import { signal } from '@preact/signals'
-import type { CanvasToolCommandSurface } from './runtime/runtime'
 
 const PLANT_STAMP_MIME = 'application/x.canopi.plant-stamp+json'
 const LEGACY_TEXT_MIME = 'text/plain'
@@ -31,8 +30,11 @@ type DragDataTypes = {
 type ReadableDragData = Pick<DataTransfer, 'getData'> & DragDataTypes
 
 const selectedPlantStampSource = signal<PlantStampSource | null>(null)
+const RECENT_PLANT_STAMP_SOURCE_LIMIT = 8
+/** Species chosen to place this session, newest first; Place plants' chooser offers them. */
+export const recentPlantStampSources = signal<readonly PlantStampSource[]>([])
 
-export function plantStampSourceFromSpecies(source: PlantStampSourceInput): PlantStampSource {
+function plantStampSourceFromSpecies(source: PlantStampSourceInput): PlantStampSource {
   return {
     canonical_name: source.canonical_name,
     common_name: source.common_name,
@@ -48,20 +50,15 @@ export function readPlantStampSource(): PlantStampSource | null {
 export function selectPlantStampSource(source: PlantStampSourceInput): PlantStampSource {
   const next = plantStampSourceFromSpecies(source)
   selectedPlantStampSource.value = next
+  recentPlantStampSources.value = [
+    next,
+    ...recentPlantStampSources.peek().filter((entry) => entry.canonical_name !== next.canonical_name),
+  ].slice(0, RECENT_PLANT_STAMP_SOURCE_LIMIT)
   return next
 }
 
 export function clearPlantStampSource(): void {
   selectedPlantStampSource.value = null
-}
-
-export function beginPlantStampFromSpecies(
-  source: PlantStampSourceInput,
-  commandSurface: CanvasToolCommandSurface | null | undefined,
-): PlantStampSource {
-  const next = selectPlantStampSource(source)
-  commandSurface?.setTool('plant-stamp')
-  return next
 }
 
 export function writePlantStampDragData(

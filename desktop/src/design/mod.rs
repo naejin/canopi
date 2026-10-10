@@ -1,7 +1,8 @@
-// .canopi file format: serialize, deserialize, migrate, autosave
-pub mod autosave;
+// .canopi Design files: admission, durable writes, fingerprints, drafts
+pub mod drafts;
 pub mod format;
 mod new_design_defaults;
+pub(crate) mod preview;
 
 use std::{
     collections::HashMap,
@@ -20,32 +21,92 @@ static NEXT_SIDECAR_ID: AtomicU64 = AtomicU64::new(0);
 /// Publish derived output with the same target admission and replacement safety
 /// as Design writes, without a Design backup or persistence acknowledgement.
 pub(crate) fn write_derived_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    with_write_admission(path, || write_file_durably(path, bytes, "export"))
+}
+
+/// Durably replace `path` with `bytes`.
+///
+/// Writes an operation-owned temporary created with `create_new`, flushes it
+/// to stable storage, atomically replaces the target and, on Unix, flushes the
+/// parent directory so the rename itself survives a crash. On failure before
+/// the replace, the temporary is removed and the previous target is left in
+/// place; once the replace succeeds the write has succeeded, and a failed
+/// directory flush is only logged. Callers own write admission for the target.
+pub(crate) fn write_file_durably(path: &Path, bytes: &[u8], role: &str) -> std::io::Result<()> {
     use std::io::Write;
-    with_write_admission(path, || {
-        let temporary = operation_sidecar_path(path, "export");
+    let temporary = operation_sidecar_path(path, role);
+    let result: std::io::Result<()> = (|| {
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(&temporary)?;
-        let result = (|| {
-            file.write_all(bytes)?;
-            file.sync_all()?;
-            drop(file);
-            atomic_replace(&temporary, path)
-        })();
-        if let Err(ref original) = result {
-            match std::fs::remove_file(&temporary) {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => {
-                    return Err(std::io::Error::other(format!(
-                        "Export failed: {original}; temporary cleanup also failed: {error}"
-                    )));
-                }
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        drop(file);
+        atomic_replace(&temporary, path)?;
+        // The new bytes are already in place under the target name. A failed
+        // directory flush only weakens crash durability of the rename; it is
+        // not a failed write, and reporting one would leave the caller with a
+        // stale fingerprint and false conflicts on the next save.
+        if let Err(error) = sync_parent_directory(path) {
+            tracing::warn!(
+                "Could not sync the folder after replacing a file ({:?})",
+                error.kind()
+            );
+        }
+        Ok(())
+    })();
+    if let Err(ref original) = result {
+        match std::fs::remove_file(&temporary) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(std::io::Error::new(
+                    original.kind(),
+                    format!("{original}; temporary cleanup also failed: {error}"),
+                ));
             }
         }
-        result
-    })
+    }
+    result
+}
+
+/// Flush an existing file's contents to stable storage. Windows flushes only
+/// through a handle opened for writing (FlushFileBuffers needs write access),
+/// so a read-only handle fails there with "Access is denied"; the handle is
+/// opened for writing without truncating or changing the file.
+pub(crate) fn sync_file(path: &Path) -> std::io::Result<()> {
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(path)?
+        .sync_all()
+}
+
+#[cfg(unix)]
+pub(crate) fn sync_parent_directory(path: &Path) -> std::io::Result<()> {
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    match std::fs::File::open(parent).and_then(|directory| directory.sync_all()) {
+        Ok(()) => Ok(()),
+        // Some filesystems cannot sync a directory handle; the file itself is
+        // already on stable storage, so that is not a failed write.
+        Err(error)
+            if error.kind() == std::io::ErrorKind::InvalidInput
+                || error.kind() == std::io::ErrorKind::Unsupported =>
+        {
+            Ok(())
+        }
+        Err(error) => Err(error),
+    }
+}
+
+#[cfg(not(unix))]
+pub(crate) fn sync_parent_directory(_path: &Path) -> std::io::Result<()> {
+    // Windows commits the rename with the file's metadata; there is no
+    // directory handle to flush.
+    Ok(())
 }
 
 fn operation_sidecar_path(dest: &Path, role: &str) -> PathBuf {
@@ -65,67 +126,35 @@ fn operation_sidecar_path(dest: &Path, role: &str) -> PathBuf {
 /// Run one write operation at a time for a process-local storage resource.
 ///
 /// The permit deliberately spans blocking file I/O: its invariant is that the
-/// complete backup/write/replace sequence for one target or store is indivisible.
+/// complete check/write/replace sequence for one target is indivisible, so a
+/// fingerprint check and the write it admits cannot interleave with another
+/// write to the same file.
 fn with_write_admission<T>(resource: &Path, operation: impl FnOnce() -> T) -> T {
-    with_write_admissions(&[resource], operation)
-}
-
-/// Run one write operation while holding every named storage resource.
-///
-/// Keys are normalized, sorted, and deduplicated before their permits are
-/// acquired. Deterministic ordering lets overlapping resource families share
-/// a boundary without deadlocking one another.
-fn with_write_admissions<T>(resources: &[&Path], operation: impl FnOnce() -> T) -> T {
-    let mut keys = resources
-        .iter()
-        .map(|resource| write_admission_key(resource))
-        .collect::<Vec<_>>();
-    keys.sort();
-    keys.dedup();
-
+    let key = write_admission_key(resource);
     let registry = WRITE_ADMISSIONS.get_or_init(|| Mutex::new(HashMap::new()));
-    let admissions = {
+    let admission = {
         let mut admissions = registry.lock().unwrap_or_else(|poisoned| {
             tracing::warn!("Recovering poisoned Design write admission registry");
             poisoned.into_inner()
         });
         admissions.retain(|_, admission| admission.strong_count() > 0);
-        keys.into_iter()
-            .map(|key| {
-                let admission = admissions
-                    .get(&key)
-                    .and_then(Weak::upgrade)
-                    .unwrap_or_else(|| {
-                        let admission = Arc::new(Mutex::new(()));
-                        admissions.insert(key.clone(), Arc::downgrade(&admission));
-                        admission
-                    });
-                (key, admission)
+        admissions
+            .get(&key)
+            .and_then(Weak::upgrade)
+            .unwrap_or_else(|| {
+                let admission = Arc::new(Mutex::new(()));
+                admissions.insert(key.clone(), Arc::downgrade(&admission));
+                admission
             })
-            .collect::<Vec<_>>()
     };
-    let _permits = admissions
-        .iter()
-        .map(|(key, admission)| {
-            admission.lock().unwrap_or_else(|poisoned| {
-                tracing::warn!(
-                    "Recovering poisoned Design write admission for {}",
-                    key.display()
-                );
-                poisoned.into_inner()
-            })
-        })
-        .collect::<Vec<_>>();
+    let _permit = admission.lock().unwrap_or_else(|poisoned| {
+        tracing::warn!("Recovering poisoned Design write admission");
+        poisoned.into_inner()
+    });
     operation()
 }
 
 fn write_admission_key(resource: &Path) -> PathBuf {
-    if resource.is_dir() {
-        return resource
-            .canonicalize()
-            .unwrap_or_else(|_| absolute_path(resource));
-    }
-
     let parent = resource
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -136,6 +165,28 @@ fn write_admission_key(resource: &Path) -> PathBuf {
     resource
         .file_name()
         .map_or(parent.clone(), |name| parent.join(name))
+}
+
+/// Fingerprint of a Design file's exact bytes: lowercase hex SHA-256.
+///
+/// A save that expects a fingerprint writes only while the file on disk still
+/// has it, so a change made outside Canopi is detected instead of overwritten.
+pub(crate) fn fingerprint(bytes: &[u8]) -> String {
+    crate::services::lidar::grid::sha256_hex(bytes)
+}
+
+/// [`fingerprint`] of the file at `path`, streamed so an unexpectedly large
+/// replacement is never buffered whole. `None` when no file is there.
+pub(crate) fn fingerprint_file(path: &Path) -> std::io::Result<Option<String>> {
+    use sha2::{Digest, Sha256};
+    let mut file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let mut hasher = Sha256::new();
+    std::io::copy(&mut file, &mut hasher)?;
+    Ok(Some(format!("{:x}", hasher.finalize())))
 }
 
 fn absolute_path(path: &Path) -> PathBuf {
@@ -191,9 +242,10 @@ fn atomic_replace_fallback(
     }
 
     // Fallback: direct rename failed (common on Windows with file locks).
+    // The destination is a Design path (user content): log the kind only.
     tracing::warn!(
-        "atomic_replace: direct rename failed for {}, entering fallback: {first_err}",
-        dest.display()
+        "atomic_replace: direct rename failed ({:?}), entering fallback",
+        first_err.kind()
     );
     let old = operation_sidecar_path(dest, "old");
     std::fs::rename(dest, &old).map_err(|e| {
@@ -209,8 +261,8 @@ fn atomic_replace_fallback(
                 // This sidecar still owns the only copy of the predecessor, so
                 // preserving it is safer than treating cleanup as destructive.
                 tracing::warn!(
-                    "atomic_replace: could not remove rollback sidecar {}: {e}",
-                    old.display()
+                    "atomic_replace: could not remove the rollback sidecar ({:?})",
+                    e.kind()
                 );
             }
             Ok(())
@@ -261,23 +313,13 @@ pub fn unix_to_iso8601(secs: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_scratch::TestScratch;
     use std::fs;
     use std::sync::mpsc;
     use std::time::Duration;
 
-    fn tmp(name: &str) -> std::path::PathBuf {
-        std::env::temp_dir().join(name)
-    }
-
-    fn unique_root(name: &str) -> PathBuf {
-        tmp(&format!(
-            "canopi_{name}_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        ))
+    fn unique_root(name: &str) -> TestScratch {
+        TestScratch::new(&format!("design-{name}"))
     }
 
     fn operation_sidecars(root: &Path, role: &str) -> Vec<PathBuf> {
@@ -296,9 +338,55 @@ mod tests {
     }
 
     #[test]
+    fn durable_write_round_trips_content_without_leaving_a_temporary() {
+        let root = unique_root("durable_write");
+        let target = root.join("garden.canopi");
+        fs::write(&target, "previous").unwrap();
+
+        write_file_durably(&target, b"replacement", "tmp").unwrap();
+
+        assert_eq!(fs::read_to_string(&target).unwrap(), "replacement");
+        assert!(operation_sidecars(&root, "tmp").is_empty());
+        assert!(operation_sidecars(&root, "old").is_empty());
+    }
+
+    #[test]
+    fn failed_durable_write_keeps_the_target_and_removes_its_temporary() {
+        let root = unique_root("durable_write_failure");
+        // A directory cannot be replaced by a file, so the replace step fails
+        // after the temporary has been written.
+        let target = root.join("garden.canopi");
+        fs::create_dir(&target).unwrap();
+        fs::write(target.join("marker.txt"), "kept").unwrap();
+
+        assert!(write_file_durably(&target, b"replacement", "tmp").is_err());
+
+        assert_eq!(
+            fs::read_to_string(target.join("marker.txt")).unwrap(),
+            "kept"
+        );
+        assert!(
+            operation_sidecars(&root, "tmp").is_empty(),
+            "a failed durable write must not leave its temporary behind"
+        );
+    }
+
+    #[test]
+    fn derived_file_write_is_durable_and_leaves_no_temporary() {
+        let root = unique_root("derived_write");
+        let target = root.join("export.geojson");
+
+        write_derived_file(&target, b"{}").unwrap();
+
+        assert_eq!(fs::read_to_string(&target).unwrap(), "{}");
+        assert!(operation_sidecars(&root, "export").is_empty());
+    }
+
+    #[test]
     fn test_atomic_replace_new_dest() {
-        let src = tmp("canopi_ar_src_new.txt");
-        let dest = tmp("canopi_ar_dest_new.txt");
+        let scratch = unique_root("atomic_replace_new");
+        let src = scratch.join("canopi_ar_src_new.txt");
+        let dest = scratch.join("canopi_ar_dest_new.txt");
         let _ = fs::remove_file(&src);
         let _ = fs::remove_file(&dest);
 
@@ -314,7 +402,6 @@ mod tests {
     #[test]
     fn test_atomic_replace_overwrites_existing() {
         let root = unique_root("atomic_replace_overwrite");
-        fs::create_dir_all(&root).unwrap();
         let src = root.join("replacement.tmp");
         let dest = root.join("garden.canopi");
 
@@ -327,8 +414,6 @@ mod tests {
             operation_sidecars(&root, "old").is_empty(),
             "successful replacement must not leak an owned rollback sidecar"
         );
-
-        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
@@ -336,8 +421,9 @@ mod tests {
         // The stable legacy .old name is outside this operation's ownership.
         // Its presence must neither block the save nor be claimed as rollback
         // state, regardless of whether the platform needs the fallback path.
-        let src = tmp("canopi_ar_src_stale.txt");
-        let dest = tmp("canopi_ar_dest_stale.txt");
+        let scratch = unique_root("atomic_replace_stale");
+        let src = scratch.join("canopi_ar_src_stale.txt");
+        let dest = scratch.join("canopi_ar_dest_stale.txt");
         let old = dest.with_extension("canopi.old");
 
         fs::write(&dest, "original").unwrap();
@@ -355,9 +441,18 @@ mod tests {
     }
 
     #[test]
+    fn syncing_a_published_file_leaves_its_bytes_and_length_unchanged() {
+        let root = unique_root("sync_file");
+        let path = root.join("asset.tif");
+        std::fs::write(&path, b"published bytes").unwrap();
+        super::sync_file(&path).expect("a written file can be synced");
+        assert_eq!(std::fs::read(&path).unwrap(), b"published bytes");
+        assert!(super::sync_file(&root.join("missing.tif")).is_err());
+    }
+
+    #[test]
     fn atomic_replace_fallback_does_not_claim_legacy_rollback_sidecar() {
         let root = unique_root("atomic_owned_rollback");
-        fs::create_dir_all(&root).unwrap();
         let src = root.join("replacement.tmp");
         let dest = root.join("garden.canopi");
         let legacy_old = dest.with_extension("canopi.old");
@@ -365,30 +460,34 @@ mod tests {
         fs::write(&dest, "original").unwrap();
         fs::write(&legacy_old, "another operation owns this").unwrap();
 
-        atomic_replace_fallback(
-            &src,
-            &dest,
-            std::io::Error::other("forced fallback for test"),
-        )
-        .unwrap();
+        let ((), logs) = crate::services::design_files::capture_logs(|| {
+            atomic_replace_fallback(
+                &src,
+                &dest,
+                std::io::Error::other("forced fallback for test"),
+            )
+            .unwrap()
+        });
 
         assert_eq!(fs::read_to_string(&dest).unwrap(), "replacement");
         assert_eq!(
             fs::read_to_string(&legacy_old).unwrap(),
             "another operation owns this"
         );
+        assert!(logs.contains("entering fallback"), "{logs}");
+        assert!(
+            !logs.contains(&*root.to_string_lossy()),
+            "the Design path is user content and stays out of the log: {logs}"
+        );
         assert!(
             operation_sidecars(&root, "old").is_empty(),
             "successful fallback must clean its owned rollback sidecar"
         );
-
-        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
     fn atomic_replace_rejects_directory_destination_without_moving_it() {
         let root = unique_root("atomic_directory_destination");
-        fs::create_dir_all(&root).unwrap();
         let src = root.join("replacement.tmp");
         let dest = root.join("garden.canopi");
         let marker = dest.join("marker.txt");
@@ -413,14 +512,11 @@ mod tests {
             operation_sidecars(&root, "old").is_empty(),
             "rejecting a directory must not create an owned rollback sidecar"
         );
-
-        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
     fn test_atomic_replace_fails_if_src_missing() {
         let root = unique_root("atomic_missing_source");
-        fs::create_dir_all(&root).unwrap();
         let src = root.join("missing.tmp");
         let dest = root.join("garden.canopi");
         fs::write(&dest, "original").unwrap();
@@ -436,20 +532,30 @@ mod tests {
             operation_sidecars(&root, "old").is_empty(),
             "a successfully restored fallback must not leak its rollback sidecar"
         );
+    }
 
-        let _ = fs::remove_dir_all(root);
+    #[test]
+    fn file_fingerprint_is_the_lowercase_sha256_of_its_bytes() {
+        let root = unique_root("fingerprint_file");
+        let target = root.join("garden.canopi");
+        fs::write(&target, b"abc").unwrap();
+
+        let expected = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        assert_eq!(fingerprint(b"abc"), expected);
+        assert_eq!(
+            fingerprint_file(&target).unwrap().as_deref(),
+            Some(expected)
+        );
+        assert_eq!(
+            fingerprint_file(&root.join("missing.canopi")).unwrap(),
+            None
+        );
     }
 
     #[test]
     fn same_resource_write_admission_serializes_operations() {
-        let resource = tmp(&format!(
-            "canopi_write_admission_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        ));
+        let scratch = unique_root("write_admission");
+        let resource = scratch.join("resource");
         let (first_entered_tx, first_entered_rx) = mpsc::channel();
         let (release_first_tx, release_first_rx) = mpsc::channel();
         let first_resource = resource.clone();
@@ -487,7 +593,6 @@ mod tests {
     #[test]
     fn different_resource_write_admissions_proceed_concurrently() {
         let root = unique_root("independent_write_admission");
-        fs::create_dir_all(&root).unwrap();
         let first_resource = root.join("first.canopi");
         let second_resource = root.join("second.canopi");
         let (first_entered_tx, first_entered_rx) = mpsc::channel();
@@ -510,7 +615,5 @@ mod tests {
         first.join().unwrap();
         second.join().unwrap();
         second_entered.expect("a different resource must not wait for the first admission");
-
-        let _ = fs::remove_dir_all(root);
     }
 }

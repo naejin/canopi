@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { CanopiFile } from '../../../types/design'
+import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
+import { geoAt } from '../../../__tests__/support/geo-design'
 import {
   resolvePlantSymbolForPlant,
+  lockedSceneDesignObjectTargets,
+  sceneHasLockedDesignObjects,
   SceneStore,
   type SceneDesignObjectTarget,
 } from '../scene'
@@ -12,10 +16,9 @@ import { SceneRuntimeEditCoordinator } from './transactions'
 
 function makeFile(): CanopiFile {
   return {
-    version: 6,
+    version: CURRENT_CANOPI_FILE_VERSION,
     name: 'Mutation demo',
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [
       { name: 'plants', visible: true, locked: false, opacity: 1 },
@@ -28,7 +31,7 @@ function makeFile(): CanopiFile {
         canonical_name: 'Malus domestica',
         common_name: 'Apple',
         color: null,
-        position: { x: 10, y: 10 },
+        position: geoAt(10, 10),
         rotation: null,
         scale: null,
         notes: null,
@@ -41,7 +44,7 @@ function makeFile(): CanopiFile {
         canonical_name: 'Malus domestica',
         common_name: 'Apple',
         color: null,
-        position: { x: 20, y: 20 },
+        position: geoAt(20, 20),
         rotation: null,
         scale: null,
         notes: null,
@@ -52,14 +55,14 @@ function makeFile(): CanopiFile {
     ],
     zones: [
       {
-        name: 'zone-1',
+        id: 'zone-1', name: null,
         zone_type: 'rect',
         rotation: 0,
         points: [
-          { x: 0, y: 0 },
-          { x: 5, y: 0 },
-          { x: 5, y: 5 },
-          { x: 0, y: 5 },
+          geoAt(0, 0),
+          geoAt(5, 0),
+          geoAt(5, 5),
+          geoAt(0, 5),
         ],
         fill_color: null,
         notes: null,
@@ -70,7 +73,7 @@ function makeFile(): CanopiFile {
       {
         id: 'annotation-1',
         annotation_type: 'text',
-        position: { x: 50, y: 60 },
+        position: geoAt(50, 60),
         text: 'Note',
         font_size: 20,
         rotation: null,
@@ -89,7 +92,7 @@ function makeFile(): CanopiFile {
 }
 
 function createController(file = makeFile()) {
-  const sceneStore = new SceneStore(file)
+  const sceneStore = new SceneStore().hydrate(file)
   const state = {
     invalidations: 0,
     dirtyTypes: [] as string[],
@@ -112,8 +115,8 @@ function createController(file = makeFile()) {
     syncCanvasSignalsFromScene: () => {
       state.plantSpeciesColorSyncs += 1
     },
-    invalidate: (kind) => {
-      if (kind === 'scene') state.invalidations += 1
+    invalidate: () => {
+      state.invalidations += 1
     },
   })
   const controller = new SceneRuntimeMutationController({
@@ -127,7 +130,7 @@ function createController(file = makeFile()) {
     presentation: {
       getViewportScale: () => 1,
       createPlantPresentationContext: (viewportScale = 1) => ({
-        viewport: { x: 0, y: 0, scale: viewportScale },
+        pixelsPerMetre: viewportScale,
         speciesCache: new Map(),
         localizedCommonNames: new Map(),
       }),
@@ -143,13 +146,48 @@ function createController(file = makeFile()) {
 }
 
 describe('scene runtime mutation controller', () => {
+  it('copy, move the source, paste twice: each paste is the copy as it was, and the pastes share nothing', () => {
+    const { controller, sceneStore } = createController()
+    sceneStore.setSelection([{ kind: 'plant', id: 'plant-1' }, { kind: 'zone', id: 'zone-1' }])
+    const source = sceneStore.persisted
+    const plantAt = source.plants.find((plant) => plant.id === 'plant-1')!.position
+    const zoneAt = source.zones.find((zone) => zone.id === 'zone-1')!.points
+
+    controller.copy()
+    sceneStore.updatePersisted((draft) => {
+      const plant = draft.plants.find((entry) => entry.id === 'plant-1')!
+      plant.position.x += 40
+      const zone = draft.zones.find((entry) => entry.id === 'zone-1')!
+      zone.points[0]!.y += 40
+    })
+    controller.paste()
+    controller.paste()
+
+    const scene = sceneStore.persisted
+    const pastedPlants = scene.plants.filter((plant) => !['plant-1', 'plant-2'].includes(plant.id))
+    const pastedZones = scene.zones.filter((zone) => zone.id !== 'zone-1')
+    expect(pastedPlants.map((plant) => plant.position.x)).toEqual([plantAt.x + 1, plantAt.x + 2])
+    expect(pastedPlants.map((plant) => plant.position.y)).toEqual([plantAt.y, plantAt.y])
+    expect(pastedZones.map((zone) => zone.points[0]!.y)).toEqual([zoneAt[0]!.y, zoneAt[0]!.y])
+    expect(pastedZones.map((zone) => zone.points[0]!.x)).toEqual([zoneAt[0]!.x + 1, zoneAt[0]!.x + 2])
+
+    // Moving the first paste leaves the second where it was.
+    sceneStore.updatePersisted((draft) => {
+      draft.plants.find((entry) => entry.id === pastedPlants[0]!.id)!.position.y += 7
+      draft.zones.find((entry) => entry.id === pastedZones[0]!.id)!.points[1]!.y += 7
+    })
+    const after = sceneStore.persisted
+    expect(after.plants.find((entry) => entry.id === pastedPlants[1]!.id)!.position).toEqual(pastedPlants[1]!.position)
+    expect(after.zones.find((entry) => entry.id === pastedZones[1]!.id)!.points).toEqual(pastedZones[1]!.points)
+  })
+
   it('locks only the typed selected Design Object when raw ids collide', () => {
     const file = makeFile()
     file.plants = file.plants.map((plant, index) =>
       index === 0 ? { ...plant, id: 'shared-id' } : plant,
     )
     file.zones = file.zones.map((zone, index) =>
-      index === 0 ? { ...zone, name: 'shared-id' } : zone,
+      index === 0 ? { ...zone, id: 'shared-id' } : zone,
     )
     const { controller, sceneStore } = createController(file)
     sceneStore.setSelection([{ kind: 'zone', id: 'shared-id' }])
@@ -157,28 +195,28 @@ describe('scene runtime mutation controller', () => {
     controller.lockSelected()
 
     expect(sceneStore.persisted.plants.find((plant) => plant.id === 'shared-id')?.locked).toBe(false)
-    expect(sceneStore.persisted.zones.find((zone) => zone.name === 'shared-id')?.locked).toBe(true)
+    expect(sceneStore.persisted.zones.find((zone) => zone.id === 'shared-id')?.locked).toBe(true)
     expect(sceneStore.session.selectedTargets).toEqual([])
   })
 
   it('deletes only the typed selected Design Object when raw ids collide', () => {
     const file = makeFile()
     file.plants[0] = { ...file.plants[0]!, id: 'shared-id' }
-    file.zones[0] = { ...file.zones[0]!, name: 'shared-id' }
+    file.zones[0] = { ...file.zones[0]!, id: 'shared-id' }
     const { controller, sceneStore } = createController(file)
     sceneStore.setSelection([{ kind: 'zone', id: 'shared-id' }])
 
     controller.deleteSelected()
 
     expect(sceneStore.persisted.plants.some((plant) => plant.id === 'shared-id')).toBe(true)
-    expect(sceneStore.persisted.zones.some((zone) => zone.name === 'shared-id')).toBe(false)
+    expect(sceneStore.persisted.zones.some((zone) => zone.id === 'shared-id')).toBe(false)
     expect(sceneStore.session.selectedTargets).toEqual([])
   })
 
   it('duplicates only the typed selected Design Object when raw ids collide', () => {
     const file = makeFile()
     file.plants[0] = { ...file.plants[0]!, id: 'shared-id' }
-    file.zones[0] = { ...file.zones[0]!, name: 'shared-id' }
+    file.zones[0] = { ...file.zones[0]!, id: 'shared-id' }
     const { controller, sceneStore } = createController(file)
     sceneStore.setSelection([{ kind: 'zone', id: 'shared-id' }])
 
@@ -294,7 +332,7 @@ describe('scene runtime mutation controller', () => {
 
     controller.deleteSelected()
 
-    expect(sceneStore.persisted.zones.map((zone) => zone.name)).toEqual(['zone-1'])
+    expect(sceneStore.persisted.zones.map((zone) => zone.id)).toEqual(['zone-1'])
     expect(sceneStore.session.selectedTargets).toEqual([{ kind: 'zone', id: 'zone-1' }])
     expect(state.dirtyTypes).toEqual([])
     expect(state.invalidations).toBe(0)
@@ -314,7 +352,7 @@ describe('scene runtime mutation controller', () => {
       },
     ]
     file.zones = file.zones.map((zone) =>
-      zone.name === 'zone-1' ? { ...zone, locked: true } : zone,
+      zone.id === 'zone-1' ? { ...zone, locked: true } : zone,
     )
     const { controller, sceneStore, state } = createController(file)
 
@@ -493,7 +531,7 @@ describe('scene runtime mutation controller', () => {
         canonical_name: 'Pyrus communis',
         common_name: 'Pear',
         color: null,
-        position: { x: 30, y: 30 },
+        position: geoAt(30, 30),
         rotation: null,
         scale: null,
         notes: null,
@@ -506,7 +544,7 @@ describe('scene runtime mutation controller', () => {
         canonical_name: 'Malus domestica',
         common_name: 'Apple',
         color: null,
-        position: { x: 40, y: 40 },
+        position: geoAt(40, 40),
         rotation: null,
         scale: null,
         notes: null,
@@ -519,7 +557,7 @@ describe('scene runtime mutation controller', () => {
         canonical_name: 'Malus domestica',
         common_name: 'Apple',
         color: null,
-        position: { x: 50, y: 50 },
+        position: geoAt(50, 50),
         rotation: null,
         scale: null,
         notes: null,
@@ -545,6 +583,166 @@ describe('scene runtime mutation controller', () => {
     ])
     expect(state.dirtyTypes).toEqual([])
     expect(state.invalidations).toBe(1)
+  })
+
+  it('selectSpecies replaces the selection with selectable plants of every named species', () => {
+    const file = makeFile()
+    file.plants = [
+      ...file.plants,
+      {
+        id: 'plant-3',
+        canonical_name: 'Pyrus communis',
+        common_name: 'Pear',
+        color: null,
+        position: geoAt(30, 30),
+        rotation: null,
+        scale: null,
+        notes: null,
+        planted_date: null,
+        quantity: 1,
+        locked: false,
+      },
+      {
+        id: 'plant-4',
+        canonical_name: 'Pyrus communis',
+        common_name: 'Pear',
+        color: null,
+        position: geoAt(40, 40),
+        rotation: null,
+        scale: null,
+        notes: null,
+        planted_date: null,
+        quantity: 1,
+        locked: true,
+      },
+    ]
+    const { controller, sceneStore, state } = createController(file)
+    sceneStore.setSelection([{ kind: 'plant', id: 'plant-1' }])
+
+    controller.selectSpecies(['Pyrus communis', 'Malus domestica', 'Unknown species'])
+
+    expect(sceneStore.session.selectedTargets).toEqual([
+      { kind: 'plant', id: 'plant-1' },
+      { kind: 'plant', id: 'plant-2' },
+      { kind: 'plant', id: 'plant-3' },
+    ])
+    expect(state.dirtyTypes).toEqual([])
+    controller.selectSpecies(['Unknown species'])
+    expect(sceneStore.session.selectedTargets).toHaveLength(3)
+  })
+
+  it('selectSpecies with one name selects that species as the chip and the key panel ask', () => {
+    const file = makeFile()
+    const plant = file.plants[0]!
+    file.plants = [
+      ...file.plants,
+      { ...plant, id: 'plant-3', canonical_name: 'Pyrus communis', position: geoAt(30, 30) },
+      { ...plant, id: 'plant-4', position: geoAt(40, 40), locked: true },
+      { ...plant, id: 'plant-5', position: geoAt(50, 50) },
+    ]
+    file.groups = [{ id: 'group-1', name: null, locked: false, members: [{ kind: 'plant', id: 'plant-5' }] }]
+    const { controller, sceneStore, state } = createController(file)
+    sceneStore.setSelection([{ kind: 'plant', id: 'plant-3' }])
+
+    controller.selectSpecies([plant.canonical_name])
+
+    expect(sceneStore.session.selectedTargets).toEqual([
+      { kind: 'plant', id: 'plant-1' },
+      { kind: 'plant', id: 'plant-2' },
+    ])
+    expect(state.dirtyTypes).toEqual([])
+    expect(state.invalidations).toBe(1)
+    controller.selectSpecies([plant.canonical_name])
+    expect(state.invalidations).toBe(1)
+  })
+
+  it('rotates the selection about its centre as one undoable edit', () => {
+    const { controller, sceneStore, state } = createController()
+    sceneStore.setSelection([{ kind: 'plant', id: 'plant-1' }, { kind: 'plant', id: 'plant-2' }])
+    const [first, second] = sceneStore.persisted.plants.map((plant) => plant.position)
+    const centre = { x: (first!.x + second!.x) / 2, y: (first!.y + second!.y) / 2 }
+
+    controller.rotateSelected(90)
+
+    const [rotatedFirst, rotatedSecond] = sceneStore.persisted.plants.map((plant) => plant.position)
+    // Clockwise on the map (the plane's y grows southward): north of the centre turns to east.
+    const turned = (point: { x: number; y: number }) => ({
+      x: centre.x - (point.y - centre.y),
+      y: centre.y + (point.x - centre.x),
+    })
+    expect(rotatedFirst!.x).toBeCloseTo(turned(first!).x)
+    expect(rotatedFirst!.y).toBeCloseTo(turned(first!).y)
+    expect(rotatedSecond!.x).toBeCloseTo(turned(second!).x)
+    expect(rotatedSecond!.y).toBeCloseTo(turned(second!).y)
+    expect(state.dirtyTypes).toEqual(['rotate-selected'])
+  })
+
+  it('turns a rectangle zone and keeps its shape', () => {
+    const { controller, sceneStore } = createController()
+    sceneStore.setSelection([{ kind: 'zone', id: 'zone-1' }])
+
+    controller.rotateSelected(-30)
+
+    expect(sceneStore.persisted.zones[0]!.rotationDeg).toBeCloseTo(330)
+  })
+
+  it('never rotates locked objects, and ignores a zero or non-finite angle', () => {
+    const file = makeFile()
+    file.plants[1] = { ...file.plants[1]!, locked: true }
+    const { controller, sceneStore, state } = createController(file)
+    const before = sceneStore.persisted.plants.map((plant) => ({ ...plant.position }))
+    sceneStore.setSelection([{ kind: 'plant', id: 'plant-1' }, { kind: 'plant', id: 'plant-2' }])
+
+    controller.rotateSelected(45)
+    sceneStore.setSelection([{ kind: 'zone', id: 'zone-1' }])
+    controller.rotateSelected(0)
+    controller.rotateSelected(Number.NaN)
+    controller.rotateSelected(360)
+
+    expect(sceneStore.persisted.plants.map((plant) => plant.position)).toEqual(before)
+    expect(sceneStore.persisted.zones[0]!.rotationDeg).toBe(0)
+    expect(state.dirtyTypes).toEqual([])
+  })
+
+  it('unlocks every locked object in the Design as one edit, and does nothing when none is locked', () => {
+    const file = makeFile()
+    file.plants[1] = { ...file.plants[1]!, locked: true }
+    file.zones[0] = { ...file.zones[0]!, locked: true }
+    file.groups = [{ id: 'group-1', locked: true, name: null, members: [{ kind: 'annotation', id: 'annotation-1' }] }]
+    file.annotations[0] = { ...file.annotations[0]!, locked: true }
+    file.measurement_guides = [{ id: 'guide-1', start: geoAt(0, 0), end: geoAt(4, 0), locked: true }]
+    const { controller, sceneStore, state } = createController(file)
+    expect(lockedSceneDesignObjectTargets(sceneStore.persisted)).toEqual([
+      { kind: 'plant', id: 'plant-2' },
+      { kind: 'zone', id: 'zone-1' },
+      { kind: 'annotation', id: 'annotation-1' },
+      { kind: 'measurement-guide', id: 'guide-1' },
+      { kind: 'group', id: 'group-1' },
+    ])
+    expect(sceneHasLockedDesignObjects(sceneStore.persisted)).toBe(true)
+
+    controller.unlockAll()
+
+    expect(sceneStore.persisted.plants.map((plant) => plant.locked)).toEqual([false, false])
+    expect(sceneStore.persisted.zones[0]!.locked).toBe(false)
+    expect(sceneStore.persisted.groups[0]!.locked).toBe(false)
+    expect(sceneStore.persisted.annotations[0]!.locked).toBe(false)
+    expect(sceneStore.persisted.measurementGuides[0]!.locked).toBe(false)
+    expect(sceneHasLockedDesignObjects(sceneStore.persisted)).toBe(false)
+    controller.unlockAll()
+    expect(state.dirtyTypes).toEqual(['unlock-all'])
+  })
+
+  it('clears the selection without editing the Design', () => {
+    const { controller, sceneStore, state } = createController()
+    sceneStore.setSelection([{ kind: 'plant', id: 'plant-1' }, { kind: 'zone', id: 'Z01' }])
+
+    controller.clearSelection()
+
+    expect(sceneStore.session.selectedTargets).toEqual([])
+    expect(state.dirtyTypes).toEqual([])
+    controller.clearSelection()
+    expect(sceneStore.session.selectedTargets).toEqual([])
   })
 
   it('updates species colors through the presentation seam', () => {
@@ -627,21 +825,6 @@ describe('scene runtime mutation controller', () => {
     expect(state.invalidations).toBe(1)
   })
 
-  it('clears species symbol defaults without rewriting existing plants', () => {
-    const file = makeFile()
-    file.plant_species_symbols = { 'Malus domestica': 'canopy' }
-    file.plants = file.plants.map((plant) => ({ ...plant, symbol: 'conifer' }))
-    const { controller, sceneStore, state } = createController(file)
-
-    const changed = controller.clearPlantSpeciesSymbol('Malus domestica')
-
-    expect(changed).toBe(true)
-    expect(sceneStore.persisted.plantSpeciesSymbols).toEqual({})
-    expect(sceneStore.persisted.plants.map((plant) => plant.symbol)).toEqual(['conifer', 'conifer'])
-    expect(state.dirtyTypes).toEqual(['clear-plant-species-symbol'])
-    expect(state.invalidations).toBe(1)
-  })
-
   it('does not resymbol locked Plants through species-wide symbol edits', () => {
     const file = makeFile()
     file.plants = file.plants.map((plant) =>
@@ -660,25 +843,6 @@ describe('scene runtime mutation controller', () => {
       'Malus domestica': 'canopy',
     })
     expect(state.dirtyTypes).toEqual(['set-plant-symbol-for-species'])
-  })
-
-  it('does not resymbol locked Plants when clearing a species symbol default', () => {
-    const file = makeFile()
-    file.plant_species_symbols = { 'Malus domestica': 'canopy' }
-    file.plants = file.plants.map((plant) =>
-      plant.id === 'plant-2' ? { ...plant, locked: true } : plant,
-    )
-    const { controller, sceneStore, state } = createController(file)
-
-    const changed = controller.clearPlantSpeciesSymbol('Malus domestica')
-    const lockedPlant = sceneStore.persisted.plants.find((plant) => plant.id === 'plant-2')!
-
-    expect(changed).toBe(true)
-    expect(sceneStore.persisted.plantSpeciesSymbols).toEqual({})
-    expect(sceneStore.persisted.plants.find((plant) => plant.id === 'plant-1')?.symbol ?? null).toBeNull()
-    expect(lockedPlant.symbol).toBe('canopy')
-    expect(resolvePlantSymbolForPlant(lockedPlant, sceneStore.persisted.plantSpeciesSymbols)).toBe('canopy')
-    expect(state.dirtyTypes).toEqual(['clear-plant-species-symbol'])
   })
 
   it('does not resymbol Plants inside locked Object Groups through species-wide symbol edits', () => {
@@ -767,7 +931,7 @@ describe('scene runtime mutation controller', () => {
         canonical_name: 'Pyrus communis',
         common_name: 'Pear',
         color: null,
-        position: { x: 30, y: 30 },
+        position: geoAt(30, 30),
         rotation: null,
         scale: null,
         notes: null,

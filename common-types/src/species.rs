@@ -16,6 +16,7 @@ pub struct SpeciesListItem {
     pub hardiness_zone_max: Option<i32>,
     pub growth_rate: Option<String>,
     pub stratum: Option<String>,
+    pub habit: Option<String>,
     pub climate_zones: Vec<String>,
     pub life_cycles: Vec<String>,
     pub edibility_rating: Option<i32>,
@@ -223,14 +224,6 @@ pub struct SpeciesImage {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct SpeciesExternalLink {
-    pub id: String,
-    pub species_id: String,
-    pub link_type: String,
-    pub url: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct CommonNameEntry {
     pub name: String,
     pub is_primary: bool,
@@ -254,11 +247,10 @@ pub struct SpeciesFilter {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub enum Sort {
+    Recommended,
     Name,
-    Family,
     Height,
-    Hardiness,
-    GrowthRate,
+    Edibility,
     Relevance,
 }
 

@@ -7,86 +7,27 @@
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use std::collections::HashMap;
 
-/// Immutable measurement definition of a source layer.
-///
-/// Measurement kind, units and reference establish capability; layer names,
-/// filenames and providers do not.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
-pub enum LidarMeasurementKind {
-    /// Bare-earth elevation (MNT/DTM).
-    GroundElevation,
-    /// Top surface including vegetation and buildings (MNS/DSM).
-    SurfaceElevation,
-    /// Height relative to compatible terrain (MNH).
-    AboveGroundHeight,
-    /// User-described continuous numeric value; numeric display only.
-    OtherContinuous,
-}
-
-impl LidarMeasurementKind {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::GroundElevation => "ground-elevation",
-            Self::SurfaceElevation => "surface-elevation",
-            Self::AboveGroundHeight => "above-ground-height",
-            Self::OtherContinuous => "other-continuous",
-        }
-    }
-}
-
-/// Registered analysis capability. Slice 1 ships slope only; later slices add
-/// the remaining ground-elevation and height analyses.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
-pub enum LidarAnalysisKind {
-    /// Terrain slope from a ground-elevation layer.
-    Slope,
-}
-
-impl LidarAnalysisKind {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Slope => "slope",
-        }
-    }
-}
-
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
-pub enum LidarSlopeUnit {
-    Degrees,
-    Percent,
-}
-
-/// Result states defined by the product plan (§4). `refreshing` keeps the last
-/// complete result visible; `incomplete` distinguishes unknown areas from
-/// low/zero measured values.
+/// State of a library item: its operation while it runs, then a fixed result.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub enum LidarResultState {
     Preparing,
     Ready,
-    Refreshing,
-    Incomplete,
     Failed,
 }
 
 /// Import job states.
 ///
 /// `Staging` is preparation, `Applying` is publication, and the terminal states
-/// report the outcome. `AwaitingReview` is retained in the vocabulary for the
-/// superseded review route, which no production caller enters.
+/// report the outcome. A cancelled import has no state: Cancel deletes its
+/// item.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub enum LidarImportJobState {
     Staging,
-    AwaitingReview,
     Applying,
     Complete,
-    Cancelled,
     Failed,
 }
 
@@ -109,95 +50,11 @@ pub struct LidarImportProgress {
 
 /// Detected external raster engine used behind the narrow LiDAR adapter.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct LidarEngineStatus {
     pub available: bool,
     pub version: Option<String>,
     pub detail: Option<String>,
-}
-
-/// Where one tileset's pixels come from.
-///
-/// The distinction is explicit so a generation stored as sparse resolved
-/// chunks never has to invent a filesystem path it does not own: the desktop
-/// either resolves a preserved legacy pyramid's asset directory, or renders
-/// the immutable generation on demand behind the raster protocol.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(tag = "kind")]
-pub enum LidarTileSource {
-    /// Preserved display pyramid: an absolute filesystem tile path template
-    /// ending in `{z}_{x}_{y}.png`, resolved to a local asset URL.
-    #[serde(rename = "legacy-asset")]
-    LegacyAsset { path_template: String },
-    /// Immutable generation rendered by the library on demand.
-    #[serde(rename = "native-generation")]
-    NativeGeneration { generation_id: String },
-}
-
-/// Display tile metadata for one generation and style.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct LidarTileset {
-    pub style: String,
-    pub source: LidarTileSource,
-    pub min_zoom: u32,
-    pub max_zoom: u32,
-    pub tile_size: u32,
-    /// Geographic bounds as `[west, south, east, north]` WGS84 degrees for
-    /// direct use by MapLibre. Prepared catalogue rows remain EPSG:3857.
-    pub bounds: [f64; 4],
-}
-
-/// Library-side summary of a source layer.
-/// How an "other continuous" dataset's values are labelled.
-///
-/// A continuous dataset that is neither an elevation nor a height has no
-/// inherent unit, so the unit is a decision only its author can make. This makes
-/// three states distinguishable rather than two:
-///
-/// - a real label, such as `mg/kg`;
-/// - an explicit unknown, stored as the sentinel below, for an author who does
-///   not know the unit yet but wants the data usable;
-/// - undeclared, which is a *different* thing and is refused at creation.
-///
-/// Folding the middle case into a label like `unitless` would claim the values
-/// are dimensionless, which is a measurement claim nobody made.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
-pub enum LidarUnitDeclaration {
-    /// The author supplied a unit label.
-    Known,
-    /// The author stated the unit is not known.
-    Unknown,
-}
-
-pub const LIDAR_UNITS_UNKNOWN: &str = "unknown";
-
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct LidarLayerSummary {
-    pub id: String,
-    pub name: String,
-    pub measurement_kind: LidarMeasurementKind,
-    pub units: String,
-    pub state: LidarResultState,
-    /// Native source-grid resolution in metres for accepted coverage.
-    pub resolution_m: Option<f64>,
-    /// Exact valid cells in the accepted composition.
-    ///
-    /// `None` when the exact count is not known. Publishing membership does not
-    /// require reading the composed pixels, so a generation that was published
-    /// without that scan reports unknown coverage rather than zero: zero means
-    /// "measured, and there is nothing there".
-    pub coverage_cells: Option<u64>,
-    pub bounds: Option<[f64; 4]>,
-    /// Exact composed value range, when it is known.
-    pub value_range: Option<[f64; 2]>,
-    /// The range styling and legends use, labelled by how it was derived.
-    pub display_range: Option<LidarDisplayRange>,
-    pub tilesets: Vec<LidarTileset>,
-    pub analysis_count: u32,
 }
 
 /// Where a display range came from.
@@ -224,83 +81,15 @@ pub struct LidarDisplayRange {
     pub basis: LidarDisplayRangeBasis,
 }
 
-/// Library-side summary of an analysis definition and its current result.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct LidarAnalysisSummary {
-    pub id: String,
-    pub source_layer_id: String,
-    pub kind: LidarAnalysisKind,
-    /// The name its author gave this result.
-    ///
-    /// `None` for a result published before names existed and for one whose
-    /// author left the field empty; the UI then shows its kind, so an unnamed
-    /// result is never presented with an invented name.
-    pub name: Option<String>,
-    pub state: LidarResultState,
-    pub detail: Option<String>,
-    pub bounds: Option<[f64; 4]>,
-    pub value_range: Option<[f64; 2]>,
-    /// The unit this result was actually computed in.
-    ///
-    /// Read from the definition's own parameters rather than from the input
-    /// layer, so a slope in percent is never labelled with an elevation unit or
-    /// with the other slope unit. `None` for a definition written before the
-    /// unit was recorded, which the UI shows as degrees — the default the
-    /// analysis path itself applies.
-    #[serde(default)]
-    pub slope_unit: Option<LidarSlopeUnit>,
-    pub tilesets: Vec<LidarTileset>,
-}
-
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct LidarLibrarySnapshot {
-    pub layers: Vec<LidarLayerSummary>,
-    pub analyses: Vec<LidarAnalysisSummary>,
-    pub engine: LidarEngineStatus,
-}
-
-/// Immutable published generation of a source layer, for layer history.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct LidarGenerationHistoryEntry {
-    pub id: String,
-    pub created_at: String,
-    /// Exact valid cells, or `None` when that count is not known.
-    pub coverage_cells: Option<u64>,
-    pub display_range: Option<LidarDisplayRange>,
-    /// Position of this version in the layer's publication order, counting from
-    /// the oldest. Unique within the layer, so it is the identity cue History
-    /// shows instead of numbering that makes consecutive imports read alike.
-    pub sequence: u32,
-    /// User operation this version recorded (`import`, `reorder`, `remove`,
-    /// `undo`, `restore`). Absent for a version migrated from a catalogue that
-    /// did not record one; the UI names those neutrally rather than guessing.
-    pub operation: Option<String>,
-    /// Occurrences in this version's ordered composition.
-    pub source_count: u32,
-    pub is_head: bool,
-    /// Whether this version can be restored as the new head.
-    pub restorable: bool,
-}
-
-/// One occurrence in a Data Layer's priority list, topmost first.
-///
-/// `kind` is `source` for an ordinary independently prepared COG and
-/// `previous-composition` for the single indivisible member that exposes a
-/// preserved pre-transition head. A source member carries its own measured
-/// coverage; a previous-composition member reports the preserved generation's.
+/// One source file in a Data Layer's priority list, topmost first, with its
+/// own measured coverage.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct LidarLayerSource {
     pub member_id: String,
-    pub kind: String,
-    /// Display name of the source file, when this member has one.
-    pub filename: Option<String>,
-    pub interpretation_id: Option<String>,
-    /// Preserved generation this member replays, for a previous composition.
-    pub base_generation_id: Option<String>,
+    /// Original name of the imported source file.
+    pub filename: String,
+    pub interpretation_id: String,
     pub width: u32,
     pub height: u32,
     pub pixel_size_m: f64,
@@ -308,27 +97,19 @@ pub struct LidarLayerSource {
     pub value_range: [f64; 2],
 }
 
-/// The ordered composition and published versions of one Data Layer.
+/// The ordered source files of one fixed library item.
 ///
-/// `sources` is the layer's priority list exactly as the UI must show it:
-/// index 0 is the topmost source and its valid samples cover every source below
-/// it. `head_generation_id` is the immutable snapshot the list describes, which
-/// every edit echoes back so a stale edit fails by name instead of applying to
-/// a newer order.
+/// `sources` is the item's priority list exactly as the UI shows it: index 0
+/// is the topmost source and its valid samples cover every source below it.
+/// `head_generation_id` is the immutable snapshot the list describes.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct LidarLayerCollection {
     pub layer_id: String,
-    /// Immutable snapshot this page describes. Every edit echoes it back, so a
-    /// request prepared against a superseded head fails by name.
+    /// Immutable snapshot this page describes.
     pub head_generation_id: Option<String>,
     /// Occurrences in the whole current composition, not only this page.
     pub member_count: u32,
-    /// Whether Undo is offered from this head at all. An available Undo with no
-    /// target restores the empty composition; an unavailable one is exhausted.
-    pub undo_available: bool,
-    /// Snapshot Undo restores; absent means the empty composition.
-    pub undo_target: Option<String>,
     /// One bounded page of the top-first priority list.
     pub sources: Vec<LidarLayerSource>,
     /// Cursor for the next member page, when the composition has more.
@@ -337,44 +118,15 @@ pub struct LidarLayerCollection {
 
 /// Largest source-list page a caller may request.
 pub const LAYER_MEMBER_PAGE: i64 = 200;
-/// Largest history page a caller may request.
-pub const LAYER_HISTORY_PAGE: i64 = 100;
 
-/// What one awaited ordered-layer edit did.
-///
-/// `changed` distinguishes a published snapshot from a request that was
-/// legitimately a no-op, and `head_generation_id` is the authoritative head
-/// after settlement, so the caller never has to infer whether its edit landed.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct LidarLayerEditOutcome {
-    pub head_generation_id: Option<String>,
-    pub changed: bool,
-    pub message: Option<String>,
-}
-
-/// One bounded page of a Data Layer's publication history, newest first.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct LidarLayerHistoryPage {
-    pub layer_id: String,
-    pub head_generation_id: Option<String>,
-    pub versions: Vec<LidarGenerationHistoryEntry>,
-    /// Cursor for the next page, when older versions exist.
-    pub next_cursor: Option<String>,
-}
-
-/// Impact summary shown before a layer deletion is confirmed.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct LidarDeleteImpact {
-    pub layer_name: String,
-    pub analysis_count: u32,
-    pub analysis_ids: Vec<String>,
-}
+/// The stored unit of an "other continuous" source whose author stated the
+/// unit is not known. A label such as `unitless` would claim the values are
+/// dimensionless, which is a measurement claim nobody made; an undeclared unit
+/// is refused at import.
+pub const LIDAR_UNITS_UNKNOWN: &str = "unknown";
 
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct LidarImportJob {
     pub job_id: String,
     pub layer_id: String,
@@ -383,84 +135,16 @@ pub struct LidarImportJob {
     pub progress: Option<LidarImportProgress>,
 }
 
-/// Receipt returned when an analysis definition is created and its first
-/// job is enqueued.
+/// Receipt for one submitted import operation: the fixed library item it
+/// publishes and the job that prepares it.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct LidarAnalysisReceipt {
-    pub definition_id: String,
+pub struct LidarImportReceipt {
+    pub layer_id: String,
     pub job_id: String,
-}
-
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct LidarAnalysisJobStatus {
-    pub job_id: String,
-    pub definition_id: String,
-    pub state: LidarResultState,
-    pub message: Option<String>,
-}
-
-/// Analysis parameters. Slope output unit is selected in the definition per
-/// the plan (§5); other parameters arrive with later slices.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct LidarAnalysisParameters {
-    pub slope_unit: Option<LidarSlopeUnit>,
-    /// The name to publish this result under.
-    ///
-    /// Optional and defaulted, so an existing caller that sends only a slope
-    /// unit keeps working and simply publishes an unnamed result. The name
-    /// travels with the definition's parameters, so a refresh publishes the
-    /// same name rather than silently renaming the user's result.
-    pub name: Option<String>,
-}
-
-// Numeric pixel inspection: one read-only lookup of the physical value at one
-// WGS84 point on one source or result generation. The expected generation is
-// part of the request so a head that changed since the user aimed is refused
-// rather than answered from different bytes.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
-pub enum LidarSampleEntityKind {
-    /// A source Data Layer.
-    Source,
-    /// An analysis result.
-    Analysis,
-}
-
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
-pub struct LidarSampleRequest {
-    pub kind: LidarSampleEntityKind,
-    /// Layer id or analysis definition id, matching `kind`.
-    pub entity_id: String,
-    /// The immutable generation the caller believes is current.
-    pub expected_generation_id: String,
-    /// Opaque identity of this lookup, chosen by the caller.
-    ///
-    /// Inspection shares the bounded display read admission with raster tiles,
-    /// so a superseded or abandoned lookup has to be cancellable by the owner
-    /// that started it. The name is scoped per surface by the command, so one
-    /// caller can never signal another's read. Empty means "not cancellable",
-    /// which keeps an older caller working without claiming a slot it cannot
-    /// release.
-    #[serde(default)]
-    pub request_id: String,
-    /// WGS84 longitude in degrees of the point to sample.
-    ///
-    /// The caller derives this from the scene point with the canvas's own
-    /// `worldToGeo`, which is the projection the canvas actually drew with, so
-    /// the sampled point is the displayed point. Nothing here re-derives or
-    /// approximates the placement: the native side only transforms this WGS84
-    /// point into the generation's own CRS.
-    pub longitude: f64,
-    /// WGS84 latitude in degrees of the point to sample.
-    pub latitude: f64,
 }
 
 /// Why a sample could not produce a physical value.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub enum LidarSampleUnavailableReason {
     /// The entity or generation no longer exists.
@@ -473,62 +157,175 @@ pub enum LidarSampleUnavailableReason {
     UnsupportedInput,
 }
 
-/// The outcome of one numeric inspection lookup.
-///
-/// `Value` carries the generation that was actually read, so a caller can prove
-/// the answer belongs to the head it asked about. The containing pixel is read
-/// at native resolution; no display interpolation is involved.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+/// The most targets one `lidar_sample_points` request may carry; the
+/// frontend splits longer lists into batches of this size.
+pub const LIDAR_SAMPLE_MAX_TARGETS: usize = 8;
+/// The most points one `lidar_sample_points` request may carry: a profile
+/// samples at most this many points along its line.
+pub const LIDAR_SAMPLE_MAX_POINTS: usize = 4096;
+
+// One sampler for the Site data row values, the pin and the profile: the
+// native cell under each WGS84 point (no interpolation) of each target, read
+// through the one CRS authority. A request carries at most
+// `LIDAR_SAMPLE_MAX_TARGETS` targets and `LIDAR_SAMPLE_MAX_POINTS` points and
+// is refused before any work beyond either.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
-pub enum LidarSampleOutcome {
-    Value {
-        generation_id: String,
-        value: f64,
-        units: String,
-    },
-    /// Inside the generation, but the containing pixel declares no data.
-    NoData { generation_id: String },
+pub struct LidarSamplePointsRequest {
+    pub targets: Vec<LidarSampleTarget>,
+    /// WGS84 `[longitude, latitude]` in degrees, in the caller's order.
+    pub points: Vec<[f64; 2]>,
+}
+
+/// One item to sample, aimed at the generation the caller believes current.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct LidarSampleTarget {
+    pub kind: crate::library::LibraryItemRole,
+    /// Library item id, matching `kind`.
+    pub entity_id: String,
+    pub expected_generation_id: String,
+}
+
+/// One target's answer, in target order.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub enum LidarSampleSeries {
+    /// One value per point, in point order; `None` where the cell declares no
+    /// data or the point lies outside the generation.
+    Values { values: Vec<Option<f64>> },
     Unavailable {
         reason: LidarSampleUnavailableReason,
     },
 }
 
-// `.canopi` presentation section: ordered references to library layers and
-// analysis results with per-entry display settings. Reference identities
+// Display derivatives: regenerable tiled COGs with overviews that the upstream
+// WASM renderer reads through the scoped asset protocol. They are never source
+// members, heads or results; sampling and analysis keep reading the exact
+// numeric generation.
+
+/// Whether an entity's display derivative can be drawn now.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub enum LidarDisplayState {
+    /// Derivatives for the current generation are being prepared.
+    Preparing,
+    /// Every derivative exists; `assets` can be rendered.
+    Ready,
+    /// Nothing can be drawn: the entity, its generation or its data is gone.
+    Unavailable,
+    /// Preparation failed; a later request with `retry` starts it again.
+    Failed,
+    /// The entity's current generation is not the one the caller expected.
+    Stale,
+}
+
+/// One display derivative file, in the entity's source-priority order.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct LidarDisplayAsset {
+    /// Absolute path of an immutable display COG inside the scoped display
+    /// directory; the frontend converts it to an asset URL and never stores it.
+    pub path: String,
+    /// WGS84 footprint `[west, south, east, north]`.
+    pub bounds: [f64; 4],
+}
+
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct LidarDisplayRequest {
+    pub kind: crate::library::LibraryItemRole,
+    /// Library item id, matching `kind`.
+    pub entity_id: String,
+    /// The immutable generation the caller is about to draw, when known.
+    pub expected_generation_id: Option<String>,
+    /// Restart a failed preparation instead of reporting the failure again.
+    #[serde(default)]
+    pub retry: bool,
+}
+
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct LidarDisplayDescriptor {
+    pub kind: crate::library::LibraryItemRole,
+    pub entity_id: String,
+    /// The generation these derivatives describe, when the entity has one.
+    pub generation_id: Option<String>,
+    /// Versioned display profile; part of every derivative's identity.
+    pub profile: String,
+    pub state: LidarDisplayState,
+    pub message: Option<String>,
+    /// Top-first: the first listed asset wins where assets overlap.
+    pub assets: Vec<LidarDisplayAsset>,
+    /// Derivatives already prepared out of `total_assets`.
+    pub prepared_assets: u32,
+    pub total_assets: u32,
+}
+
+// `.canopi` presentation section: ordered references to library sources and
+// derived items with per-entry display settings. Reference identities
 // survive library renames; unavailable references persist without rendering.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 pub struct LidarPresentationSection {
     pub schema_version: u32,
+    // The Site data eye in Layers: an entry draws only while both this flag
+    // and its own `visible` are on, and each entry keeps its own eye.
+    pub visible: bool,
     pub entries: Vec<LidarPresentationEntry>,
-    // Preserves unknown presentation fields for forward compatibility.
-    #[serde(flatten)]
-    #[specta(skip)]
-    pub extra: HashMap<String, serde_json::Value>,
 }
 
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
-pub enum LidarPresentationEntryKind {
-    Source,
-    Analysis,
+/// Import › "Covers your site": where the chosen files lie, read before import.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct LidarImportCoverage {
+    /// WGS84 `[west, south, east, north]` around every file whose extent was read.
+    pub bounds: Option<[f64; 4]>,
+    /// Files whose geographic extent could not be read.
+    pub unreadable_files: u32,
 }
 
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 pub struct LidarPresentationEntry {
-    pub kind: LidarPresentationEntryKind,
-    // Stable library identity: source-layer ID or analysis definition ID.
+    pub kind: crate::library::LibraryItemRole,
+    // Stable library identity: source-layer ID or derived item ID.
     pub id: String,
+    // The library item's name, written on attach and refreshed from the
+    // library while the item exists, so a missing item still reads by name.
+    pub name: String,
     pub visible: bool,
     pub opacity: f32,
     // User-defined order inside the LiDAR band; lower renders further back.
     pub order: u32,
-    pub style: Option<String>,
-    // Preserves unknown entry fields so newer builds round-trip on Web.
-    #[serde(flatten)]
-    #[specta(skip)]
-    pub extra: HashMap<String, serde_json::Value>,
+    // The colour ramp; `None` is the item kind's default.
+    pub ramp: Option<LidarRamp>,
+    pub reversed: bool,
+    // The value range the ramp spans; `None` is the item kind's default.
+    pub range: Option<LidarColourRange>,
+}
+
+// A colour ramp by Canopi's own name; the frontend maps each to a renderer
+// ramp, so a renderer rename never reaches files. A variant is added only
+// when an item kind that offers it ships. A ramp outside the item kind's list
+// draws with the kind's default.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub enum LidarRamp {
+    Terrain,
+    Earth,
+    Greens,
+    YellowRed,
+    Magma,
+    Gray,
+}
+
+// The value range a ramp spans: the data's own range, the data with its
+// outliers cut (the cut values are recomputed each session, never stored), or
+// the user's pair (finite, `min < max`).
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
+#[serde(tag = "mode")]
+pub enum LidarColourRange {
+    Data,
+    CutOutliers,
+    Custom { min: f64, max: f64 },
 }
 
 pub const LIDAR_PRESENTATION_SCHEMA_VERSION: u32 = 1;
@@ -536,34 +333,38 @@ pub const LIDAR_PRESENTATION_SCHEMA_VERSION: u32 = 1;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
-    /// The frontend reads these exact keys: a tagged tile source carries the
-    /// variant in `kind` and keeps snake_case payload fields, like every other
-    /// tagged contract in this crate.
     #[test]
-    fn tile_source_wire_shape_is_tagged_and_stable() {
-        let legacy = LidarTileset {
-            style: "elevation".to_string(),
-            source: LidarTileSource::LegacyAsset {
-                path_template: "/data/{z}_{x}_{y}.png".to_string(),
-            },
-            min_zoom: 13,
-            max_zoom: 17,
-            tile_size: 256,
-            bounds: [-1.0, 48.0, 0.0, 49.0],
-        };
-        let json = serde_json::to_string(&legacy).unwrap();
-        assert!(json.contains(r#""kind":"legacy-asset""#), "{json}");
-        assert!(json.contains(r#""path_template""#), "{json}");
-        assert!(!json.contains("path-template"), "{json}");
-
-        let native = LidarTileSource::NativeGeneration {
-            generation_id: "gen-1".to_string(),
-        };
-        let json = serde_json::to_string(&native).unwrap();
+    fn a_batched_sample_crosses_ipc_in_target_order() {
+        let request: LidarSamplePointsRequest = serde_json::from_value(json!({
+            "targets": [
+                { "kind": "Source", "entity_id": "ground", "expected_generation_id": "g1" },
+                { "kind": "Derived", "entity_id": "slope", "expected_generation_id": "g2" }
+            ],
+            "points": [[0.0338, 48.2202], [0.0339, 48.2203]]
+        }))
+        .expect("a sample request decodes");
         assert_eq!(
-            json,
-            r#"{"kind":"native-generation","generation_id":"gen-1"}"#
+            request.targets[1].kind,
+            crate::library::LibraryItemRole::Derived
+        );
+        assert_eq!(request.points[1], [0.0339, 48.2203]);
+
+        let series = vec![
+            LidarSampleSeries::Values {
+                values: vec![Some(142.5), None],
+            },
+            LidarSampleSeries::Unavailable {
+                reason: LidarSampleUnavailableReason::StaleGeneration,
+            },
+        ];
+        assert_eq!(
+            serde_json::to_value(series).unwrap(),
+            json!([
+                { "Values": { "values": [142.5, null] } },
+                { "Unavailable": { "reason": "StaleGeneration" } }
+            ])
         );
     }
 }

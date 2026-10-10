@@ -3,19 +3,14 @@ import {
   DOCUMENT_FILE_FIELD_OWNERS as GENERATED_DOCUMENT_FILE_FIELD_OWNERS,
   KNOWN_CANOPI_KEYS,
 } from '../../generated/known-canopi-keys'
-import type {
-  DocumentFileFieldOwner,
-  KnownCanopiKey,
-} from '../../generated/known-canopi-keys'
-import type { CanopiFile, SpatialFrame } from '../../types/design'
-import { cloneSpatialFrame } from '../../spatial-frame'
+import type { KnownCanopiKey } from '../../generated/known-canopi-keys'
+import type { CanopiFile } from '../../types/design'
 
-export { DEFAULT_BUDGET_CURRENCY, KNOWN_CANOPI_KEYS }
+export { DEFAULT_BUDGET_CURRENCY }
 
-export interface DocumentFileSaveMetadata {
+interface DocumentFileSaveMetadata {
   name: string
   description?: string | null
-  spatialFrame?: SpatialFrame
 }
 
 export interface ComposeDocumentForSaveOptions {
@@ -26,13 +21,11 @@ export interface ComposeDocumentForSaveOptions {
 
 export const DOCUMENT_FILE_FIELD_OWNERS = GENERATED_DOCUMENT_FILE_FIELD_OWNERS
 
-export const DOCUMENT_FILE_KNOWN_KEYS = KNOWN_CANOPI_KEYS
+const DOCUMENT_FILE_KNOWN_KEYS = KNOWN_CANOPI_KEYS
 
 const KNOWN_CANOPI_KEY_SET = new Set<string>(DOCUMENT_FILE_KNOWN_KEYS)
-const SHARED_EXTRA_FIELD_OWNERS = {
-  guides: 'scene',
-} as const satisfies Record<string, DocumentFileFieldOwner>
-
+/** Optional sections a Design writes only when it has them (the Rust side skips them when None). */
+const WRITTEN_ONLY_WHEN_PRESENT: ReadonlySet<KnownCanopiKey> = new Set(['lidar', 'map_view'])
 function normalizePersistedExtra(extra: CanopiFile['extra']): Record<string, unknown> {
   if (!extra || typeof extra !== 'object' || Array.isArray(extra)) return {}
   const normalized: Record<string, unknown> = {}
@@ -73,10 +66,19 @@ export function normalizeLoadedDocument(file: CanopiFile): CanopiFile {
   }
 }
 
-export function normalizeNewDocument(file: CanopiFile): CanopiFile {
+/**
+ * A new Design starts with an empty `extra`, except the keys its creator set
+ * on purpose (`keepExtraKeys`: Settings › New Designs display options).
+ */
+export function normalizeNewDocument(file: CanopiFile, keepExtraKeys: readonly string[] = []): CanopiFile {
+  const persisted = normalizePersistedExtra(file.extra)
+  const extra: Record<string, unknown> = {}
+  for (const key of keepExtraKeys) {
+    if (Object.prototype.hasOwnProperty.call(persisted, key)) extra[key] = persisted[key]
+  }
   return {
     ...normalizeDocumentKnownFields(file),
-    extra: {},
+    extra,
   }
 }
 
@@ -93,7 +95,6 @@ export function composeDocumentForSave({
     ...composed,
     name: metadata.name,
     description: metadata.description ?? composed.description ?? null,
-    spatial_frame: cloneSpatialFrame(metadata.spatialFrame ?? composed.spatial_frame),
   }
 }
 
@@ -103,14 +104,12 @@ function composeKnownDocumentFields(
 ): CanopiFile {
   const output: Partial<Record<KnownCanopiKey, unknown>> = {}
 
+  // `extra` is all Design Edit's, like every 'document' field: the scene owns no `extra` key (ADR 0011).
   for (const key of DOCUMENT_FILE_KNOWN_KEYS) {
-    if (key === 'extra') continue
     const value = ownedFieldSource(key, document, canvas)[key]
-    if (key === 'lidar' && value == null) continue
+    if (WRITTEN_ONLY_WHEN_PRESENT.has(key) && value == null) continue
     output[key] = value
   }
-
-  output.extra = composeDocumentExtra(document.extra, canvas.extra)
   return output as CanopiFile
 }
 
@@ -127,7 +126,6 @@ function normalizeDocumentKnownFields(file: CanopiFile): CanopiFile {
     version: file.version,
     name: file.name,
     description: file.description ?? null,
-    spatial_frame: cloneSpatialFrame(file.spatial_frame),
     plant_species_colors: file.plant_species_colors,
     plant_species_symbols: file.plant_species_symbols ?? {},
     plant_species_codes: file.plant_species_codes ?? {},
@@ -142,41 +140,11 @@ function normalizeDocumentKnownFields(file: CanopiFile): CanopiFile {
     budget: file.budget ?? [],
     budget_currency: file.budget_currency ?? DEFAULT_BUDGET_CURRENCY,
     ...(file.lidar == null ? {} : { lidar: file.lidar }),
+    views: file.views ?? [],
+    stories: file.stories ?? [],
+    ...(file.map_view == null ? {} : { map_view: file.map_view }),
     created_at: file.created_at,
     updated_at: file.updated_at,
     extra: normalizePersistedExtra(file.extra),
-  }
-}
-
-function composeDocumentExtra(
-  documentExtra: CanopiFile['extra'],
-  canvasExtra: CanopiFile['extra'],
-): Record<string, unknown> {
-  const nextExtra = normalizePersistedExtra(documentExtra)
-  const sceneExtra = normalizePersistedExtra(canvasExtra)
-
-  for (const [key, owner] of Object.entries(SHARED_EXTRA_FIELD_OWNERS)) {
-    const source = sharedExtraSource(owner, nextExtra, sceneExtra)
-    if (Object.prototype.hasOwnProperty.call(source, key)) {
-      nextExtra[key] = source[key]
-    } else {
-      delete nextExtra[key]
-    }
-  }
-
-  return nextExtra
-}
-
-function sharedExtraSource(
-  owner: DocumentFileFieldOwner,
-  documentExtra: Record<string, unknown>,
-  sceneExtra: Record<string, unknown>,
-): Record<string, unknown> {
-  switch (owner) {
-    case 'document':
-    case 'shared':
-      return documentExtra
-    case 'scene':
-      return sceneExtra
   }
 }

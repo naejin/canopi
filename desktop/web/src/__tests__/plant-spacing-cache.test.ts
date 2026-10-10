@@ -8,7 +8,7 @@ function createStore() {
     draft.plants = [0, 3, 11].map((x, index) => ({
       kind: 'plant', id: String(index), locked: false,
       canonicalName: 'Malus domestica', commonName: null, color: null,
-      stratum: null, canopySpreadM: null, position: { x, y: 7 },
+      canopySpreadM: null, position: { x, y: 7 },
       rotationDeg: null, scale: null, notes: null, plantedDate: null, quantity: null,
     }))
   })
@@ -31,17 +31,17 @@ describe('plant spacing across scene reads', () => {
     store.updatePersisted((draft) => { draft.plants[0]!.color = '#ffffff' })
     expect(spacing()).toBe(5)
     store.hydrate(createStore().toCanopiFile())
-    expect(spacing()).toBe(3)
+    // Hydration re-centres the plane on the plants; saved lon/lat is rounded to 1e-9°.
+    const [first] = store.persisted.plants
+    expect(nearestPlantSpacing(store.persisted.plants, first!.position)).toBeCloseTo(3, 3)
   })
 
-  it('owns cached coordinates and preserves defensive scene ownership', () => {
-    const store = createStore()
-    const snapshot = store.persisted
-    expect(nearestPlantSpacing(snapshot.plants, { x: 1, y: 7 })).toBe(1)
-    for (const plant of snapshot.plants) plant.position.x += 100
-    snapshot.plants.pop()
-    const fresh = store.persisted.plants
-    expect(fresh.map((plant) => plant.position.x)).toEqual([0, 3, 11])
+  it('owns cached coordinates, so a caller changing its own array never corrupts the index', () => {
+    const plants = [0, 3, 11].map((x) => ({ position: { x, y: 7 } }))
+    expect(nearestPlantSpacing(plants, { x: 1, y: 7 })).toBe(1)
+    for (const plant of plants) plant.position.x += 100
+    plants.pop()
+    const fresh = [0, 3, 11].map((x) => ({ position: { x, y: 7 } }))
     expect(nearestPlantSpacing(fresh, { x: 1, y: 7 })).toBe(1)
   })
 
@@ -53,22 +53,22 @@ describe('plant spacing across scene reads', () => {
     expect(nearestPlantSpacing([{ position: { x: 0, y: 0 } }], { x: 0, y: 0 })).toBe(Infinity)
   })
 
-  it('does not rebuild the spatial tree for fresh read-only snapshots', () => {
+  it('does not rebuild the spatial tree for a selection change or an edit that moves no plant', () => {
     const store = createStore()
     const first = store.persisted.plants
     expect(nearestPlantSpacing(first, first[0]!.position)).toBe(3)
-    // Sorting is the expensive spatial-tree construction, not snapshot cloning.
+    // Sorting is the expensive spatial-tree construction.
     const sort = vi.spyOn(Array.prototype, 'sort')
     try {
       store.setSelection([{ kind: 'plant', id: '0' }])
       store.setHoveredTarget({ kind: 'plant', id: '1' })
-      for (let read = 0; read < 20; read++) {
-        const plants = store.persisted.plants
-        expect(plants).not.toBe(first)
-        sort.mockClear()
-        expect(nearestPlantSpacing(plants, plants[0]!.position)).toBe(3)
-        expect(sort).not.toHaveBeenCalled()
-      }
+      expect(store.persisted.plants).toBe(first)
+      store.updatePersisted((draft) => { draft.layers[0]!.locked = true })
+      const plants = store.persisted.plants
+      expect(plants).not.toBe(first)
+      sort.mockClear()
+      expect(nearestPlantSpacing(plants, plants[0]!.position)).toBe(3)
+      expect(sort).not.toHaveBeenCalled()
     } finally {
       sort.mockRestore()
     }

@@ -1,0 +1,192 @@
+.rail {
+  position: absolute;
+  top: var(--chrome-rail-top);
+  left: var(--chrome-inset);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-glass);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(16px);
+}
+
+.icons {
+  width: var(--chrome-rail-width);
+}
+
+.named {
+  width: var(--chrome-rail-named-width);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+}
+
+.rule {
+  height: 1px;
+  margin: var(--space-0-75) var(--space-1-5);
+  background: var(--color-border);
+}
+
+.heading {
+  padding: var(--space-1) var(--space-2) var(--space-0-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+}
+
+.button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-2) + var(--space-0-5));
+  flex-shrink: 0;
+  height: var(--control-size-3xl);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--text-base);
+  cursor: pointer;
+}
+
+.icons .button {
+  justify-content: center;
+  width: var(--control-size-3xl);
+}
+
+.named .button {
+  height: var(--control-size-2xl);
+  padding: 0 var(--space-2);
+  color: var(--color-text);
+  text-align: left;
+}
+
+.button:hover:not([aria-disabled="true"]) {
+  background: var(--color-control-hover);
+}
+
+.button[aria-pressed="true"] {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: 600;
+}
+
+.button[aria-disabled="true"] {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.icon {
+  width: var(--icon-size-lg);
+  height: var(--icon-size-lg);
+  flex-shrink: 0;
+}
+
+.label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.key {
+  flex-shrink: 0;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-alt);
+  color: var(--color-text-secondary);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  font-weight: 400;
+  line-height: var(--line-height);
+  white-space: nowrap;
+}
+
+/* More tools (a short window folds the last tools into its menu): hover while
+   its menu is open, and a soft accent while it holds the active tool. */
+.button[data-tool-rail-more][aria-expanded="true"] {
+  background: var(--color-control-hover);
+}
+
+.button[data-tool-rail-more][data-holds-active] {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+}
+
+.button[aria-pressed="true"] .key {
+  border-color: currentColor;
+  background: transparent;
+  color: inherit;
+}
+
+/* Short canvases: tighter buttons keep Undo and Redo above the view chip. */
+@container (max-height: 720px) {
+  .icons .button,
+  .named .button {
+    height: var(--control-size-md);
+  }
+
+  .named .heading {
+    display: none;
+  }
+}
+
+
+/* Narrow canvases: names stay as accessible names but the rail keeps to icons. */
+@container (max-width: 600px) {
+  .named {
+    width: var(--chrome-rail-width);
+  }
+
+  .named .button {
+    justify-content: center;
+    width: var(--control-size-3xl);
+    padding: 0;
+  }
+
+  .named .label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .named .key,
+  .named .heading {
+    display: none;
+  }
+}
+
+/* Web on phones (board WebPhone): a strip of 44 px buttons below the top bar,
+   clear of the notch in landscape. It keeps its size in short windows. */
+.phone {
+  left: calc(var(--chrome-inset) + env(safe-area-inset-left));
+  width: auto;
+}
+
+.phone .rule {
+  display: none;
+}
+
+.phone.icons .button {
+  width: var(--control-size-touch);
+  height: var(--control-size-touch);
+}

@@ -5,10 +5,11 @@ import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import { MM } from '../app/canvas-pdf/print-style'
 import { overlaps } from '../app/canvas-pdf/field-geometry'
 import type { PdfInput, PdfLabels } from '../app/canvas-pdf/types'
+import { englishPdfLabels } from '../../scripts/pdf-validation/fixtures'
 const fonts = new Map<PdfFontId, Uint8Array>([
   ['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')], ['strong', readFileSync('public/pdf-fonts/NotoSans-SemiBold.ttf')],
 ])
-const labels: PdfLabels = { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }
+const labels: PdfLabels = { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }
 
 it.each([
   { vertical: false, tilt: 0, rows: 3 },
@@ -17,7 +18,7 @@ it.each([
   { vertical: true, tilt: -.015, rows: 4 },
 ])('keeps mixed strip identities clear of plants ($vertical, slope $tilt)', ({ vertical, tilt, rows }) => {
   const point = (x: number, y: number) => vertical ? { x: y, y: x } : { x, y }
-  const input: PdfInput = { name: 'Mixed strip', locale: 'en', commonNames: {}, canvas: {
+  const input: PdfInput = { name: 'Mixed strip', locale: 'en', viewBearingDeg: 0, commonNames: {}, canvas: {
     layers: [{ name: 'plants', visible: true, opacity: 1 }], annotations: [], zones: [], measurements: [],
     plants: Array.from({ length: 30 * rows }, (_, i) => ({ id: String(i), canonicalName: `Species ${i % 7}`,
       position: point((i % 30) * .35, Math.floor(i / 30) * .3 + (i % 30) * .35 * tilt), color: '#428063', symbol: 'round', mark: [], pinnedName: false })),
@@ -46,7 +47,7 @@ it.each([
 })
 
 it('fits one complete key and ground scale in spare paper without duplicating the key', () => {
-  const input: PdfInput = { name: 'Repeated strip', locale: 'en', commonNames: { 'Species 0': 'Apple', 'Species 1': 'Pear', 'Species 2': 'Plum' }, canvas: {
+  const input: PdfInput = { name: 'Repeated strip', locale: 'en', viewBearingDeg: 0, commonNames: { 'Species 0': 'Apple', 'Species 1': 'Pear', 'Species 2': 'Plum' }, canvas: {
     layers: [{ name: 'plants', visible: true, opacity: 1 }], zones: [], measurements: [],
     annotations: [{ id: 'note', text: 'Keep this access clear', position: { x: 5, y: .7 }, fontSize: 12, rotation: 0 }],
     plants: Array.from({ length: 60 }, (_, i) => ({ id: String(i), canonicalName: `Species ${i % 3}`,

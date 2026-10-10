@@ -4,8 +4,6 @@ import {
   normalizeSavedObjectStampPayload,
   parseSavedObjectStampPayload,
 } from './saved-object-stamp-payload'
-import type { CanvasToolCommandSurface } from './runtime/runtime'
-import { currentCanvasToolCommandSurface } from './session'
 import type { SavedObjectStamp } from '../types/saved-object-stamps'
 
 const SAVED_OBJECT_STAMP_MIME = 'application/x.canopi.saved-object-stamp+json'
@@ -24,33 +22,32 @@ type DragDataTypes = {
 type ReadableDragData = Pick<DataTransfer, 'getData'> & DragDataTypes
 
 const selectedSavedObjectStampSource = signal<SavedObjectStampPayload | null>(null)
+const selectedSavedObjectStampName = signal<string | null>(null)
 const activeSavedObjectStampDragSource = signal<SavedObjectStampPayload | null>(null)
 
 export function readSavedObjectStampSource(): SavedObjectStampPayload | null {
   return selectedSavedObjectStampSource.value
 }
 
+/** The armed saved stamp's name, for the tool card. */
+export function readSavedObjectStampName(): string | null {
+  return selectedSavedObjectStampSource.value ? selectedSavedObjectStampName.value : null
+}
+
+/** The saved stamp Place a stamp holds, with its name for the tool card; app code writes it through armCanvasTool. */
 export function selectSavedObjectStampSource(
   source: SavedObjectStampPayload,
+  name: string | null = null,
 ): SavedObjectStampPayload | null {
   const normalized = normalizeSavedObjectStampPayload(source)
   selectedSavedObjectStampSource.value = normalized
+  selectedSavedObjectStampName.value = name?.trim() || null
   return normalized
 }
 
 export function clearSavedObjectStampSource(): void {
   selectedSavedObjectStampSource.value = null
-}
-
-export function beginSavedObjectStampPlacement(
-  stamp: SavedObjectStamp,
-  commandSurface: CanvasToolCommandSurface | null | undefined = currentCanvasToolCommandSurface.value,
-): boolean {
-  const payload = parseSavedObjectStampPayload(stamp.payload_json)
-  if (!payload || !commandSurface) return false
-  selectedSavedObjectStampSource.value = payload
-  commandSurface.setTool('saved-object-stamp')
-  return true
+  selectedSavedObjectStampName.value = null
 }
 
 export function writeSavedObjectStampDragData(

@@ -6,7 +6,7 @@ import {
   openProblemReportDialog,
   problemReportSubmission,
 } from '../app/problem-report/submission'
-import { replaceCurrentDesignState } from '../app/document-session/store'
+import { replaceCurrentDesignState } from './support/design-session-state'
 import { ProblemReportDialog } from '../components/shared/ProblemReportDialog'
 import type { CanopiFile } from '../types/design'
 
@@ -22,13 +22,24 @@ vi.mock('../ipc/problem-report', () => ({
 
 function makeDesign(): CanopiFile {
   return {
-    version: 6,
+    version: 9,
     name: 'Secret Orchard',
     description: 'Private notes',
-    spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
     plant_species_colors: {},
     layers: [],
-    plants: [],
+    plants: [{
+      id: 'plant-1',
+      canonical_name: 'Malus domestica',
+      common_name: null,
+      color: null,
+      position: { lon: 2.3522, lat: 48.8566 },
+      rotation: null,
+      scale: null,
+      notes: null,
+      planted_date: null,
+      quantity: 1,
+      locked: false,
+    }],
     zones: [],
     annotations: [],
     consortiums: [],
@@ -85,7 +96,7 @@ describe('ProblemReportDialog', () => {
 
     const dialog = container.querySelector('[role="dialog"]')
     expect(dialog).not.toBeNull()
-    expect(dialog!.textContent).toContain('Report a Problem')
+    expect(dialog!.textContent).toContain('Report a problem')
 
     const description = container.querySelector('textarea') as HTMLTextAreaElement
     const currentDesignAttachment = container.querySelector(
@@ -117,7 +128,7 @@ describe('ProblemReportDialog', () => {
 
     await act(async () => {
       const copyButton = Array.from(container.querySelectorAll('button'))
-        .find((button) => button.textContent?.includes('Copy Summary'))!
+        .find((button) => button.textContent?.includes('Copy summary'))!
       copyButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
@@ -152,8 +163,8 @@ describe('ProblemReportDialog', () => {
 
     const request = mocks.createProblemReport.mock.calls[0]![0]
     expect(request.sensitive_attachments.current_design).toContain('"name": "Secret Orchard"')
-    expect(request.sensitive_attachments.current_design).toContain('"spatial_frame"')
     const attached = JSON.parse(request.sensitive_attachments.current_design) as Record<string, unknown>
+    expect((attached.plants as Array<{ position: unknown }>)[0]!.position).toEqual({ lon: 2.3522, lat: 48.8566 })
     expect(attached.future_top_level).toEqual({ keep: true })
     expect(attached).not.toHaveProperty('extra')
   })
@@ -179,7 +190,7 @@ describe('ProblemReportDialog', () => {
     })
 
     const showButton = Array.from(container.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('Show Folder'),
+      button.textContent?.includes('Show folder'),
     )
     expect(showButton).toBeDefined()
 

@@ -1,1215 +1,142 @@
-import { speciesFocusOpacity } from '../species-key'
-import { instrumentSceneRenderer } from './profile'
-import { Application, Container, Graphics, GraphicsContext, Text, TextStyle, type TextStyleOptions } from 'pixi.js'
-import {
-  getAnnotationVisualWorldCorners,
-  getAnnotationPresentation,
-  worldToScreen,
-} from '../annotation-layout'
-import {
-  createMeasurementGuidePresentation,
-  MEASUREMENT_GUIDE_DASH_PX,
-  MEASUREMENT_GUIDE_GAP_PX,
-  MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX,
-  MEASUREMENT_GUIDE_TICK_HALF_PX,
-} from '../measurement-guides'
-import {
-  buildPlantPresentationEntries,
-  getStackBadgeOffsetPx,
-  layoutPlantPresentation,
-  STACK_BADGE_RADIUS_PX,
-  type PlantPresentationEntry,
-} from '../plant-presentation'
-import {
-  getPlantSymbolShapes,
-  ROUND_PLANT_SYMBOL_RADIUS,
-  tracePlantSymbolContour,
-} from '../plant-symbol-recipes'
-import type { PlantNameLabel } from '../selection-labels'
-import { SceneViewportPresentation } from './viewport-presentation'
-import { getCanvasDetailLayout, isMeasurementLabelVisible } from '../automatic-detail'
-import {
-  getAnnotationTextColor,
-  getCanvasInteractionStrokeVisual,
-  getPlantSymbolEdgeColor,
-  getPlantSymbolEdgeWidth,
-  getPlantLabelColor,
-  getSceneLayerStyle,
-  getStackBadgeBackgroundColor,
-  getStackBadgeTextColor,
-  resolveZoneVisual,
-  type CanvasInteractionVisualState,
-} from '../scene-visuals'
-import type { SceneRendererDefinition, SceneRendererHoverState, SceneRendererInstance, SceneRendererSnapshot } from './scene-types'
-import { getEllipticalZonePolygon, getRectangularZoneCorners } from '../zone-geometry'
-import type { PlantSymbolId, SceneAnnotationEntity, SceneMeasurementGuideEntity, ScenePlantEntity, ScenePoint, SceneZoneEntity } from '../scene'
-import { isSceneObjectGroupMemberTarget } from '../scene'
+// Production CSP rejects Pixi's generated functions; its shim avoids eval.
+import 'pixi.js/unsafe-eval'
+import type { Container, Text } from 'pixi.js'
+import { getAnnotationPresentation } from '../annotation-layout'
+import { buildPlantPresentationEntries } from '../plant-presentation'
+import { getMapTextColor, resolveZoneVisual } from '../scene-visuals'
+import type { DraftPresentation } from '../tools/draft'
+import { bandCentreScale, zoomBandOf } from '../view/frame-source'
+import type { ViewTransform } from '../view/types'
+import { createBillboardLayer, drawPlantGlyph, noteTextRotation, styleAnnotationText, traceAnnotationMarker } from './billboard-layer'
+import { createDraftLayer, type DraftScenePainters } from './draft-layer'
+import { cssColorAlpha, pixiPaint, screenPxToWorldPx, toPixiColor } from './scene-paint'
+import type { SceneRendererSnapshot } from './scene-types'
+import { createWorldLayers, traceZonePath, ZONE_STROKE_PX } from './world-layers'
 
-const BACKGROUND_COLOR = 0x000000
-const ZONE_STROKE_PX = 2
-const PLANT_STROKE_PX = 1.5
-const graphicsKeys = new WeakMap<Graphics, string>()
-
-type PixiSceneWorkName = 'plantObjects' | 'plantCull' | 'plantEntries' | 'plantLayout' | 'plantDraw'
-
-declare global {
-  interface Window {
-    __CANOPI_PIXI_SCENE_WORK__?: (name: PixiSceneWorkName, durationMs: number) => void
-  }
-}
-
-function measurePixiSceneWork<T>(name: PixiSceneWorkName, operation: () => T): T {
-  const observer = import.meta.env.DEV ? window.__CANOPI_PIXI_SCENE_WORK__ : undefined
-  if (!observer) return operation()
-  const startedAt = performance.now()
-  try {
-    return operation()
-  } finally {
-    observer(name, performance.now() - startedAt)
-  }
-}
-
-/** Keeps exact current and two prior plant geometry generations while bounding zoom churn. */
-class PlantGraphicsContextCache {
-  private current = new Map<string, GraphicsContext>()
-  private recent = new Map<string, GraphicsContext>()
-  private older = new Map<string, GraphicsContext>()
-  private disposed = false
-
-  beginGeneration(): void {
-    this.destroyContexts(this.older)
-    this.older = this.recent
-    this.recent = this.current
-    this.current = new Map()
-  }
-
-  acquire(key: string): { context: GraphicsContext; created: boolean } {
-    const current = this.current.get(key)
-    if (current) return { context: current, created: false }
-    const recent = this.recent.get(key)
-    if (recent) {
-      this.recent.delete(key)
-      this.current.set(key, recent)
-      return { context: recent, created: false }
-    }
-    const older = this.older.get(key)
-    if (older) {
-      this.older.delete(key)
-      this.current.set(key, older)
-      return { context: older, created: false }
-    }
-    const context = new GraphicsContext()
-    this.current.set(key, context)
-    return { context, created: true }
-  }
-
-  dispose(): void {
-    if (this.disposed) return
-    this.disposed = true
-    this.destroyContexts(this.current)
-    this.destroyContexts(this.recent)
-    this.destroyContexts(this.older)
-    this.current.clear()
-    this.recent.clear()
-    this.older.clear()
-  }
-
-  private destroyContexts(contexts: ReadonlyMap<string, GraphicsContext>): void {
-    for (const context of contexts.values()) context.destroy()
-  }
-}
-
-interface CachedPlantStackCounts {
-  readonly plants: readonly ScenePlantEntity[]
-  readonly selectedPlantIds: ReadonlySet<string>
-  readonly stackCounts: ReadonlyMap<string, number>
-}
-
-class PlantStackCountsCache {
-  private readonly entries: CachedPlantStackCounts[] = []
-
-  get(
-    presentationEntries: readonly PlantPresentationEntry[],
-    selectedPlantIds: ReadonlySet<string>,
-    viewportScale: number,
-  ): ReadonlyMap<string, number> {
-    const matchIndex = this.entries.findIndex((candidate) =>
-      samePlantSelection(candidate.selectedPlantIds, selectedPlantIds)
-      && candidate.plants.length === presentationEntries.length
-      && candidate.plants.every((plant, index) => plant === presentationEntries[index]?.plant))
-    if (matchIndex >= 0) {
-      const [match] = this.entries.splice(matchIndex, 1)
-      this.entries.unshift(match!)
-      return match!.stackCounts
-    }
-    const stackCounts = layoutPlantPresentation(presentationEntries, viewportScale).stackCounts
-    this.entries.unshift({
-      plants: presentationEntries.map((entry) => entry.plant),
-      selectedPlantIds: new Set(selectedPlantIds),
-      stackCounts,
-    })
-    if (this.entries.length > 2) this.entries.pop()
-    return stackCounts
-  }
-}
-
-function samePlantSelection(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
-  return left.size === right.size && [...left].every((plantId) => right.has(plantId))
-}
+/** Plant a row's disc is at least 4 px across, as its 2 px border-box border kept it before v2 (plant-spacing-overlay.ts at a4c86d39). */
+const DOT_GHOST_MIN_RADIUS_PX = 2
 
 /**
- * Retained botanical presentation. The render-surface owner supplies the
- * stage and frame submission, which lets an Application and a shared WebGL
- * context use the same scene graph without sharing lifecycle ownership.
+ * Retained botanical presentation. The MapLibre custom layer owns the stage,
+ * the shared WebGL context and frame submission; it presents each frame here
+ * once, with the camera's view and any new scene snapshot, and this graph
+ * draws the active tool's draft over it (`draft-layer.ts`). The stage holds,
+ * in this order (spec §1.5): the world root (`world-layers.ts`), the
+ * billboard root (`billboard-layer.ts`), then the two draft roots.
  */
 export interface PixiScenePresentation {
   dispose(): void
   resize(width: number, height: number): void
-  renderScene(snapshot: SceneRendererSnapshot): void
-  setViewport(viewport: SceneRendererSnapshot['viewport']): void
+  /**
+   * One frame: the camera's view (the world roots' affine, the visible set, the billboards' anchors) and, when data,
+   * selection, hover, style or labels changed, the new snapshot drawn under it. A pan brings no snapshot. Names are
+   * admitted on a snapshot, a zoom-band change and a `settled` frame at a new scale; omitted, the frame is settled.
+   */
+  present(view: ViewTransform, snapshot?: SceneRendererSnapshot, settled?: boolean): void
+  setDraft(draft: DraftPresentation | null): void
 }
 
 export interface PixiScenePresentationOptions {
   readonly stage: Container
   readonly createText: () => Text
-  readonly requestDraw: () => void
   readonly viewSize: { width: number; height: number }
-}
-
-export function createPixiSceneRenderer(): SceneRendererDefinition {
-  return {
-    id: 'pixi',
-    supports(capabilities) {
-      return capabilities.webgl || capabilities.webgl2
-    },
-    async initialize(context, backendContext) {
-      const app = new Application()
-      const resolution = Math.max(1, backendContext.capabilities.devicePixelRatio ?? 1)
-      // Textures need extra samples to retain glyph edges at fractional screen
-      // positions. Keep this text-only density independent of camera zoom.
-      const createText = () => new Text({ resolution: resolution * 2 })
-      await app.init({
-        width: Math.max(1, context.container.clientWidth),
-        height: Math.max(1, context.container.clientHeight),
-        antialias: true,
-        resolution,
-        autoDensity: true,
-        autoStart: false,
-        backgroundAlpha: 0,
-        clearBeforeRender: true,
-        backgroundColor: BACKGROUND_COLOR,
-        preference: 'webgl',
-      })
-
-      const canvas = app.canvas as HTMLCanvasElement
-      canvas.dataset.canopiRenderer = 'pixi'
-      canvas.style.position = 'absolute'
-      canvas.style.inset = '0'
-      canvas.style.width = '100%'
-      canvas.style.height = '100%'
-      canvas.style.background = 'transparent'
-      canvas.style.zIndex = '1'
-      context.container.appendChild(canvas)
-
-      const presentation = createPixiScenePresentation({
-        stage: app.stage,
-        createText,
-        requestDraw: () => app.render(),
-        viewSize: { width: context.container.clientWidth, height: context.container.clientHeight },
-      })
-
-      const instance: SceneRendererInstance = {
-        id: 'pixi',
-        dispose() {
-          presentation.dispose()
-          app.destroy({ removeView: false })
-          canvas.remove()
-        },
-        resize(width, height) {
-          presentation.resize(width, height)
-          app.renderer.resize(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)))
-        },
-        renderScene(snapshot) {
-          presentation.renderScene(snapshot)
-        },
-        setViewport(viewport) {
-          presentation.setViewport(viewport)
-        },
-      }
-
-      return import.meta.env.DEV ? instrumentSceneRenderer(canvas, instance) : instance
-    },
-  }
+  /** Asks the host for a frame when the presentation changed outside a render (a draft chip's font arrived). */
+  readonly requestRepaint?: () => void
 }
 
 export function createPixiScenePresentation(options: PixiScenePresentationOptions): PixiScenePresentation {
-  const { stage, createText, requestDraw, viewSize } = options
-  const world = new Container()
-  const zonesLayer = new Container()
-  const measurementGuideLayer = new Container()
-  const plantsLayer = new Container()
-  const plantsOverlayLayer = new Container()
-  const annotationTextLayer = new Container()
-  const annotationHighlightLayer = new Container()
-  world.addChild(zonesLayer)
-  world.addChild(measurementGuideLayer)
+  const { stage, createText, viewSize } = options
+  let snapshot: SceneRendererSnapshot | null = null
+  const world = createWorldLayers()
   // Rasterize text and tessellate symbols at their readable CSS-pixel size.
   // Tiny world-unit primitives lose detail before the camera enlarges them.
-  const screen = new Container()
-  screen.addChild(plantsLayer)
-  screen.addChild(plantsOverlayLayer)
-  screen.addChild(annotationTextLayer)
-  screen.addChild(annotationHighlightLayer)
-  const measurementGuideLabelLayer = new Container()
-  const pinnedPlantNameLabelLayer = new Container()
-  const selectionLabelLayer = new Container()
-  stage.addChild(world)
-  stage.addChild(screen)
-  stage.addChild(measurementGuideLabelLayer)
-  stage.addChild(pinnedPlantNameLabelLayer)
-  stage.addChild(selectionLabelLayer)
-
-  const presentation = new SceneViewportPresentation()
-  const zoneGraphicsByName = new Map<string, Graphics>()
-  const measurementGuideGraphicsById = new Map<string, Graphics>()
-  const measurementGuideLabelById = new Map<string, Text>()
-  const plantGraphicsById = new Map<string, Graphics>()
-  // Passing one external empty context avoids the unused owned context that
-  // `new Graphics()` would otherwise allocate for every Plant before its exact
-  // shared geometry is assigned.
-  const emptyPlantGraphicsContext = new GraphicsContext()
-  const visiblePlantIds = new Set<string>()
-  const plantGraphicsContexts = new PlantGraphicsContextCache()
-  const plantStackCounts = new PlantStackCountsCache()
-  const plantBadgeGraphicsById = new Map<string, Graphics>()
-  const plantBadgeTextById = new Map<string, Text>()
-  const annotationTextById = new Map<string, Text>()
-  const annotationHighlightById = new Map<string, Graphics>()
-  const pinnedPlantNameLabelById = new Map<string, Text>()
-  const selectionLabelBySpecies = new Map<string, Text>()
+  const billboards = createBillboardLayer({ createText, viewSize })
+  // Drafts draw over plants, notes and labels, as the DOM previews did over the canvas.
+  const draftLayer = createDraftLayer({
+    createText,
+    viewSize,
+    requestRepaint: options.requestRepaint,
+    painters: createDraftScenePainters(() => snapshot),
+  })
+  stage.addChild(world.root)
+  stage.addChild(billboards.root)
+  stage.addChild(draftLayer.worldDraftRoot)
+  stage.addChild(draftLayer.billboardDraftRoot)
 
   return {
     dispose() {
-      presentation.dispose()
-      for (const graphics of plantGraphicsById.values()) {
-        graphics.removeFromParent()
-        destroySharedPlantGraphics(graphics)
-      }
-      plantGraphicsById.clear()
-      visiblePlantIds.clear()
-      emptyPlantGraphicsContext.destroy()
-      plantGraphicsContexts.dispose()
+      draftLayer.dispose()
+      billboards.dispose()
+      snapshot = null
     },
     resize(width, height) {
       viewSize.width = width
       viewSize.height = height
+      billboards.resize(width, height)
+      draftLayer.resize(width, height)
     },
-    renderScene(nextSnapshot) {
-      const { plantNameLabels } = presentation.setScene(nextSnapshot)
-      syncZones(zonesLayer, zoneGraphicsByName, nextSnapshot, true)
-      syncMeasurementGuides(
-        createText,
-        measurementGuideLayer,
-        measurementGuideLabelLayer,
-        measurementGuideGraphicsById,
-        measurementGuideLabelById,
-        nextSnapshot,
-        true,
-      )
-      syncPlants(
-        createText,
-        plantsLayer,
-        plantsOverlayLayer,
-        plantGraphicsById,
-        emptyPlantGraphicsContext,
-        visiblePlantIds,
-        plantGraphicsContexts,
-        plantStackCounts,
-        plantBadgeGraphicsById,
-        plantBadgeTextById,
-        viewSize,
-        nextSnapshot,
-        true,
-      )
-      syncAnnotations(
-        createText,
-        annotationTextLayer,
-        annotationHighlightLayer,
-        annotationTextById,
-        annotationHighlightById,
-        nextSnapshot,
-        true,
-      )
-      syncPinnedPlantNameLabels(createText, pinnedPlantNameLabelLayer, pinnedPlantNameLabelById, nextSnapshot, plantNameLabels)
-      syncSelectionLabels(createText, selectionLabelLayer, selectionLabelBySpecies, nextSnapshot)
-      world.position.set(nextSnapshot.viewport.x, nextSnapshot.viewport.y)
-      world.scale.set(nextSnapshot.viewport.scale)
-      requestDraw()
+    present(view, next, settled) {
+      if (next) snapshot = next
+      world.present(view, next)
+      billboards.present(view, next, settled)
+      draftLayer.setView(view)
     },
-    setViewport(viewport) {
-      const current = presentation.setViewport(viewport)
-      if (!current) return
-      const { snapshot, plantNameLabels } = current
-      syncZones(zonesLayer, zoneGraphicsByName, snapshot, false)
-      syncMeasurementGuides(
-        createText,
-        measurementGuideLayer,
-        measurementGuideLabelLayer,
-        measurementGuideGraphicsById,
-        measurementGuideLabelById,
-        snapshot,
-        false,
-      )
-      syncPlants(
-        createText,
-        plantsLayer,
-        plantsOverlayLayer,
-        plantGraphicsById,
-        emptyPlantGraphicsContext,
-        visiblePlantIds,
-        plantGraphicsContexts,
-        plantStackCounts,
-        plantBadgeGraphicsById,
-        plantBadgeTextById,
-        viewSize,
-        snapshot,
-        false,
-      )
-      syncAnnotations(
-        createText,
-        annotationTextLayer,
-        annotationHighlightLayer,
-        annotationTextById,
-        annotationHighlightById,
-        snapshot,
-        false,
-      )
-      syncPinnedPlantNameLabels(createText, pinnedPlantNameLabelLayer, pinnedPlantNameLabelById, snapshot, plantNameLabels)
-      syncSelectionLabels(createText, selectionLabelLayer, selectionLabelBySpecies, snapshot)
-      world.position.set(viewport.x, viewport.y)
-      world.scale.set(viewport.scale)
-      requestDraw()
+    setDraft(draft) {
+      draftLayer.setDraft(draft)
     },
   }
 }
 
-function syncMeasurementGuides(
-  createText: () => Text,
-  worldLayer: Container,
-  labelLayer: Container,
-  graphicsById: Map<string, Graphics>,
-  labelById: Map<string, Text>,
-  snapshot: SceneRendererSnapshot,
-  reconcileRemoved: boolean,
-): void {
-  const layer = getSceneLayerStyle(snapshot.scene, 'measurement-guides')
-  worldLayer.visible = layer.visible
-  worldLayer.alpha = layer.opacity
-  labelLayer.visible = layer.visible
-  labelLayer.alpha = layer.opacity
-  if (!layer.visible) return
-
-  const nextIds = new Set<string>()
-  for (const guide of snapshot.scene.measurementGuides) {
-    const presentation = createMeasurementGuidePresentation(guide, snapshot.viewport)
-    if (!presentation) continue
-
-    nextIds.add(guide.id)
-    let graphics = graphicsById.get(guide.id)
-    if (!graphics) {
-      graphics = new Graphics()
-      graphicsById.set(guide.id, graphics)
-      worldLayer.addChild(graphics)
-    }
-    drawMeasurementGuide(
-      graphics,
-      guide,
-      snapshot.selectedMeasurementGuideIds.has(guide.id),
-      hoverStateForTarget(snapshot, 'measurement-guide', guide.id),
-      snapshot.viewport.scale,
-    )
-    graphics.visible = true
-
-    let text = labelById.get(guide.id)
-    if (!text) {
-      text = createText()
-      labelById.set(guide.id, text)
-      labelLayer.addChild(text)
-    }
-    text.text = presentation.text
-    const interactionState = resolveInteractionState(
-      snapshot.selectedMeasurementGuideIds.has(guide.id),
-      false,
-      hoverStateForTarget(snapshot, 'measurement-guide', guide.id),
-    )
-    const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
-    setTextStyle(text, {
-      fontFamily: 'Inter, sans-serif',
-      fontSize: MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX,
-      fill: toPixiColor(interactionVisual?.color ?? getAnnotationTextColor(), 0),
-    })
-    text.position.set(presentation.labelScreenPoint.x, presentation.labelScreenPoint.y)
-    text.rotation = presentation.labelRotationRad
-    text.anchor.set(0.5, 0.5)
-    text.visible = isMeasurementLabelVisible(snapshot, guide.id)
-  }
-
-  for (const [guideId, graphics] of graphicsById) {
-    if (nextIds.has(guideId)) continue
-    if (reconcileRemoved) {
-      graphics.removeFromParent()
-      graphics.destroy()
-      graphicsById.delete(guideId)
-    } else {
-      graphics.visible = false
-    }
-  }
-  for (const [guideId, text] of labelById) {
-    if (nextIds.has(guideId)) continue
-    if (reconcileRemoved) {
-      text.removeFromParent()
-      text.destroy()
-      labelById.delete(guideId)
-    } else {
-      text.visible = false
-    }
-  }
-}
-
-function drawMeasurementGuide(
-  graphics: Graphics,
-  guide: SceneMeasurementGuideEntity,
-  selected: boolean,
-  hoverState: SceneRendererHoverState | null,
-  viewportScale: number,
-): void {
-  const presentation = createMeasurementGuidePresentation(guide, { x: 0, y: 0, scale: viewportScale })
-  if (!presentation) return
-
-  const interactionState = resolveInteractionState(selected, false, hoverState)
-  const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
-  const color = toPixiColor(interactionVisual?.color ?? getAnnotationTextColor(), 0)
-  const strokeWidth = screenPxToWorldPx(interactionVisual?.widthPx ?? .8, viewportScale)
-  const strokeAlpha = (interactionVisual?.alpha ?? .25) * cssColorAlpha(interactionVisual?.color ?? getAnnotationTextColor())
-  if (reuseGeometry(graphics, [guide.start, guide.end, color, strokeWidth, strokeAlpha, viewportScale])) return
-  graphics.clear()
-  drawDashedMeasurementGuideLine(
-    graphics,
-    guide.start,
-    guide.end,
-    screenPxToWorldPx(MEASUREMENT_GUIDE_DASH_PX, viewportScale),
-    screenPxToWorldPx(MEASUREMENT_GUIDE_GAP_PX, viewportScale),
-  )
-  drawMeasurementGuideTick(
-    graphics,
-    guide.start,
-    presentation.normalWorld,
-    screenPxToWorldPx(MEASUREMENT_GUIDE_TICK_HALF_PX, viewportScale),
-  )
-  drawMeasurementGuideTick(
-    graphics,
-    guide.end,
-    presentation.normalWorld,
-    screenPxToWorldPx(MEASUREMENT_GUIDE_TICK_HALF_PX, viewportScale),
-  )
-  graphics.stroke({ color, width: strokeWidth, alpha: strokeAlpha })
-}
-
-function drawDashedMeasurementGuideLine(
-  graphics: Graphics,
-  start: ScenePoint,
-  end: ScenePoint,
-  dashLength: number,
-  gapLength: number,
-): void {
-  const dx = end.x - start.x
-  const dy = end.y - start.y
-  const length = Math.hypot(dx, dy)
-  if (length <= 0) return
-
-  const unit = { x: dx / length, y: dy / length }
-  let cursor = 0
-  while (cursor < length) {
-    const segmentEnd = Math.min(cursor + dashLength, length)
-    if (segmentEnd > cursor) {
-      graphics.moveTo(start.x + unit.x * cursor, start.y + unit.y * cursor)
-        .lineTo(start.x + unit.x * segmentEnd, start.y + unit.y * segmentEnd)
-    }
-    cursor += dashLength + gapLength
-  }
-}
-
-function drawMeasurementGuideTick(
-  graphics: Graphics,
-  point: ScenePoint,
-  normal: ScenePoint,
-  halfLength: number,
-): void {
-  graphics.moveTo(point.x - normal.x * halfLength, point.y - normal.y * halfLength)
-    .lineTo(point.x + normal.x * halfLength, point.y + normal.y * halfLength)
-}
-
-function syncZones(
-  world: Container,
-  zoneGraphicsByName: Map<string, Graphics>,
-  snapshot: SceneRendererSnapshot,
-  reconcileRemoved: boolean,
-): void {
-  const layer = getSceneLayerStyle(snapshot.scene, 'zones')
-  world.visible = layer.visible
-  world.alpha = layer.opacity
-  if (!layer.visible) return
-
-  const nextZoneNames = new Set<string>()
-  for (const zone of snapshot.scene.zones) {
-    nextZoneNames.add(zone.name)
-    const graphics = zoneGraphicsByName.get(zone.name) ?? new Graphics()
-    if (!zoneGraphicsByName.has(zone.name)) {
-      zoneGraphicsByName.set(zone.name, graphics)
-      world.addChild(graphics)
-    }
-    drawZone(
-      graphics,
-      zone,
-      snapshot.selectedZoneIds.has(zone.name),
-      snapshot.highlightedZoneIds.has(zone.name),
-      hoverStateForTarget(snapshot, 'zone', zone.name),
-      snapshot.viewport.scale,
-    )
-    graphics.visible = true
-  }
-
-  if (!reconcileRemoved) return
-  for (const [zoneName, graphics] of zoneGraphicsByName) {
-    if (nextZoneNames.has(zoneName)) continue
-    graphics.removeFromParent()
-    graphics.destroy()
-    zoneGraphicsByName.delete(zoneName)
-  }
-}
-
-function drawZone(
-  graphics: Graphics,
-  zone: SceneZoneEntity,
-  selected: boolean,
-  highlighted: boolean,
-  hoverState: SceneRendererHoverState | null,
-  viewportScale: number,
-): void {
-  const visual = resolveZoneVisual(zone)
-  const fillColor = toPixiColor(visual.fill, 0)
-  const fillAlpha = 0.2 * cssColorAlpha(visual.fill)
-  const interactionState = resolveInteractionState(selected, highlighted, hoverState)
-  const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
-  const strokeColor = toPixiColor(interactionVisual?.color ?? visual.stroke, 0)
-  const strokeWidth = screenPxToWorldPx(
-    interactionVisual?.widthPx ?? ZONE_STROKE_PX,
-    viewportScale,
-  )
-  const strokeAlpha = (interactionVisual?.alpha ?? 1) * cssColorAlpha(interactionVisual?.color ?? visual.stroke)
-
-  if (reuseGeometry(graphics, [zone.zoneType, zone.points, zone.rotationDeg, fillColor, fillAlpha, strokeColor, strokeWidth, strokeAlpha])) return
-  graphics.clear()
-
-  if (zone.zoneType === 'rect' && zone.points.length >= 4) {
-    if (Math.abs(zone.rotationDeg) > 0.000001) {
-      const corners = getRectangularZoneCorners(zone)
-      if (!corners) return
-      drawClosedZonePath(graphics, corners)
-        .fill({ color: fillColor, alpha: fillAlpha })
-        .stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
-      return
-    }
-
-    const start = zone.points[0]!
-    const end = zone.points[2]!
-    graphics.rect(start.x, start.y, end.x - start.x, end.y - start.y)
-      .fill({ color: fillColor, alpha: fillAlpha })
-      .stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
-    return
-  }
-
-  if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
-    if (Math.abs(zone.rotationDeg) > 0.000001) {
-      const polygon = getEllipticalZonePolygon(zone)
-      if (!polygon) return
-      drawClosedZonePath(graphics, polygon)
-        .fill({ color: fillColor, alpha: fillAlpha })
-        .stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
-      return
-    }
-
-    const center = zone.points[0]!
-    const radii = zone.points[1]!
-    graphics.ellipse(center.x, center.y, radii.x, radii.y)
-      .fill({ color: fillColor, alpha: fillAlpha })
-      .stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
-    return
-  }
-
-  if (zone.points.length < 2) return
-
-  const first = zone.points[0]!
-  graphics.moveTo(first.x, first.y)
-  for (let i = 1; i < zone.points.length; i += 1) {
-    const point = zone.points[i]!
-    graphics.lineTo(point.x, point.y)
-  }
-
-  if (zone.zoneType !== 'line') {
-    graphics.closePath().fill({ color: fillColor, alpha: fillAlpha })
-  }
-
-  graphics.stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
-}
-
-function drawClosedZonePath(graphics: Graphics, points: readonly { x: number; y: number }[]): Graphics {
-  const first = points[0]
-  if (!first) return graphics
-  graphics.moveTo(first.x, first.y)
-  for (let index = 1; index < points.length; index += 1) {
-    const point = points[index]!
-    graphics.lineTo(point.x, point.y)
-  }
-  return graphics.closePath()
-}
-
-function syncPlants(
-  createText: () => Text,
-  symbolLayer: Container,
-  overlay: Container,
-  plantGraphicsById: Map<string, Graphics>,
-  emptyPlantGraphicsContext: GraphicsContext,
-  visiblePlantIds: Set<string>,
-  plantGraphicsContexts: PlantGraphicsContextCache,
-  plantStackCounts: PlantStackCountsCache,
-  plantBadgeGraphicsById: Map<string, Graphics>,
-  plantBadgeTextById: Map<string, Text>,
-  viewSize: { width: number; height: number },
-  snapshot: SceneRendererSnapshot,
-  reconcileRemoved: boolean,
-): void {
-  const layer = getSceneLayerStyle(snapshot.scene, 'plants')
-  symbolLayer.visible = layer.visible
-  symbolLayer.alpha = layer.opacity
-  overlay.visible = layer.visible
-  overlay.alpha = layer.opacity
-  if (!layer.visible) return
-
-  // Keep display order stable even when a previously unseen Plant enters the view.
-  const nextIds = new Set<string>()
-  measurePixiSceneWork('plantObjects', () => {
-    for (const plant of snapshot.scene.plants) {
-      nextIds.add(plant.id)
-      let graphic = plantGraphicsById.get(plant.id)
-      if (!graphic) {
-        graphic = new Graphics(emptyPlantGraphicsContext)
-        graphic.visible = false
-        plantGraphicsById.set(plant.id, graphic)
-        symbolLayer.addChild(graphic)
-      }
-    }
-    for (const badge of plantBadgeGraphicsById.values()) badge.visible = false
-    for (const text of plantBadgeTextById.values()) text.visible = false
-  })
-  // Includes the largest symbolic footprint, interaction ring and stack badge.
-  const margin = 32
-  const visiblePlants = measurePixiSceneWork('plantCull', () => snapshot.scene.plants.filter(plant => {
-    if (viewSize.width <= 0 || viewSize.height <= 0) return true
-    const { x, y } = worldToScreen(plant.position, snapshot.viewport)
-    return x >= -margin && y >= -margin && x <= viewSize.width + margin && y <= viewSize.height + margin
-  }))
-  const entries = measurePixiSceneWork('plantEntries', () => buildPlantPresentationEntries(visiblePlants, {
-    plants: snapshot.scene.plants,
-    viewport: snapshot.viewport,
-    speciesCache: snapshot.speciesCache,
-    plantSpeciesSymbols: snapshot.scene.plantSpeciesSymbols,
-    localizedCommonNames: snapshot.localizedCommonNames,
-  }, snapshot.selectedPlantIds))
-  const stackCounts = measurePixiSceneWork('plantLayout', () => plantStackCounts.get(
-    entries, snapshot.selectedPlantIds, snapshot.viewport.scale,
-  ))
-  const nextVisiblePlantIds = new Set(visiblePlants.map((plant) => plant.id))
-  for (const plantId of visiblePlantIds) {
-    if (!nextVisiblePlantIds.has(plantId)) plantGraphicsById.get(plantId)!.visible = false
-  }
-  plantGraphicsContexts.beginGeneration()
-
-  measurePixiSceneWork('plantDraw', () => { for (const entry of entries) {
-    const graphic = plantGraphicsById.get(entry.plant.id)!
-    const hovered = snapshot.hoveredCanonicalName
-    const highlighted = snapshot.highlightedPlantIds.has(entry.plant.id)
-    const hoverState = hoverStateForTarget(snapshot, 'plant', entry.plant.id)
-    const glyphOpacity = speciesFocusOpacity(snapshot.speciesFocus, entry.plant.canonicalName)
-    const { context, created } = plantGraphicsContexts.acquire(plantGeometryKey(entry, hovered, highlighted, hoverState, glyphOpacity))
-    graphic.context = context
-    graphic.position.set(entry.screenPoint.x, entry.screenPoint.y)
-    if (created) drawPlantGeometry(context, entry, hovered, highlighted, hoverState, glyphOpacity)
-    if (!visiblePlantIds.has(entry.plant.id)) graphic.visible = true
-
-    const stackCount = stackCounts.get(entry.plant.id)
-    if (stackCount) {
-      const badge = plantBadgeGraphicsById.get(entry.plant.id) ?? new Graphics()
-      if (!plantBadgeGraphicsById.has(entry.plant.id)) {
-        plantBadgeGraphicsById.set(entry.plant.id, badge)
-        overlay.addChild(badge)
-      }
-      drawStackBadge(badge, entry)
-      badge.visible = true
-
-      const badgeText = plantBadgeTextById.get(entry.plant.id) ?? createText()
-      if (!plantBadgeTextById.has(entry.plant.id)) {
-        plantBadgeTextById.set(entry.plant.id, badgeText)
-        overlay.addChild(badgeText)
-      }
-      drawStackBadgeText(badgeText, entry, stackCount)
-      badgeText.visible = true
-    } else if (reconcileRemoved) {
-      const badge = plantBadgeGraphicsById.get(entry.plant.id)
-      if (badge) {
-        badge.removeFromParent()
-        badge.destroy()
-      }
-      plantBadgeGraphicsById.delete(entry.plant.id)
-      const badgeText = plantBadgeTextById.get(entry.plant.id)
-      if (badgeText) {
-        badgeText.removeFromParent()
-        badgeText.destroy()
-      }
-      plantBadgeTextById.delete(entry.plant.id)
-    } else {
-      const badge = plantBadgeGraphicsById.get(entry.plant.id)
-      if (badge) badge.visible = false
-      const badgeText = plantBadgeTextById.get(entry.plant.id)
-      if (badgeText) badgeText.visible = false
-    }
-  } })
-
-  visiblePlantIds.clear()
-  for (const plantId of nextVisiblePlantIds) visiblePlantIds.add(plantId)
-
-  if (!reconcileRemoved) return
-  for (const [plantId, graphics] of plantGraphicsById) {
-    if (nextIds.has(plantId)) continue
-    graphics.removeFromParent()
-    destroySharedPlantGraphics(graphics)
-    plantGraphicsById.delete(plantId)
-  }
-  for (const [plantId, badge] of plantBadgeGraphicsById) {
-    if (nextIds.has(plantId)) continue
-    badge.removeFromParent()
-    badge.destroy()
-    plantBadgeGraphicsById.delete(plantId)
-  }
-  for (const [plantId, badgeText] of plantBadgeTextById) {
-    if (nextIds.has(plantId)) continue
-    badgeText.removeFromParent()
-    badgeText.destroy()
-    plantBadgeTextById.delete(plantId)
-  }
-}
-
-/** Pixi does not detach a destroyed Graphics from an externally owned context. */
-function destroySharedPlantGraphics(graphics: Graphics): void {
-  // Rebinding uses Pixi's public context setter to detach both listeners from
-  // the shared cache entry. The temporary context is then destroyed with the
-  // Graphics, so neither side retains the other.
-  graphics.context = new GraphicsContext()
-  graphics.destroy({ context: true })
-}
-
-function plantGeometryKey(
-  entry: PlantPresentationEntry,
-  hoveredCanonicalName: string | null,
-  highlighted: boolean,
-  hoverState: SceneRendererHoverState | null,
-  glyphOpacity: number,
-): string {
-  const selected = entry.selected
-  const sameSpeciesHover = Boolean(hoveredCanonicalName && entry.plant.canonicalName === hoveredCanonicalName)
-  const interactionState = resolveInteractionState(selected, highlighted || sameSpeciesHover, hoverState)
-  const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
-  const renderedSymbol = resolveRenderedPlantSymbol(entry)
-  const edgeColor = getPlantSymbolEdgeColor(entry.color)
-  const edgeWidth = getPlantSymbolEdgeWidth(entry.radiusScreenPx * 2)
-  return `${entry.radiusScreenPx}|${renderedSymbol}|${entry.lod}|${entry.color}|${glyphOpacity}|${selected ? 1 : 0}`
-    + `|${interactionState ?? ''}|${interactionVisual?.color ?? ''}|${interactionVisual?.widthPx ?? ''}`
-    + `|${interactionVisual?.alpha ?? ''}|${edgeColor}|${edgeWidth}`
-}
-
-function drawPlantGeometry(
-  graphics: GraphicsContext,
-  entry: PlantPresentationEntry,
-  hoveredCanonicalName: string | null,
-  highlighted: boolean,
-  hoverState: SceneRendererHoverState | null,
-  glyphOpacity: number,
-): void {
-  const color = toPixiColor(entry.color, 0)
-  const selected = entry.selected
-  const sameSpeciesHover = Boolean(hoveredCanonicalName && entry.plant.canonicalName === hoveredCanonicalName)
-  const interactionState = resolveInteractionState(selected, highlighted || sameSpeciesHover, hoverState)
-  const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
-  const x = 0
-  const y = 0
-  const r = entry.radiusScreenPx
-  const renderedSymbol = resolveRenderedPlantSymbol(entry)
-  const selectedStrokeColor = toPixiColor(interactionVisual?.color ?? entry.color, color)
-  drawPlantSymbolGlyph(graphics, renderedSymbol, { ...entry, screenPoint: { x, y } }, glyphOpacity)
-
-  if (selected) {
-    graphics.circle(x, y, r)
-      .stroke({
-        color: selectedStrokeColor,
-        width: interactionVisual?.widthPx ?? PLANT_STROKE_PX,
-        alpha: cssColorAlpha(interactionVisual?.color ?? entry.color),
+/**
+ * The scene's own drawing code, lent to the draft layer so a placement ghost
+ * looks like the object a click would create: zones in world units, plant
+ * marks and note text at the local origin in CSS px. Plants are presented
+ * with the last scene snapshot's plant context.
+ */
+export function createDraftScenePainters(getSnapshot: () => SceneRendererSnapshot | null): DraftScenePainters {
+  return {
+    drawZoneGhost(graphics, zone, scale) {
+      // The ghost: the zone's fill at a fifth and its stroke, with round ends and no casing; the stroke is traced at
+      // the band's centre scale, as the zone it places is.
+      const visual = resolveZoneVisual(zone)
+      if (!traceZonePath(graphics, zone)) return false
+      if (zone.zoneType !== 'line') graphics.fill({ color: toPixiColor(visual.fill), alpha: 0.2 * cssColorAlpha(visual.fill) })
+      graphics.stroke({
+        ...pixiPaint(visual.stroke),
+        width: screenPxToWorldPx(ZONE_STROKE_PX, bandCentreScale(zoomBandOf(scale))),
+        cap: 'round',
+        join: 'round',
       })
+      return true
+    },
+    drawPlantGhost(graphics, plant, mark, scale, sizeFrom) {
+      const snapshot = getSnapshot()
+      if (!snapshot) return false
+      // A dot's radius is the presentation at sizeFrom (Plant a row: the source plant's), so the whole row has one size.
+      const presented = mark === 'dot' && sizeFrom ? { ...plant, position: sizeFrom } : plant
+      const [entry] = buildPlantPresentationEntries([presented], {
+        plants: snapshot.scene.plants,
+        pixelsPerMetre: scale,
+        speciesCache: snapshot.speciesCache,
+        plantSpeciesSymbols: snapshot.scene.plantSpeciesSymbols,
+      }, new Set())
+      if (!entry) return false
+      // Plant a row's look: a disc in the display colour, its 2 px border the same colour, so never under 2 px in radius.
+      if (mark === 'dot') graphics.circle(0, 0, Math.max(entry.radiusScreenPx, DOT_GHOST_MIN_RADIUS_PX)).fill({ color: toPixiColor(entry.color) })
+      else drawPlantGlyph(graphics.context, entry)
+      return true
+    },
+    drawNoteGhost(text, marker, annotation, scale) {
+      if (annotation.annotationType !== 'text') return null
+      const { textFrame, textOpacity, markerOpacity, markerPaths, markerStrokePx } =
+        getAnnotationPresentation(annotation, scale)
+      styleAnnotationText(text, annotation, textFrame.lineHeightPx)
+      // The note's own angle; the draft layer turns it with the map.
+      text.rotation = noteTextRotation(annotation, 0)
+      // The ghost marker has no halo.
+      traceAnnotationMarker(marker.context, markerPaths)
+      marker.stroke({ color: toPixiColor(getMapTextColor()), width: markerStrokePx })
+      return { textOpacity, markerOpacity }
+    },
   }
-  if (interactionState && !selected) {
-    const ringVisual = getCanvasInteractionStrokeVisual(interactionState)
-    graphics.circle(x, y, r * 1.4)
-      .stroke({
-        color: toPixiColor(ringVisual.color, 0),
-        width: ringVisual.widthPx,
-        alpha: ringVisual.alpha * cssColorAlpha(ringVisual.color),
-      })
-  }
-}
-
-function resolveRenderedPlantSymbol(entry: PlantPresentationEntry): PlantSymbolId {
-  return entry.lod === 'dot' || entry.usesCanopyRadius ? 'round' : entry.symbol
-}
-
-function drawPlantSymbolGlyph(graphics: GraphicsContext, symbol: PlantSymbolId, entry: PlantPresentationEntry, opacity: number): void {
-  const { x, y } = entry.screenPoint
-  const r = entry.radiusScreenPx
-  const color = toPixiColor(entry.color, 0)
-  if (entry.lod === 'dot' || symbol === 'round') {
-    graphics.circle(x, y, entry.lod === 'dot' ? r : r * ROUND_PLANT_SYMBOL_RADIUS).fill({ color, alpha: opacity })
-    if (entry.lod !== 'dot') graphics.stroke({ color: toPixiColor(getPlantSymbolEdgeColor(entry.color), 0), width: getPlantSymbolEdgeWidth(r * 2), alpha: opacity })
-    return
-  }
-  const edge = toPixiColor(getPlantSymbolEdgeColor(entry.color), 0)
-  const width = getPlantSymbolEdgeWidth(r * 2)
-  for (const shape of getPlantSymbolShapes(symbol, r * 2)) {
-    tracePlantSymbolContour(graphics, shape.outline, x, y, r)
-    graphics.stroke({ color: edge, width, alpha: opacity, join: 'round', cap: 'round' }).fill({ color, alpha: opacity })
-    for (const hole of shape.holes ?? []) {
-      tracePlantSymbolContour(graphics, hole, x, y, r)
-      graphics.cut()
-    }
-  }
-}
-
-function screenPxToWorldPx(px: number, viewportScale: number): number {
-  return px / Math.max(viewportScale, 0.001)
-}
-
-function drawStackBadge(
-  badge: Graphics,
-  entry: ReturnType<typeof buildPlantPresentationEntries>[number],
-): void {
-  const offset = getStackBadgeOffsetPx(entry.radiusScreenPx)
-  badge.clear()
-  badge.circle(
-    entry.screenPoint.x + offset.x,
-    entry.screenPoint.y + offset.y,
-    STACK_BADGE_RADIUS_PX,
-  ).fill({ color: toPixiColor(getStackBadgeBackgroundColor(), 0), alpha: 1 })
-}
-
-function drawStackBadgeText(
-  badgeText: Text,
-  entry: ReturnType<typeof buildPlantPresentationEntries>[number],
-  stackCount: number,
-): void {
-  const offset = getStackBadgeOffsetPx(entry.radiusScreenPx)
-  badgeText.text = String(stackCount)
-  setTextStyle(badgeText, {
-    fontFamily: 'Inter, sans-serif',
-    fontSize: 9,
-    fill: toPixiColor(getStackBadgeTextColor(), 0),
-  })
-  badgeText.position.set(
-    entry.screenPoint.x + offset.x,
-    entry.screenPoint.y + offset.y,
-  )
-  badgeText.anchor.set(0.5, 0.5)
-}
-
-function syncAnnotations(
-  createText: () => Text,
-  textLayer: Container,
-  highlightLayer: Container,
-  annotationTextById: Map<string, Text>,
-  annotationHighlightById: Map<string, Graphics>,
-  snapshot: SceneRendererSnapshot,
-  reconcileRemoved: boolean,
-): void {
-  const layer = getSceneLayerStyle(snapshot.scene, 'annotations')
-  textLayer.visible = layer.visible
-  textLayer.alpha = layer.opacity
-  highlightLayer.visible = layer.visible
-  highlightLayer.alpha = layer.opacity
-  if (!layer.visible) return
-
-  const nextIds = new Set<string>()
-  for (const annotation of snapshot.scene.annotations) {
-    if (annotation.annotationType !== 'text') continue
-    nextIds.add(annotation.id)
-    const text = annotationTextById.get(annotation.id) ?? createText()
-    if (!annotationTextById.has(annotation.id)) {
-      annotationTextById.set(annotation.id, text)
-      textLayer.addChild(text)
-    }
-    const revealText = annotation.id === snapshot.revealedAnnotationId
-      || (snapshot.hoverTarget?.kind === 'annotation' && snapshot.hoverTarget.id === annotation.id)
-    const textAllowed = getCanvasDetailLayout(snapshot.scene, snapshot.viewport.scale).annotationIds.has(annotation.id)
-    const { textOpacity, markerOpacity } = getAnnotationPresentation(annotation, snapshot.viewport, revealText, textAllowed)
-    drawAnnotationText(text, annotation, snapshot.viewport)
-    text.alpha = textOpacity
-    text.visible = textOpacity > 0
-
-    const selected = snapshot.selectedAnnotationIds.has(annotation.id)
-    const interactionState = resolveInteractionState(
-      selected,
-      false,
-      hoverStateForTarget(snapshot, 'annotation', annotation.id),
-    )
-    const highlight = annotationHighlightById.get(annotation.id)
-    if (interactionState || markerOpacity > 0) {
-      const nextHighlight = highlight ?? new Graphics()
-      if (!annotationHighlightById.has(annotation.id)) {
-        annotationHighlightById.set(annotation.id, nextHighlight)
-        highlightLayer.addChild(nextHighlight)
-      }
-      drawAnnotationDecoration(nextHighlight, annotation, snapshot.viewport, interactionState, revealText, textAllowed)
-      nextHighlight.visible = true
-    } else if (reconcileRemoved) {
-      if (highlight) {
-        highlight.removeFromParent()
-        highlight.destroy()
-      }
-      annotationHighlightById.delete(annotation.id)
-    } else if (highlight) {
-      highlight.visible = false
-    }
-  }
-
-  if (!reconcileRemoved) return
-  for (const [annotationId, text] of annotationTextById) {
-    if (nextIds.has(annotationId)) continue
-    text.removeFromParent()
-    text.destroy()
-    annotationTextById.delete(annotationId)
-  }
-  for (const [annotationId, highlight] of annotationHighlightById) {
-    if (nextIds.has(annotationId)) continue
-    highlight.removeFromParent()
-    highlight.destroy()
-    annotationHighlightById.delete(annotationId)
-  }
-}
-
-function drawAnnotationText(
-  text: Text,
-  annotation: SceneAnnotationEntity,
-  viewport: SceneRendererSnapshot['viewport'],
-): void {
-  text.text = annotation.text
-  setTextStyle(text, {
-    fontFamily: 'Inter, sans-serif',
-    fontSize: annotation.fontSize,
-    lineHeight: getAnnotationPresentation(annotation, viewport).textFrame.lineHeightPx,
-    fill: getAnnotationTextColor(),
-  })
-  const origin = worldToScreen(annotation.position, viewport)
-  text.position.set(origin.x, origin.y)
-  text.rotation = ((annotation.rotationDeg ?? 0) * Math.PI) / 180
-  text.anchor.set(0, 0)
-}
-
-function drawAnnotationDecoration(
-  graphics: Graphics,
-  annotation: SceneAnnotationEntity,
-  viewport: SceneRendererSnapshot['viewport'],
-  state: CanvasInteractionVisualState | null,
-  revealText: boolean,
-  textAllowed: boolean,
-): void {
-  const { markerOpacity, markerPaths, markerStrokePx } = getAnnotationPresentation(annotation, viewport, revealText, textAllowed)
-  const origin = worldToScreen(annotation.position, viewport)
-  graphics.clear()
-  if (markerOpacity > 0) {
-    for (const path of markerPaths) {
-      path.forEach((point, index) => {
-        const x = origin.x + point.x
-        const y = origin.y + point.y
-        if (index === 0) graphics.moveTo(x, y)
-        else graphics.lineTo(x, y)
-      })
-    }
-    graphics.stroke({ color: toPixiColor(getAnnotationTextColor(), 0),
-      width: markerStrokePx, alpha: markerOpacity })
-  }
-  if (state) {
-    const corners = getAnnotationVisualWorldCorners(annotation, viewport.scale, revealText, { x: 4, y: 2 }, textAllowed)
-      .map((point) => worldToScreen(point, viewport))
-    const visual = getCanvasInteractionStrokeVisual(state)
-    drawClosedZonePath(graphics, corners).stroke({
-      color: toPixiColor(visual.color, 0),
-      width: visual.widthPx,
-      alpha: visual.alpha * cssColorAlpha(visual.color),
-    })
-  }
-}
-
-function syncSelectionLabels(
-  createText: () => Text,
-  layer: Container,
-  labelBySpecies: Map<string, Text>,
-  snapshot: SceneRendererSnapshot,
-): void {
-  const nextSpecies = new Set(snapshot.selectionLabels.map((l) => l.canonicalName))
-
-  for (const label of snapshot.selectionLabels) {
-    let text = labelBySpecies.get(label.canonicalName)
-    if (!text) {
-      text = createText()
-      labelBySpecies.set(label.canonicalName, text)
-      layer.addChild(text)
-    }
-    text.text = label.text
-    setTextStyle(text, {
-      fontFamily: 'Inter, sans-serif',
-      fontSize: 12,
-      fontWeight: '600',
-      fontStyle: label.fontStyle,
-      fill: toPixiColor(getPlantLabelColor(), 0),
-    })
-    text.position.set(label.screenPoint.x, label.screenPoint.y)
-    text.anchor.set(0.5, 0)
-    text.visible = true
-  }
-
-  for (const [species, text] of labelBySpecies) {
-    if (nextSpecies.has(species)) continue
-    text.removeFromParent()
-    text.destroy()
-    labelBySpecies.delete(species)
-  }
-}
-
-function syncPinnedPlantNameLabels(
-  createText: () => Text,
-  layer: Container,
-  labelByPlantId: Map<string, Text>,
-  snapshot: SceneRendererSnapshot,
-  labels: readonly PlantNameLabel[],
-): void {
-  const plantLayer = getSceneLayerStyle(snapshot.scene, 'plants')
-  layer.visible = plantLayer.visible
-  layer.alpha = plantLayer.opacity
-  const nextPlantIds = new Set(labels.map((label) => label.plantId))
-
-  if (plantLayer.visible) {
-    for (const label of labels) {
-      let text = labelByPlantId.get(label.plantId)
-      if (!text) {
-        text = createText()
-        labelByPlantId.set(label.plantId, text)
-        layer.addChild(text)
-      }
-      text.text = label.text
-      setTextStyle(text, {
-        fontFamily: 'Inter, sans-serif',
-        fontSize: 12,
-        fontWeight: '600',
-        fontStyle: label.fontStyle,
-        fill: toPixiColor(getPlantLabelColor(), 0),
-      })
-      text.position.set(label.screenPoint.x, label.screenPoint.y)
-      text.anchor.set(0.5, 0)
-      text.alpha = label.opacity
-      text.visible = true
-    }
-  }
-
-  for (const [plantId, text] of labelByPlantId) {
-    if (plantLayer.visible && nextPlantIds.has(plantId)) continue
-    text.removeFromParent()
-    text.destroy()
-    labelByPlantId.delete(plantId)
-  }
-}
-
-function cssColorAlpha(color: string): number {
-  const channels = color.match(/^rgba\(([^)]+)\)$/i)?.[1]?.split(',')
-  return channels?.length === 4 ? Number.parseFloat(channels[3]!) : 1
-}
-
-function toPixiColor(color: string | null | undefined, fallback: string | number): number {
-  const value = typeof fallback === 'number'
-    ? fallback
-    : Number.parseInt(String(fallback).replace('#', ''), 16)
-
-  if (!color) return value
-
-  const rgba = color.match(/rgba?\(([^)]+)\)/i)
-  if (rgba) {
-    const channels = rgba[1]!
-      .split(',')
-      .slice(0, 3)
-      .map((channel) => Number.parseFloat(channel.trim()))
-    if (channels.length === 3 && channels.every((channel) => Number.isFinite(channel))) {
-      const [r, g, b] = channels.map((channel) => Math.max(0, Math.min(255, Math.round(channel)))) as [number, number, number]
-      return (r << 16) + (g << 8) + b
-    }
-  }
-
-  const normalized = color.replace('#', '')
-  const parsed = Number.parseInt(normalized, 16)
-  return Number.isFinite(parsed) ? parsed : value
-}
-
-function resolveInteractionState(
-  selected: boolean,
-  highlighted: boolean,
-  hoverState: SceneRendererHoverState | null,
-): CanvasInteractionVisualState | null {
-  if (selected) return 'selected'
-  if (hoverState) return hoverState
-  return highlighted ? 'hover' : null
-}
-
-function hoverStateForTarget(
-  snapshot: SceneRendererSnapshot,
-  kind: 'plant' | 'zone' | 'annotation' | 'measurement-guide',
-  id: string,
-): SceneRendererHoverState | null {
-  const hoverTarget = snapshot.hoverTarget
-  if (!hoverTarget) return null
-  if (hoverTarget.kind === kind && hoverTarget.id === id) return hoverTarget.state
-  if (kind === 'measurement-guide') return null
-  if (hoverTarget.kind !== 'group') return null
-  const group = snapshot.scene.groups.find((entry) => entry.id === hoverTarget.id)
-  return group?.members.some((member) => isSceneObjectGroupMemberTarget(member, { kind, id }))
-    ? hoverTarget.state
-    : null
-}
-
-const textStyleKeys = new WeakMap<Text, string>()
-
-function setTextStyle(text: Text, options: TextStyleOptions): void {
-  const key = JSON.stringify(options)
-  if (textStyleKeys.get(text) === key) return
-  text.style = new TextStyle(options)
-  textStyleKeys.set(text, key)
-}
-
-function reuseGeometry(graphics: Graphics, appearance: readonly unknown[]): boolean {
-  const key = JSON.stringify(appearance)
-  if (graphicsKeys.get(graphics) === key) return true
-  graphicsKeys.set(graphics, key)
-  return false
 }

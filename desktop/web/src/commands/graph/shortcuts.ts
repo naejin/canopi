@@ -1,156 +1,53 @@
-import { activePanel } from '../../app/shell/state'
 import {
-  canvasHistoryCommandIdForShortcut,
-  canvasToolCommandIdForShortcut,
-  type CanvasCommandShortcutInput,
+  canvasCommandDefinitions,
+  type CanvasCommandDefinition,
+  type CanvasCommandId,
 } from '../../app/canvas-commands'
-import { matchShellCommandShortcut } from '../../app/shell-commands'
-import { getCurrentCanvasCommandSurface } from '../../canvas/session'
-import { isEditableTarget } from '../../canvas/runtime/interaction/pointer-utils'
-import { COMMAND_PALETTE_SHORTCUT_KEY } from '../../shortcuts/definitions'
+import {
+  CANVAS_KEYMAP_ROWS,
+  shellKeymapRows,
+  type CommandSink,
+  type KeymapRow,
+} from '../../app/keyboard/keymap'
+import { closeCommandPalette, commandPaletteOpen } from '../../app/shell/dialogs'
+import { dispatchWorkspaceCanvasIntent } from '../../app/workspace-commands/canvas-actions'
 import {
   DESKTOP_SHELL_COMMAND_CATALOG,
   runCatalogCommand,
   type AppCommandId,
 } from './catalog'
 
-interface AppCommandShortcutMatch {
-  readonly commandId: AppCommandId
-  readonly preventDefault: boolean
-}
+/** The Desktop keymap: its shell catalogue's rows, then both editions' canvas rows (spec §1.6). */
+export const DESKTOP_KEYMAP: readonly KeymapRow[] = [
+  ...shellKeymapRows(DESKTOP_SHELL_COMMAND_CATALOG),
+  ...CANVAS_KEYMAP_ROWS,
+]
 
-export function isCommandPaletteToggleEvent(event: KeyboardEvent): boolean {
-  return (event.ctrlKey || event.metaKey)
-    && event.shiftKey
-    && event.key.toUpperCase() === COMMAND_PALETTE_SHORTCUT_KEY
-}
+const canvasDefinitionById = new Map<CanvasCommandId, CanvasCommandDefinition>(
+  canvasCommandDefinitions.map((definition) => [definition.commandId, definition]),
+)
 
-export function isCommandPaletteEscapeEvent(event: KeyboardEvent): boolean {
-  return event.key === 'Escape'
-}
-
-export function runAppCommandShortcutForEvent(event: KeyboardEvent): boolean {
-  const match = matchAppCommandShortcut(event)
-  if (!match) return false
-  if (match.preventDefault) event.preventDefault()
-  runCatalogCommand(match.commandId)
-  return true
-}
-
-export function matchAppCommandShortcut(event: KeyboardEvent): AppCommandShortcutMatch | null {
-  return shortcutMatchForEvent(event, isEditableTarget(event.target))
-}
-
-function shortcutMatchForEvent(event: KeyboardEvent, editable: boolean): AppCommandShortcutMatch | null {
-  const shellCommand = matchShellCommandShortcut(
-    DESKTOP_SHELL_COMMAND_CATALOG,
-    shortcutInput(event),
-  )
-  if (shellCommand?.family === 'navigation') {
-    return {
-      commandId: shellCommand.id,
-      preventDefault: true,
-    }
-  }
-
-  if (!editable && !event.ctrlKey && !event.metaKey && !event.altKey) {
-    const bareNavigationCommand = matchShellCommandShortcut(
-      DESKTOP_SHELL_COMMAND_CATALOG,
-      { ...shortcutInput(event), ctrlKey: true, shiftKey: false },
-    )
-    if (bareNavigationCommand?.family === 'navigation') {
-      return {
-        commandId: bareNavigationCommand.id,
-        preventDefault: false,
-      }
-    }
-  }
-
-  const canvasToolCommandId = canvasToolCommandIdForShortcut(shortcutInput(event))
-  if (
-    !editable
-    && !event.ctrlKey
-    && !event.metaKey
-    && !event.altKey
-    && activePanel.value === 'canvas'
-    && canvasToolCommandId
-  ) {
-    return {
-      commandId: canvasToolCommandId,
-      preventDefault: true,
-    }
-  }
-
-  if (activePanel.value === 'canvas') {
-    if (shellCommand?.family === 'file') {
-      return {
-        commandId: shellCommand.id,
-        preventDefault: true,
-      }
-    }
-  }
-
-  if (activePanel.value !== 'canvas' || editable || !getCurrentCanvasCommandSurface()) {
-    return null
-  }
-
-  return canvasShortcutCommand(event)
-}
-
-function canvasShortcutCommand(event: KeyboardEvent): AppCommandShortcutMatch | null {
-  const key = event.key
-  const historyCommandId = canvasHistoryCommandIdForShortcut(shortcutInput(event))
-  if (historyCommandId) {
-    return { commandId: historyCommandId, preventDefault: true }
-  }
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key === '=') {
-    return { commandId: 'view.zoomIn', preventDefault: true }
-  }
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key === '-') {
-    return { commandId: 'view.zoomOut', preventDefault: true }
-  }
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key === '0') {
-    return { commandId: 'view.fitToContent', preventDefault: true }
-  }
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key.toLowerCase() === 'c') {
-    return { commandId: 'canvas.copy', preventDefault: true }
-  }
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key.toLowerCase() === 'v') {
-    return { commandId: 'canvas.paste', preventDefault: true }
-  }
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key.toLowerCase() === 'd') {
-    return { commandId: 'canvas.duplicateSelected', preventDefault: true }
-  }
-  if (key === 'Delete' || key === 'Backspace') {
-    return { commandId: 'canvas.deleteSelected', preventDefault: true }
-  }
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key.toLowerCase() === 'a') {
-    return { commandId: 'canvas.selectAll', preventDefault: true }
-  }
-  if (!event.ctrlKey && !event.metaKey && key === ']') {
-    return { commandId: 'canvas.bringToFront', preventDefault: false }
-  }
-  if (!event.ctrlKey && !event.metaKey && key === '[') {
-    return { commandId: 'canvas.sendToBack', preventDefault: false }
-  }
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key.toLowerCase() === 'l') {
-    return { commandId: 'canvas.lockOrUnlockSelected', preventDefault: true }
-  }
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key.toLowerCase() === 'g') {
-    return { commandId: 'canvas.groupSelected', preventDefault: true }
-  }
-  if ((event.ctrlKey || event.metaKey) && event.shiftKey && key.toLowerCase() === 'g') {
-    return { commandId: 'canvas.ungroupSelected', preventDefault: true }
-  }
-  return null
-}
-
-function shortcutInput(event: KeyboardEvent): CanvasCommandShortcutInput {
+/**
+ * Where a Desktop keymap row runs. A shell shortcut takes its key even when its command is disabled; a canvas command
+ * runs through the same dispatch as the Web sink, so a disabled one (Copy with nothing selected, any command but a tool
+ * key before the canvas mounts) leaves its key to the page. The palette's own key is the one row that runs in a modal:
+ * it closes the open palette and opens none over another dialog.
+ */
+export function createDesktopCommandSink(isModalOpen: () => boolean): CommandSink {
   return {
-    key: event.key,
-    ctrlKey: event.ctrlKey,
-    metaKey: event.metaKey,
-    shiftKey: event.shiftKey,
-    altKey: event.altKey,
+    run(command) {
+      if (command === 'help.commandPalette') {
+        if (commandPaletteOpen.peek()) {
+          closeCommandPalette()
+          return true
+        }
+        if (isModalOpen()) return false
+      }
+      const canvas = canvasDefinitionById.get(command as CanvasCommandId)
+      if (canvas) return dispatchWorkspaceCanvasIntent(canvas.intent, 'shortcut')
+      // The Desktop keymap names only Desktop commands: its own catalogue's and the canvas rows'.
+      runCatalogCommand(command as AppCommandId, 'shortcut')
+      return true
+    },
   }
 }

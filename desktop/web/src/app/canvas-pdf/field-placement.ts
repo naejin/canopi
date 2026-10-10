@@ -1,7 +1,7 @@
 import type { PrintBounds as Bounds, PrintPoint as Point } from '../../canvas/print'
 import type { PdfTextEngine, TextLine } from './text'
 import { MM } from './print-style'
-import { PaperIndex, contains, crossing, distance, edge, fits, hits, inflate, overlaps, segmentBounds, type Segment } from './field-geometry'
+import { PaperIndex, contains, crossing, distance, distanceToSegment, edge, fits, hits, inflate, overlaps, segmentBounds, type Segment } from './field-geometry'
 
 export interface FieldLabel {
   opacity?: number
@@ -32,6 +32,8 @@ export class FieldSpace {
   private rectangles = new PaperIndex<Bounds>()
   private paths = new PaperIndex<Segment>()
   private crossingPaths = new Set<Segment>()
+  /** Each guide code placed `beside` its guide: its centre and its distance to that guide (Q16). */
+  private besideCodes: { centre: Point; reach: number }[] = []
   constructor(readonly frame: Bounds, readonly text: PdfTextEngine) {}
 
   reserve(bounds: Bounds): void { this.rectangles.add(bounds, bounds) }
@@ -111,5 +113,35 @@ export class FieldSpace {
     }
     return best
   }
-  admit(label: FieldLabel): void { this.labels.push(label); this.reserve(label.bounds); this.addSegments(label.route, true) }
+  /**
+   * A box beside segment `s` (the `fieldDimensions` frame): offset along its normal, positioned along it, its near edge
+   * at most 2.5 mm from the segment whatever its width, and its centre nearer `s` than any of the `others` (the page's
+   * other guides), so it never names the next guide; null when no spot is clear, so the caller keeps the code in the key.
+   */
+  beside(measured: FieldMeasure, s: Segment, others: readonly Segment[]): Bounds | null {
+    const length = distance(s.a, s.b)
+    if (length < 1e-8) return null
+    const u = { x: (s.b.x - s.a.x) / length, y: (s.b.y - s.a.y) / length }, n = { x: -u.y, y: u.x }
+    const across = (Math.abs(n.x) * measured.width + Math.abs(n.y) * measured.height) / 2
+    for (const gap of [.8, 1.5, 2.5]) for (const side of [-1, 1]) for (const t of [.5, .4, .6, .3, .7, .2, .8, .1, .9, 0, 1]) {
+      const offset = side * (across + gap)
+      const centre = { x: s.a.x + u.x * t * length + n.x * offset, y: s.a.y + u.y * t * length + n.y * offset }
+      const bounds = { x: centre.x - measured.width / 2, y: centre.y - measured.height / 2, width: measured.width, height: measured.height }
+      const own = distanceToSegment(centre, s)
+      if (this.clear(bounds) && others.every(o => own < distanceToSegment(centre, o))) return bounds
+    }
+    return null
+  }
+  /** `guide`: the label is a code placed `beside` that guide, which later ink must not come nearer (`keepsCodesBeside`). */
+  admit(label: FieldLabel, guide?: Segment): void {
+    this.labels.push(label); this.reserve(label.bounds); this.addSegments(label.route, true)
+    if (!guide) return
+    const centre = { x: label.bounds.x + label.bounds.width / 2, y: label.bounds.y + label.bounds.height / 2 }
+    this.besideCodes.push({ centre, reach: distanceToSegment(centre, guide) })
+  }
+  /** Whether ink drawn after the guide codes leaves each code nearer its own guide than `segments`, so a dimension
+   *  placed later never takes a code's reading (Q16). */
+  keepsCodesBeside(segments: readonly Segment[]): boolean {
+    return this.besideCodes.every(code => segments.every(s => distanceToSegment(code.centre, s) > code.reach))
+  }
 }

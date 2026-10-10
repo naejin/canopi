@@ -1,5 +1,8 @@
+import { useState } from 'preact/hooks'
 import { t } from '../i18n'
-import styles from '../components/shared/WelcomeScreen.module.css'
+import { openKeyboardShortcutsDialog, openSettingsDialog } from '../app/shell/dialogs'
+import { formatShortcut } from '../app/shell-commands/shortcut-text'
+import { StartScreen } from '../components/shared/StartScreen'
 import {
   browserDesignSessionController,
   type BrowserDesignSessionController,
@@ -9,47 +12,34 @@ interface WebWelcomeScreenProps {
   readonly controller?: BrowserDesignSessionController
 }
 
+/** Web start screen: Designs live as Drafts in this browser; files come and go as downloads. */
 export function WebWelcomeScreen({
   controller = browserDesignSessionController,
 }: WebWelcomeScreenProps) {
+  const [drafts, setDrafts] = useState(() => controller.listDrafts())
   return (
-    <div
-      className={styles.welcome}
-      role="region"
-      aria-label={t('canvas.emptyWelcome')}
-      data-testid="web-welcome-screen"
-    >
-      <div className={styles.hero}>
-        <img
-          src={new URL('../assets/canopi-logo.svg', import.meta.url).href}
-          className={styles.logo}
-          alt="Canopi"
-          draggable={false}
-        />
-
-        <div className={styles.actions}>
-          <button
-            className={styles.primaryBtn}
-            type="button"
-            onClick={() => { void controller.newDesign().catch(logWebWelcomeError) }}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-            {t('canvas.emptyNewDesign')}
-          </button>
-          <button
-            className={styles.secondaryBtn}
-            type="button"
-            onClick={() => { void controller.openCanopi().catch(logWebWelcomeError) }}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M2 13h12M2 4h5l2 2h5v6H2V4z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            {t('canvas.emptyOpenDesign')}
-          </button>
-        </div>
-      </div>
+    <div data-testid="web-welcome-screen">
+      <StartScreen
+        newDesign={{ label: t('menu.file.new'), run: () => { void controller.newDesign().catch(logWebWelcomeError) } }}
+        openDesign={{ label: t('webShell.openCanopi'), shortcut: formatShortcut('Ctrl+O', t), run: () => { void controller.openCanopi().catch(logWebWelcomeError) } }}
+        links={[
+          { icon: 'gear', label: t('menu.file.settings'), run: openSettingsDialog },
+          { icon: 'keyboard', label: t('menu.help.shortcuts'), run: openKeyboardShortcutsDialog },
+        ]}
+        footer={t('start.footerWeb')}
+        recent={null}
+        drafts={drafts.map((draft) => ({
+          id: draft.id,
+          name: draft.name,
+          updatedAt: draft.updatedAt,
+          open: () => { void controller.openDraft(draft.id).catch(logWebWelcomeError) },
+          delete: () => {
+            const deleted = controller.deleteDraft(draft.id)
+            if (!deleted.ok) logWebWelcomeError(deleted.error)
+            setDrafts(controller.listDrafts())
+          },
+        }))}
+      />
     </div>
   )
 }

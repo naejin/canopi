@@ -7,21 +7,23 @@ import {
 import type { CanvasRuntimeSurfaces } from '../canvas/runtime/runtime'
 import {
   abortFailedAttachedDesignSessionStart,
-  autosaveDesignSession,
   consumeQueuedDocumentLoad,
   startAttachedDesignSession,
   teardownAttachedDesignSession,
 } from '../app/document-session/transition'
-import { setCanvasRuntimeSurfaces } from '../canvas/session'
+import { setCurrentCanvasSession } from '../canvas/session'
 import { flushSettingsProjection } from '../app/settings/projection'
 import type {
   WorkspaceRuntimeComposition,
   WorkspaceRuntimeStartOutcome,
 } from '../app/canvas-map-surface/workspace-runtime-composition'
+import {
+  UNAVAILABLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+  type MapLibreCanvasSurfaceState,
+} from '../maplibre/canvas-surface-state'
 
 vi.mock('../app/document-session/transition', () => ({
   abortFailedAttachedDesignSessionStart: vi.fn(),
-  autosaveDesignSession: vi.fn(async () => undefined),
   consumeQueuedDocumentLoad: vi.fn(() => () => {}),
   startAttachedDesignSession: vi.fn(async () => null),
   teardownAttachedDesignSession: vi.fn(),
@@ -51,6 +53,7 @@ function composition(
   return {
     surfaces,
     start,
+    retryMap: () => undefined,
     dispose,
   }
 }
@@ -58,10 +61,9 @@ function composition(
 describe('document session lifecycle', () => {
   let canvasArea: HTMLDivElement
   let container: HTMLDivElement
-  let rulerOverlay: HTMLDivElement
 
   beforeEach(() => {
-    setCanvasRuntimeSurfaces(null)
+    setCurrentCanvasSession(null)
     vi.mocked(flushSettingsProjection).mockReset()
     vi.mocked(flushSettingsProjection).mockResolvedValue(undefined)
     vi.mocked(abortFailedAttachedDesignSessionStart).mockReset()
@@ -72,36 +74,28 @@ describe('document session lifecycle', () => {
     vi.mocked(consumeQueuedDocumentLoad).mockImplementation(() => () => {})
     canvasArea = document.createElement('div')
     container = document.createElement('div')
-    rulerOverlay = document.createElement('div')
   })
 
-  it.each<WorkspaceRuntimeStartOutcome>(['shared-ready', 'fallback-ready', 'no-design'])(
+  it.each<WorkspaceRuntimeStartOutcome>(['shared-ready', 'map-unavailable', 'no-design'])(
     'publishes Canvas Runtime Surfaces after the workspace reports %s',
     async (outcome) => {
-      const initializeViewport = vi.fn<() => void>()
-      const attachRulersTo = vi.fn<(element: HTMLElement) => void>()
-      const documents = createTestCanvasDocumentSurface({
-        initializeViewport,
-        attachRulersTo,
-      })
-      const surfaces = createTestCanvasRuntimeSurfaces({ documents })
+      const surfaces = createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface() })
       const start = vi.fn(async () => outcome)
       const dispose = vi.fn(async () => undefined)
       const createRuntimeComposition = vi.fn(() => composition(surfaces, start, dispose))
       const observe = vi.fn<(target: Element) => void>()
       const createResizeObserver = vi.fn(() => ({ observe, disconnect: vi.fn() }))
       const publishSurfaces = vi.fn<(surfaces: CanvasRuntimeSurfaces | null) => void>(
-        setCanvasRuntimeSurfaces,
+        setCurrentCanvasSession,
       )
       const logError = vi.fn<(message?: unknown, ...optionalParams: unknown[]) => void>()
 
       const lifecycle = createDesignSessionLifecycle(
-        { canvasArea, container, rulerOverlay },
+        { canvasArea, container },
         {
           createRuntimeComposition,
           publishSurfaces,
           createResizeObserver,
-          readInitialAutosaveInterval: () => 1000,
           logError,
         },
       )
@@ -118,12 +112,9 @@ describe('document session lifecycle', () => {
       expect(start).toHaveBeenCalledOnce()
       expect(publishSurfaces).toHaveBeenCalled()
       expect(publishSurfaces.mock.calls[0]![0] === surfaces).toBe(true)
-      expect(initializeViewport).not.toHaveBeenCalled()
-      expect(attachRulersTo.mock.calls[0]?.[0] === rulerOverlay).toBe(true)
       expect(logError).not.toHaveBeenCalled()
       const startupOrder = [
         start.mock.invocationCallOrder[0]!,
-        attachRulersTo.mock.invocationCallOrder[0]!,
         vi.mocked(startAttachedDesignSession).mock.invocationCallOrder[0]!,
         observe.mock.invocationCallOrder[0]!,
         vi.mocked(consumeQueuedDocumentLoad).mock.invocationCallOrder[0]!,
@@ -138,21 +129,17 @@ describe('document session lifecycle', () => {
     },
   )
 
-  it('does not attach or publish when workspace start is cancelled', async () => {
-    const attachRulersTo = vi.fn<(element: HTMLElement) => void>()
-    const surfaces = createTestCanvasRuntimeSurfaces({
-      documents: createTestCanvasDocumentSurface({ attachRulersTo }),
-    })
+  it('does not start the Design session or publish when workspace start is cancelled', async () => {
+    const surfaces = createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface() })
     const publishSurfaces = vi.fn<(surfaces: CanvasRuntimeSurfaces | null) => void>()
     const onInitializationFailure = vi.fn<() => void>()
     const logError = vi.fn<(message?: unknown, ...optionalParams: unknown[]) => void>()
     const lifecycle = createDesignSessionLifecycle(
-      { canvasArea, container, rulerOverlay },
+      { canvasArea, container },
       {
         createRuntimeComposition: () => composition(surfaces, async () => 'cancelled'),
         publishSurfaces,
         createResizeObserver: () => null,
-        readInitialAutosaveInterval: () => 1000,
         logError,
         onInitializationFailure,
       },
@@ -161,7 +148,6 @@ describe('document session lifecycle', () => {
     lifecycle.start()
     await flushLifecycle()
 
-    expect(attachRulersTo).not.toHaveBeenCalled()
     expect(startAttachedDesignSession).not.toHaveBeenCalled()
     expect(publishSurfaces).not.toHaveBeenCalled()
     expect(onInitializationFailure).toHaveBeenCalledOnce()
@@ -173,37 +159,24 @@ describe('document session lifecycle', () => {
     await lifecycle.dispose()
   })
 
-  it('reports a fire-and-forget autosave rejection through its lifecycle logger', async () => {
-    vi.useFakeTimers()
-    const autosaveError = new Error('stale Canvas lease')
-    vi.mocked(autosaveDesignSession).mockRejectedValueOnce(autosaveError)
-    const surfaces = createTestCanvasRuntimeSurfaces()
-    const logError = vi.fn<(message?: unknown, ...optionalParams: unknown[]) => void>()
+  it('reports the map unavailable when the runtime fails to start, so an open Design shows over the notice', async () => {
+    const onMapStateChange = vi.fn<(state: MapLibreCanvasSurfaceState) => void>()
     const lifecycle = createDesignSessionLifecycle(
-      { canvasArea, container, rulerOverlay },
+      { canvasArea, container, onMapStateChange },
       {
-        createRuntimeComposition: () => composition(surfaces),
+        createRuntimeComposition: () => composition(createTestCanvasRuntimeSurfaces(), async () => 'cancelled'),
         publishSurfaces: vi.fn(),
         createResizeObserver: () => null,
-        readInitialAutosaveInterval: () => 100,
-        logError,
+        logError: vi.fn(),
       },
     )
 
-    try {
-      lifecycle.start()
-      await Promise.resolve()
-      await Promise.resolve()
-      await flushLifecycle()
-      vi.advanceTimersByTime(100)
-      await Promise.resolve()
-      await Promise.resolve()
+    lifecycle.start()
+    await flushLifecycle()
 
-      expect(logError).toHaveBeenCalledWith('Autosave failed:', autosaveError)
-    } finally {
-      lifecycle.dispose()
-      vi.useRealTimers()
-    }
+    expect(onMapStateChange).toHaveBeenLastCalledWith(UNAVAILABLE_MAPLIBRE_CANVAS_SURFACE_STATE)
+    expect(UNAVAILABLE_MAPLIBRE_CANVAS_SURFACE_STATE).toMatchObject({ status: 'error', retryable: false })
+    await lifecycle.dispose()
   })
 
   it('hands off synchronously, then awaits settings and composition teardown before unpublishing', async () => {
@@ -213,16 +186,15 @@ describe('document session lifecycle', () => {
     const documents = createTestCanvasDocumentSurface()
     const surfaces = createTestCanvasRuntimeSurfaces({ documents })
     const publishSurfaces = vi.fn<(surfaces: CanvasRuntimeSurfaces | null) => void>(
-      setCanvasRuntimeSurfaces,
+      setCurrentCanvasSession,
     )
     const dispose = vi.fn(() => compositionDispose.promise)
     const lifecycle = createDesignSessionLifecycle(
-      { canvasArea, container, rulerOverlay },
+      { canvasArea, container },
       {
         createRuntimeComposition: () => composition(surfaces, undefined, dispose),
         publishSurfaces,
         createResizeObserver: () => null,
-        readInitialAutosaveInterval: () => 1000,
         logError: vi.fn(),
       },
     )
@@ -252,20 +224,20 @@ describe('document session lifecycle', () => {
     const destroy = vi.fn(async () => undefined)
     const logError = vi.fn<(message?: unknown, ...optionalParams: unknown[]) => void>()
     const publishSurfaces = vi.fn((next: CanvasRuntimeSurfaces | null) => {
-      setCanvasRuntimeSurfaces(next)
+      setCurrentCanvasSession(next)
       if (next === null) throw unpublicationError
     })
     const lifecycle = createDesignSessionLifecycle(
-      { canvasArea, container, rulerOverlay },
+      { canvasArea, container },
       {
         createRuntimeComposition: () => ({
           surfaces,
           start: vi.fn(async () => 'shared-ready' as const),
+          retryMap: vi.fn(),
           dispose: destroy,
         }),
         publishSurfaces,
         createResizeObserver: () => null,
-        readInitialAutosaveInterval: () => 1000,
         logError,
       },
     )
@@ -289,10 +261,11 @@ describe('document session lifecycle', () => {
     const onInitializationFailure = vi.fn<() => void>()
     const logError = vi.fn<(message?: unknown, ...optionalParams: unknown[]) => void>()
     const lifecycle = createDesignSessionLifecycle(
-      { canvasArea, container, rulerOverlay },
+      { canvasArea, container },
       {
         createRuntimeComposition: () => ({
           surfaces: createTestCanvasRuntimeSurfaces(),
+          retryMap: vi.fn(),
           start: vi.fn(async () => {
             throw initializationError
           }),
@@ -300,7 +273,6 @@ describe('document session lifecycle', () => {
         }),
         publishSurfaces: vi.fn(),
         createResizeObserver: () => null,
-        readInitialAutosaveInterval: () => 1000,
         logError,
         onInitializationFailure,
       },
@@ -334,16 +306,16 @@ describe('document session lifecycle', () => {
     const onInitializationFailure = vi.fn<() => void>()
     const logError = vi.fn<(message?: unknown, ...optionalParams: unknown[]) => void>()
     const lifecycle = createDesignSessionLifecycle(
-      { canvasArea, container, rulerOverlay },
+      { canvasArea, container },
       {
         createRuntimeComposition: () => ({
           surfaces: createTestCanvasRuntimeSurfaces({ documents }),
+          retryMap: vi.fn(),
           start: vi.fn(async () => 'shared-ready' as const),
           dispose: vi.fn(async () => undefined),
         }),
         publishSurfaces,
         createResizeObserver: () => null,
-        readInitialAutosaveInterval: () => 1000,
         logError,
         onInitializationFailure,
       },
@@ -358,10 +330,11 @@ describe('document session lifecycle', () => {
       await Promise.resolve()
       await flushLifecycle()
 
-      expect(abortFailedAttachedDesignSessionStart).toHaveBeenCalledWith(
-        documents,
-        logError,
-      )
+      // By identity: the surface holds a signal, which Vitest's deep equality cannot compare.
+      expect(abortFailedAttachedDesignSessionStart).toHaveBeenCalledOnce()
+      const [abortedDocuments, abortLog] = vi.mocked(abortFailedAttachedDesignSessionStart).mock.calls[0]!
+      expect(abortedDocuments).toBe(documents)
+      expect(abortLog).toBe(logError)
       expect(publishSurfaces).not.toHaveBeenCalled()
       expect(onInitializationFailure).toHaveBeenCalledOnce()
       expect(logError).toHaveBeenCalledWith(
@@ -377,10 +350,11 @@ describe('document session lifecycle', () => {
     const cleanupError = new Error('runtime lease release failed')
     const logError = vi.fn<(message?: unknown, ...optionalParams: unknown[]) => void>()
     const lifecycle = createDesignSessionLifecycle(
-      { canvasArea, container, rulerOverlay },
+      { canvasArea, container },
       {
         createRuntimeComposition: () => ({
           surfaces: createTestCanvasRuntimeSurfaces(),
+          retryMap: vi.fn(),
           start: vi.fn(async () => {
             throw new Error('renderer initialization failed')
           }),
@@ -388,7 +362,6 @@ describe('document session lifecycle', () => {
         }),
         publishSurfaces: vi.fn(),
         createResizeObserver: () => null,
-        readInitialAutosaveInterval: () => 1000,
         logError,
         onInitializationFailure: () => {
           throw cleanupError

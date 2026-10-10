@@ -1,14 +1,15 @@
 import { groupPlantsBySpecies } from '../../canvas/plant-grouping'
 import type { PlantSymbolId } from '../../canvas/runtime/scene'
-import type { SpeciesKeyEntry } from '../../canvas/runtime/species-key'
+import { isEnglishFallbackName, type SpeciesKeyEntry } from '../../canvas/runtime/species-key'
 import { getBudgetHoverTarget, getBudgetSpeciesTarget } from '../../target'
 import type { BudgetItem, PanelTarget, PlacedPlant } from '../../types/design'
-import type { BudgetPriceFilter, BudgetSort } from '../planning-view/state'
-import { normalizeSearchText } from '../../utils/normalize-search'
+import type { BudgetSort } from '../planning-view/state'
 
 export interface BudgetPlanningRow {
   readonly canonical: string
   readonly commonName: string
+  /** `commonName` is the English catalog name: none exists in the UI language. */
+  readonly englishFallback: boolean
   readonly code: string
   readonly appearances: readonly { readonly symbol: PlantSymbolId; readonly color: string }[]
   readonly count: number
@@ -26,7 +27,6 @@ export interface BudgetPlanningProjection {
   readonly itemByCanonical: ReadonlyMap<string, BudgetItem>
   readonly totalPlants: number
   readonly pricedCount: number
-  readonly zeroPricedCount: number
   readonly grandTotal: number
 }
 
@@ -38,7 +38,9 @@ export interface BudgetListProjection {
 
 export interface BuildBudgetPlanningProjectionOptions {
   readonly plants: readonly PlacedPlant[]
+  /** Names in the UI language, with English fallbacks filled in. */
   readonly localizedNames?: ReadonlyMap<string, string | null>
+  readonly englishFallbackNames?: ReadonlyMap<string, string>
   readonly budget: readonly BudgetItem[]
   readonly currency: string
   readonly locale: string
@@ -48,6 +50,7 @@ export interface BuildBudgetPlanningProjectionOptions {
 export function buildBudgetPlanningProjection({
   plants,
   localizedNames,
+  englishFallbackNames = new Map(),
   budget,
   currency,
   locale,
@@ -74,9 +77,11 @@ export function buildBudgetPlanningProjection({
       const price = lineItemPriceMap.get(canonical)
       const identity = identityByCanonical.get(canonical)
       const unitCost = price?.unit_cost ?? 0
+      const commonName = identity?.commonName ?? value.commonName
       return {
         canonical,
-        commonName: identity?.commonName ?? value.commonName,
+        commonName,
+        englishFallback: isEnglishFallbackName(englishFallbackNames, canonical, commonName),
         code: identity?.code ?? '',
         appearances: identity?.appearances ?? [],
         count: value.count,
@@ -98,7 +103,6 @@ export function buildBudgetPlanningProjection({
     itemByCanonical,
     totalPlants: rows.reduce((sum, row) => sum + row.count, 0),
     pricedCount: rows.filter((row) => row.hasPrice).length,
-    zeroPricedCount: rows.filter((row) => row.hasPrice && row.unitCost === 0).length,
     grandTotal: rows.reduce((sum, row) => sum + row.subtotal, 0),
   }
 }
@@ -106,13 +110,17 @@ export function buildBudgetPlanningProjection({
 export function buildBudgetListProjection(
   projection: BudgetPlanningProjection,
   options: {
-    readonly search: string
+    /** Species the finder matched; null when the finder is empty. */
+    readonly matches: ReadonlySet<string> | null
+    /** Species selected on the map; null when that filter is off. */
+    readonly selectedSpecies: ReadonlySet<string> | null
+    /** Species passing the Stratum and Form quick filters; null when neither is chosen. */
+    readonly quickFilterSpecies?: ReadonlySet<string> | null
+    readonly missingPriceOnly: boolean
     readonly sort: BudgetSort
-    readonly priceFilter: BudgetPriceFilter
     readonly locale: string
   },
 ): BudgetListProjection {
-  const needle = normalizeSearchText(options.search.trim())
   const nameOrder = (left: BudgetPlanningRow, right: BudgetPlanningRow): number => {
     const localized = (left.commonName || left.canonical).localeCompare(
       right.commonName || right.canonical,
@@ -121,13 +129,12 @@ export function buildBudgetListProjection(
     return localized || left.canonical.localeCompare(right.canonical)
   }
   const rows = projection.rows
-    .filter((row) => {
-      if (options.priceFilter === 'no-price' && row.hasPrice) return false
-      if (options.priceFilter === 'zero-price' && (!row.hasPrice || row.unitCost !== 0)) return false
-      return needle === '' || normalizeSearchText(
-        `${row.commonName} ${row.canonical} ${row.code}`,
-      ).includes(needle)
-    })
+    .filter((row) => (
+      (!options.missingPriceOnly || !row.hasPrice)
+      && (!options.matches || options.matches.has(row.canonical))
+      && (!options.selectedSpecies || options.selectedSpecies.has(row.canonical))
+      && (!options.quickFilterSpecies || options.quickFilterSpecies.has(row.canonical))
+    ))
     .sort((left, right) => {
       if (options.sort === 'highest-total') {
         if (left.hasPrice !== right.hasPrice) return left.hasPrice ? -1 : 1
@@ -144,6 +151,6 @@ export function buildBudgetListProjection(
   return {
     rows,
     shownSubtotal: rows.reduce((sum, row) => sum + (row.hasPrice ? row.subtotal : 0), 0),
-    restricted: needle !== '' || options.priceFilter !== 'all',
+    restricted: options.missingPriceOnly || options.matches !== null || options.selectedSpecies !== null,
   }
 }

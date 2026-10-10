@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CanopiFile } from "../types/design";
 
 const mocks = vi.hoisted(() => ({
-  autosaveDesignSession: vi.fn(async () => true),
   beginEmptyDocumentSession: vi.fn((session: any) => {
     session.hideCanvasChrome();
   }),
@@ -21,19 +20,12 @@ const mocks = vi.hoisted(() => ({
   }>,
   teardownAttachedDesignSession: vi.fn(),
   startAttachedDesignSession: vi.fn(),
-  transitionDocument: vi.fn((request: any) => {
-    request.session.loadDocument({ name: "Mounted" });
-    request.session.showCanvasChrome();
-    return Promise.resolve({ status: "applied", documentLoaded: request.session.hasLoadedDocument() });
-  }),
 }));
 
 vi.mock("../app/canvas-map-surface/desktop-workspace-runtime", () => ({
   createDesktopWorkspaceRuntimeComposition: vi.fn((options?: { container: HTMLElement }) => {
     let loaded = false;
     const documents = {
-      initializeViewport: vi.fn(),
-      attachRulersTo: vi.fn(),
       showCanvasChrome: vi.fn(),
       hideCanvasChrome: vi.fn(),
       zoomToFit: vi.fn(),
@@ -70,7 +62,6 @@ vi.mock("../app/canvas-map-surface/desktop-workspace-runtime", () => ({
       surfaces: host.surfaces,
       start: async () => {
         await host.init(options?.container);
-        documents.initializeViewport();
         return 'shared-ready' as const;
       },
       dispose: () => host.destroy(),
@@ -82,12 +73,9 @@ vi.mock("../app/document-session/transition", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../app/document-session/transition")>();
   return {
     ...actual,
-    beginEmptyDocumentSession: mocks.beginEmptyDocumentSession,
-    autosaveDesignSession: mocks.autosaveDesignSession,
     consumeQueuedDocumentLoad: mocks.consumeQueuedDocumentLoad,
     startAttachedDesignSession: mocks.startAttachedDesignSession,
     teardownAttachedDesignSession: mocks.teardownAttachedDesignSession,
-    transitionDocument: mocks.transitionDocument,
   };
 });
 
@@ -99,16 +87,13 @@ import { useCanvasDocumentSession } from "../app/document-session/use-canvas-doc
 import { createDesktopWorkspaceRuntimeComposition } from "../app/canvas-map-surface/desktop-workspace-runtime";
 import {
   currentCanvasDocumentSurface,
-  currentCanvasReady,
   currentCanvasSession,
   setCurrentCanvasSession,
 } from "../canvas/session";
 import { createTestCanvasRuntimeSurfaces } from "./support/canvas-runtime-surfaces";
 import { createCanvasDocumentReplacementToken } from "../canvas/runtime/runtime";
-import { autoSaveIntervalMs } from "../app/settings/state";
 import {
   designSessionFixture,
-  autosaveFailed,
   currentDesign,
   resetDirtyBaselines,
 } from "./support/design-session-state";
@@ -116,16 +101,14 @@ import {
 function Harness() {
   const canvasAreaRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const rulerOverlayRef = useRef<HTMLDivElement>(null);
 
-  useCanvasDocumentSession({ canvasAreaRef, containerRef, rulerOverlayRef });
+  useCanvasDocumentSession({ canvasAreaRef, containerRef });
 
   return (
     <div>
       <div ref={canvasAreaRef}>
         <div ref={containerRef} />
       </div>
-      <div ref={rulerOverlayRef} />
     </div>
   );
 }
@@ -147,10 +130,9 @@ async function mountHarness(container: HTMLElement): Promise<void> {
 
 function makeDesign(name = "Demo"): CanopiFile {
   return {
-    version: 6,
+    version: 9,
     name,
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [],
     plants: [],
@@ -172,7 +154,6 @@ describe("useCanvasDocumentSession", () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    mocks.autosaveDesignSession.mockClear();
     mocks.beginEmptyDocumentSession.mockClear();
     mocks.cancelQueuedLoad.mockReset();
     mocks.cancelQueuedLoad.mockImplementation(() => {});
@@ -194,12 +175,6 @@ describe("useCanvasDocumentSession", () => {
       mocks.beginEmptyDocumentSession(session);
       return Promise.resolve(null);
     });
-    mocks.transitionDocument.mockClear();
-    mocks.transitionDocument.mockImplementation((request: any) => {
-      request.session.loadDocument({ name: "Mounted" });
-      request.session.showCanvasChrome();
-      return Promise.resolve({ status: "applied", documentLoaded: request.session.hasLoadedDocument() });
-    });
     (globalThis as Record<string, unknown>).ResizeObserver = class {
       observe() {}
       disconnect() {
@@ -213,9 +188,7 @@ describe("useCanvasDocumentSession", () => {
     designSessionFixture.file = null;
     designSessionFixture.name = "Demo";
     designSessionFixture.path = "/designs/demo.canopi";
-    autoSaveIntervalMs.value = 100;
     resetDirtyBaselines();
-    designSessionFixture.autosaveFailed = false;
   });
 
   afterEach(() => {
@@ -230,11 +203,10 @@ describe("useCanvasDocumentSession", () => {
 
     const documents = mocks.runtimeInstances[0]?.documents as {
       hideCanvasChrome: ReturnType<typeof vi.fn>;
-      initializeViewport: ReturnType<typeof vi.fn>;
     };
 
     expect(documents).toBeDefined();
-    expect(documents.initializeViewport).toHaveBeenCalledTimes(1);
+    expect(mocks.runtimeInstances[0]?.host.init).toHaveBeenCalledTimes(1);
     expect(mocks.startAttachedDesignSession).toHaveBeenCalledWith(currentCanvasDocumentSurface.value);
     expect(documents.hideCanvasChrome).toHaveBeenCalledTimes(1);
     expect(mocks.consumeQueuedDocumentLoad).toHaveBeenCalledWith(currentCanvasDocumentSurface.value);
@@ -260,36 +232,34 @@ describe("useCanvasDocumentSession", () => {
   it("does not continue initialization after publication synchronously releases the runtime", async () => {
     let releasedFirst = false;
     const disposePublicationEffect = effect(() => {
+      const published = currentCanvasSession.value;
       const firstSurfaces = mocks.runtimeInstances[0]?.host.surfaces;
       if (
         !releasedFirst
         && firstSurfaces
-        && currentCanvasSession.value === firstSurfaces
+        && published === firstSurfaces
       ) {
         releasedFirst = true;
         render(null, container);
       }
-      void currentCanvasReady.value;
     });
 
     try {
       await mountHarness(container);
 
       const first = mocks.runtimeInstances[0] as unknown as {
-        host: { destroy: ReturnType<typeof vi.fn> };
-        documents: { initializeViewport: ReturnType<typeof vi.fn> };
+        host: { init: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn> };
       };
       const destroyOrder = first.host.destroy.mock.invocationCallOrder[0] ?? 0;
 
       expect(first.host.destroy).toHaveBeenCalledOnce();
-      expect(first.documents.initializeViewport.mock.invocationCallOrder[0])
+      expect(first.host.init.mock.invocationCallOrder[0])
         .toBeLessThan(destroyOrder);
       expect(mocks.startAttachedDesignSession.mock.invocationCallOrder[0])
         .toBeLessThan(destroyOrder);
       expect(mocks.consumeQueuedDocumentLoad.mock.invocationCallOrder[0])
         .toBeLessThan(destroyOrder);
       expect(currentCanvasSession.value).toBeNull();
-      expect(currentCanvasReady.value).toBe(false);
 
       await mountHarness(container);
       expect(mocks.runtimeInstances).toHaveLength(2);
@@ -324,6 +294,9 @@ describe("useCanvasDocumentSession", () => {
     });
 
     expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledTimes(1);
+    expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledWith(
+      expect.objectContaining({ runtimeInitialized: true }),
+    );
     expect(mocks.cancelQueuedLoad).toHaveBeenCalledTimes(1);
     expect(mocks.flushSettingsProjection).toHaveBeenCalledTimes(1);
     expect(instance.host.destroy).toHaveBeenCalledTimes(1);
@@ -352,12 +325,6 @@ describe("useCanvasDocumentSession", () => {
     expect(mocks.resizeDisconnect).not.toHaveBeenCalled();
     expect(mocks.cancelQueuedLoad).not.toHaveBeenCalled();
     expect(mocks.flushSettingsProjection).not.toHaveBeenCalled();
-
-    await act(async () => {
-      vi.advanceTimersByTime(100);
-      await flushMicrotasks();
-    });
-    expect(mocks.autosaveDesignSession).toHaveBeenCalledOnce();
 
     await mountHarness(container);
 
@@ -449,25 +416,17 @@ describe("useCanvasDocumentSession", () => {
 
     const failedInstance = mocks.runtimeInstances[0] as unknown as {
       host: { destroy: ReturnType<typeof vi.fn> };
+      documents: { loadDocument: ReturnType<typeof vi.fn> };
     };
 
-    expect(mocks.transitionDocument).not.toHaveBeenCalled();
-    expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledTimes(1);
+    expect(mocks.startAttachedDesignSession).not.toHaveBeenCalled();
+    expect(failedInstance.documents.loadDocument).not.toHaveBeenCalled();
+    expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledOnce();
+    expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledWith(
+      expect.objectContaining({ runtimeInitialized: false }),
+    );
     expect(failedInstance.host.destroy).toHaveBeenCalledTimes(1);
     expect(currentCanvasSession.value).toBe(null);
-
-    await act(async () => {
-      vi.advanceTimersByTime(100);
-      await flushMicrotasks();
-    });
-    expect(mocks.autosaveDesignSession).not.toHaveBeenCalled();
-
-    await act(async () => {
-      autoSaveIntervalMs.value = 250;
-      vi.advanceTimersByTime(250);
-      await flushMicrotasks();
-    });
-    expect(mocks.autosaveDesignSession).not.toHaveBeenCalled();
 
     await act(async () => {
       render(null, container);
@@ -501,10 +460,15 @@ describe("useCanvasDocumentSession", () => {
 
     const instance = mocks.runtimeInstances[0] as unknown as {
       host: { destroy: ReturnType<typeof vi.fn> };
+      documents: { loadDocument: ReturnType<typeof vi.fn> };
     };
 
-    expect(mocks.transitionDocument).not.toHaveBeenCalled();
-    expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledTimes(1);
+    expect(mocks.startAttachedDesignSession).not.toHaveBeenCalled();
+    expect(instance.documents.loadDocument).not.toHaveBeenCalled();
+    expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledOnce();
+    expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledWith(
+      expect.objectContaining({ runtimeInitialized: false }),
+    );
     expect(instance.host.destroy).toHaveBeenCalledTimes(1);
     expect(currentCanvasSession.value).toBe(null);
   });
@@ -529,40 +493,6 @@ describe("useCanvasDocumentSession", () => {
 
     expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledTimes(1);
     expect(instance.host.destroy).toHaveBeenCalledTimes(1);
-  });
-
-  it("recreates autosave on interval changes", async () => {
-    designSessionFixture.file = makeDesign();
-    designSessionFixture.detachedCanvasDirty = true;
-
-    await mountHarness(container);
-
-    await act(async () => {
-      vi.advanceTimersByTime(100);
-      await flushMicrotasks();
-    });
-
-    expect(mocks.autosaveDesignSession).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      autoSaveIntervalMs.value = 250;
-      await flushMicrotasks();
-    });
-
-    await act(async () => {
-      vi.advanceTimersByTime(100);
-      await flushMicrotasks();
-    });
-
-    expect(mocks.autosaveDesignSession).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      vi.advanceTimersByTime(150);
-      await flushMicrotasks();
-    });
-
-    expect(mocks.autosaveDesignSession).toHaveBeenCalledTimes(2);
-    expect(autosaveFailed.value).toBe(false);
   });
 
 });

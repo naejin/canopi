@@ -17,16 +17,16 @@ export function createZoomCalibrationScene(name: ZoomCalibrationScene): ScenePer
         kind: 'plant', id: `plant-${index}`, locked: index === 2,
         canonicalName: `Species ${index}`, commonName: names[index % names.length]!,
         color: null, symbol: symbols[index % symbols.length], pinnedName: index % 3 !== 0,
-        stratum: 'medium', canopySpreadM: null,
+        canopySpreadM: null,
         position: { x: 5 + column * spacing, y: 7 + row * spacing },
-        rotationDeg: null, scale: null, notes: null, plantedDate: null, quantity: null,
+        rotationDeg: null, notes: null, plantedDate: null, quantity: null,
       })
     }
   }
   const width = columns * spacing + 8
   const height = rows * spacing + 10
   scene.zones = [{
-    kind: 'zone', name: 'Planting bed', locked: false, zoneType: 'rect',
+    kind: 'zone', id: 'Planting bed', name: 'Planting bed', locked: false, zoneType: 'rect',
     points: [{ x: 2, y: 3 }, { x: width, y: 3 }, { x: width, y: height }, { x: 2, y: height }],
     rotationDeg: 0, fillColor: null, notes: null,
   }]

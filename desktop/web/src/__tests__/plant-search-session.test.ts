@@ -23,6 +23,7 @@ function makePlant(canonicalName: string): SpeciesListItem {
     hardiness_zone_max: null,
     growth_rate: null,
     stratum: null,
+    habit: null,
     climate_zones: [],
     life_cycles: [],
     edibility_rating: null,
@@ -384,7 +385,7 @@ describe('plant search session', () => {
       filters: expect.any(Object),
       cursor: null,
       limit: 50,
-      sort: 'Name',
+      sort: 'Recommended',
       locale: 'en',
       include_total: true,
     }))
@@ -409,7 +410,7 @@ describe('plant search session', () => {
     dispose()
   })
 
-  it('keeps active text on relevance ordering and browse on canonical-name ordering', async () => {
+  it('keeps active text on relevance ordering and browse on the chosen browse order', async () => {
     vi.useFakeTimers()
     const locale = signal('en')
     const search = vi.fn<PlantSearchAdapter>()
@@ -423,7 +424,7 @@ describe('plant search session', () => {
       filters: expect.any(Object),
       cursor: null,
       limit: 50,
-      sort: 'Name',
+      sort: 'Recommended',
       locale: 'en',
       include_total: true,
     }))
@@ -441,6 +442,13 @@ describe('plant search session', () => {
       include_total: false,
     }))
 
+    // Choosing a browse order during a search keeps relevance until the text is cleared.
+    const callsBeforeSort = search.mock.calls.length
+    session.setBrowseSort('Height')
+    await flushMicrotasks()
+    expect(search.mock.calls.length).toBe(callsBeforeSort)
+    expect(session.intent.value).toMatchObject({ sort: 'Relevance', browseSort: 'Height' })
+
     session.setText('')
     vi.advanceTimersByTime(150)
     await flushMicrotasks()
@@ -449,10 +457,14 @@ describe('plant search session', () => {
       filters: expect.any(Object),
       cursor: null,
       limit: 50,
-      sort: 'Name',
+      sort: 'Height',
       locale: 'en',
       include_total: true,
     }))
+
+    session.setBrowseSort('Name')
+    await flushMicrotasks()
+    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({ text: '', sort: 'Name', cursor: null }))
 
     dispose()
   })
@@ -516,7 +528,7 @@ describe('plant search session', () => {
       filters: expect.any(Object),
       cursor: 'offset:50',
       limit: 50,
-      sort: 'Name',
+      sort: 'Recommended',
       locale: 'en',
       include_total: false,
     }))

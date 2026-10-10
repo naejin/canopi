@@ -1,21 +1,21 @@
 import type { PanelTarget, SpeciesPanelTarget } from '../types/design'
 
-export type Target = PanelTarget
-export type SpeciesTarget = SpeciesPanelTarget
+type Target = PanelTarget
+type SpeciesTarget = SpeciesPanelTarget
 
 export interface TargetScenePoint {
   readonly x: number
   readonly y: number
 }
 
-export interface TargetPlantRef {
+interface TargetPlantRef {
   readonly id: string
   readonly canonicalName: string
   readonly position?: TargetScenePoint
 }
 
 export interface TargetZoneRef {
-  readonly name: string
+  readonly id: string
   readonly zoneType?: string
   readonly points?: readonly TargetScenePoint[]
   readonly rotationDeg?: number
@@ -29,23 +29,20 @@ export interface TargetSceneInput {
 export interface TargetSceneIndex {
   readonly plantsById: ReadonlyMap<string, TargetPlantRef>
   readonly plantIdsBySpecies: ReadonlyMap<string, readonly string[]>
-  readonly zonesByName: ReadonlyMap<string, TargetZoneRef>
+  readonly zonesById: ReadonlyMap<string, TargetZoneRef>
 }
 
-export type ResolvedTargetRef =
+type ResolvedTargetRef =
   | { readonly kind: 'plant'; readonly id: string; readonly plant: TargetPlantRef }
   | { readonly kind: 'zone'; readonly id: string; readonly zone: TargetZoneRef }
 
 export interface TargetResolution {
   readonly plantIds: readonly string[]
   readonly zoneIds: readonly string[]
-  readonly sceneIds: readonly string[]
-  readonly unresolvedTargets: readonly Target[]
   readonly resolvedRefs: readonly ResolvedTargetRef[]
 }
 
 export const MANUAL_TARGET: Target = { kind: 'manual' }
-export const NONE_TARGET: Target = { kind: 'none' }
 
 export function speciesTarget(canonicalName: string): SpeciesTarget {
   return { kind: 'species', canonical_name: canonicalName }
@@ -55,14 +52,14 @@ export function isSpeciesTarget(target: Target): target is SpeciesTarget {
   return target.kind === 'species'
 }
 
-export function targetKey(target: Target): string {
+function targetKey(target: Target): string {
   switch (target.kind) {
     case 'placed_plant':
       return `placed_plant:${target.plant_id}`
     case 'species':
       return `species:${target.canonical_name}`
     case 'zone':
-      return `zone:${target.zone_name}`
+      return `zone:${target.zone_id}`
     case 'manual':
       return 'manual'
     case 'none':
@@ -70,7 +67,7 @@ export function targetKey(target: Target): string {
   }
 }
 
-export function targetListsEqual(left: readonly Target[], right: readonly Target[]): boolean {
+function targetListsEqual(left: readonly Target[], right: readonly Target[]): boolean {
   if (left.length !== right.length) return false
   for (let i = 0; i < left.length; i++) {
     if (targetKey(left[i]!) !== targetKey(right[i]!)) return false
@@ -78,14 +75,14 @@ export function targetListsEqual(left: readonly Target[], right: readonly Target
   return true
 }
 
-export function targetsEqual(left: Target, right: Target): boolean {
+function targetsEqual(left: Target, right: Target): boolean {
   return targetKey(left) === targetKey(right)
 }
 
 export function indexTargetScene(scene: TargetSceneInput): TargetSceneIndex {
   const plantsById = new Map<string, TargetPlantRef>()
   const plantIdsBySpecies = new Map<string, string[]>()
-  const zonesByName = new Map<string, TargetZoneRef>()
+  const zonesById = new Map<string, TargetZoneRef>()
 
   for (const plant of scene.plants) {
     plantsById.set(plant.id, plant)
@@ -95,33 +92,23 @@ export function indexTargetScene(scene: TargetSceneInput): TargetSceneIndex {
   }
 
   for (const zone of scene.zones) {
-    zonesByName.set(zone.name, zone)
+    zonesById.set(zone.id, zone)
   }
 
-  return { plantsById, plantIdsBySpecies, zonesByName }
+  return { plantsById, plantIdsBySpecies, zonesById }
 }
 
 export function resolveTargetsInScene(
   values: readonly Target[],
   index: TargetSceneIndex,
 ): TargetResolution {
-  const seenSceneIds = new Set<string>()
   const seenFeatureKeys = new Set<string>()
   const plantIds: string[] = []
   const zoneIds: string[] = []
-  const sceneIds: string[] = []
-  const unresolvedTargets: Target[] = []
   const resolvedRefs: ResolvedTargetRef[] = []
-
-  const addSceneId = (id: string): void => {
-    if (seenSceneIds.has(id)) return
-    seenSceneIds.add(id)
-    sceneIds.push(id)
-  }
 
   const addPlant = (id: string, plant: TargetPlantRef): void => {
     if (!plantIds.includes(id)) plantIds.push(id)
-    addSceneId(id)
     const featureKey = `plant:${id}`
     if (seenFeatureKeys.has(featureKey)) return
     seenFeatureKeys.add(featureKey)
@@ -130,7 +117,6 @@ export function resolveTargetsInScene(
 
   const addZone = (id: string, zone: TargetZoneRef): void => {
     if (!zoneIds.includes(id)) zoneIds.push(id)
-    addSceneId(id)
     const featureKey = `zone:${id}`
     if (seenFeatureKeys.has(featureKey)) return
     seenFeatureKeys.add(featureKey)
@@ -140,12 +126,7 @@ export function resolveTargetsInScene(
   for (const target of values) {
     switch (target.kind) {
       case 'species': {
-        const speciesPlantIds = index.plantIdsBySpecies.get(target.canonical_name) ?? []
-        if (speciesPlantIds.length === 0) {
-          unresolvedTargets.push(target)
-          break
-        }
-        for (const plantId of speciesPlantIds) {
+        for (const plantId of index.plantIdsBySpecies.get(target.canonical_name) ?? []) {
           const plant = index.plantsById.get(plantId)
           if (plant) addPlant(plantId, plant)
         }
@@ -154,13 +135,11 @@ export function resolveTargetsInScene(
       case 'placed_plant': {
         const plant = index.plantsById.get(target.plant_id)
         if (plant) addPlant(target.plant_id, plant)
-        else unresolvedTargets.push(target)
         break
       }
       case 'zone': {
-        const zone = index.zonesByName.get(target.zone_name)
-        if (zone) addZone(target.zone_name, zone)
-        else unresolvedTargets.push(target)
+        const zone = index.zonesById.get(target.zone_id)
+        if (zone) addZone(target.zone_id, zone)
         break
       }
       case 'manual':
@@ -169,13 +148,7 @@ export function resolveTargetsInScene(
     }
   }
 
-  return {
-    plantIds,
-    zoneIds,
-    sceneIds,
-    unresolvedTargets,
-    resolvedRefs,
-  }
+  return { plantIds, zoneIds, resolvedRefs }
 }
 
 export const targetIdentity = {

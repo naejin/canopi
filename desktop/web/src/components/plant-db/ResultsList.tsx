@@ -1,26 +1,30 @@
-import { useRef, useLayoutEffect, useReducer } from 'preact/hooks';
-import { useSignalEffect } from '@preact/signals';
+import type { ComponentChildren } from 'preact'
+import { useRef, useLayoutEffect, useReducer } from 'preact/hooks'
+import { useSignalEffect } from '@preact/signals'
 import {
   Virtualizer,
   observeElementRect,
   observeElementOffset,
   elementScroll,
-} from '@tanstack/virtual-core';
-import { t } from '../../i18n';
-import { speciesCatalogWorkbench } from '../../app/plant-browser';
-import { PlantRow } from './PlantRow';
-import { PlantCard } from './PlantCard';
-import styles from './PlantDb.module.css';
+} from '@tanstack/virtual-core'
+import { t } from '../../i18n'
+import { speciesCatalogWorkbench } from '../../app/plant-browser'
+import { plantDbStatus } from '../../app/health/state'
+import { EmptyState } from '../shared/EmptyState'
+import { PanelIcon } from '../shared/PanelIcon'
+import type { CatalogDesignSpecies } from './design-species'
+import { PlantRow } from './PlantRow'
+import styles from './PlantDb.module.css'
 
 // Force a re-render (used as Virtualizer.onChange callback)
 function useForceUpdate(): () => void {
-  const [, dispatch] = useReducer((n: number) => n + 1, 0);
-  return dispatch as () => void;
+  const [, dispatch] = useReducer((n: number) => n + 1, 0)
+  return dispatch as () => void
 }
 
-const ESTIMATED_ROW_HEIGHT = 38;
+/** Rows have one fixed height (names and facts stay on one line each) so the list can virtualise. */
+const ROW_HEIGHT = 62
 
-// Helper: build Virtualizer options object
 function makeVirtOpts(
   scrollRef: { current: HTMLDivElement | null },
   count: number,
@@ -29,222 +33,202 @@ function makeVirtOpts(
   return {
     count,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => ESTIMATED_ROW_HEIGHT,
+    estimateSize: () => ROW_HEIGHT,
     overscan: 10,
     observeElementRect,
     observeElementOffset,
     scrollToFn: elementScroll,
     onChange,
-  };
+  }
 }
 
-export function ResultsList() {
-  const resultState = speciesCatalogWorkbench.results.value;
-  const results = resultState.items;
-  const resultSetRevision = resultState.committedRevision;
-  const searching = speciesCatalogWorkbench.isSearchLoading(resultState.status);
-  const error = resultState.error;
-  const hasMore = resultState.nextCursor !== null;
-  const mode = speciesCatalogWorkbench.viewMode.value;
+export function ResultsList({ id, designSpecies, englishNames, highlight, footer }: {
+  readonly id?: string
+  readonly designSpecies: ReadonlyMap<string, CatalogDesignSpecies>
+  /** English catalog names of rows with no name in the interface language, shown marked "(en)". */
+  readonly englishNames?: ReadonlyMap<string, string>
+  /** Marks a row's names with the search matches, by canonical name. */
+  readonly highlight?: (canonicalName: string) => ((text: string) => ComponentChildren) | undefined
+  /** A quiet hint under the rows. */
+  readonly footer?: ComponentChildren
+}) {
+  const resultState = speciesCatalogWorkbench.results.value
+  const results = resultState.items
+  const resultSetRevision = resultState.committedRevision
+  const searching = speciesCatalogWorkbench.isSearchLoading(resultState.status)
+  const error = resultState.error
+  const hasMore = resultState.nextCursor !== null
 
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const forceUpdate = useForceUpdate();
-  const virtualizerRef = useRef<Virtualizer<HTMLDivElement, Element> | null>(null);
-  const virtualizerCleanupRef = useRef<(() => void) | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const forceUpdate = useForceUpdate()
+  const virtualizerRef = useRef<Virtualizer<HTMLDivElement, Element> | null>(null)
+  const showList = results.length > 0
 
   // Rebuild the virtualizer when a brand-new first page replaces the current
   // result set. Query text can change before the async search resolves, so using
   // query inputs as the reset key recreates the list against stale rows.
   useLayoutEffect(() => {
-    if (mode !== 'list') {
-      // Cleanup if switching away from list
-      virtualizerCleanupRef.current?.();
-      virtualizerCleanupRef.current = null;
-      virtualizerRef.current = null;
-      return;
-    }
-
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = 0;
-    }
+    if (!showList) return
+    if (scrollRef.current) scrollRef.current.scrollTop = 0
 
     const handleChange = (instance: Virtualizer<HTMLDivElement, Element>) => {
-      virtualizerRef.current = instance;
-      forceUpdate();
-    };
-
+      virtualizerRef.current = instance
+      forceUpdate()
+    }
     const virt = new Virtualizer<HTMLDivElement, Element>(
       makeVirtOpts(scrollRef, results.length, handleChange),
-    );
-
-    virtualizerRef.current = virt;
-    const cleanup = virt._didMount();
-    virtualizerCleanupRef.current = cleanup;
-    virt._willUpdate();
+    )
+    virtualizerRef.current = virt
+    const cleanup = virt._didMount()
+    virt._willUpdate()
 
     return () => {
-      cleanup?.();
-      virtualizerCleanupRef.current = null;
-      virtualizerRef.current = null;
-    };
-  // forceUpdate is stable (reducer dispatch); rebuild when the displayed
-  // result set is replaced or list mode changes.
+      cleanup?.()
+      virtualizerRef.current = null
+    }
+  // forceUpdate is stable (reducer dispatch); rebuild when the displayed result set is replaced.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, resultSetRevision]);
+  }, [resultSetRevision, showList])
 
   // Keep Virtualizer measurements in sync when rows are appended or replaced
   // without swapping to a new scroll element.
   useSignalEffect(() => {
-    const results = speciesCatalogWorkbench.results.value.items;
-    const virt = virtualizerRef.current;
-    if (!virt) return;
+    const items = speciesCatalogWorkbench.results.value.items
+    const virt = virtualizerRef.current
+    if (!virt) return
     virt.setOptions(
-      makeVirtOpts(scrollRef, results.length, (instance) => {
-        virtualizerRef.current = instance;
-        forceUpdate();
+      makeVirtOpts(scrollRef, items.length, (instance) => {
+        virtualizerRef.current = instance
+        forceUpdate()
       }),
-    );
-    virt.measure();
-  });
+    )
+    virt.measure()
+  })
 
   // Infinite scroll: load next page when near the bottom
   const handleScroll = () => {
-    const el = scrollRef.current;
-    const latestResults = speciesCatalogWorkbench.results.value;
-    if (!el || speciesCatalogWorkbench.isSearchLoading(latestResults.status) || latestResults.nextCursor === null) return;
+    const el = scrollRef.current
+    const latestResults = speciesCatalogWorkbench.results.value
+    if (!el || speciesCatalogWorkbench.isSearchLoading(latestResults.status) || latestResults.nextCursor === null) return
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
-      void speciesCatalogWorkbench.loadNextPage();
+      void speciesCatalogWorkbench.loadNextPage()
     }
-  };
+  }
 
-  // Loading state (initial, no results yet)
   if (searching && results.length === 0) {
     return (
       <div className={styles.listContainer}>
-        <div className={styles.listLoader} aria-live="polite" aria-busy="true">
-          {t('plantDb.loading')}
-        </div>
+        <p className={styles.listLoader} role="status" aria-busy="true">{t('plantDb.loading')}</p>
       </div>
-    );
+    )
   }
 
-  // Error state
+  const dbStatus = plantDbStatus.value
+  if (error !== null && results.length === 0 && dbStatus !== 'available') {
+    // Search short-circuits without the database file; say why, as the notice does, instead of the internal error.
+    return (
+      <div className={styles.listContainer}>
+        <div className={styles.listError} role="alert">
+          <span>{t(dbStatus === 'corrupt' ? 'health.plantDbCorrupt' : 'health.plantDbMissing')}</span>
+        </div>
+      </div>
+    )
+  }
+
   if (error !== null && results.length === 0) {
     return (
       <div className={styles.listContainer}>
         <div className={styles.listError} role="alert">
           <span>{t('plantDb.error')}: {error}</span>
-          <button
-            type="button"
-            className={styles.retryBtn}
-            onClick={() => speciesCatalogWorkbench.retrySearch()}
-          >
+          <button type="button" className={styles.retryBtn} onClick={() => speciesCatalogWorkbench.retrySearch()}>
             {t('plantDb.retry')}
           </button>
         </div>
       </div>
-    );
+    )
   }
 
-  // Empty state
-  if (!searching && results.length === 0) {
-    const hasQuery = speciesCatalogWorkbench.intent.value.text.length > 0 || speciesCatalogWorkbench.hasActiveFilters.value;
+  if (results.length === 0) {
     return (
       <div className={styles.listContainer}>
-        <div className={styles.listEmpty}>
-          {hasQuery ? (
-            <p className={styles.listEmptyText}>{t('plantDb.noResults')}</p>
-          ) : (
-            <>
-              <svg width="48" height="48" viewBox="0 0 48 48" fill="none" className={styles.listEmptyIcon}>
-                <circle cx="20" cy="20" r="16" stroke="currentColor" strokeWidth="2" />
-                <path d="M32 32L44 44" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                <path d="M20 12C15.6 12 12 15.6 12 20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
-              </svg>
-              <p className={styles.listEmptyTitle}>
-                {t('plantDb.searchPlaceholder')}
-              </p>
-              <p className={styles.listEmptyHint}>
-                {t('plantDb.emptyHint')}
-              </p>
-              <button
-                type="button"
-                className={`${styles.retryBtn} ${styles.listEmptyAction}`}
-                onClick={() => speciesCatalogWorkbench.retrySearch()}
-              >
-                {t('plantDb.loadPlants')}
-              </button>
-            </>
-          )}
-        </div>
+        <CatalogEmptyState />
       </div>
-    );
+    )
   }
 
-  // Card / grid view
-  if (mode === 'card') {
-    return (
-      <div
-        ref={scrollRef}
-        className={styles.listContainer}
-        onScroll={handleScroll}
-      >
-        <div className={styles.cardGrid} role="list" aria-label={t('plantDb.title')}>
-          {results.map((plant) => (
-            <PlantCard key={plant.canonical_name} plant={plant} />
-          ))}
-        </div>
-        {searching && (
-          <div className={styles.listLoader} aria-live="polite" aria-busy="true">
-            {t('plantDb.loadingMore')}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // List view — virtual scroll
-  const virt = virtualizerRef.current;
-  const virtualItems = virt?.getVirtualItems() ?? [];
-  const totalSize = virt?.getTotalSize() ?? results.length * ESTIMATED_ROW_HEIGHT;
+  const virt = virtualizerRef.current
+  const virtualItems = virt?.getVirtualItems() ?? []
+  const totalSize = virt?.getTotalSize() ?? results.length * ROW_HEIGHT
 
   return (
-    <div
-      ref={scrollRef}
-      className={styles.listContainer}
-      onScroll={handleScroll}
-    >
+    <div ref={scrollRef} className={styles.listContainer} onScroll={handleScroll}>
       <div
+        id={id}
         className={styles.listInner}
         style={{ height: `${totalSize}px` }}
         role="list"
         aria-label={t('plantDb.title')}
-        aria-rowcount={results.length}
       >
         {virtualItems.map((virtualRow) => {
-          const plant = results[virtualRow.index];
-          if (!plant) return null;
+          const plant = results[virtualRow.index]
+          if (!plant) return null
           return (
             <div
               key={virtualRow.key}
               className={styles.virtualRow}
               data-index={virtualRow.index}
-              style={{
-                height: `${virtualRow.size}px`,
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
+              style={{ height: `${virtualRow.size}px`, transform: `translateY(${virtualRow.start}px)` }}
             >
-              <PlantRow plant={plant} />
+              <PlantRow
+                plant={plant}
+                inDesign={designSpecies.get(plant.canonical_name)}
+                englishName={englishNames?.get(plant.canonical_name)}
+                highlight={highlight?.(plant.canonical_name)}
+              />
             </div>
-          );
+          )
         })}
       </div>
-
       {(searching || hasMore) && (
-        <div className={styles.listLoader} aria-live="polite" aria-busy={searching}>
+        <p className={styles.listLoader} role="status" aria-busy={searching}>
           {searching ? t('plantDb.loadingMore') : ''}
-        </div>
+        </p>
       )}
+      {!hasMore && footer}
     </div>
-  );
+  )
+}
+
+/** No rows: nothing matches the search or filters, or the catalog itself is empty. */
+function CatalogEmptyState() {
+  const intent = speciesCatalogWorkbench.intent.value
+  const query = intent.text.trim()
+  const filterCount = speciesCatalogWorkbench.filterStrip.value.activeCount
+  const hasFilters = speciesCatalogWorkbench.hasActiveFilters.value
+  if (!query && !hasFilters) {
+    return (
+      <EmptyState
+        icon={<PanelIcon panel="plant-db" />}
+        action={{ label: t('plantDb.retry'), onClick: () => speciesCatalogWorkbench.retrySearch() }}
+      >
+        {t('plantDb.emptyCatalog')}
+      </EmptyState>
+    )
+  }
+  if (query && !speciesCatalogWorkbench.isActiveSearchText(query) && !hasFilters) {
+    return <EmptyState status>{t('plantDb.tooShort')}</EmptyState>
+  }
+  const message = query && hasFilters
+    ? t('plantDb.noResultsQueryFilters', { query, count: Math.max(filterCount, 1) })
+    : query
+      ? t('plantDb.noResultsQuery', { query })
+      : t('plantDb.noResultsFilters', { count: Math.max(filterCount, 1) })
+  return (
+    <EmptyState
+      status
+      action={hasFilters ? { label: t('plantDb.clearFilters'), onClick: () => speciesCatalogWorkbench.clearFilters() } : undefined}
+    >
+      {message}
+    </EmptyState>
+  )
 }

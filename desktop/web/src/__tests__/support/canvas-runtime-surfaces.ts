@@ -3,6 +3,7 @@ import { setCanvasTool } from '../../canvas/session-state'
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
+  CanvasKeyboardPort,
   CanvasQuerySurface,
   CanvasRuntimeSurfaces,
 } from '../../canvas/runtime/runtime'
@@ -16,31 +17,56 @@ interface TestCanvasRuntimeSurfaceOptions {
   readonly commands?: CanvasCommandSurface
   readonly queries?: CanvasQuerySurface
   readonly documents?: CanvasDocumentSurface
+  readonly keyboard?: CanvasKeyboardPort
 }
 
 export function createTestCanvasRuntimeSurfaces({
   commands = createTestCanvasCommandSurface(),
   queries = createTestCanvasQuerySurface(),
   documents = createTestCanvasDocumentSurface(),
+  keyboard = createTestCanvasKeyboardPort(),
 }: TestCanvasRuntimeSurfaceOptions = {}): CanvasRuntimeSurfaces {
-  return { commands, queries, documents }
+  return { commands, queries, documents, keyboard }
+}
+
+/** A keyboard port that consumes nothing: the runtime surfaces' port before an interaction session exists. */
+export function createTestCanvasKeyboardPort(overrides: Partial<CanvasKeyboardPort> = {}): CanvasKeyboardPort {
+  return {
+    host: document.createElement('div'),
+    escapeLayers: () => [],
+    escape: () => {},
+    command: () => false,
+    keyState: () => 'pass',
+    holdsSelectionDeletes: () => false,
+    ...overrides,
+  }
 }
 
 export function createTestCanvasCommandSurface(
   overrides: DeepPartial<CanvasCommandSurface> = {},
 ): CanvasCommandSurface {
   const surface: CanvasCommandSurface = {
-    speciesFocus: { focus: () => {}, showCodes: () => {} },
+    speciesFocus: { focus: () => {} },
     tools: {
       setTool: () => {},
+      plantRowSpacing: { input: () => {}, commit: () => {}, blur: () => {}, cancel: () => {} },
     },
     viewport: {
       zoomIn: () => {},
       zoomOut: () => {},
+      zoomBy: () => {},
       zoomToFit: () => {},
       returnToDesign: () => {},
       focusTemporaryBounds: () => false,
+      frameBounds: () => false,
       returnFromTemporaryFocus: () => false,
+      showPlace: () => false,
+      setFramingInsets: () => {},
+      zoomToSelection: () => {},
+      resetNorth: () => {},
+      rotateBy: () => {},
+      beginRotation: () => ({ update: () => {}, end: () => {}, cancel: () => {} }),
+      showCamera: () => {},
     },
     history: {
       canUndo: signal(false),
@@ -50,6 +76,7 @@ export function createTestCanvasCommandSurface(
     },
     sceneEdits: {
       saveSelectionAsObjectStamp: () => {},
+      importDesignObjects: () => ({ committed: false, createdCount: 0 }),
       copy: () => {},
       paste: () => {},
       pasteAt: () => {},
@@ -59,22 +86,29 @@ export function createTestCanvasCommandSurface(
       deleteSelected: () => {},
       selectAll: () => {},
       selectSameSpecies: () => {},
+      selectSpecies: () => {},
+      clearSelection: () => {},
       bringToFront: () => {},
       sendToBack: () => {},
       lockSelected: () => {},
       unlockSelected: () => {},
       groupSelected: () => {},
       ungroupSelected: () => {},
+      renameZone: () => false,
+      rotateSelected: () => {},
+      unlockAll: () => {},
+      nudgeSelected: () => false,
+      endNudge: () => {},
     },
     chrome: {
       toggleGrid: () => {},
       toggleSnapToGrid: () => {},
-      toggleRulers: () => {},
     },
     layers: {
       setSceneLayerVisibility: () => false,
       setSceneLayerOpacity: () => false,
       setSceneLayerLocked: () => false,
+      presentLayers: () => undefined,
     },
     plantPresentation: {
       ensureSpeciesCacheEntries: async () => true,
@@ -82,8 +116,6 @@ export function createTestCanvasCommandSurface(
       setSelectedPlantSymbol: () => 0,
       setPlantColorForSpecies: () => 0,
       setPlantSymbolForSpecies: () => 0,
-      clearPlantSpeciesColor: () => false,
-      clearPlantSpeciesSymbol: () => false,
     },
   }
 
@@ -92,6 +124,7 @@ export function createTestCanvasCommandSurface(
     tools: {
       ...surface.tools,
       ...overrides.tools,
+      plantRowSpacing: { ...surface.tools.plantRowSpacing, ...overrides.tools?.plantRowSpacing },
       setTool: (name) => {
         setTool(name)
         setCanvasTool(name)
@@ -111,9 +144,8 @@ export function createTestCanvasDocumentSurface(
   overrides: Partial<CanvasDocumentSurface> = {},
 ): CanvasDocumentSurface {
   const surface: CanvasDocumentSurface = {
+    presented: signal(true),
     attachInspectionTo: () => { throw new Error('Inspection view is not configured in this test.') },
-    initializeViewport: () => {},
-    attachRulersTo: () => {},
     showCanvasChrome: () => {},
     hideCanvasChrome: () => {},
     zoomToFit: () => {},

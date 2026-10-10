@@ -161,7 +161,7 @@ export function WorldMapPanel() {
           </div>
           <p className={styles.previewDescription}>{selected.description}</p>
           <div className={styles.previewMeta}>
-            <span>{t('worldMap.plantCount', { count: selected.plant_count })}</span>
+            <span>{t('plantFinder.plants', { count: selected.plant_count })}</span>
             <span>{selected.climate_zone}</span>
           </div>
           <button
@@ -192,7 +192,7 @@ export function WorldMapPanel() {
               {t('worldMap.author', { author: template.author })}
             </span>
             <span className={styles.templateMeta}>
-              {t('worldMap.plantCount', { count: template.plant_count })}
+              {t('plantFinder.plants', { count: template.plant_count })}
             </span>
             <span className={styles.templateZone}>{template.climate_zone}</span>
           </button>

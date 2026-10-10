@@ -10,8 +10,8 @@ import { recentFrontendDiagnostics } from './diagnostics'
 import { buildCurrentDesignProblemReportAttachment } from './attachments'
 import { problemReportDialogOpen } from './state'
 
-export type ProblemReportCopyState = 'idle' | 'copied' | 'failed'
-export type ProblemReportShowFolderState = 'idle' | 'showing' | 'failed'
+type ProblemReportCopyState = 'idle' | 'copied' | 'failed'
+type ProblemReportShowFolderState = 'idle' | 'showing' | 'failed'
 
 export interface ProblemReportSubmissionDeps {
   readonly createProblemReport: (request: ProblemReportRequest) => Promise<ProblemReportResult>

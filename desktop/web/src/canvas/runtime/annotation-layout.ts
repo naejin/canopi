@@ -1,7 +1,8 @@
+import { CANVAS_CHROME_FONT_FAMILY } from '../chrome-fonts'
 import { getCanvasTextOpacity } from './text-visibility'
-import type { SceneAnnotationEntity, SceneDesignObjectSelection, ScenePoint, SceneViewportState } from './scene'
+import type { SceneAnnotationEntity, SceneDesignObjectSelection, ScenePoint } from './scene'
 
-export interface AnnotationTextMetrics {
+interface AnnotationTextMetrics {
   widthPx: number
   heightPx: number
   lineHeightPx: number
@@ -22,9 +23,11 @@ export interface AnnotationScreenFrame {
   rotationDeg: number
 }
 
-export const ANNOTATION_MARKER_SIZE_PX = 8
-export const ANNOTATION_MARKER_STROKE_PX = 1.5
-export const ANNOTATION_MARKER_PATHS: readonly (readonly ScenePoint[])[] = [
+/** The drawn outline's margin about a note's text frame, CSS px; a shown note's click target is that outline (Q7). */
+const ANNOTATION_OUTLINE_PADDING_PX = { x: 4, y: 2 } as const
+const ANNOTATION_MARKER_SIZE_PX = 8
+const ANNOTATION_MARKER_STROKE_PX = 1.5
+const ANNOTATION_MARKER_PATHS: readonly (readonly ScenePoint[])[] = [
   [{ x: -4, y: -4 }, { x: 4, y: -4 }, { x: 4, y: 4 }, { x: -4, y: 4 }, { x: -4, y: -4 }],
   [{ x: -2, y: -1 }, { x: 2, y: -1 }],
   [{ x: -2, y: 1 }, { x: 1, y: 1 }],
@@ -35,20 +38,23 @@ export function getRevealedAnnotationId(selection: SceneDesignObjectSelection): 
   return selection.length === 1 && selection[0]?.kind === 'annotation' ? selection[0].id : null
 }
 
+/** How a note shows at a scale. Its frames are in CSS px about the note's anchor, its position projected through the view. */
 export function getAnnotationPresentation(
   annotation: SceneAnnotationEntity,
-  viewport: SceneViewportState,
+  pixelsPerMetre: number,
   revealText = false,
   textAllowed = true,
 ) {
-  const textOpacity = revealText ? 1 : textAllowed ? getCanvasTextOpacity(viewport.scale) : 0
-  const textFrame = getAnnotationScreenFrame(annotation, viewport)
+  const textOpacity = revealText ? 1 : textAllowed ? getCanvasTextOpacity(pixelsPerMetre) : 0
+  const textFrame = annotationScreenFrameAt(annotation, { x: 0, y: 0 })
   const markerOwnsGeometry = textOpacity < 0.5
-  const compact = !textAllowed && getCanvasTextOpacity(viewport.scale) > 0
+  const compact = !textAllowed && getCanvasTextOpacity(pixelsPerMetre) > 0
   const markerSize = compact ? 4 : ANNOTATION_MARKER_SIZE_PX
   return {
     textOpacity,
     markerOpacity: (1 - textOpacity) * (compact ? 0.5 : 1),
+    /** The half-size marker of a note whose text the detail layout keeps hidden. */
+    compact,
     markerPaths: compact ? COMPACT_MARKER_PATHS : ANNOTATION_MARKER_PATHS,
     markerStrokePx: compact ? 1 : ANNOTATION_MARKER_STROKE_PX,
     markerOwnsGeometry,
@@ -67,19 +73,21 @@ export function getAnnotationVisualWorldCorners(
   annotation: SceneAnnotationEntity,
   viewportScale: number,
   revealText = false,
-  paddingPx: { x: number; y: number } = { x: 0, y: 0 },
   textAllowed = true,
 ): ScenePoint[] {
-  const { frame } = getAnnotationPresentation(annotation, { x: 0, y: 0, scale: viewportScale }, revealText, textAllowed)
+  const { frame } = getAnnotationPresentation(annotation, viewportScale, revealText, textAllowed)
   const safeScale = Math.max(viewportScale, 0.001)
-  return rotatedRectCorners({
-    origin: { x: frame.origin.x / safeScale, y: frame.origin.y / safeScale },
-    width: frame.widthPx / safeScale,
-    height: frame.heightPx / safeScale,
-    paddingX: paddingPx.x / safeScale,
-    paddingY: paddingPx.y / safeScale,
-    rotationDeg: frame.rotationDeg,
-  })
+  return rotatedRectCorners(
+    { x: annotation.position.x + frame.origin.x / safeScale, y: annotation.position.y + frame.origin.y / safeScale },
+    frame.widthPx / safeScale,
+    frame.heightPx / safeScale,
+    frame.rotationDeg,
+  )
+}
+
+/** A note's drawn outline in CSS px about its anchor: `frame` padded 4 px across and 2 px down, turned by its angle. */
+export function annotationOutlineCorners(frame: AnnotationScreenFrame): ScenePoint[] {
+  return rotatedRectCorners(frame.origin, frame.widthPx, frame.heightPx, frame.rotationDeg, ANNOTATION_OUTLINE_PADDING_PX)
 }
 
 export function getAnnotationVisualWorldBounds(
@@ -88,7 +96,7 @@ export function getAnnotationVisualWorldBounds(
   revealText = false,
   textAllowed = true,
 ): AnnotationWorldBounds {
-  return boundsForPoints(getAnnotationVisualWorldCorners(annotation, viewportScale, revealText, undefined, textAllowed))
+  return boundsForPoints(getAnnotationVisualWorldCorners(annotation, viewportScale, revealText, textAllowed))
 }
 
 export function isPointInAnnotationPresentation(
@@ -99,10 +107,10 @@ export function isPointInAnnotationPresentation(
   textAllowed = true,
 ): boolean {
   if (revealText || (textAllowed && getCanvasTextOpacity(viewportScale) >= 0.5)) {
-    return isPointInAnnotationText(annotation, point, viewportScale)
+    return isPointInAnnotationOutline(annotation, point, viewportScale)
   }
   // Pointer allowance follows the visible marker, including crowded notes.
-  const { frame } = getAnnotationPresentation(annotation, { x: 0, y: 0, scale: viewportScale }, false, textAllowed)
+  const { frame } = getAnnotationPresentation(annotation, viewportScale, false, textAllowed)
   const radius = (frame.widthPx / 2 + 4) / Math.max(viewportScale, 0.001)
   return Math.abs(point.x - annotation.position.x) <= radius + HIT_EPSILON
     && Math.abs(point.y - annotation.position.y) <= radius + HIT_EPSILON
@@ -112,15 +120,101 @@ const CHARACTER_WIDTH_FACTOR = 0.6
 const LINE_HEIGHT_FACTOR = 1.25
 const HIT_EPSILON = 0.000001
 
-export function getAnnotationTextMetrics(annotation: SceneAnnotationEntity): AnnotationTextMetrics {
+type MeasureContext = Pick<CanvasRenderingContext2D, 'font' | 'measureText'>
+
+/** The 2D context notes are measured with; null where there is none, and undefined until the first note asks. */
+let measureContext: MeasureContext | null | undefined
+const textMetricsByKey = new Map<string, AnnotationTextMetrics>()
+const requestedFontTexts = new Set<string>()
+const fontLoadListeners = new Set<() => void>()
+let fontEpoch = 0
+
+/** Counts the web-font loads that re-measured the notes; memos of anything sized by a note keep it in their key. */
+export function getAnnotationFontEpoch(): number {
+  return fontEpoch
+}
+
+/** Calls `listener` after a web font a note asked for has loaded and the notes measure anew; returns the unsubscribe. */
+export function onAnnotationFontLoad(listener: () => void): () => void {
+  fontLoadListeners.add(listener)
+  return () => { fontLoadListeners.delete(listener) }
+}
+
+/**
+ * A note's text box: each line measured by the browser in the font the renderer draws it in, as Pixi's
+ * CanvasTextMetrics measures it, without the halo Pixi adds to its texture (the glyphs start half a halo in, so the
+ * outline's 4 px margin ends about 2 px past the last glyph). Memoised by size and text. Policy P5c keeps Pixi out of
+ * this module's importers (the tools), hence the 2D context of its own.
+ */
+function getAnnotationTextMetrics(annotation: Pick<SceneAnnotationEntity, 'text' | 'fontSize'>): AnnotationTextMetrics {
+  const key = `${annotation.fontSize}|${annotation.text}`
+  const known = textMetricsByKey.get(key)
+  if (known) return known
   const lines = annotation.text.split('\n')
-  const maxLineLength = Math.max(...lines.map((line) => line.length), 1)
   const lineHeightPx = annotation.fontSize * LINE_HEIGHT_FACTOR
-  return {
-    widthPx: maxLineLength * annotation.fontSize * CHARACTER_WIDTH_FACTOR,
+  const metrics = {
+    widthPx: measureLinesWidth(lines, annotation.fontSize),
     heightPx: Math.max(lines.length * lineHeightPx, annotation.fontSize),
     lineHeightPx,
   }
+  if (textMetricsByKey.size >= 512) textMetricsByKey.clear()
+  textMetricsByKey.set(key, metrics)
+  return metrics
+}
+
+function measureLinesWidth(lines: readonly string[], fontSize: number): number {
+  const context = getMeasureContext()
+  // No 2D context (jsdom): 0.6 em per character.
+  if (!context) return Math.max(...lines.map((line) => line.length), 1) * fontSize * CHARACTER_WIDTH_FACTOR
+  const font = `${fontSize}px ${CANVAS_CHROME_FONT_FAMILY}`
+  context.font = font
+  requestFont(font, lines.join(''))
+  return Math.max(...lines.map((line) => {
+    const measured = context.measureText(line)
+    return Math.max(measured.width, measured.actualBoundingBoxLeft + measured.actualBoundingBoxRight)
+  }))
+}
+
+/**
+ * Probed once. A page without the font loading API cannot say when the web font arrives, so it keeps the estimate
+ * rather than a width measured in a fallback font for good.
+ */
+function getMeasureContext(): MeasureContext | null {
+  if (measureContext !== undefined) return measureContext
+  try {
+    measureContext = !globalThis.document?.fonts ? null
+      : typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(1, 1).getContext('2d')
+        : document.createElement('canvas').getContext('2d')
+  } catch {
+    measureContext = null
+  }
+  return measureContext
+}
+
+/**
+ * A note measured while its web font is still loading is measured in the fallback font. So the measure asks the
+ * browser for the font and the note's text, one request at a time for each (no listener), and when a face that had not
+ * loaded then has loaded, forgets every width and tells the listeners (the runtime redraws the scene).
+ * The request names the text because a font's faces cover character ranges (fonts.css): a Latin note's load brings
+ * back only the Latin face, while a Cyrillic note in the same font waits for the Cyrillic one. `fonts.check()` cannot
+ * tell: WebKit reports a face still loading under font-display: swap as failed, so check() is true, and only `load()`
+ * waits for the face to arrive.
+ */
+function requestFont(font: string, text: string): void {
+  const fonts = globalThis.document?.fonts
+  const request = `${font}\n${text}`
+  if (!fonts || requestedFontTexts.has(request)) return
+  const unloaded = new Set<FontFace>()
+  fonts.forEach((face) => { if (face.status !== 'loaded') unloaded.add(face) })
+  if (unloaded.size === 0) return
+  requestedFontTexts.add(request)
+  fonts.load(font, text).then((faces) => {
+    requestedFontTexts.delete(request)
+    if (!faces.some((face) => unloaded.has(face) && face.status === 'loaded')) return
+    fontEpoch += 1
+    textMetricsByKey.clear()
+    for (const listener of [...fontLoadListeners]) listener()
+  }, () => { requestedFontTexts.delete(request) })
 }
 
 export function getAnnotationWorldBounds(
@@ -130,13 +224,14 @@ export function getAnnotationWorldBounds(
   return boundsForPoints(getAnnotationWorldCorners(annotation, viewportScale))
 }
 
-export function getAnnotationScreenFrame(
-  annotation: SceneAnnotationEntity,
-  viewport: SceneViewportState,
+/** A note's text frame at an origin already projected. */
+function annotationScreenFrameAt(
+  annotation: Pick<SceneAnnotationEntity, 'text' | 'fontSize' | 'rotationDeg'>,
+  origin: ScenePoint,
 ): AnnotationScreenFrame {
   const metrics = getAnnotationTextMetrics(annotation)
   return {
-    origin: worldToScreen(annotation.position, viewport),
+    origin,
     widthPx: metrics.widthPx,
     heightPx: metrics.heightPx,
     lineHeightPx: metrics.lineHeightPx,
@@ -144,24 +239,13 @@ export function getAnnotationScreenFrame(
   }
 }
 
-export function getAnnotationWorldCorners(
-  annotation: SceneAnnotationEntity,
-  viewportScale: number,
-  paddingPx: { x: number; y: number } = { x: 0, y: 0 },
-): ScenePoint[] {
+function getAnnotationWorldCorners(annotation: SceneAnnotationEntity, viewportScale: number): ScenePoint[] {
   const safeScale = Math.max(viewportScale, 0.001)
   const metrics = getAnnotationTextMetrics(annotation)
-  return rotatedRectCorners({
-    origin: annotation.position,
-    width: metrics.widthPx / safeScale,
-    height: metrics.heightPx / safeScale,
-    paddingX: paddingPx.x / safeScale,
-    paddingY: paddingPx.y / safeScale,
-    rotationDeg: annotation.rotationDeg ?? 0,
-  })
+  return rotatedRectCorners(annotation.position, metrics.widthPx / safeScale, metrics.heightPx / safeScale, annotation.rotationDeg ?? 0)
 }
 
-export function isPointInAnnotationText(
+function isPointInAnnotationOutline(
   annotation: SceneAnnotationEntity,
   point: ScenePoint,
   viewportScale: number,
@@ -169,36 +253,31 @@ export function isPointInAnnotationText(
   const safeScale = Math.max(viewportScale, 0.001)
   const metrics = getAnnotationTextMetrics(annotation)
   const local = inverseRotatePoint(point, annotation.position, annotation.rotationDeg ?? 0)
+  const padX = ANNOTATION_OUTLINE_PADDING_PX.x / safeScale
+  const padY = ANNOTATION_OUTLINE_PADDING_PX.y / safeScale
   return (
-    local.x >= -HIT_EPSILON &&
-    local.x <= metrics.widthPx / safeScale + HIT_EPSILON &&
-    local.y >= -HIT_EPSILON &&
-    local.y <= metrics.heightPx / safeScale + HIT_EPSILON
+    local.x >= -padX - HIT_EPSILON &&
+    local.x <= metrics.widthPx / safeScale + padX + HIT_EPSILON &&
+    local.y >= -padY - HIT_EPSILON &&
+    local.y <= metrics.heightPx / safeScale + padY + HIT_EPSILON
   )
 }
 
-export function worldToScreen(point: ScenePoint, viewport: SceneViewportState): ScenePoint {
-  return {
-    x: point.x * viewport.scale + viewport.x,
-    y: point.y * viewport.scale + viewport.y,
-  }
-}
-
-function rotatedRectCorners(options: {
-  origin: ScenePoint
-  width: number
-  height: number
-  paddingX: number
-  paddingY: number
-  rotationDeg: number
-}): ScenePoint[] {
+/** A `width` by `height` rectangle grown by `padding` on each side, turned by `rotationDeg` about `origin`, its unpadded corner. */
+function rotatedRectCorners(
+  origin: ScenePoint,
+  width: number,
+  height: number,
+  rotationDeg: number,
+  padding: ScenePoint = { x: 0, y: 0 },
+): ScenePoint[] {
   const localCorners = [
-    { x: -options.paddingX, y: -options.paddingY },
-    { x: options.width + options.paddingX, y: -options.paddingY },
-    { x: options.width + options.paddingX, y: options.height + options.paddingY },
-    { x: -options.paddingX, y: options.height + options.paddingY },
+    { x: -padding.x, y: -padding.y },
+    { x: width + padding.x, y: -padding.y },
+    { x: width + padding.x, y: height + padding.y },
+    { x: -padding.x, y: height + padding.y },
   ]
-  return localCorners.map((point) => rotateLocalPoint(point, options.origin, options.rotationDeg))
+  return localCorners.map((point) => rotateLocalPoint(point, origin, rotationDeg))
 }
 
 function rotateLocalPoint(point: ScenePoint, origin: ScenePoint, rotationDeg: number): ScenePoint {

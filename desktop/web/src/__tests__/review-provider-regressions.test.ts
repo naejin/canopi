@@ -1,19 +1,23 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  BasemapProvider,
+  SatelliteImageryProvider,
   readViewportMetadata,
-  type BasemapProviderHttp,
-  type BasemapProviderResponse,
-  type BasemapProviderState,
-  type BasemapViewport,
-} from '../maplibre/basemap-provider-session'
+  type SatelliteHttp,
+  type SatelliteHttpResponse,
+  type SatelliteState,
+  type SatelliteViewport,
+} from '../maplibre/satellite-provider-session'
 import {
-  reconcileBasemapContribution,
-  type BasemapReconcileTarget,
-} from '../maplibre/basemap-contribution'
+  reconcileSatelliteContribution,
+  type SatelliteReconcileTarget,
+} from '../maplibre/satellite-contribution'
+import { MAPLIBRE_SATELLITE_LAYER_ID, MAPLIBRE_SATELLITE_SOURCE_ID } from '../maplibre/config'
+import { BasemapTileAuth } from '../maplibre/basemap-tile-auth'
+import { createSatelliteImagery, mountSatelliteLifecycle } from '../maplibre/satellite-bind'
+import { GOOGLE_SESSION_TILES, type SatelliteDescriptor } from '../maplibre/satellite-provider'
 
-const VIEWPORT_A: BasemapViewport = { west: -1, south: 48, east: 1, north: 49, zoom: 14 }
-const VIEWPORT_B: BasemapViewport = { west: 10, south: 40, east: 12, north: 42, zoom: 12 }
+const VIEWPORT_A: SatelliteViewport = { west: -1, south: 48, east: 1, north: 49, zoom: 14 }
+const VIEWPORT_B: SatelliteViewport = { west: 10, south: 40, east: 12, north: 42, zoom: 12 }
 
 function sessionBody(token = 'token-a'): unknown {
   return {
@@ -31,17 +35,17 @@ function viewportBody(maxZoom = 18, copyright = 'Imagery &copy; Google'): unknow
   }
 }
 
-function ok(json: unknown): BasemapProviderResponse {
+function ok(json: unknown): SatelliteHttpResponse {
   return { ok: true, status: 200, json }
 }
 
-function failure(status: number): BasemapProviderResponse {
+function failure(status: number): SatelliteHttpResponse {
   return { ok: false, status, json: null, retryAfterSeconds: null }
 }
 
 function scriptedHttp(
-  answers: Array<BasemapProviderResponse | (() => Promise<BasemapProviderResponse>)>,
-): { http: BasemapProviderHttp; calls: Array<{ url: string; method?: string }> } {
+  answers: Array<SatelliteHttpResponse | (() => Promise<SatelliteHttpResponse>)>,
+): { http: SatelliteHttp; calls: Array<{ url: string; method?: string }> } {
   const calls: Array<{ url: string; method?: string }> = []
   let index = 0
   return {
@@ -57,8 +61,21 @@ function scriptedHttp(
   }
 }
 
-function recorder(provider: BasemapProvider): BasemapProviderState[] {
-  const seen: BasemapProviderState[] = []
+/** Reconcile options for a map whose transport resolves official tiles, and for one without that transport. */
+const RESOLVABLE = { officialTilesResolvable: true, beforeLayerId: () => null }
+const NO_TRANSPORT = { officialTilesResolvable: false, beforeLayerId: () => null }
+
+/** A ready style, no layer anchor, no events: what a mount needs beyond its provider, map and viewport. */
+const MOUNT_DEFAULTS = {
+  styleReady: { isReady: () => true, whenReady: () => () => {} },
+  beforeLayerId: () => null,
+  afterApply: () => {},
+  events: { on: () => {}, off: () => {} },
+  replaceSatelliteAttribution: () => {},
+} as const
+
+function recorder(provider: SatelliteImageryProvider): SatelliteState[] {
+  const seen: SatelliteState[] = []
   provider.subscribe((state) => seen.push(state))
   return seen
 }
@@ -68,7 +85,7 @@ function recordingTarget() {
   const layers = new Map<string, Record<string, unknown>>()
   const order: string[] = []
   let attribution: string | null = null
-  const target: BasemapReconcileTarget = {
+  const target: SatelliteReconcileTarget = {
     getSource: (id) => sources.get(id),
     getLayer: (id) => layers.get(id),
     removeLayer: (id) => {
@@ -94,7 +111,7 @@ function recordingTarget() {
         layer.layout = { visibility: value }
       }
     },
-    replaceBasemapAttribution: (next) => {
+    replaceSatelliteAttribution: (next) => {
       order.push(`attribution:${next}`)
       attribution = next
     },
@@ -102,16 +119,13 @@ function recordingTarget() {
   return { target, sources, layers, order, readAttribution: () => attribution }
 }
 
-function descriptor(overrides: Record<string, unknown> = {}) {
+function descriptor(overrides: Partial<SatelliteDescriptor> = {}): SatelliteDescriptor {
   return {
-    style: 'google_satellite' as const,
-    provider: 'google' as const,
-    tiles: ['https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}?session={session}'],
+    tiles: [GOOGLE_SESSION_TILES],
     tileSize: 256,
     maxzoom: 22,
     attribution: 'Imagery &copy; Google',
     official: true,
-    notice: null,
     ...overrides,
   }
 }
@@ -125,12 +139,12 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       ok(sessionBody('token-b')),
       ok(viewportBody()),
     ])
-    const provider = new BasemapProvider(http, () => ({ googleMapsApiKey: key }))
+    const provider = new SatelliteImageryProvider(http, () => ({ googleMapsApiKey: key }))
     await new Promise<void>((resolve) => {
       provider.subscribe((state) => {
         if (state.state === 'ready') resolve()
       })
-      provider.update({ style: 'google_satellite' }, VIEWPORT_A)
+      provider.update(VIEWPORT_A)
     })
 
     key = 'key-b'
@@ -138,7 +152,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       provider.subscribe((state) => {
         if (state.state === 'ready') resolve()
       })
-      provider.update({ style: 'google_satellite' }, VIEWPORT_A)
+      provider.update(VIEWPORT_A)
     })
 
     const sessionCalls = calls.filter((call) => call.url.includes('createSession'))
@@ -153,13 +167,13 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     const { http, calls } = scriptedHttp([
       ok(sessionBody()),
       () =>
-        new Promise<BasemapProviderResponse>((resolve) => {
+        new Promise<SatelliteHttpResponse>((resolve) => {
           gate.release = () => resolve(ok(viewportBody(15, 'old')))
         }),
       ok(viewportBody(20, 'new')),
     ])
-    const provider = new BasemapProvider(http, { googleMapsApiKey: 'key' })
-    provider.update({ style: 'google_satellite' }, VIEWPORT_A)
+    const provider = new SatelliteImageryProvider(http, () => ({ googleMapsApiKey: 'key' }))
+    provider.update(VIEWPORT_A)
     await vi.waitFor(() => {
       if (calls.length < 2) throw new Error('session not settled')
     })
@@ -170,7 +184,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     await vi.waitFor(() => {
       const last = provider.snapshot()
       if (last.state !== 'ready') throw new Error('not ready')
-      if (last.copyright !== 'new') throw new Error('stale viewport published')
+      if (last.descriptor.attribution !== 'new') throw new Error('stale viewport published')
     })
     const viewportCalls = calls.filter((call) => call.url.includes('viewport'))
     expect(viewportCalls.length).toBeGreaterThanOrEqual(2)
@@ -182,13 +196,13 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     const { http, calls } = scriptedHttp([
       ok(sessionBody()),
       () =>
-        new Promise<BasemapProviderResponse>((resolve) => {
+        new Promise<SatelliteHttpResponse>((resolve) => {
           gate.release = () => resolve(ok(viewportBody()))
         }),
     ])
-    const provider = new BasemapProvider(http, { googleMapsApiKey: 'key' })
+    const provider = new SatelliteImageryProvider(http, () => ({ googleMapsApiKey: 'key' }))
     const seen = recorder(provider)
-    provider.update({ style: 'google_satellite' }, VIEWPORT_A)
+    provider.update(VIEWPORT_A)
     await vi.waitFor(() => {
       if (!gate.release) throw new Error('viewport request not started')
     })
@@ -219,13 +233,13 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       failure(500),
       ok(viewportBody(18, 'recovered')),
     ])
-    const provider = new BasemapProvider(
+    const provider = new SatelliteImageryProvider(
       http,
-      { googleMapsApiKey: 'key' },
+      () => ({ googleMapsApiKey: 'key' }),
       () => 0,
       async () => {},
     )
-    provider.update({ style: 'google_satellite' }, VIEWPORT_A)
+    provider.update(VIEWPORT_A)
     await vi.waitFor(() => {
       if (provider.snapshot().state !== 'unavailable') throw new Error('not failed')
     })
@@ -235,7 +249,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     await vi.waitFor(() => {
       const last = provider.snapshot()
       if (last.state !== 'ready') throw new Error('not recovered')
-      if (last.copyright !== 'recovered') throw new Error('wrong copyright')
+      if (last.descriptor.attribution !== 'recovered') throw new Error('wrong copyright')
     })
     expect(calls.filter((c) => c.url.includes('viewport')).length).toBeGreaterThanOrEqual(2)
     provider.dispose()
@@ -248,8 +262,8 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       ok(viewportBody(20)),
       ok(viewportBody(12)),
     ])
-    const provider = new BasemapProvider(http, { googleMapsApiKey: 'key' })
-    provider.update({ style: 'google_satellite' }, VIEWPORT_A)
+    const provider = new SatelliteImageryProvider(http, () => ({ googleMapsApiKey: 'key' }))
+    provider.update(VIEWPORT_A)
     await vi.waitFor(() => {
       const last = provider.snapshot()
       if (last.state !== 'ready' || last.descriptor.maxzoom !== 15) throw new Error('want 15')
@@ -302,25 +316,24 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       descriptor: descriptor({ attribution: 'first' }),
       copyright: 'first',
     }
-    reconcileBasemapContribution(target, first, { officialTilesResolvable: true })
+    reconcileSatelliteContribution(target, first, RESOLVABLE)
     expect(sources.size).toBe(1)
     const addCount = order.filter((entry) => entry.startsWith('addSource')).length
 
     // Identical publication retains source identity and loaded state.
-    reconcileBasemapContribution(target, first, { officialTilesResolvable: true })
+    reconcileSatelliteContribution(target, first, RESOLVABLE)
     expect(sources.size).toBe(1)
     expect(order.filter((entry) => entry.startsWith('removeSource')).length).toBe(0)
     expect(order.filter((entry) => entry.startsWith('addSource')).length).toBe(addCount)
 
     // Copyright-only change updates attribution without removing the source.
-    reconcileBasemapContribution(
+    reconcileSatelliteContribution(
       target,
       {
         state: 'ready',
         descriptor: descriptor({ attribution: 'second' }),
-        copyright: 'second',
       },
-      { officialTilesResolvable: true },
+      RESOLVABLE,
     )
     expect(sources.size).toBe(1)
     expect(order.filter((entry) => entry.startsWith('removeSource')).length).toBe(0)
@@ -329,15 +342,15 @@ describe('provider lifecycle regressions after 26eca68a', () => {
 
   it('R41: a real tile-configuration change rebuilds the source', () => {
     const { target, sources, order } = recordingTarget()
-    reconcileBasemapContribution(
+    reconcileSatelliteContribution(
       target,
-      { state: 'ready', descriptor: descriptor({ maxzoom: 18 }), copyright: 'a' },
-      { officialTilesResolvable: true },
+      { state: 'ready', descriptor: descriptor({ maxzoom: 18 }) },
+      RESOLVABLE,
     )
-    reconcileBasemapContribution(
+    reconcileSatelliteContribution(
       target,
-      { state: 'ready', descriptor: descriptor({ maxzoom: 20 }), copyright: 'a' },
-      { officialTilesResolvable: true },
+      { state: 'ready', descriptor: descriptor({ maxzoom: 20 }) },
+      RESOLVABLE,
     )
     expect(order.filter((entry) => entry.startsWith('removeSource')).length).toBe(1)
     expect(order.filter((entry) => entry.startsWith('addSource')).length).toBe(2)
@@ -351,12 +364,12 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       descriptor: descriptor({ attribution: 'A' }),
       copyright: 'A',
     }
-    reconcileBasemapContribution(target, first, { officialTilesResolvable: true })
+    reconcileSatelliteContribution(target, first, RESOLVABLE)
     const addCount = order.filter((entry) => entry.startsWith('addSource')).length
-    reconcileBasemapContribution(
+    reconcileSatelliteContribution(
       target,
-      { state: 'ready', descriptor: descriptor({ attribution: 'B' }), copyright: 'B' },
-      { officialTilesResolvable: true },
+      { state: 'ready', descriptor: descriptor({ attribution: 'B' }) },
+      RESOLVABLE,
     )
     expect(sources.size).toBe(1)
     expect(order.filter((entry) => entry.startsWith('removeSource')).length).toBe(0)
@@ -366,15 +379,15 @@ describe('provider lifecycle regressions after 26eca68a', () => {
 
   it('R46: Loading hides an unchanged source instead of exposing cached imagery', () => {
     const { target, layers } = recordingTarget()
-    reconcileBasemapContribution(
+    reconcileSatelliteContribution(
       target,
-      { state: 'ready', descriptor: descriptor(), copyright: 'A' },
-      { officialTilesResolvable: true },
+      { state: 'ready', descriptor: descriptor() },
+      RESOLVABLE,
     )
-    const layer = layers.get('basemap-raster') as { layout?: { visibility?: string } } | undefined
+    const layer = layers.get(MAPLIBRE_SATELLITE_LAYER_ID) as { layout?: { visibility?: string } } | undefined
     expect(layer?.layout?.visibility).toBe('visible')
-    reconcileBasemapContribution(target, { state: 'loading', style: 'google_satellite' })
-    expect((layers.get('basemap-raster') as { layout?: { visibility?: string } })?.layout?.visibility)
+    reconcileSatelliteContribution(target, { state: 'loading' }, NO_TRANSPORT)
+    expect((layers.get(MAPLIBRE_SATELLITE_LAYER_ID) as { layout?: { visibility?: string } })?.layout?.visibility)
       .toBe('none')
   })
 
@@ -518,22 +531,20 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       addSource: (id: string, source: Record<string, unknown>) => void sources.set(id, source),
       addLayer: (layer: Record<string, unknown>) => void layers.set(String(layer.id), layer),
       setLayoutProperty: () => {},
-      replaceBasemapAttribution: (credit: string) => credits.push(credit),
+      replaceSatelliteAttribution: (credit: string) => credits.push(credit),
     }
-    reconcileBasemapContribution(target, {
+    reconcileSatelliteContribution(target, {
       state: 'ready',
       descriptor: descriptor({ attribution: 'A' }),
-      copyright: 'A',
-    }, { officialTilesResolvable: true })
+    }, RESOLVABLE)
     expect(credits.at(-1)).toBe('A')
     expect(sources.size).toBe(1)
-    reconcileBasemapContribution(target, { state: 'idle' })
+    reconcileSatelliteContribution(target, { state: 'idle' }, NO_TRANSPORT)
     expect(sources.size).toBe(0)
     expect(credits.at(-1)).toBe('')
   })
 
-  it('M1: mountBasemapLifecycle applies current configuration without waiting for events', async () => {
-    const { mountBasemapLifecycle } = await import('../maplibre/basemap-bind')
+  it('M1: mountSatelliteLifecycle applies current configuration without waiting for events', async () => {
     const sources = new Map<string, Record<string, unknown>>()
     const layers = new Map<string, Record<string, unknown>>()
     const map = {
@@ -548,20 +559,49 @@ describe('provider lifecycle regressions after 26eca68a', () => {
         if (layer && name === 'visibility') layer.layout = { visibility: value }
       },
     }
-    const teardown = mountBasemapLifecycle({
+    const teardown = mountSatelliteLifecycle({
+      ...MOUNT_DEFAULTS,
+      provider: createSatelliteImagery(new BasemapTileAuth()),
       map,
-      tileAuth: null,
-      readStyle: () => 'street' as const,
       readViewport: () => ({ west: -10, south: -10, east: 10, north: 10, zoom: 2 }),
-      readVisible: () => true,
     })
-    // No movement, settings or style-ready event: the keyless street provider
+    // No movement, settings or style-ready event: keyless Google imagery
     // must already be applied from current configuration.
     expect(sources.size).toBe(1)
-    expect(layers.get('basemap-raster')?.layout).toEqual({ visibility: 'visible' })
+    expect(layers.get(MAPLIBRE_SATELLITE_LAYER_ID)?.layout).toEqual({ visibility: 'visible' })
     teardown.dispose()
     expect(sources.size).toBe(0)
     expect(layers.size).toBe(0)
+  })
+
+  it('M2: mountSatelliteLifecycle keeps a class-based map\'s prototype methods with an attribution seam', async () => {
+    // A real MapLibre map exposes its methods on the prototype, so a mount that
+    // copies the map into a plain object loses every one of them.
+    class PrototypeMap {
+      readonly sources = new Map<string, Record<string, unknown>>()
+      readonly layers = new Map<string, Record<string, unknown>>()
+      getSource(id: string) { return this.sources.get(id) ?? null }
+      getLayer(id: string) { return this.layers.get(id) ?? null }
+      removeLayer(id: string) { this.layers.delete(id) }
+      removeSource(id: string) { this.sources.delete(id) }
+      addSource(id: string, source: Record<string, unknown>) { this.sources.set(id, source) }
+      addLayer(layer: Record<string, unknown>) { this.layers.set(String(layer.id), layer) }
+      setLayoutProperty() {}
+    }
+    const map = new PrototypeMap()
+    const credits: string[] = []
+    const mount = mountSatelliteLifecycle({
+      ...MOUNT_DEFAULTS,
+      provider: createSatelliteImagery(new BasemapTileAuth()),
+      map,
+      readViewport: () => ({ west: -10, south: -10, east: 10, north: 10, zoom: 2 }),
+      replaceSatelliteAttribution: (credit: string) => credits.push(credit),
+    })
+    expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(true)
+    expect(credits.at(-1)).toBe('&copy; Google')
+    mount.dispose()
+    expect(map.sources.size).toBe(0)
+    expect(credits.at(-1)).toBe('')
   })
 
   it('M5: equivalent world copies share the same supported coverage', () => {
@@ -583,8 +623,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     ).toBeNull()
   })
 
-  it('E1: mountBasemapLifecycle registers moveend and updates viewport metadata', async () => {
-    const { mountBasemapLifecycle } = await import('../maplibre/basemap-bind')
+  it('E1: mountSatelliteLifecycle registers moveend and updates viewport metadata', async () => {
     const sources = new Map<string, Record<string, unknown>>()
     const layers = new Map<string, Record<string, unknown>>()
     const listeners = new Map<string, Set<() => void>>()
@@ -613,17 +652,16 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       },
     }
     const credits: string[] = []
-    const mount = mountBasemapLifecycle({
+    const mount = mountSatelliteLifecycle({
+      ...MOUNT_DEFAULTS,
+      provider: createSatelliteImagery(new BasemapTileAuth()),
       map,
-      tileAuth: null,
-      readStyle: () => 'street' as const,
       readViewport: () => {
         readCount += 1
         return viewport
       },
-      readVisible: () => true,
       events,
-      replaceBasemapAttribution: (credit: string) => credits.push(credit),
+      replaceSatelliteAttribution: (credit: string) => credits.push(credit),
     })
     expect(sources.size).toBe(1)
     // The mount owns viewport-event subscription.
@@ -643,44 +681,4 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     expect(sources.size).toBe(0)
   })
 
-  it('E4: one owned attribution control; identical credit preserves identity', async () => {
-    const { mountBasemapLifecycle } = await import('../maplibre/basemap-bind')
-    const sources = new Map<string, Record<string, unknown>>()
-    const layers = new Map<string, Record<string, unknown>>()
-    const map = {
-      getSource: (id: string) => sources.get(id) ?? null,
-      getLayer: (id: string) => layers.get(id) ?? null,
-      removeLayer: (id: string) => void layers.delete(id),
-      removeSource: (id: string) => void sources.delete(id),
-      addSource: (id: string, source: Record<string, unknown>) => void sources.set(id, source),
-      addLayer: (layer: Record<string, unknown>) => void layers.set(String(layer.id), layer),
-      setLayoutProperty: () => {},
-      addControl: vi.fn(),
-      removeControl: vi.fn(),
-    }
-    const controls = {
-      create: vi.fn(() => ({})),
-      add: vi.fn(),
-      remove: vi.fn(),
-    }
-    const mount = mountBasemapLifecycle({
-      map,
-      tileAuth: null,
-      readStyle: () => 'street' as const,
-      readViewport: () => ({ west: -10, south: -10, east: 10, north: 10, zoom: 2 }),
-      readVisible: () => true,
-      attributionControls: controls,
-    })
-    expect(controls.create).toHaveBeenCalledTimes(1)
-    const first = controls.create.mock.results[0]?.value
-    // Identical credit must not recreate the control.
-    mount.update({ style: 'street' }, { west: -10, south: -10, east: 10, north: 10, zoom: 2 })
-    await Promise.resolve()
-    expect(controls.create).toHaveBeenCalledTimes(1)
-    expect(controls.remove).not.toHaveBeenCalled()
-    // Withdrawal clears only basemap credit and never adds an empty control.
-    mount.dispose()
-    expect(controls.create).toHaveBeenCalledTimes(1)
-    expect(controls.remove).toHaveBeenCalledWith(first)
-  })
 })

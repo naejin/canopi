@@ -5,4 +5,4 @@ export interface DesignTemplateEnvelope {
   readonly name: string
 }
 
-export type DesignTemplateImportResult = 'opened' | 'queued' | 'cancelled' | 'superseded'
+export type DesignTemplateImportResult = 'opened' | 'cancelled' | 'superseded'

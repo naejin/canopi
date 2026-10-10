@@ -1,4 +1,5 @@
-import { lazy } from 'preact/compat'
+import { lazy, Suspense } from 'preact/compat'
+import { dataDialog, libraryView } from '../../app/lidar/library-navigation'
 import { appCommandGraphPanelProjection } from '../../commands/registry'
 import { CanvasPanel } from '../panels/CanvasPanel'
 import {
@@ -31,14 +32,14 @@ const LayersPanel = lazy(async () => {
   return { default: module.LayersPanel }
 })
 
-const DataPanel = lazy(async () => {
-  const module = await import('../panels/lidar/DataPanel')
-  return { default: module.DataPanel }
+const SiteDataPanel = lazy(async () => {
+  const module = await import('../panels/lidar/SiteDataPanel')
+  return { default: module.SiteDataPanel }
 })
 
-const AnalysisPanel = lazy(async () => {
-  const module = await import('../panels/lidar/AnalysisPanel')
-  return { default: module.AnalysisPanel }
+const DataDialogs = lazy(async () => {
+  const module = await import('../panels/lidar/DataDialogs')
+  return { default: module.DataDialogs }
 })
 
 const BudgetPanel = lazy(async () => {
@@ -56,51 +57,50 @@ const ConsortiumPanel = lazy(async () => {
   return { default: module.ConsortiumPanel }
 })
 
-const LocationPanel = lazy(async () => {
-  const module = await import('../panels/LocationPanel')
-  return { default: module.LocationPanel }
+const StoriesPanel = lazy(async () => {
+  const module = await import('../panels/StoriesPanel')
+  return { default: module.StoriesPanel }
 })
 
 function DesignNotebookSurface() {
   return <DesignNotebookPanel />
 }
 
-function LayersSurface() {
-  return <LayersPanel />
-}
-
-function DataSurface() {
-  return <DataPanel />
-}
-
-function AnalysisSurface() {
-  return <AnalysisPanel />
+function SiteDataSurface() {
+  return <SiteDataPanel />
 }
 
 const DESKTOP_WORKSPACE_SURFACES: WorkspaceSurfaces = {
   primary: {
     canvas: CanvasPanel,
-    location: LocationPanel,
   },
   side: {
     'plant-db': PlantDbPanel,
     favorites: FavoritesPanel,
     'design-notebook': DesignNotebookSurface,
     'species-key': SpeciesKeyPanel,
-    data: DataSurface,
-    analysis: AnalysisSurface,
-    layers: LayersSurface,
+    layers: LayersPanel,
+    'site-data': SiteDataSurface,
     calendar: CalendarPanel,
     budget: BudgetPanel,
     consortium: ConsortiumPanel,
+    stories: StoriesPanel,
   },
 }
 
 export function DesktopWorkspace() {
   return (
-    <WorkspaceComposition
-      panelProjection={appCommandGraphPanelProjection.value}
-      surfaces={DESKTOP_WORKSPACE_SURFACES}
-    />
+    <>
+      <WorkspaceComposition
+        panelProjection={appCommandGraphPanelProjection.value}
+        surfaces={DESKTOP_WORKSPACE_SURFACES}
+      />
+      {/* The Data library and the data dialogs sit outside the composition, which turns inert under them. */}
+      {(libraryView.value || dataDialog.value) && (
+        <Suspense fallback={null}>
+          <DataDialogs />
+        </Suspense>
+      )}
+    </>
   )
 }

@@ -1,12 +1,13 @@
-import { signal, batch } from "@preact/signals";
+import { signal, batch, effect } from "@preact/signals";
+import { currentDesign } from "../document-session/store";
 import { DEFAULT_SETTINGS } from "../../generated/settings";
 
-export type Panel = "plant-db" | "canvas" | "favorites" | "location" | "templates" | "design-notebook" | "species-key" | "data" | "analysis" | "layers" | "calendar" | "budget" | "consortium";
+export type Panel = "plant-db" | "canvas" | "favorites" | "templates" | "design-notebook" | "species-key" | "layers" | "site-data" | "calendar" | "budget" | "consortium" | "stories";
 
 // Panels that open as a sidebar alongside the canvas instead of replacing it.
-export type SidePanel = "plant-db" | "favorites" | "design-notebook" | "species-key" | "data" | "analysis" | "layers" | "calendar" | "budget" | "consortium";
+export type SidePanel = "plant-db" | "favorites" | "design-notebook" | "species-key" | "layers" | "site-data" | "calendar" | "budget" | "consortium" | "stories";
 
-const SIDE_PANELS = new Set<Panel>(["plant-db", "favorites", "design-notebook", "species-key", "data", "analysis", "layers", "calendar", "budget", "consortium"]);
+const SIDE_PANELS = new Set<Panel>(["plant-db", "favorites", "design-notebook", "species-key", "layers", "site-data", "calendar", "budget", "consortium", "stories"]);
 
 export function isSidePanel(panel: Panel): panel is SidePanel {
   return SIDE_PANELS.has(panel);
@@ -18,6 +19,12 @@ export const activePanel = signal<Panel>("canvas");
 // Starts closed — the user opens the Species Catalog Workbench when they need it
 // (by then IPC is ready).
 export const sidePanel = signal<SidePanel | null>(null);
+
+// Close Design closes every side panel but the Catalog before the next render (Q5). Only the Design is tracked, so
+// panels that run from the start screen (the Catalog, the Design Notebook, Web Favorites) still open without one.
+effect(() => {
+  if (currentDesign.value === null && sidePanel.peek() !== "plant-db") sidePanel.value = null;
+});
 
 // Sidebar width in pixels. null = no explicit user resize, so the shell uses
 // the responsive first-use default.
@@ -40,7 +47,7 @@ export function selectPanel(panel: Panel): void {
 /**
  * Navigate to a panel using the correct routing model:
  * - side panels share a single dock alongside the canvas (toggle if already open)
- * - canvas / location / templates: full-screen primary panels
+ * - canvas / templates: full-screen primary panels
  */
 export function navigateTo(panel: Panel): void {
   if (isSidePanel(panel) && sidePanel.value === panel) {

@@ -1,40 +1,6 @@
-use common_types::design::{
-    CanopiFile, DesignNotebookEntry, DesignNotebookSection, DesignNotebookSnapshot, DesignSummary,
-};
-use std::path::Path;
-
 use crate::db::UserDb;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum NotebookPathStatus {
-    Available,
-    Stale,
-    Unavailable,
-}
-
-#[derive(Debug)]
-struct NotebookFilterResult {
-    visible: Vec<DesignSummary>,
-    stale_paths: Vec<String>,
-}
-
-#[derive(Debug)]
-struct NotebookSectionedFilterResult {
-    visible: Vec<DesignNotebookEntry>,
-    stale_paths: Vec<String>,
-}
-
-pub fn get_design_notebook_entries(user_db: &UserDb) -> Result<Vec<DesignSummary>, String> {
-    let entries = {
-        let conn = user_db.acquire();
-        crate::db::design_notebook::get_design_notebook_entries(&conn)
-            .map_err(|e| format!("Failed to get Design Notebook entries: {e}"))?
-    };
-
-    let filtered = filter_design_notebook_entries(entries, notebook_path_status);
-    prune_stale_design_notebook_entries(user_db, &filtered.stale_paths);
-    Ok(filtered.visible)
-}
+use crate::services::design_files::{design_path_availability, partition_by_availability};
+use common_types::design::{CanopiFile, DesignNotebookSection, DesignNotebookSnapshot};
 
 pub fn get_design_notebook(user_db: &UserDb) -> Result<DesignNotebookSnapshot, String> {
     let (entries, sections) = {
@@ -46,8 +12,9 @@ pub fn get_design_notebook(user_db: &UserDb) -> Result<DesignNotebookSnapshot, S
         (entries, sections)
     };
 
-    let filtered = filter_design_notebook_sectioned_entries(entries, notebook_path_status);
-    prune_stale_design_notebook_entries(user_db, &filtered.stale_paths);
+    let filtered =
+        partition_by_availability(entries, |entry| &entry.path, None, design_path_availability);
+    prune_missing_design_notebook_entries(user_db, &filtered.missing_paths);
     Ok(DesignNotebookSnapshot {
         entries: filtered.visible,
         sections,
@@ -172,50 +139,6 @@ pub fn reorder_design_references(user_db: &UserDb, paths: Vec<String>) -> Result
         .map_err(|e| format!("Failed to reorder Design Notebook entries: {e}"))
 }
 
-fn filter_design_notebook_entries(
-    entries: Vec<DesignSummary>,
-    mut status_for_path: impl FnMut(&Path) -> NotebookPathStatus,
-) -> NotebookFilterResult {
-    let mut visible = Vec::new();
-    let mut stale_paths = Vec::new();
-
-    for entry in entries {
-        let path = entry.path.clone();
-        match status_for_path(Path::new(&path)) {
-            NotebookPathStatus::Available => visible.push(entry),
-            NotebookPathStatus::Stale => stale_paths.push(path),
-            NotebookPathStatus::Unavailable => {}
-        }
-    }
-
-    NotebookFilterResult {
-        visible,
-        stale_paths,
-    }
-}
-
-fn filter_design_notebook_sectioned_entries(
-    entries: Vec<DesignNotebookEntry>,
-    mut status_for_path: impl FnMut(&Path) -> NotebookPathStatus,
-) -> NotebookSectionedFilterResult {
-    let mut visible = Vec::new();
-    let mut stale_paths = Vec::new();
-
-    for entry in entries {
-        let path = entry.path.clone();
-        match status_for_path(Path::new(&path)) {
-            NotebookPathStatus::Available => visible.push(entry),
-            NotebookPathStatus::Stale => stale_paths.push(path),
-            NotebookPathStatus::Unavailable => {}
-        }
-    }
-
-    NotebookSectionedFilterResult {
-        visible,
-        stale_paths,
-    }
-}
-
 fn normalize_section_name(name: &str) -> Result<&str, String> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
@@ -231,22 +154,7 @@ fn validate_order_values(values: &[String], label: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn notebook_path_status(path: &Path) -> NotebookPathStatus {
-    match path.metadata() {
-        Ok(metadata) if metadata.is_file() => NotebookPathStatus::Available,
-        Ok(_) => NotebookPathStatus::Stale,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => NotebookPathStatus::Stale,
-        Err(error) => {
-            tracing::warn!(
-                "Design Notebook entry '{}' could not be checked for availability: {error}",
-                path.display()
-            );
-            NotebookPathStatus::Unavailable
-        }
-    }
-}
-
-fn prune_stale_design_notebook_entries(user_db: &UserDb, paths: &[String]) {
+fn prune_missing_design_notebook_entries(user_db: &UserDb, paths: &[String]) {
     if paths.is_empty() {
         return;
     }
@@ -254,19 +162,15 @@ fn prune_stale_design_notebook_entries(user_db: &UserDb, paths: &[String]) {
     let conn = user_db.acquire();
     for path in paths {
         if let Err(error) = crate::db::design_notebook::remove_design_reference(&conn, path) {
-            tracing::warn!(
-                "Failed to prune stale Design Notebook entry '{}': {error}",
-                path
-            );
+            tracing::warn!("Failed to prune a missing Design Notebook entry: {error}");
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{NotebookPathStatus, filter_design_notebook_entries};
     use crate::db::UserDb;
-    use common_types::design::DesignSummary;
+    use crate::test_scratch::TestScratch;
     use rusqlite::Connection;
     use std::path::PathBuf;
 
@@ -276,36 +180,19 @@ mod tests {
     }
 
     fn test_user_db_at(path: &std::path::Path) -> UserDb {
-        UserDb::open(path).unwrap()
+        UserDb::open(path).unwrap().0
     }
 
-    fn temp_design_path(name: &str) -> PathBuf {
-        let unique = format!(
-            "canopi_notebook_service_{}_{}_{}.canopi",
-            name,
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        );
-        std::env::temp_dir().join(unique)
-    }
-
-    fn design_summary(path: &str, name: &str) -> DesignSummary {
-        DesignSummary {
-            path: path.to_owned(),
-            name: name.to_owned(),
-            updated_at: "2026-07-02T00:00:00Z".to_owned(),
-            plant_count: 0,
-        }
+    fn temp_design_path(scratch: &TestScratch, name: &str) -> PathBuf {
+        scratch.join(format!("{name}.canopi"))
     }
 
     #[test]
     fn notebook_listing_prunes_missing_paths() {
+        let scratch = TestScratch::new("design-notebook-notebook-listing-prunes-missing-paths");
         let user_db = test_user_db();
-        let existing_path = temp_design_path("existing");
-        let missing_path = temp_design_path("missing");
+        let existing_path = temp_design_path(&scratch, "existing");
+        let missing_path = temp_design_path(&scratch, "missing");
         std::fs::write(&existing_path, "{}").unwrap();
         {
             let conn = user_db.acquire();
@@ -325,10 +212,10 @@ mod tests {
             .unwrap();
         }
 
-        let entries = super::get_design_notebook_entries(&user_db).unwrap();
+        let entries = super::get_design_notebook(&user_db).unwrap().entries;
         let stored = {
             let conn = user_db.acquire();
-            crate::db::design_notebook::get_design_notebook_entries(&conn).unwrap()
+            crate::db::design_notebook::get_design_notebook_entries_with_sections(&conn).unwrap()
         };
 
         assert_eq!(entries.len(), 1);
@@ -344,30 +231,43 @@ mod tests {
     }
 
     #[test]
-    fn notebook_filter_hides_unavailable_paths_without_pruning() {
-        let result = filter_design_notebook_entries(
-            vec![
-                design_summary("/available.canopi", "Available"),
-                design_summary("/stale.canopi", "Stale"),
-                design_summary("/unavailable.canopi", "Unavailable"),
-            ],
-            |path| match path.to_string_lossy().as_ref() {
-                "/available.canopi" => NotebookPathStatus::Available,
-                "/stale.canopi" => NotebookPathStatus::Stale,
-                "/unavailable.canopi" => NotebookPathStatus::Unavailable,
-                other => panic!("unexpected path {other}"),
-            },
-        );
+    fn notebook_keeps_entries_whose_drive_is_unavailable() {
+        let scratch =
+            TestScratch::new("design-notebook-notebook-keeps-entries-whose-drive-is-unavailable");
+        let user_db = test_user_db();
+        let unmounted = temp_design_path(&scratch, "unmounted_drive")
+            .with_extension("")
+            .join("garden.canopi");
+        {
+            let conn = user_db.acquire();
+            crate::db::design_notebook::record_design_reference(
+                &conn,
+                &unmounted.to_string_lossy(),
+                "Garden on a USB drive",
+                2,
+            )
+            .unwrap();
+        }
 
-        assert_eq!(result.visible.len(), 1);
-        assert_eq!(result.visible[0].path, "/available.canopi");
-        assert_eq!(result.stale_paths, vec!["/stale.canopi"]);
+        let snapshot = super::get_design_notebook(&user_db).unwrap();
+        let stored = {
+            let conn = user_db.acquire();
+            crate::db::design_notebook::get_design_notebook_entries_with_sections(&conn).unwrap()
+        };
+
+        assert!(
+            snapshot.entries.is_empty(),
+            "an unreachable Design is hidden"
+        );
+        assert_eq!(stored.len(), 1, "an unreachable Design is not forgotten");
     }
 
     #[test]
     fn notebook_snapshot_includes_sections_and_membership() {
+        let scratch =
+            TestScratch::new("design-notebook-notebook-snapshot-includes-sections-and-membership");
         let user_db = test_user_db();
-        let design_path = temp_design_path("sectioned");
+        let design_path = temp_design_path(&scratch, "sectioned");
         std::fs::write(&design_path, "{}").unwrap();
         {
             let conn = user_db.acquire();
@@ -399,8 +299,11 @@ mod tests {
 
     #[test]
     fn deleting_section_keeps_design_references_unsectioned() {
+        let scratch = TestScratch::new(
+            "design-notebook-deleting-section-keeps-design-references-unsectioned",
+        );
         let user_db = test_user_db();
-        let design_path = temp_design_path("deleted_section");
+        let design_path = temp_design_path(&scratch, "deleted_section");
         std::fs::write(&design_path, "{}").unwrap();
         {
             let conn = user_db.acquire();
@@ -432,8 +335,10 @@ mod tests {
 
     #[test]
     fn removing_design_reference_preserves_design_file() {
+        let scratch =
+            TestScratch::new("design-notebook-removing-design-reference-preserves-design-file");
         let user_db = test_user_db();
-        let design_path = temp_design_path("remove_reference");
+        let design_path = temp_design_path(&scratch, "remove_reference");
         std::fs::write(&design_path, "{}").unwrap();
         {
             let conn = user_db.acquire();
@@ -460,9 +365,10 @@ mod tests {
 
     #[test]
     fn manual_order_survives_user_db_reopen() {
-        let db_path = temp_design_path("ordered_user_db").with_extension("db");
-        let first_design_path = temp_design_path("ordered_first");
-        let second_design_path = temp_design_path("ordered_second");
+        let scratch = TestScratch::new("design-notebook-manual-order-survives-user-db-reopen");
+        let db_path = temp_design_path(&scratch, "ordered_user_db").with_extension("db");
+        let first_design_path = temp_design_path(&scratch, "ordered_first");
+        let second_design_path = temp_design_path(&scratch, "ordered_second");
         std::fs::write(&first_design_path, "{}").unwrap();
         std::fs::write(&second_design_path, "{}").unwrap();
 

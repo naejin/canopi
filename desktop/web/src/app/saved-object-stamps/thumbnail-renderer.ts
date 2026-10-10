@@ -6,6 +6,7 @@ import {
 import {
   getEllipticalZonePolygon,
   getRectangularZoneCorners,
+  polygonArea,
 } from '../../canvas/runtime/zone-geometry'
 import type { ScenePoint, SceneZoneEntity } from '../../canvas/runtime/scene'
 
@@ -35,13 +36,13 @@ export interface SavedObjectStampThumbnailSignature {
   readonly annotations: readonly SavedObjectStampThumbnailAnnotation[]
 }
 
-export interface SavedObjectStampThumbnailZone {
+interface SavedObjectStampThumbnailZone {
   readonly points: readonly ScenePoint[]
   readonly closed: boolean
   readonly fillColor: string | null
 }
 
-export interface SavedObjectStampThumbnailPlant {
+interface SavedObjectStampThumbnailPlant {
   readonly x: number
   readonly y: number
   readonly radius: number
@@ -51,7 +52,7 @@ export interface SavedObjectStampThumbnailPlant {
   readonly cluster: boolean
 }
 
-export interface SavedObjectStampThumbnailAnnotation {
+interface SavedObjectStampThumbnailAnnotation {
   readonly x1: number
   readonly y1: number
   readonly x2: number
@@ -179,6 +180,7 @@ function zonePreviewPoints(zone: SavedObjectStampZone): readonly ScenePoint[] {
 function sceneZoneFromSavedZone(zone: SavedObjectStampZone): SceneZoneEntity {
   return {
     kind: 'zone',
+    id: zone.id,
     name: zone.name,
     locked: false,
     zoneType: zone.zoneType,
@@ -361,17 +363,6 @@ function averagePoint(points: readonly ScenePoint[]): ScenePoint {
     x: total.x / points.length,
     y: total.y / points.length,
   }
-}
-
-function polygonArea(points: readonly ScenePoint[]): number {
-  if (points.length < 3) return 0
-  let area = 0
-  for (let index = 0; index < points.length; index += 1) {
-    const current = points[index]!
-    const next = points[(index + 1) % points.length]!
-    area += current.x * next.y - next.x * current.y
-  }
-  return area / 2
 }
 
 function isFinitePoint(point: ScenePoint): boolean {

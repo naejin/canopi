@@ -1,71 +1,89 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { CanopiFile } from '../../../types/design'
+import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
+import { geoAt, storedGeoAt } from '../../../__tests__/support/geo-design'
 import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../../../target'
-import {
-  SceneStore,
-  createDefaultScenePersistedState,
-  createDefaultSceneSessionState,
-  serializeScenePersistedState,
-} from './store'
+import { SceneStore } from './store'
+import { createDefaultScenePersistedState, createDefaultSceneSessionState } from './defaults'
+import { serializeScenePersistedState } from './codec'
+import { createSessionPlane } from '../../session-plane'
+import { createScenePatchCommand } from '../scene-commands'
+
+const TEST_FRAME_ORIGIN = { lon: 13, lat: 23 }
 
 describe('scene store', () => {
-  it('projects guides and current physical extent without cloning the full scene', () => {
+  it('reads whether it holds objects', () => {
     const store = new SceneStore()
     store.updatePersisted((draft) => {
-      draft.guides.push({ id: 'guide', axis: 'h', position: 7 })
       draft.annotations.push({ kind: 'annotation', id: 'a', locked: false,
         annotationType: 'text', position: { x: 3, y: 4 }, text: 'Note', fontSize: 12, rotationDeg: 0 })
     })
-    const read = vi.spyOn(store, 'persisted', 'get')
-    try {
-      expect(store.physicalExtentMeters).toBe(5)
-      const guides = store.guides
-      guides[0]!.position = 99
-      expect(store.guides[0]!.position).toBe(7)
-      store.updatePersisted((draft) => { draft.annotations[0]!.position = { x: 6, y: 8 } })
-      expect(store.physicalExtentMeters).toBe(10)
-      expect(read).not.toHaveBeenCalled()
-    } finally { read.mockRestore() }
+    expect(store.hasObjects).toBe(true)
+    store.updatePersisted((draft) => { draft.annotations = [] })
+    expect(store.hasObjects).toBe(false)
   })
 
-  it('keeps camera viewport state out of Scene Session state', () => {
-    expect(new SceneStore().session).not.toHaveProperty('viewport')
-  })
-
-  it('owns committed persisted drafts after the mutator returns', () => {
+  it('hands out the stored Scene without a copy per read, frozen in dev builds; a write throws', () => {
     const store = new SceneStore()
-    let mutateEscapedGuide = (): void => {}
-
+    let writeAfterCommit = (): void => {}
     store.updatePersisted((draft) => {
-      const guide = { id: 'guide-1', axis: 'h' as const, position: 10 }
-      draft.guides.push(guide)
-      mutateEscapedGuide = () => {
-        guide.position = 99
-      }
+      const guide = { kind: 'measurement-guide' as const, id: 'guide-1', locked: false, start: { x: 0, y: 0 }, end: { x: 10, y: 0 } }
+      draft.measurementGuides.push(guide)
+      writeAfterCommit = () => { guide.end.x = 99 }
     })
+    store.setSelection([{ kind: 'measurement-guide', id: 'guide-1' }])
 
-    mutateEscapedGuide()
-
-    expect(store.persisted.guides).toEqual([
-      { id: 'guide-1', axis: 'h', position: 10 },
-    ])
+    const scene = store.persisted
+    expect(store.persisted).toBe(scene)
+    expect(store.session).toBe(store.session)
+    expect(Object.isFrozen(scene)).toBe(true)
+    expect(Object.isFrozen(scene.measurementGuides[0]!.end)).toBe(true)
+    expect(() => { scene.measurementGuides[0]!.end.x = 99 }).toThrow(TypeError)
+    expect(() => { scene.layers.push(scene.layers[0]!) }).toThrow(TypeError)
+    expect(writeAfterCommit).toThrow(TypeError)
+    expect(() => { (store.session.selectedTargets[0] as { id: string }).id = 'escaped' }).toThrow(TypeError)
+    expect(store.persisted.measurementGuides.map((guide) => guide.end)).toEqual([{ x: 10, y: 0 }])
+    expect(store.session.selectedTargets).toEqual([{ kind: 'measurement-guide', id: 'guide-1' }])
   })
 
-  it('owns committed session drafts after the mutator returns', () => {
+  it('gives a mutator its own copy, so the Scene read before the edit stays as it was', () => {
     const store = new SceneStore()
-    let mutateEscapedSelection = (): void => {}
-
-    store.updateSession((draft) => {
-      const selectedTargets = [{ kind: 'plant' as const, id: 'plant-1' }]
-      draft.selectedTargets = selectedTargets
-      mutateEscapedSelection = () => {
-        selectedTargets.push({ kind: 'plant', id: 'plant-2' })
-      }
+    const before = store.persisted
+    store.updatePersisted((draft) => {
+      const layer = draft.layers[0]!
+      layer.visible = !layer.visible
     })
+    expect(store.persisted).not.toBe(before)
+    expect(store.persisted.layers[0]!.visible).toBe(!before.layers[0]!.visible)
+  })
 
-    mutateEscapedSelection()
+  it('a new species gets its code at commit', () => {
+    const store = new SceneStore()
+    store.updatePersisted((draft) => {
+      draft.plants.push({ kind: 'plant', id: 'p', locked: false, canonicalName: 'Malus domestica', commonName: null,
+        color: null, canopySpreadM: null, position: { x: 0, y: 0 }, rotationDeg: null, notes: null,
+        plantedDate: null, quantity: null })
+    })
+    const codes = store.persisted.plantSpeciesCodes
+    expect(codes).toEqual({ 'Malus domestica': 'MDO' })
+    expect(store.persisted.plantSpeciesCodes).toBe(codes)
+    expect(store.toCanopiFile().plant_species_codes).toEqual({ 'Malus domestica': 'MDO' })
+  })
 
-    expect(store.session.selectedTargets).toEqual([{ kind: 'plant', id: 'plant-1' }])
+  it('a commit that changes nothing yields no command after a species that sorts first', () => {
+    const store = new SceneStore()
+    const plant = (id: string, canonicalName: string) => ({ kind: 'plant' as const, id, locked: false, canonicalName,
+      commonName: null, color: null, canopySpreadM: null, position: { x: 0, y: 0 }, rotationDeg: null, notes: null,
+      plantedDate: null, quantity: null })
+    store.updatePersisted((draft) => { draft.plants.push(plant('m', 'Malus domestica'), plant('p', 'Prunus avium')) })
+    store.updatePersisted((draft) => { draft.plants.push(plant('c', 'Corylus avellana')) })
+    const snapshot = () => ({ persisted: store.persisted, selectedTargets: store.session.selectedTargets })
+
+    const before = snapshot()
+    store.updatePersisted(() => {})
+
+    expect(createScenePatchCommand('noop', before, snapshot())).toBeNull()
+    expect(Object.keys(store.persisted.plantSpeciesCodes)).toEqual(['Corylus avellana', 'Malus domestica', 'Prunus avium'])
   })
 
   it('owns typed selection targets and preserves first-seen typed order', () => {
@@ -81,10 +99,6 @@ describe('scene store', () => {
     plantTarget.id = 'mutated-input'
     zoneTarget.id = 'mutated-input'
 
-    const escapedSnapshot = store.session.selectedTargets
-    ;(escapedSnapshot[0] as { id: string }).id = 'mutated-snapshot'
-    ;(escapedSnapshot[1] as { id: string }).id = 'mutated-snapshot'
-
     expect(store.session.selectedTargets).toEqual([
       { kind: 'plant', id: 'shared-id' },
       { kind: 'zone', id: 'shared-id' },
@@ -93,16 +107,9 @@ describe('scene store', () => {
 
   it('hydrates and serializes CanopiFile data without crossing the session boundary', () => {
     const file: CanopiFile = {
-      version: 6,
+      version: CURRENT_CANOPI_FILE_VERSION,
       name: 'Demo',
       description: 'sample',
-      spatial_frame: {
-        anchor_longitude_deg: 2.3522,
-        anchor_latitude_deg: 48.8566,
-        north_bearing_deg: 12,
-        placement_status: 'confirmed',
-        location_metadata: { altitude_m: 35 },
-      },
       plant_species_colors: {
         oak: '#228833',
       },
@@ -121,7 +128,7 @@ describe('scene store', () => {
           color: '#228833',
           symbol: 'square',
           pinned_name: false,
-          position: { x: 12, y: 18 },
+          position: storedGeoAt(12, 18),
           rotation: 45,
           scale: 1.2,
           notes: 'heritage tree',
@@ -131,14 +138,14 @@ describe('scene store', () => {
       ],
       zones: [
         {
-          name: 'zone-a',
+          id: 'zone-a', name: null,
           locked: false,
           zone_type: 'rect',
           points: [
-            { x: 0, y: 0 },
-            { x: 10, y: 0 },
-            { x: 10, y: 8 },
-            { x: 0, y: 8 },
+            storedGeoAt(0, 0),
+            storedGeoAt(10, 0),
+            storedGeoAt(10, 8),
+            storedGeoAt(0, 8),
           ],
           rotation: 0,
           fill_color: '#ddeeff',
@@ -149,8 +156,8 @@ describe('scene store', () => {
       measurement_guides: [{
         id: 'measurement-guide-1',
         locked: false,
-        start: { x: 1, y: 1 },
-        end: { x: 4, y: 1 },
+        start: storedGeoAt(1, 1),
+        end: storedGeoAt(4, 1),
       }],
       consortiums: [{ target: consortiumTarget('Quercus robur'), stratum: 'high', start_phase: 0, end_phase: 3 }],
       groups: [
@@ -167,30 +174,22 @@ describe('scene store', () => {
       created_at: '2026-04-01T10:00:00.000Z',
       updated_at: '2026-04-01T12:00:00.000Z',
       extra: {
-        guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
+        guides: [{ id: 'guide-1', axis: 'h', lat: 22.9996 }],
       },
     }
 
-    const store = SceneStore.fromCanopi(file, {
-      selectedTargets: [{ kind: 'plant', id: 'plant-1' }],
-    })
+    const store = new SceneStore().hydrate(file).setSelection([{ kind: 'plant', id: 'plant-1' }])
 
     expect(store.session.selectedTargets).toContainEqual({ kind: 'plant', id: 'plant-1' })
-    expect(store.session).not.toHaveProperty('activeEntityId')
-    expect(store.session).not.toHaveProperty('activeLayerName')
     expect(store.persisted.plants[0]).toMatchObject({
-      stratum: null,
       canopySpreadM: 1.2,
-      scale: 1.2,
     })
 
     store.updateSession((draft) => {
       draft.hoveredTarget = { kind: 'zone', id: 'zone-a' }
-      draft.documentRevision = 3
     })
 
     expect(store.session.hoveredTarget).toEqual({ kind: 'zone', id: 'zone-a' })
-    expect(store.session.documentRevision).toBe(3)
 
     // toCanopiFile serializes canvas-entity fields; non-canvas sections
     // (consortiums, timeline, budget) are emitted as empty placeholders —
@@ -205,17 +204,11 @@ describe('scene store', () => {
     expect(roundTripped.layers).toEqual(file.layers)
     expect(roundTripped.plant_species_colors).toEqual(file.plant_species_colors)
     expect(roundTripped.plant_species_symbols).toEqual(file.plant_species_symbols)
-    expect(roundTripped.extra).toEqual({ guides: file.extra?.guides })
+    // `extra` is Design Edit's: a leftover key in the file never passes through the scene.
+    expect(roundTripped).not.toHaveProperty('extra')
     expect(roundTripped.name).toBe('Untitled')
     expect(roundTripped.description).toBeNull()
-    expect(roundTripped.spatial_frame).toEqual({
-      anchor_longitude_deg: 13,
-      anchor_latitude_deg: 23,
-      north_bearing_deg: 0,
-      placement_status: 'provisional',
-      location_metadata: { altitude_m: null },
-    })
-    expect(roundTripped.version).toBe(6)
+    expect(roundTripped.version).toBe(CURRENT_CANOPI_FILE_VERSION)
     // Non-canvas sections must be empty placeholders, NOT the input values
     expect(roundTripped.consortiums).toEqual([])
     expect(roundTripped.timeline).toEqual([])
@@ -223,56 +216,49 @@ describe('scene store', () => {
   })
 
   it('creates a usable default scene state', () => {
-    const persisted = createDefaultScenePersistedState(new Date('2026-04-02T00:00:00.000Z'))
-    const secondPersisted = createDefaultScenePersistedState(new Date('2026-04-02T00:00:00.000Z'))
+    const persisted = createDefaultScenePersistedState()
+    const secondPersisted = createDefaultScenePersistedState()
     const session = createDefaultSceneSessionState()
     const firstLayer = persisted.layers[0]
     const secondLayer = secondPersisted.layers[0]
     if (!firstLayer || !secondLayer) throw new Error('canonical layer catalog is empty')
 
-    expect(persisted.layers).toHaveLength(8)
+    expect(persisted.layers).toHaveLength(4)
     expect(firstLayer).not.toBe(secondLayer)
     expect(persisted.plantSpeciesSymbols).toEqual({})
     expect(persisted.layers.map((layer: { name: string; visible: boolean }) => [layer.name, layer.visible])).toEqual([
-      ['base', false],
-      ['contours', false],
-      ['climate', false],
       ['zones', true],
-      ['water', false],
       ['plants', true],
       ['measurement-guides', true],
       ['annotations', true],
     ])
-    firstLayer.visible = true
-    expect(secondLayer.visible).toBe(false)
+    firstLayer.visible = false
+    expect(secondLayer.visible).toBe(true)
     expect(persisted.plants).toHaveLength(0)
     expect(persisted.measurementGuides).toEqual([])
     expect(session.selectedTargets).toEqual([])
-    expect(session).not.toHaveProperty('activeEntityId')
-    expect(session).not.toHaveProperty('activeLayerName')
-    expect(serializeScenePersistedState(persisted, { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(6)
+    expect(serializeScenePersistedState(persisted, createSessionPlane(TEST_FRAME_ORIGIN), { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(CURRENT_CANOPI_FILE_VERSION)
   })
 
-  it('normalizes and round-trips a legacy Design without Measurement Guides', () => {
-    const file = serializeScenePersistedState(createDefaultScenePersistedState())
+  it('normalizes and round-trips a Design without Measurement Guides', () => {
+    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSessionPlane(TEST_FRAME_ORIGIN))
     delete file.measurement_guides
 
-    const store = SceneStore.fromCanopi(file)
+    const store = new SceneStore().hydrate(file)
     expect(store.persisted.measurementGuides).toEqual([])
 
     const normalizedFile = store.toCanopiFile()
     expect(normalizedFile.measurement_guides).toEqual([])
 
-    const reloadedStore = SceneStore.fromCanopi(normalizedFile)
+    const reloadedStore = new SceneStore().hydrate(normalizedFile)
     expect(reloadedStore.persisted.measurementGuides).toEqual([])
   })
 
   it('hydrates and serializes embedded Design Object lock state', () => {
     const file: CanopiFile = {
-      version: 6,
+      version: CURRENT_CANOPI_FILE_VERSION,
       name: 'Locked objects',
       description: null,
-      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [
@@ -282,7 +268,7 @@ describe('scene store', () => {
           canonical_name: 'Quercus robur',
           common_name: null,
           color: null,
-          position: { x: 1, y: 2 },
+          position: geoAt(1, 2),
           rotation: null,
           scale: null,
           notes: null,
@@ -292,9 +278,9 @@ describe('scene store', () => {
       ],
       zones: [
         {
-          name: 'zone-1',
+          id: 'zone-1', name: null,
           zone_type: 'polygon',
-          points: [{ x: 0, y: 0 }],
+          points: [geoAt(0, 0)],
           rotation: 0,
           fill_color: null,
           notes: null,
@@ -305,7 +291,7 @@ describe('scene store', () => {
         {
           id: 'annotation-1',
           annotation_type: 'text',
-          position: { x: 3, y: 4 },
+          position: geoAt(3, 4),
           text: 'Note',
           font_size: 16,
           rotation: null,
@@ -329,7 +315,7 @@ describe('scene store', () => {
       extra: {},
     }
 
-    const serialized = SceneStore.fromCanopi(file).toCanopiFile({ now: new Date(file.updated_at) })
+    const serialized = new SceneStore().hydrate(file).toCanopiFile({ now: new Date(file.updated_at) })
 
     expect(serialized.plants[0]?.locked).toBe(true)
     expect(serialized.zones[0]?.locked).toBe(true)
@@ -339,23 +325,23 @@ describe('scene store', () => {
 
   it('hydrates and serializes shaped Zone orientation', () => {
     const file = {
-      version: 6,
+      version: CURRENT_CANOPI_FILE_VERSION,
       name: 'Oriented zones',
       description: null,
-      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [],
       zones: [
         {
-          name: 'zone-1',
+          id: 'zone-1',
+          name: null,
           locked: false,
           zone_type: 'rect',
           points: [
-            { x: 0, y: 0 },
-            { x: 10, y: 0 },
-            { x: 10, y: 5 },
-            { x: 0, y: 5 },
+            geoAt(0, 0),
+            geoAt(10, 0),
+            geoAt(10, 5),
+            geoAt(0, 5),
           ],
           rotation: 35,
           fill_color: null,
@@ -373,7 +359,7 @@ describe('scene store', () => {
       extra: {},
     } as CanopiFile
 
-    const store = SceneStore.fromCanopi(file)
+    const store = new SceneStore().hydrate(file)
 
     expect(store.persisted.zones[0]?.rotationDeg).toBe(35)
     expect(store.toCanopiFile({ now: new Date(file.updated_at) }).zones[0]?.rotation).toBe(35)
@@ -381,10 +367,9 @@ describe('scene store', () => {
 
   it('serializes runtime plant presentation metadata back into the existing placed-plant fields only', () => {
     const file: CanopiFile = {
-      version: 6,
+      version: CURRENT_CANOPI_FILE_VERSION,
       name: 'Demo',
       description: null,
-      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [
@@ -395,7 +380,7 @@ describe('scene store', () => {
           common_name: 'English oak',
           color: null,
           pinned_name: false,
-          position: { x: 12, y: 18 },
+          position: storedGeoAt(12, 18),
           rotation: null,
           scale: 1.2,
           notes: null,
@@ -415,10 +400,9 @@ describe('scene store', () => {
       extra: {},
     }
 
-    const store = SceneStore.fromCanopi(file)
+    const store = new SceneStore().hydrate(file)
 
     store.updatePersisted((draft) => {
-      draft.plants[0]!.stratum = 'high'
       draft.plants[0]!.canopySpreadM = 2.4
     })
 
@@ -428,19 +412,14 @@ describe('scene store', () => {
       ...file.plants[0],
       scale: 2.4,
     })
-    expect(serialized.plants[0]).not.toHaveProperty('stratum')
     expect(serialized.plants[0]).not.toHaveProperty('canopySpreadM')
   })
 
-  it('serializes extra metadata under the extra key', () => {
-    const persisted = createDefaultScenePersistedState(new Date('2026-04-02T00:00:00.000Z'))
-    persisted.guides = [{ id: 'g-1', axis: 'h', position: 10 }]
-
-    const file = serializeScenePersistedState(persisted, { now: new Date('2026-04-02T00:00:00.000Z') })
-
-    expect(file.extra).toEqual({
-      guides: [{ id: 'g-1', axis: 'h', position: 10 }],
+  it('writes no extra: the scene owns no extra key', () => {
+    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSessionPlane(TEST_FRAME_ORIGIN), {
+      now: new Date('2026-04-02T00:00:00.000Z'),
     })
-    expect('guides' in file).toBe(false)
+
+    expect(file).not.toHaveProperty('extra')
   })
 })

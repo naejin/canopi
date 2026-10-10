@@ -1,27 +1,116 @@
+import type { SpeciesDisplayNames } from '../app/plant-browser/workbench'
 import type { CanvasPrintSnapshot, PrintPlant } from '../canvas/print'
 import type { PdfPreparation } from '../app/canvas-pdf/prepare'
 import { describe, expect, it, vi } from 'vitest'
 import { createPdfWorkflow, type PdfCapture } from '../app/canvas-pdf/workflow'
-import type { PreparedPdf } from '../app/canvas-pdf/types'
-const result: PreparedPdf = { bytes: new Uint8Array([37, 80, 68, 70]), plan: { pages: [], outlines: {}, blocked: null } }
-function fixture(plants: PrintPlant[] = []) {
+import { pdfAreaKey, type PdfInput, type PdfPage, type PreparedPdf } from '../app/canvas-pdf/types'
+import { areaContains, areaFromFrame, areaToFrame, layoutAngle, pageFrame } from '../app/canvas-pdf/page-frame'
+import { splitPrintArea } from '../app/canvas-pdf/split-sheets'
+import { englishPdfLabels } from '../../scripts/pdf-validation/fixtures'
+const result: PreparedPdf = { bytes: new Uint8Array([37, 80, 68, 70]), plan: { pages: [], angleDeg: 0, outlines: {}, blocked: null } }
+function fixture(plants: PrintPlant[] = [], view: Pick<PdfInput, 'viewBearingDeg'> = { viewBearingDeg: 0 }) {
   const identity = {}
   let current = true
-  const capture: PdfCapture = { identity, isCurrent: () => current, input: { name: 'Garden', locale: 'fr', commonNames: {},
+  const capture: PdfCapture = { identity, isCurrent: () => current, input: { name: 'Garden', locale: 'fr', commonNames: {}, ...view,
     canvas: { layers: [{ name: 'plants', visible: true, opacity: 1 }, { name: 'base', visible: true, opacity: 1 }],
       plants, zones: [], annotations: [], measurements: [] } } }
   const prepare = vi.fn<(input: PdfPreparation, signal: AbortSignal) => Promise<PreparedPdf>>(async () => result)
   const save = vi.fn(async () => 'saved' as const)
-  const resolveNames = vi.fn(async (_names: readonly string[], _locale: string): Promise<Record<string, string>> => ({}))
+  const resolveDisplayNames = vi.fn(async (_names: readonly string[], _locale: string): Promise<SpeciesDisplayNames> => ({ names: {}, englishFallbacks: [] }))
   let currentCanvas = capture.input.canvas
+  let bearing = view.viewBearingDeg, turning = false, settles = 0
   const workflow = createPdfWorkflow({ capture: () => {
-    const canvas = currentCanvas
-    return { ...capture, input: { ...capture.input, canvas }, isCurrent: () => current && canvas === currentCanvas }
-  }, prepare, resolveNames,
-    delivery: { save, dispose: vi.fn() }, labels: () => ({ notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => 'https://test/fonts/' })
-  return { workflow, prepare, save, resolveNames, capture, setCanvas: (canvas: CanvasPrintSnapshot) => { currentCanvas = canvas }, replace: () => { current = false; workflow.synchronize({}) } }
+    const canvas = currentCanvas, turningNow = turning, settled = settles
+    return { ...capture, input: { ...capture.input, canvas, viewBearingDeg: bearing },
+      ...(turningNow ? { turning: true } : {}), isCurrent: () => current && canvas === currentCanvas && (!turningNow || settled === settles) }
+  }, prepare, resolveDisplayNames, resolveHabits: async () => ({}),
+    delivery: { save, dispose: vi.fn() }, labels: () => ({ ...englishPdfLabels, notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => 'https://test/fonts/' })
+  return { workflow, prepare, save, resolveDisplayNames, capture, setCanvas: (canvas: CanvasPrintSnapshot) => { currentCanvas = canvas },
+    turnView: (deg: number) => { bearing = deg },
+    startTurn: (deg: number) => { bearing = deg; turning = true },
+    settleView: (deg: number) => { bearing = deg; turning = false; settles++; workflow.synchronize(identity) }, replace: () => { current = false; workflow.synchronize({}) } }
 }
 describe('PDF workflow lifetime', () => {
+  it('As on screen stores Whole Design and split sheets in plan metres and looks split names up in the turned sheets', async () => {
+    const frame = pageFrame(30), plant = (id: string, canonicalName: string, x: number, y: number): PrintPlant =>
+      ({ id, canonicalName, position: { x, y }, color: '#123456', symbol: 'round', mark: [], pinnedName: false })
+    const along = frame.fromFrame({ x: 9, y: 0 })
+    const plants = [plant('a', 'Malus domestica', along.x, along.y), plant('b', 'Prunus avium', 9, 0),
+      ...Array.from({ length: 200 }, (_, i) => frame.fromFrame({ x: 1 + i * .09, y: .5 })).map((p, i) => plant(`r${i}`, 'Malus domestica', p.x, p.y))]
+    const { workflow, prepare, resolveDisplayNames } = fixture(plants, { viewBearingDeg: 30 })
+    const picker = { x: 0, y: -1, width: 20, height: 2 }
+    prepare.mockImplementation(async ({ input, setup }) => {
+      const angle = pageFrame(layoutAngle(setup, input))
+      const page = (id: string, ground: PdfPage['ground'], kind: PdfPage['kind']): PdfPage =>
+        ({ id, kind, number: 1, width: 600, height: 800, frame: ground, ground, pointsPerMeter: 1, operations: [], legend: [] })
+      return { bytes: new Uint8Array([1]), plan: { angleDeg: angle.angleDeg, outlines: {}, blocked: null, pickerPage: page('overview', picker, 'overview'),
+        pages: (setup.areas ?? []).map(area => page(pdfAreaKey(area), areaToFrame(angle, area.bounds, area.pivot), 'detail')) } }
+    })
+    try {
+      workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      expect(workflow.setup.value.mapOrientation).toBeUndefined()
+      workflow.configure({ mapOrientation: 'as-on-screen' }); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      expect(workflow.state.value.result!.plan.angleDeg).toBe(30)
+      const id = workflow.addWholeDesign()!
+      await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      const stored = workflow.setup.value.areas![0]!.bounds
+      expect(stored).toEqual(areaFromFrame(frame, picker))
+      expect(stored.x).not.toBeCloseTo(picker.x, 3)
+      // Whole design refits to the design at every build, so it looks up every plant.
+      expect(workflow.setup.value.areas![0]!.wholeDesign).toBe(true)
+      expect(resolveDisplayNames.mock.lastCall![0]).toEqual(['Malus domestica', 'Prunus avium'])
+      workflow.previewSplit(id); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      const parts = workflow.splitPreview.value!.areas!.map(({ bounds, pivot }) => ({ bounds, pivot }))
+      expect(parts).toEqual(splitPrintArea(picker, plants, frame))
+      expect(workflow.splitPreview.value!.areas!.some(area => area.wholeDesign)).toBe(false)
+      expect(resolveDisplayNames.mock.lastCall![0]).toEqual(['Malus domestica'])
+      expect(parts.length).toBeGreaterThan(1)
+      for (const p of plants.filter(p => areaContains(frame, stored, p.position))) expect(parts.some(part => areaContains(frame, part.bounds, p.position, part.pivot))).toBe(true)
+      // A split sheet split again keeps the first split's pivot, so every sheet still tiles after a switch.
+      workflow.applySplit(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      workflow.previewSplit(pdfAreaKey(workflow.setup.value.areas![0]!)); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      const family = workflow.splitPreview.value!.areas!
+      expect(family.length).toBeGreaterThan(parts.length)
+      for (const area of family) expect(area.pivot).toEqual(parts[0]!.pivot)
+    } finally { workflow.dispose() }
+  })
+  it('waits for a flight still turning on open and holds the bearing it lands at', async () => {
+    // A saved view flies from 0 to 15; Ctrl+P during the flight reads about 9 on the live camera.
+    const { workflow, prepare, startTurn, settleView } = fixture()
+    const angle = () => layoutAngle(prepare.mock.lastCall![0].setup, prepare.mock.lastCall![0].input)
+    try {
+      startTurn(9)
+      workflow.show(); workflow.configure({ mapOrientation: 'as-on-screen' })
+      await new Promise(resolve => setTimeout(resolve, 150))
+      expect(prepare).not.toHaveBeenCalled()
+      expect(workflow.state.value).toMatchObject({ status: 'preparing', error: null, result: null })
+      expect(workflow.availableLayers.value).toEqual(['plants'])
+      settleView(15)
+      await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      expect(angle()).toBe(15)
+      expect(prepare.mock.calls.every(([preparation]) => preparation.input.viewBearingDeg === 15)).toBe(true)
+    } finally { workflow.dispose() }
+  })
+  it('holds the bearing read on open until the workspace closes, however the view turns behind it', async () => {
+    // A settled view read on open: any later turn behind the modal never moves the pages on the next setting change.
+    const { workflow, prepare, turnView, setCanvas, capture } = fixture([], { viewBearingDeg: 9 })
+    const angle = () => layoutAngle(prepare.mock.lastCall![0].setup, prepare.mock.lastCall![0].input)
+    try {
+      workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      workflow.configure({ mapOrientation: 'as-on-screen' }); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      expect(angle()).toBe(9)
+      turnView(15)
+      workflow.configure({ paper: 'Letter' }); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      expect(angle()).toBe(9)
+      setCanvas({ ...capture.input.canvas, zones: [] }); workflow.synchronize(capture.identity)
+      await vi.waitFor(() => expect(prepare.mock.lastCall![0].input.canvas.zones).not.toBe(capture.input.canvas.zones))
+      await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      expect(angle()).toBe(9)
+      workflow.close(); workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      expect(workflow.setup.value.mapOrientation).toBe('as-on-screen')
+      expect(angle()).toBe(15)
+    } finally { workflow.dispose() }
+  })
   it('exports automatically prepared pages and clears temporary choices on Design replacement', async () => {
     const { workflow, save, replace } = fixture()
     try {
@@ -113,7 +202,7 @@ describe('PDF workflow lifetime', () => {
   })
   it('retains independent Print Areas when Zones are resized, renamed or removed', async () => {
     const { workflow, prepare, capture, setCanvas } = fixture()
-    const zone = { name: 'Orchard', bounds: { x: 0, y: 0, width: 10, height: 10 }, path: 'M0 0 H10 V10 H0 Z', fill: null }
+    const zone = { name: 'Orchard', bounds: { x: 0, y: 0, width: 10, height: 10 }, path: 'M0 0 L10 0 L10 10 L0 10 Z', geometry: { kind: 'rect' as const, points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }] }, fill: null }
     setCanvas({ ...capture.input.canvas, zones: [zone] })
     workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
     expect(workflow.setup.value.areas ?? []).toEqual([])
@@ -167,8 +256,8 @@ describe('PDF workflow lifetime', () => {
     workflow.dispose()
   })
   it('keeps full canonical names when the catalog is unavailable', async () => {
-    const { workflow, prepare, resolveNames } = fixture([{ id: 'a', canonicalName: 'Malus domestica', position: { x: 0, y: 0 }, color: '#000000', symbol: 'round', mark: [], pinnedName: false }])
-    resolveNames.mockRejectedValue(new Error('catalog unavailable'))
+    const { workflow, prepare, resolveDisplayNames } = fixture([{ id: 'a', canonicalName: 'Malus domestica', position: { x: 0, y: 0 }, color: '#000000', symbol: 'round', mark: [], pinnedName: false }])
+    resolveDisplayNames.mockRejectedValue(new Error('catalog unavailable'))
     workflow.show()
     await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
     expect(prepare.mock.calls[0]![0].input.commonNames).toEqual({})
@@ -199,12 +288,12 @@ describe('PDF workflow lifetime', () => {
 
 it('bounds an unavailable name lookup and releases its deadline when preview closes', async () => {
   vi.useFakeTimers()
-  const { workflow, prepare, resolveNames } = fixture([{ id: 'a', canonicalName: 'Malus domestica', position: { x: 0, y: 0 }, color: '#000000', symbol: 'round', mark: [], pinnedName: false }])
-  resolveNames.mockImplementation(() => new Promise(() => {}))
+  const { workflow, prepare, resolveDisplayNames } = fixture([{ id: 'a', canonicalName: 'Malus domestica', position: { x: 0, y: 0 }, color: '#000000', symbol: 'round', mark: [], pinnedName: false }])
+  resolveDisplayNames.mockImplementation(() => new Promise(() => {}))
   try {
     workflow.show()
     await vi.advanceTimersByTimeAsync(0)
-    expect(resolveNames).not.toHaveBeenCalled()
+    expect(resolveDisplayNames).not.toHaveBeenCalled()
     workflow.addPrintArea({ x: -1, y: -1, width: 2, height: 2 })
     await vi.advanceTimersByTimeAsync(30_000)
     expect(workflow.state.value.status).toBe('ready')
@@ -240,24 +329,24 @@ it('recovers from encoding and delivery failures without rebuilding valid bytes 
 })
 
 it('opens an overview without asking the catalog for any plant names', async () => {
-  const { workflow, resolveNames, prepare } = fixture([{ id: 'a', canonicalName: 'Malus domestica', position: { x: 0, y: 0 }, color: '#000000', symbol: 'round', mark: [], pinnedName: false }])
+  const { workflow, resolveDisplayNames, prepare } = fixture([{ id: 'a', canonicalName: 'Malus domestica', position: { x: 0, y: 0 }, color: '#000000', symbol: 'round', mark: [], pinnedName: false }])
   try {
-    resolveNames.mockImplementation(() => new Promise(() => {}))
+    resolveDisplayNames.mockImplementation(() => new Promise(() => {}))
     workflow.show()
     await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
-    expect(resolveNames).not.toHaveBeenCalled()
+    expect(resolveDisplayNames).not.toHaveBeenCalled()
     expect(prepare).toHaveBeenCalledOnce()
   } finally { workflow.dispose() }
 })
 
 it('does not resolve plant names for uncovered annotations on an overview-only export', async () => {
   const plant = { id: 'remote', canonicalName: 'Prunus avium', speciesCode: 'PAV', position: { x: 30, y: 30 }, color: '#123456', symbol: 'round', mark: [], pinnedName: false }
-  const { workflow, capture, setCanvas, resolveNames } = fixture([plant])
+  const { workflow, capture, setCanvas, resolveDisplayNames } = fixture([plant])
   setCanvas({ ...capture.input.canvas, layers: [...capture.input.canvas.layers, { name: 'annotations', visible: true, opacity: 1 }],
     annotations: [{ id: 'note', text: 'Complete instruction '.repeat(30), fontSize: 16, rotation: 0, position: { x: 30, y: 30 } }] })
   try {
     workflow.show()
     await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
-    expect(resolveNames).not.toHaveBeenCalled()
+    expect(resolveDisplayNames).not.toHaveBeenCalled()
   } finally { workflow.dispose() }
 })

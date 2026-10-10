@@ -26,6 +26,7 @@ pub(crate) fn species_list_select_sql_with_matched_common_name(
                 s.hardiness_zone_max AS hardiness_zone_max,
                 s.growth_rate AS growth_rate,
                 s.stratum AS stratum,
+                s.habit AS habit,
                 s.climate_zones AS climate_zones,
                 s.is_annual AS is_annual,
                 s.is_biennial AS is_biennial,

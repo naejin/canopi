@@ -1,10 +1,6 @@
-import type { BasemapStyle } from '../generated/contracts'
-import { createMapLibreBasemapStyle } from './config'
-import type {
-  MapLibreApi,
-  MapLibreHostViewState,
-  MapLibreMapInstance,
-} from './host'
+import { createMapLibreEmptyStyle } from './config'
+import { logMapError } from './redact-credentials'
+import type { MapLibreApi, MapLibreMapInstance } from './loader'
 
 export interface WorldMapLibreMap extends MapLibreMapInstance {
   addControl(control: unknown, position?: string): void
@@ -15,8 +11,9 @@ export interface WorldMapLibreMap extends MapLibreMapInstance {
     duration?: number
     essential?: boolean
   }): void
-  getCenter(): { lng: number; lat: number }
   getZoom(): number
+  readonly keyboard: { disableRotation(): void }
+  readonly touchZoomRotate: { disableRotation(): void }
 }
 
 export interface WorldMapMarker {
@@ -41,33 +38,44 @@ interface WorldMapLibreApi extends MapLibreApi {
   LngLatBounds?: new () => WorldMapBounds
 }
 
-export interface WorldMapLibreOptions {
-  readonly basemapStyle: BasemapStyle
-  readonly center: [number, number]
-  readonly zoom: number
-  /** The request seam that authenticates official provider tiles. */
-  readonly transformRequest?: (url: string) => { url: string }
-}
-
+/**
+ * A new World map starts at this whole-world view; the selected template's fly-to and the templates' bounds move it.
+ * `transformRequest` is the request seam that authenticates official provider tiles.
+ */
 export function createWorldMapLibreMap(
   maplibre: MapLibreApi,
   container: HTMLElement,
-  options: WorldMapLibreOptions,
+  transformRequest: (url: string) => { url: string },
 ): WorldMapLibreMap {
   const map = new maplibre.Map({
     container,
-    style: createMapLibreBasemapStyle(options.basemapStyle),
-    center: options.center,
-    zoom: options.zoom,
-    // Attribution is owned by the basemap mount's single control, not the
-    // map's automatic AttributionControl (E4).
+    style: createMapLibreEmptyStyle(),
+    center: [0, 14],
+    zoom: 1.15,
+    // Attribution is owned by the map background's single control.
     attributionControl: false,
     interactive: true,
     pitchWithRotate: false,
     dragRotate: false,
-    touchZoomRotate: false,
-    ...(options.transformRequest ? { transformRequest: options.transformRequest } : {}),
+    // North-up and flat: two fingers sliding together would tilt it, and no control resets a tilt.
+    touchPitch: false,
+    // Shift+drag pans like any drag instead of drawing MapLibre's zoom box (spec §4.17).
+    boxZoom: false,
+    transformRequest,
   }) as unknown as WorldMapLibreMap
+
+  // MapLibre prints an error event nobody listens to on the console, and a
+  // failed official tile's message carries its URL with the Google key and
+  // session. Every World map error is passive (tiles, sources), so it is only
+  // logged, redacted.
+  map.on('error', (event) => logMapError('Passive MapLibre World map error:', event))
+
+  // The World map stays north-up: its keyboard handler keeps arrow pans and
+  // +/- zoom, but Shift+arrows neither turn nor tilt it (world-map-surface.test.tsx,
+  // "Shift+arrow keys do not turn or tilt the World map").
+  map.keyboard.disableRotation()
+  // A pinch zooms the map, not the page, on a phone; a twist turns nothing (world-map-surface.test.tsx).
+  map.touchZoomRotate.disableRotation()
 
   try {
     const NavigationControl = (maplibre as WorldMapLibreApi).NavigationControl
@@ -99,12 +107,4 @@ export function createWorldMapBounds(maplibre: MapLibreApi): WorldMapBounds {
   const LngLatBounds = (maplibre as WorldMapLibreApi).LngLatBounds
   if (!LngLatBounds) throw new Error('MapLibre LngLatBounds constructor unavailable')
   return new LngLatBounds()
-}
-
-export function readWorldMapViewState(map: WorldMapLibreMap): MapLibreHostViewState {
-  const center = map.getCenter()
-  return {
-    center: [center.lng, center.lat],
-    zoom: map.getZoom(),
-  }
 }

@@ -1,27 +1,10 @@
-use common_types::design::{
-    CanopiFile, DesignNotebookSection, DesignNotebookSnapshot, DesignSummary,
-};
+use common_types::design::{CanopiFile, DesignNotebookSection, DesignNotebookSnapshot};
 
 use crate::{
     db::UserDb,
     native_operation::{NativeOperationClass, NativeOperationExecutor},
 };
 use tauri::State;
-
-#[tauri::command]
-pub async fn get_design_notebook_entries(
-    executor: State<'_, NativeOperationExecutor>,
-    user_db: State<'_, UserDb>,
-) -> Result<Vec<DesignSummary>, String> {
-    let user_db = user_db.inner().clone();
-    executor
-        .run(
-            NativeOperationClass::UserData,
-            "design notebook entry read",
-            move || crate::services::design_notebook::get_design_notebook_entries(&user_db),
-        )
-        .await
-}
 
 #[tauri::command]
 pub async fn get_design_notebook(

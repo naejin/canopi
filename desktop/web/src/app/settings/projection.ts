@@ -1,28 +1,33 @@
 import { batch } from '@preact/signals'
-import type { BasemapStyle } from '../../generated/contracts'
+import type { LastView, SatelliteSource, ScrollWheel } from '../../generated/contracts'
+import { WEB_MERCATOR_MAX_LATITUDE_DEG } from '../../generated/canopi-design-format'
 import type { Locale, Settings, Theme } from '../../types/settings'
 import { FALLBACK_PLANT_SPACING_INTERVAL_M } from '../../canvas/plant-spacing-interval'
-import { normalizeBasemapStyle } from '../../maplibre/config'
+import { clampPlantSymbolScale } from '../../canvas/runtime/plant-display'
 import {
-  contourIntervalMeters,
-  snapToGridEnabled,
-  snapToGuidesEnabled,
-  hillshadeOpacity,
-  hillshadeVisible,
-  layerOpacity,
-  layerVisibility,
-} from '../canvas-settings/signals'
+  mapLayers,
+  mapLayersEqual,
+  normalizeMapLayers,
+  type MapLayersState,
+} from '../map-layers/state'
+import { snapToGridEnabled } from '../canvas-settings/signals'
 import { sidePanelWidth } from '../shell/state'
 import {
   DEFAULT_SAVED_STAMPS_FRAME_HEIGHT,
   MIN_FAVORITES_FRAME_HEIGHT,
-  autoSaveIntervalMs,
-  basemapStyle,
   googleMapsApiKey,
+  lastView,
   locale,
+  newDesignDefaults,
   plantSpacingIntervalM,
+  satelliteSource,
   savedStampsFrameHeight,
+  scrollWheel,
+  singleKeyShortcuts,
   theme,
+  toolNamesVisible,
+  usedCanvasTools,
+  type NewDesignDefaults,
 } from './state'
 import type { SettingsPlatformAdapter } from './platform-adapter'
 
@@ -31,27 +36,25 @@ export type SettingsPersistMode = 'immediate' | 'queued' | 'none'
 export interface SettingsProjectionDraft {
   locale: Locale
   theme: Theme
-  basemapStyle: BasemapStyle
   googleMapsApiKey: string | null
+  satelliteSource: SatelliteSource
   snapToGrid: boolean
-  snapToGuides: boolean
-  autoSaveIntervalMs: number
   plantSpacingIntervalM: number
+  lastView: LastView | null
   sidePanel: {
     width: number | null
   }
   savedStamps: {
     frameHeight: number
   }
-  mapLayers: {
-    baseVisible: boolean
-    baseOpacity: number
-    contoursVisible: boolean
-    contoursOpacity: number
-    contourIntervalMeters: number
-    hillshadeVisible: boolean
-    hillshadeOpacity: number
+  mapLayers: MapLayersState
+  toolRail: {
+    usedTools: readonly string[]
+    namesVisible: boolean | null
   }
+  singleKeyShortcuts: boolean
+  scrollWheel: ScrollWheel
+  newDesigns: NewDesignDefaults
 }
 
 interface MutateSettingsProjectionOptions {
@@ -99,16 +102,6 @@ let activeSettingsProjection: ActiveSettingsProjection | null = null
 let pendingSettingsRetirement: Promise<void> | null = null
 let pendingHydrationIntent: PendingHydrationIntent | null = null
 
-function clampUnitInterval(value: number, fallback: number): number {
-  if (!Number.isFinite(value)) return fallback
-  return Math.min(1, Math.max(0, value))
-}
-
-function normalizeContourInterval(value: number, fallback: number): number {
-  if (!Number.isFinite(value)) return fallback
-  return Math.max(0, Math.round(value))
-}
-
 function normalizePositiveMeters(value: number, fallback: number): number {
   if (!Number.isFinite(value) || value <= 0) return fallback
   return value
@@ -132,27 +125,25 @@ function createDraftFromProjection(): SettingsProjectionDraft {
   return {
     locale: locale.value,
     theme: theme.value,
-    basemapStyle: basemapStyle.value,
     googleMapsApiKey: googleMapsApiKey.value,
+    satelliteSource: satelliteSource.value,
     snapToGrid: snapToGridEnabled.value,
-    snapToGuides: snapToGuidesEnabled.value,
-    autoSaveIntervalMs: autoSaveIntervalMs.value,
     plantSpacingIntervalM: plantSpacingIntervalM.value,
+    lastView: lastView.value,
     sidePanel: {
       width: sidePanelWidth.value,
     },
     savedStamps: {
       frameHeight: savedStampsFrameHeight.value,
     },
-    mapLayers: {
-      baseVisible: layerVisibility.value.base ?? true,
-      baseOpacity: layerOpacity.value.base ?? 1,
-      contoursVisible: layerVisibility.value.contours ?? false,
-      contoursOpacity: layerOpacity.value.contours ?? 1,
-      contourIntervalMeters: contourIntervalMeters.value,
-      hillshadeVisible: hillshadeVisible.value,
-      hillshadeOpacity: hillshadeOpacity.value,
+    mapLayers: mapLayers.value,
+    toolRail: {
+      usedTools: usedCanvasTools.value,
+      namesVisible: toolNamesVisible.value,
     },
+    singleKeyShortcuts: singleKeyShortcuts.value,
+    scrollWheel: scrollWheel.value,
+    newDesigns: newDesignDefaults.value,
   }
 }
 
@@ -171,31 +162,33 @@ function normalizeDraft(draft: SettingsProjectionDraft): SettingsProjectionDraft
   return {
     locale: draft.locale,
     theme: normalizeTheme(draft.theme),
-    basemapStyle: normalizeBasemapStyle(draft.basemapStyle),
     // The key is stored exactly as typed; the explicit save action is what
     // trims it, so partial editing never silently rewrites the credential.
     googleMapsApiKey: draft.googleMapsApiKey,
+    satelliteSource: draft.satelliteSource === 'google_key' ? 'google_key' : 'free',
     snapToGrid: draft.snapToGrid,
-    snapToGuides: draft.snapToGuides,
-    autoSaveIntervalMs: Math.max(0, Math.round(draft.autoSaveIntervalMs)),
     plantSpacingIntervalM: normalizePositiveMeters(
       draft.plantSpacingIntervalM,
       FALLBACK_PLANT_SPACING_INTERVAL_M,
     ),
+    lastView: normalizeLastView(draft.lastView),
     sidePanel: {
       width: normalizeSidePanelWidth(draft.sidePanel.width),
     },
     savedStamps: {
       frameHeight: normalizeSavedStampsFrameHeight(draft.savedStamps.frameHeight),
     },
-    mapLayers: {
-      baseVisible: draft.mapLayers.baseVisible,
-      baseOpacity: clampUnitInterval(draft.mapLayers.baseOpacity, 1),
-      contoursVisible: draft.mapLayers.contoursVisible,
-      contoursOpacity: clampUnitInterval(draft.mapLayers.contoursOpacity, 1),
-      contourIntervalMeters: normalizeContourInterval(draft.mapLayers.contourIntervalMeters, 0),
-      hillshadeVisible: draft.mapLayers.hillshadeVisible,
-      hillshadeOpacity: clampUnitInterval(draft.mapLayers.hillshadeOpacity, 0.55),
+    mapLayers: normalizeMapLayers(draft.mapLayers),
+    toolRail: {
+      usedTools: [...new Set(draft.toolRail.usedTools)],
+      namesVisible: draft.toolRail.namesVisible,
+    },
+    singleKeyShortcuts: draft.singleKeyShortcuts,
+    scrollWheel: draft.scrollWheel === 'pan' ? 'pan' : 'zoom',
+    newDesigns: {
+      satellite: draft.newDesigns.satellite,
+      symbolScale: clampPlantSymbolScale(draft.newDesigns.symbolScale),
+      labels: draft.newDesigns.labels,
     },
   }
 }
@@ -204,27 +197,19 @@ function applyDraftToProjection(draft: SettingsProjectionDraft): void {
   batch(() => {
     locale.value = draft.locale
     theme.value = draft.theme
-    basemapStyle.value = draft.basemapStyle
     googleMapsApiKey.value = draft.googleMapsApiKey
+    satelliteSource.value = draft.satelliteSource
     snapToGridEnabled.value = draft.snapToGrid
-    snapToGuidesEnabled.value = draft.snapToGuides
-    autoSaveIntervalMs.value = draft.autoSaveIntervalMs
     plantSpacingIntervalM.value = draft.plantSpacingIntervalM
+    if (!sameLastView(lastView.value, draft.lastView)) lastView.value = draft.lastView
     sidePanelWidth.value = draft.sidePanel.width
     savedStampsFrameHeight.value = draft.savedStamps.frameHeight
-    layerVisibility.value = {
-      ...layerVisibility.value,
-      base: draft.mapLayers.baseVisible,
-      contours: draft.mapLayers.contoursVisible,
-    }
-    layerOpacity.value = {
-      ...layerOpacity.value,
-      base: draft.mapLayers.baseOpacity,
-      contours: draft.mapLayers.contoursOpacity,
-    }
-    contourIntervalMeters.value = draft.mapLayers.contourIntervalMeters
-    hillshadeVisible.value = draft.mapLayers.hillshadeVisible
-    hillshadeOpacity.value = draft.mapLayers.hillshadeOpacity
+    if (!mapLayersEqual(mapLayers.value, draft.mapLayers)) mapLayers.value = draft.mapLayers
+    if (!sameStrings(usedCanvasTools.value, draft.toolRail.usedTools)) usedCanvasTools.value = draft.toolRail.usedTools
+    toolNamesVisible.value = draft.toolRail.namesVisible
+    singleKeyShortcuts.value = draft.singleKeyShortcuts
+    scrollWheel.value = draft.scrollWheel
+    if (!sameNewDesignDefaults(newDesignDefaults.value, draft.newDesigns)) newDesignDefaults.value = draft.newDesigns
   })
 }
 
@@ -233,21 +218,54 @@ function settingsFromDraft(draft: SettingsProjectionDraft): Settings {
     locale: draft.locale,
     theme: draft.theme,
     snap_to_grid: draft.snapToGrid,
-    snap_to_guides: draft.snapToGuides,
-    auto_save_interval_s: Math.round(draft.autoSaveIntervalMs / 1000),
     plant_spacing_interval_m: draft.plantSpacingIntervalM,
+    last_view: draft.lastView,
     side_panel_width: draft.sidePanel.width,
     saved_stamps_frame_height: draft.savedStamps.frameHeight,
-    map_layer_visible: draft.mapLayers.baseVisible,
-    map_style: draft.basemapStyle,
+    basemap_style: draft.mapLayers.basemap.style,
+    basemap_visible: draft.mapLayers.basemap.visible,
+    basemap_opacity: draft.mapLayers.basemap.opacity,
+    satellite_visible: draft.mapLayers.satellite.visible,
+    satellite_opacity: draft.mapLayers.satellite.opacity,
     google_maps_api_key: trimmedKey(draft.googleMapsApiKey),
-    map_opacity: draft.mapLayers.baseOpacity,
-    contour_visible: draft.mapLayers.contoursVisible,
-    contour_opacity: draft.mapLayers.contoursOpacity,
-    contour_interval: draft.mapLayers.contourIntervalMeters,
-    hillshade_visible: draft.mapLayers.hillshadeVisible,
-    hillshade_opacity: draft.mapLayers.hillshadeOpacity,
+    satellite_source: draft.satelliteSource,
+    contour_visible: draft.mapLayers.contours.visible,
+    contour_opacity: draft.mapLayers.contours.opacity,
+    contour_interval: draft.mapLayers.contours.intervalMeters,
+    hillshade_visible: draft.mapLayers.hillshade.visible,
+    hillshade_opacity: draft.mapLayers.hillshade.opacity,
+    soften_background: draft.mapLayers.softenBackground,
+    used_canvas_tools: [...draft.toolRail.usedTools],
+    tool_names_visible: draft.toolRail.namesVisible,
+    single_key_shortcuts: draft.singleKeyShortcuts,
+    scroll_wheel: draft.scrollWheel,
+    new_design_satellite: draft.newDesigns.satellite,
+    new_design_symbol_scale: draft.newDesigns.symbolScale,
+    new_design_labels: draft.newDesigns.labels,
   }
+}
+
+function sameNewDesignDefaults(left: NewDesignDefaults, right: NewDesignDefaults): boolean {
+  return left.satellite === right.satellite
+    && left.symbolScale === right.symbolScale
+    && left.labels === right.labels
+}
+
+function normalizeLastView(view: LastView | null): LastView | null {
+  if (!view) return null
+  const { lon, lat, zoom } = view
+  if (![lon, lat, zoom].every(Number.isFinite)) return null
+  if (lon < -180 || lon > 180 || Math.abs(lat) > WEB_MERCATOR_MAX_LATITUDE_DEG) return null
+  return { lon, lat, zoom }
+}
+
+function sameLastView(left: LastView | null | undefined, right: LastView | null | undefined): boolean {
+  if (!left || !right) return !left && !right
+  return left.lon === right.lon && left.lat === right.lat && left.zoom === right.zoom
+}
+
+function sameStrings(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index])
 }
 
 function settingsEqual(left: Settings, right: Settings): boolean {
@@ -255,8 +273,15 @@ function settingsEqual(left: Settings, right: Settings): boolean {
   if (leftKeys.length !== Object.keys(right).length) return false
 
   return leftKeys.every((key) => (
-    Object.prototype.hasOwnProperty.call(right, key) && Object.is(left[key], right[key])
+    Object.prototype.hasOwnProperty.call(right, key)
+    && sameSettingValue(key, left, right)
   ))
+}
+
+function sameSettingValue(key: keyof Settings, left: Settings, right: Settings): boolean {
+  if (key === 'last_view') return sameLastView(left.last_view, right.last_view)
+  if (key === 'used_canvas_tools') return sameStrings(left.used_canvas_tools, right.used_canvas_tools)
+  return Object.is(left[key], right[key])
 }
 
 function currentSettingsSnapshot(): Settings {
@@ -267,12 +292,12 @@ function projectSettingsToSignals(settings: Settings): Settings {
   const draft = normalizeDraft({
     locale: settings.locale,
     theme: settings.theme,
-    basemapStyle: normalizeBasemapStyle(settings.map_style),
     googleMapsApiKey: settings.google_maps_api_key ?? null,
+    // A record from before the choice existed uses a saved key.
+    satelliteSource: settings.satellite_source ?? (trimmedKey(settings.google_maps_api_key ?? null) ? 'google_key' : 'free'),
     snapToGrid: settings.snap_to_grid,
-    snapToGuides: settings.snap_to_guides,
-    autoSaveIntervalMs: settings.auto_save_interval_s * 1000,
     plantSpacingIntervalM: settings.plant_spacing_interval_m,
+    lastView: settings.last_view ?? null,
     sidePanel: {
       width: settings.side_panel_width,
     },
@@ -280,13 +305,36 @@ function projectSettingsToSignals(settings: Settings): Settings {
       frameHeight: normalizeSavedStampsFrameHeight(settings.saved_stamps_frame_height),
     },
     mapLayers: {
-      baseVisible: settings.map_layer_visible,
-      baseOpacity: settings.map_opacity,
-      contoursVisible: settings.contour_visible,
-      contoursOpacity: settings.contour_opacity,
-      contourIntervalMeters: settings.contour_interval,
-      hillshadeVisible: settings.hillshade_visible,
-      hillshadeOpacity: settings.hillshade_opacity,
+      basemap: {
+        style: settings.basemap_style,
+        visible: settings.basemap_visible,
+        opacity: settings.basemap_opacity,
+      },
+      satellite: {
+        visible: settings.satellite_visible,
+        opacity: settings.satellite_opacity,
+      },
+      contours: {
+        visible: settings.contour_visible,
+        opacity: settings.contour_opacity,
+        intervalMeters: settings.contour_interval,
+      },
+      hillshade: {
+        visible: settings.hillshade_visible,
+        opacity: settings.hillshade_opacity,
+      },
+      softenBackground: settings.soften_background,
+    },
+    toolRail: {
+      usedTools: settings.used_canvas_tools,
+      namesVisible: settings.tool_names_visible ?? null,
+    },
+    singleKeyShortcuts: settings.single_key_shortcuts,
+    scrollWheel: settings.scroll_wheel,
+    newDesigns: {
+      satellite: settings.new_design_satellite,
+      symbolScale: settings.new_design_symbol_scale,
+      labels: settings.new_design_labels,
     },
   })
   applyDraftToProjection(draft)
@@ -629,7 +677,7 @@ export function installSettingsProjection(
   }
 }
 
-export function hydrateSettingsProjection(settings: Settings): void {
+export function hydrateSettingsProjectionForTests(settings: Settings): void {
   const projection = activeSettingsProjection
   clearQueuedPersist(projection)
   const normalizedSettings = projectSettingsToSignals(settings)
@@ -671,7 +719,7 @@ export function mutateSettingsProjection(
     const updated = settingsFromDraft(normalized)
     let changed = false
     for (const key of Object.keys(updated) as Array<keyof Settings>) {
-      if (!Object.is(before[key], updated[key])) {
+      if (!sameSettingValue(key, before, updated)) {
         ;(projection.pendingHydrationPatch as Record<string, unknown>)[key] = updated[key]
         changed = true
       }

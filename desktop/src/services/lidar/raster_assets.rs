@@ -8,12 +8,12 @@
 //! Assets are content-addressed and immutable; a reader never deletes one, and
 //! a cancelled or failed job only removes files it staged itself.
 
-use super::engine::{GdalEngine, GdalProgram};
+use super::engine::{RasterEngine, RasterGeoref, RasterInput};
 use super::grid::RasterGrid;
 use super::paths::LidarPaths;
-use super::prepared_raster::{self, PreparedRaster, RasterWindow};
+use super::prepared_raster::{self, PreparedRaster};
 use sha2::{Digest, Sha256};
-use std::io::{Read as _, Write as _};
+use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
@@ -58,17 +58,17 @@ pub(super) fn hash_file(path: &Path, cancel: &AtomicBool) -> Result<(String, u64
 /// Create one controlled COG from bounded in-memory samples and admit it into
 /// the content-addressed asset store.
 ///
-/// The scratch ENVI pair is removed before returning; only the validated,
-/// digested COG remains. An identical digest already on disk is reused.
+/// Only the validated, digested COG remains; an identical digest already on
+/// disk is reused.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn write_cog_asset(
-    engine: &GdalEngine,
+    engine: &dyn RasterEngine,
     cancel: &AtomicBool,
     paths: &LidarPaths,
     scratch: &Path,
     stem: &str,
     grid: &RasterGrid,
-    crs_wkt: &str,
+    crs_ref: &str,
     nodata: Option<f32>,
     values: &[f32],
 ) -> Result<CogAsset, String> {
@@ -86,43 +86,18 @@ pub(super) fn write_cog_asset(
             grid.height
         ));
     }
-    let raw = scratch.join(format!("{stem}.raw"));
-    let header = scratch.join(format!("{stem}.hdr"));
-    {
-        let mut output = std::io::BufWriter::new(
-            std::fs::File::create(&raw)
-                .map_err(|e| format!("Failed to create scratch raster: {e}"))?,
-        );
-        for value in values {
-            output
-                .write_all(&value.to_le_bytes())
-                .map_err(|e| format!("Failed to write scratch raster: {e}"))?;
-        }
-        output
-            .flush()
-            .map_err(|e| format!("Failed to flush scratch raster: {e}"))?;
-    }
-    std::fs::write(
-        &header,
-        format!(
-            "ENVI\nsamples = {}\nlines = {}\nbands = 1\ndata type = 4\nbyte order = 0\nheader offset = 0\n",
-            grid.width, grid.height
-        ),
-    )
-    .map_err(|e| format!("Failed to write scratch header: {e}"))?;
-
     let staged = scratch.join(format!("{stem}.tif"));
-    // Bounded chunk conversion keeps the ordinary finite deadline; only
-    // whole-source controlled conversion may outlive it (R49).
-    let created = engine.run(
-        GdalProgram::Translate,
-        &prepared_raster::controlled_cog_arguments(&raw, &staged, crs_wkt, grid, nodata),
-        Some(cancel),
+    let created = engine.write_controlled_cog(
+        RasterInput::Samples { grid, values },
+        &staged,
+        Some(RasterGeoref { grid, crs: crs_ref }),
+        nodata,
+        cancel,
     );
-    let _ = std::fs::remove_file(&raw);
-    let _ = std::fs::remove_file(&header);
-    created?;
-
+    if let Err(error) = created {
+        let _ = std::fs::remove_file(&staged);
+        return Err(error);
+    }
     admit_staged_cog(paths, &staged, grid, nodata, cancel)
 }
 
@@ -133,22 +108,24 @@ pub(super) fn write_cog_asset(
 /// asset appears for an import that was never accepted.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn write_job_source_cog(
-    engine: &GdalEngine,
+    engine: &dyn RasterEngine,
     cancel: &AtomicBool,
     job_dir: &Path,
     stem: &str,
     input: &Path,
     grid: &RasterGrid,
-    crs_wkt: &str,
+    crs_ref: &str,
     nodata: Option<f32>,
 ) -> Result<CogAsset, String> {
     let required = prepared_raster::required_free_bytes(grid.width, grid.height, 0)?;
     super::paths::require_free_space(job_dir, required, "the staged source COG")?;
     let staged = job_dir.join(format!("{stem}.tif"));
-    let created = engine.run_uncapped_conversion(
-        GdalProgram::Translate,
-        &prepared_raster::controlled_cog_arguments(input, &staged, crs_wkt, grid, nodata),
-        Some(cancel),
+    let created = engine.write_controlled_cog(
+        RasterInput::File(input),
+        &staged,
+        Some(RasterGeoref { grid, crs: crs_ref }),
+        nodata,
+        cancel,
     );
     if let Err(error) = created {
         let _ = std::fs::remove_file(&staged);
@@ -170,6 +147,16 @@ pub(super) fn write_job_source_cog(
         let _ = std::fs::remove_file(&staged);
     }
     validated
+}
+
+/// Flush a file just renamed into the asset store, and its directory, to
+/// stable storage. A catalogue row is written durably right after; without
+/// this a crash could leave that row pointing at a truncated asset, which the
+/// sweep never removes because it is referenced.
+pub(super) fn sync_published_asset(path: &Path) -> Result<(), String> {
+    crate::design::sync_file(path)
+        .and_then(|()| crate::design::sync_parent_directory(path))
+        .map_err(|e| format!("Failed to sync a published raster asset: {e}"))
 }
 
 /// Validate, digest and admit one staged COG into the content-addressed store.
@@ -201,6 +188,7 @@ pub(super) fn admit_staged_cog(
             .map_err(|e| format!("Failed to create asset directory: {e}"))?;
             std::fs::rename(staged, &target)
                 .map_err(|e| format!("Failed to publish raster asset: {e}"))?;
+            sync_published_asset(&target)?;
         }
         Ok(CogAsset {
             sha256,
@@ -216,49 +204,13 @@ pub(super) fn admit_staged_cog(
     admitted
 }
 
-/// Read a 0/1 quality asset through the bounded reader.
-///
-/// Quality assets carry no NoData tag and every sample must be exactly 0.0 or
-/// 1.0; anything else is a corrupt asset rather than a silent partial mask.
-// No production caller yet: the quality display consumer is deferred, and this
-// read surface exists so the B1 round-trip is exercised end to end.
-#[allow(dead_code)]
-pub(super) fn read_quality_window(
-    asset: &CogAsset,
-    window: RasterWindow,
-    cancel: &AtomicBool,
-) -> Result<Vec<u8>, String> {
-    let mut reader = PreparedRaster::open_committed(&asset.path, &asset.grid, None)?;
-    let samples = reader.read_window(window, cancel)?;
-    let mut quality = Vec::with_capacity(samples.samples().len());
-    for value in samples.samples() {
-        let byte = match *value {
-            0.0 => 0u8,
-            1.0 => 1u8,
-            other => {
-                return Err(format!(
-                    "quality asset {} holds {other}, expected exact 0 or 1",
-                    asset.path.display()
-                ));
-            }
-        };
-        quality.push(byte);
-    }
-    Ok(quality)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::lidar::prepared_raster::RasterWindow;
 
-    fn scratch_dir(label: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "canopi-assets-{label}-{}-{}",
-            std::process::id(),
-            super::super::catalogue::new_id("t")
-        ));
-        std::fs::create_dir_all(&dir).expect("scratch dir");
-        dir
+    fn scratch_dir(label: &str) -> crate::test_scratch::TestScratch {
+        crate::test_scratch::TestScratch::new(&format!("assets-{label}"))
     }
 
     fn library_paths(root: &Path) -> LidarPaths {
@@ -315,7 +267,7 @@ mod tests {
 
     #[test]
     fn cog_asset_size_must_match_the_grid() {
-        let engine = GdalEngine::new();
+        let engine = super::super::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let dir = scratch_dir("size");
         let paths = library_paths(&dir);
@@ -336,9 +288,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn chunk_cog_round_trips_through_gdal_and_the_native_reader() {
-        let engine = GdalEngine::new();
+    fn chunk_cog_round_trips_through_the_engine_and_the_native_reader() {
+        let engine = super::super::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let dir = scratch_dir("roundtrip");
         let paths = library_paths(&dir);
@@ -397,27 +348,16 @@ mod tests {
             (asset.sha256.clone(), asset.bytes)
         );
 
-        // GDAL reopens it as a correctly georeferenced standard raster.
-        let info = engine
-            .run(
-                GdalProgram::Info,
-                &["-json".to_string(), asset.path.display().to_string()],
-                Some(&cancel),
-            )
-            .expect("GDAL reopens the chunk");
-        let parsed: serde_json::Value = serde_json::from_str(&info.stdout).unwrap();
-        assert_eq!(parsed["size"], serde_json::json!([4, 3]));
-        assert_eq!(parsed["bands"][0]["type"], "Float32");
-        assert_eq!(parsed["bands"][0]["block"], serde_json::json!([256, 256]));
-        let transform = parsed["geoTransform"].as_array().unwrap();
-        assert_eq!(transform[0].as_f64().unwrap(), grid.geotransform[0]);
-        assert_eq!(transform[3].as_f64().unwrap(), grid.geotransform[3]);
-        assert!(
-            parsed["coordinateSystem"]["wkt"]
-                .as_str()
-                .unwrap()
-                .contains("3857")
-        );
+        // The engine reopens it as a correctly georeferenced standard raster.
+        let probe = engine
+            .probe(&asset.path, &cancel)
+            .expect("the engine reopens the chunk");
+        assert_eq!((probe.width, probe.height), (4, 3));
+        assert_eq!(probe.band_type, "Float32");
+        assert_eq!(probe.block, [256, 256]);
+        assert_eq!(probe.geotransform[0], grid.geotransform[0]);
+        assert_eq!(probe.geotransform[3], grid.geotransform[3]);
+        assert!(probe.crs_ref.contains("3857"), "{}", probe.crs_ref);
 
         // Quality asset: exact 0/1 samples with no NoData tag.
         let quality_values: Vec<f32> =
@@ -434,8 +374,11 @@ mod tests {
             &quality_values,
         )
         .expect("quality chunk is created");
-        let bytes = read_quality_window(&quality, window, &cancel).expect("quality reads");
-        assert_eq!(bytes, vec![1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1]);
+        let read_back = PreparedRaster::open_committed(&quality.path, &quality.grid, None)
+            .expect("quality asset opens")
+            .read_window(window, &cancel)
+            .expect("quality reads");
+        assert_eq!(read_back.samples(), quality_values.as_slice());
 
         // A truncated asset is rejected rather than decoded partially.
         let truncated = dir.join("truncated.tif");
@@ -459,43 +402,6 @@ mod tests {
         .expect("re-created chunk");
         assert_eq!(again.sha256, asset.sha256);
         assert_eq!(again.path, asset.path);
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn quality_asset_rejects_non_binary_samples() {
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let dir = scratch_dir("quality-corrupt");
-        let paths = library_paths(&dir);
-        let grid = chunk_grid(0, 0);
-        let mut values = vec![1.0f32; 12];
-        values[5] = 0.5;
-        let asset = write_cog_asset(
-            &engine,
-            &cancel,
-            &paths,
-            &dir,
-            "quality",
-            &grid,
-            "EPSG:3857",
-            None,
-            &values,
-        )
-        .expect("asset is created");
-        let error = read_quality_window(
-            &asset,
-            RasterWindow {
-                x: 0,
-                y: 0,
-                width: grid.width,
-                height: grid.height,
-            },
-            &cancel,
-        )
-        .expect_err("a non-binary quality sample must fail");
-        assert!(error.contains("expected exact 0 or 1"), "{error}");
         let _ = std::fs::remove_dir_all(dir);
     }
 }

@@ -1,45 +1,46 @@
 /* ============================================
-   Canvas Panel
+   Canvas: the full-bleed map under the floating chrome
    ============================================ */
 
 .canvasPanel {
-  flex: 1;
-  display: flex;
   position: relative;
-  overflow: hidden;
-}
-
-/* Toolbar + layer panel row */
-.canvasRow {
   flex: 1;
   display: flex;
-  flex-direction: row;
   overflow: hidden;
-  min-height: 0;
 }
 
-/* Canvas area + utility bar column */
-.canvasColumn {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  min-width: 0;
-}
-
-/* Position:relative container for canvas + rulers + empty state */
+/* Position:relative container for the map, its chrome and the start screen. */
 .canvasArea {
-  flex: 1;
+  /* The tool card slot sits beside the tool rail: wider while it shows names. */
+  --canvas-tool-card-left: calc(2 * var(--chrome-inset) + var(--chrome-rail-width));
+  /* Chrome sizes itself against the canvas, not the window (the gallery nests it). */
+  container-type: size;
   position: relative;
+  flex: 1;
   overflow: hidden;
 }
 
-/* Ruler overlay — sits above the canvas, passes pointer events through */
-.rulerOverlay {
-  position: absolute;
-  inset: 0;
-  z-index: 15;
-  pointer-events: none;
+.canvasArea:has([data-tool-rail="named"]) {
+  --canvas-tool-card-left: calc(2 * var(--chrome-inset) + var(--chrome-rail-named-width));
+}
+
+/* While a tool card shows, top chips start right of it. */
+.canvasArea:has([data-tool-card]) {
+  --tool-card-reserve: calc(var(--canvas-tool-card-left) + 320px + var(--space-2));
+}
+
+/* An open Design is hidden until its first scene is drawn (app/canvas-map-surface/design-reveal.ts):
+   its chrome is laid out, so it registers what it covers, and transparent rather than hidden, so a field that focuses
+   itself on mount (the New Design place field) keeps that focus when it shows. */
+.canvasArea[data-design-hidden] > :not([data-start-screen], :has([data-start-screen])) {
+  opacity: 0;
+}
+
+/* Transparent chrome stacked over the start screen must not take its clicks, including parts that ask for pointer input
+   (!important wins over an inline style too; e2e/canvas/design-reveal.spec.ts). */
+.canvasArea[data-design-hidden] > :not([data-start-screen], :has([data-start-screen])),
+.canvasArea[data-design-hidden] > :not([data-start-screen], :has([data-start-screen])) * {
+  pointer-events: none !important;
 }
 
 .canvasContainer {
@@ -54,17 +55,68 @@
   background: transparent;
 }
 
-.basemapFeedback {
-  --ruler-size: 24px;
+/* The map host is a keyboard stop (Tab, or focus returning after a gesture);
+   the interaction session gives it role="application". Its map canvases fill
+   it and would hide an outline, so the ring is drawn over them, inside the
+   full-bleed edge, and never takes pointer input. */
+.canvasArea > [role="application"]:focus-visible {
+  outline: none;
+}
+
+.canvasArea > [role="application"]:focus-visible::after {
+  content: "";
   position: absolute;
-  top: calc(var(--ruler-size) + var(--space-1));
-  left: calc(var(--ruler-size) + var(--space-2));
-  /* Above ruler/scale-bar chrome, below toolbar-hosted plant styling popovers. */
+  inset: 0;
+  z-index: 6;
+  border: 2px solid var(--color-focus);
+  pointer-events: none;
+}
+
+/* Map status: a quiet chip above the bottom row, centred in the part of the map the other chrome leaves visible
+   (`--map-framing-inset-*`, published by app/shell/visible-map-area.ts), so the bottom row, the rails and an open dock
+   or bottom sheet never cover it, in every window and locale; on a phone it keeps clear of the home indicator. Beside
+   an open dock in a narrow window that map is narrower than the notice's widest place: Retry then wraps below the
+   sentence rather than squeeze it into a tower of single words. Its own box is status chrome on that seam
+   (frames: false): the selection chip stands above it, and it never moves the Design's framing. */
+.basemapFeedback {
+  --map-notice-room-left: calc(var(--map-framing-inset-left, 0px) + var(--chrome-inset));
+  --map-notice-room-right: calc(var(--map-framing-inset-right, 0px) + var(--chrome-inset));
+  position: absolute;
+  bottom: max(calc(var(--map-framing-inset-bottom, 0px) + var(--space-2)), calc(var(--chrome-inset) + env(safe-area-inset-bottom)));
+  left: calc(var(--map-notice-room-left) + (100% - var(--map-notice-room-left) - var(--map-notice-room-right)) / 2);
   z-index: 18;
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-1-5);
+  /* max-content: centred at its left edge, the chip would otherwise wrap at the room right of that edge. */
+  width: max-content;
+  max-width: min(480px, calc(100% - var(--map-notice-room-left) - var(--map-notice-room-right)));
+  min-height: var(--control-size-lg);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  /* A notice, not a pill: a long localized sentence wraps beside Retry instead of losing its advice. */
+  border-radius: var(--radius-lg);
+  background: var(--color-glass);
+  box-shadow: var(--shadow-float);
+  transform: translateX(-50%);
   pointer-events: none;
+}
+
+/* In the story presenter, which places the notice clear of its bar and card (StoryPresenter.module.css). */
+.basemapFeedback[data-layer="presenter"] {
+  position: static;
+  max-width: 100%;
+  transform: none;
+}
+
+/* The dot and the sentence: Retry stays beside them while they keep this width, and wraps below them otherwise. */
+.basemapFeedbackLead {
+  display: flex;
+  flex: 1 1 15em;
+  align-items: center;
+  gap: var(--space-1-5);
+  min-width: 0;
 }
 
 .basemapFeedbackDot {
@@ -76,11 +128,7 @@
 }
 
 .basemapFeedback[data-tone="ready"] .basemapFeedbackDot {
-  background: var(--color-primary);
-}
-
-.basemapFeedback[data-tone="warning"] .basemapFeedbackDot {
-  background: var(--color-warning);
+  background: var(--color-accent);
 }
 
 .basemapFeedback[data-tone="error"] .basemapFeedbackDot {
@@ -94,103 +142,35 @@
 
 .basemapFeedbackText {
   min-width: 0;
-  font-size: var(--text-xs);
-  font-weight: 600;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
-  color: var(--color-text-muted);
-  line-height: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: min(280px, 40vw);
 }
 
-.overviewNotice {
-  position: absolute;
-  top: var(--space-2);
-  left: 50%;
-  z-index: 19;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  max-width: calc(100% - var(--space-4));
-  padding: var(--space-1) var(--space-2);
-  transform: translateX(-50%);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--canvas-ruler-bg, var(--color-surface));
-  color: var(--color-text);
-}
-
-.overviewNoticeText {
-  min-width: 0;
-  overflow: hidden;
-  font-size: var(--text-xs);
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.overviewReturn {
+/* Retry is the chip's one control; the chip itself lets pointer input through to the map. */
+.basemapFeedbackRetry {
   flex-shrink: 0;
   min-height: var(--control-size-sm);
   padding: 0 var(--space-2);
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-sm);
-  background: var(--color-primary-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: transparent;
   color: var(--color-text);
   font: inherit;
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
+  pointer-events: auto;
 }
 
-.overviewReturn:focus-visible,
-.overviewMarker:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+.basemapFeedbackRetry:hover {
+  background: var(--color-control-hover);
 }
 
-.overviewMarker {
-  position: absolute;
-  z-index: 19;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  max-width: min(240px, calc(100% - 48px));
-  min-height: var(--control-size-md);
-  padding: var(--space-1) var(--space-2);
-  transform: translate(-50%, -50%);
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-full);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-size: var(--text-xs);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.overviewMarkerDot {
-  width: 10px;
-  height: 10px;
-  flex-shrink: 0;
-  border-radius: var(--radius-full);
-  background: var(--color-primary);
-}
-
-@media (max-width: 520px) {
-  .overviewNotice {
-    top: calc(var(--control-size-md) + var(--space-8));
-    right: var(--space-2);
-    left: var(--space-2);
-    justify-content: space-between;
-    transform: none;
-  }
-}
-
-.basemapFeedback[data-location-cue="true"] .basemapFeedbackDot {
-  animation: basemapCue 1.8s ease-out;
+.basemapFeedback:focus-visible,
+.basemapFeedbackRetry:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 1px;
 }
 
 @keyframes basemapPulse {
@@ -199,53 +179,46 @@
   50% { opacity: 1; }
 }
 
-@keyframes basemapCue {
-  0% { transform: scale(0.6); opacity: 0.5; }
-  20% { transform: scale(1.5); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
-/* Thin utility bar below the canvas for zoom controls */
-.canvasBar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  height: var(--control-size-xl);
-  padding: 0 var(--space-2);
-  border-top: 1px solid var(--color-border);
-  background: var(--panel-gradient);
-  flex-shrink: 0;
-}
-
-.canvasBarSpacer {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-}
-
-.canvasEmptyState {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-  pointer-events: none;
-  animation: fadeIn var(--transition-enter) both;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .canvasEmptyState {
+  .basemapFeedback[data-tone="loading"] .basemapFeedbackDot {
     animation: none;
   }
 }
 
-.canvasEmptyState > * {
-  pointer-events: auto;
+/* The map attribution pill sits immediately left of the zoom group, bottom
+   aligned with it, between the view chip and the zoom group. When that band
+   has too little room for one line (app/shell/visible-map-area.ts), the
+   workspace folds it into MapLibre's (i) button instead of letting it wrap
+   up under a panel. */
+.canvasArea :global(.maplibregl-ctrl-bottom-right) {
+  right: calc(var(--zoom-group-width, 0px) + var(--chrome-inset) + var(--space-2));
+  bottom: var(--chrome-inset);
+  max-width: calc(100% - var(--zoom-group-width, 0px) - var(--view-chip-width, 0px) - 2 * var(--chrome-inset) - 2 * var(--space-2));
+}
+
+.canvasArea :global(.maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib) {
+  margin: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-glass);
+  color: var(--color-text-secondary);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--line-height-tight);
+}
+
+.canvasArea :global(.maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib a) {
+  color: inherit;
+}
+
+.canvasArea :global(.maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib:not(.maplibregl-compact)) {
+  padding: var(--space-0-5) var(--space-2);
+}
+
+/* Web on phones: the credits keep above the panel sheet and left of the side
+   sheet, clear of the home indicator. */
+:global([data-phone-layout]) .canvasArea :global(.maplibregl-ctrl-bottom-right) {
+  right: max(calc(var(--map-inset-right, 0px) + var(--space-2)), calc(var(--chrome-inset) + env(safe-area-inset-right)));
+  bottom: max(calc(var(--map-inset-bottom, 0px) + var(--space-2)), calc(var(--chrome-inset) + env(safe-area-inset-bottom)));
+  max-width: calc(100% - var(--map-inset-left, 0px) - var(--map-inset-right, 0px) - 2 * var(--chrome-inset));
 }

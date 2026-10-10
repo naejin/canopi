@@ -13,13 +13,13 @@ import {
   type TestCanvasQuerySurface,
 } from './support/canvas-query-surface'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
+import { createDefaultScenePersistedState, type ScenePersistedState } from '../canvas/runtime/scene'
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 6,
+    version: 9,
     name: 'Budget hover test',
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [],
     plants: [],
@@ -43,13 +43,33 @@ function makePlant(canonicalName: string, commonName: string): PlacedPlant {
     canonical_name: canonicalName,
     common_name: commonName,
     color: null,
-    position: { x: 0, y: 0 },
+    position: { lon: 13, lat: 23 },
     rotation: null,
     scale: null,
     notes: null,
     planted_date: null,
     quantity: 1,
     locked: false,
+  }
+}
+
+function sceneWithApple(): ScenePersistedState {
+  return {
+    ...createDefaultScenePersistedState(),
+    plants: [{
+      kind: 'plant',
+      id: 'apple',
+      locked: false,
+      canonicalName: 'Malus domestica',
+      commonName: 'Apple',
+      color: '#3E8E4E',
+      canopySpreadM: null,
+      position: { x: 0, y: 0 },
+      rotationDeg: null,
+      notes: null,
+      plantedDate: null,
+      quantity: 1,
+    }],
   }
 }
 
@@ -109,6 +129,21 @@ describe('BudgetPanel hover bridge', () => {
     expect(hoveredPanelTargets.value).toEqual([])
   })
 
+  it('draws each row glyph in the colour the map draws it with', async () => {
+    designSessionFixture.file = {
+      ...makeDesign(),
+      extra: { plant_display: { color_by: 'one_color', one_color: '#AA3355' } },
+    }
+    querySurface = createTestCanvasQuerySurface({ scene: sceneWithApple(), plants: [makePlant('Malus domestica', 'Apple')] })
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: querySurface }))
+    await act(async () => {
+      render(<BudgetPanel />, container)
+    })
+
+    const glyph = container.querySelector<HTMLElement>('li [aria-hidden="true"] > span[style]')
+    expect(glyph?.style.color).toBe('rgb(170, 51, 85)')
+  })
+
   it('refreshes localized species names when switching to a cached locale', async () => {
     querySurface = createTestCanvasQuerySurface({
       plants: [makePlant('Malus domestica', 'Fallback Apple')],
@@ -133,5 +168,33 @@ describe('BudgetPanel hover bridge', () => {
 
     expect(container.textContent).toContain('Pommier')
     expect(container.textContent).not.toContain('Apple')
+  })
+
+  it('marks the English catalog name of a species with no name in the UI language', async () => {
+    locale.value = 'fr'
+    querySurface = createTestCanvasQuerySurface({
+      plants: [makePlant('Malus domestica', 'Pommier stocké')],
+      localizedNames: new Map([['Malus domestica', null]]),
+      englishFallbackNames: new Map([['Malus domestica', 'Apple']]),
+    })
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: querySurface }))
+
+    await act(async () => {
+      render(<BudgetPanel />, container)
+    })
+
+    const row = container.querySelector('li')!
+    expect(row.querySelector('[lang="en"]')?.textContent).toBe('Apple')
+    expect(row.querySelector('strong [aria-hidden="true"]')?.textContent).toBe('(angl.)')
+    expect(row.textContent).not.toContain('Pommier stocké')
+
+    await act(async () => {
+      locale.value = 'en'
+      querySurface.setLocalizedNames(new Map([['Malus domestica', 'Apple']]))
+      querySurface.setEnglishFallbackNames(new Map())
+      querySurface.bumpPlantNamesRevision()
+    })
+    expect(container.querySelector('li [lang="en"]')).toBeNull()
+    expect(container.textContent).not.toContain('(en)')
   })
 })

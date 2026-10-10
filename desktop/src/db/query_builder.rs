@@ -15,6 +15,9 @@ pub use builder::{SpeciesSearchPlan, SpeciesSearchPlanRequest};
 pub(crate) use columns::validated_column;
 #[cfg(test)]
 use cursor::{decode_cursor, encode_cursor};
+#[cfg(test)]
+use pagination::BrowseKeyValue;
+pub use pagination::BrowsePosition;
 pub(crate) use projection::{species_list_common_name_join_sql, species_list_select_sql};
 
 #[cfg(test)]
@@ -68,6 +71,7 @@ mod tests {
             hardiness_zone_max: None,
             growth_rate: None,
             stratum: None,
+            habit: None,
             climate_zones: Vec::new(),
             life_cycles: Vec::new(),
             edibility_rating: None,
@@ -143,10 +147,14 @@ mod tests {
 
     #[test]
     fn test_cursor_round_trip() {
-        let encoded = encode_cursor("Lamiaceae", "Lavandula angustifolia");
+        let encoded = encode_cursor(1, Some("7.5"), "Lavandula angustifolia");
         let decoded = decode_cursor(&encoded).unwrap();
-        assert_eq!(decoded.0, "Lamiaceae");
-        assert_eq!(decoded.1, "Lavandula angustifolia");
+        assert_eq!(decoded.0, 1);
+        assert_eq!(decoded.1.as_deref(), Some("7.5"));
+        assert_eq!(decoded.2, "Lavandula angustifolia");
+
+        let name_only = decode_cursor(&encode_cursor(0, None, "Acer rubrum")).unwrap();
+        assert_eq!(name_only, (0, None, "Acer rubrum".to_owned()));
     }
 
     #[test]
@@ -201,8 +209,8 @@ mod tests {
         let keyset_plan = SpeciesSearchPlan::build(request(
             None,
             filters,
-            Some(encode_cursor("4", "Vaccinium corymbosum")),
-            Sort::Hardiness,
+            Some(encode_cursor(0, Some("4.5"), "Vaccinium corymbosum")),
+            Sort::Height,
             20,
             false,
         ));
@@ -342,7 +350,7 @@ mod tests {
 
     #[test]
     fn test_cursor_clause_name_sort() {
-        let cursor = encode_cursor("Lavandula angustifolia", "Lavandula angustifolia");
+        let cursor = encode_cursor(0, None, "Lavandula angustifolia");
         let plan = SpeciesSearchPlan::build(request(
             None,
             default_filter(),
@@ -353,21 +361,6 @@ mod tests {
         ));
         let sql = plan.list().sql();
         assert!(sql.contains("s.canonical_name >"));
-    }
-
-    #[test]
-    fn test_cursor_clause_family_sort_uses_row_value() {
-        let cursor = encode_cursor("Lamiaceae", "Lavandula angustifolia");
-        let plan = SpeciesSearchPlan::build(request(
-            None,
-            default_filter(),
-            Some(cursor),
-            Sort::Family,
-            20,
-            false,
-        ));
-        let sql = plan.list().sql();
-        assert!(sql.contains("(s.family, s.canonical_name) >"));
     }
 
     #[test]
@@ -428,8 +421,11 @@ mod tests {
         );
 
         let items = vec![list_item("Lavandula alpha"), list_item("Lavandula beta")];
-        assert_eq!(plan.next_cursor(&items, true).as_deref(), Some("offset:52"));
-        assert_eq!(plan.next_cursor(&items, false), None);
+        assert_eq!(
+            plan.next_cursor(&items, None, true).as_deref(),
+            Some("offset:52")
+        );
+        assert_eq!(plan.next_cursor(&items, None, false), None);
     }
 
     #[test]
@@ -676,13 +672,13 @@ mod tests {
             Some("lin"),
             default_filter(),
             None,
-            Sort::Family,
+            Sort::Height,
             20,
             false,
         ));
         let sql = plan.list().sql();
 
-        assert!(sql.contains("ORDER BY s.family"));
+        assert!(sql.contains("ORDER BY s.height_max_m DESC, s.canonical_name"));
         assert!(!sql.contains("ORDER BY CASE"));
         assert!(sql.contains("species_search_common_name_tokens"));
     }
@@ -704,40 +700,11 @@ mod tests {
             assert!(!plan.list().sql().contains("OFFSET ?"));
 
             let items = vec![list_item("Lavandula alpha")];
-            let next_cursor = plan.next_cursor(&items, true).expect("expected cursor");
-            assert!(!next_cursor.starts_with("offset:"));
-        }
-    }
-
-    #[test]
-    fn test_non_relevance_keyset_cursors_use_sort_specific_values() {
-        let mut family = list_item("Lavandula angustifolia");
-        family.family = Some("Lamiaceae".to_owned());
-
-        let mut height = list_item("Malus domestica");
-        height.height_max_m = Some(7.5);
-
-        let mut hardiness = list_item("Vaccinium corymbosum");
-        hardiness.hardiness_zone_min = Some(4);
-
-        let mut growth_rate = list_item("Alnus rubra");
-        growth_rate.growth_rate = Some("Fast".to_owned());
-
-        for (sort, item, expected_value) in [
-            (Sort::Name, list_item("Acer rubrum"), "Acer rubrum"),
-            (Sort::Family, family, "Lamiaceae"),
-            (Sort::Height, height, "7.5"),
-            (Sort::Hardiness, hardiness, "4"),
-            (Sort::GrowthRate, growth_rate, "Fast"),
-        ] {
-            let plan =
-                SpeciesSearchPlan::build(request(None, default_filter(), None, sort, 20, false));
-            let cursor = plan
-                .next_cursor(std::slice::from_ref(&item), true)
+            let position = BrowsePosition::new(0, None);
+            let next_cursor = plan
+                .next_cursor(&items, Some(&position), true)
                 .expect("expected cursor");
-            let (sort_value, canonical_name) = decode_cursor(&cursor).unwrap();
-            assert_eq!(sort_value, expected_value);
-            assert_eq!(canonical_name, item.canonical_name);
+            assert!(!next_cursor.starts_with("offset:"));
         }
     }
 
@@ -755,7 +722,7 @@ mod tests {
             Some("lavender"),
             filters,
             None,
-            Sort::Family,
+            Sort::Name,
             20,
             true,
         ));
@@ -955,5 +922,202 @@ mod tests {
         assert!(!sql.contains("selected_candidate_count"));
         assert!(sql.contains("candidate_scores AS MATERIALIZED"));
         assert_dense_statement_placeholders(plan.list());
+    }
+    fn browse_plan(sort: Sort, cursor: Option<String>) -> SpeciesSearchPlan {
+        SpeciesSearchPlan::build(request(None, default_filter(), cursor, sort, 20, false))
+    }
+
+    #[test]
+    fn browse_sorts_build_one_index_ordered_subquery_per_phase() {
+        for (sort, phases) in [
+            (
+                Sort::Recommended,
+                vec![
+                    "s.edibility_rating >= 0",
+                    "+s.edibility_rating IS NULL AND EXISTS (SELECT 1 FROM best_common_names b WHERE b.species_id = s.id AND b.language = ?1)",
+                    "+s.edibility_rating IS NULL AND NOT EXISTS (SELECT 1 FROM best_common_names b WHERE b.species_id = s.id AND b.language = ?1)",
+                ],
+            ),
+            (Sort::Name, vec![]),
+            (Sort::Relevance, vec![]),
+            (
+                Sort::Height,
+                vec!["s.height_max_m IS NOT NULL", "+s.height_max_m IS NULL"],
+            ),
+            (
+                Sort::Edibility,
+                vec!["s.edibility_rating >= 0", "+s.edibility_rating IS NULL"],
+            ),
+        ] {
+            let plan = browse_plan(sort.clone(), None);
+            let sql = normalize_placeholders(plan.list().sql());
+            let phase_count = phases.len().max(1);
+
+            assert!(plan.is_browse());
+            assert!(
+                sql.starts_with("WITH page AS MATERIALIZED ("),
+                "{sort:?}: {sql}"
+            );
+            assert_eq!(
+                sql.matches(" UNION ALL ").count(),
+                phase_count - 1,
+                "{sort:?}"
+            );
+            assert_eq!(
+                sql.matches("FROM species s ").count(),
+                phase_count,
+                "{sort:?}"
+            );
+            for predicate in phases {
+                let predicate = normalize_placeholders(predicate);
+                assert!(
+                    sql.contains(&predicate),
+                    "{sort:?} missing {predicate}: {sql}"
+                );
+            }
+            assert!(
+                sql.contains("ORDER BY page_phase, page_sort_key DESC, canonical_name LIMIT ?")
+            );
+            assert!(sql.contains("page.page_phase AS page_phase"));
+            assert!(sql.contains("page.page_sort_key AS page_sort_key"));
+            assert!(sql.contains("JOIN species s ON s.id = page.species_id"));
+            assert!(sql.ends_with(
+                "ORDER BY page.page_phase, page.page_sort_key DESC, page.canonical_name"
+            ));
+            assert!(!sql.contains("canonical_name >"), "{sort:?} has no cursor");
+            assert_dense_statement_placeholders(plan.list());
+        }
+    }
+
+    #[test]
+    fn browse_phases_order_by_their_key_then_canonical_name() {
+        let recommended = normalize_placeholders(browse_plan(Sort::Recommended, None).list().sql());
+        assert!(recommended.contains(
+            "0 AS page_phase, (s.edibility_rating * 36 + COALESCE(s.other_uses_rating, 0) * 6 + COALESCE(s.medicinal_rating, 0)) AS page_sort_key"
+        ));
+        assert!(recommended.contains(
+            "ORDER BY (s.edibility_rating * 36 + COALESCE(s.other_uses_rating, 0) * 6 + COALESCE(s.medicinal_rating, 0)) DESC, s.canonical_name LIMIT ?"
+        ));
+        assert!(recommended.contains("1 AS page_phase, NULL AS page_sort_key"));
+        assert!(recommended.contains("2 AS page_phase, NULL AS page_sort_key"));
+
+        let height = normalize_placeholders(browse_plan(Sort::Height, None).list().sql());
+        assert!(height.contains("ORDER BY s.height_max_m DESC, s.canonical_name LIMIT ?"));
+        assert!(height.contains("ORDER BY s.canonical_name LIMIT ?"));
+
+        let edibility = normalize_placeholders(browse_plan(Sort::Edibility, None).list().sql());
+        assert!(edibility.contains("ORDER BY s.edibility_rating DESC, s.canonical_name LIMIT ?"));
+
+        let name = normalize_placeholders(browse_plan(Sort::Name, None).list().sql());
+        assert!(name.contains("0 AS page_phase, NULL AS page_sort_key"));
+        assert!(name.contains("ORDER BY s.canonical_name LIMIT ?"));
+    }
+
+    #[test]
+    fn key_phase_cursor_keeps_the_index_range_scan_and_binds_numbers() {
+        let plan = browse_plan(
+            Sort::Height,
+            Some(encode_cursor(0, Some("4.5"), "Malus domestica")),
+        );
+        let sql = normalize_placeholders(plan.list().sql());
+        let params = plan.list().params();
+
+        assert!(
+            sql.contains("s.height_max_m <= ? AND (s.height_max_m < ? OR s.canonical_name > ?)")
+        );
+        assert!(!sql.contains("(s.height_max_m, s.canonical_name)"));
+        assert_eq!(sql.matches("canonical_name > ?").count(), 1);
+        assert!(sql.contains("+s.height_max_m IS NULL"), "later phase stays");
+        assert!(params.contains(&Value::Real(4.5)));
+        assert!(params.contains(&Value::Text("Malus domestica".to_owned())));
+        assert_dense_statement_placeholders(plan.list());
+
+        let plan = browse_plan(
+            Sort::Recommended,
+            Some(encode_cursor(0, Some("199"), "Malus domestica")),
+        );
+        let sql = normalize_placeholders(plan.list().sql());
+        assert!(sql.contains(
+            "(s.edibility_rating * 36 + COALESCE(s.other_uses_rating, 0) * 6 + COALESCE(s.medicinal_rating, 0)) <= ? AND ((s.edibility_rating * 36 + COALESCE(s.other_uses_rating, 0) * 6 + COALESCE(s.medicinal_rating, 0)) < ? OR s.canonical_name > ?)"
+        ));
+        assert!(plan.list().params().contains(&Value::Integer(199)));
+        assert_dense_statement_placeholders(plan.list());
+    }
+
+    #[test]
+    fn cursor_in_a_later_phase_skips_earlier_phases() {
+        let plan = browse_plan(
+            Sort::Recommended,
+            Some(encode_cursor(1, None, "Crataegus monogyna")),
+        );
+        let sql = normalize_placeholders(plan.list().sql());
+
+        assert!(!sql.contains("s.edibility_rating >= 0"));
+        assert!(!sql.contains("0 AS page_phase"));
+        assert!(sql.contains("1 AS page_phase"));
+        assert!(sql.contains("2 AS page_phase"));
+        assert_eq!(sql.matches(" UNION ALL ").count(), 1);
+        assert_eq!(sql.matches("s.canonical_name > ?").count(), 1);
+        let cursor_at = sql.find("s.canonical_name > ?").unwrap();
+        assert!(cursor_at < sql.find("2 AS page_phase").unwrap());
+        assert!(
+            plan.list()
+                .params()
+                .contains(&Value::Text("Crataegus monogyna".to_owned()))
+        );
+        assert_dense_statement_placeholders(plan.list());
+
+        let plan = browse_plan(Sort::Height, Some(encode_cursor(1, None, "Prunus")));
+        let sql = normalize_placeholders(plan.list().sql());
+        assert!(!sql.contains("s.height_max_m IS NOT NULL"));
+        assert!(!sql.contains(" UNION ALL "));
+    }
+
+    #[test]
+    fn cursors_that_do_not_fit_the_sort_restart_the_browse() {
+        for cursor in [
+            encode_cursor(5, None, "Malus domestica"),
+            encode_cursor(0, None, "Malus domestica"),
+            encode_cursor(0, Some("tall"), "Malus domestica"),
+            encode_cursor(1, Some("4.5"), "Malus domestica"),
+            "not-a-cursor".to_owned(),
+        ] {
+            let plan = browse_plan(Sort::Height, Some(cursor));
+            let sql = plan.list().sql();
+            assert!(!sql.contains("canonical_name >"), "{sql}");
+            assert!(sql.contains("0 AS page_phase"));
+            assert!(sql.contains("1 AS page_phase"));
+        }
+    }
+
+    #[test]
+    fn browse_next_cursor_records_the_last_row_phase_and_key() {
+        let item = list_item("Malus domestica");
+        for (sort, position, expected) in [
+            (
+                Sort::Height,
+                BrowsePosition::new(0, Some(BrowseKeyValue::Real(7.5))),
+                (0, Some("7.5".to_owned())),
+            ),
+            (
+                Sort::Recommended,
+                BrowsePosition::new(0, Some(BrowseKeyValue::Integer(199))),
+                (0, Some("199".to_owned())),
+            ),
+            (Sort::Recommended, BrowsePosition::new(2, None), (2, None)),
+            (Sort::Name, BrowsePosition::new(0, None), (0, None)),
+        ] {
+            let plan = browse_plan(sort, None);
+            let cursor = plan
+                .next_cursor(std::slice::from_ref(&item), Some(&position), true)
+                .expect("expected cursor");
+            let (phase, key, canonical_name) = decode_cursor(&cursor).unwrap();
+            assert_eq!((phase, key), expected);
+            assert_eq!(canonical_name, "Malus domestica");
+            assert_eq!(
+                plan.next_cursor(std::slice::from_ref(&item), Some(&position), false),
+                None
+            );
+        }
     }
 }

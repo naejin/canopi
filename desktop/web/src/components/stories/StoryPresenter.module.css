@@ -1,0 +1,425 @@
+/* The presenter covers the window over the map; only its bar and card are drawn. */
+.presenter {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-full-window);
+  outline: none;
+  touch-action: pan-y;
+}
+
+.topBar {
+  position: absolute;
+  top: var(--space-6);
+  right: var(--space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--control-size-window);
+  padding: 0 var(--space-1-5) 0 var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-glass);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(16px);
+}
+
+.topTitle {
+  max-width: 288px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.phoneProgress {
+  display: none;
+}
+
+.iconButton {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-size-2xl);
+  height: var(--control-size-2xl);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  background: var(--color-control-hover);
+}
+
+.iconButton[aria-pressed="true"] {
+  color: var(--color-accent-ink);
+}
+
+.iconButton:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.card {
+  position: absolute;
+  top: var(--space-8);
+  left: var(--space-8);
+  width: min(420px, calc(100vw - 2 * var(--space-8)));
+  max-height: calc(100vh - 2 * var(--space-8));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-7) var(--space-7) var(--space-5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-glass);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(16px);
+}
+
+/* The map's notice: centred at the bottom of the room right of the card. */
+.notice {
+  position: absolute;
+  right: var(--space-6);
+  bottom: var(--space-6);
+  left: calc(var(--space-8) + min(420px, calc(100vw - 2 * var(--space-8))) + var(--space-4));
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+/* Where that room would be under 280px (32 + 420 + 16 + 280 + 24 = 772), too narrow for a sentence beside Retry, the
+   notice spans the bottom of the window instead and the card stops short of it. The phone layouts below override both. */
+@media (max-width: 771px) {
+  .card {
+    max-height: calc(100vh - var(--space-8) - var(--space-6) - var(--space-12) - var(--space-4));
+  }
+
+  .notice {
+    left: var(--space-8);
+  }
+}
+
+.kicker {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-display);
+  font-weight: 600;
+  line-height: var(--line-height-tight);
+}
+
+.text {
+  color: var(--color-text-secondary);
+  font-size: var(--text-lg);
+  line-height: 1.55;
+}
+
+.text p,
+.text ul {
+  margin: 0 0 var(--space-2);
+}
+
+.text ul {
+  padding-left: var(--space-5);
+}
+
+.text a {
+  color: var(--color-accent-ink);
+}
+
+.image {
+  width: 100%;
+  max-height: 240px;
+  object-fit: cover;
+  border-radius: var(--radius-control);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-size-md);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-alt);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.navButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: var(--control-size-2xl);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-base);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.navButton:hover:not([aria-disabled="true"]) {
+  background: var(--color-control-hover);
+}
+
+.navButton[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.navButton:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.primary {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.primary:hover:not([aria-disabled="true"]) {
+  border-color: var(--color-primary-hover);
+  background: var(--color-primary-hover);
+}
+
+.dots {
+  flex: 1 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-size-md);
+  height: var(--control-size-md);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+}
+
+.dot:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.dotMark {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-border-strong);
+  transition: width var(--transition-normal);
+}
+
+.dot[aria-current="step"] .dotMark {
+  width: 24px;
+  background: var(--color-accent);
+}
+
+.hint {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+.hint[data-hint="swipe"] {
+  display: none;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dotMark {
+    transition: none;
+  }
+}
+
+/* Phones (the Web phone layout's sizes, `app/shell/phone-layout.ts`): a bar
+   with the progress on top and the card as a bottom sheet (board StoryPhone);
+   on its side the card stands at the left instead. */
+@media (max-width: 639px), (orientation: landscape) and (max-height: 479px) and (max-width: 959px) {
+  .topBar {
+    top: calc(var(--space-2) + env(safe-area-inset-top));
+    right: calc(var(--space-2) + env(safe-area-inset-right));
+    left: calc(var(--space-2) + env(safe-area-inset-left));
+    min-height: 52px;
+    padding: 0 var(--space-1) 0 var(--space-4);
+    border-radius: var(--radius-panel);
+  }
+
+  .topTitle {
+    display: none;
+  }
+
+  .phoneProgress {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  .phoneStep {
+    flex: 1 1 auto;
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .phoneDots {
+    display: flex;
+    gap: var(--space-1);
+  }
+
+  .phoneDot {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: var(--color-border-strong);
+  }
+
+  .phoneDot[data-current="true"] {
+    width: 22px;
+    background: var(--color-accent);
+  }
+
+  .iconButton {
+    width: var(--control-size-touch);
+    height: var(--control-size-touch);
+  }
+
+  .card {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    max-height: 60vh;
+    gap: var(--space-3);
+    padding: var(--space-4) calc(var(--space-4) + env(safe-area-inset-right)) calc(var(--space-3) + env(safe-area-inset-bottom)) calc(var(--space-4) + env(safe-area-inset-left));
+    border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+  }
+
+  /* Under the bar, above the bottom sheet. */
+  .notice {
+    top: calc(var(--space-2) + env(safe-area-inset-top) + 52px + var(--space-2));
+    right: calc(var(--space-2) + env(safe-area-inset-right));
+    bottom: auto;
+    left: calc(var(--space-2) + env(safe-area-inset-left));
+  }
+
+  .kicker {
+    display: none;
+  }
+
+  .title {
+    font-size: var(--text-xl);
+  }
+
+  .text {
+    font-size: var(--text-touch);
+    line-height: 1.5;
+  }
+
+  .dots {
+    display: none;
+  }
+
+  .image {
+    max-height: 120px;
+  }
+
+  /* Previous and Next stay in reach while the text scrolls. */
+  .nav {
+    position: sticky;
+    bottom: 0;
+    margin-top: 0;
+    padding-top: var(--space-2);
+    background: var(--color-glass);
+  }
+
+  .navButton {
+    flex: 1 1 0;
+    min-height: var(--control-size-touch);
+    font-size: var(--text-touch);
+  }
+
+  .hint[data-hint="keys"] {
+    display: none;
+  }
+
+  .hint[data-hint="swipe"] {
+    display: block;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 479px) and (max-width: 959px) {
+  .card {
+    top: calc(env(safe-area-inset-top) + var(--space-4) + var(--control-size-touch) + var(--space-2));
+    right: auto;
+    bottom: calc(var(--space-2) + env(safe-area-inset-bottom));
+    left: calc(var(--space-2) + env(safe-area-inset-left));
+    width: min(400px, 50%);
+    max-height: none;
+    padding: var(--space-4) var(--space-4) var(--space-3);
+    border-radius: var(--radius-panel);
+  }
+
+  .image {
+    max-height: 96px;
+  }
+
+  /* At the bottom of the room right of the card. */
+  .notice {
+    top: auto;
+    bottom: calc(var(--space-2) + env(safe-area-inset-bottom));
+    left: calc(var(--space-2) + env(safe-area-inset-left) + min(400px, 50%) + var(--space-2));
+  }
+}

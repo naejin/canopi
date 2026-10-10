@@ -1,0 +1,95 @@
+name: Web Edition browsers
+
+# Serves the built Web Edition and drives it in Chromium (stands in for WebView2) and
+# WebKit (stands in for WKWebView) with real input; canvas v2 plan section 3.2, canopi-9x95.
+# Then drives the UI gallery the same way (canopi-f47t.42, plan section 4).
+on:
+  push:
+    branches: [main, feature/geolibre-adoption]
+    paths-ignore: ['docs/**', '.beads/**', '.interface-design/**', '**/*.md']
+  pull_request:
+    branches: [main, feature/geolibre-adoption]
+    paths-ignore: ['docs/**', '.beads/**', '.interface-design/**', '**/*.md']
+  workflow_dispatch:
+    inputs:
+      update_snapshots:
+        description: Record the screenshot baselines in the pinned image and upload them as an artifact
+        type: boolean
+        default: false
+
+# A newer push or PR update cancels the older run of the same ref; main always finishes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  browsers:
+    name: Chromium and WebKit
+    # A same-repo PR from main or the v2 branch (PR 33) runs nothing: the push
+    # run already drives its head commit.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name != github.repository ||
+      (github.head_ref != 'main' && github.head_ref != 'feature/geolibre-adoption')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The same image run locally gives the same pixels, so baselines can be recorded with
+    # `docker run` on a workstation. Its tag matches the exact @playwright/test version in
+    # desktop/web/package.json; a bump changes both and re-records the baselines.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --ipc=host
+    defaults:
+      run:
+        working-directory: desktop/web
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 22 like every other job (package.json engines ^22.13.0); the image ships Node 24.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/web/package-lock.json
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Build the Web Edition
+        run: npm run build:web
+
+      - name: Type-check the browser specs
+        run: npx tsc -p e2e --noEmit
+
+      - name: Drive the Web Edition in Chromium and WebKit
+        if: ${{ !inputs.update_snapshots }}
+        run: npx playwright test e2e/canvas --project=chromium --project=webkit
+
+      # The UI gallery (ui-gallery/, its dev server started by playwright.config.ts) over memory fixtures: the
+      # Desktop panels and the shared workspace, Desktop's raster renderer included; DOM and pixel assertions only.
+      - name: Drive the UI gallery in Chromium and WebKit
+        if: ${{ !inputs.update_snapshots }}
+        run: npx playwright test e2e/gallery --project=gallery-chromium --project=gallery-webkit
+
+      - name: Record the screenshot baselines
+        if: ${{ inputs.update_snapshots }}
+        run: npx playwright test e2e/canvas --project=chromium --project=webkit --update-snapshots
+
+      - name: Upload the report and traces
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-edition-browsers-report
+          path: |
+            desktop/web/playwright-report/
+            desktop/web/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload the recorded baselines
+        if: ${{ !cancelled() && inputs.update_snapshots }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-edition-snapshots
+          path: desktop/web/e2e/**/*-snapshots/
+          if-no-files-found: error

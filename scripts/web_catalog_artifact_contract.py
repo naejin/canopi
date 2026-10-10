@@ -1521,10 +1521,6 @@ def main(argv: list[str] | None = None) -> int:
     subparsers.add_parser(
         "check", help="Delegate the generated-adapter drift check to bindings-gen."
     )
-    emit_parser = subparsers.add_parser(
-        "emit", help="Delegate generated-adapter publication to bindings-gen."
-    )
-    emit_parser.add_argument("--write", action="store_true", required=True)
     render_parser = subparsers.add_parser(
         "render", help="Render generated files into a staging directory."
     )
@@ -1535,8 +1531,6 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "check":
             run_bindings_generator(check=True)
-        elif args.command == "emit":
-            run_bindings_generator(check=False)
         else:
             render_generated(output_directory=args.output_directory)
     except ArtifactContractError as error:

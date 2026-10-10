@@ -3,8 +3,18 @@ import type {
   ScenePoint,
 } from './runtime/scene'
 
+/**
+ * Payload format of a saved stamp. Version 2 separates a zone's display name
+ * from its identity (`.canopi` v9). Canopi 2.0 breaks stored data (ADR 0021):
+ * only version 2 is read; a version 1 payload from before 2.0 and anything
+ * newer are refused. A version 1 stamp stays in the library so the user can
+ * see it and delete it (`isSavedObjectStampPayloadFromBefore2_0`).
+ */
+export const SAVED_OBJECT_STAMP_PAYLOAD_VERSION = 2
+const SAVED_OBJECT_STAMP_PAYLOAD_VERSION_BEFORE_2_0 = 1
+
 export interface SavedObjectStampPayload {
-  readonly version: 1
+  readonly version: typeof SAVED_OBJECT_STAMP_PAYLOAD_VERSION
   readonly anchor: ScenePoint
   readonly plants: SavedObjectStampPlant[]
   readonly zones: SavedObjectStampZone[]
@@ -25,7 +35,8 @@ export interface SavedObjectStampPlant {
 
 export interface SavedObjectStampZone {
   readonly id: string
-  readonly name: string
+  /** The zone's display name; null when the user has not named it. */
+  readonly name: string | null
   readonly zoneType: string
   readonly points: ScenePoint[]
   readonly rotationDeg: number
@@ -41,7 +52,7 @@ export interface SavedObjectStampAnnotation {
   readonly rotationDeg: number | null
 }
 
-export interface SavedObjectStampGroup {
+interface SavedObjectStampGroup {
   readonly id: string
   readonly name: string | null
   readonly members: SceneObjectGroupMember[]
@@ -57,20 +68,35 @@ export function parseSavedObjectStampPayload(raw: string): SavedObjectStampPaylo
   }
 }
 
-export function normalizeSavedObjectStampPayload(data: unknown): SavedObjectStampPayload | null {
-  if (!isRecord(data)) return null
-  if (data.version !== 1) return null
-  const anchor = pointFromUnknown(data.anchor)
+/**
+ * True for a payload written by Canopi before 2.0 (version 1). Canopi 2.0
+ * cannot place, drag, export or convert it (ADR 0021); it can only delete it.
+ * The one classifier for Favorites and the tool card's stamp chooser.
+ */
+export function isSavedObjectStampPayloadFromBefore2_0(raw: string): boolean {
+  if (!raw) return false
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return isRecord(parsed) && parsed.version === SAVED_OBJECT_STAMP_PAYLOAD_VERSION_BEFORE_2_0
+  } catch {
+    return false
+  }
+}
+
+export function normalizeSavedObjectStampPayload(raw: unknown): SavedObjectStampPayload | null {
+  if (!isRecord(raw)) return null
+  if (raw.version !== SAVED_OBJECT_STAMP_PAYLOAD_VERSION) return null
+  const anchor = pointFromUnknown(raw.anchor)
   if (!anchor) return null
 
-  const plants = arrayFromUnknown(data.plants, plantFromUnknown)
-  const zones = arrayFromUnknown(data.zones, zoneFromUnknown)
-  const annotations = arrayFromUnknown(data.annotations, annotationFromUnknown)
-  const groups = arrayFromUnknown(data.groups, groupFromUnknown)
+  const plants = arrayFromUnknown(raw.plants, plantFromUnknown)
+  const zones = arrayFromUnknown(raw.zones, zoneFromUnknown)
+  const annotations = arrayFromUnknown(raw.annotations, annotationFromUnknown)
+  const groups = arrayFromUnknown(raw.groups, groupFromUnknown)
   if (!plants || !zones || !annotations || !groups) return null
 
   return {
-    version: 1,
+    version: SAVED_OBJECT_STAMP_PAYLOAD_VERSION,
     anchor,
     plants,
     zones,
@@ -101,10 +127,10 @@ function plantFromUnknown(data: unknown): SavedObjectStampPlant | null {
 function zoneFromUnknown(data: unknown): SavedObjectStampZone | null {
   if (!isRecord(data)) return null
   const id = stringFromUnknown(data.id)
-  const name = stringFromUnknown(data.name)
+  const name = nullableStringFromUnknown(data.name)
   const zoneType = stringFromUnknown(data.zoneType)
   const points = arrayFromUnknown(data.points, pointFromUnknown)
-  if (!id || !name || !zoneType || !points || points.length === 0) return null
+  if (!id || !zoneType || !points || points.length === 0) return null
 
   return {
     id,

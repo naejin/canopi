@@ -2,29 +2,39 @@ import {
   CANOPI_FILE_SCHEMA,
   CURRENT_CANOPI_FILE_VERSION,
   MISSING_CANOPI_FILE_VERSION,
+  OBSOLETE_CANOPI_ROOT_KEYS,
 } from '../../generated/canopi-design-format'
 import type { CanopiFile } from '../../types/design'
+import { mapViewProblem, viewsAndStoriesProblem } from './views-admission'
 import { normalizeLoadedDocument } from './document'
 import { decodeCanopiFileSchema } from './canopi-design-schema-decoder'
-import {
-  asCanopiDesignIngestionError,
-  CanopiDesignIngestionError,
-} from './canopi-design-errors'
+import { asCanopiDesignIngestionError, CanopiDesignIngestionError } from './canopi-design-errors'
+import { designIdentitiesAndRangesProblem } from './design-admission'
 
 export { CanopiDesignIngestionError }
 
+/**
+ * Admit a Design: the Web mirror of `decode_design_value`. Canopi 2.0 breaks
+ * stored data (ADR 0021): there is no migration ladder, and any version other
+ * than the current one is refused as `unsupported_version`.
+ */
 export function decodeCanopiDesign(value: unknown): CanopiFile {
   try {
-    admitV6DesignValue(value)
-    const decoded = decodeCanopiFileSchema(value, CANOPI_FILE_SCHEMA) as CanopiFile
-    normalizeSpatialFrame(decoded)
-    return normalizeLoadedDocument(decoded)
+    const version = admitDesignVersion(value)
+    if (version !== CURRENT_CANOPI_FILE_VERSION) {
+      throw new CanopiDesignIngestionError(
+        'unsupported_version',
+        `$.version: unsupported Canopi Design version ${version}; Canopi 2.0 and later open only version ${CURRENT_CANOPI_FILE_VERSION}`,
+        version,
+      )
+    }
+    return admitCurrentDesignValue(value as Record<string, unknown>)
   } catch (error) {
     throw asCanopiDesignIngestionError(error)
   }
 }
 
-function admitV6DesignValue(value: unknown): asserts value is Record<string, unknown> {
+function admitDesignVersion(value: unknown): number {
   if (!isRecord(value)) throw new Error('$: expected a Canopi Design object')
 
   const version = Object.prototype.hasOwnProperty.call(value, 'version')
@@ -36,27 +46,32 @@ function admitV6DesignValue(value: unknown): asserts value is Record<string, unk
       '$.version: expected a positive integer',
     )
   }
-  if (version !== CURRENT_CANOPI_FILE_VERSION) {
-    throw new CanopiDesignIngestionError(
-      'unsupported_version',
-      `$.version: unsupported Canopi Design version ${version}; current version is ${CURRENT_CANOPI_FILE_VERSION}`,
-    )
-  }
-  if (
-    Object.prototype.hasOwnProperty.call(value, 'location')
-    || Object.prototype.hasOwnProperty.call(value, 'north_bearing_deg')
-  ) {
-    throw new CanopiDesignIngestionError(
-      'invalid_document',
-      '$: v6 replaces root location and north_bearing_deg with spatial_frame',
-    )
-  }
+  return version
 }
 
-function normalizeSpatialFrame(file: CanopiFile): void {
-  const bearing = file.spatial_frame.north_bearing_deg
-  const normalized = ((bearing % 360) + 360) % 360
-  file.spatial_frame.north_bearing_deg = Object.is(normalized, -0) ? 0 : normalized
+/** Current-format admission. */
+function admitCurrentDesignValue(value: Record<string, unknown>): CanopiFile {
+  const obsolete = OBSOLETE_CANOPI_ROOT_KEYS.find((key) => Object.prototype.hasOwnProperty.call(value, key))
+  if (obsolete) {
+    throw new CanopiDesignIngestionError(
+      'invalid_document',
+      `$.${obsolete}: obsolete root field; Designs store lon/lat on each design object`,
+    )
+  }
+  // Unknown fields travel at the root; `extra` is only the in-memory holder
+  // and the canonical encoder never writes it, so a root `extra` is refused.
+  if (Object.prototype.hasOwnProperty.call(value, 'extra')) {
+    throw new CanopiDesignIngestionError(
+      'invalid_document',
+      '$.extra: unknown fields belong at the document root',
+    )
+  }
+  const decoded = normalizeLoadedDocument(decodeCanopiFileSchema(value, CANOPI_FILE_SCHEMA) as CanopiFile)
+  const problem = designIdentitiesAndRangesProblem(decoded)
+    ?? viewsAndStoriesProblem(decoded.views ?? [], decoded.stories ?? [])
+    ?? mapViewProblem(decoded.map_view)
+  if (problem) throw new CanopiDesignIngestionError('invalid_document', problem)
+  return decoded
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

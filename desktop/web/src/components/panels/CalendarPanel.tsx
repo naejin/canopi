@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
-import type { JSX } from 'preact'
+import { Fragment, type JSX } from 'preact'
 import { useCalendarWorkbench, type CalendarTargetMode } from '../../app/timeline/calendar-workbench'
 import {
   addCivilDays,
@@ -9,20 +9,26 @@ import {
   formatCivilDate,
   localToday,
   parseCivilDate,
-  civilWeekStartsOnSunday,
+  civilWeekdayOffset,
   compareCivilDates,
   startOfCivilMonth,
   type CivilDate,
 } from '../../app/timeline/civil-date'
-import { ACTION_TYPES, type CalendarDayProjection, type CalendarPlanningAction, type CalendarTargetLabel } from '../../app/planning-projection'
+import { ACTION_TYPES, missingZoneLabel, type CalendarDayProjection, type CalendarPlanningAction, type CalendarTargetLabel } from '../../app/planning-projection'
 import type { CalendarCompletionFilter, CalendarDisplay } from '../../app/planning-view/state'
-import { sidePanel } from '../../app/shell/state'
 import { t } from '../../i18n'
-import { DockPanelHeader } from '../shared/DockPanelHeader'
+import { locale } from '../../app/settings/state'
+import { formatCount } from '../../utils/format-count'
+import { DockPanelHeader, closeDockPanel } from '../shared/DockPanelHeader'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import { SurfaceSearch } from '../shared/SurfaceSearch'
 import { DatePicker } from '../shared/DatePicker'
-import { normalizeSearchText } from '../../utils/normalize-search'
+import { EmptyState } from '../shared/EmptyState'
+import { SegmentedControl, type SegmentedOption } from '../shared/SegmentedControl'
+import { SpeciesCommonName } from '../shared/SpeciesIdentity'
+import { SurfaceHeader } from '../shared/SurfaceHeader'
+import { Switch } from '../shared/Switch'
+import { CalendarSpeciesPicker } from './CalendarSpeciesPicker'
 import styles from './CalendarPanel.module.css'
 
 const FULL_MONTH_MIN_WIDTH = 640
@@ -82,8 +88,7 @@ export function CalendarPanel() {
   function closePanel(): void {
     workbench.cancelEditor()
     workbench.setExpanded(false)
-    sidePanel.value = null
-    document.querySelector<HTMLButtonElement>('button[data-panel="calendar"]')?.focus()
+    closeDockPanel()
   }
 
   function handleEscape(event: JSX.TargetedKeyboardEvent<HTMLElement>): void {
@@ -110,7 +115,7 @@ export function CalendarPanel() {
       onKeyDown={handleEscape}
     >
       {workbench.editor ? (
-        <CalendarEditor workbench={workbench} onCancel={cancelEditorAndRestoreFocus} />
+        <CalendarEditor workbench={workbench} onCancel={cancelEditorAndRestoreFocus} onClose={closePanel} />
       ) : (
         <>
           <DockPanelHeader
@@ -300,10 +305,7 @@ function CalendarDateGrid({ workbench, compact, onSelect }: {
     if (event.key === 'ArrowRight') amount = 1
     if (event.key === 'ArrowUp') amount = -7
     if (event.key === 'ArrowDown') amount = 7
-    const weekday = civilDateToLocalDate(day.date).getDay()
-    const weekOffset = civilWeekStartsOnSunday(workbench.activeLocale)
-      ? weekday
-      : (weekday + 6) % 7
+    const weekOffset = civilWeekdayOffset(day.date, workbench.activeLocale)
     if (event.key === 'Home') amount = -weekOffset
     if (event.key === 'End') amount = 6 - weekOffset
     if (amount !== null) {
@@ -437,7 +439,7 @@ function CalendarAgenda({ workbench }: { workbench: Workbench }) {
           onClick={() => workbench.setUnscheduledExpanded(!workbench.unscheduledExpanded)}
         >
           <span>{workbench.unscheduledExpanded ? '▾' : '▸'} {t('canvas.calendar.unscheduled')}</span>
-          <small>{workbench.projection.unscheduled.length}</small>
+          <small>{formatCount(workbench.projection.unscheduled.length, locale.value)}</small>
         </button>
         {workbench.unscheduledExpanded && workbench.projection.unscheduled.map((action) => (
           <CalendarActionRow key={action.id} action={action} workbench={workbench} />
@@ -446,16 +448,40 @@ function CalendarAgenda({ workbench }: { workbench: Workbench }) {
           <p className={styles.quiet}>{t('canvas.calendar.noUnscheduled')}</p>
         )}
       </section>
-      {workbench.projection.filteredCount === 0 && (
-        <div className={styles.noResults}>
-          <p>{t('canvas.calendar.noResults')}</p>
-          <button type="button" onClick={() => {
-            workbench.setSearch('')
-            workbench.setActionType('all')
-            workbench.setCompletion('open')
-          }}>{t('canvas.calendar.clearFilters')}</button>
-        </div>
-      )}
+      <CalendarAgendaEmpty workbench={workbench} />
+    </div>
+  )
+}
+
+/**
+ * Why the agenda is empty: no actions at all, chosen filters hiding them, or
+ * the default open-actions filter hiding only completed ones.
+ */
+function CalendarAgendaEmpty({ workbench }: { workbench: Workbench }) {
+  if (workbench.projection.filteredCount > 0) return null
+  if (workbench.actions.length === 0) {
+    return (
+      <div className={styles.emptyState} data-calendar-empty>
+        <EmptyState action={{ label: t('canvas.calendar.addAction'), onClick: () => workbench.openAdd(workbench.selectedDate) }}>
+          {t('canvas.calendar.noActionsYet')}
+        </EmptyState>
+      </div>
+    )
+  }
+  if (workbench.filtersActive) {
+    return (
+      <div className={styles.emptyState} data-calendar-empty>
+        <EmptyState status action={{ label: t('canvas.calendar.clearFilters'), onClick: workbench.clearFilters }}>
+          {t('canvas.calendar.noResults')}
+        </EmptyState>
+      </div>
+    )
+  }
+  return (
+    <div className={styles.emptyState} data-calendar-empty>
+      <EmptyState status action={{ label: t('canvas.calendar.showCompleted'), onClick: () => workbench.setCompletion('all') }}>
+        {t('canvas.calendar.allDone')}
+      </EmptyState>
     </div>
   )
 }
@@ -499,7 +525,7 @@ function CalendarActionRow({ action, workbench }: { action: CalendarPlanningActi
       />
       <button type="button" className={styles.actionBody} onClick={() => workbench.openEdit(action.id)}>
         <strong>{actionDescription(action)}</strong>
-        <span>{actionTypeLabel(action.actionType)} · {targetSummary(action)}</span>
+        <span>{actionTypeLabel(action.actionType)} · <TargetSummary action={action} /></span>
         <span>{actionDateSummary(action, workbench.activeLocale, workbench.projection.month)}</span>
       </button>
       <button
@@ -513,24 +539,20 @@ function CalendarActionRow({ action, workbench }: { action: CalendarPlanningActi
   )
 }
 
-function CalendarEditor({ workbench, onCancel }: { workbench: Workbench; onCancel: () => void }) {
+function CalendarEditor({ workbench, onCancel, onClose }: {
+  workbench: Workbench
+  onCancel: () => void
+  onClose: () => void
+}) {
   const editor = workbench.editor!
   const draft = editor.draft
   const action = editor.actionId
     ? workbench.projection.weeks.flat().flatMap((day) => day.actions).find((candidate) => candidate.id === editor.actionId)
       ?? workbench.projection.unscheduled.find((candidate) => candidate.id === editor.actionId)
     : null
-  const speciesSearchRef = useRef<HTMLInputElement>(null)
   const descriptionRef = useRef<HTMLTextAreaElement>(null)
-  const [speciesSearch, setSpeciesSearch] = useState('')
-  const speciesNeedle = normalizeSearchText(speciesSearch)
   const selectedSpecies = new Set(
     draft.targets.filter((target) => target.kind === 'species').map((target) => target.canonical_name),
-  )
-  const visibleSpecies = workbench.speciesList.filter((species) =>
-    speciesNeedle !== ''
-    && !selectedSpecies.has(species.canonical_name)
-    && normalizeSearchText(`${species.display_name} ${species.canonical_name}`).includes(speciesNeedle),
   )
   const typeItems: DropdownItem<string>[] = [
     ...(knownActionType(draft.action_type)
@@ -539,8 +561,13 @@ function CalendarEditor({ workbench, onCancel }: { workbench: Workbench; onCance
     ...ACTION_TYPES.map((type) => ({ value: type, label: actionTypeLabel(type) })),
   ]
   const selectedSpeciesTargets = draft.targets.filter((target) => target.kind === 'species')
-  const selectedZone = draft.targets.find((target) => target.kind === 'zone')?.zone_name ?? ''
-  const scheduleMode = !draft.scheduled ? 'unscheduled' : draft.range ? 'range' : 'single'
+  const selectedZone = draft.targets.find((target) => target.kind === 'zone')?.zone_id ?? ''
+  const scheduleMode: ScheduleMode = !draft.scheduled ? 'unscheduled' : draft.range ? 'range' : 'single'
+  const scheduleOptions: SegmentedOption<ScheduleMode>[] = [
+    { value: 'range', label: t('canvas.calendar.range') },
+    { value: 'single', label: t('canvas.calendar.oneDay') },
+    { value: 'unscheduled', label: t('canvas.calendar.unscheduled') },
+  ]
   const targetModeItems: DropdownItem<CalendarTargetMode>[] = (
     ['design', 'species', 'selection', 'zone'] as const
   ).map((mode) => ({
@@ -550,17 +577,17 @@ function CalendarEditor({ workbench, onCancel }: { workbench: Workbench; onCance
   }))
   const zoneItems: DropdownItem<string>[] = [
     { value: '', label: t('canvas.calendar.chooseZone') },
-    ...(!workbench.zoneNames.includes(selectedZone) && selectedZone
-      ? [{ value: selectedZone, label: `${selectedZone} · ${t('canvas.calendar.unavailable')}` }]
+    ...(selectedZone && !workbench.zones.some((zone) => zone.id === selectedZone)
+      ? [{ value: selectedZone, label: `${missingZoneLabel()} · ${t('canvas.calendar.unavailable')}` }]
       : []),
-    ...workbench.zoneNames.map((zone) => ({ value: zone, label: zone })),
+    ...workbench.zones.map((zone) => ({ value: zone.id, label: zone.label })),
   ]
 
   useLayoutEffect(() => {
     descriptionRef.current?.focus()
   }, [])
 
-  function setScheduleMode(mode: 'range' | 'single' | 'unscheduled'): void {
+  function setScheduleMode(mode: ScheduleMode): void {
     if (mode === 'unscheduled') {
       workbench.setScheduled(false)
       return
@@ -583,18 +610,21 @@ function CalendarEditor({ workbench, onCancel }: { workbench: Workbench; onCance
 
   return (
     <div className={styles.editor} role="dialog" aria-label={t(editor.mode === 'add' ? 'canvas.timeline.addTitle' : 'canvas.timeline.editTitle')}>
-      <header className={styles.editorTitle}>
-        <button type="button" className={styles.backButton} onClick={onCancel}>‹ {t('canvas.calendar.back')}</button>
-        <h2>{t(editor.mode === 'add' ? 'canvas.timeline.addTitle' : 'canvas.timeline.editTitle')}</h2>
-      </header>
+      <SurfaceHeader
+        title={t(editor.mode === 'add' ? 'canvas.timeline.addTitle' : 'canvas.timeline.editTitle')}
+        back={{ label: t('sidebar.back'), onClick: onCancel }}
+        closeLabel={t('sidebar.close')}
+        onClose={onClose}
+      />
       <div className={styles.editorFields}>
         <label>
           <span>{t('canvas.timeline.description')}</span>
           <textarea
             ref={descriptionRef}
-            rows={1}
+            rows={3}
             className={styles.descriptionInput}
             data-calendar-description
+            placeholder={t('canvas.calendar.descriptionPlaceholder')}
             value={draft.description}
             onInput={(event) => workbench.updateDraft({ description: event.currentTarget.value })}
           />
@@ -612,22 +642,12 @@ function CalendarEditor({ workbench, onCancel }: { workbench: Workbench; onCance
           />
         </div>
         <section className={styles.scheduleEditor} aria-label={t('canvas.calendar.schedule')}>
-          <div className={styles.scheduleModes} role="group" aria-label={t('canvas.calendar.schedule')}>
-            {(['range', 'single', 'unscheduled'] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                aria-pressed={scheduleMode === mode}
-                onClick={() => setScheduleMode(mode)}
-              >
-                {t(mode === 'range'
-                  ? 'canvas.calendar.range'
-                  : mode === 'single'
-                    ? 'canvas.calendar.oneDay'
-                    : 'canvas.calendar.unscheduled')}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            label={t('canvas.calendar.schedule')}
+            options={scheduleOptions}
+            value={scheduleMode}
+            onChange={setScheduleMode}
+          />
           {draft.scheduled && (
             <div className={styles.dateFields} data-calendar-date-fields data-range={draft.range ? 'true' : undefined}>
               <div className={styles.field}>
@@ -684,63 +704,21 @@ function CalendarEditor({ workbench, onCancel }: { workbench: Workbench; onCance
           ) && (
             <ul className={styles.savedTargetList}>
               {action.targetLabels.map((target, index) => (
-                <li key={`${target.kind}:${target.label}:${index}`}>{calendarTargetLabel(target)}</li>
+                <li key={`${target.kind}:${target.label}:${index}`}><CalendarTargetName target={target} /></li>
               ))}
             </ul>
           )}
           {draft.targetMode === 'species' && (
-            <div className={styles.targetPicker}>
-              {selectedSpeciesTargets.length > 0 && (
-                <div className={styles.selectedSpecies} aria-label={t('canvas.calendar.speciesTargets')}>
-                  {selectedSpeciesTargets.map((target) => {
-                    const selected = selectedSpeciesLabel(target.canonical_name)
-                    return (
-                      <button
-                        key={target.canonical_name}
-                        type="button"
-                        className={styles.speciesChip}
-                        data-calendar-selected-target={target.canonical_name}
-                        aria-label={t('canvas.calendar.removeSpecies', { name: selected.label })}
-                        onClick={() => workbench.toggleSpeciesTarget(target.canonical_name)}
-                      >
-                        <span>{selected.label}</span>
-                        {selected.unavailable && <small>{t('canvas.calendar.unavailable')}</small>}
-                        <span aria-hidden="true">×</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-              <input
-                ref={speciesSearchRef}
-                type="search"
-                value={speciesSearch}
-                placeholder={t('canvas.calendar.searchSpecies')}
-                aria-label={t('canvas.calendar.searchSpecies')}
-                onInput={(event) => setSpeciesSearch(event.currentTarget.value)}
-              />
-              {speciesNeedle !== '' && <div className={styles.speciesOptions}>
-                {visibleSpecies.map((species) => (
-                  <button
-                    key={species.canonical_name}
-                    type="button"
-                    className={styles.speciesOption}
-                    data-calendar-species-option={species.canonical_name}
-                    onClick={() => {
-                      workbench.toggleSpeciesTarget(species.canonical_name)
-                      setSpeciesSearch('')
-                      speciesSearchRef.current?.focus()
-                    }}
-                  >
-                    <span>{species.display_name}</span>
-                    <em>{species.canonical_name}</em>
-                  </button>
-                ))}
-                {visibleSpecies.length === 0 && (
-                  <p className={styles.quiet}>{t('canvas.calendar.noSpeciesMatches')}</p>
-                )}
-              </div>}
-            </div>
+            <CalendarSpeciesPicker
+              species={workbench.speciesList}
+              chosen={selectedSpecies}
+              unavailable={selectedSpeciesTargets.flatMap((target) => {
+                const selected = selectedSpeciesLabel(target.canonical_name)
+                return selected.unavailable ? [{ canonicalName: target.canonical_name, label: selected.label }] : []
+              })}
+              onToggle={workbench.toggleSpeciesTarget}
+              onAddAll={workbench.addSpeciesTargets}
+            />
           )}
           {draft.targetMode === 'selection' && (
             <p className={styles.savedTargets}>{t('canvas.calendar.plantSelectionCount', { count: draft.targets.length })}</p>
@@ -759,14 +737,13 @@ function CalendarEditor({ workbench, onCancel }: { workbench: Workbench; onCance
             <p className={styles.validation} role="alert">{t('canvas.calendar.targetRequired')}</p>
           )}
         </section>
-        <label className={styles.checkboxLabel} data-calendar-completed>
-          <input
-            type="checkbox"
+        <div data-calendar-completed>
+          <Switch
+            label={t('canvas.calendar.completed')}
             checked={draft.completed}
-            onChange={(event) => workbench.updateDraft({ completed: event.currentTarget.checked })}
+            onChange={(completed) => workbench.updateDraft({ completed })}
           />
-          <span>{t('canvas.calendar.completed')}</span>
-        </label>
+        </div>
         {action?.recurrence && (
           <p className={styles.savedTargets}>
             {t('canvas.calendar.savedRecurrence', { value: action.recurrence })}
@@ -788,6 +765,8 @@ function CalendarEditor({ workbench, onCancel }: { workbench: Workbench; onCance
   )
 }
 
+type ScheduleMode = 'range' | 'single' | 'unscheduled'
+
 function actionDescription(action: CalendarPlanningAction): string {
   return action.description.trim() || actionTypeLabel(action.actionType)
 }
@@ -800,18 +779,24 @@ function knownActionType(actionType: string): boolean {
   return ACTION_TYPES.includes(actionType as (typeof ACTION_TYPES)[number])
 }
 
-function targetSummary(action: CalendarPlanningAction): string {
-  if (action.targetLabels.length === 0) return t('canvas.calendar.noTarget')
-  return action.targetLabels.map(calendarTargetLabel).join(', ')
+function TargetSummary({ action }: { action: CalendarPlanningAction }) {
+  if (action.targetLabels.length === 0) return <>{t('canvas.calendar.noTarget')}</>
+  return <>{action.targetLabels.map((target, index) => (
+    <Fragment key={index}>{index > 0 && ', '}<CalendarTargetName target={target} /></Fragment>
+  ))}</>
 }
 
-function calendarTargetLabel(target: CalendarTargetLabel): string {
+/** A target's name; a species shown by its English catalog name carries the "(en)" mark. */
+function CalendarTargetName({ target }: { target: CalendarTargetLabel }) {
   const label = target.kind === 'manual'
     ? t('canvas.calendar.wholeDesign')
     : target.kind === 'none'
       ? t('canvas.calendar.noTarget')
       : target.label
-  return target.unavailable ? `${label} · ${t('canvas.calendar.unavailable')}` : label
+  return <>
+    <SpeciesCommonName name={label} englishFallback={target.englishFallback} />
+    {target.unavailable && ` · ${t('canvas.calendar.unavailable')}`}
+  </>
 }
 
 function actionDateSummary(action: CalendarPlanningAction, locale: string, month: CivilDate): string {

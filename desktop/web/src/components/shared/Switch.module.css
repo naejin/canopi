@@ -1,0 +1,84 @@
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--control-size-lg);
+  font-size: var(--text-base);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.row[data-disabled="true"] {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  line-height: var(--line-height);
+}
+
+.control {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  width: var(--control-size-xl);
+  height: var(--control-size-xs);
+}
+
+/* The native checkbox sits over the track so pointer, keyboard and assistive tech all reach it. */
+.input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.track {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--color-switch-off);
+  pointer-events: none;
+  transition: background-color var(--transition-fast);
+}
+
+.track::after {
+  content: '';
+  position: absolute;
+  top: var(--space-0-5);
+  left: var(--space-0-5);
+  width: var(--icon-size-md);
+  height: var(--icon-size-md);
+  border-radius: var(--radius-full);
+  background: var(--color-knob-off);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-fast);
+}
+
+.input:checked + .track {
+  background: var(--color-accent);
+}
+
+.input:checked + .track::after {
+  background: var(--color-knob);
+  transform: translateX(calc(var(--control-size-xl) - var(--icon-size-md) - var(--space-1)));
+}
+
+.input:focus-visible + .track {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

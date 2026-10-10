@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { SavedObjectStampPayload } from '../canvas/saved-object-stamp-payload'
+import {
+  isSavedObjectStampPayloadFromBefore2_0,
+  parseSavedObjectStampPayload,
+  type SavedObjectStampPayload,
+} from '../canvas/saved-object-stamp-payload'
 import type { SavedObjectStamp } from '../types/saved-object-stamps'
 import {
   hasSavedObjectStampDragData,
@@ -9,7 +13,7 @@ import {
 
 function payload(): SavedObjectStampPayload {
   return {
-    version: 1,
+    version: 2,
     anchor: { x: 10, y: 20 },
     plants: [{
       id: 'plant-1',
@@ -88,6 +92,31 @@ describe('Saved Object Stamp source', () => {
     protectedDragData = false
     expect(readSavedObjectStampDragData(dataTransfer)?.plants[0]?.canonicalName)
       .toBe('Malus domestica')
+  })
+
+  it('keeps a zone\'s display name apart from its id, and reads only the current payload version', () => {
+    const zone = { id: 'zone-1', zoneType: 'rect', points: [{ x: 0, y: 0 }, { x: 2, y: 2 }], rotationDeg: 0, fillColor: null }
+    const named = parseSavedObjectStampPayload(JSON.stringify({ ...payload(), zones: [{ ...zone, name: 'Kitchen bed' }] }))
+    expect(named?.zones[0]).toMatchObject({ id: 'zone-1', name: 'Kitchen bed' })
+    const unnamed = parseSavedObjectStampPayload(JSON.stringify({ ...payload(), zones: [zone] }))
+    expect(unnamed?.zones[0]?.name).toBeNull()
+
+    // Canopi 2.0 breaks stored data (ADR 0021): a version 1 payload, written
+    // before 2.0, is not upgraded; neither is anything newer than the app.
+    expect(parseSavedObjectStampPayload(JSON.stringify({ ...payload(), version: 1, zones: [{ ...zone, name: 'Kitchen bed' }] }))).toBeNull()
+    expect(parseSavedObjectStampPayload(JSON.stringify({ ...payload(), version: 0 }))).toBeNull()
+    expect(parseSavedObjectStampPayload(JSON.stringify({ ...payload(), version: 3 }))).toBeNull()
+  })
+
+  it('tells a payload saved before 2.0 (version 1) apart from a current or damaged one', () => {
+    const before2_0 = JSON.stringify({ ...payload(), version: 1 })
+    expect(isSavedObjectStampPayloadFromBefore2_0(before2_0)).toBe(true)
+    expect(parseSavedObjectStampPayload(before2_0)).toBeNull()
+    expect(isSavedObjectStampPayloadFromBefore2_0(JSON.stringify(payload()))).toBe(false)
+    expect(isSavedObjectStampPayloadFromBefore2_0(JSON.stringify({ ...payload(), version: 3 }))).toBe(false)
+    expect(isSavedObjectStampPayloadFromBefore2_0('{not json')).toBe(false)
+    expect(isSavedObjectStampPayloadFromBefore2_0('')).toBe(false)
+    expect(isSavedObjectStampPayloadFromBefore2_0('1')).toBe(false)
   })
 
   it('rejects invalid Saved Object Stamp drag payloads', () => {

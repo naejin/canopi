@@ -4,30 +4,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BasemapStyle } from '../generated/contracts'
 import type { Settings, Theme } from '../types/settings'
 import type { SettingsProjectionInstallation } from '../app/settings/projection'
-import {
-  contourIntervalMeters,
-  createDefaultLayerOpacity,
-  createDefaultLayerVisibility,
-  hillshadeOpacity,
-  hillshadeVisible,
-  layerOpacity,
-  layerVisibility,
-  snapToGridEnabled,
-  snapToGuidesEnabled,
-} from '../app/canvas-settings/signals'
+import { snapToGridEnabled } from '../app/canvas-settings/signals'
+import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
 import { sidePanelWidth } from '../app/shell/state'
 import {
-  autoSaveIntervalMs,
-  basemapStyle,
   locale,
   plantSpacingIntervalM,
   savedStampsFrameHeight,
   theme,
   googleMapsApiKey,
+  lastView,
+  newDesignDefaults,
+  satelliteSource,
+  activeGoogleMapsApiKey,
+  scrollWheel,
+  singleKeyShortcuts,
 } from '../app/settings/state'
 import {
   flushSettingsProjection,
-  hydrateSettingsProjection,
+  hydrateSettingsProjectionForTests,
   installSettingsProjection,
   mutateSettingsProjection,
   resetSettingsProjectionForTests,
@@ -39,38 +34,45 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     locale: 'en',
     theme: 'light',
     snap_to_grid: false,
-    snap_to_guides: true,
-    auto_save_interval_s: 60,
     side_panel_width: null,
-    map_layer_visible: true,
-    map_style: 'street',
-    map_opacity: 1,
+    basemap_style: 'liberty',
+    basemap_visible: true,
+    basemap_opacity: 1,
+    satellite_visible: false,
+    satellite_opacity: 1,
     contour_visible: false,
     contour_opacity: 1,
     contour_interval: 0,
     hillshade_visible: false,
     hillshade_opacity: 0.55,
+    soften_background: false,
     plant_spacing_interval_m: 0.5,
     saved_stamps_frame_height: 220,
+    last_view: null,
+    used_canvas_tools: [],
+    tool_names_visible: null,
+    single_key_shortcuts: true,
+    scroll_wheel: 'zoom',
+    new_design_satellite: false,
+    new_design_symbol_scale: 1,
+    new_design_labels: 'names',
+    satellite_source: null,
     ...overrides,
   }
 }
 
 function resetProjectionSignals(): void {
+  lastView.value = null
   locale.value = 'en'
   theme.value = 'light'
-  basemapStyle.value = 'street'
-  autoSaveIntervalMs.value = 60_000
   snapToGridEnabled.value = false
-  snapToGuidesEnabled.value = true
   sidePanelWidth.value = null
-  layerVisibility.value = createDefaultLayerVisibility()
-  layerOpacity.value = createDefaultLayerOpacity()
-  contourIntervalMeters.value = 0
-  hillshadeVisible.value = false
-  hillshadeOpacity.value = 0.55
+  mapLayers.value = createDefaultMapLayers()
   plantSpacingIntervalM.value = 0.5
   savedStampsFrameHeight.value = 220
+  singleKeyShortcuts.value = true
+  scrollWheel.value = 'zoom'
+  newDesignDefaults.value = { satellite: false, symbolScale: 1, labels: 'names' }
 }
 
 function readSource(path: string): string {
@@ -93,14 +95,11 @@ async function flushMicrotasks(): Promise<void> {
   }
 }
 
-let originalMapTilerKey: string | undefined
 let installation: SettingsProjectionInstallation
 const saveSettings = vi.fn(async (_settings: Settings): Promise<void> => {})
 
 beforeEach(() => {
   vi.useFakeTimers()
-  originalMapTilerKey = import.meta.env.VITE_MAPTILER_KEY
-  ;(import.meta.env as { VITE_MAPTILER_KEY?: string }).VITE_MAPTILER_KEY = undefined
   saveSettings.mockReset().mockResolvedValue(undefined)
   resetSettingsProjectionForTests()
   resetProjectionSignals()
@@ -115,66 +114,78 @@ afterEach(() => {
   resetSettingsProjectionForTests()
   vi.clearAllTimers()
   vi.useRealTimers()
-  ;(import.meta.env as { VITE_MAPTILER_KEY?: string }).VITE_MAPTILER_KEY = originalMapTilerKey
 })
 
 describe('settings projection', () => {
+  it('hydrates, snapshots and normalizes the last view', () => {
+    hydrateSettingsProjectionForTests(baseSettings({ last_view: { lon: 2.3522, lat: 48.8566, zoom: 17.5 } }))
+    expect(lastView.value).toEqual({ lon: 2.3522, lat: 48.8566, zoom: 17.5 })
+    expect(snapshotSettingsProjection().last_view).toEqual({ lon: 2.3522, lat: 48.8566, zoom: 17.5 })
+
+    mutateSettingsProjection((draft) => {
+      draft.lastView = { lon: 13, lat: 89, zoom: 4 }
+    }, { persist: 'none' })
+    expect(lastView.value).toBeNull()
+
+    mutateSettingsProjection((draft) => {
+      draft.lastView = { lon: -122.4, lat: 37.8, zoom: Number.NaN }
+    }, { persist: 'none' })
+    expect(lastView.value).toBeNull()
+  })
+
   it('hydrates platform settings into the frontend projection without persisting', () => {
-    hydrateSettingsProjection(baseSettings({
+    hydrateSettingsProjectionForTests(baseSettings({
       locale: 'fr',
       theme: 'dark',
       snap_to_grid: true,
-      snap_to_guides: false,
-      auto_save_interval_s: 45,
       side_panel_width: 460,
       saved_stamps_frame_height: 280,
-      map_layer_visible: false,
-      map_opacity: 0.35,
+      basemap_style: 'bright',
+      basemap_visible: false,
+      basemap_opacity: 0.35,
+      satellite_visible: true,
+      satellite_opacity: 0.7,
       contour_visible: true,
       contour_opacity: 0.45,
       contour_interval: 12,
       hillshade_visible: true,
       hillshade_opacity: 0.2,
+      soften_background: true,
       plant_spacing_interval_m: 0.75,
     }))
 
     expect(locale.value).toBe('fr')
     expect(theme.value).toBe('dark')
-    expect(autoSaveIntervalMs.value).toBe(45_000)
     expect(snapToGridEnabled.value).toBe(true)
-    expect(snapToGuidesEnabled.value).toBe(false)
     expect(sidePanelWidth.value).toBe(460)
     expect(savedStampsFrameHeight.value).toBe(280)
-    expect(basemapStyle.value).toBe('street')
-    expect(layerVisibility.value.base).toBe(false)
-    expect(layerOpacity.value.base).toBe(0.35)
-    expect(layerVisibility.value.contours).toBe(true)
-    expect(layerOpacity.value.contours).toBe(0.45)
-    expect(contourIntervalMeters.value).toBe(12)
-    expect(hillshadeVisible.value).toBe(true)
-    expect(hillshadeOpacity.value).toBe(0.2)
+    expect(mapLayers.value).toEqual({
+      basemap: { style: 'bright', visible: false, opacity: 0.35 },
+      satellite: { visible: true, opacity: 0.7 },
+      contours: { visible: true, opacity: 0.45, intervalMeters: 12 },
+      hillshade: { visible: true, opacity: 0.2 },
+      softenBackground: true,
+    })
     expect(plantSpacingIntervalM.value).toBe(0.75)
     expect(saveSettings).not.toHaveBeenCalled()
   })
 
   it('snapshots the projection back to the shared Settings contract', () => {
-    hydrateSettingsProjection(baseSettings())
+    hydrateSettingsProjectionForTests(baseSettings())
 
     mutateSettingsProjection((settings) => {
       settings.locale = 'de'
       settings.theme = 'dark'
       settings.snapToGrid = true
-      settings.snapToGuides = false
-      settings.autoSaveIntervalMs = 15_000
       settings.sidePanel.width = 440
       settings.savedStamps.frameHeight = 260
-      settings.mapLayers.baseVisible = false
-      settings.mapLayers.baseOpacity = 0.6
-      settings.mapLayers.contoursVisible = true
-      settings.mapLayers.contoursOpacity = 0.3
-      settings.mapLayers.contourIntervalMeters = 18
-      settings.mapLayers.hillshadeVisible = true
-      settings.mapLayers.hillshadeOpacity = 0.25
+      settings.mapLayers = {
+        basemap: { style: 'dark', visible: false, opacity: 0.6 },
+        satellite: { visible: true, opacity: 0.8 },
+        contours: { visible: true, opacity: 0.3, intervalMeters: 18 },
+        hillshade: { visible: true, opacity: 0.25 },
+        softenBackground: false,
+      }
       settings.plantSpacingIntervalM = 0.25
     }, { persist: 'none' })
 
@@ -182,26 +193,49 @@ describe('settings projection', () => {
       locale: 'de',
       theme: 'dark',
       snap_to_grid: true,
-      snap_to_guides: false,
-      auto_save_interval_s: 15,
       side_panel_width: 440,
       saved_stamps_frame_height: 260,
-      map_layer_visible: false,
-      map_style: 'street',
-      map_opacity: 0.6,
+      basemap_style: 'dark',
+      basemap_visible: false,
+      basemap_opacity: 0.6,
+      satellite_visible: true,
+      satellite_opacity: 0.8,
       contour_visible: true,
       contour_opacity: 0.3,
       contour_interval: 18,
       hillshade_visible: true,
       hillshade_opacity: 0.25,
+      soften_background: false,
       plant_spacing_interval_m: 0.25,
       google_maps_api_key: null,
+      last_view: null,
+      used_canvas_tools: [],
+      tool_names_visible: null,
+      single_key_shortcuts: true,
+      scroll_wheel: 'zoom',
+      new_design_satellite: false,
+      new_design_symbol_scale: 1,
+      new_design_labels: 'names',
+      satellite_source: 'free',
     })
     expect(saveSettings).not.toHaveBeenCalled()
   })
 
+  it('derives the satellite source from a saved key for an older record, then keeps the choice', () => {
+    hydrateSettingsProjectionForTests(baseSettings({ google_maps_api_key: 'device-key', satellite_source: null }))
+    expect(satelliteSource.value).toBe('google_key')
+    expect(activeGoogleMapsApiKey.value).toBe('device-key')
+    hydrateSettingsProjectionForTests(baseSettings({ google_maps_api_key: null, satellite_source: null }))
+    expect(satelliteSource.value).toBe('free')
+
+    hydrateSettingsProjectionForTests(baseSettings({ google_maps_api_key: 'device-key', satellite_source: 'free' }))
+    expect(satelliteSource.value).toBe('free')
+    expect(activeGoogleMapsApiKey.value).toBeNull()
+    expect(snapshotSettingsProjection()).toMatchObject({ google_maps_api_key: 'device-key', satellite_source: 'free' })
+  })
+
   it('persists the device-local Google key trimmed, and only on an explicit save', () => {
-    hydrateSettingsProjection(baseSettings({ google_maps_api_key: '  stored-key  ' }))
+    hydrateSettingsProjectionForTests(baseSettings({ google_maps_api_key: '  stored-key  ' }))
     // Hydration keeps the stored value reachable rather than dropping it.
     expect(snapshotSettingsProjection().google_maps_api_key).toBe('stored-key')
 
@@ -225,20 +259,59 @@ describe('settings projection', () => {
   })
 
   it('keeps the Google key out of the design-facing settings it does not belong to', () => {
-    hydrateSettingsProjection(baseSettings({ google_maps_api_key: 'device-key' }))
+    hydrateSettingsProjectionForTests(baseSettings({ google_maps_api_key: 'device-key' }))
     // The key is device-local configuration. It travels with Settings, which is
-    // never written into a Design, and no basemap identity depends on it: the
-    // provider module chooses the official or keyless path from the key alone.
+    // never written into a Design, and no layer identity depends on it: the
+    // satellite module chooses keyless or official tiles from the key alone.
     const snapshot = snapshotSettingsProjection()
     expect(Object.keys(snapshot)).toContain('google_maps_api_key')
-    expect(snapshot.map_style).toBe('street')
+    expect(snapshot.basemap_style).toBe('liberty')
+    expect(snapshot).not.toHaveProperty('satellite_provider')
+    expect(JSON.stringify(mapLayers.value)).not.toContain('device-key')
   })
 
-  it('normalizes theme, map style, opacities, and contour interval at the seam', () => {
-    hydrateSettingsProjection(baseSettings({
+  it('projects Keyboard and New Designs settings and clamps the default symbol size', () => {
+    hydrateSettingsProjectionForTests(baseSettings({
+      single_key_shortcuts: false,
+      scroll_wheel: 'zoom',
+      new_design_satellite: true,
+      new_design_symbol_scale: 9,
+      new_design_labels: 'none',
+    }))
+    expect(singleKeyShortcuts.value).toBe(false)
+    expect(newDesignDefaults.value).toEqual({ satellite: true, symbolScale: 2, labels: 'none' })
+
+    mutateSettingsProjection((draft) => {
+      draft.singleKeyShortcuts = true
+      draft.newDesigns = { ...draft.newDesigns, symbolScale: 0.1, labels: 'codes' }
+    }, { persist: 'none' })
+    expect(snapshotSettingsProjection()).toMatchObject({
+      single_key_shortcuts: true,
+      scroll_wheel: 'zoom',
+      new_design_satellite: true,
+      new_design_symbol_scale: 0.5,
+      new_design_labels: 'codes',
+    })
+  })
+
+  it('projects the Canvas scroll wheel choice both ways and falls back to zoom', () => {
+    hydrateSettingsProjectionForTests(baseSettings({ scroll_wheel: 'pan' }))
+    expect(scrollWheel.value).toBe('pan')
+
+    mutateSettingsProjection((draft) => { draft.scrollWheel = 'zoom' }, { persist: 'none' })
+    expect(snapshotSettingsProjection().scroll_wheel).toBe('zoom')
+
+    mutateSettingsProjection((draft) => { draft.scrollWheel = 'fling' as never }, { persist: 'none' })
+    expect(scrollWheel.value).toBe('zoom')
+    expect(snapshotSettingsProjection().scroll_wheel).toBe('zoom')
+  })
+
+  it('normalizes theme, map layer choices, opacities, and contour interval at the seam', () => {
+    hydrateSettingsProjectionForTests(baseSettings({
       theme: 'neon' as Theme,
-      map_style: 'terrain' as BasemapStyle,
-      map_opacity: 2,
+      basemap_style: 'street' as BasemapStyle,
+      basemap_opacity: 2,
+      satellite_opacity: Number.NaN,
       contour_opacity: -1,
       contour_interval: 12.7,
       hillshade_opacity: Number.NaN,
@@ -248,20 +321,24 @@ describe('settings projection', () => {
     }))
 
     expect(theme.value).toBe('light')
-    expect(basemapStyle.value).toBe('street')
-    expect(layerOpacity.value.base).toBe(1)
-    expect(layerOpacity.value.contours).toBe(0)
-    expect(contourIntervalMeters.value).toBe(13)
-    expect(hillshadeOpacity.value).toBe(0.55)
+    expect(mapLayers.value.basemap.style).toBe('liberty')
+    expect(mapLayers.value.basemap.opacity).toBe(1)
+    expect(mapLayers.value.satellite.opacity).toBe(1)
+    expect(mapLayers.value.contours.opacity).toBe(0)
+    expect(mapLayers.value.contours.intervalMeters).toBe(13)
+    expect(mapLayers.value.hillshade.opacity).toBe(0.55)
     expect(plantSpacingIntervalM.value).toBe(0.5)
     expect(sidePanelWidth.value).toBe(null)
     expect(savedStampsFrameHeight.value).toBe(120)
 
     mutateSettingsProjection((settings) => {
-      settings.mapLayers.baseOpacity = -2
-      settings.mapLayers.contoursOpacity = Number.POSITIVE_INFINITY
-      settings.mapLayers.contourIntervalMeters = 7.6
-      settings.mapLayers.hillshadeOpacity = 3
+      settings.mapLayers = {
+        basemap: { ...settings.mapLayers.basemap, opacity: -2 },
+        satellite: { ...settings.mapLayers.satellite, opacity: 5 },
+        contours: { ...settings.mapLayers.contours, opacity: Number.POSITIVE_INFINITY, intervalMeters: 7.6 },
+        hillshade: { ...settings.mapLayers.hillshade, opacity: 3 },
+        softenBackground: false,
+      }
       settings.plantSpacingIntervalM = Number.POSITIVE_INFINITY
       settings.sidePanel.width = 120
       settings.savedStamps.frameHeight = Number.POSITIVE_INFINITY
@@ -269,8 +346,9 @@ describe('settings projection', () => {
 
     expect(snapshotSettingsProjection()).toEqual(expect.objectContaining({
       theme: 'light',
-      map_style: 'street',
-      map_opacity: 0,
+      basemap_style: 'liberty',
+      basemap_opacity: 0,
+      satellite_opacity: 1,
       contour_opacity: 1,
       contour_interval: 8,
       hillshade_opacity: 1,
@@ -281,7 +359,7 @@ describe('settings projection', () => {
   })
 
   it('persists immediate mutations against the latest normalized snapshot', async () => {
-    hydrateSettingsProjection(baseSettings())
+    hydrateSettingsProjectionForTests(baseSettings())
 
     mutateSettingsProjection((settings) => {
       settings.locale = 'es'
@@ -297,14 +375,14 @@ describe('settings projection', () => {
   })
 
   it('debounces queued persistence and writes the latest projection', async () => {
-    hydrateSettingsProjection(baseSettings())
+    hydrateSettingsProjectionForTests(baseSettings())
 
     mutateSettingsProjection((settings) => {
       settings.locale = 'fr'
     }, { persist: 'queued', delayMs: 250 })
     mutateSettingsProjection((settings) => {
       settings.theme = 'dark'
-      settings.mapLayers.baseOpacity = 0.4
+      settings.mapLayers = { ...settings.mapLayers, basemap: { ...settings.mapLayers.basemap, opacity: 0.4 } }
     }, { persist: 'queued', delayMs: 250 })
 
     vi.advanceTimersByTime(249)
@@ -317,17 +395,17 @@ describe('settings projection', () => {
     expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
       locale: 'fr',
       theme: 'dark',
-      map_opacity: 0.4,
+      basemap_opacity: 0.4,
     }))
   })
 
   it('flushes queued persistence immediately and waits for durable settlement', async () => {
     const pendingSave = deferred<void>()
     saveSettings.mockImplementationOnce(() => pendingSave.promise)
-    hydrateSettingsProjection(baseSettings())
+    hydrateSettingsProjectionForTests(baseSettings())
 
     mutateSettingsProjection((settings) => {
-      settings.mapLayers.contourIntervalMeters = 24
+      settings.mapLayers = { ...settings.mapLayers, contours: { ...settings.mapLayers.contours, intervalMeters: 24 } }
     }, { persist: 'queued', delayMs: 250 })
 
     let settled = false
@@ -367,7 +445,7 @@ describe('settings projection', () => {
   })
 
   it('avoids persistence when a mutation leaves the settings snapshot unchanged', () => {
-    hydrateSettingsProjection(baseSettings())
+    hydrateSettingsProjectionForTests(baseSettings())
 
     mutateSettingsProjection((settings) => {
       settings.locale = 'en'
@@ -556,8 +634,8 @@ describe('settings projection', () => {
   })
 
   it('uses the normalized hydrated snapshot as the durable no-op baseline', () => {
-    hydrateSettingsProjection(baseSettings({
-      map_opacity: 4,
+    hydrateSettingsProjectionForTests(baseSettings({
+      basemap_opacity: 4,
       contour_interval: 12.7,
       saved_stamps_frame_height: 80,
     }))
@@ -896,28 +974,5 @@ describe('settings projection', () => {
 
     expect(source).not.toContain('../../ipc/settings')
     expect(source).not.toContain('browser-app-data')
-  })
-
-  it('keeps production settings-backed callers on the projection mutation seam', () => {
-    const sources = [
-      '../app/canvas-layer-presentation/presentation.ts',
-      '../app/canvas-runtime/app-adapter.ts',
-      '../app/favorites/controller.ts',
-      '../app/shell/controller.ts',
-      '../components/shared/TitleBar.tsx',
-      '../commands/graph/catalog.ts',
-      '../utils/theme.ts',
-    ].map(readSource)
-
-    for (const source of sources) {
-      expect(source).toContain('settings/projection')
-      expect(source).not.toContain('settings/persistence')
-      expect(source).not.toMatch(/\b(?:locale|theme|basemapStyle|snapToGridEnabled|snapToGuidesEnabled|autoSaveIntervalMs|sidePanelWidth|contourIntervalMeters|hillshadeVisible|hillshadeOpacity)\.value\s*=(?!=)/)
-    }
-
-    const runtimeSource = readSource('../canvas/runtime/scene-runtime.ts')
-
-    expect(runtimeSource).not.toContain('settings/projection')
-    expect(runtimeSource).not.toContain('settings/persistence')
   })
 })

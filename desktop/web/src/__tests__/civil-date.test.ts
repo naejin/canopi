@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   addCivilDays,
   addCivilMonths,
   buildCivilMonthGrid,
   civilDateToLocalDate,
   formatCivilDate,
+  civilWeekStartDay,
   parseCivilDate,
   startOfCivilWeek,
 } from '../app/timeline/civil-date'
@@ -25,6 +26,32 @@ describe('calendar civil dates', () => {
     expect(formatCivilDate(startOfCivilWeek(date, 'fr'))).toBe('2026-09-07')
     expect(buildCivilMonthGrid({ year: 2026, month: 2, day: 1 }, 'en')).toHaveLength(4)
     expect(buildCivilMonthGrid({ year: 2026, month: 8, day: 1 }, 'fr')).toHaveLength(6)
+  })
+
+  it('follows the locale week start from Intl week info', () => {
+    // 2026-09-09 is a Wednesday: Monday is the 7th, Sunday the 6th.
+    const date = { year: 2026, month: 9, day: 9 }
+    for (const tag of ['fr', 'de', 'es', 'it', 'nl', 'ru', 'zh', 'en-GB']) {
+      expect(formatCivilDate(startOfCivilWeek(date, tag)), tag).toBe('2026-09-07')
+    }
+    for (const tag of ['en', 'en-US', 'pt', 'ja', 'ko']) {
+      expect(formatCivilDate(startOfCivilWeek(date, tag)), tag).toBe('2026-09-06')
+    }
+  })
+
+  describe('without Intl week info (older WebKit)', () => {
+    afterEach(() => vi.unstubAllGlobals())
+
+    it('falls back to a table for the app locales', () => {
+      class LocaleWithoutWeekInfo { constructor(readonly baseName: string) {} }
+      vi.stubGlobal('Intl', { ...Intl, Locale: LocaleWithoutWeekInfo })
+      for (const tag of ['fr', 'de', 'es', 'it', 'nl', 'ru', 'zh']) {
+        expect(civilWeekStartDay(tag), tag).toBe(1)
+      }
+      for (const tag of ['en', 'en-US', 'pt', 'ja', 'ko']) expect(civilWeekStartDay(tag), tag).toBe(0)
+      expect(civilWeekStartDay('en-GB')).toBe(1)
+      expect(civilWeekStartDay('xx')).toBe(1)
+    })
   })
 
   it('uses calendar constructors through both DST transitions without shifting the day', () => {

@@ -2,7 +2,7 @@ use common_types::species::{SpeciesFilter, SpeciesListItem, SpeciesSearchRequest
 use rusqlite::types::Value;
 
 use super::filters::append_structured_filters;
-use super::pagination::{SpeciesSearchPagePlan, cursor_clause};
+use super::pagination::{BrowsePlan, BrowsePosition, SpeciesSearchPagePlan};
 use super::predicates::PredicatePlan;
 use super::projection::{
     species_list_common_name_join_sql, species_list_matched_common_name_sql,
@@ -78,7 +78,14 @@ impl SpeciesSearchPlan {
         } else {
             None
         };
-        let list = build_list_statement(&request, &search_text, &page);
+        let list = match &page {
+            SpeciesSearchPagePlan::Browse(browse) => {
+                build_browse_list_statement(&request, &search_text, browse)
+            }
+            SpeciesSearchPagePlan::RelevanceOffset { .. } => {
+                build_relevance_list_statement(&request, &search_text, &page)
+            }
+        };
 
         Self { list, count, page }
     }
@@ -91,8 +98,20 @@ impl SpeciesSearchPlan {
         self.count.as_ref()
     }
 
-    pub fn next_cursor(&self, items: &[SpeciesListItem], has_next: bool) -> Option<String> {
-        self.page.next_cursor(items, has_next)
+    /// Whether list rows carry `page_phase` and `page_sort_key` for
+    /// [`BrowsePosition::from_row`].
+    pub fn is_browse(&self) -> bool {
+        self.page.is_browse()
+    }
+
+    /// Browse plans need the last kept row's position; offset plans ignore it.
+    pub fn next_cursor(
+        &self,
+        items: &[SpeciesListItem],
+        last_position: Option<&BrowsePosition>,
+        has_next: bool,
+    ) -> Option<String> {
+        self.page.next_cursor(items, last_position, has_next)
     }
 }
 
@@ -138,7 +157,7 @@ fn build_count_statement(
     SqlStatementPlan::new(sql, sql_builder.into_params())
 }
 
-fn build_list_statement(
+fn build_relevance_list_statement(
     request: &SpeciesSearchPlanRequest,
     search_text: &SearchText,
     page: &SpeciesSearchPagePlan,
@@ -148,17 +167,14 @@ fn build_list_statement(
     let locale_placeholder = sql_builder.bind_text(request.search.locale.clone());
     let common_name_join = species_list_common_name_join_sql(&locale_placeholder);
 
-    let relevance_plan = match page {
-        SpeciesSearchPagePlan::RelevanceOffset { .. } => Some(CommonNameRelevancePlan::build(
-            search_text.common_name_query(),
-            request.use_common_name_token_index,
-            &locale_placeholder,
-            &mut sql_builder,
-        )),
-        SpeciesSearchPagePlan::Keyset { .. } => None,
-    };
+    let relevance_plan = CommonNameRelevancePlan::build(
+        search_text.common_name_query(),
+        request.use_common_name_token_index,
+        &locale_placeholder,
+        &mut sql_builder,
+    );
 
-    let mut predicates = PredicatePlan::for_search(
+    let predicates = PredicatePlan::for_search(
         search_text.fts_term(),
         search_text.common_name_query(),
         Some(&locale_placeholder),
@@ -166,26 +182,12 @@ fn build_list_statement(
         &request.search.filters,
         &mut sql_builder,
     );
-    if page.is_keyset()
-        && let Some(clause) = cursor_clause(
-            &request.search.cursor,
-            &request.search.sort,
-            &mut sql_builder,
-        )
-    {
-        predicates.push(clause);
-    }
 
-    let order_by = match page {
-        SpeciesSearchPagePlan::RelevanceOffset { .. } => relevance_order_by(
-            search_text.common_name_query(),
-            relevance_plan
-                .as_ref()
-                .expect("relevance plan is built for relevance pages"),
-            &mut sql_builder,
-        ),
-        SpeciesSearchPagePlan::Keyset { .. } => page.order_by(&request.search.sort),
-    };
+    let order_by = relevance_order_by(
+        search_text.common_name_query(),
+        &relevance_plan,
+        &mut sql_builder,
+    );
 
     let limit_clause = page.limit_clause(request.search.limit, &mut sql_builder);
     let matched_common_name_sql = species_list_matched_common_name_sql(
@@ -210,13 +212,89 @@ fn build_list_statement(
          {limit_clause}",
         fts_join = predicates.fts_join_sql(),
         cn_join = common_name_join,
-        token_join = relevance_plan
-            .as_ref()
-            .map(|plan| plan.join_sql.as_str())
-            .unwrap_or(""),
+        token_join = relevance_plan.join_sql,
         where_sql = where_sql,
         order_by = order_by,
         limit_clause = limit_clause,
+    );
+
+    SqlStatementPlan::new(sql, sql_builder.into_params())
+}
+
+/// One statement for every browse page: a materialized page that UNION ALLs
+/// one index-ordered subquery per remaining phase, then the list projection.
+/// Each subquery keeps its own `ORDER BY ... LIMIT` so SQLite walks the phase's
+/// index instead of sorting the table.
+fn build_browse_list_statement(
+    request: &SpeciesSearchPlanRequest,
+    search_text: &SearchText,
+    browse: &BrowsePlan,
+) -> SqlStatementPlan {
+    let mut sql_builder = SqlBuilder::default();
+
+    let locale_placeholder = sql_builder.bind_text(request.search.locale.clone());
+    let limit_placeholder = sql_builder.bind_integer(i64::from(request.search.limit) + 1);
+    let phase_sql = browse
+        .remaining_phases()
+        .map(|(index, phase)| {
+            let mut predicates = PredicatePlan::for_search(
+                search_text.fts_term(),
+                search_text.common_name_query(),
+                Some(&locale_placeholder),
+                request.use_common_name_token_index,
+                &request.search.filters,
+                &mut sql_builder,
+            );
+            if let Some(predicate) = phase.predicate_sql(&locale_placeholder) {
+                predicates.push(predicate);
+            }
+            if let Some(clause) = browse.cursor_clause(index, &mut sql_builder) {
+                predicates.push(clause);
+            }
+            format!(
+                "SELECT * FROM (
+                     SELECT s.id AS species_id,
+                            {index} AS page_phase,
+                            {key_sql} AS page_sort_key,
+                            s.canonical_name
+                     FROM species s
+                     {fts_join}
+                     {where_sql}
+                     {order_by}
+                     LIMIT {limit_placeholder}
+                 )",
+                key_sql = phase.key_sql(),
+                fts_join = predicates.fts_join_sql(),
+                where_sql = predicates.where_sql(),
+                order_by = phase.order_by_sql(),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n             UNION ALL\n             ");
+
+    let common_name_join = species_list_common_name_join_sql(&locale_placeholder);
+    let matched_common_name_sql = species_list_matched_common_name_sql(
+        search_text.common_name_query(),
+        &locale_placeholder,
+        &mut sql_builder,
+    );
+    let select_sql = species_list_select_sql_with_matched_common_name(
+        &locale_placeholder,
+        &matched_common_name_sql,
+    );
+    let sql = format!(
+        "WITH page AS MATERIALIZED (
+             {phase_sql}
+             ORDER BY page_phase, page_sort_key DESC, canonical_name
+             LIMIT {limit_placeholder}
+         )
+         {select_sql},
+                page.page_phase AS page_phase,
+                page.page_sort_key AS page_sort_key
+         FROM page
+         JOIN species s ON s.id = page.species_id
+         {common_name_join}
+         ORDER BY page.page_phase, page.page_sort_key DESC, page.canonical_name"
     );
 
     SqlStatementPlan::new(sql, sql_builder.into_params())
@@ -249,6 +327,10 @@ fn build_indexed_count_statement(
     SqlStatementPlan::new(sql, sql_builder.into_params())
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "the indexed list is only chosen when Common Name tokens exist"
+)]
 fn build_indexed_list_statement(
     request: &SpeciesSearchPlanRequest,
     search_text: &SearchText,
@@ -343,6 +425,10 @@ enum IndexedNameSearchMode {
     Staged { fallback_threshold: u32 },
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "indexed name search is only chosen when Common Name tokens exist"
+)]
 fn indexed_name_search_cte(
     search_text: &SearchText,
     locale_placeholder: &str,

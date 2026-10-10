@@ -1,0 +1,21 @@
+.sketch {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.zones {
+  fill: none;
+  stroke: var(--color-text-secondary);
+  stroke-width: 1px;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.plants {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}

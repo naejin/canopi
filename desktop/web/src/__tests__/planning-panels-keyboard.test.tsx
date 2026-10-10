@@ -1,6 +1,6 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { CalendarPanel } from '../components/panels/CalendarPanel'
 import { ConsortiumPanel } from '../components/panels/ConsortiumPanel'
 import { disposePlanningViewState, readPlanningViewState } from '../app/planning-view/state'
@@ -11,13 +11,13 @@ import type { CanopiFile, PlacedPlant } from '../types/design'
 import { designSessionFixture } from './support/design-session-state'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
+import { dropdownTrigger } from './support/dropdown-trigger'
 
 function design(): CanopiFile {
   return {
-    version: 6,
+    version: 9,
     name: 'Planning keyboard test',
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [],
     plants: [],
@@ -56,7 +56,7 @@ function plant(): PlacedPlant {
     canonical_name: 'Malus domestica',
     common_name: 'Apple',
     color: null,
-    position: { x: 0, y: 0 },
+    position: { lon: 13, lat: 23 },
     rotation: null,
     scale: null,
     notes: null,
@@ -120,6 +120,10 @@ describe('planning panel keyboard hierarchy', () => {
   })
 
   it('restores one operable date-grid tab stop after toolbar month navigation', async () => {
+    // Today takes the tab stop when it is visible, so keep it out of both grids.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-06-15T12:00:00'))
+    onTestFinished(() => { vi.useRealTimers() })
     const view = readPlanningViewState()
     view.calendarMonth.value = '2026-09-01'
     sidePanel.value = 'calendar'
@@ -211,7 +215,7 @@ describe('planning panel keyboard hierarchy', () => {
     await act(async () => {
       container.querySelector<HTMLButtonElement>('button[data-consortium-edit]')!.click()
     })
-    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Stratum"]')!
+    const trigger = dropdownTrigger(container, 'Stratum')!
 
     await act(async () => { trigger.click() })
     const menu = document.querySelector<HTMLElement>('[role="listbox"][aria-label="Stratum"]')!

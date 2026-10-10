@@ -1,11 +1,9 @@
 import { buildPinnedPlantNameLegendEntries } from '../../canvas/pinned-plant-name-legend'
-import { SCALE_BAR_RESERVED_BOTTOM_PX } from '../../canvas/scale-bar'
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import { t } from '../../i18n'
+import { currentPlantDisplay } from '../../app/plant-display/state'
 import { PlantSymbolGlyph } from './PlantSymbolGlyph'
 import styles from './DisplayLegend.module.css'
-
-const DISPLAY_LEGEND_TOP_RESERVED_PX = 32
 
 export function DisplayLegend() {
   const querySurface = currentCanvasQuerySurface.value
@@ -14,13 +12,12 @@ export function DisplayLegend() {
 
   if (!querySurface) return null
 
-  const pinnedEntries = buildPinnedPlantNameLegendEntries(querySurface)
+  const pinnedEntries = buildPinnedPlantNameLegendEntries(querySurface, currentPlantDisplay.value)
   if (pinnedEntries.length === 0) return null
 
   return (
     <div
       className={styles.legend}
-      style={getLegendStyle()}
       data-pinned-plant-name-legend
     >
       <div className={styles.title}>{t('canvas.pinnedPlantNames.legend')}</div>
@@ -49,12 +46,4 @@ export function DisplayLegend() {
       </div>
     </div>
   )
-}
-
-function getLegendStyle() {
-  return {
-    bottom: `${SCALE_BAR_RESERVED_BOTTOM_PX}px`,
-    maxHeight: `calc(100% - ${SCALE_BAR_RESERVED_BOTTOM_PX}px - ${DISPLAY_LEGEND_TOP_RESERVED_PX}px)`,
-    overflowY: 'auto',
-  }
 }

@@ -2,14 +2,22 @@
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: var(--color-tip);
+  color: var(--color-on-tip);
   border-radius: var(--radius-md);
-  padding: var(--space-1-5) calc(var(--space-2) + var(--space-0-5));
-  box-shadow: var(--shadow-md);
-  white-space: nowrap;
+  padding: var(--space-1) calc(var(--space-2) + var(--space-0-25));
+  box-shadow: var(--shadow-sm);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  line-height: var(--line-height);
+  text-align: left;
+  /* As wide as its longest line, up to a reading measure that fits a phone's window: a top or bottom tooltip grows
+     from the button's end edge, so a long line would run past the window's start. Past the measure the label and
+     the description wrap, so the text stays on the tooltip's background. */
+  width: max-content;
+  max-width: min(22em, calc(100vw - 2 * var(--space-4)));
   pointer-events: none;
-  z-index: 100;
+  z-index: var(--z-tooltip);
   opacity: 0;
   visibility: hidden;
   transition: opacity var(--transition-fast), visibility var(--transition-fast);
@@ -23,6 +31,19 @@
   right: calc(100% + 8px);
 }
 
+.tooltipTop {
+  top: auto;
+  right: 0;
+  bottom: calc(100% + 8px);
+  transform: none;
+}
+
+.tooltipBottom {
+  top: calc(100% + 8px);
+  right: 0;
+  transform: none;
+}
+
 button:hover .tooltip,
 button:focus-visible .tooltip {
   opacity: 1;
@@ -30,22 +51,36 @@ button:focus-visible .tooltip {
   transition-delay: var(--transition-delay-tooltip);
 }
 
+/* A reason a tap asked for, shown for a few seconds whatever the hover. */
+.tooltipShown {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Touch screens: a tap leaves the button hovered, so its tooltip would stay over
+   the button above; only keyboard focus or a tap's reason shows it there. */
+@media (hover: none) {
+  button:hover:not(:focus-visible) .tooltip:not(.tooltipShown) {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
 .tooltipName {
-  font-size: var(--text-xs);
-  font-weight: 600;
-  color: var(--color-text);
+  color: var(--color-on-tip);
 }
 
 .tooltipShortcut {
-  color: var(--color-text-muted);
-  margin-left: var(--space-1);
-  font-size: var(--text-xs);
+  margin-left: var(--space-2);
+  white-space: nowrap;
+  color: var(--color-on-tip);
+  opacity: 0.78;
 }
 
 .tooltipDesc {
   font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  margin-top: var(--space-0-25);
+  color: var(--color-on-tip);
+  opacity: 0.78;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -66,6 +66,8 @@ if args[:2] == ["release", "view"]:
 elif args[0] == "release" and args[1] in ["create", "edit", "upload"]:
     if args[1] == "create" and state.get("rewrite_local_on_create"):
         Path(state["rewrite_local_on_create"]).write_bytes(b"changed after verification")
+    if "--notes-file" in args:
+        (root / "notes.md").write_text(Path(args[args.index("--notes-file") + 1]).read_text())
     if args[1] == "upload":
         uploaded = {}
         for arg in args[3:]:
@@ -269,6 +271,20 @@ else: raise SystemExit("Unexpected command: " + repr(args))
         self.assertIn("--target", create)
         self.assertEqual(create[create.index("--target") + 1], SHA)
         self.assertIn("--draft", create)
+
+    # The GeoLibre CLI sidecar links an AGPL component (desktop/THIRD_PARTY_NOTICES.md),
+    # so every release body must carry the written Corresponding Source offer,
+    # naming the tag whose source archive and notices file identify the exact sources.
+    def test_release_body_offers_the_corresponding_source_of_the_agpl_sidecar(self):
+        result = self.promote()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        notes = (self.root / "notes.md").read_text()
+        self.assertIn("## Corresponding Source", notes)
+        self.assertIn("AGPL", notes)
+        self.assertIn("https://github.com/example/canopi/archive/refs/tags/v1.1.1.tar.gz", notes)
+        self.assertIn("desktop/THIRD_PARTY_NOTICES.md", notes)
+        self.assertIn("geolibre-rust", notes)
+        self.assertIn("whitebox-wasm", notes)
 
     def test_tag_must_match_the_candidate_version(self):
         result = self.promote(tag="v1.2.0")

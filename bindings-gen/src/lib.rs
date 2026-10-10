@@ -1,3 +1,4 @@
+mod analysis_registry;
 mod contracts;
 mod design_format;
 mod external_contracts;
@@ -13,6 +14,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+const ANALYSIS_REGISTRY_TS: &str = "desktop/web/src/generated/analysis-registry.ts";
+const ANALYSIS_REGISTRY_RUST: &str = "desktop/src/services/lidar/analysis_registry_generated.rs";
 const CONTRACTS_TS: &str = "desktop/web/src/generated/contracts.ts";
 const KNOWN_KEYS_TS: &str = "desktop/web/src/generated/known-canopi-keys.ts";
 const DESIGN_FORMAT_TS: &str = "desktop/web/src/generated/canopi-design-format.ts";
@@ -104,6 +107,11 @@ fn compile_native_plan(
         &source_root.join("common-types/species-search-normalization.json"),
     )?;
     let plant_filter_rust = format_rust_source(&plant_filter_rust, source_root)?;
+    let (analysis_registry_ts, analysis_registry_rust) =
+        analysis_registry::render_analysis_registry(
+            &source_root.join("common-types/analysis-registry.json"),
+        )?;
+    let analysis_registry_rust = format_rust_source(&analysis_registry_rust, source_root)?;
     let mut plan = GenerationPlan::new(destination_root);
     plan.add(
         destination_root.join(CONTRACTS_TS),
@@ -134,6 +142,14 @@ fn compile_native_plan(
     plan.add(
         destination_root.join(SPECIES_SEARCH_NORMALIZATION_TS),
         species_search_normalization_ts,
+    )?;
+    plan.add(
+        destination_root.join(ANALYSIS_REGISTRY_TS),
+        analysis_registry_ts,
+    )?;
+    plan.add(
+        destination_root.join(ANALYSIS_REGISTRY_RUST),
+        analysis_registry_rust,
     )?;
     Ok(plan)
 }
@@ -172,17 +188,31 @@ fn format_rust_source(
 #[cfg(test)]
 mod tests {
     use super::{
-        AdmissionMode, CONTRACTS_TS, DESIGN_FORMAT_TS, ExternalContractRenderer, GenerationMode,
-        KNOWN_KEYS_TS, NEW_DESIGN_DEFAULTS_RUST, NEW_DESIGN_DEFAULTS_TS, PLANT_FILTER_RUST,
-        PLANT_FILTER_TS, SETTINGS_TS, SPECIES_SEARCH_NORMALIZATION_TS, WEB_CATALOG_DECLARATION,
-        WEB_CATALOG_MODULE, acquire_generation_admission, execute_generation,
+        ANALYSIS_REGISTRY_RUST, ANALYSIS_REGISTRY_TS, AdmissionMode, CONTRACTS_TS,
+        DESIGN_FORMAT_TS, ExternalContractRenderer, GenerationMode, KNOWN_KEYS_TS,
+        NEW_DESIGN_DEFAULTS_RUST, NEW_DESIGN_DEFAULTS_TS, PLANT_FILTER_RUST, PLANT_FILTER_TS,
+        SETTINGS_TS, SPECIES_SEARCH_NORMALIZATION_TS, WEB_CATALOG_DECLARATION, WEB_CATALOG_MODULE,
+        acquire_generation_admission, execute_generation,
     };
     use crate::external_contracts::WebCatalogArtifacts;
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::{Mutex, MutexGuard, PoisonError};
 
     static NEXT_TEMP_ROOT: AtomicU64 = AtomicU64::new(0);
+
+    // `execute_generation` spawns rustfmt. A child forked while another test
+    // holds its admission flock inherits that descriptor until exec, so a
+    // concurrent test can see its own admission as still held (canopi-he4e).
+    // The CLI runs one generation per process; only parallel tests race.
+    static GENERATION_RUNS: Mutex<()> = Mutex::new(());
+
+    fn serialize_generation_runs() -> MutexGuard<'static, ()> {
+        GENERATION_RUNS
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
 
     struct TempRoot(PathBuf);
 
@@ -261,6 +291,7 @@ mod tests {
 
     #[test]
     fn late_renderer_failure_leaves_every_destination_unchanged() {
+        let _generation_run = serialize_generation_runs();
         let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
         let destination = TempRoot::new();
         let relative_paths = [
@@ -273,6 +304,8 @@ mod tests {
             PLANT_FILTER_TS,
             PLANT_FILTER_RUST,
             SPECIES_SEARCH_NORMALIZATION_TS,
+            ANALYSIS_REGISTRY_TS,
+            ANALYSIS_REGISTRY_RUST,
             WEB_CATALOG_MODULE,
             WEB_CATALOG_DECLARATION,
         ];
@@ -311,6 +344,7 @@ mod tests {
 
     #[test]
     fn generation_admission_is_held_through_external_rendering() {
+        let _generation_run = serialize_generation_runs();
         let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
         let destination = TempRoot::new();
         let renderer = AdmissionLifetimeProbe {
@@ -336,6 +370,7 @@ mod tests {
 
     #[test]
     fn drift_check_admission_is_held_through_external_rendering() {
+        let _generation_run = serialize_generation_runs();
         let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
         let destination = TempRoot::new();
         let renderer = AdmissionLifetimeProbe {

@@ -1,0 +1,379 @@
+// canvas/runtime/tools/plant-row.ts
+//
+// Owns Plant a row ('plant-spacing', key W; spec §1.4, §3.2, §3.7): a press on a placed plant picks it as the row's source
+// (the tool card's spacing field asks for focus on that press's release, unless it became a drag), then every hover and every move of a held press previews the row from it, and a press or a drag's release commits it, one
+// Scene Edit that selects the source and the new plants. A held press is a drag past the recogniser's slop (spec §1.4); a
+// release inside it is a click.
+// The row's plants repeat the source at the spacing interval of the tool card's field (the spacing commands; Settings keeps
+// the interval). Shift turns the row to 45° steps against the screen from the source, its length then snapped along it
+// (the host's constraint), Ctrl or Cmd turns snapping off (noSnap), and the host clamps the pointer to the view
+// (clampsToView). A pan, a blur and a tool re-arm keep the source; the source is the tool's transient, which Esc drops
+// (the chain's tool-transient layer), and with none the chain's tool layer leaves the tool. The draft is the source ring at the plant's
+// presented radius, the dashed row guide, a disc for each plant the row would add (at most 250) and the guide's length in the zone chip format.
+
+import {
+  formatPlantSpacingIntervalInput,
+  parsePlantSpacingIntervalInput,
+} from '../../plant-spacing-interval'
+import {
+  computePlantSpacingCount,
+  computePlantSpacingPositions,
+  createPlantSpacingGeneratedPlants,
+} from '../../plant-spacing-sequence'
+import type { CanvasPlantRowGuidance } from '../../session-state'
+import { createUuid } from '../../../utils/ids'
+import { isSceneObjectGroupMemberTarget } from '../scene/group-members'
+import { isSceneDesignObjectLocked } from '../scene/locks'
+import { resolvePlantSymbolForPlant } from '../scene/plant-symbols'
+import type { ScenePlantEntity } from '../scene/types'
+import type { WorldPoint } from '../view/types'
+import { formatMetricDistance } from '../zone-measurements'
+import type { DraftShape, DraftStroke } from './draft'
+import type { CanvasTool, ToolCommand, ToolContext, ToolPoint } from './tool'
+
+const PLANT_ROW_DENSE_WARNING_THRESHOLD = 100
+const PLANT_ROW_PREVIEW_POSITION_LIMIT = 250
+const PLANT_ROW_COMMIT_POSITION_LIMIT = 5_000
+const PLANT_ROW_GHOST_OPACITY = 0.35
+const SOURCE_RING_STROKE: DraftStroke = Object.freeze({ token: 'selection', widthPx: 2 })
+/** Today's 2 px CSS dashed border, drawn as dashes and gaps of 3 × its width (convention). */
+const ROW_GUIDE_STROKE: DraftStroke = Object.freeze({ token: 'selection', widthPx: 2, dash: Object.freeze([6, 6]) })
+
+interface PlantRowSource {
+  readonly sourceId: string
+  /** The picked plant as it was picked; the row repeats the plant as the Scene holds it now (livePlant), so a Species
+   *  Key recolour reaches the card glyph and the new plants, and this copy serves only once the plant is gone. */
+  readonly plant: ScenePlantEntity
+  readonly label: string
+}
+
+export function createPlantRowTool(): CanvasTool {
+  let ctx: ToolContext | null = null
+  let source: PlantRowSource | null = null
+  let intervalText = ''
+  let intervalValid = true
+  let endpoint: WorldPoint | null = null
+  let generatedPositions: WorldPoint[] = []
+  let generatedCount = 0
+  let missed = false
+  let shownCount: { readonly count: number; readonly density: CanvasPlantRowGuidance['density'] } | null = null
+  let focusRequest = 0
+  /** The held press picked the source: its field asks for focus on the release, unless the press became a drag (the map
+   *  took focus then; a field focused on the next render would take Esc, Enter and letters from it). */
+  let fieldFocusOnRelease = false
+
+  function context(): ToolContext {
+    if (!ctx) throw new Error('Plant a row is not active.')
+    return ctx
+  }
+
+  // ── What the tool card and the map show ─────────────────────────────────────────────────────────────────────────
+
+  /** The source plant as the Scene holds it now, else as it was picked. */
+  function livePlant(tool: ToolContext, picked: PlantRowSource): ScenePlantEntity {
+    return tool.scene.persisted.plants.find((plant) => plant.id === picked.sourceId) ?? picked.plant
+  }
+
+  /** The picked plant's symbol and colour as the Scene shows them now. */
+  function glyphOf(tool: ToolContext, picked: PlantRowSource): CanvasPlantRowGuidance['glyph'] {
+    const plant = livePlant(tool, picked)
+    return {
+      symbol: resolvePlantSymbolForPlant(plant, tool.scene.persisted.plantSpeciesSymbols),
+      color: tool.scene.plantPresentation(plant).color,
+    }
+  }
+
+  function describe(tool: ToolContext): CanvasPlantRowGuidance {
+    return {
+      phase: source ? 'row' : missed ? 'missed' : 'pick',
+      plantName: source?.label ?? null,
+      glyph: source ? glyphOf(tool, source) : null,
+      interval: intervalText,
+      intervalValid,
+      count: source ? shownCount?.count ?? null : null,
+      density: source ? shownCount?.density ?? 'normal' : 'normal',
+      focusRequest,
+    }
+  }
+
+  /** The card, then the map: every change of state ends here. */
+  function publish(): void {
+    const tool = ctx
+    if (!tool) return
+    tool.effects.setGuidance({ gesture: source !== null, plantRow: describe(tool) })
+    tool.effects.setDraft(source ? { shapes: draftShapes(tool, source) } : null)
+  }
+
+  function draftShapes(tool: ToolContext, picked: PlantRowSource): DraftShape[] {
+    const start = picked.plant.position
+    // The ring sits at the radius the scene presents the plant with now (the plant in the scene, for its crowding).
+    const presented = livePlant(tool, picked)
+    const radiusPx = tool.scene.plantPresentation(presented).radiusPx
+    const shapes: DraftShape[] = [{ kind: 'circle-px', center: start, radiusPx, style: SOURCE_RING_STROKE }]
+    const end = endpoint
+    if (!end) return shapes
+    // The guide and the ring under the row's discs, the length on top.
+    shapes.push({ kind: 'polyline', points: [start, end], style: ROW_GUIDE_STROKE })
+    const ghosts = createPlantSpacingGeneratedPlants(presented, generatedPositions, (index) => `plant-row-ghost-${index}`)
+    for (const plant of ghosts) {
+      shapes.push({ kind: 'ghost', entity: { kind: 'plant', plant, mark: 'dot', sizeFrom: start }, opacity: PLANT_ROW_GHOST_OPACITY })
+    }
+    shapes.push({
+      kind: 'label',
+      anchor: { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 },
+      offsetPx: { x: 0, y: 0 },
+      text: formatMetricDistance(Math.hypot(end.x - start.x, end.y - start.y)),
+      tone: 'hint-primary',
+    })
+    return shapes
+  }
+
+  function focusIntervalInput(): void {
+    focusRequest += 1
+  }
+
+  /** The release of the press that picked the source: the field asks for focus now. */
+  function focusFieldOnRelease(): boolean {
+    if (!fieldFocusOnRelease) return false
+    fieldFocusOnRelease = false
+    if (source) focusIntervalInput()
+    return true
+  }
+
+  // ── Source ──────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  function showSourcePicking(reason: 'select-source' | 'source-missed' = 'select-source'): void {
+    missed = reason === 'source-missed'
+    shownCount = null
+  }
+
+  function clear(): void {
+    source = null
+    endpoint = null
+    generatedPositions = []
+    generatedCount = 0
+    showSourcePicking()
+  }
+
+  /** A press with no source: the plant under it, if it can repeat (not locked, not grouped away). */
+  function pickSource(point: ToolPoint): void {
+    const tool = context()
+    const persisted = tool.scene.persisted
+    // Today's hitTestTopLevel: object locks come back and are refused here.
+    const hit = tool.scene.hitAt(point.world)
+    const target = hit?.kind === 'object' ? hit.target : null
+    const plant = target?.kind === 'plant' && !isSceneDesignObjectLocked(persisted, target)
+      ? persisted.plants.find((entry) => entry.id === target.id)
+      : undefined
+    if (!plant) {
+      showSourcePicking('source-missed')
+      return
+    }
+    source = {
+      sourceId: plant.id,
+      plant: { ...plant, pinnedName: false, position: { ...plant.position } },
+      label: tool.scene.plantPresentation(plant).commonName,
+    }
+    intervalText = formatPlantSpacingIntervalInput(tool.settings.plantSpacingIntervalM())
+    intervalValid = true
+    missed = false
+    shownCount = null
+    fieldFocusOnRelease = true
+  }
+
+  function canUseSource(candidate: PlantRowSource): boolean {
+    const persisted = context().scene.persisted
+    const target = { kind: 'plant', id: candidate.sourceId } as const
+    if (isSceneDesignObjectLocked(persisted, target)) return false
+    const layer = persisted.layers.find((entry) => entry.name === 'plants')
+    if (layer?.visible === false || layer?.locked === true) return false
+    if (!persisted.plants.some((plant) => plant.id === candidate.sourceId)) return false
+    return !persisted.groups.some((group) => group.members.some((member) => isSceneObjectGroupMemberTarget(member, target)))
+  }
+
+  // ── Row ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  function setGeneratedCount(count: number, options: { dense?: boolean; blocked?: boolean }): void {
+    shownCount = { count, density: options.blocked ? 'blocked' : options.dense ? 'dense' : 'normal' }
+  }
+
+  /** The row to `nextEndpoint`; answers the interval in metres, or null while the field's text is not a valid one. */
+  function updatePreview(nextEndpoint: WorldPoint): number | null {
+    if (!source) return null
+    endpoint = nextEndpoint
+    const start = source.plant.position
+    const parsed = parsePlantSpacingIntervalInput(intervalText)
+    intervalValid = parsed.valid
+    generatedCount = parsed.valid ? computePlantSpacingCount(start, nextEndpoint, parsed.meters) : 0
+    generatedPositions = parsed.valid
+      ? computePlantSpacingPositions(start, nextEndpoint, parsed.meters, { limit: PLANT_ROW_PREVIEW_POSITION_LIMIT })
+      : []
+    setGeneratedCount(generatedCount, {
+      dense: generatedCount > PLANT_ROW_DENSE_WARNING_THRESHOLD,
+      blocked: generatedCount > PLANT_ROW_COMMIT_POSITION_LIMIT,
+    })
+    return parsed.valid ? parsed.meters : null
+  }
+
+  /** The row follows the pointer: its snapped point, which the host constrained under Shift. */
+  function previewAt(point: ToolPoint): void {
+    updatePreview(point.snapped)
+  }
+
+  function commitPreview(nextEndpoint: WorldPoint): void {
+    if (!source) return
+    if (!canUseSource(source)) {
+      clear()
+      showSourcePicking('source-missed')
+      return
+    }
+    const intervalM = updatePreview(nextEndpoint)
+    if (intervalM === null) {
+      focusIntervalInput()
+      return
+    }
+    // The preview already reads blocked above the limit.
+    if (generatedCount === 0 || generatedCount > PLANT_ROW_COMMIT_POSITION_LIMIT) return
+    const positions = generatedCount > generatedPositions.length
+      ? computePlantSpacingPositions(source.plant.position, nextEndpoint, intervalM)
+      : generatedPositions
+    commitPositions(source, positions)
+  }
+
+  function commitPositions(picked: PlantRowSource, positions: readonly WorldPoint[]): void {
+    const tool = context()
+    // The source as the Scene holds it at the commit (canUseSource checked it is there): its colour now, not at the pick.
+    const repeated = livePlant(tool, picked)
+    const generatedIds: string[] = []
+    tool.effects.edits.run('interaction-plant-spacing', (tx) => {
+      tx.mutate((draft) => {
+        const generated = createPlantSpacingGeneratedPlants(repeated, positions, () => {
+          const id = createUuid()
+          generatedIds.push(id)
+          return id
+        })
+        draft.plants = [...draft.plants, ...generated]
+      })
+      tx.setSelection([picked.sourceId, ...generatedIds].map((id) => ({ kind: 'plant', id })))
+    }, {
+      onCommitted: () => {
+        clear()
+        publish()
+      },
+    })
+  }
+
+  // ── The tool card's spacing field ───────────────────────────────────────────────────────────────────────────────
+
+  function spacingCommand(c: Extract<ToolCommand, { kind: 'spacing-input' | 'spacing-commit' | 'spacing-cancel' }>): void {
+    const tool = context()
+    if (c.kind === 'spacing-input') {
+      intervalText = c.text
+      intervalValid = parsePlantSpacingIntervalInput(c.text).valid
+      if (endpoint) updatePreview(endpoint)
+      return
+    }
+    if (c.kind === 'spacing-cancel') {
+      // Esc in the field drops the source and gives the map its focus back.
+      const hadSource = source !== null
+      if (hadSource) clear()
+      tool.effects.requestFocus('map')
+      if (!hadSource) tool.effects.requestTool('select')
+      return
+    }
+    const parsed = parsePlantSpacingIntervalInput(intervalText)
+    intervalValid = parsed.valid
+    if (!parsed.valid) {
+      // Enter keeps the field until the spacing is valid; leaving it moves no focus.
+      if (c.via === 'enter') focusIntervalInput()
+      return
+    }
+    tool.settings.commitPlantSpacingIntervalM(parsed.meters)
+    intervalText = formatPlantSpacingIntervalInput(parsed.meters)
+    if (endpoint) updatePreview(endpoint)
+    if (c.via === 'enter') tool.effects.requestFocus('map')
+  }
+
+  return {
+    id: 'plant-spacing',
+    clampsToView: true,
+    constraint() {
+      return source ? { kind: 'direction', origin: source.plant.position, stepDeg: 45 } : null
+    },
+    activate(next) {
+      ctx = next
+      intervalText = formatPlantSpacingIntervalInput(next.settings.plantSpacingIntervalM())
+      publish()
+    },
+    gesture(g) {
+      switch (g.kind) {
+        case 'press':
+          fieldFocusOnRelease = false
+          if (source) commitPreview(g.point.snapped)
+          else pickSource(g.point)
+          break
+        case 'drag-start':
+          if (!source) return 'pass'
+          // The drag gives the map its focus, so the field asks for none on the release.
+          fieldFocusOnRelease = false
+          context().effects.requestFocus('map')
+          previewAt(g.point)
+          break
+        case 'drag-move':
+          if (!source) return 'pass'
+          previewAt(g.point)
+          break
+        case 'drag-end':
+          if (!source) return 'pass'
+          commitPreview(g.point.snapped)
+          break
+        case 'tap':
+          // The tap itself stays the host's, as before; only the field's focus request is published.
+          if (focusFieldOnRelease()) publish()
+          return 'pass'
+        case 'cancel':
+          fieldFocusOnRelease = false
+          return 'pass'
+        case 'hover':
+          if (!source) return 'pass'
+          previewAt(g.point)
+          publish()
+          // While a source is picked the row replaces the hover restyle and the plant tooltip.
+          return 'handled'
+        default:
+          // A click adds nothing more than its press; a cancelled drag keeps the source and its preview.
+          return 'pass'
+      }
+      publish()
+      return 'handled'
+    },
+    command(c) {
+      switch (c.kind) {
+        case 'escape':
+          // The source is the transient; with none Esc passes, and the chain's tool layer leaves.
+          if (!source) return 'pass'
+          clear()
+          publish()
+          return 'handled'
+        case 'spacing-input':
+        case 'spacing-commit':
+        case 'spacing-cancel':
+          spacingCommand(c)
+          publish()
+          return 'handled'
+        default:
+          return 'pass'
+      }
+    },
+    sceneChanged: publish,
+    viewChanged: publish,
+    hasTransient: () => source !== null,
+    // The picked source outlives every cancellation (a pan, a blur, overview); Esc drops it through command 'escape'.
+    cancelTransient() {},
+    deactivate() {
+      clear()
+      ctx?.effects.setDraft(null)
+      ctx = null
+    },
+  }
+}

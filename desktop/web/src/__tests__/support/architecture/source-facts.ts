@@ -1,8 +1,8 @@
 import ts from 'typescript'
 
-export type TypeScriptImportKind = 'static' | 'dynamic' | 'import-type' | 'reexport'
+type TypeScriptImportKind = 'static' | 'dynamic' | 'import-type' | 'reexport'
 
-export interface TypeScriptImportBindingFact {
+interface TypeScriptImportBindingFact {
   readonly importedName: string
   readonly localName: string
   readonly typeOnly: boolean
@@ -18,11 +18,18 @@ export interface TypeScriptImportFact {
   readonly target: string
   readonly literalSpecifier: boolean
   readonly reexportAll: boolean
+  /**
+   * For a namespace import, a dynamic `import()` or an `import('…')` type: the
+   * module members the importer reads (`ns.member`, destructured names, a type
+   * qualifier). `null` when the module object escapes (passed on, returned,
+   * spread), so every member may be read. Empty for other edges.
+   */
+  readonly members: readonly string[] | null
 }
 
-export type TypeScriptExportKind = 'local' | 'named-reexport' | 'star-reexport' | 'namespace-reexport'
+type TypeScriptExportKind = 'local' | 'named-reexport' | 'star-reexport' | 'namespace-reexport'
 
-export interface TypeScriptExportFact {
+interface TypeScriptExportFact {
   readonly kind: TypeScriptExportKind
   readonly exportedName: string | null
   readonly sourceName: string | null
@@ -31,9 +38,9 @@ export interface TypeScriptExportFact {
   readonly typeOnly: boolean
 }
 
-export type TypeScriptWriteKind = 'assignment' | 'update' | 'object-property'
+type TypeScriptWriteKind = 'assignment' | 'update' | 'object-property'
 
-export interface TypeScriptWriteFact {
+interface TypeScriptWriteFact {
   readonly kind: TypeScriptWriteKind
   readonly target: string
   readonly property: string | null
@@ -42,9 +49,9 @@ export interface TypeScriptWriteFact {
   readonly column: number
 }
 
-export type TypeScriptCallKind = 'call' | 'new'
+type TypeScriptCallKind = 'call' | 'new'
 
-export interface TypeScriptCallFact {
+interface TypeScriptCallFact {
   readonly kind: TypeScriptCallKind
   readonly target: string
   readonly property: string | null
@@ -78,6 +85,7 @@ interface ImportFactFields {
   readonly target?: string
   readonly literalSpecifier?: boolean
   readonly reexportAll?: boolean
+  readonly members?: readonly string[] | null
 }
 
 const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts'] as const
@@ -192,7 +200,9 @@ function callFact(
   }
 }
 
+/** The member a callee names, through `!` and parentheses: `map.flyTo!(…)` and `(map.easeTo)(…)` call `flyTo` and `easeTo`. */
 function memberPropertyName(node: ts.Expression): string | null {
+  while (ts.isNonNullExpression(node) || ts.isParenthesizedExpression(node)) node = node.expression
   if (ts.isPropertyAccessExpression(node)) return node.name.text
   if (ts.isElementAccessExpression(node) && node.argumentExpression) {
     return stringLiteralText(node.argumentExpression) ?? null
@@ -375,6 +385,14 @@ export function discoverTypeScriptSourceGraph(
   rootUrl: URL,
   rootPath: string,
 ): TypeScriptSourceFact[] {
+  return createTypeScriptSourceGraph(readTypeScriptSources(rootUrl, rootPath))
+}
+
+/** The TypeScript files under `rootUrl`, keyed as `rootPath/<relative path>` and sorted, for a graph that spans several roots. */
+export function readTypeScriptSources(
+  rootUrl: URL,
+  rootPath: string,
+): TypeScriptSourceInput[] {
   const fileSystemRoot = fileUrlPath(rootUrl)
   const normalizedRoot = trimTrailingSlash(normalizePath(fileSystemRoot))
   const normalizedRootPath = trimSlashes(normalizePath(rootPath))
@@ -396,7 +414,7 @@ export function discoverTypeScriptSourceGraph(
   })
 
   sources.sort((left, right) => left.path.localeCompare(right.path))
-  return createTypeScriptSourceGraph(sources)
+  return sources
 }
 
 function importDeclarationFact(
@@ -434,10 +452,14 @@ function importDeclarationFact(
     }
   }
 
+  const namespace = clause?.namedBindings && ts.isNamespaceImport(clause.namedBindings)
+    ? clause.namedBindings.name
+    : undefined
   return importFactAt(sourceFile, declaration, {
     kind: 'static',
     specifier,
     bindings,
+    members: namespace ? memberReads(sourceFile, namespace) : [],
     typeOnly: bindings.length > 0 && bindings.every((binding) => binding.typeOnly),
   })
 }
@@ -495,6 +517,7 @@ function importTypeFact(
     specifier,
     bindings: [],
     typeOnly: true,
+    members: importTypeMembers(node),
   })
 }
 
@@ -511,6 +534,7 @@ function dynamicImportFact(
     specifier,
     bindings: [],
     typeOnly: false,
+    members: dynamicImportMembers(call),
     literalSpecifier: literalSpecifier !== undefined,
   })
 }
@@ -539,6 +563,7 @@ function createImportFact(fields: ImportFactFields): TypeScriptImportFact {
     target: fields.target ?? fields.specifier,
     literalSpecifier: fields.literalSpecifier ?? true,
     reexportAll: fields.reexportAll ?? false,
+    members: fields.members === undefined ? [] : fields.members,
   }
 }
 
@@ -556,7 +581,139 @@ function cloneImportFact(
     target: fields.target,
     literalSpecifier: edge.literalSpecifier,
     reexportAll: edge.reexportAll,
+    members: edge.members,
   })
+}
+
+/** `typeof import('./m').Name`, `import('./m').Name` or `import('./m')['Name']`. */
+function importTypeMembers(node: ts.ImportTypeNode): readonly string[] | null {
+  if (node.qualifier) {
+    let name: ts.EntityName = node.qualifier
+    while (ts.isQualifiedName(name)) name = name.left
+    return [name.text]
+  }
+  const member = literalIndex(node.parent, node)
+  return member === undefined ? null : [member]
+}
+
+/** What the importer reads from `import('./m')`: awaited, `.then(…)`-ed or bound to a name. */
+function dynamicImportMembers(call: ts.CallExpression): readonly string[] | null {
+  const promise = outerParentheses(call)
+  const parent = promise.parent
+  if (ts.isAwaitExpression(parent)) return moduleValueMembers(outerParentheses(parent))
+  if (
+    ts.isPropertyAccessExpression(parent)
+    && parent.expression === promise
+    && parent.name.text === 'then'
+    && ts.isCallExpression(parent.parent)
+    && parent.parent.expression === parent
+  ) {
+    const callback = parent.parent.arguments[0]
+    if (callback && (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback))) {
+      const parameter = callback.parameters[0]
+      return parameter ? bindingMembers(parameter.name, callback) : []
+    }
+  }
+  return null
+}
+
+/** Members read from an expression whose value is a module object. */
+function moduleValueMembers(value: ts.Node): readonly string[] | null {
+  const parent = value.parent
+  const member = memberAccess(parent, value)
+  if (member !== undefined) return [member]
+  if (ts.isVariableDeclaration(parent) && parent.initializer === value) {
+    return bindingMembers(parent.name, enclosingScope(parent))
+  }
+  return null
+}
+
+function bindingMembers(name: ts.BindingName, scope: ts.Node): readonly string[] | null {
+  if (ts.isIdentifier(name)) return memberReads(scope, name)
+  if (ts.isArrayBindingPattern(name)) return null
+  const members: string[] = []
+  for (const element of name.elements) {
+    if (element.dotDotDotToken) return null
+    const property = element.propertyName ?? element.name
+    if (ts.isIdentifier(property) || ts.isStringLiteral(property)) members.push(property.text)
+    else return null
+  }
+  return members
+}
+
+/**
+ * The members read through `name` inside `scope` (`name.member`, `name['member']`,
+ * the type `name.Member`), or `null` when `name` is used any other way.
+ */
+function memberReads(scope: ts.Node, name: ts.Identifier): readonly string[] | null {
+  const members = new Set<string>()
+  let escapes = false
+  const visit = (node: ts.Node): void => {
+    if (escapes) return
+    if (ts.isIdentifier(node) && node !== name && node.text === name.text && isValueReference(node)) {
+      const member = memberAccess(node.parent, node)
+      if (member === undefined) {
+        escapes = true
+        return
+      }
+      members.add(member)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(scope)
+  return escapes ? null : [...members].sort()
+}
+
+/** False for an identifier that names a property, not a binding in scope. */
+function isValueReference(node: ts.Identifier): boolean {
+  const parent = node.parent
+  if (ts.isPropertyAccessExpression(parent)) return parent.expression === node
+  if (ts.isQualifiedName(parent)) return parent.left === node
+  if (
+    ts.isPropertyAssignment(parent)
+    || ts.isPropertySignature(parent)
+    || ts.isPropertyDeclaration(parent)
+    || ts.isMethodDeclaration(parent)
+    || ts.isMethodSignature(parent)
+    || ts.isGetAccessorDeclaration(parent)
+    || ts.isSetAccessorDeclaration(parent)
+    || ts.isEnumMember(parent)
+  ) {
+    return parent.name !== node
+  }
+  if (ts.isBindingElement(parent)) return parent.propertyName !== node
+  if (ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent)) return parent.propertyName !== node
+  return true
+}
+
+/** The member `parent` reads from `object`: `object.name`, `object['name']`, the type `object.Name`. */
+function memberAccess(parent: ts.Node, object: ts.Node): string | undefined {
+  if (ts.isPropertyAccessExpression(parent) && parent.expression === object) return parent.name.text
+  if (ts.isQualifiedName(parent) && parent.left === object) return parent.right.text
+  if (ts.isElementAccessExpression(parent) && parent.expression === object) {
+    return stringLiteralText(parent.argumentExpression)
+  }
+  return literalIndex(parent, object)
+}
+
+function literalIndex(parent: ts.Node, object: ts.Node): string | undefined {
+  if (!ts.isIndexedAccessTypeNode(parent) || parent.objectType !== object) return undefined
+  const index = parent.indexType
+  return ts.isLiteralTypeNode(index) ? stringLiteralText(index.literal) : undefined
+}
+
+function outerParentheses(node: ts.Node): ts.Node {
+  let outer = node
+  while (ts.isParenthesizedExpression(outer.parent)) outer = outer.parent
+  return outer
+}
+
+function enclosingScope(node: ts.Node): ts.Node {
+  let scope = node.parent
+  while (!ts.isBlock(scope) && !ts.isSourceFile(scope) && !ts.isModuleBlock(scope) && !ts.isCaseClause(scope)) {
+    scope = scope.parent
+  }
+  return scope
 }
 
 function reexportElementsAreTypeOnly(declaration: ts.ExportDeclaration): boolean {
@@ -816,7 +973,12 @@ function resolveImportTarget(
   if (!specifier.startsWith('.')) return specifier
 
   const unresolvedTarget = normalizePath(`${directoryName(importerPath)}/${specifier}`)
-  for (const candidate of resolutionCandidates(unresolvedTarget)) {
+  // A Vite query (`./worker?worker&inline`) loads the same module another way.
+  const query = specifier.indexOf('?')
+  const modulePath = query < 0
+    ? unresolvedTarget
+    : normalizePath(`${directoryName(importerPath)}/${specifier.slice(0, query)}`)
+  for (const candidate of resolutionCandidates(modulePath)) {
     if (sourcePaths.has(candidate)) return candidate
   }
   return unresolvedTarget

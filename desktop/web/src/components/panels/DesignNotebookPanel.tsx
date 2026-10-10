@@ -273,7 +273,7 @@ export function DesignNotebookPanel({
 
   return (
     <section className={styles.panel} aria-label={t('designNotebook.title')}>
-      <DockPanelHeader title={t('designNotebook.title')} count={view.visibleEntries.length} />
+      <DockPanelHeader title={t('designNotebook.title')} />
       <header className={styles.header}>
         <div className={styles.headerActions}>
           <button
@@ -562,7 +562,7 @@ function NotebookRow({
           {entry.plant_count > 0 && (
             <>
               <span className={styles.metaSeparator} aria-hidden="true">·</span>
-              <span>{t('designNotebook.plantCount', { count: entry.plant_count })}</span>
+              <span>{t('plantFinder.plants', { count: entry.plant_count })}</span>
             </>
           )}
         </span>

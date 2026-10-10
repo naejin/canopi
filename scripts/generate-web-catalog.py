@@ -318,14 +318,6 @@ def validate_output_destination(output_dir: Path) -> OutputDestinationAdmission:
         and manifest.get("generated_by") == ARTIFACT_PLAN.generated_by
     ):
         return output_destination_admission(metadata)
-    legacy_children = {"images", "manifest.json", "names", "species"}
-    if (
-        isinstance(manifest, dict)
-        and manifest.get("version") == 1
-        and manifest.get("asset_format") == "parquet"
-        and children <= legacy_children
-    ):
-        return output_destination_admission(metadata)
     raise ValueError(
         f"Web Catalog output '{output_dir}' is not a generator-owned catalog."
     )

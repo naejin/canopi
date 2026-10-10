@@ -1,9 +1,11 @@
 import { effect } from '@preact/signals'
 import { isSpeciesTarget, targetIdentity, speciesTarget } from '../../target'
 import type { PanelTarget } from '../../types/design'
+import { storyPresentationOverrides } from '../story-presentation/overrides'
 import {
   hoveredCanvasTargets,
   hoveredPanelTargets,
+  matchedPanelTargets,
   selectedPanelTargetOrigin,
   selectedPanelTargets,
 } from './state'
@@ -11,7 +13,7 @@ import type { PanelTargetPresentationOrigin } from './state'
 
 export type { PanelTargetPresentationOrigin } from './state'
 
-export interface PanelTargetSelectionSnapshot {
+interface PanelTargetSelectionSnapshot {
   readonly origin: PanelTargetPresentationOrigin | null
   readonly targets: readonly PanelTarget[]
   readonly ownsOrigin: boolean
@@ -39,7 +41,7 @@ export interface PanelTargetOverlaySnapshot {
   readonly selectedTargets: readonly PanelTarget[]
 }
 
-export function readPanelTargetSelection(
+function readPanelTargetSelection(
   origin: PanelTargetPresentationOrigin,
 ): PanelTargetSelectionSnapshot {
   const currentOrigin = selectedPanelTargetOrigin.value
@@ -51,7 +53,7 @@ export function readPanelTargetSelection(
   }
 }
 
-export function panelTargetSelectionMatches(
+function panelTargetSelectionMatches(
   selection: PanelTargetSelectionSnapshot,
   targetList: readonly PanelTarget[],
 ): boolean {
@@ -113,7 +115,7 @@ export function setHoveredPanelTargets(targetList: readonly PanelTarget[]): void
   }
 }
 
-export function setHoveredPanelSpecies(canonicalName: string): void {
+function setHoveredPanelSpecies(canonicalName: string): void {
   setHoveredPanelTargets([speciesTarget(canonicalName)])
 }
 
@@ -143,8 +145,15 @@ export function clearSelectedPanelTargetsForOrigin(
   selectedPanelTargetOrigin.value = null
 }
 
+export function setMatchedPanelTargets(targetList: readonly PanelTarget[]): void {
+  if (!targetIdentity.listEquals(matchedPanelTargets.peek(), targetList)) {
+    matchedPanelTargets.value = targetList
+  }
+}
+
 export function clearPanelOriginTargets(): void {
   clearHoveredPanelTargets()
+  setMatchedPanelTargets([])
   if (selectedPanelTargets.peek().length > 0) {
     selectedPanelTargets.value = []
   }
@@ -153,7 +162,7 @@ export function clearPanelOriginTargets(): void {
   }
 }
 
-export function prunePanelTargetSelectionForOrigin(
+function prunePanelTargetSelectionForOrigin(
   origin: PanelTargetPresentationOrigin,
   visibleTargetLists: readonly (readonly PanelTarget[])[],
 ): void {
@@ -190,10 +199,14 @@ export function readPanelOriginTargets(): readonly PanelTarget[] {
   return [
     ...selectedPanelTargets.value,
     ...hoveredPanelTargets.value,
+    ...matchedPanelTargets.value,
   ]
 }
 
 export function readPanelTargetOverlaySnapshot(): PanelTargetOverlaySnapshot {
+  // A presented story step rings what its view highlights, and nothing else.
+  const presented = storyPresentationOverrides.value
+  if (presented) return { hoveredTargets: [], selectedTargets: presented.targets }
   return {
     hoveredTargets: hoveredPanelTargets.value,
     selectedTargets: selectedPanelTargets.value,
@@ -206,6 +219,7 @@ export function subscribePanelOriginTargetChanges(
   return effect(() => {
     void hoveredPanelTargets.value
     void selectedPanelTargets.value
+    void matchedPanelTargets.value
     onChange()
   })
 }

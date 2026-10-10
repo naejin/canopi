@@ -1,4 +1,4 @@
-"""Offline checks for repository Markdown links and document lifecycle headers.
+"""Offline checks for repository Markdown links, ADR status, docs placement and size budgets.
 
 Checks inline links/images, reference definitions, and Markdown heading fragments.
 Fenced code, inline code, and external URLs are excluded. This is intentionally
@@ -12,10 +12,54 @@ from urllib.parse import unquote, urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DESIGN_STATES = {"proposed", "active", "partial", "completed", "retired", "evidence"}
 ADR_STATES = {"proposed", "accepted", "superseded", "rejected", "deprecated"}
 LINK = re.compile(r"\[[^\]\n]*\]\((<[^>\n]+>|[^\s)]+)(?:\s+\"[^\"]*\")?\)")
 REFERENCE = re.compile(r"^\s{0,3}\[[^\]]+\]:\s*(<[^>]+>|\S+)", re.MULTILINE)
+# The v2 documentation layout: anything else under docs/ is evidence or history
+# that belongs in bd or nowhere.
+DOCS_FILES = {"README.md", "architecture.md", "workflow.md", "review-checklist.md"}
+DOCS_DIRECTORIES = {"adr", "guides", "plans", "release-notes"}
+LINE_BUDGETS = {
+    "AGENTS.md": 120,
+    "README.md": 80,
+    "CONTEXT.md": 250,
+    "docs/README.md": 60,
+    "docs/architecture.md": 160,
+    "docs/workflow.md": 100,
+    "docs/review-checklist.md": 200,
+}
+# A guide states rules and boundaries; wiring lives in code comments and policy
+# tests. Budgets in bytes stop the guides from growing by accretion again.
+BYTE_BUDGETS = {
+    "AGENTS.md": 9_000,
+    "CONTEXT.md": 14_000,
+    "docs/README.md": 4_000,
+    "docs/architecture.md": 12_000,
+    "docs/workflow.md": 8_000,
+    "docs/review-checklist.md": 12_000,
+    "docs/release-notes/v2.0.0.md": 10_000,
+    ".interface-design/system.md": 9_000,
+    # The session brief holds only what the next session needs; the plan file
+    # shrinks as steps close (both are deleted at the 2.0 release close).
+    "docs/plans/canvas-v2-implementation-prompt.md": 12_000,
+    "docs/plans/canvas-v2-plan.md": 120_000,
+}
+GUIDE_BYTE_BUDGET = 12_000
+PATTERN_BYTE_BUDGET = 8_000
+ADR_BUDGET = 60
+# One idea per paragraph. Long paragraphs are how file-by-file narration crept
+# into the guides; tables and reference definitions are exempt.
+PARAGRAPH_BUDGET = 600
+# Exempt: release notes, and plans written before the budget reached docs/plans:
+# the canvas v2 plan, spec and inventory (deleted at the 2.0 release close) and
+# the ONF adaptation plan, whose long paragraphs are lists of upstream names.
+PARAGRAPH_EXEMPT = (
+    "docs/release-notes/",
+    "docs/plans/canvas-v2-plan.md",
+    "docs/plans/canvas-v2-spec.md",
+    "docs/plans/canvas-v2-inventory.md",
+    "docs/plans/onf-plugin-adaptation.md",
+)
 
 
 def prose(text):
@@ -70,15 +114,24 @@ def check_document(file, root):
         elif url.fragment and dest.suffix == ".md" and unquote(url.fragment) not in anchors(dest.read_text(encoding="utf-8")):
             errors.append(f"{relative}:{line}: missing heading {target}")
 
-    if relative.startswith("docs/design/"):
-        header = text.split("\n## ", 1)[0]
-        status = re.search(r"^Status:\s*(\w+)", header, re.MULTILINE)
-        if not status or status[1].lower() not in DESIGN_STATES:
-            errors.append(f"{relative}: missing/invalid design Status header")
-        if not re.search(r"^Tracking:.*`canopi-[\w.]+`", header, re.MULTILINE):
-            errors.append(f"{relative}: missing Tracking bead header")
-        if not re.search(r"^Current guidance:.*\]\(", header, re.MULTILINE):
-            errors.append(f"{relative}: missing Current guidance link header")
+    budget = LINE_BUDGETS.get(relative) or (ADR_BUDGET if relative.startswith("docs/adr/") else None)
+    lines = len(text.splitlines())
+    if budget is not None and lines > budget:
+        errors.append(f"{relative}: {lines} lines exceeds its {budget}-line budget")
+    byte_budget = BYTE_BUDGETS.get(relative)
+    if byte_budget is None and relative.startswith("docs/guides/"):
+        byte_budget = GUIDE_BYTE_BUDGET
+    if byte_budget is None and relative.startswith(".interface-design/patterns/"):
+        byte_budget = PATTERN_BYTE_BUDGET
+    size = len(text.encode("utf-8"))
+    if byte_budget is not None and size > byte_budget:
+        errors.append(f"{relative}: {size} bytes exceeds its {byte_budget}-byte budget")
+    if not relative.startswith(PARAGRAPH_EXEMPT):
+        for number, line in enumerate(prose(text).splitlines(), start=1):
+            if len(line) > PARAGRAPH_BUDGET and not line.lstrip().startswith("|") and not REFERENCE.match(line):
+                errors.append(f"{relative}:{number}: paragraph of {len(line)} characters exceeds {PARAGRAPH_BUDGET}")
+    if relative.startswith("docs/plans/") and not re.search(r"^Status:\s*\S", text, re.MULTILINE):
+        errors.append(f"{relative}: a plan needs a `Status:` line (proposed, agreed, in progress)")
     if relative.startswith("docs/adr/"):
         status = re.search(r"^(?:status|Status):\s*(\w+)", text, re.MULTILINE)
         if not status or status[1].lower() not in ADR_STATES:
@@ -90,11 +143,26 @@ def check_document(file, root):
     return errors
 
 
+def check_placement(root):
+    errors = []
+    docs = root / "docs"
+    for path in sorted(docs.rglob("*")) if docs.is_dir() else []:
+        if not path.is_file():
+            continue
+        parts = path.relative_to(docs).parts
+        allowed = parts[0] in DOCS_DIRECTORIES if len(parts) > 1 else parts[0] in DOCS_FILES
+        if not allowed:
+            errors.append(f"{path.relative_to(root).as_posix()}: outside the docs layout (see docs/README.md)")
+    return errors
+
+
 def check(root):
     files = [root / p for p in ("AGENTS.md", "CONTEXT.md", "README.md", "desktop/web/ui-gallery/README.md", ".beads/README.md")]
     for directory in ("docs", ".interface-design"):
         files.extend((root / directory).rglob("*.md"))
-    return [error for file in sorted(set(files)) if file.is_file() for error in check_document(file, root)]
+    return check_placement(root) + [
+        error for file in sorted(set(files)) if file.is_file() for error in check_document(file, root)
+    ]
 
 
 if __name__ == "__main__":

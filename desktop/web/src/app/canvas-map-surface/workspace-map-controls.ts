@@ -1,57 +1,52 @@
 import { WorkspaceMapContributions, type WorkspaceMapContributionsOptions } from './workspace-map-contributions'
-import { captureWorkspaceMapContributions, type WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
-import type { MapLibreSurfaceAdapter } from '../../maplibre/surface-adapter'
-import { createMapLibreSurfaceAdapter } from '../../maplibre/surface-adapter'
+import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
+import { MapLibreSurface, type MapLibreSurfaceLifetime } from '../../maplibre/surface'
 import {
   MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
-  MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
-  MAPLIBRE_BASEMAP_SOURCE_ID,
+  MAPLIBRE_SATELLITE_LAYER_ID,
+  MAPLIBRE_SATELLITE_SOURCE_ID,
 } from '../../maplibre/config'
-import type { BasemapStyle } from '../../generated/contracts'
-import { mapStyleReadiness, mountBasemapLifecycle } from '../../maplibre/basemap-bind'
-import type { BasemapProvider, BasemapViewport } from '../../maplibre/basemap-provider-session'
 import { BasemapTileAuth } from '../../maplibre/basemap-tile-auth'
-import type { MapLibreSurfaceLifetime } from '../../maplibre/surface-adapter'
+import {
+  mountMapBackground,
+  type MapBackgroundHandle,
+  type MapBackgroundMap,
+  type MapBackgroundPresentation,
+} from '../../maplibre/map-background'
+import { OPENFREEMAP_LAYER_PREFIX, OPENFREEMAP_SOURCE_PREFIX } from '../../maplibre/openfreemap-basemap'
+import { mapErrorResourceId } from '../../maplibre/map-error-owner'
+import { describeMapErrorEvent, logMapError, redactCredentials, redactError } from '../../maplibre/redact-credentials'
+import { UNAVAILABLE_MAPLIBRE_CANVAS_SURFACE_STATE } from '../../maplibre/canvas-surface-state'
 import {
   createWorkspaceMapLibreMap,
-  captureWorkspaceBasemapPresentation,
   type WorkspaceMapSnapshot,
-  type WorkspaceBasemapPresentation,
-  workspaceBasemapPresentationFromSnapshot,
 } from '../../maplibre/workspace-map'
-import type { MapLibreMapInstance } from '../../maplibre/loader'
+import type { ViewScreen } from '../../canvas/runtime/view/types'
 import {
   createMapLayerStackDescriptors,
   reconcileMapLayerStack,
-} from './layer-stack'
-import type {
-  WorkspaceActivationMap,
-  WorkspaceActivationMapControls,
+} from '../map-layers/bands'
+import {
+  WorkspaceWebGL2UnavailableError,
+  type WorkspaceActivationMap,
+  type WorkspaceActivationMapControls,
 } from './workspace-activation'
 
 interface WorkspaceMapAttempt {
-  readonly sessionIdentity: object
   readonly contributions: WorkspaceMapContributions
   contributionSnapshot: WorkspaceMapContributionSnapshot | null
   readonly signal: AbortSignal
   readonly snapshot: WorkspaceMapSnapshot
-  presentation: WorkspaceBasemapPresentation
+  presentation: MapBackgroundPresentation
   /** The map's own credential owner, created before the map for its transform. */
   readonly tileAuth: BasemapTileAuth
-  /** The one shared provider for this map lifetime, created with the map. */
-  provider: BasemapProvider | null
-  /** The binding's disposer plus the opacity subscription. */
-  basemapTeardown: (() => void) | null
-  /** The style the live provider is already serving, if any. */
-  basemapProviderStyle: BasemapStyle | null
+  /** The map's background band owner, mounted once per map lifetime. */
+  background: MapBackgroundHandle | null
   lifetime: MapLibreSurfaceLifetime | null
   map: WorkspaceActivationMap | null
-  maplibre: unknown
   settled: boolean
   released: boolean
   admitted: boolean
-  styleRestorer: (() => void) | null
-  pendingStyleRestore: boolean
   pendingPresentationSync: boolean
   reconciling: boolean
   pendingFailure: Error | null
@@ -63,33 +58,37 @@ interface WorkspaceMapAttempt {
 }
 
 export interface WorkspaceActivationMapControlsOptions {
-  readonly contributions?: Omit<WorkspaceMapContributionsOptions, 'sessionIdentity' | 'onFailure'>
+  readonly contributions: Omit<WorkspaceMapContributionsOptions, 'onFailure'>
   readonly container: HTMLElement
-  readonly surface?: MapLibreSurfaceAdapter<MapLibreMapInstance>
+  readonly surface?: MapLibreSurface
   readonly logError?: (message?: unknown, ...optionalParams: unknown[]) => void
   readonly canCreateWebGL2Context?: () => boolean
+  /**
+   * The workspace request's resize owner (spec §1.1 "Resize"): the map container's new size goes to the camera, whose driver
+   * resizes the map (CameraDriver.setScreen). The MapLibre surface never resizes the map itself.
+   */
+  readonly setScreen: (screen: ViewScreen) => void
 }
 
 /**
- * Bridges the coordinator's awaited map admission to the Surface Adapter.
- * The adapter remains the only owner allowed to remove the MapLibre map.
+ * Bridges the coordinator's awaited map admission to the MapLibre surface,
+ * the only owner allowed to remove the map.
  */
 export class WorkspaceMapControls implements WorkspaceActivationMapControls {
-  private readonly surface: MapLibreSurfaceAdapter<MapLibreMapInstance>
+  private readonly surface: MapLibreSurface
   private readonly logError: (message?: unknown, ...optionalParams: unknown[]) => void
   private attempt: WorkspaceMapAttempt | null = null
+  private attributionCompact: boolean | null = null
 
   constructor(private readonly options: WorkspaceActivationMapControlsOptions) {
-    this.surface = options.surface ?? createMapLibreSurfaceAdapter()
-    this.logError = options.logError ?? console.error
+    this.surface = options.surface ?? new MapLibreSurface()
+    this.logError = options.logError ?? logMapError
   }
 
   createMap(
     signal: AbortSignal,
     snapshot: WorkspaceMapSnapshot,
-    sessionIdentity: object,
   ): Promise<WorkspaceActivationMap> {
-    const ownedSnapshot = captureMapSnapshot(snapshot)
     const previous = this.attempt
     if (previous && !previous.settled) {
       this.rejectAttempt(previous, abortError())
@@ -97,35 +96,29 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
       this.releaseAttempt(previous)
     }
     if (!(this.options.canCreateWebGL2Context ?? canCreateWebGL2Context)()) {
-      return Promise.reject(new Error('WebGL2 is unavailable for the shared workspace map.'))
+      // No map attempt exists to publish its failure, so publish it here.
+      this.publishUnavailable()
+      return Promise.reject(new WorkspaceWebGL2UnavailableError())
     }
-    this.surface.attach(this.options.container)
 
     return new Promise<WorkspaceActivationMap>((resolve, reject) => {
       const attempt: WorkspaceMapAttempt = {
-        sessionIdentity,
         contributions: new WorkspaceMapContributions({
           ...this.options.contributions,
-          sessionIdentity,
           logError: this.logError,
-          onFailure: (error) => this.reportRestorationFailure(attempt, error),
+          onFailure: (error) => this.failAttempt(attempt, error),
         }),
         contributionSnapshot: null,
         signal,
-        snapshot: ownedSnapshot,
-        presentation: workspaceBasemapPresentationFromSnapshot(ownedSnapshot),
+        snapshot,
+        presentation: snapshot.background,
         tileAuth: new BasemapTileAuth(),
-        provider: null,
-        basemapTeardown: null,
-        basemapProviderStyle: null,
+        background: null,
         lifetime: null,
         map: null,
-        maplibre: null,
         settled: false,
         released: false,
         admitted: false,
-        styleRestorer: null,
-        pendingStyleRestore: false,
         pendingPresentationSync: false,
         reconciling: false,
         pendingFailure: null,
@@ -145,8 +138,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
         return
       }
 
-      this.surface.requestMap({
-        key: 'shared-workspace',
+      this.surface.open(this.options.container, {
         createMap: (maplibre, container) => createWorkspaceMapLibreMap(
           maplibre,
           container,
@@ -160,11 +152,21 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
           attempt.contributions.attach(context)
           const isLive = () => !attempt.released && !attempt.signal.aborted && context.isCurrent()
           if (!isLive()) return
+          // Errors are classified by owner. After admission, an error naming an
+          // optional contribution or the background band, or a request for the
+          // Basemap's own sprite or TileJSON, only skips that
+          // contribution; context loss, pre-admission engine failure and any
+          // other unattributed error or one naming the shared scene layer are core.
           const reportMapError = (event: unknown) => {
             if (!isLive()) return
-            if (attempt.admitted && attempt.contributions.handleSourceError(event)) return
+            if (attempt.admitted && attempt.contributions.handleMapError(event)) return
+            // The Basemap's sprite or TileJSON failed (offline): its notice shows, the map keeps drawing.
+            if (attempt.admitted && attempt.background?.claimMapError(event)) {
+              this.logError('MapLibre workspace basemap resource failed to load:', describeMapErrorEvent(event))
+              return
+            }
             if (attempt.admitted && isPassiveBasemapError(event)) {
-              this.logError('Passive MapLibre workspace basemap error:', event)
+              this.logError('Passive MapLibre workspace basemap error:', describeMapErrorEvent(event))
               return
             }
             const error = mapError(event)
@@ -172,7 +174,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
               this.rejectAttempt(attempt, error)
               return
             }
-            this.reportRestorationFailure(attempt, error)
+            this.failAttempt(attempt, error)
           }
           const handleContextLoss = (event?: unknown) => {
             const error = contextLossError(event)
@@ -181,19 +183,15 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
               this.rejectAttempt(attempt, error)
               return
             }
-            this.reportRestorationFailure(attempt, error)
+            this.failAttempt(attempt, error)
           }
           const handleStyleLoad = () => {
             if (!isLive()) return
             if (attempt.admitted) {
-              if (attempt.failureReported) return
-              attempt.pendingStyleRestore = true
-              // A reloaded style is an empty stack again, so the basemap
-              // contribution has to be re-applied even though the provider
-              // itself has not changed. An unexpired session is reused, so this
-              // costs no extra provider request.
-              attempt.basemapProviderStyle = null
-              this.drainReconciliation(attempt)
+              // Canopi never reloads a style (ADR 0004): the map is admitted on its first style.load and a later
+              // one is logged once and ignored.
+              context.lifetime.off('style.load', handleStyleLoad)
+              this.logError('MapLibre loaded a later style; Canopi never reloads it, so it is ignored.')
               return
             }
             if (attempt.settled) return
@@ -202,9 +200,9 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
             // addSource runs; only a thrown configuration error rejects this map.
             attempt.admitted = true
             try {
-              this.applyBasemapPresentation(attempt)
+              this.applyBackground(attempt)
               if (attempt.failureReported || attempt.released) return
-              attempt.contributions.restoreStyle()
+              attempt.contributions.admitStyle()
               if (attempt.failureReported || attempt.released) return
               attempt.settled = true
               signal.removeEventListener('abort', abort)
@@ -227,6 +225,10 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
           context.lifetime.on('webglcontextlost', handleContextLoss)
           if (signal.aborted) abort()
         },
+        onResize: (_context, size) => {
+          if (attempt.released) return
+          this.options.setScreen({ width: size.width, height: size.height, devicePixelRatio: window.devicePixelRatio })
+        },
         onCreateError: (error) => this.rejectAttempt(attempt, error),
       })
     })
@@ -243,21 +245,34 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     return map.getCanvas().getContext('webgl2')
   }
 
-  updateBasemapPresentation(presentation: WorkspaceBasemapPresentation): void {
+  updateBackgroundPresentation(presentation: MapBackgroundPresentation): void {
     const attempt = this.attempt
     if (!attempt || attempt.released || attempt.failureReported) return
-    attempt.presentation = captureWorkspaceBasemapPresentation(presentation)
+    attempt.presentation = presentation
     if (!attempt.map || !attempt.admitted) return
     attempt.pendingPresentationSync = true
     this.drainReconciliation(attempt)
   }
 
+  retryBasemap(): void {
+    const attempt = this.attempt
+    if (!attempt || attempt.released || attempt.failureReported || !attempt.admitted) return
+    // The latest presentation again: a Basemap that is not installed, or whose resources failed, is downloaded again.
+    attempt.background?.retry(attempt.presentation)
+  }
+
+  setAttributionCompact(compact: boolean): void {
+    this.attributionCompact = compact
+    const attempt = this.attempt
+    if (!attempt || attempt.released || attempt.failureReported) return
+    attempt.background?.setAttributionCompact(compact)
+  }
+
   updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void {
     const attempt = this.attempt
     if (!attempt || attempt.released || attempt.failureReported) return
-    if (snapshot && snapshot.sessionIdentity !== attempt.sessionIdentity) return
-    attempt.contributionSnapshot = snapshot && captureWorkspaceMapContributions(snapshot)
-    attempt.contributions.update(attempt.contributionSnapshot)
+    attempt.contributionSnapshot = snapshot
+    attempt.contributions.update(snapshot)
   }
 
   watchFailure(
@@ -278,215 +293,65 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     }
   }
 
-  installStyleRestorer(
-    map: WorkspaceActivationMap,
-    restore: () => void,
-  ): () => void {
+  /**
+   * Puts the present Canopi layers in their bands (app/map-layers/bands.ts): the shared scene above the basemap and
+   * LiDAR, below the interaction overlays. Activation calls it once, after adding the scene layer.
+   */
+  reconcileLayerStack(map: WorkspaceActivationMap): void {
     const attempt = this.attempt
-    if (
-      !attempt
-      || attempt.map !== map
-      || attempt.released
-      || attempt.failureReported
-      || !attempt.admitted
-    ) return () => {}
-    let active = true
-    const restoreCurrentStyle = () => {
-      if (!active) return
-      try {
-        restore()
-      } catch (error) {
-        this.reportRestorationFailure(attempt, error)
-      }
-    }
-    attempt.styleRestorer = restoreCurrentStyle
-    const hadPendingStyleRestore = attempt.pendingStyleRestore
-    this.drainReconciliation(attempt)
-    if (!hadPendingStyleRestore) {
-      try {
-        this.reconcileLayerStack(attempt)
-      } catch (error) {
-        this.reportRestorationFailure(attempt, error)
-      }
-    }
-    return () => {
-      active = false
-      if (attempt.styleRestorer === restoreCurrentStyle) {
-        attempt.styleRestorer = null
-      }
-    }
-  }
-
-  /**
-   * Drive the canvas basemap through the same provider the other surfaces use.
-   *
-   * The canvas previously built a static contribution from a descriptor, which
-   * cannot follow the official Google path at all: that path needs a session
-   * acquired per generation and an authenticated tile request, and it is only
-   * reachable through the shared provider and the map's request transform.
-   */
-  private applyBasemapPresentation(attempt: WorkspaceMapAttempt): void {
-    const { map, snapshot, presentation } = attempt
-    if (!map) return
-    if (snapshot.placementStatus !== 'confirmed' || !presentation.basemapVisible) {
-      this.releaseBasemapProvider(attempt)
-      this.removeBasemapContribution(map)
-      return
-    }
-    const justMounted = attempt.provider === null
-    const provider = this.ensureBasemapProvider(attempt)
-    if (!provider) return
-    if (justMounted) {
-      // The mount already applied current configuration and opacity.
-      return
-    }
-    // An opacity-only update must not re-issue a session or rebuild the
-    // contribution; only a provider change does that.
-    if (attempt.basemapProviderStyle !== presentation.basemapStyle) {
-      attempt.basemapProviderStyle = presentation.basemapStyle
-      provider.update(
-        { style: presentation.basemapStyle },
-        readWorkspaceMapViewport(map),
-      )
-    } else {
-      // Opacity alone changes no provider input, so the contribution is left
-      // exactly as it is and only the paint property is written.
-      this.applyBasemapOpacity(attempt)
-    }
-  }
-
-  private applyBasemapOpacity(attempt: WorkspaceMapAttempt): void {
-    const map = attempt.map
-    // No contribution means no layer to paint; writing a property for a layer
-    // that does not exist is not an opacity update.
-    if (!map?.getLayer?.(MAPLIBRE_BASEMAP_RASTER_LAYER_ID)) return
-    map.setPaintProperty?.(
-      MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
-      'raster-opacity',
-      attempt.presentation.basemapOpacity,
+    if (!attempt || attempt.map !== map || attempt.released || attempt.failureReported) return
+    reconcileMapLayerStack(
+      map,
+      createMapLayerStackDescriptors(attempt.contributionSnapshot?.lidar.map((layer) => layer.id) ?? []),
     )
+    // A rebuilt map gains its scene layer after the contributions' first drain: the rasters re-anchor beneath it.
+    attempt.contributions.restack()
   }
 
-  /**
-   * Create this map lifetime's provider and bind it to the map once.
-   *
-   * The binding owns contribution reconciliation, so this surface never adds or
-   * removes the basemap source itself while a provider is live.
-   */
-  private ensureBasemapProvider(attempt: WorkspaceMapAttempt): BasemapProvider | null {
-    const map = attempt.map
-    const lifetime = attempt.lifetime
-    if (!map || !lifetime) return null
-    if (attempt.provider) return attempt.provider
-    const mount = mountBasemapLifecycle({
-      map: map as unknown as Parameters<typeof mountBasemapLifecycle>[0]['map'],
+  private publishUnavailable(): void {
+    try {
+      this.options.contributions.onStateChange?.(UNAVAILABLE_MAPLIBRE_CANVAS_SURFACE_STATE)
+    } catch (observerError) {
+      this.logError('Map state observer failed:', observerError)
+    }
+  }
+
+  /** Mounts the background band once per map lifetime and applies the latest presentation. */
+  private applyBackground(attempt: WorkspaceMapAttempt): void {
+    const { map, lifetime } = attempt
+    if (!map || !lifetime) return
+    attempt.background ??= mountMapBackground({
+      map: map as unknown as MapBackgroundMap,
+      maplibre: this.surface.maplibre,
       tileAuth: attempt.tileAuth,
-      readStyle: () => attempt.presentation.basemapStyle,
-      readViewport: () => readWorkspaceMapViewport(map),
-      readVisible: () => attempt.presentation.basemapVisible,
-      styleReady: mapStyleReadiness(
-        map as unknown as { isStyleLoaded?(): boolean; loaded?(): boolean },
-        lifetime,
-      ),
-      afterApply: () => this.applyBasemapOpacity(attempt),
-      beforeLayerId: () => {
-        const order = map.getLayersOrder()
-        const background = order.indexOf(MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID)
-        return background >= 0 ? order[background + 1] ?? null : order[0] ?? null
-      },
-      maplibre: (this.surface as { maplibre?: unknown }).maplibre,
-      mapControls: map as unknown as Parameters<typeof mountBasemapLifecycle>[0]['mapControls'],
-      events: lifetime,
+      lifetime,
+      onError: (error) => this.logError('Map basemap style failed to load:', error),
+      onBasemapStatus: (status) => attempt.contributions.setBasemapStatus(status),
     })
-    attempt.basemapTeardown = () => mount.dispose()
-    // The mount already applied current configuration; record it so the
-    // caller's first presentation sync does not issue a duplicate update.
-    attempt.basemapProviderStyle = attempt.presentation.basemapStyle
-    // Reuse one mount per map lifetime; opacity-only updates must not remount.
-    attempt.provider = {
-      update: (presentation: { style: BasemapStyle }, viewport: BasemapViewport) =>
-        mount.update(presentation, viewport),
-      updateViewport: (viewport: BasemapViewport) => mount.updateViewport(viewport),
-      dispose: () => mount.dispose(),
-      snapshot: () => ({ state: 'idle' as const }),
-      subscribe: () => () => {},
-    } as unknown as BasemapProvider
-    return attempt.provider
-  }
-
-  /** Stop the canvas provider and release its session and timers. */
-  private releaseBasemapProvider(attempt: WorkspaceMapAttempt): void {
-    attempt.basemapTeardown?.()
-    attempt.basemapTeardown = null
-    attempt.provider = null
-    attempt.basemapProviderStyle = null
-  }
-
-  private removeBasemapContribution(map: WorkspaceActivationMap): void {
-    if (map.getLayer(MAPLIBRE_BASEMAP_RASTER_LAYER_ID) != null) {
-      map.removeLayer(MAPLIBRE_BASEMAP_RASTER_LAYER_ID)
-    }
-    if (map.getSource(MAPLIBRE_BASEMAP_SOURCE_ID) != null) {
-      map.removeSource(MAPLIBRE_BASEMAP_SOURCE_ID)
-    }
+    if (this.attributionCompact !== null) attempt.background.setAttributionCompact(this.attributionCompact)
+    attempt.background.update(attempt.presentation)
   }
 
   private drainReconciliation(attempt: WorkspaceMapAttempt): void {
-    if (
-      (!attempt.pendingStyleRestore && !attempt.pendingPresentationSync)
-      || attempt.reconciling
-      || attempt.released
-      || attempt.failureReported
-    ) return
+    if (!attempt.pendingPresentationSync || attempt.reconciling || attempt.released || attempt.failureReported) return
     attempt.reconciling = true
     try {
-      while (
-        (attempt.pendingStyleRestore || attempt.pendingPresentationSync)
-        && !attempt.released
-        && !attempt.failureReported
-      ) {
-        const restoreScene = attempt.pendingStyleRestore && attempt.styleRestorer != null
-        const syncPresentation = attempt.pendingPresentationSync
-        if (!restoreScene && !syncPresentation) break
-        if (restoreScene) attempt.pendingStyleRestore = false
-        if (syncPresentation) attempt.pendingPresentationSync = false
-        this.applyBasemapPresentation(attempt)
-        if (attempt.failureReported) break
-        if (restoreScene) {
-          attempt.contributions.restoreStyle()
-          if (attempt.released || attempt.failureReported) break
-          attempt.styleRestorer?.()
-        }
-        if (attempt.failureReported) break
-        this.reconcileLayerStack(attempt)
+      while (attempt.pendingPresentationSync && !attempt.released && !attempt.failureReported) {
+        attempt.pendingPresentationSync = false
+        this.applyBackground(attempt)
+        if (attempt.failureReported || !attempt.map) break
+        this.reconcileLayerStack(attempt.map)
       }
     } catch (error) {
-      this.reportRestorationFailure(attempt, error)
+      this.failAttempt(attempt, error)
     } finally {
       attempt.reconciling = false
-      if (
-        (attempt.pendingPresentationSync
-          || (attempt.pendingStyleRestore && attempt.styleRestorer != null))
-        && !attempt.released
-        && !attempt.failureReported
-      ) {
-        queueMicrotask(() => this.drainReconciliation(attempt))
-      }
     }
   }
 
-  private reconcileLayerStack(attempt: WorkspaceMapAttempt): void {
-    if (!attempt.map || attempt.released) return
-    reconcileMapLayerStack(
-      attempt.map,
-      createMapLayerStackDescriptors(attempt.contributionSnapshot?.lidar.map((layer) => layer.id) ?? []),
-    )
-  }
-
-  private reportRestorationFailure(attempt: WorkspaceMapAttempt, error: unknown): void {
+  private failAttempt(attempt: WorkspaceMapAttempt, error: unknown): void {
     if (attempt.released || attempt.failureReported) return
     attempt.failureReported = true
-    attempt.pendingStyleRestore = false
     attempt.pendingPresentationSync = false
     const failure = mapError(error)
     attempt.pendingFailure = failure
@@ -510,55 +375,18 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
   private releaseAttempt(attempt: WorkspaceMapAttempt | null): void {
     if (!attempt || attempt.released) return
     attempt.released = true
-    this.releaseBasemapProvider(attempt)
+    attempt.background?.dispose()
+    attempt.background = null
     attempt.lifetime = null
     attempt.signal.removeEventListener('abort', attempt.abort)
     if (this.attempt === attempt) this.attempt = null
-    // Host/Surface Adapter performs listener cleanup, observer disconnect, and
-    // final map removal. No app-layer code calls map.remove().
+    // The surface releases the map's listeners, disconnects its observer and
+    // removes it. No app-layer code calls map.remove().
     try {
       attempt.contributions.dispose(attempt.pendingFailure ?? undefined)
     } finally {
       this.surface.destroy()
     }
-  }
-}
-
-/**
- * The provider viewport for the live workspace map.
- *
- * Read from the map's own camera. A map that cannot report bounds yet describes
- * the whole world, which is what it is actually showing at that point rather
- * than an invented extent.
- */
-function readWorkspaceMapViewport(map: WorkspaceActivationMap): BasemapViewport {
-  const bounds = (
-    map as unknown as {
-      getBounds?(): {
-        getWest(): number
-        getSouth(): number
-        getEast(): number
-        getNorth(): number
-      }
-    }
-  ).getBounds?.()
-  // A map whose camera is not attached yet reports no zoom; that is the same
-  // "nothing known yet" case as no bounds.
-  let zoom = Number.NaN
-  try {
-    zoom = map.getZoom()
-  } catch {
-    zoom = Number.NaN
-  }
-  if (!bounds || !Number.isFinite(zoom)) {
-    return { west: -180, south: -85, east: 180, north: 85, zoom: 0 }
-  }
-  return {
-    west: bounds.getWest(),
-    south: bounds.getSouth(),
-    east: bounds.getEast(),
-    north: bounds.getNorth(),
-    zoom,
   }
 }
 
@@ -571,20 +399,6 @@ function canCreateWebGL2Context(): boolean {
   } catch {
     return false
   }
-}
-
-function captureMapSnapshot(snapshot: WorkspaceMapSnapshot): WorkspaceMapSnapshot {
-  return Object.freeze({
-    anchor: Object.freeze({
-      lat: snapshot.anchor.lat,
-      lon: snapshot.anchor.lon,
-    }),
-    northBearingDeg: snapshot.northBearingDeg,
-    placementStatus: snapshot.placementStatus,
-    basemapStyle: snapshot.basemapStyle,
-    basemapVisible: snapshot.basemapVisible,
-    basemapOpacity: snapshot.basemapOpacity,
-  })
 }
 
 function abortError(): Error {
@@ -604,18 +418,22 @@ function contextLossError(event: unknown): Error {
 }
 
 function isPassiveBasemapError(event: unknown): boolean {
-  return typeof event === 'object'
-    && event !== null
-    && 'sourceId' in event
-    && event.sourceId === MAPLIBRE_BASEMAP_SOURCE_ID
+  const id = mapErrorResourceId(event)
+  return id !== null && (
+    id === MAPLIBRE_SATELLITE_SOURCE_ID
+    || id === MAPLIBRE_SATELLITE_LAYER_ID
+    || id === MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID
+    || id.startsWith(OPENFREEMAP_SOURCE_PREFIX)
+    || id.startsWith(OPENFREEMAP_LAYER_PREFIX)
+  )
 }
 
 function mapError(event: unknown): Error {
-  if (event instanceof Error) return event
-  if (typeof event === 'string' && event.length > 0) return new Error(event)
+  if (event instanceof Error) return redactError(event)
+  if (typeof event === 'string' && event.length > 0) return new Error(redactCredentials(event))
   if (typeof event === 'object' && event !== null && 'message' in event
     && typeof event.message === 'string' && event.message.length > 0) {
-    return new Error(event.message)
+    return new Error(redactCredentials(event.message))
   }
   if (
     typeof event === 'object'

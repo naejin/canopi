@@ -1,11 +1,11 @@
 //! Sampled process-tree resident memory for the representative raster runs.
 //!
 //! The combined-memory gate needs the working set that is actually live while a
-//! raster operation runs, including the GDAL children the engine launches. This
-//! module samples the root process and every descendant it can observe on a
-//! fixed interval, tracking `(pid, start time)` identity so a recycled pid is
-//! never counted twice and a child that exits between discovery and read is
-//! reported as an unreadable sample rather than as zero.
+//! raster operation runs, including the GDAL children the comparison lane
+//! launches. This module samples the root process and every descendant it can
+//! observe on a fixed interval, tracking `(pid, start time)` identity so a
+//! recycled pid is never counted twice and a child that exits between
+//! discovery and read is reported as an unreadable sample rather than as zero.
 //!
 //! Reported limitations, which every gate must state:
 //!
@@ -65,12 +65,6 @@ pub(super) enum TreeMeasurement {
         /// Largest number of readable members seen in any one tick, the root
         /// included. This is the observed concurrency, not a configured limit.
         peak_member_count: u64,
-        /// Resident bytes of one managed GDAL conversion's block cache ceiling.
-        ///
-        /// The engine sets `GDAL_CACHEMAX` for every child it launches, so this
-        /// many bytes per concurrent conversion is attributable to the cache
-        /// rather than to job logic.
-        child_cache_ceiling_bytes: u64,
     },
     /// This platform cannot measure the process tree.
     Unsupported(String),
@@ -102,7 +96,6 @@ impl TreeMeasurement {
                 interval_ms,
                 peak_member_bytes,
                 peak_member_count,
-                child_cache_ceiling_bytes,
             } => {
                 let incremental = match peak_incremental_bytes {
                     Some(bytes) => format!("{} MiB", bytes / (1024 * 1024)),
@@ -122,14 +115,10 @@ impl TreeMeasurement {
                     peak_total_bytes / (1024 * 1024),
                     peak_subtotal_bytes / (1024 * 1024),
                 ) + &format!(
-                    "; composition: largest single member {} MiB over {} member(s) at most, \
-                     and each managed conversion may hold up to {} MiB of block cache \
-                     (GDAL_CACHEMAX), so {} concurrent conversion(s) could account for the \
-                     cache share",
+                    "; composition: largest single member {} MiB over {} member(s) at most \
+                     (raster work runs in process; members beyond the root are GeoLibre children)",
                     peak_member_bytes / (1024 * 1024),
                     peak_member_count,
-                    child_cache_ceiling_bytes / (1024 * 1024),
-                    peak_member_count.saturating_sub(1),
                 )
             }
             Self::Unsupported(reason) => format!("process tree measurement unavailable: {reason}"),
@@ -380,7 +369,6 @@ impl ProcessTreeSampler {
             interval_ms: u64::try_from(SAMPLE_INTERVAL.as_millis()).unwrap_or(100),
             peak_member_bytes: self.member_peak.load(Ordering::Relaxed),
             peak_member_count: self.member_count_peak.load(Ordering::Relaxed),
-            child_cache_ceiling_bytes: crate::services::lidar::engine::GDAL_CACHE_BYTES,
         }
     }
 }
@@ -663,6 +651,8 @@ mod tests {
     }
 
     /// A real child process appears in the live tree while it runs.
+    // Samples Linux /proc; other platforms report Unsupported (tested below).
+    #[cfg(target_os = "linux")]
     #[test]
     fn a_running_child_is_discovered_in_the_live_tree() {
         let Ok(mut child) = std::process::Command::new("sleep").arg("0.4").spawn() else {
@@ -722,7 +712,7 @@ mod tests {
     fn stat_parsing_survives_spaces_and_parentheses_in_the_command_name() {
         // `comm` is parenthesised, so splitting on whitespace is only safe
         // after the final `)`.
-        let stat = "4242 (gdal_trans late (x)) S 1 4242 4242 0 -1 4194560 100 0 0 0 \
+        let stat = "4242 (geolibre slope (x)) S 1 4242 4242 0 -1 4194560 100 0 0 0 \
                     5 3 0 0 20 0 7 0 987654 1000 200";
         assert_eq!(parse_stat(stat), Some((1, 987654)));
         assert_eq!(
@@ -751,7 +741,6 @@ mod tests {
             interval_ms: 50,
             peak_member_bytes: peak_total.unwrap_or(0),
             peak_member_count: 1,
-            child_cache_ceiling_bytes: crate::services::lidar::engine::GDAL_CACHE_BYTES,
         }
     }
 
@@ -821,6 +810,8 @@ mod tests {
         );
     }
 
+    // Samples Linux /proc; other platforms report Unsupported (tested below).
+    #[cfg(target_os = "linux")]
     #[test]
     fn sampling_reports_a_baseline_and_a_peak_of_the_live_tree() {
         let sampler = match Sampler::start() {
@@ -860,6 +851,18 @@ mod tests {
         }
     }
 
+    #[cfg(not(target_os = "linux"))]
+    #[test]
+    fn other_platforms_report_the_measurement_as_unavailable_not_as_a_number() {
+        let measurement = Sampler::start().finish();
+        assert!(
+            matches!(measurement, TreeMeasurement::Unsupported(_)),
+            "no /proc means no sampled figure: {measurement:?}"
+        );
+    }
+
+    // Samples Linux /proc; other platforms report Unsupported (tested below).
+    #[cfg(target_os = "linux")]
     #[test]
     fn stopping_before_the_first_tick_invents_no_workload_evidence() {
         let sampler = match Sampler::start() {

@@ -1,0 +1,70 @@
+// The network rule of the Web Edition browser checks (canvas v2 plan section 3.2, "Network").
+// Every committed scenario runs offline except for the preview server, so baselines never
+// change with OpenFreeMap's tiles or the network's speed. Every spec imports `test` and
+// `expect` from this file, never from '@playwright/test'.
+import { test as base, expect, type ConsoleMessage } from '@playwright/test'
+
+/** The preview server of playwright.config.ts; the only origin a scenario may reach. */
+export const APP_ORIGIN = 'http://localhost:4174'
+
+/**
+ * The Web plant catalog (public/canopi-catalog/, git-ignored) is generated from canopi-core.db
+ * by `npm run generate:web-catalog` and packaged separately, so the job's `npm run build:web`
+ * has none. A checkout that has generated it would copy it into dist-web, and the Place plants
+ * card would then start DuckDB-WASM, whose worker comes from a CDN this file aborts. Every
+ * checkout answers as the job does: the catalog is missing.
+ */
+const WEB_CATALOG = `${APP_ORIGIN}/app/canopi-catalog/`
+
+/**
+ * Console errors a scenario allows. Anything else logged as an error, and every uncaught
+ * page error, fails the test.
+ */
+function isAllowedConsoleError(message: ConsoleMessage, aborted: ReadonlySet<string>, expected: readonly string[]): boolean {
+  const text = message.text()
+  const source = message.location().url
+  // A failure the scenario causes on purpose (`test.use({ expectedConsoleErrors })`).
+  if (expected.some((prefix) => text.startsWith(prefix))) return true
+  // The Web Edition's default basemap is remote (OpenFreeMap). Its style request is aborted
+  // below, so the basemap never installs and the map keeps its backdrop colour; the app logs
+  // this (app/canvas-map-surface/workspace-map-controls.ts) and shows "Basemap couldn't load"
+  // with Retry in the map's status chip, which every offline baseline records (U22).
+  if (text.startsWith('Map basemap style failed to load:')) return true
+  // The browser's own log line for a request this file aborted (Chromium:
+  // "Failed to load resource: net::ERR_INTERNET_DISCONNECTED"); its location is the aborted
+  // URL, so the line is caused only by the offline rule.
+  if (text.startsWith('Failed to load resource:') && aborted.has(source)) return true
+  // The Web plant catalog's manifest, answered 404 below (WEB_CATALOG). The Place plants card
+  // asks for it; "In this Design" still lists the Design's species without it.
+  if (
+    text === 'Failed to load resource: the server responded with a status of 404 (Not Found)'
+    && source === `${WEB_CATALOG}manifest.json`
+  ) return true
+  return false
+}
+
+// Named `networkRule`: `offline` is Playwright's own context option.
+export const test = base.extend<{ networkRule: void, expectedConsoleErrors: readonly string[] }>({
+  /** Starts of the console errors a spec causes on purpose; a spec sets them with test.use. */
+  expectedConsoleErrors: [[], { option: true }],
+  networkRule: [async ({ context, expectedConsoleErrors }, use) => {
+    const aborted = new Set<string>()
+    await context.route('**/*', (route) => {
+      const url = route.request().url()
+      if (url.startsWith(WEB_CATALOG)) return route.fulfill({ status: 404, contentType: 'text/plain', body: 'Not Found' })
+      if (new URL(url).origin === APP_ORIGIN) return route.continue()
+      aborted.add(url)
+      return route.abort('internetdisconnected')
+    })
+    const unexpected: string[] = []
+    context.on('console', (message) => {
+      if (message.type() !== 'error' || isAllowedConsoleError(message, aborted, expectedConsoleErrors)) return
+      unexpected.push(`console error: ${message.text()} (${message.location().url})`)
+    })
+    context.on('weberror', (error) => unexpected.push(`uncaught: ${error.error().stack ?? error.error().message}`))
+    await use()
+    expect(unexpected, 'console errors and uncaught page errors').toEqual([])
+  }, { auto: true }],
+})
+
+export { expect }

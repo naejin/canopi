@@ -1,3 +1,5 @@
+import { logMapError } from '../../maplibre/redact-credentials'
+import { mapBackgroundPresentationsEqual } from '../../maplibre/map-background'
 import type {
   WorkspaceActivationOutcome,
   WorkspaceActivationSnapshot,
@@ -8,8 +10,8 @@ export interface WorkspaceGenerationLifecycle {
   requestGenerationDisconnect(): Promise<void>
   activate(snapshot: WorkspaceActivationSnapshot): Promise<WorkspaceActivationOutcome>
   teardown(): Promise<void>
-  /** True when this lifecycle already observes rejection of this exact result. */
-  ownsLifecycleFailureObservation?(result: Promise<unknown>): boolean
+  /** Accepts a user Retry of an unavailable map (WorkspaceActivationCoordinator.retry). */
+  retry(): boolean
 }
 
 export interface WorkspaceGenerationReconcilerOptions {
@@ -17,7 +19,6 @@ export interface WorkspaceGenerationReconcilerOptions {
   readonly readSnapshot: () => WorkspaceActivationSnapshot | null
   readonly workspace: WorkspaceGenerationLifecycle
   readonly onFailure?: (error: unknown) => void
-  readonly onOutcome?: (outcome: WorkspaceActivationOutcome) => void
 }
 
 const replacementTicketBrand = Symbol('workspace-generation-replacement-ticket')
@@ -68,13 +69,34 @@ export class WorkspaceGenerationReconciler {
       if (!this.isCurrentActivation(activation)) return 'cancelled'
       this.activation = null
       if (outcome !== 'cancelled') this.reconciledSnapshot = snapshot
-      return this.publishOutcome(outcome) ? outcome : 'cancelled'
+      return outcome
     } catch (error) {
       if (!this.isCurrentActivation(activation)) return 'cancelled'
       this.activation = null
       this.reportFailure(error)
       return 'cancelled'
     }
+  }
+
+  /**
+   * The user's Retry after the map became unavailable: when the workspace accepts it, the current Design
+   * is activated again. Refused, and false, with no Design, while an activation or a replacement is under
+   * way, or when the workspace refuses.
+   */
+  retry(): boolean {
+    if (this.disposed || this.activation || this.replacementSuspended) return false
+    let snapshot: WorkspaceActivationSnapshot | null
+    try {
+      snapshot = this.options.readSnapshot()
+    } catch (error) {
+      this.reportFailure(error)
+      return false
+    }
+    if (!snapshot || !this.options.workspace.retry()) return false
+    const activation: ReconciliationActivation = { ticket: this.currentReplacement, snapshot }
+    this.activation = activation
+    this.observeActivation(activation)
+    return true
   }
 
   /** Synchronously fences the old generation before Canvas replacement begins. */
@@ -117,9 +139,7 @@ export class WorkspaceGenerationReconciler {
       teardown = Promise.reject(error)
     }
     this.teardown = teardown
-    if (!this.options.workspace.ownsLifecycleFailureObservation?.(teardown)) {
-      this.observeTerminalTeardown(teardown)
-    }
+    this.observeTerminalTeardown(teardown)
     return teardown
   }
 
@@ -168,7 +188,6 @@ export class WorkspaceGenerationReconciler {
         if (!this.isCurrentActivation(activation)) return
         this.activation = null
         if (outcome !== 'cancelled') this.reconciledSnapshot = activation.snapshot
-        this.publishOutcome(outcome)
       },
       (error: unknown) => this.handleActivationFailure(activation, error),
     )
@@ -190,28 +209,18 @@ export class WorkspaceGenerationReconciler {
       && this.activation === activation
   }
 
-  private publishOutcome(outcome: WorkspaceActivationOutcome): boolean {
-    try {
-      this.options.onOutcome?.(outcome)
-      return true
-    } catch (error) {
-      this.reportFailure(error)
-      return false
-    }
-  }
-
   private reportFailure(error: unknown): void {
     try {
       if (this.options.onFailure) this.options.onFailure(error)
-      else console.error('Shared workspace activation failed:', error)
+      else logMapError('Shared workspace activation failed:', error)
     } catch (observerError) {
-      console.error('Shared workspace failure observer failed:', observerError)
+      logMapError('Shared workspace failure observer failed:', observerError)
     }
   }
 
   private observeTerminalTeardown(result: Promise<void>): void {
     void result.catch((error) => {
-      console.error('Shared workspace teardown failed:', error)
+      logMapError('Shared workspace teardown failed:', error)
     })
   }
 }
@@ -226,12 +235,5 @@ function snapshotsEqual(
   right: WorkspaceActivationSnapshot,
 ): boolean {
   if (!left || left.sessionIdentity !== right.sessionIdentity) return false
-  return left.maximumWorldExtentMeters === right.maximumWorldExtentMeters
-    && left.map.anchor.lat === right.map.anchor.lat
-    && left.map.anchor.lon === right.map.anchor.lon
-    && left.map.northBearingDeg === right.map.northBearingDeg
-    && left.map.placementStatus === right.map.placementStatus
-    && left.map.basemapStyle === right.map.basemapStyle
-    && left.map.basemapVisible === right.map.basemapVisible
-    && left.map.basemapOpacity === right.map.basemapOpacity
+  return mapBackgroundPresentationsEqual(left.map.background, right.map.background)
 }

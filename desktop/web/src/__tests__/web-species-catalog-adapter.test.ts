@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createEmptySpeciesFilter, createSpeciesCatalogWorkbench } from '../app/plant-browser'
 import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
+import { createReducedSpeciesCatalogAdapters } from '../web/reduced-species-catalog'
 import {
   createInMemoryReducedSpeciesCatalogReader,
-  createReducedSpeciesCatalogAdapters,
   type ReducedSpeciesCatalogData,
-} from '../web/reduced-species-catalog'
+} from './support/in-memory-reduced-species-catalog'
 import type { FilterOptions, SpeciesSearchRequest } from '../types/species'
 
 describe('Web Edition reduced Species Catalog adapter', () => {
@@ -164,6 +164,7 @@ describe('Web Edition reduced Species Catalog adapter', () => {
       hardiness_zone_min: null,
       hardiness_zone_max: null,
       stratum: null,
+      habit: null,
       edibility_rating: null,
     })
   })
@@ -395,6 +396,7 @@ describe('Web Edition reduced Species Catalog adapter', () => {
       detail,
       loading: false,
       error: null,
+      englishName: null,
     })
   })
 
@@ -425,6 +427,7 @@ describe('Web Edition reduced Species Catalog adapter', () => {
       detail,
       loading: false,
       error: null,
+      englishName: null,
     })
   })
 
@@ -984,6 +987,7 @@ function makeSpeciesListItem(canonicalName: string) {
     hardiness_zone_max: null,
     growth_rate: null,
     stratum: null,
+    habit: null,
     climate_zones: [],
     life_cycles: [],
     edibility_rating: null,

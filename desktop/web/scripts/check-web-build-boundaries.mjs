@@ -1,20 +1,31 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const distRoot = resolve(root, "dist-web");
 const MAX_CLOUDFLARE_PAGES_ASSET_BYTES = 25 * 1024 * 1024;
-const FORBIDDEN_DUCKDB_WASM_PATTERN = "duckdb-.*\\\\.wasm";
+const FORBIDDEN_DUCKDB_WASM_PATTERN = "duckdb-.*\\.wasm";
 
 const scannedExtensions = new Set([".html", ".js", ".mjs"]);
 const forbiddenAssetNamePatterns = [
-  new RegExp(FORBIDDEN_DUCKDB_WASM_PATTERN, "i"),
+  {
+    pattern: new RegExp(FORBIDDEN_DUCKDB_WASM_PATTERN, "i"),
+    reason: "must not bundle DuckDB raw WASM; use CDN-selected DuckDB-WASM bundles",
+  },
+  // Local raster display is Desktop-only; the Web Edition must not ship its decoders.
+  { pattern: /whitebox_wasm_bg.*\.wasm/i, reason: "is a Desktop-only raster decoder" },
+  { pattern: /cog_tiler_wasm_bg.*\.wasm/i, reason: "is a Desktop-only raster decoder" },
+  // vite.config.ts puts every @tauri-apps module in a chunk named "tauri".
+  { pattern: /(^|\/)tauri-[^/]*\.js$/i, reason: "is the Tauri API chunk; the Web entry graph reached @tauri-apps" },
 ];
+// Minified chunks keep runtime globals and plugin command names, not module
+// paths; the source-path patterns still catch a build with sourcemaps or
+// unminified output.
 const forbiddenPatterns = [
   "@tauri-apps",
   "__TAURI__",
   "__TAURI_INTERNALS__",
+  "plugin:dialog|",
   "app/shell/bootstrap",
   "app/shell/close-guard",
   "ipc/design",
@@ -25,44 +36,36 @@ const forbiddenPatterns = [
   "ipc/geocoding",
   "ipc/problem-report",
   "plugin-dialog",
+  "maplibre-gl-raster",
+  "canopi-raster-display",
 ];
 
-if (!existsSync(distRoot)) {
-  console.error(`Missing Web Edition build output at ${distRoot}. Run npm run build:web first.`);
-  process.exit(1);
-}
-
-const violations = [];
-
-for (const filePath of filesUnder(distRoot)) {
-  const relativePath = relative(root, filePath);
-  const size = statSync(filePath).size;
-  if (size > MAX_CLOUDFLARE_PAGES_ASSET_BYTES) {
-    violations.push(
-      `${relativePath} is ${size} bytes; Cloudflare Pages allows at most ${MAX_CLOUDFLARE_PAGES_ASSET_BYTES} bytes per file`,
-    );
-  }
-
-  for (const pattern of forbiddenAssetNamePatterns) {
-    if (pattern.test(relativePath)) {
-      violations.push(`${relativePath} must not bundle DuckDB raw WASM; use CDN-selected DuckDB-WASM bundles`);
+/**
+ * Scans a built Web Edition tree and returns one message per violation:
+ * a Desktop-only import or runtime marker, a raw WASM asset the deployment
+ * must not carry, or a file over the Cloudflare Pages per-asset limit.
+ */
+export function scanWebBuild(distRoot, { maxAssetBytes = MAX_CLOUDFLARE_PAGES_ASSET_BYTES } = {}) {
+  const violations = [];
+  for (const filePath of filesUnder(distRoot)) {
+    const relativePath = relative(distRoot, filePath).split("\\").join("/");
+    const size = statSync(filePath).size;
+    if (size > maxAssetBytes) {
+      violations.push(`${relativePath} is ${size} bytes; Cloudflare Pages allows at most ${maxAssetBytes} bytes per file`);
     }
-  }
 
-  if (scannedExtensions.has(extensionOf(filePath))) {
-    const source = readFileSync(filePath, "utf8");
-    for (const pattern of forbiddenPatterns) {
-      if (source.includes(pattern)) {
-        violations.push(`${relativePath} contains ${pattern}`);
+    for (const { pattern, reason } of forbiddenAssetNamePatterns) {
+      if (pattern.test(relativePath)) violations.push(`${relativePath} ${reason}`);
+    }
+
+    if (scannedExtensions.has(extensionOf(filePath))) {
+      const source = readFileSync(filePath, "utf8");
+      for (const pattern of forbiddenPatterns) {
+        if (source.includes(pattern)) violations.push(`${relativePath} contains ${pattern}`);
       }
     }
   }
-}
-
-if (violations.length > 0) {
-  console.error("Web Edition build contains desktop-only imports or runtime markers:");
-  for (const violation of violations) console.error(`- ${violation}`);
-  process.exit(1);
+  return violations;
 }
 
 function filesUnder(dir) {
@@ -79,4 +82,24 @@ function extensionOf(filePath) {
   const dot = name.lastIndexOf(".");
   if (dot === -1) return "";
   return name.slice(dot);
+}
+
+function isCli() {
+  return process.argv[1] !== undefined
+    && import.meta.url.startsWith("file:")
+    && pathToFileURL(resolve(process.argv[1])).href === import.meta.url;
+}
+
+if (isCli()) {
+  const distRoot = resolve(root, process.argv[2] ?? "dist-web");
+  if (!existsSync(distRoot)) {
+    console.error(`Missing Web Edition build output at ${distRoot}. Run npm run build:web first.`);
+    process.exit(1);
+  }
+  const violations = scanWebBuild(distRoot);
+  if (violations.length > 0) {
+    console.error("Web Edition build contains desktop-only imports or runtime markers:");
+    for (const violation of violations) console.error(`- ${violation}`);
+    process.exit(1);
+  }
 }

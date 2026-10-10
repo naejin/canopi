@@ -8,15 +8,25 @@ export default defineConfig(({ command }) => {
   return {
     root: path('.'),
     cacheDir: path('../node_modules/.vite-ui-gallery'),
+    // Serves the prepared PDF fonts (`npm run prepare:pdf-fonts`) for the PDF export workspace.
+    publicDir: path('../public'),
     plugins: [preact()],
     resolve: { alias: {
       '@tauri-apps/api/core': path('./memory-backend.ts'),
       '@tauri-apps/plugin-dialog': path('./memory-dialogs.ts'),
       '#species-catalog-live': path('../src/app/plant-browser/live.desktop.ts'),
       '#platform': path('../src/platform/browser.ts'),
-      '#canvas-pdf-platform': path('../src/app/canvas-pdf/platform.browser.ts'),
+      '#canvas-pdf-platform': path('./canvas-pdf-platform.ts'),
       '#budget-export-platform': path('./budget-export.ts'),
+      '#geocoding-transport': path('../src/app/geocoding/transport.browser.ts'),
     } },
+    // As the app's (vite.config.ts): `state=lidar-raster` draws through Desktop's raster renderer, whose WASM
+    // decoders resolve their .wasm beside their own module and whose TIFF codecs use top-level await.
+    optimizeDeps: {
+      exclude: ['cog-tiler-wasm', 'whitebox-wasm'],
+      esbuildOptions: { target: 'es2022' },
+    },
+    worker: { format: 'es' as const },
     server: { host: '127.0.0.1', port: 1422, strictPort: true, fs: { allow: [path('..')] } },
   }
 })

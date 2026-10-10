@@ -19,7 +19,6 @@ fn validate_canopi_design_conformance_value(
     let expected_facts = serde_json::json!({
         "current_version": common_types::design::CURRENT_CANOPI_FILE_VERSION,
         "missing_version": common_types::design::MISSING_CANOPI_FILE_VERSION,
-        "minimum_supported_version": common_types::design::MIN_SUPPORTED_CANOPI_FILE_VERSION,
         "future_version_policy": common_types::design::FUTURE_CANOPI_FILE_VERSION_POLICY,
         "error_kinds": common_types::design::CanopiDesignIngestionErrorKind::ALL
             .iter()
@@ -74,6 +73,23 @@ fn validate_canopi_design_conformance_value(
         }
         let accepted = case.get("accepted").and_then(serde_json::Value::as_str);
         let error_kind = case.get("error_kind").and_then(serde_json::Value::as_str);
+        if let Some(site) = case.get("site") {
+            // A pre-geolocation Design placed at this site before comparison.
+            let placed = site
+                .get("lon")
+                .and_then(serde_json::Value::as_f64)
+                .is_some()
+                && site
+                    .get("lat")
+                    .and_then(serde_json::Value::as_f64)
+                    .is_some();
+            if !placed || accepted.is_none() {
+                return Err(format!(
+                    "Canopi Design conformance case {id} with a site must name lon, lat and an accepted document",
+                )
+                .into());
+            }
+        }
         match (accepted, error_kind) {
             (Some(document), None) if accepted_documents.contains_key(document) => {}
             (Some(document), None) => {
@@ -126,7 +142,7 @@ pub(crate) fn render_known_canopi_keys() -> Result<String, Box<dyn std::error::E
     }
     file.push_str("] as const\n");
     file.push_str("\nexport type KnownCanopiKey = (typeof KNOWN_CANOPI_KEYS)[number]\n");
-    file.push_str("export type DocumentFileFieldOwner = 'document' | 'scene' | 'shared'\n\n");
+    file.push_str("export type DocumentFileFieldOwner = 'document' | 'scene'\n\n");
     file.push_str("export const DOCUMENT_FILE_FIELD_OWNERS = {\n");
     for field in common_types::design::DESIGN_FILE_FIELDS {
         writeln!(file, "  {}: {:?},", field.key, field.owner.as_str())?;
@@ -153,11 +169,6 @@ pub(crate) fn render_canopi_design_format() -> Result<String, Box<dyn std::error
     )?;
     writeln!(
         file,
-        "export const MIN_SUPPORTED_CANOPI_FILE_VERSION = {}",
-        common_types::design::MIN_SUPPORTED_CANOPI_FILE_VERSION,
-    )?;
-    writeln!(
-        file,
         "export const WEB_MERCATOR_MAX_LATITUDE_DEG = {:?}",
         common_types::design::WEB_MERCATOR_MAX_LATITUDE_DEG,
     )?;
@@ -166,6 +177,41 @@ pub(crate) fn render_canopi_design_format() -> Result<String, Box<dyn std::error
         "export const FUTURE_CANOPI_FILE_VERSION_POLICY = {:?} as const\n",
         common_types::design::FUTURE_CANOPI_FILE_VERSION_POLICY,
     )?;
+    writeln!(
+        file,
+        "export const SAVED_VIEW_MAX_ZOOM = {:?}",
+        common_types::views::SAVED_VIEW_MAX_ZOOM,
+    )?;
+    writeln!(
+        file,
+        "export const SAVED_VIEW_MAX_GROUND_SIZE_M = {:?}",
+        common_types::views::SAVED_VIEW_MAX_GROUND_SIZE_M,
+    )?;
+    writeln!(
+        file,
+        "export const RICH_TEXT_LINK_SCHEMES = {} as const",
+        serde_json::to_string(common_types::views::RICH_TEXT_LINK_SCHEMES)?,
+    )?;
+    writeln!(
+        file,
+        "export const STORY_IMAGE_DATA_TYPES = {} as const",
+        serde_json::to_string(common_types::views::STORY_IMAGE_DATA_TYPES)?,
+    )?;
+    writeln!(
+        file,
+        "export const STORY_IMAGE_MAX_BYTES = {}",
+        common_types::views::STORY_IMAGE_MAX_BYTES,
+    )?;
+    writeln!(
+        file,
+        "export const STORY_IMAGES_MAX_TOTAL_BYTES = {}\n",
+        common_types::views::STORY_IMAGES_MAX_TOTAL_BYTES,
+    )?;
+    file.push_str("export const OBSOLETE_CANOPI_ROOT_KEYS = [\n");
+    for key in common_types::design::OBSOLETE_CANOPI_ROOT_KEYS {
+        writeln!(file, "  {:?},", key)?;
+    }
+    file.push_str("] as const\n\n");
     file.push_str("export const CANOPI_DESIGN_INGESTION_ERROR_KINDS = [\n");
     for kind in common_types::design::CanopiDesignIngestionErrorKind::ALL {
         writeln!(file, "  {:?},", kind.as_str())?;

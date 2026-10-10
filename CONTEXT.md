@@ -1,632 +1,157 @@
 # Canopi Design Domain
 
-Canopi helps people create agroecological designs for permaculture, syntropic agriculture, and food forests. This glossary defines the product's domain language, independent of storage format, UI components, or implementation details.
+Canopi helps people create agroecological designs for permaculture, syntropic agriculture and food forests. This glossary defines the product's domain language. Every term is the name the interface uses (`desktop/web/src/i18n/en.json`; translations in the [UI glossary](docs/guides/ui-glossary.md)); the few architecture terms at the end name authorities, not screens. Code, guides, ADRs and bd use these words.
 
-## Language
+## Designs and files
 
-**Design**:
-An agroecological plan that combines plants, spatial layout, scheduling, budget, consortium planning, and site information. A design may be saved as a `.canopi` file, but "design" is the user-facing domain term.
-_Avoid_: Document, file, project
+**Design**: An agroecological plan drawn on the map: plants, zones, notes, measurements, planning (Calendar, Budget, Consortium), saved views and stories. Saved as a `.canopi` file; "Design" is always capitalised. _Avoid:_ Document, file, project
 
-**Canvas PDF**:
-A printable, shareable representation of selected Layers from a Design's spatial layout, with local plant-identification keys on field sheets. A Canvas PDF may contain an overview fitted to printable objects and detail-sheet coverage, plus numbered detail pages focused on drawn Print Areas; the editable Design remains the source of truth.
-_Avoid_: Design Report, Design file, canvas screenshot
+**Draft**: A Design that has no `.canopi` file yet. Every new Design starts as one; Desktop keeps drafts in app data until Save as…, the Web Edition in the browser, their only home. _Avoid:_ Autosave backup, untitled file
 
-**Print Area**:
-A temporary rectangle selected over a Design's spatial layout to define a Canvas PDF detail page. A Print Area belongs to the export setup, remains independent of Zones, and does not create or modify the Design's spatial features. Export never adds Print Areas for annotations; notes that cannot fit on the overview and lie outside chosen detail coverage are omitted.
-_Avoid_: Zone, Zone Draft
+**Home**: Where a Design Session writes: the `.canopi` file it was opened from or saved as (Desktop), or a Draft. Save as… moves it to a file; a Web download never changes it. _Avoid:_ Save location, target
 
-**Design Session**:
-The active runtime context for a Design in the app. A design session includes the current Design state, dirty baselines, save/autosave behavior, queued Design loads, lifecycle workflows, and an optional attached canvas runtime.
-_Avoid_: Document session, file session, canvas session
+**Continuous Save**: Canopi's always-on saving: changes are written to the Home shortly after each change, when the window is left, before another Design replaces it and on close. The user is asked only when a write fails or the file changed outside Canopi. _Avoid:_ Autosave, save prompt
 
-**Web Edition**:
-A browser-accessible Canopi experience that creates, opens, edits, and exports real Designs. A web edition may omit desktop-only or planning-heavy surfaces, but it is not a separate sketch format, static catalog, or website-only demo.
-_Avoid_: Web sketch, catalog site, demo app
-_Note_: Web Edition v1 omits the visible Location Workbench and Recent Design list while preserving the saved Spatial Frame and browser-local autosave state behind the app surface.
+**Design Session**: The runtime context of the open Design: its state, Home, Continuous Save, lifecycle workflows and the attached scene runtime. _Avoid:_ Document session
 
-**Browser App Shell**:
-The Web Edition workspace chrome for starting, opening, resuming, downloading, and navigating Designs in a browser. A browser app shell presents web-appropriate commands around the shared Canopi app core rather than reproducing desktop window or native file-management chrome.
-_Avoid_: Desktop title bar, website navigation, embedded widget
+**Start screen**: What the app shows when no Design Session is active: New Design, Open Design… (Web: Open a .canopi file…), Drafts and, on Desktop, Recent Designs. A Design that cannot open says why, never a path. _Avoid:_ Welcome screen, homepage
 
-**Welcome Screen**:
-The app-opening state shown when no Design Session is active. A welcome screen may offer entry points such as creating a new design, opening an existing design, or reopening a recent design, but it is not itself a Design and does not have a user-editable Design name.
-_Avoid_: Homepage, empty design, untitled design
+**Recent Design**: A Desktop reference to a `.canopi` file opened or saved before, with its sketch and counts. A file that cannot open shows its name and why. _Avoid:_ Recent file, history item
 
-**Recent Design**:
-A previously opened or saved design reference that lets the user reopen that design from the app-opening experience. A recent design points to a saved design location; if that location is definitely gone, the reference is stale rather than a design the user can reopen.
-_Avoid_: Recent file, recent document, history item
+**Design notebook**: The Desktop panel that lists saved Designs in user-named sections. It stores references and organisation only; the `.canopi` file stays the authority. Not in the Web Edition. _Avoid:_ File browser, project folder
 
-**Design Notebook**:
-The desktop app-level workspace for finding, organizing, and switching between saved Designs. A design notebook stores organizing metadata and references to saved Design locations only; the saved `.canopi` Design remains the authority for design content and Design name, and switching to a notebook entry starts a different Design Session rather than merging designs.
-_Avoid_: File browser, recent list, project folder
+**Web Edition**: Canopi in a browser: the same map canvas, panels, stories and PDF export with a reduced Plant catalog and browser-local Drafts; it cannot import or show terrain data but keeps a Design's terrain layers for Desktop. It is a real editor, not a demo or a website. _Avoid:_ Web sketch, demo app
 
-**Species Key**:
-The Design’s searchable index of placed Species. Each entry pairs a Species Code with names, authored appearances, and the number of placed Plants. It identifies existing Plants; the Species Catalog discovers Species for placement.
+**GeoJSON import and export**: A Design's objects as a WGS84 FeatureCollection. Import adds ordinary Design objects in one undoable step. _Avoid:_ Shapefile import
 
-**Species Code**:
-A short, unique reference for a Species within one Design, derived initially from its canonical name. A Design reserves assigned codes even when its last Plant of that Species is removed, so later additions do not rename existing references. Codes accompany the on-canvas key and printed detail sheets; they do not replace canonical Species identity.
+**Design template**: A static `.canopi` file offered as a starting Design. Web Edition only, hidden unless templates are configured. _Avoid:_ Community template
 
-**Species Focus**:
-A temporary viewing state that keeps one Species prominent while dimming other Plants. It survives switching side panels, is visibly clearable on the Canvas, and resets for a different Design. Focus changes neither Plant selection nor saved content.
+## Map and coordinates
 
-**Browser Draft**:
-A Web Edition Design snapshot saved in the current browser profile to preserve active work for autosave and recovery. A browser draft is internal convenience state, not a visible workspace, portable `.canopi` file, Design Notebook entry, saved path reference, or cloud-synced library item.
-_Avoid_: Notebook entry, recent file, autosave backup
+**Map canvas**: The design surface is the map itself: basemap, satellite, terrain data, contours and hillshading are its background. There is no separate local canvas and no Design location. The view can turn; editing stays top-down. _Avoid:_ sketch, Design location
 
-**Notebook Section**:
-A user-named, manually ordered grouping inside the Design Notebook. A notebook section organizes saved Design references one-to-many: a saved Design reference belongs to at most one notebook section, and section membership is personal app organization rather than saved Design content.
-_Avoid_: Folder, tag, category
+**Session plane**: The runtime's local metre plane for the open Design, centred on the objects. Files store WGS84 longitude/latitude; the session plane converts to metres for tools, snapping, measurements and PDF layout. _Avoid:_ Anchor, spatial frame
 
-**Design Edit**:
-A non-canvas change to Design-owned state, including Location, Budget Items, Timeline Actions, Consortiums, description, and extra fields. Design Edit owns no-op detection, preview/commit/abort transaction behavior, and non-canvas dirty-state marking behind the Design Session seam. It does not own canvas scene state, save/load lifecycle, or UI draft state.
-_Avoid_: Document mutation, panel action, direct currentDesign write
+**Background**: The choice in Layers' Map section: Satellite, Street map or None (plain paper), with its opacity and Soften background. An app setting shared by every Design. _Avoid:_ Basemap layer, Design layer
 
-**App Command Graph**:
-The app runtime seam for user command identity, labels, availability, shortcuts, dispatch, and chrome projections such as menus, palettes, toolbars, and panel navigation. The app command graph coordinates command access to Design Session, canvas, settings, and shell state without owning those domain states.
-_Avoid_: Menu registry, shortcut map, toolbar state
+**Online elevation**: Contour lines and Hillshading, drawn from online elevation, not from imported data, listed in Layers' Map section. App settings, not Design content. _Avoid:_ Map layers, Site data
 
-**Canvas Runtime Surface**:
-The app-facing seam for canvas runtime behavior, split by role into command, query, and Design Session document surfaces. Canvas runtime surfaces expose canvas capabilities to app modules while hiding SceneStore, renderers, tool state machines, history internals, and app adapters. Canvas runtime core should not import app modules; app-owned settings, Design Session clean-state updates, save composition, and Target Presentation cross through explicit adapters.
-_Avoid_: Raw runtime, canvas service, renderer API
+**Place search**: The title-bar field (Search a place…, Ctrl K) that finds a place by name (on Enter) or by typed coordinates and moves the view there. Only the camera moves; objects never do. _Avoid:_ Location editing, geocoding
 
-**Canvas Runtime App Adapter**:
-A concrete adapter that connects Canvas Runtime Surface implementation to app-owned state such as settings projection, Design Session dirty-state, Design file composition, and Target Presentation. Canvas runtime app adapters belong at the app/canvas seam and must not become canvas scene authority.
-_Avoid_: Runtime helper, app bridge, global canvas state
+**Last view**: The map centre and zoom Canopi remembers on this device; "Where is your site?" opens a new Design north-up over it. _Avoid:_ Design location, default site
 
-**Spatial Frame**:
-The required geographic placement of a Design: one WGS84 anchor, the Design's north bearing, Placement Status, and site metadata. Design objects retain local-metre geometry; changing the spatial frame intentionally changes their geographic placement without changing that geometry.
-_Avoid_: Optional Location, map center, viewport
+**Saved view**: A named camera position and direction kept in the Design (View › Save current view…), with the background, layers, labels and focused species it showed, and a picture. Going to a view moves only the camera. _Avoid:_ Bookmark, camera preset
 
-**Placement Status**:
-Whether a Design's Spatial Frame is `provisional` or `confirmed`. Provisional placement supports local editing and independently georeferenced raster work without claiming a real site. Visibility of geographic layers and camera movement never confirm placement.
-_Avoid_: Location visibility, map readiness
+**Turn the view**: Rotate the map so north is no longer up (Shift + right-drag, Shift + ← or →, the compass, two fingers). Objects keep their stored angle. _Avoid:_ Rotate the map, spin (Rotate… turns objects)
 
-**Shared Spatial Workspace**:
-The active Canvas composition that presents local botanical editing and geographic contributions through one camera and render lifecycle. MapLibre owns the live camera and frame while the shared renderer is active; Canvas2D owns the fallback camera only after an explicit handoff. The workspace derives presentation from Design, Scene, LiDAR, settings, and Target authorities without owning them.
-_Avoid_: Second map canvas, camera follower, map-owned Design state
+**Reset north**: Turn the view back to north up (N, Shift N, Shift + ↑, a compass click). _Avoid:_ Reset rotation, north-up mode
 
-**Canvas Map Surface**:
-A historical implementation name retained in some module paths and map-status types. The previous standalone follower surface is retired; use Shared Spatial Workspace for the active composition and do not introduce another map or camera authority under this name.
-_Avoid_: Active workspace authority, second renderer surface
+**Compass**: The zoom-group button whose needle points north: click to reset north, drag its ring to turn the view. _Avoid:_ North arrow (the PDF's), orientation button
 
-**MapLibre Host**:
-The app runtime seam for MapLibre resource lifetime across map-backed surfaces, including lazy loading, map creation, teardown, resize observation, basemap style rebuilds, preserved view state, and initialization failure state. The MapLibre Host does not own Design data, Spatial Frame edits, Design Template selection, workspace camera commands, terrain, or Target Presentation overlays; those remain in caller-specific adapters.
-_Avoid_: Map component, map helper, direct maplibregl ownership
+**Story**: An ordered set of steps kept in the Design, each showing a saved view with a title, text and pictures. Present shows a story full-window. Presenting never changes the Design. _Avoid:_ Slideshow, tour
 
-**MapLibre Surface Adapter**:
-The typed adapter seam above the MapLibre Host for map-backed surfaces. A MapLibre Surface Adapter owns typed current-map access, per-map event listener cleanup, map-lifetime cleanup callbacks, and forwarding host lifecycle events to a caller-specific adapter. It does not own Design data, Spatial Frame edits, Design Template selection, workspace camera commands, terrain, markers, or Target Presentation overlays.
-_Avoid_: Map component helper, host wrapper, map ref state
+## Design objects
 
-**Canvas Layer Presentation**:
-The app-facing presentation seam for Layer chrome, map layer visibility, terrain layer controls, active layer selection, Placement Status cues, and layer-related commands. Canvas Layer Presentation turns scene Layer state, settings-backed map layer preferences, terrain settings, and Spatial Frame readiness into caller-ready layer read models while routing writes to the correct authority. It does not own Design data, Scene Edit state, placement drafts, Shared Spatial Workspace lifecycle, or settings persistence.
-_Avoid_: Layer panel state, map layer helper, terrain UI state
-
-**Problem Report**:
-A user's description of a problem they encountered while using Canopi. A problem report may include reproduction context and a diagnostic bundle, but it is not the confirmed defect itself.
-_Avoid_: Bug report, issue, feedback
-
-**Report Summary**:
-A plain-text summary of a problem report that a user can copy into their chosen support channel. A report summary should be easy to find alongside any diagnostic bundle.
-_Avoid_: Issue body, debug text, support template
-
-**Diagnostic Bundle**:
-A user-approved package of troubleshooting evidence shared with a problem report. A diagnostic bundle contains support context only when the user chooses to include it.
-_Avoid_: Logs, debug export, support zip
-
-**Species**:
-A botanical catalog entry that describes a plant taxon and its ecological, morphological, agronomic, risk, use, and media data. A species is identified by its canonical name and may have common names.
-_Avoid_: Plant, catalog plant, database plant
-
-**Species Catalog**:
-The searchable collection of species and their supporting data used when selecting plants for a design. Species in the catalog are not part of a design until they become placed plants.
-_Avoid_: Plant catalog, plant database
-
-**Species Catalog Workbench**:
-The interaction surface for browsing, filtering, selecting, favoriting, and inspecting species from the Species Catalog. The workbench coordinates Species Catalog UI state, but it does not own Species Catalog data or Design workflows.
-_Avoid_: Plant browser state, plant DB panel state
-
-**Species Catalog Search**:
-A text search interaction inside the Species Catalog Workbench. Species Catalog Search uses the selected app language for Common Name matching and display, while Canonical Name and botanical taxonomy remain language-neutral ways to find species.
-_Avoid_: Plant database search, global common-name search
-
-**Species Catalog Filter**:
-A search criterion that narrows Species Catalog results by Species attributes such as climate fit, growth form, ecological role, risk, use, or morphology. A species catalog filter is user-facing behavior even when its implementation is backed by generated metadata, SQL columns, related tables, or bespoke predicates.
-_Avoid_: Plant filter, SQL filter, column filter
-
-**Species Catalog Read Projection**:
-A storage-backed read model that translates Species Catalog rows into caller-oriented data for search, detail, favorites, or recently viewed Species. A species catalog read projection owns query shape, row mapping, parameter binding, and localized Common Name hydration; consuming workflows add their own interpretation.
-_Avoid_: Raw species row, SQL result, ad hoc lookup
-
-**Canonical Name**:
-The normalized name Canopi uses to identify a species. A species has one canonical name in Canopi, even when it has synonyms or multiple common names.
-_Avoid_: Scientific name, Latin name, species name
-
-**Common Name**:
-A language-scoped local or everyday name for a species. A species may have many common names, and common names are display aids rather than stable identifiers; a common name in one language should not stand in for a missing common name in another language.
-_Avoid_: Species identifier, primary key
-
-**Matched Common Name**:
-A selected-language Common Name that explains why a Species appeared in Species Catalog Search results. A matched common name may differ from the Species' primary displayed Common Name, but it should not come from another language.
-_Avoid_: English fallback match, hidden match
-
-**Placed Plant**:
-An instance of a species positioned inside a design. Multiple placed plants may refer to the same species.
-_Avoid_: Species, plant record, catalog item
-
-**Plant Symbol**:
-A user-chosen built-in marker shape used to visually distinguish placed plants in a design. A placed plant may have its own plant symbol, and a design may define a default plant symbol for a species' placed plants; the symbol sits within the placed plant's Visual Footprint and is design-owned presentation, not Species Catalog data, physical geometry, or imported artwork.
-_Avoid_: Custom icon, uploaded icon, SVG asset
-
-**Plant Form Symbol**:
-A botanical plant symbol that suggests a visible form, such as a canopy, palm, fern, rosette, or climber. Plant Form Symbols are a compact visual vocabulary chosen by the designer, not a botanical classification, catalog value, or validation rule. Life cycle, aquatic habitat, epiphytic attachment, and species identity do not require separate symbols.
-_Avoid_: Growth form value, inferred species icon, botanical claim
-
-**Abstract Plant Symbol**:
-A simple geometric plant marker whose meaning is assigned by the designer. Abstract Plant Symbols complement botanical forms; neither shape nor color alone guarantees a unique species identity.
-_Avoid_: Botanical form, species identifier
-
-**Zone**:
-A named spatial feature in a design, optionally typed by ecological or functional purpose. A design may contain many zones, and zones may overlap placed plants, other zones, or linear boundaries.
-_Avoid_: Shape, polygon, region
-
-**Zone Draft**:
-An in-progress zone boundary that a user is still drawing. A zone draft is not part of the design until the user finishes it as a Zone.
-_Avoid_: Temporary shape, unsaved polygon, canvas draft
-
-**Polygonal Zone**:
-A zone whose boundary is defined by three or more zone edges. A polygonal zone is still a zone; "polygonal" describes its boundary geometry.
-_Avoid_: Polygon, shape
-
-**Rectangular Zone**:
-A zone whose boundary is defined by four right-angled zone edges. A rectangular zone may be rotated in the design; "rectangular" describes the zone geometry, not its alignment to the canvas.
-_Avoid_: Axis-aligned rectangle, box, shape
-
-**Elliptical Zone**:
-A zone whose boundary is an ellipse. An elliptical zone may be rotated in the design; "elliptical" describes its boundary geometry, not its alignment to the canvas.
-_Avoid_: Oval, shape
-
-**Linear Zone**:
-A zone whose geometry is one straight zone edge with two endpoints. A linear zone represents a boundary, row, path, or other linear feature rather than an enclosed area.
-_Avoid_: Line object, measurement guide, spacing guide
-
-**Zone Edge**:
-One straight boundary segment of a zone. A linear zone has one zone edge, a polygonal zone has many zone edges, a rectangular zone has four zone edges, and an elliptical zone has no zone edges.
-_Avoid_: Line, stroke
-
-**Zone Measurement**:
-A derived physical size description of a zone or zone edge, such as width, height, edge length, or area. A zone measurement describes the zone's current geometry; it is not a separate design object.
-_Avoid_: Shape metadata, annotation, label
-
-**Measurement Guide**:
-A persistent straight measuring aid in a design with two endpoints and a derived distance. Its line remains visible; Automatic Detail reveals the distance when space allows or the guide is inspected. A measurement guide helps a designer read distance without making the line an ecological boundary, spacing instruction, or text note.
-_Avoid_: Linear Zone, Spacing Guide, ruler line
-
-**Zone Control Point**:
-An on-canvas point a designer can drag to reshape a selected zone. Zone control points are editing affordances for a zone's geometry; they are not separate design objects or zone measurements.
-_Avoid_: Shape handle, vertex handle, resize knob
-
-**Annotation**:
-A text note positioned in a design. An annotation explains or labels part of the design without becoming a zone, placed plant, or timeline action.
-_Avoid_: Label, comment
-
-**Design Object**:
-A canvas-positioned part of a design, such as a placed plant, zone, annotation, measurement guide, or object group. Design objects are the things users arrange spatially in the design.
-_Avoid_: Canvas object, shape, element
-
-**Rotation Pivot**:
-The point around which one or more selected design objects turn during a rotation.
-_Avoid_: Origin, anchor, center point
-
-**Rotation Handle**:
-The on-canvas control a user drags to rotate the current design object selection.
-_Avoid_: Rotation button, spin control, transform widget
-
-**Selection Action Toolbar**:
-A compact contextual canvas toolbar for commands that act on the current editable design object selection, such as locking, grouping, or precision transforms.
-_Avoid_: Canvas toolbar, inspector, floating card
-
-**Canvas Context Menu**:
-A compact canvas-scoped menu for common edit commands such as Copy, Paste, and Delete. A canvas context menu may act on the current editable design object selection or on a canvas point for paste placement, but it is not the Selection Action Toolbar.
-_Avoid_: Browser menu, right-click menu, action bar
-
-**Species Selection**:
-A canvas selection gesture that selects visible editable placed plants of the same species as a reference placed plant. Species selection uses Canonical Name identity and is temporary interaction state, not a planning Target.
-_Avoid_: Species target, select similar, same common name
-
-**Design Object Rotation**:
-A scene edit that turns one or more selected design objects around a rotation pivot, changing their visible orientation or geometry in the design.
-_Avoid_: Orientation field, group transform, element rotation
-
-**Design Object Lock**:
-A saved editing constraint on a design object that prevents direct selection, transformation, deletion, and reuse as an object stamp source while leaving the object visible and discoverable in the design. A design object lock belongs to the design, not only to the design session, and is stored with the locked design object rather than in a separate top-level lock list. If an object group contains a locked design object, the object group cannot be moved, deleted, stamped, or otherwise edited in a way that mutates the locked member.
-_Avoid_: Selection lock, runtime lock
-
-**Visual Footprint**:
-The visible on-screen presence of a design object or its readable presentation aids at the current zoom level. A visual footprint may differ from the object's real-world geometry when readability requires it.
-_Avoid_: Object scale, canvas scale, display size
-
-**Automatic Detail**:
-The presentation that reveals plant symbols, names, annotations and measurements as available space allows. On the Canvas this uses screen space; Canvas PDF uses physical page space, collision-only plant enclosures, readable annotations, aligned measurements and complete adaptive keys. Its overview groups stored guide values and native Zone dimensions without generating a Species key. Automatic Detail changes what is readable at a given zoom without changing the Design or its authored presentation choices.
-_Avoid_: Display by mode, canopy sizing, automatic design editing
-
-**Inspection Lens**:
-A temporary magnified view of a small part of the Canvas, with plant names beside their positions inside the frame while the surrounding Design remains in view. Its magnification adapts to planting density, and the frame can be expanded. Holding the lens fixes its inspection location; it does not pin plant names or create a Design Object.
-_Avoid_: Planting strip, Print Area, second Design
-
-**Plant Drag Distance Guide**:
-A temporary on-canvas distance cue shown while dragging a placed plant. A plant drag distance guide describes the center-to-center distance from the active dragged placed plant to nearby non-dragged placed plants, and it is not saved in the design.
-_Avoid_: Plant spacing interval, zone measurement, ruler
-
-**Selection Label**:
-A temporary visible name label shown only when one unpinned placed plant is the current selection. A selection label helps identify the current selection and is not saved in the design.
-_Avoid_: Pinned Plant Name, annotation, hover tooltip
-
-**Pinned Plant Name**:
-A saved choice to display the name of an individual placed plant in a design, subject to zoom and local screen space on the canvas. Pinned names take priority over automatic names. A pinned plant name is a presentation aid; hiding it at low zoom does not unpin the name or lock the placed plant.
-_Avoid_: Locked plant name, Design Object Lock, annotation
-
-**Layer**:
-A fixed visibility and locking group for design objects. A design has many layers, and each layer controls whether its objects are visible, locked, and how opaque they appear; layers are not arbitrary user-created folders.
-_Avoid_: Category, folder, custom layer
-
-**Data Layer**:
-A reusable library collection of ordered geographic raster sources describing one measurement. Higher-priority valid source samples cover lower-priority samples for both display and analysis; hiding the Data Layer in a Design changes only its presentation.
-_Avoid_: Canvas Layer, merged file, source folder
-
-**Data Source**:
-One independently interpreted raster occurrence in a Data Layer. Moving it changes overlap priority; removing it changes the current composition without erasing retained history.
-_Avoid_: Canvas object, display layer
-
-**Scene Edit**:
-A runtime change to canvas-owned design state, including placed plants, zones, annotations, object groups, layers, plant species colors, plant species symbols, and guides. A scene edit is the canvas mutation concept that owns undo/redo history, dirty-state updates, mirror projections, and render invalidation for canvas state.
-_Avoid_: Canvas mutation, layer signal write, scene patch
-
-**Object Group**:
-A named or unnamed flat collection of design objects whose members move or transform together. An object group may contain placed plants, zones, or annotations across Layers; the group itself is not a separate visible design shape and object groups do not nest inside object groups.
-_Avoid_: Layer, selection
-
-**Plant Stamp**:
-An interaction for placing repeated placed plants from a chosen species. A plant stamp starts from Species Catalog data and creates new placed plants in the design.
-_Avoid_: Object stamp, clone tool
-
-**Plant Stamp Source**:
-The Species-derived source currently chosen for Plant Stamp placement, including the canonical name, Common Name, Stratum, and canopy spread needed to create placed plants from click or drag interactions. A plant stamp source is runtime interaction state, not a design object.
-_Avoid_: Plant stamp payload, plant stamp signal, dragged plant JSON
-
-**Object Stamp**:
-An interaction for sampling an existing design object and placing repeated copies of it. An object stamp starts from a design object already in the design, not from Species Catalog data.
-_Avoid_: Plant stamp, copy/paste
-
-**Saved Object Stamp**:
-A named personal reusable snapshot of one or more design objects that a designer can save and place into designs later, primarily for multi-object arrangements of placed plants, zones, annotations, and captured object groups. Saved object stamps preserve visible arrangement details while excluding non-visual planning details and lock state; placing one creates unlocked ordinary design objects, selects the newly placed objects without implying a new object group, and leaves the original source objects unchanged.
-_Avoid_: Template, Design Template, favorite plant, object group
+**Design object**: Anything placed on the map canvas: a placed plant, zone, text note, measurement or group. Positions are stored as longitude/latitude. _Avoid:_ Canvas object, shape, element
 
-**Plant Spacing**:
-An interaction for repeating a sampled placed plant along a chosen spacing guide at a chosen interval. Plant spacing starts from a placed plant already in the design and creates additional placed plants of the same species.
-_Avoid_: Line tool, interval tool, linear stamp
+**Placed plant**: One instance of a species positioned in a Design. Many placed plants share a species. _Avoid:_ Species, catalog item
 
-**Spacing Guide**:
-A temporary guide used to choose a direction, length, and interval for plant spacing. A spacing guide is not a design object.
-_Avoid_: Line, ruler line, spacing object
+**Plant symbol**: The marker a placed plant draws, chosen by the designer from four families: plant form, what it gives, what it does and abstract marks. Any symbol takes any colour. Design-owned presentation, not catalog data. _Avoid:_ Custom icon, uploaded icon
 
-**Plant Spacing Interval**:
-The positive center-to-center distance between placed plants in plant spacing. A plant spacing interval is expressed as a physical distance, not as canopy overlap or plant radius.
-_Avoid_: Gap, radius, endpoint spacing
+**Plant label**: The code or name shown beside a placed plant. View › Labels chooses None, Codes or Names for the Design; Show name pins one plant's name. _Avoid:_ Annotation, tooltip
 
-**Location**:
-The user-facing actual site projected from a confirmed Spatial Frame, expressed as latitude, longitude, and optionally altitude. Every Design has a Spatial Frame; a provisional frame supplies a computational anchor without asserting a Location.
-_Avoid_: Optional coordinate authority, map pin, camera center
+**Species focus**: A temporary view state that keeps one species prominent and dims the others. Saved views remember it; it changes neither selection nor content. _Avoid:_ Filter, selection
 
-**Location Workbench**:
-The interaction surface for previewing, confirming, resetting, presenting, and validating a Design's Spatial Frame and Location. A Location Workbench may support address search, coordinate entry, map picking, and altitude where the product surface offers them, but it does not own canvas scene data.
-_Avoid_: Map panel state, location input state, basemap status helper
+**Zone**: An area or line drawn in a Design, typed by its shape: Polygon zone, Rectangle zone, Ellipse zone or Line zone. _Avoid:_ Shape, region
 
-**Location Notice**:
-A user-facing cue that reports active site/map readiness for a design with a Location, such as loading, precision, or map/terrain availability. A clean ready map does not need a location notice or coordinate summary. A location notice is informational; it does not set, clear, or validate the design's location.
-_Avoid_: Basemap feedback, map warning, location tooltip
+**Zone display name**: A zone's name where it has one (Rename zone…), otherwise its type and size ("Rectangle zone · 120 m²"). Panels never show an internal id. _Avoid:_ Zone id, label
 
-**Climate Zone**:
-A broad climate classification associated with a site or design template. Climate zone helps designers compare templates and site suitability at a high level.
-_Avoid_: Hardiness zone
+**Text note**: A positioned text object in a Design. _Avoid:_ Annotation, label, comment
 
-**Hardiness Zone**:
-A plant cold-tolerance zone used to assess whether a species is suitable for a target site. A species may have minimum and maximum hardiness zones.
-_Avoid_: Climate zone
+**Measurement**: A persistent straight measuring aid with two endpoints and a derived distance, drawn with Measure. Not a boundary or row. _Avoid:_ Line zone, ruler line
 
-**Timeline Action**:
-A scheduled action in a design, such as planting, maintenance, or another work item. A timeline action may have dates, recurrence, dependencies, completion state, and targets in the design.
-_Avoid_: Event, task, calendar item
+**Group**: Design objects that move and transform together (Arrange › Group). Groups do not nest. _Avoid:_ Layer, selection
 
-**Timeline Action Workbench**:
-The interaction surface for creating, editing, deleting, completing, and selecting timeline actions in Calendar. The timeline action workbench coordinates action forms and target presentation, but it does not own Design data.
-_Avoid_: Timeline popup, event editor, task workbench
+**Layer**: A fixed visibility and locking group of Design objects (Annotations, Plants, Measurement guides, Zones) in the Design section of Layers. Not user-created folders. _Avoid:_ Folder, category
 
-**Calendar**:
-The right-dock presentation of Timeline Actions. Calendar provides month and agenda views, civil-date editing, completion, search, and explicit target editing while Timeline Action data remains owned by the Design.
-_Avoid_: Timeline canvas, calendar data store, event database
+**Lock**: A saved constraint on a Design object that stops selection, moving, deleting and copying while keeping it visible. Edit › Unlock all releases every lock as one Undo. _Avoid:_ Selection lock
 
-**Budget Item**:
-A cost entry in a design. A budget item may refer to a species, placed plant, zone, or manual line item and contributes to the design's budget.
-_Avoid_: Price, estimate row
+**Selection chip**: The chip at the bottom of the map that names the selection ("12 plants · 3 species · 0.52 m apart", "Zone · Z04 · 118 m² · 46 m") with Select all of this species, Rename… and Clear selection. _Avoid:_ Status bar, inspector
 
-**Budget Item Workbench**:
-The interaction surface for editing budget item prices, choosing budget currency, exporting budget data, and presenting budget item targets. The budget item workbench coordinates budget UI state and commands, but it does not own placed plants or the planning projection.
-_Avoid_: Budget tab state, price editor helper, CSV helper
+**Right-click menu**: The one context menu for objects and the empty map (a still right-click, the Menu key or Shift F10; a right-drag pans): Cut, Copy, Paste, Duplicate, Plant color, Plant symbol, Arrange, Save as stamp, Lock, Rotate…, Species details, Add to calendar…, Set unit cost… and more. _Avoid:_ Selection toolbar, action bar
 
-**Target**:
-The design subject that a timeline action, budget item, or other planning entry refers to. A target may identify a species, a placed plant, a zone, or a manual entry.
-_Avoid_: Panel target, link, reference
+**Tool card**: The card beside the tool rail that names the active tool, what to do now and its keys. _Avoid:_ Toolbar hint, status text
 
-**Target Presentation**:
-Runtime presentation state that connects targets from planning surfaces, canvas hover, and map overlays. Target presentation may mark hovered or selected targets and their origin, but it must not mutate Design data, canvas selection, labels, dirty state, or history.
-_Avoid_: Panel target state, canvas selection, planning projection state
+**Inspection lens**: A temporary magnified view of a small part of the map with plant names beside their positions. It creates no Design object. _Avoid:_ Print area, second Design
 
-**Planning Projection**:
-A runtime read model that combines Design planning entries, placed plants, localized species names, and targets for planning surfaces such as timeline, budget, and consortium views. A planning projection does not own Design data, canvas scene data, or Target Presentation lifecycle; it only derives view-ready planning rows from those authorities.
-_Avoid_: Panel view model, budget row helper, tab bridge
+## Placing tools
 
-**Consortium**:
-A stratified, time-aware plant assembly in a design. A consortium describes which species participate, which stratum they occupy, and which succession phases they span.
-_Avoid_: Guild, companion planting group
+**Place plants**: The tool that places one species per click, with a chooser (species in the Design, Favorites, recent, search, the catalog). _Avoid:_ Plant stamp, clone tool
 
-**Consortium Entry**:
-One species' participation in a consortium, with one Stratum and one Succession Phase span. The span includes both its starting and ending succession phases, and the entry is species-level planning, not an individual placed plant.
-_Avoid_: Plant row, plant bar, placed plant entry
+**Plant a row**: The tool that repeats a species along a drawn line at an Interval, the centre-to-centre distance. _Avoid:_ Spacing tool, linear stamp
 
-**Consortium Lane**:
-A derived visual track within a Stratum that can contain multiple Consortium Entries when their Succession Phase spans do not overlap. Overlapping entries are presented in separate consortium lanes, and designers do not manage consortium lanes directly.
-_Avoid_: Row, sub-lane, slot
+**Stamp**: A copy source for Place a stamp: an object picked on the map, or a saved stamp. Copies land unlocked and selected; the source never changes. _Avoid:_ Template, clone
 
-**Stratum**:
-A vertical layer in a consortium, such as emergent, high, medium, or low. A consortium entry belongs to one stratum.
-_Avoid_: Layer, row, height band
+**Saved stamps**: Named personal snapshots of selected objects (plants, zones, notes, groups), kept outside Designs in Favorites and stamps, importable and exportable. They keep visible arrangement, not planning data or locks. _Avoid:_ Template, Design template
 
-**Succession Phase**:
-A time phase in a consortium's development, from early establishment through climax. A consortium entry spans one or more succession phases.
-_Avoid_: Timeline action, stage
+## Plants and the catalog
 
-**Consortium Time Model**:
-The ordered Succession Phases, ordered Strata, default Consortium entry timing, and clamping rules used by Consortium planning and presentation. The consortium time model defines time and Stratum meaning; renderers and interaction modules consume it rather than owning those facts.
-_Avoid_: Consortium renderer constants, timeline model
+**Plant catalog**: The searchable species database with filters, details, photos and Favorites. Guides call the subsystem the species catalog. A species enters a Design only as placed plants. _Avoid:_ Plant database, species browser
 
-**Design Template**:
-A reusable design that can be imported as the starting point for a new design. A design template usually includes location, placed plants, and descriptive metadata.
-_Avoid_: Community template, file template
+**Species**: A catalog entry describing a plant taxon, identified by its canonical name. _Avoid:_ Plant, catalog plant
 
-**Site Adaptation**:
-A retired concept for checking whether Species in a Design or Design Template suit a target site. ADR 0023 records that Canopi has no mounted Site Adaptation workflow; current Design Template imports open as Designs without compatibility or replacement steps.
-_Avoid_: Template adaptation, plant review
+**Canonical name**: The scientific name Canopi uses to identify a species; one per species. _Avoid:_ Latin name, species name
 
-## Flagged Ambiguities
+**Common name**: A language-scoped everyday name. Lists show the name in the interface language; when none exists they show the English name marked "(en)". A common name never stands in for another language. _Avoid:_ Species identifier
 
-**Document vs Design**:
-Use **Design** for the user's agroecological plan. Reserve "document" and "file" for implementation, persistence, or agent-facing technical docs.
+**Species code**: A short unique code for a species within one Design (IBM Plex Mono). A Design keeps assigned codes even after the last plant of that species is removed. _Avoid:_ Species id
 
-**Design vs Canvas PDF**:
-A **Design** includes spatial layout and planning information. A **Canvas PDF** communicates the spatial layout on paper or for sharing; it does not replace the editable Design or imply inclusion of Timeline, Budget, and Consortium information.
+**Plants in this Design**: The panel listing the placed species with counts, colours, symbols and Display on the map (colour by Species, Stratum or One color; Symbol size; Outline; Labels). _Avoid:_ Species key, legend panel
 
-**Design vs Design Session**:
-A **Design** is the agroecological plan. A **Design Session** is the active app runtime context around that design, including lifecycle and persistence behavior.
+**Find plants**: The Ctrl F search in every plant list (guides call it the plant finder): common names in every language, scientific names, synonyms and codes, ignoring accents, capitals and small typos. _Avoid:_ Global search
 
-**Design Session vs Design Edit**:
-A **Design Session** owns lifecycle, persistence, dirty baselines, and active Design identity. A **Design Edit** changes non-canvas Design state inside that session and owns no-op detection, preview transactions, and non-canvas dirty marking for those changes.
+**Hardiness zone**: A USDA cold-tolerance zone of a species (min and max). _Avoid:_ Climate zone
 
-**Design Template vs Saved Object Stamp**:
-A **Design Template** starts a whole Design. A **Saved Object Stamp** reuses a visible canvas arrangement inside a Design and should not be called a template.
+## Planning panels
 
-**Problem Report vs Diagnostic Bundle**:
-A **Problem Report** is the user's account of what went wrong. A **Diagnostic Bundle** is optional supporting evidence the user can attach or share.
+**Calendar**: The panel of actions: scheduled work (a range, one day or unscheduled) with a type, completion, description and targets. _Avoid:_ Timeline, tasks
 
-**Report Summary vs Diagnostic Bundle**:
-A **Report Summary** is readable text for the support conversation. A **Diagnostic Bundle** is the attached evidence package.
+**Budget**: The panel of unit costs per species, a currency and a CSV export. _Avoid:_ Estimate, price list
 
-**Species vs Plant**:
-Use **Species** for catalog/database entries. Use **Placed Plant** for a species instance positioned in a design.
+**Consortium**: A stratified, time-aware plant assembly: which species take part, in which stratum and across which succession phases. _Avoid:_ Guild, companion group
 
-**Species Catalog vs Plant Database**:
-Use **Species Catalog** in domain language. "Plant database" is acceptable in broad product copy, but it should not be the canonical term in domain docs.
+**Stratum**: A vertical layer of a consortium: Emergent, High, Mid or Low. A species without one is "No stratum yet"; stratum colours on the map follow it. _Avoid:_ Layer, height band
 
-**Species Catalog vs Species Catalog Workbench**:
-The **Species Catalog** is the collection of Species data. The **Species Catalog Workbench** is the interaction surface used to browse, filter, favorite, select, and inspect that data.
+**Succession phase**: A time phase of a consortium: Placenta 1–3, Secondary 1–3, Climax. An entry spans a first and a last phase. _Avoid:_ Stage, action
 
-**Species Catalog Filter vs SQL Column**:
-A **Species Catalog Filter** describes user-facing search behavior. A SQL column is only one possible implementation detail behind that behavior.
+**Target**: What a Calendar action or Budget line refers to: a species, a placed plant, a zone or the whole Design. _Avoid:_ Link, reference
 
-**Canonical Name vs Scientific Name**:
-Use **Canonical Name** for species identity in Canopi. "Scientific name" may be used in explanatory copy, but it is not the canonical identity term.
+## Data and analyses
 
-**Zone vs Shape**:
-Use **Zone** when the drawn area has design meaning. Use "shape" only for implementation or geometry discussions.
+**Data library**: The Desktop store of imported terrain and height rasters (single-band GeoTIFF: ground elevation, surface elevation, height above ground) and calculated results, shared by every Design; it needs no GDAL or other install. Delete everywhere removes an item from the library and every Design. _Avoid:_ LiDAR panel, layer store
 
-**Zone vs Polygonal Zone**:
-A **Polygonal Zone** is a kind of **Zone** with an edge-based boundary. Use "polygon" only for implementation or geometry discussions.
+**Site data**: The Desktop panel listing the Data library items this Design shows, results nested under their source; Layers shows it as one row. Remove from Design keeps the item in the library. _Avoid:_ Data layer, terrain layer
 
-**Ellipse vs Oval**:
-Use **Elliptical Zone** for zones with elliptical boundaries. "Oval" is acceptable in casual conversation, but it is not the canonical domain term.
+**Analysis**: A calculation run on a Data library item with recorded parameters and history, such as Slope from ground elevation. A result knows when its source changed (Out of date, Refresh). _Avoid:_ Filter, derived layer
 
-**Zone Edge vs Line**:
-A **Zone Edge** is part of a zone boundary. A line is an independently drawn design object or implementation geometry, not the canonical term for a polygon side.
+## PDF export
 
-**Zone Measurement vs Annotation**:
-A **Zone Measurement** is derived from a zone's geometry. An **Annotation** is authored text in the design.
+**Planting plan (PDF)**: File › Export › Planting plan (PDF)…, titled "Export to PDF": the planting plan as pages with a plant key, north arrow and scale, printed As in the Design, in Grayscale or in Black. The Design never changes. _Avoid:_ Design report, screenshot
 
-**Measurement Guide vs Linear Zone**:
-A **Measurement Guide** is a persistent aid for reading distance. A **Linear Zone** is a zone with ecological or functional meaning, such as a boundary, row, or path.
+**Map orientation**: The PDF choice North up (default) or As on screen; the north arrow always points to true north. _Avoid:_ Orientation (the paper's), rotation
 
-**Measurement Guide vs Spacing Guide**:
-A **Measurement Guide** stays in the design as a distance aid. A **Spacing Guide** is temporary interaction guidance used by Plant Spacing and does not stay in the design.
+**Field sheet**: A detail page added over a drawn print area (Add field sheet) or the Whole Design, with its own key. Print areas belong to the export, never to the Design. _Avoid:_ Zone, page zone
 
-**Zone Control Point vs Zone Measurement**:
-A **Zone Control Point** is an editing affordance for reshaping a selected zone. A **Zone Measurement** is read-only derived information about a zone's current geometry.
+## Support
 
-**Canvas Object vs Design Object**:
-Use **Design Object** for a spatial part of a Design. "Canvas object" is implementation language and should not be the canonical product term.
+**Problem report**: Help › Report a problem… (Desktop): a summary and a diagnostic bundle the user shares by hand, never with screenshots, raw paths or keys, and with the Design only when the user opts in. _Avoid:_ Bug report, telemetry
 
-**Layer Lock vs Design Object Lock**:
-A **Layer** lock prevents editing every design object in that layer. A **Design Object Lock** prevents editing one design object and is saved with the design.
+## Architecture authorities
 
-**Layer vs Canvas Layer Presentation**:
-A **Layer** is a visibility and locking group in the Design. **Canvas Layer Presentation** is runtime presentation that combines Layer state with map and terrain controls for app chrome.
+**Scene Edit**: A runtime transaction on canvas-owned state (objects, layers, species colours and symbols) that owns undo history and dirty state. _Avoid:_ Canvas mutation, scene patch
 
-**Canvas Layer Presentation vs Shared Spatial Workspace**:
-**Canvas Layer Presentation** decides which layer controls and layer commands app chrome exposes. The **Shared Spatial Workspace** presents the resulting geographic contributions with the botanical Scene through its single camera and render lifecycle.
+**Design Edit**: A change to non-canvas Design state: Budget, Calendar, Consortium, saved views, stories, description and extra fields. _Avoid:_ Panel action, direct write
 
-**MapLibre Host vs Shared Spatial Workspace**:
-The **MapLibre Host** owns low-level MapLibre resource lifetime. The **Shared Spatial Workspace** owns composition and coordinates derived inputs from app, Scene, and LiDAR authorities without becoming their data authority.
+**App Command Graph**: The one registry of user commands: labels, availability, shortcuts and dispatch for menus, the Command palette (Ctrl Shift P) and rails. _Avoid:_ Menu registry, shortcut map
 
-**Climate Zone vs Hardiness Zone**:
-Use **Climate Zone** for broad site/template classification. Use **Hardiness Zone** for species cold-tolerance compatibility.
-
-**Target vs Selection**:
-A **Target** names what a planning entry refers to. A selection is a temporary user interaction state and should not be used as domain language for planning relationships.
-
-**Target vs Target Presentation**:
-A **Target** is the stored or derived subject a planning entry refers to. **Target Presentation** is runtime hover/selection state over targets and must not become the authority for planning entries or canvas selection.
-
-**Scene Edit vs Design Edit**:
-A **Scene Edit** changes canvas-owned Design state and should be handled by the canvas runtime. A **Design Edit** changes non-canvas Design state such as Budget Items, Timeline Actions, Consortiums, Location, description, or extra fields.
-
-**Spatial Frame vs Location**:
-The **Spatial Frame** is always saved and may be provisional. **Location** is the confirmed-site projection presented to the user.
-
-**Location vs Location Workbench**:
-A **Location** is the confirmed site. The **Location Workbench** previews and commits the Spatial Frame that establishes it. The Web Edition preserves the Spatial Frame but does not mount the visible Location Workbench.
-
-**Planning Projection vs Design Authority**:
-A **Planning Projection** is derived runtime state for planning surfaces. It must not become the authority for Design planning entries, placed plants, or canvas scene state.
-
-**Budget Item vs Budget Item Workbench**:
-A **Budget Item** is a cost entry in a Design. The **Budget Item Workbench** is the interaction surface that edits, exports, and presents budget item behavior.
-
-**Consortium vs Guild**:
-Use **Consortium** for Canopi's broader stratified, time-aware plant assembly. Use "guild" only in explanatory copy when discussing narrower companion-planting concepts.
-
-**Plant Stamp vs Object Stamp**:
-A **Plant Stamp** places placed plants from a chosen species. An **Object Stamp** copies an existing design object already in the design.
-
-**Object Stamp vs Saved Object Stamp**:
-An **Object Stamp** samples an editable design object during the current placement interaction. A **Saved Object Stamp** is named and reusable later, usually as a multi-object arrangement; directly locked source objects may be captured into a saved object stamp but place as unlocked copies.
-
-**Plant Stamp vs Plant Stamp Source**:
-A **Plant Stamp** is the placement interaction. A **Plant Stamp Source** is the runtime Species-derived source the interaction uses to create placed plants.
-
-**Object Stamp vs Plant Spacing**:
-An **Object Stamp** places one copy at a time from a sampled design object. **Plant Spacing** repeats a sampled placed plant along a spacing guide at a chosen interval.
-
-**Spacing Guide vs Design Object**:
-A **Spacing Guide** is temporary interaction guidance for plant spacing. A **Design Object** is part of the design.
-
-**Plant Spacing Interval vs Canopy Spread**:
-A **Plant Spacing Interval** positions plant centers. Canopy spread describes a plant's visible or biological size.
-
-**Plant Drag Distance Guide vs Plant Spacing Interval**:
-A **Plant Drag Distance Guide** is temporary feedback while moving an existing placed plant. A **Plant Spacing Interval** is the chosen repeat spacing used by Plant Spacing to create additional placed plants.
-
-**Pinned Plant Name vs Design Object Lock**:
-A **Pinned Plant Name** records the choice to display a placed plant's name, not a guarantee of visibility at every canvas zoom level. A **Design Object Lock** prevents editing a design object; pinning a name does not lock the placed plant.
-
-**Stratum vs Layer**:
-Use **Stratum** for vertical ecological position in a consortium. Use **Layer** for design-object visibility and locking.
-
-**Succession Phase vs Timeline Action**:
-A **Succession Phase** describes a period in ecological development. A **Timeline Action** is scheduled work in the design.
-
-**Consortium Time Model vs Renderer Geometry**:
-The **Consortium Time Model** owns Succession Phase and Stratum order, labels, durations, defaults, and clamping. Renderer geometry owns pixel layout and drawing only.
-
-**Timeline Action vs Timeline Action Workbench**:
-A **Timeline Action** is the scheduled work in the Design. The **Timeline Action Workbench** is the interaction surface used to create, edit, delete, and select those actions.
-
-**Calendar vs Timeline Action**:
-**Calendar** is the user-facing planning surface. A **Timeline Action** is the saved Design record that Calendar presents and edits.
-
-## Example Dialogue
-
-Designer: "I want to create a design for a small food forest."
-
-Developer: "That design can include placed plants, zones, timeline actions, budget items, consortium planning, and location details."
-
-Designer: "Can I add the same species more than once?"
-
-Developer: "Yes. Each copy is a separate placed plant, and each placed plant refers back to the same species."
-
-Designer: "Does editing the species catalog change my design?"
-
-Developer: "No. The species catalog is the source for choosing species; the design contains placed plants that refer to species."
-
-Designer: "The app behaved strangely. Should I send the logs?"
-
-Developer: "Create a problem report first. It gives you a report summary to copy and, if you choose, a diagnostic bundle with troubleshooting evidence."
-
-Designer: "Can I identify a species by its common name?"
-
-Developer: "You can search and display common names, but the species identity is its canonical name."
-
-Designer: "Is the species search panel the Species Catalog?"
-
-Developer: "The panel is the Species Catalog Workbench. It helps you browse and inspect the Species Catalog."
-
-Designer: "Is the orchard area a zone or a layer?"
-
-Developer: "It is a zone. A layer controls visibility and locking; the zone is the meaningful area in the design."
-
-Designer: "Can I stamp this existing apple tree several more times?"
-
-Developer: "Yes. Use Object Stamp to sample that placed plant, then place copies. Use Plant Stamp when you are starting from a species in the Species Catalog."
-
-Designer: "Can I save this small guild of trees, shrubs, zones, and annotations to reuse in another corner?"
-
-Developer: "Yes. Save it as a Saved Object Stamp so the arrangement can be placed again later. It is different from a Design Template, which starts a whole design."
-
-Designer: "Can I repeat this apple tree every three meters along this row?"
-
-Developer: "Yes. Use Plant Spacing to sample the placed plant, draw a spacing guide, and choose the interval."
-
-Designer: "Will that spacing guide stay in my design?"
-
-Developer: "No. The spacing guide is temporary; the design receives the generated placed plants."
-
-Designer: "Does three meter spacing mean three meters between canopies or plant centers?"
-
-Developer: "It means three meters center-to-center between placed plants."
-
-Designer: "If I hide a layer, is that just a UI toggle?"
-
-Developer: "Layer visibility is canvas-owned design state. Changing it is a scene edit, so it belongs with canvas undo, dirty state, and save behavior."
-
-Designer: "Can I search for an address and keep the site's altitude?"
-
-Developer: "On desktop, yes. Web Edition v1 preserves saved Location data when opening and downloading Designs, but does not expose Location editing."
-
-Designer: "Can a timeline action apply to every apple tree in the design?"
-
-Developer: "Yes. The timeline action can target the apple species, which resolves to the placed plants of that species in the design."
-
-Designer: "Why does the budget update when I add another apple tree?"
-
-Developer: "The budget view uses the planning projection, which derives budget rows from placed plants and budget items without becoming the source of truth for either."
-
-Designer: "Is setting a plant price part of the planning projection?"
-
-Developer: "No. The budget item workbench edits budget items. The planning projection only derives rows from those budget items and placed plants."
-
-Designer: "Is the high canopy row a layer?"
-
-Developer: "No. In the consortium it is a stratum. Layers control design-object visibility and locking."
-
-Designer: "When I drag apple in the consortium, am I moving one placed apple tree?"
-
-Developer: "No. You are moving the apple consortium entry, which describes that species' stratum and succession phase span."
-
-Designer: "Can two species share the same line in the emergent stratum?"
-
-Developer: "Yes, if their consortium entries occupy different succession phases. They are sharing a consortium lane, not becoming the same consortium entry."
-
-Designer: "If a template includes a Species outside my hardiness zone, does Canopi replace it?"
-
-Developer: "No. Canopi currently imports Design Templates unchanged. ADR 0023 retired Site Adaptation, Compatibility Checks, and Replacement Suggestions."
-
-Designer: "Is the template's climate zone the same as a Species hardiness zone?"
-
-Developer: "No. Climate zone describes the site or template broadly, while hardiness zone describes Species cold tolerance. No current import workflow interprets the two as a compatibility result."
+**Browser App Shell**: The Web Edition chrome (title bar, menus, phone layout) around the shared app core. _Avoid:_ Website navigation

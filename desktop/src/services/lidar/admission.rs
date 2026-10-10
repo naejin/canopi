@@ -3,32 +3,29 @@
 //! A **new** import or replacement is admitted only inside these bounds: at
 //! most 24 source files, at most 2 GiB per source, at most 2 GiB of selected
 //! sources, and at most 400,000,000 processing cells in the proposed active
-//! collection.
+//! collection. Only GeoTIFF sources are admitted, and a refusal names the
+//! user's file, never its folder.
 //!
-//! The processing-cell count replaced an earlier union-**envelope** bound on
-//! the ordered path. An envelope charges the empty space between independent
-//! sources, so a batch of small tiles separated by a wide gap was refused by
-//! geometry it never decoded. Processing cells charge the work actually
-//! proposed: each source occurrence's own full native grid, or a preserved
-//! sparse member's occupied chunk footprint. Overlap and NoData are counted
-//! every time they occur, because a mostly-NoData source still costs decoding
-//! work; the count is deliberately conservative work accounting, not a
-//! scientific coverage figure. The envelope bound is retained as the legacy
-//! dense allocation guard, where the whole envelope really is allocated.
+//! Processing cells charge the work actually proposed: each source
+//! occurrence's own full native grid, never the empty space between
+//! independent sources. Overlap and NoData are counted every time they occur,
+//! because a mostly-NoData source still costs decoding work; the count is
+//! deliberately conservative work accounting, not a scientific coverage figure.
 //!
 //! One policy serves every caller — selection validation, the managed-original
 //! copy/hash, review staging and Apply — so a bound cannot hold on one storage
 //! branch and be skipped on another, and no hidden ceiling in a copy loop can
-//! invalidate an authorized run. Reads, display, deletion and undo of
-//! generations that already exist are deliberately **not** subject to it:
-//! grandfathered immutable history stays readable however large it is, and undo
-//! restores accepted history rather than admitting new input.
+//! invalidate an authorized run. Reads, display and deletion of items that
+//! already exist are deliberately **not** subject to it.
 //!
 //! Representative large-fixture runs raise the bounds for their own thread
 //! through the test-only [`limits_probe`]; nothing in a production build can,
 //! and no environment variable can enable a production bypass.
 
-use std::path::Path;
+use super::engine::RasterEngine;
+use super::rust_engine::is_tiff;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 
 /// Most source files one import may select.
 pub(crate) const MAX_SOURCE_FILES_PER_IMPORT: usize = 24;
@@ -42,25 +39,14 @@ pub(crate) const MAX_IMPORT_SOURCE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 /// up every occurrence's full native grid, counting overlap and NoData
 /// repeatedly and charging nothing for empty space between independent sources.
 pub(crate) const MAX_IMPORT_PROCESSING_CELLS: u64 = 400_000_000;
-/// Most cells a **legacy dense** import may allocate as one union envelope.
-///
-/// The preserved dense format materializes values and a mask across the whole
-/// envelope, so its allocation really is the envelope area. The ordered path
-/// never allocates by envelope and is bounded by
-/// [`MAX_IMPORT_PROCESSING_CELLS`] instead; this constant is retained only as
-/// that dense allocation guard.
-pub(crate) const MAX_DENSE_ENVELOPE_CELLS: u64 = 25_000_000;
-
 /// The bounds in force for one admission decision.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct AdmissionLimits {
     pub files: usize,
     pub source_bytes: u64,
     pub import_bytes: u64,
-    /// Processing-cell budget for the ordered path.
+    /// Processing-cell budget of one import.
     pub processing_cells: u64,
-    /// Envelope allocation guard for the preserved dense path.
-    pub dense_envelope_cells: u64,
 }
 
 impl AdmissionLimits {
@@ -70,7 +56,6 @@ impl AdmissionLimits {
             source_bytes: MAX_SOURCE_FILE_BYTES,
             import_bytes: MAX_IMPORT_SOURCE_BYTES,
             processing_cells: MAX_IMPORT_PROCESSING_CELLS,
-            dense_envelope_cells: MAX_DENSE_ENVELOPE_CELLS,
         }
     }
 }
@@ -98,21 +83,76 @@ pub(crate) fn check_source_count(count: usize) -> Result<(), String> {
     Ok(())
 }
 
+/// How a refusal names a source: its file name, never the folder it lives in.
+pub(crate) fn source_name(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.display().to_string())
+}
+
 /// Refuse one source whose bytes exceed the per-source bound.
 ///
 /// Every place that learns a source's size — selection validation and the
 /// managed-original copy/hash loop — reports through this one check, so an
 /// authorized run cannot be stopped by a second hard-coded ceiling.
-pub(crate) fn check_source_bytes(path: &Path, bytes: u64) -> Result<(), String> {
+/// `name` is how the refusal names the source ([`source_name`] for a path).
+pub(crate) fn check_source_bytes(name: &str, bytes: u64) -> Result<(), String> {
     let limits = limits();
     if bytes > limits.source_bytes {
         return Err(format!(
-            "{} is larger than the {} MiB per-source limit",
-            path.display(),
+            "{name} is larger than the {} MiB per-source limit",
             limits.source_bytes / (1024 * 1024),
         ));
     }
     Ok(())
+}
+
+/// Refuse a selection Canopi cannot place: a source that is not a GeoTIFF,
+/// declares no coordinate system or one that is refused (U31). Each refusal
+/// names the source through `name_of`, never its folder. Only headers are
+/// read, so reading them again at staging is cheap.
+pub(crate) fn check_sources_placeable(
+    engine: &dyn RasterEngine,
+    paths: &[PathBuf],
+    name_of: &dyn Fn(&Path) -> String,
+) -> Result<(), String> {
+    // A header check no one can cancel.
+    let cancel = AtomicBool::new(false);
+    for path in paths {
+        let name = name_of(path);
+        check_source_format(path, &name)?;
+        let probe = engine.probe(path, &cancel).map_err(|error| {
+            // An engine message may spell out the whole path; the user sees
+            // the file name in its place.
+            let error = error.replace(&path.display().to_string(), &name);
+            if error.contains(&name) {
+                error
+            } else {
+                format!("{name}: {error}")
+            }
+        })?;
+        if probe.crs_ref.trim().is_empty() {
+            return Err(format!(
+                "{name} has no coordinate system; Canopi needs one to place it"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Refuse a source that does not start with a classic or BigTIFF signature,
+/// the engine's own rule ([`is_tiff`]).
+///
+/// Only GeoTIFF sources import, and this reads four bytes, so a file in
+/// another format is refused before any reader parses it whole.
+fn check_source_format(path: &Path, name: &str) -> Result<(), String> {
+    match is_tiff(path) {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(format!(
+            "{name} is not a GeoTIFF; Canopi imports GeoTIFF rasters"
+        )),
+        Err(_) => Err(format!("{name} cannot be read; choose the files again")),
+    }
 }
 
 /// Refuse a selection whose total bytes exceed the per-import bound.
@@ -127,54 +167,18 @@ pub(crate) fn check_import_bytes(total: u64) -> Result<(), String> {
     Ok(())
 }
 
-/// Refuse a union envelope that spans more cells than the dense guard allows.
-///
-/// `what` names the step so a refusal says which union was too large. This is
-/// the **preserved dense** guard: that format allocates values and a mask
-/// across the whole envelope, so the envelope area is the allocation. The
-/// ordered path must not call it — it is bounded by
-/// [`check_processing_budget`], which does not charge empty space.
-pub(crate) fn check_dense_envelope(cells: u64, what: &str) -> Result<(), String> {
-    let limits = limits();
-    if cells > limits.dense_envelope_cells {
-        return Err(format!(
-            "{what} spans {cells} cells, above the {} cell dense envelope limit; \
-             select sources whose combined extent is smaller",
-            limits.dense_envelope_cells
-        ));
-    }
-    Ok(())
-}
-
-/// The envelope's cell count, with checked arithmetic.
-pub(crate) fn union_envelope_cells(width: u32, height: u32) -> Result<u64, String> {
-    u64::from(width)
-        .checked_mul(u64::from(height))
-        .ok_or_else(|| "import envelope dimensions overflow".to_string())
-}
-
-/// One member's contribution to the processing-cell budget.
-///
-/// The distinction is what a reader must decode, not how far the member
-/// reaches: a dense grid is read across its whole rectangle, while a sparse
-/// member is visited only where it stores a chunk.
+/// One source occurrence's contribution to the processing-cell budget: its
+/// full native grid, which a reader decodes across the whole rectangle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ProcessingCost {
-    /// A dense grid of `width` x `height` cells.
-    Dense { width: u32, height: u32 },
-    /// A sparse member occupying `footprint` cells across stored chunks.
-    Sparse { footprint: u64 },
+pub(crate) struct ProcessingCost {
+    pub width: u32,
+    pub height: u32,
 }
 
 impl ProcessingCost {
-    /// This member's cells, with checked arithmetic.
-    pub(crate) fn cells(self) -> Result<u64, String> {
-        match self {
-            Self::Dense { width, height } => u64::from(width)
-                .checked_mul(u64::from(height))
-                .ok_or_else(|| "source grid dimensions overflow the cell count".to_string()),
-            Self::Sparse { footprint } => Ok(footprint),
-        }
+    /// This member's cells. Two u32 dimensions always multiply exactly in u64.
+    pub(crate) fn cells(self) -> u64 {
+        u64::from(self.width) * u64::from(self.height)
     }
 }
 
@@ -190,7 +194,7 @@ pub(crate) fn processing_cells(
 ) -> Result<u64, String> {
     let mut total: u64 = 0;
     for member in members {
-        let cells = member.cells()?;
+        let cells = member.cells();
         total = total
             .checked_add(cells)
             .ok_or_else(|| "processing cell count overflowed".to_string())?;
@@ -241,7 +245,6 @@ pub(crate) mod limits_probe {
             source_bytes,
             import_bytes: source_bytes.saturating_mul(files as u64),
             processing_cells: cells,
-            dense_envelope_cells: cells,
         })
     }
 
@@ -265,25 +268,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_dense_envelope_guard_admits_exactly_its_limit() {
-        let limits = AdmissionLimits::production();
-        assert_eq!(limits.dense_envelope_cells, 25_000_000);
-        assert!(check_dense_envelope(25_000_000, "import review").is_ok());
-        let refused = check_dense_envelope(25_000_001, "import review").unwrap_err();
-        assert!(refused.contains("import review"), "{refused}");
-        assert!(refused.contains("25000000"), "{refused}");
-        // The arithmetic that produces the count is checked, not saturating.
-        assert_eq!(union_envelope_cells(5000, 5000).unwrap(), 25_000_000);
-        assert_eq!(union_envelope_cells(5001, 5000).unwrap(), 25_005_000);
-        // Two u32 dimensions always multiply exactly into u64, so the count is
-        // never saturated; the policy, not the arithmetic, is the bound.
-        assert_eq!(
-            union_envelope_cells(u32::MAX, u32::MAX).unwrap(),
-            u64::from(u32::MAX) * u64::from(u32::MAX)
-        );
-    }
-
-    #[test]
     fn the_file_and_byte_bounds_admit_exactly_their_limits() {
         let limits = AdmissionLimits::production();
         assert_eq!(limits.files, 24);
@@ -291,9 +275,9 @@ mod tests {
         assert_eq!(limits.import_bytes, 2 * 1024 * 1024 * 1024);
         assert!(check_source_count(limits.files).is_ok());
         assert!(check_source_count(limits.files + 1).is_err());
-        let path = Path::new("/library/source.tif");
-        assert!(check_source_bytes(path, limits.source_bytes).is_ok());
-        assert!(check_source_bytes(path, limits.source_bytes + 1).is_err());
+        let name = source_name(Path::new("/library/source.tif"));
+        assert!(check_source_bytes(&name, limits.source_bytes).is_ok());
+        assert!(check_source_bytes(&name, limits.source_bytes + 1).is_err());
         assert!(check_import_bytes(limits.import_bytes).is_ok());
         assert!(check_import_bytes(limits.import_bytes + 1).is_err());
     }
@@ -304,11 +288,11 @@ mod tests {
         assert_eq!(limits.processing_cells, 400_000_000);
         // The 400-million-cell analytical plane is admitted at exactly the
         // limit, which is the capacity input the contract names.
-        let plane = ProcessingCost::Dense {
+        let plane = ProcessingCost {
             width: 20_000,
             height: 20_000,
         };
-        assert_eq!(plane.cells().unwrap(), 400_000_000);
+        assert_eq!(plane.cells(), 400_000_000);
         assert_eq!(
             check_processing_budget([plane], "import review").unwrap(),
             400_000_000
@@ -316,7 +300,7 @@ mod tests {
         // One cell more is refused, and the refusal names the step and the
         // limit rather than a path or an internal identifier.
         let refused = check_processing_budget(
-            [ProcessingCost::Dense {
+            [ProcessingCost {
                 width: 20_000,
                 height: 20_001,
             }],
@@ -330,7 +314,7 @@ mod tests {
 
     #[test]
     fn processing_cells_charge_occurrences_and_ignore_the_gap_between_them() {
-        let tile = ProcessingCost::Dense {
+        let tile = ProcessingCost {
             width: 2_000,
             height: 2_000,
         };
@@ -346,38 +330,28 @@ mod tests {
         // Overlap is charged on every occurrence, so re-importing the same
         // extent as a second occurrence doubles the proposal.
         assert_eq!(processing_cells(vec![tile, tile]).unwrap(), 8_000_000);
-        // A preserved sparse member contributes its occupied chunk footprint,
-        // not the envelope its stored chunks happen to span.
-        let sparse = ProcessingCost::Sparse {
-            footprint: 3 * 1024 * 1024,
-        };
-        assert_eq!(sparse.cells().unwrap(), 3_145_728);
-        assert_eq!(
-            processing_cells([tile, sparse]).unwrap(),
-            4_000_000 + 3_145_728
-        );
     }
 
     #[test]
     fn processing_cells_use_checked_arithmetic() {
         // Two u32 dimensions always multiply exactly into u64.
         assert_eq!(
-            ProcessingCost::Dense {
+            ProcessingCost {
                 width: u32::MAX,
                 height: u32::MAX,
             }
-            .cells()
-            .unwrap(),
+            .cells(),
             u64::from(u32::MAX) * u64::from(u32::MAX)
         );
         // A total beyond u64 is an explicit error, never a wrapped or
         // saturated budget that would silently admit the work.
-        let huge = ProcessingCost::Sparse {
-            footprint: u64::MAX,
+        let huge = ProcessingCost {
+            width: u32::MAX,
+            height: u32::MAX,
         };
-        let error = processing_cells([huge, huge]).unwrap_err();
+        let error = processing_cells([huge; 3]).unwrap_err();
         assert!(error.contains("overflow"), "{error}");
-        assert!(check_processing_budget([huge, huge], "import review").is_err());
+        assert!(check_processing_budget([huge; 3], "import review").is_err());
     }
 
     #[test]
@@ -392,7 +366,7 @@ mod tests {
             assert_eq!(raised.files, 64);
             assert!(
                 check_processing_budget(
-                    [ProcessingCost::Dense {
+                    [ProcessingCost {
                         width: 20_000,
                         height: 20_000
                     }],
@@ -414,14 +388,13 @@ mod tests {
                 source_bytes: 1024,
                 import_bytes: 2048,
                 processing_cells: 16,
-                dense_envelope_cells: 16,
             };
             let _guard = limits_probe::set(lowered);
             assert_eq!(limits(), lowered);
-            assert!(check_source_bytes(Path::new("/library/big.tif"), 2048).is_err());
+            assert!(check_source_bytes(&source_name(Path::new("/library/big.tif")), 2048).is_err());
             assert!(
                 check_processing_budget(
-                    [ProcessingCost::Dense {
+                    [ProcessingCost {
                         width: 5,
                         height: 5
                     }],

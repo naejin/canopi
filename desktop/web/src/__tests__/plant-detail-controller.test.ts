@@ -116,4 +116,45 @@ describe('plant detail controller', () => {
     expect(loadDetail).toHaveBeenNthCalledWith(2, 'Lavandula angustifolia', 'fr')
     expect(controller.detail.value).toBe(null)
   })
+
+  it('publishes an English fallback name with the detail when the language has none', async () => {
+    const loadDetail = vi.fn().mockResolvedValue(createDetail('Ribes nigrum', null))
+    const resolveDisplayNames = vi.fn().mockResolvedValue({ names: { 'Ribes nigrum': 'Blackcurrant' }, englishFallbacks: ['Ribes nigrum'] })
+    const loadHabits = vi.fn().mockResolvedValue({ 'Ribes nigrum': 'Shrub' })
+    const controller = createPlantDetailController({
+      loadDetail,
+      loadLocaleCommonNames: vi.fn().mockResolvedValue([]),
+      resolveDisplayNames,
+      loadHabits,
+    })
+
+    controller.setTarget('Ribes nigrum', 'fr')
+    await flushMicrotasks()
+    await flushMicrotasks()
+
+    expect(resolveDisplayNames).toHaveBeenCalledWith(['Ribes nigrum'], 'fr')
+    expect(controller.loadState.value).toBe('loaded')
+    expect(controller.englishName.value).toBe('Blackcurrant')
+    expect(controller.habitKey.value).toBe('Shrub')
+  })
+
+  it('asks for no English fallback in English or when the language has a name', async () => {
+    const resolveDisplayNames = vi.fn().mockResolvedValue({ names: {}, englishFallbacks: [] })
+    const controller = createPlantDetailController({
+      loadDetail: vi.fn()
+        .mockResolvedValueOnce(createDetail('Ribes nigrum', null))
+        .mockResolvedValueOnce(createDetail('Ribes nigrum', 'Cassissier')),
+      loadLocaleCommonNames: vi.fn().mockResolvedValue([]),
+      resolveDisplayNames,
+      loadHabits: vi.fn().mockResolvedValue({}),
+    })
+
+    controller.setTarget('Ribes nigrum', 'en')
+    await flushMicrotasks()
+    controller.setTarget('Ribes nigrum', 'fr')
+    await flushMicrotasks()
+
+    expect(resolveDisplayNames).not.toHaveBeenCalled()
+    expect(controller.englishName.value).toBeNull()
+  })
 })

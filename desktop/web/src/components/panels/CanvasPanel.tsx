@@ -1,171 +1,70 @@
-import { SpeciesFocusChip } from '../canvas/SpeciesFocusChip'
-import { useRef, useEffect, useState } from 'preact/hooks'
+import { useRef, useState } from 'preact/hooks'
 import { t } from '../../i18n'
 import { useCanvasDocumentSession } from '../../app/document-session/use-canvas-document-session'
-import { CanvasToolbar } from '../canvas/CanvasToolbar'
-import { ZoomControls } from '../canvas/ZoomControls'
-import { InspectionLens } from '../canvas/InspectionLens'
-import { InspectionStatus } from '../canvas/InspectionStatus'
-import { DisplayLegend } from '../canvas/DisplayLegend'
-import { CanvasOverview } from '../canvas/CanvasOverview'
 import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   type MapLibreCanvasSurfaceState,
 } from '../../maplibre/canvas-surface-state'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
-import { readCanvasLayerPresentation } from '../../app/canvas-layer-presentation/presentation'
-import { getLocationNoticeReadModel, useSavedLocationPresentation } from '../../app/location'
-import {
-  CANVAS_NOTICE_DEFAULT_CANVAS_HEIGHT_PX,
-  CANVAS_NOTICE_DEFAULT_CANVAS_WIDTH_PX,
-  resolveCanvasNoticePlacement,
-} from '../../canvas/canvas-notice-layout'
+import { hasVisibleMapLayer } from '../../app/map-layers/state'
+import { presentedMapLayers } from '../../app/story-presentation/overrides'
+import { getMapNoticeReadModel } from '../../app/canvas-map-surface/map-notice'
+import { useDesignReveal } from '../../app/canvas-map-surface/design-reveal'
+import { currentDesign } from '../../app/document-session/store'
+import { appCommandGraphToolbarProjection } from '../../commands/registry'
+import { profileLineMenu } from '../../app/lidar/profile'
+import { CanvasChrome } from '../canvas/CanvasChrome'
+import { MapNotice } from '../canvas/MapNotice'
+import { StampChooser } from '../canvas/StampChooser'
+import { useMapArea } from '../shared/useMapChrome'
 import styles from './Panels.module.css'
 
-interface CanvasNoticeViewportState {
-  canvasWidth: number
-  canvasHeight: number
-}
-
-function readCanvasNoticeViewport(element: HTMLElement): CanvasNoticeViewportState {
-  const rect = element.getBoundingClientRect()
-  return {
-    canvasWidth: element.clientWidth || Math.round(rect.width) || CANVAS_NOTICE_DEFAULT_CANVAS_WIDTH_PX,
-    canvasHeight: element.clientHeight || Math.round(rect.height) || CANVAS_NOTICE_DEFAULT_CANVAS_HEIGHT_PX,
-  }
-}
-
+/** Desktop canvas: the full-bleed map with the shared floating chrome, or the start screen. */
 export function CanvasPanel() {
   const canvasAreaRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const rulerOverlayRef = useRef<HTMLDivElement>(null)
   const [basemapState, setBasemapState] = useState<MapLibreCanvasSurfaceState>(
     () => IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   )
-  const [locationCueVisible, setLocationCueVisible] = useState(false)
-  const [canvasNoticeViewport, setCanvasNoticeViewport] = useState<CanvasNoticeViewportState>({
-    canvasWidth: CANVAS_NOTICE_DEFAULT_CANVAS_WIDTH_PX,
-    canvasHeight: CANVAS_NOTICE_DEFAULT_CANVAS_HEIGHT_PX,
-  })
-  const lastLocationRef = useRef<string | null>(null)
 
-  useCanvasDocumentSession({
+  useMapArea(canvasAreaRef)
+  const { retryMap } = useCanvasDocumentSession({
     canvasAreaRef,
     containerRef,
-    rulerOverlayRef,
     onMapStateChange: setBasemapState,
   })
 
-  const savedLocation = useSavedLocationPresentation()
-  const hasDesign = savedLocation.hasDesign
-  const mapVisible = readCanvasLayerPresentation().hasVisibleMapLayer
-  const locationNotice = getLocationNoticeReadModel({
-    saved: savedLocation,
-    mapVisible,
+  const hasDesign = currentDesign.value !== null
+  const reveal = useDesignReveal(hasDesign, basemapState)
+  const mapNotice = getMapNoticeReadModel({
+    hasDesign,
+    // The map the workspace draws: a presented story step's layers, else the user's own.
+    mapVisible: hasVisibleMapLayer(presentedMapLayers()),
     mapSurface: basemapState,
     t,
   })
-  const locationKey = locationNotice.locationKey
-
-  useEffect(() => {
-    if (locationKey === null) {
-      lastLocationRef.current = null
-      setLocationCueVisible(false)
-      return
-    }
-    if (lastLocationRef.current === null) {
-      lastLocationRef.current = locationKey
-      return
-    }
-    if (lastLocationRef.current === locationKey) return
-    lastLocationRef.current = locationKey
-    setLocationCueVisible(true)
-    const timer = window.setTimeout(() => setLocationCueVisible(false), 1800)
-    return () => window.clearTimeout(timer)
-  }, [locationKey])
-
-  useEffect(() => {
-    if (!hasDesign) return
-    const element = canvasAreaRef.current
-    if (!element) return
-
-    const updateViewport = () => {
-      const next = readCanvasNoticeViewport(element)
-      setCanvasNoticeViewport((previous) => {
-        if (
-          previous.canvasWidth === next.canvasWidth
-          && previous.canvasHeight === next.canvasHeight
-        ) {
-          return previous
-        }
-        return next
-      })
-    }
-
-    updateViewport()
-    const observer = new ResizeObserver(updateViewport)
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [hasDesign])
-
-  const locationNoticePlacement = resolveCanvasNoticePlacement('location-notice', {
-    canvasWidth: canvasNoticeViewport.canvasWidth,
-    canvasHeight: canvasNoticeViewport.canvasHeight,
-    rulersVisible: true,
-    scaleBarVisible: true,
-  })
-  const locationNoticeStyle = {
-    top: 'auto',
-    left: `${locationNoticePlacement.leftPx}px`,
-    bottom: `${locationNoticePlacement.bottomPx}px`,
-    maxWidth: `${Math.min(320, locationNoticePlacement.maxWidthPx)}px`,
-  }
 
   return (
     <div className={styles.canvasPanel}>
-      {hasDesign && <CanvasToolbar />}
-
-      <div className={styles.canvasColumn}>
-        <div className={styles.canvasRow}>
-          <div ref={canvasAreaRef} className={styles.canvasArea}>
-            <div
-              ref={containerRef}
-              className={styles.canvasContainer}
-              data-map-active={locationNotice.mapSurfaceVisible ? 'true' : 'false'}
-            />
-            <div ref={rulerOverlayRef} className={styles.rulerOverlay} />
-            {hasDesign && <InspectionLens canvasRef={containerRef} />}
-            {/* Read-only numeric inspection; nothing here is document state. */}
-            {hasDesign && <InspectionStatus />}
-            {hasDesign && <SpeciesFocusChip />}
-            {hasDesign && <CanvasOverview />}
-            {locationNotice.visible && (
-              <div
-                className={styles.basemapFeedback}
-                data-tone={locationNotice.tone}
-                data-location-cue={locationCueVisible ? 'true' : 'false'}
-                data-location-notice-placement={locationNoticePlacement.placement}
-                data-compact={locationNoticePlacement.compact ? 'true' : 'false'}
-                style={locationNoticeStyle}
-                role="status"
-                aria-live="polite"
-              >
-                <span className={styles.basemapFeedbackDot} aria-hidden="true" />
-                <span className={styles.basemapFeedbackText}>{locationNotice.statusText}</span>
-              </div>
-            )}
-
-            {!hasDesign && <WelcomeScreen />}
-            {hasDesign && <DisplayLegend />}
-          </div>
-
-        </div>
+      <div ref={canvasAreaRef} className={styles.canvasArea} data-design-hidden={hasDesign && !reveal.shown ? '' : undefined}>
+        {/* Focusable from script while no session holds it (tabIndex -1, which the session restores when it ends), so
+            focus handed to the map after a Retry lands before the rebuilt session makes it a Tab stop again. */}
+        <div
+          ref={containerRef}
+          tabIndex={-1}
+          className={styles.canvasContainer}
+          data-map-active={mapNotice.mapSurfaceVisible ? 'true' : 'false'}
+        />
         {hasDesign && (
-          <div className={styles.canvasBar}>
-            <div className={styles.canvasBarSpacer} />
-            <ZoomControls />
-          </div>
+          <CanvasChrome
+            projection={appCommandGraphToolbarProjection.value}
+            canvasRef={containerRef}
+            stampChooser={StampChooser}
+            profileLine={profileLineMenu}
+          />
         )}
+        <MapNotice notice={mapNotice} onRetry={retryMap} canvasRef={containerRef} />
+        {reveal.startScreen && <WelcomeScreen />}
       </div>
     </div>
   )

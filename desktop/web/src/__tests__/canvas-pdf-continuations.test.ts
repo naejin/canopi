@@ -6,14 +6,15 @@ import { MM } from '../app/canvas-pdf/print-style'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import type { PdfInput, PdfLabels, PdfSetup } from '../app/canvas-pdf/types'
-const labels: PdfLabels = { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Print at actual size' }
+import { englishPdfLabels } from '../../scripts/pdf-validation/fixtures'
+const labels: PdfLabels = { ...englishPdfLabels, notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Print at actual size' }
 const engine = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
 const setup: PdfSetup = { paper: 'A4', views: { overview: { orientation: 'portrait' } }, layers: ['plants'], areas: [{ id: 'all', name: 'Garden', bounds: { x: -1, y: -1, width: 12, height: 17 } }] }
 function garden(count = 90): PdfInput {
-  return { name: 'Garden', locale: 'en', commonNames: {}, canvas: {
+  return { name: 'Garden', locale: 'en', viewBearingDeg: 0, commonNames: {}, canvas: {
     layers: [{ name: 'plants', visible: true, opacity: .7 }], zones: [], annotations: [], measurements: [],
     plants: Array.from({ length: count }, (_, i) => ({ id: String(i), canonicalName: `Species ${String(i).padStart(3, '0')}`, position: { x: i % 10, y: Math.floor(i / 10) },
-      color: '#234567', symbol: 'square', mark: [{ d: 'M-1 -1 H1 V1 H-1 Z', fill: true, stroke: false, strokeWidth: 0 }], pinnedName: false })),
+      color: '#234567', symbol: 'square', mark: [{ d: 'M-1 -1 H1 V1 H-1 Z', paint: 'symbol' }], pinnedName: false })),
   } }
 }
 it('automatically paginates a complete linked key without requesting consent', () => {
@@ -33,8 +34,8 @@ it('automatically paginates a complete linked key without requesting consent', (
 it('keeps automatic area fit while linking legends and later detail pages after pagination', () => {
   const input = garden(60)
   const canvas = { ...input.canvas, zones: [
-    { name: 'Long bed', path: 'M0 0 H35 V5 H0 Z', fill: null, bounds: { x: 0, y: 0, width: 35, height: 5 } },
-    { name: 'Long bed:legend:0', path: 'M100 0 H101 V1 H100 Z', fill: null, bounds: { x: 100, y: 0, width: 1, height: 1 } },
+    { name: 'Long bed', path: 'M0 0 L35 0 L35 5 L0 5 Z', geometry: { kind: 'rect' as const, points: [{ x: 0, y: 0 }, { x: 35, y: 0 }, { x: 35, y: 5 }, { x: 0, y: 5 }] }, fill: null, bounds: { x: 0, y: 0, width: 35, height: 5 } },
+    { name: 'Long bed:legend:0', path: 'M100 0 L101 0 L101 1 L100 1 Z', geometry: { kind: 'rect' as const, points: [{ x: 100, y: 0 }, { x: 101, y: 0 }, { x: 101, y: 1 }, { x: 100, y: 1 }] }, fill: null, bounds: { x: 100, y: 0, width: 1, height: 1 } },
   ], plants: input.canvas.plants.map((plant, i) => ({ ...plant, position: { x: i < 30 ? 1 : 34, y: 2 } })) }
   const detail: PdfSetup = { ...setup, areas: [{ id: '1', name: 'Long bed', bounds: { x: 0, y: 0, width: 35, height: 5 } }, { id: '2', name: 'Long bed:legend:0', bounds: { x: 100, y: 0, width: 1, height: 1 } }] }
   const plan = buildPdfPlan({ ...input, canvas }, detail, engine(), labels)

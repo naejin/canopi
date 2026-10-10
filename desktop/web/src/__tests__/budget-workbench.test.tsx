@@ -8,20 +8,19 @@ import {
   currentDesign,
 } from './support/design-session-state'
 import { locale } from '../app/settings/state'
-import {
-  budgetPriceDraftValue,
-  parseBudgetPriceDraft,
-} from '../app/budget/workbench'
+import { validateBudgetPriceDraft } from '../app/budget/workbench'
+import { budgetPriceRequest, requestBudgetPrice } from '../app/budget/price-request'
+import { readPlanningViewState } from '../app/planning-view/state'
 import type { CanopiFile, PlacedPlant } from '../types/design'
+import { speciesBudgetTarget } from '../target'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 6,
+    version: 9,
     name: 'Budget workbench test',
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [],
     plants: [],
@@ -45,7 +44,7 @@ function makePlant(canonicalName: string, commonName: string): PlacedPlant {
     canonical_name: canonicalName,
     common_name: commonName,
     color: null,
-    position: { x: 0, y: 0 },
+    position: { lon: 13, lat: 23 },
     rotation: null,
     scale: null,
     notes: null,
@@ -78,39 +77,49 @@ describe('Budget Item workbench', () => {
     setCurrentCanvasSession(null)
   })
 
-  it('parses zero-price drafts without conflating them with an empty draft', () => {
-    expect(parseBudgetPriceDraft('0')).toBe(0)
-    expect(parseBudgetPriceDraft('0.00')).toBe(0)
-    expect(parseBudgetPriceDraft('')).toBeNull()
-    expect(parseBudgetPriceDraft('  ')).toBeNull()
-    expect(budgetPriceDraftValue(0)).toBe('0')
-    expect(budgetPriceDraftValue(undefined)).toBe('')
+  it('parses locale decimals and zero prices without conflating them with an empty draft', () => {
+    expect(validateBudgetPriceDraft('0')).toEqual({ valid: true, value: 0 })
+    expect(validateBudgetPriceDraft('0.00')).toEqual({ valid: true, value: 0 })
+    expect(validateBudgetPriceDraft('3,90', 'fr')).toEqual({ valid: true, value: 3.9 })
+    expect(validateBudgetPriceDraft('3.90', 'fr')).toEqual({ valid: true, value: 3.9 })
+    expect(validateBudgetPriceDraft('1 250,5', 'fr')).toEqual({ valid: true, value: 1250.5 })
+    expect(validateBudgetPriceDraft('')).toEqual({ valid: false })
+    expect(validateBudgetPriceDraft('  ')).toEqual({ valid: false })
+    expect(validateBudgetPriceDraft('-2')).toEqual({ valid: false })
+    expect(validateBudgetPriceDraft('3,90')).toEqual({ valid: false })
   })
 
-  it('commits a zero price through the workbench edit lifecycle', async () => {
-    await act(async () => {
-      render(<BudgetPanel />, container)
-    })
+  it('focuses a species’ unit cost when the right-click menu asks, showing its row through the filters', async () => {
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: createTestCanvasQuerySurface({
+        plants: [makePlant('Malus domestica', 'Apple'), makePlant('Pyrus communis', 'Pear')],
+      }),
+    }))
+    await act(async () => { render(<BudgetPanel />, container) })
+    const view = readPlanningViewState()
+    await act(async () => { view.budgetSearch.value = 'Apple' })
+    expect(rowNames()).toEqual(['Apple'])
 
-    const priceButton = container.querySelector<HTMLButtonElement>('button[aria-label^="Unit cost"]')
-    expect(priceButton).toBeTruthy()
+    await act(async () => { requestBudgetPrice('Pyrus communis') })
 
+    expect(budgetPriceRequest.value).toBeNull()
+    expect(rowNames()).toEqual(['Apple', 'Pear'])
+    expect(document.activeElement).toBe(priceInput('Pear'))
+    await type(priceInput('Pear'), '12')
     await act(async () => {
-      priceButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      priceInput('Pear').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
     })
+    expect(currentDesign.value?.budget[0]).toMatchObject({ description: 'Pyrus communis', unit_cost: 12 })
+  })
 
-    const input = container.querySelector<HTMLInputElement>('input[type="number"]')
-    expect(input).toBeTruthy()
+  it('labels each unit cost field and commits a zero price on blur', async () => {
+    await act(async () => { render(<BudgetPanel />, container) })
 
-    await act(async () => {
-      if (!input) return
-      input.focus()
-      input.value = '0'
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    await act(async () => {
-      input?.blur()
-    })
+    const input = priceInput('Apple')
+    expect(input.value).toBe('')
+    await act(async () => { input.focus() })
+    await type(input, '0')
+    await act(async () => { input.blur() })
 
     expect(currentDesign.value?.budget).toHaveLength(1)
     expect(currentDesign.value?.budget[0]).toMatchObject({
@@ -118,37 +127,93 @@ describe('Budget Item workbench', () => {
       unit_cost: 0,
       currency: 'EUR',
     })
-    expect(container.textContent).toContain('EUR')
-    expect(container.textContent).toContain('0.00')
+    expect(priceInput('Apple').value).toBe('0.00')
+    expect(container.textContent).toContain('€0.00')
   })
 
-  it('rejects invalid blur and lets Escape suppress a later valid blur', async () => {
-    await act(async () => { render(<BudgetPanel />, container) })
-    const priceButton = container.querySelector<HTMLButtonElement>('button[aria-label^="Unit cost"]')!
-
-    await act(async () => { priceButton.click() })
-    let input = container.querySelector<HTMLInputElement>('input[type="number"]')!
-    await act(async () => {
-      input.value = '-2'
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-      input.dispatchEvent(new FocusEvent('blur', { bubbles: true }))
+  it('shows and accepts locale decimals in French', async () => {
+    locale.value = 'fr'
+    designSessionFixture.file = makeDesign({
+      budget: [{ target: speciesBudgetTarget('Malus domestica'), category: 'plants', description: 'Malus domestica', quantity: 0, unit_cost: 3.9, currency: 'EUR' }],
     })
-    expect(currentDesign.value?.budget).toEqual([])
-    expect(container.querySelector('[role="alert"]')).not.toBeNull()
+    await act(async () => { render(<BudgetPanel />, container) })
 
+    const input = priceInput('Apple')
+    expect(input.value).toBe('3,90')
+    await act(async () => { input.focus() })
+    await type(input, '4,5')
+    await act(async () => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+
+    expect(currentDesign.value?.budget[0]?.unit_cost).toBe(4.5)
+    expect(priceInput('Apple').value).toBe('4,50')
+  })
+
+  it('keeps a price with more than two decimals when the field is only focused and left', async () => {
+    designSessionFixture.file = makeDesign({
+      budget: [{ target: speciesBudgetTarget('Malus domestica'), category: 'plants', description: 'Malus domestica', quantity: 0, unit_cost: 0.125, currency: 'EUR' }],
+    })
+    await act(async () => { render(<BudgetPanel />, container) })
+    const designBefore = currentDesign.value
+
+    const input = priceInput('Apple')
+    expect(input.value).toBe('0.125')
+    await act(async () => { input.focus() })
+    await act(async () => { input.blur() })
+    await act(async () => { priceInput('Apple').focus() })
     await act(async () => {
-      input = container.querySelector<HTMLInputElement>('input[type="number"]')!
-      input.value = '7'
-      input.dispatchEvent(new Event('input', { bubbles: true }))
+      priceInput('Apple').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+
+    expect(currentDesign.value?.budget[0]?.unit_cost).toBe(0.125)
+    expect(currentDesign.value).toBe(designBefore)
+  })
+
+  it('keeps accepting typing in a still-focused field after Enter on the last row or Escape', async () => {
+    await act(async () => { render(<BudgetPanel />, container) })
+    const input = priceInput('Apple')
+    await act(async () => { input.focus() })
+    await type(input, '4.50')
+    await act(async () => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+    expect(currentDesign.value?.budget[0]?.unit_cost).toBe(4.5)
+
+    // Focus stays in the last row's field; a correction must still be taken.
+    await type(priceInput('Apple'), '4.05')
+    expect(priceInput('Apple').value).toBe('4.05')
+    await act(async () => { priceInput('Apple').blur() })
+    expect(currentDesign.value?.budget[0]?.unit_cost).toBe(4.05)
+
+    await act(async () => { priceInput('Apple').focus() })
+    await type(priceInput('Apple'), '9')
+    await act(async () => { priceInput('Apple').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+    expect(priceInput('Apple').value).toBe('4.05')
+    await type(priceInput('Apple'), '6')
+    expect(priceInput('Apple').value).toBe('6')
+    await act(async () => { priceInput('Apple').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+    expect(currentDesign.value?.budget[0]?.unit_cost).toBe(6)
+  })
+
+  it('rejects an invalid draft and lets Escape restore the saved price', async () => {
+    await act(async () => { render(<BudgetPanel />, container) })
+    const input = priceInput('Apple')
+
+    await act(async () => { input.focus() })
+    await type(input, '-2')
+    await act(async () => { input.dispatchEvent(new FocusEvent('blur', { bubbles: true })) })
+    expect(currentDesign.value?.budget).toEqual([])
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('nonnegative')
+    expect(input.getAttribute('aria-invalid')).toBe('true')
+
+    await type(input, '7')
+    await act(async () => {
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
       input.dispatchEvent(new FocusEvent('blur', { bubbles: true }))
     })
     expect(currentDesign.value?.budget).toEqual([])
-    expect(container.querySelector('input[type="number"]')).toBeNull()
-    expect((document.activeElement as HTMLButtonElement)?.getAttribute('data-budget-price')).toContain('Malus')
+    expect(priceInput('Apple').value).toBe('')
+    expect(container.querySelector('[role="alert"]')).toBeNull()
   })
 
-  it('advances after Enter and ignores the previous input blur', async () => {
+  it('moves to the next row after Enter and ignores the previous field blur', async () => {
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       queries: createTestCanvasQuerySurface({
         plants: [
@@ -158,39 +223,98 @@ describe('Budget Item workbench', () => {
       }),
     }))
     await act(async () => { render(<BudgetPanel />, container) })
-    const priceButton = container.querySelector<HTMLButtonElement>('button[aria-label="Unit cost for Apple"]')!
-    await act(async () => { priceButton.click() })
-    const appleInput = container.querySelector<HTMLInputElement>('input[type="number"]')!
-
+    const apple = priceInput('Apple')
+    await act(async () => { apple.focus() })
+    await type(apple, '4')
     await act(async () => {
-      appleInput.value = '4'
-      appleInput.dispatchEvent(new Event('input', { bubbles: true }))
-      appleInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-      appleInput.dispatchEvent(new FocusEvent('blur', { bubbles: true }))
+      apple.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
     })
 
     expect(currentDesign.value?.budget).toHaveLength(1)
     expect(currentDesign.value?.budget[0]?.unit_cost).toBe(4)
-    expect(container.querySelector<HTMLInputElement>('input[type="number"]')?.id).toContain('Prunus')
+    expect(document.activeElement).toBe(priceInput('Cherry'))
+    await act(async () => { apple.dispatchEvent(new FocusEvent('blur', { bubbles: true })) })
+    expect(currentDesign.value?.budget).toHaveLength(1)
   })
 
-  it('cancels an editor when another Design replaces the session', async () => {
-    await act(async () => { render(<BudgetPanel />, container) })
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label^="Unit cost"]')!.click()
+  it('finds rows by name or code, filters missing prices and follows the map selection', async () => {
+    designSessionFixture.file = makeDesign({
+      budget: [{ target: speciesBudgetTarget('Malus domestica'), category: 'plants', description: 'Malus domestica', quantity: 0, unit_cost: 5, currency: 'EUR' }],
     })
-    const staleInput = container.querySelector<HTMLInputElement>('input[type="number"]')!
+    const queries = createTestCanvasQuerySurface({
+      plants: [
+        makePlant('Malus domestica', 'Apple'),
+        makePlant('Prunus avium', 'Cherry'),
+      ],
+    })
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries }))
+    await act(async () => { render(<BudgetPanel />, container) })
+    expect(rowNames()).toEqual(['Apple', 'Cherry'])
+
+    const finder = container.querySelector<HTMLInputElement>('input[type="search"]')!
+    expect(finder.getAttribute('aria-keyshortcuts')).toBe('Control+F Meta+F')
+    await type(finder, 'chery')
+    expect(rowNames()).toEqual(['Cherry'])
+    expect(container.querySelector('[role="status"]')?.textContent).toBe('Showing results for cherry · 1 species · 1 plant')
+    expect(container.querySelector('mark')?.textContent).toBe('Cherry')
+    await type(finder, '')
+
+    const missing = buttonNamed('Missing a price · 1')
+    await act(async () => { missing.click() })
+    expect(missing.getAttribute('aria-pressed')).toBe('true')
+    expect(rowNames()).toEqual(['Cherry'])
+    await act(async () => { missing.click() })
+
+    const meter = container.querySelector<HTMLButtonElement>('button[aria-label^="1 of 2 species priced"]')!
+    await act(async () => { meter.click() })
+    expect(rowNames()).toEqual(['Cherry'])
+    await act(async () => { meter.click() })
+
+    const selected = buttonNamed('Selected on map')
+    await act(async () => { selected.click() })
+    expect(container.textContent).toContain('No species match these filters')
     await act(async () => {
-      staleInput.value = '9'
-      staleInput.dispatchEvent(new Event('input', { bubbles: true }))
+      queries.setSelection([{ kind: 'plant', id: 'plant-Malus domestica' }])
+      queries.bumpSceneRevision()
+    })
+    expect(rowNames()).toEqual(['Apple'])
+    expect(buttonNamed('Selected on map · 1').getAttribute('aria-pressed')).toBe('true')
+    expect(container.querySelector('[role="status"]')?.textContent).toBe('1 species · 1 plant selected on the map')
+    expect(readPlanningViewState().budgetSelectedOnMap.value).toBe(true)
+  })
+
+  it('cancels a draft when another Design replaces the session', async () => {
+    await act(async () => { render(<BudgetPanel />, container) })
+    const staleInput = priceInput('Apple')
+    await act(async () => { staleInput.focus() })
+    await type(staleInput, '9')
+    await act(async () => {
       designSessionFixture.file = makeDesign({ name: 'Replacement budget' })
     })
     await act(async () => {
       staleInput.dispatchEvent(new FocusEvent('blur', { bubbles: true }))
     })
 
-    expect(container.querySelector('input[type="number"]')).toBeNull()
     expect(currentDesign.value?.name).toBe('Replacement budget')
     expect(currentDesign.value?.budget).toEqual([])
   })
+
+  function priceInput(name: string): HTMLInputElement {
+    return container.querySelector<HTMLInputElement>(`li input[aria-label$=" ${name}"]`)!
+  }
+
+  function rowNames(): string[] {
+    return Array.from(container.querySelectorAll('li button strong')).map((node) => node.textContent ?? '')
+  }
+
+  function buttonNamed(name: string): HTMLButtonElement {
+    return Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((button) => button.textContent === name)!
+  }
+
+  async function type(input: HTMLInputElement, value: string): Promise<void> {
+    await act(async () => {
+      input.value = value
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+  }
 })

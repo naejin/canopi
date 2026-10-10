@@ -1,11 +1,11 @@
 import { signal } from '@preact/signals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { CameraController } from '../canvas/runtime/camera'
 import { createSceneCanvasQuerySurface } from '../canvas/runtime/query-surface'
 import { SceneStore } from '../canvas/runtime/scene'
 import { SceneHistory } from '../canvas/runtime/scene-history'
 import { SceneRuntimePresentationController } from '../canvas/runtime/scene-runtime/presentation'
 import { SceneRuntimeEditCoordinator } from '../canvas/runtime/scene-runtime/transactions'
+import { createTestView } from './support/test-view'
 
 function setup() {
   const store = new SceneStore()
@@ -13,24 +13,24 @@ function setup() {
     draft.plants = [0, 3].map((x, index) => ({
       kind: 'plant', id: String(index), locked: false,
       canonicalName: 'Malus domestica', commonName: null, color: null,
-      stratum: null, canopySpreadM: null, position: { x, y: 0 },
+      canopySpreadM: null, position: { x, y: 0 },
       rotationDeg: null, scale: null, notes: null, plantedDate: null, quantity: null,
     }))
   })
   store.setSelection([{ kind: 'plant', id: '0' }])
-  const camera = new CameraController()
+  const camera = createTestView()
   const authority = new SceneRuntimeEditCoordinator({
     sceneStore: store, history: new SceneHistory(),
     setSelection: (targets) => { store.setSelection(targets) },
     incrementSceneRevision: () => {}, syncCanvasSignalsFromScene: () => {}, invalidate: () => {},
   })
   const presentation = new SceneRuntimePresentationController({
-    sceneStore: store, getViewport: () => camera.viewport, getLocale: () => 'en',
+    sceneStore: store, readPixelsPerMetre: () => camera.view().pixelsPerMetre, getLocale: () => 'en',
     resolveHighlightedTargets: () => ({ plantIds: [], zoneIds: [] }), onPlantNamesChanged: () => {},
   })
   const query = createSceneCanvasQuerySurface({
-    sceneStore: store, camera, settledReader: authority, presentation,
-    revision: { scene: signal(0), plantNames: signal(0) },
+    sceneStore: store, frames: camera.frames, settledReader: authority, presentation,
+    revision: { scene: signal(0), plantNames: signal(0), transientHistory: signal(0) },
     mutations: {
       getSelectedPlantColorContext: () => { throw new Error('unused') },
       getSelectedPlantSymbolContext: () => { throw new Error('unused') },
@@ -42,18 +42,18 @@ function setup() {
 afterEach(() => vi.restoreAllMocks())
 
 describe('scene query snapshot reuse', () => {
-  it('projects physical extent from live edits without cloning a scene snapshot', () => {
+  it('reads whether the Scene holds objects from live edits without cloning a scene snapshot', () => {
     const { store, authority, query } = setup()
     const read = vi.spyOn(store, 'persisted', 'get')
-    expect(query.getScenePhysicalExtentMeters()).toBe(3)
+    expect(query.sceneHasObjects()).toBe(true)
     expect(read).not.toHaveBeenCalled()
-    const edit = authority.begin('move')
-    edit.mutate((draft) => { draft.plants[0]!.position.x = 10 })
+    const edit = authority.begin('delete')
+    edit.mutate((draft) => { draft.plants = [] })
     read.mockClear()
-    expect(query.getScenePhysicalExtentMeters()).toBe(10)
+    expect(query.sceneHasObjects()).toBe(false)
     expect(read).not.toHaveBeenCalled()
     edit.abort()
-    expect(query.getScenePhysicalExtentMeters()).toBe(3)
+    expect(query.sceneHasObjects()).toBe(true)
   })
 
   it('observes live-preview movement, abort, commit, and viewport changes on each call', () => {
@@ -74,17 +74,17 @@ describe('scene query snapshot reuse', () => {
     committed.commit()
     expect(centerX()).toBe(20)
     const before = query.getDesignObjectSelection().bounds!
-    camera.zoomIn()
+    camera.navigation.zoomIn()
     const after = query.getDesignObjectSelection().bounds!
     expect(after.maxX - after.minX).not.toBe(before.maxX - before.minX)
   })
 
-  it('keeps selection, scene, and print results isolated from authoritative state', () => {
+  it('hands out a Scene snapshot frozen in dev builds and selection and print results no caller can change', () => {
     const { query } = setup()
+    expect(() => { query.getSceneSnapshot().plants[0]!.position.x = 999 }).toThrow(TypeError)
     const selection = query.getDesignObjectSelection()
     Reflect.set(selection.editableTargets[0]!, 'id', 'escaped')
-    selection.bounds!.minX = 999
-    query.getSceneSnapshot().plants[0]!.position.x = 999
+    Reflect.set(selection.bounds!, 'minX', 999)
     Reflect.set(query.capturePrintSnapshot()!.plants[0]!.position, 'x', 999)
     expect(query.getDesignObjectSelection().editableTargets).toEqual([{ kind: 'plant', id: '0' }])
     expect(query.getDesignObjectSelection().bounds!.minX).toBeLessThan(0)
@@ -109,7 +109,7 @@ describe('scene query snapshot reuse', () => {
     expect(query.capturePrintSnapshot()?.plants[0]!.position.x).toBe(0)
   })
 
-  it('avoids scene reads when nothing is selected and returns owned results', () => {
+  it('avoids scene reads when nothing is selected and returns an empty model no caller can change', () => {
     const { store, query } = setup()
     store.setSelection([])
     const read = vi.spyOn(store, 'persisted', 'get')
@@ -119,13 +119,13 @@ describe('scene query snapshot reuse', () => {
       sameSpeciesReferenceCanonicalName: null, plantNamePinning: { plantIds: [], allPinned: false },
     })
     Reflect.set(empty.editableTargets, '0', { kind: 'plant', id: '0' })
-    Reflect.set(empty.plantNamePinning!.plantIds, '0', '0')
+    Reflect.set(empty.plantNamePinning.plantIds, '0', '0')
     expect(query.getDesignObjectSelection().editableTargets).toEqual([])
-    expect(query.getDesignObjectSelection().plantNamePinning?.plantIds).toEqual([])
+    expect(query.getDesignObjectSelection().plantNamePinning.plantIds).toEqual([])
     expect(read).not.toHaveBeenCalled()
   })
 
-  it('reads one defensive snapshot for selection and its plant presentation', () => {
+  it('reads the Scene once for selection and its plant presentation', () => {
     const { store, query } = setup()
     const read = vi.spyOn(store, 'persisted', 'get')
     expect(query.getDesignObjectSelection().editableTargets).toEqual([{ kind: 'plant', id: '0' }])

@@ -1,64 +1,20 @@
 // ---------------------------------------------------------------------------
 // Canonical canvas↔map projection seam.
 //
-// Canvas world coordinates remain authoritative and are expressed in local
-// design meters. MapLibre is derived from those meters through a Mercator-
-// anchored local frame so the canvas and map share the same affine surface.
-//
-// The design location is the local-frame origin (0,0 in canvas world space).
-// The local frame is still an approximation over very large extents, so callers
-// may warn when a design grows too large for the local model.
+// Canvas world coordinates are metres in the session plane (x east, y south),
+// a Mercator-anchored local frame so the canvas and map share one affine
+// surface. The origin is the session plane origin; see `session-plane.ts`.
 // ---------------------------------------------------------------------------
 
 const EARTH_RADIUS_METERS = 6371008.8
 const EARTH_CIRCUMFERENCE_METERS = 2 * Math.PI * EARTH_RADIUS_METERS
 const DEGREES_TO_RADIANS = Math.PI / 180
-const MAPLIBRE_WORLD_TILE_SIZE = 512
-export const LOCAL_MERCATOR_PROJECTION_ID = 'local-mercator' as const
-export const LOCAL_PROJECTION_WARNING_THRESHOLD_METERS = 10_000
+/** MapLibre's world is 512 CSS pixels wide at zoom 0. */
+export const MAPLIBRE_WORLD_TILE_SIZE = 512
 
 export interface MapMercatorCoordinate {
   x: number
   y: number
-}
-
-export interface ProjectionPrecisionSnapshot {
-  readonly projectionId: typeof LOCAL_MERCATOR_PROJECTION_ID
-  readonly warningThresholdMeters: number
-  readonly designExtentMeters: number | null
-  readonly precisionWarning: boolean
-}
-
-function resolveBearingRad(northBearingDeg: number | null | undefined): number {
-  return (northBearingDeg ?? 0) * DEGREES_TO_RADIANS
-}
-
-function canvasWorldToEastNorthMeters(
-  x: number,
-  y: number,
-  northBearingDeg: number | null | undefined,
-): { east: number; north: number } {
-  const bearingRad = resolveBearingRad(northBearingDeg)
-  const cos = Math.cos(bearingRad)
-  const sin = Math.sin(bearingRad)
-  return {
-    east: x * cos + y * sin,
-    north: x * sin - y * cos,
-  }
-}
-
-function eastNorthMetersToCanvasWorld(
-  east: number,
-  north: number,
-  northBearingDeg: number | null | undefined,
-): { x: number; y: number } {
-  const bearingRad = resolveBearingRad(northBearingDeg)
-  const cos = Math.cos(bearingRad)
-  const sin = Math.sin(bearingRad)
-  return {
-    x: east * cos + north * sin,
-    y: east * sin - north * cos,
-  }
 }
 
 function mercatorXfromLng(lng: number): number {
@@ -96,58 +52,6 @@ export function mercatorToGeo(x: number, y: number): { lng: number; lat: number 
   }
 }
 
-export function worldToMercator(
-  x: number,
-  y: number,
-  originLat: number,
-  originLon: number,
-  northBearingDeg: number | null = 0,
-): MapMercatorCoordinate {
-  const origin = geoToMercator(originLon, originLat)
-  const mercatorUnitsPerMeter = mercatorUnitsPerMeterAtLat(originLat)
-  const { east, north } = canvasWorldToEastNorthMeters(x, y, northBearingDeg)
-  return {
-    x: origin.x + east * mercatorUnitsPerMeter,
-    y: origin.y - north * mercatorUnitsPerMeter,
-  }
-}
-
-export function mercatorToWorld(
-  x: number,
-  y: number,
-  originLat: number,
-  originLon: number,
-  northBearingDeg: number | null = 0,
-): { x: number; y: number } {
-  const origin = geoToMercator(originLon, originLat)
-  const mercatorUnitsPerMeter = mercatorUnitsPerMeterAtLat(originLat)
-  const east = (x - origin.x) / mercatorUnitsPerMeter
-  const north = -(y - origin.y) / mercatorUnitsPerMeter
-  return eastNorthMetersToCanvasWorld(east, north, northBearingDeg)
-}
-
-export function worldToGeo(
-  x: number,
-  y: number,
-  originLat: number,
-  originLon: number,
-  northBearingDeg: number | null = 0,
-): { lng: number; lat: number } {
-  const mercator = worldToMercator(x, y, originLat, originLon, northBearingDeg)
-  return mercatorToGeo(mercator.x, mercator.y)
-}
-
-export function geoToWorld(
-  lng: number,
-  lat: number,
-  originLat: number,
-  originLon: number,
-  northBearingDeg: number | null = 0,
-): { x: number; y: number } {
-  const mercator = geoToMercator(lng, lat)
-  return mercatorToWorld(mercator.x, mercator.y, originLat, originLon, northBearingDeg)
-}
-
 /**
  * Convert canvas viewport scale to a MapLibre zoom level using the same
  * Mercator world-size convention as MapLibre's transform (512px world at z=0).
@@ -163,78 +67,14 @@ export function mapZoomToStageScale(mapZoom: number, lat: number): number {
   return MAPLIBRE_WORLD_TILE_SIZE * 2 ** mapZoom * mercatorUnitsPerMeterAtLat(lat)
 }
 
-export function viewportCenterWorld(
-  viewport: { x: number; y: number; scale: number },
-  screenSize: { width: number; height: number },
-): { x: number; y: number } {
-  return {
-    x: (screenSize.width / 2 - viewport.x) / viewport.scale,
-    y: (screenSize.height / 2 - viewport.y) / viewport.scale,
-  }
-}
+/** Relative margin for scale thresholds: far below anything visible, far above a zoom round trip's error. */
+const SCALE_READBACK_TOLERANCE = 1e-9
 
-export function viewportCenterGeo(
-  viewport: { x: number; y: number; scale: number },
-  screenSize: { width: number; height: number },
-  originLat: number,
-  originLon: number,
-  northBearingDeg: number | null = 0,
-): { lng: number; lat: number } {
-  const center = viewportCenterWorld(viewport, screenSize)
-  return worldToGeo(center.x, center.y, originLat, originLon, northBearingDeg)
-}
-
-export function viewportCornerWorldPoints(
-  viewport: { x: number; y: number; scale: number },
-  screenSize: { width: number; height: number },
-): readonly [
-  { x: number; y: number },
-  { x: number; y: number },
-  { x: number; y: number },
-  { x: number; y: number },
-] {
-  const screenPoints = [
-    { x: 0, y: 0 },
-    { x: screenSize.width, y: 0 },
-    { x: screenSize.width, y: screenSize.height },
-    { x: 0, y: screenSize.height },
-  ] as const
-
-  const [topLeft, topRight, bottomRight, bottomLeft] = screenPoints.map((point) => ({
-    x: (point.x - viewport.x) / viewport.scale,
-    y: (point.y - viewport.y) / viewport.scale,
-  }))
-  return [topLeft!, topRight!, bottomRight!, bottomLeft!]
-}
-
-export function viewportCornerGeoPoints(
-  viewport: { x: number; y: number; scale: number },
-  screenSize: { width: number; height: number },
-  originLat: number,
-  originLon: number,
-  northBearingDeg: number | null = 0,
-): readonly [
-  { lng: number; lat: number },
-  { lng: number; lat: number },
-  { lng: number; lat: number },
-  { lng: number; lat: number },
-] {
-  const [topLeft, topRight, bottomRight, bottomLeft] = viewportCornerWorldPoints(viewport, screenSize)
-  return [
-    worldToGeo(topLeft.x, topLeft.y, originLat, originLon, northBearingDeg),
-    worldToGeo(topRight.x, topRight.y, originLat, originLon, northBearingDeg),
-    worldToGeo(bottomRight.x, bottomRight.y, originLat, originLon, northBearingDeg),
-    worldToGeo(bottomLeft.x, bottomLeft.y, originLat, originLon, northBearingDeg),
-  ]
-}
-
-export function createProjectionPrecisionSnapshot(
-  designExtentMeters: number | null,
-): ProjectionPrecisionSnapshot {
-  return {
-    projectionId: LOCAL_MERCATOR_PROJECTION_ID,
-    warningThresholdMeters: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
-    designExtentMeters,
-    precisionWarning: designExtentMeters != null && designExtentMeters > LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
-  }
+/**
+ * Whether a scale-derived value (px/m, or a screen gap in px) reaches a threshold. A camera holds a map zoom, so a scale placed at
+ * a round value reads back a few ulps off it, often under (10 px/m at lat 47.2 reads 9.999999999999993). Every scale threshold
+ * (the grid gap, the overview line) compares through this so such a placement lands on the side it was placed on.
+ */
+export function scaleReaches(value: number, threshold: number): boolean {
+  return value >= threshold * (1 - SCALE_READBACK_TOLERANCE)
 }

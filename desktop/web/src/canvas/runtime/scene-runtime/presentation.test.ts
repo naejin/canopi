@@ -7,18 +7,21 @@ vi.mock('../../../ipc/species', () => ({
 }))
 
 import type { CanopiFile } from '../../../types/design'
+import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
+import { geoAt } from '../../../__tests__/support/geo-design'
 import { SceneStore } from '../scene'
 import { CanvasPlantLabelResolver } from '../plant-labels'
 import { CanvasSpeciesCache } from '../species-cache'
+import { createDetachedCanvasPlantLabelSource } from '../presentation-data'
 import { SceneRuntimePresentationController } from './presentation'
+import { projectScenePlantLabels } from '../selection-labels'
 import { getCommonNames, getFlowerColorBatch, getSpeciesBatch } from '../../../ipc/species'
 
 function makeFile(): CanopiFile {
   return {
-    version: 6,
+    version: CURRENT_CANOPI_FILE_VERSION,
     name: 'Presentation demo',
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [
       { name: 'plants', visible: true, locked: false, opacity: 1 },
@@ -31,7 +34,7 @@ function makeFile(): CanopiFile {
         canonical_name: 'Malus domestica',
         common_name: 'Apple',
         color: null,
-        position: { x: 10, y: 10 },
+        position: geoAt(10, 10),
         rotation: null,
         scale: null,
         notes: null,
@@ -42,14 +45,14 @@ function makeFile(): CanopiFile {
     ],
     zones: [
       {
-        name: 'zone-1',
+        id: 'zone-1', name: null,
         zone_type: 'rect',
         rotation: 0,
         points: [
-          { x: 0, y: 0 },
-          { x: 5, y: 0 },
-          { x: 5, y: 5 },
-          { x: 0, y: 5 },
+          geoAt(0, 0),
+          geoAt(5, 0),
+          geoAt(5, 5),
+          geoAt(0, 5),
         ],
         fill_color: null,
         notes: null,
@@ -69,7 +72,7 @@ function makeFile(): CanopiFile {
 }
 
 function createController() {
-  const sceneStore = new SceneStore(makeFile())
+  const sceneStore = new SceneStore().hydrate(makeFile())
   const state = {
     locale: 'fr',
     viewport: { x: 0, y: 0, scale: 2 },
@@ -77,7 +80,7 @@ function createController() {
   }
   const controller = new SceneRuntimePresentationController({
     sceneStore,
-    getViewport: () => state.viewport,
+    readPixelsPerMetre: () => state.viewport.scale,
     getLocale: () => state.locale,
     resolveHighlightedTargets: () => ({
       plantIds: ['plant-1'],
@@ -86,7 +89,7 @@ function createController() {
     onPlantNamesChanged: () => {
       state.namesChanged += 1
     },
-    plantLabels: new CanvasPlantLabelResolver(),
+    plantLabels: new CanvasPlantLabelResolver(async (names, locale) => ({ names: await getCommonNames([...names], locale), englishFallbacks: [] })),
     speciesCache: new CanvasSpeciesCache(),
   })
   return { controller, sceneStore, state }
@@ -102,7 +105,7 @@ describe('scene runtime presentation controller', () => {
     vi.mocked(getFlowerColorBatch).mockResolvedValue([])
   })
 
-  it('hydrates labels and backfills plant presentation metadata', async () => {
+  it('loads labels and species data as one plant-names revision, leaving the Scene as saved', async () => {
     vi.mocked(getCommonNames).mockResolvedValue({
       'Malus domestica': 'Pommier',
     })
@@ -120,39 +123,41 @@ describe('scene runtime presentation controller', () => {
     } as never])
 
     const { controller, sceneStore, state } = createController()
+    const saved = sceneStore.persisted
 
     const result = await controller.refreshCurrentPresentationData()
     expect(state.namesChanged).toBe(0)
     controller.publishRefresh(result)
-    if (result.backfills) {
-      const byId = new Map(result.backfills.map((entry) => [entry.plantId, entry]))
-      sceneStore.updatePersisted((draft) => {
-        draft.plants = draft.plants.map((plant) => {
-          const next = byId.get(plant.id)
-          if (!next) return plant
-          return {
-            ...plant,
-            stratum: next.stratum,
-            canopySpreadM: next.canopySpreadM,
-            scale: next.scale,
-          }
-        })
-      })
-    }
 
     expect(result.changed).toBe(true)
     expect(state.namesChanged).toBe(1)
     expect(controller.getLocalizedCommonNames().get('Malus domestica')).toBe('Pommier')
-    expect(sceneStore.persisted.plants[0]).toMatchObject({
-      stratum: 'canopy',
-      canopySpreadM: 4.5,
-      scale: 4.5,
-    })
+    expect(sceneStore.persisted).toEqual(saved)
     expect(controller.getSpeciesCache().get('Malus domestica')).toMatchObject({
       resolved_flower_color: 'white',
       stratum: 'canopy',
       width_max_m: 4.5,
     })
+  })
+
+  it('counts a species-data load with no new names as a plant-names revision', async () => {
+    vi.mocked(getSpeciesBatch).mockResolvedValue([{ canonical_name: 'Malus domestica', stratum: 'canopy' } as never])
+    let namesChanged = 0
+    const controller = new SceneRuntimePresentationController({
+      sceneStore: new SceneStore().hydrate(makeFile()),
+      readPixelsPerMetre: () => 2,
+      getLocale: () => 'en',
+      resolveHighlightedTargets: () => ({ plantIds: [], zoneIds: [] }),
+      onPlantNamesChanged: () => { namesChanged += 1 },
+      plantLabels: createDetachedCanvasPlantLabelSource(),
+      speciesCache: new CanvasSpeciesCache(),
+    })
+
+    controller.publishRefresh(await controller.refreshCurrentPresentationData())
+
+    // Lists that colour plants by stratum (the species key, the legend) refresh on this revision.
+    expect(namesChanged).toBe(1)
+    expect(controller.getSpeciesCache().get('Malus domestica')).toMatchObject({ stratum: 'canopy' })
   })
 
   it('builds renderer snapshots from scene, viewport, and highlighted targets', async () => {
@@ -168,7 +173,6 @@ describe('scene runtime presentation controller', () => {
     await controller.refreshSpeciesCacheEntries(['Malus domestica'], 'fr')
     const snapshot = controller.buildRendererSnapshot()
 
-    expect(snapshot.viewport.scale).toBe(2)
     expect(snapshot.selectedPlantIds).toEqual(new Set(['plant-1']))
     expect(snapshot.highlightedPlantIds).toEqual(new Set(['plant-1']))
     expect(snapshot.highlightedZoneIds).toEqual(new Set(['zone-1']))
@@ -187,10 +191,9 @@ describe('scene runtime presentation controller', () => {
 
     expect(snapshot.scene.plants).toEqual([])
     expect(snapshot.scene.zones).toEqual([])
-    expect(snapshot.scene.guides).toEqual([])
     expect(snapshot.selectedPlantIds).toEqual(new Set())
     expect(snapshot.hoverTarget).toBeNull()
-    expect(snapshot.pinnedPlantNameLabels).toEqual([])
+    expect(projectScenePlantLabels(snapshot, 2).pinnedPlantNameLabels).toEqual([])
   })
 
   it('restores detail from the latest authoritative Scene after overview', () => {
@@ -219,14 +222,14 @@ describe('scene runtime presentation controller', () => {
     const snapshot = controller.buildRendererSnapshot()
 
     expect(snapshot.selectionLabelPlantIds).toEqual(new Set())
-    expect(snapshot.selectionLabels).toEqual([])
+    expect(projectScenePlantLabels(snapshot, 2).selectionLabels).toEqual([])
   })
 
   it('preserves hover kind when a Plant and Zone share the same raw id', () => {
     const { controller, sceneStore } = createController()
     sceneStore.updatePersisted((draft) => {
       draft.plants[0] = { ...draft.plants[0]!, id: 'shared-id' }
-      draft.zones[0] = { ...draft.zones[0]!, name: 'shared-id' }
+      draft.zones[0] = { ...draft.zones[0]!, id: 'shared-id', name: 'shared-id' }
     })
     sceneStore.setHoveredTarget({ kind: 'zone', id: 'shared-id' })
 
@@ -258,7 +261,7 @@ describe('scene runtime presentation controller', () => {
         layer.name === 'zones' ? { ...layer, locked: false } : layer
       ))
       draft.zones = draft.zones.map((zone) => (
-        zone.name === 'zone-1' ? { ...zone, locked: true } : zone
+        zone.id === 'zone-1' ? { ...zone, locked: true } : zone
       ))
     })
 
@@ -267,6 +270,33 @@ describe('scene runtime presentation controller', () => {
       id: 'zone-1',
       state: 'locked-design-object',
     })
+  })
+
+  it('marks a hovered cross-Layer group locked when any member Layer is locked, and drops a missing hover target', () => {
+    const { controller, sceneStore } = createController()
+    sceneStore.updatePersisted((draft) => {
+      draft.groups = [{
+        kind: 'group',
+        id: 'group-1',
+        locked: false,
+        name: null,
+        members: [{ kind: 'plant', id: 'plant-1' }, { kind: 'zone', id: 'zone-1' }],
+      }]
+      draft.layers = draft.layers.map((layer) => (
+        layer.name === 'zones' ? { ...layer, locked: true } : layer
+      ))
+    })
+    sceneStore.setHoveredTarget({ kind: 'group', id: 'group-1' })
+
+    expect(controller.buildRendererSnapshot().hoverTarget).toEqual({
+      kind: 'group',
+      id: 'group-1',
+      state: 'locked-layer',
+    })
+
+    sceneStore.setHoveredTarget({ kind: 'group', id: 'missing-group' })
+
+    expect(controller.buildRendererSnapshot().hoverTarget).toBeNull()
   })
 
   it('treats label-only refreshes as presentation changes', async () => {
@@ -285,12 +315,7 @@ describe('scene runtime presentation controller', () => {
     vi.mocked(getCommonNames).mockResolvedValue({
       'Malus domestica': 'Pommier',
     })
-    const { controller, sceneStore, state } = createController()
-    sceneStore.updatePersisted((draft) => {
-      draft.plants[0]!.stratum = 'canopy'
-      draft.plants[0]!.canopySpreadM = 4
-      draft.plants[0]!.scale = 4
-    })
+    const { controller, state } = createController()
 
     const staleRefresh = await controller.refreshCurrentPresentationData()
     const currentRefresh = await controller.refreshCurrentPresentationData()

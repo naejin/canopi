@@ -1,15 +1,7 @@
-/* ============================================
-   App root layout
-   ============================================ */
-
+/* The map fills the window; title bar, rails, chips and the dock float over it. */
 .appRoot {
+  position: relative;
   display: flex;
-  flex-direction: column;
   height: 100%;
-}
-
-.appBody {
-  display: flex;
-  flex: 1;
   overflow: hidden;
 }

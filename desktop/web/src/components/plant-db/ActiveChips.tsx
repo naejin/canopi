@@ -4,12 +4,12 @@ import { locale } from '../../app/settings/state'
 import { plantFilterCatalog, speciesCatalogWorkbench } from '../../app/plant-browser'
 import type { DynamicFilter, DynamicFilterOptions, SpeciesFilter } from '../../types/species'
 import type { ActiveChipField, SpeciesFilterKey } from '../../app/plant-browser'
-import { FIELD_REGISTRY, categoryForField } from './field-registry'
-import { FilterChip } from './FilterChip'
+import { FIELD_REGISTRY } from './field-registry'
+import { ControlIcon } from '../shared/ControlIcon'
 import { toggleArrayValue } from './filter-utils'
 import styles from './PlantDb.module.css'
 
-type Chip = { key: string; label: string; color: string; onDismiss: () => void };
+type Chip = { key: string; label: string; onDismiss: () => void };
 
 function addArrayChips(
   chips: Chip[],
@@ -17,7 +17,6 @@ function addArrayChips(
   field: SpeciesFilterKey,
   prefix: string,
   i18nPrefix: string,
-  color: string,
 ) {
   const values = filters[field] as string[] | null;
   if (!values) return;
@@ -25,7 +24,6 @@ function addArrayChips(
     chips.push({
       key: `${prefix}-${v}`,
       label: t(`${i18nPrefix}${v}`, v),
-      color,
       onDismiss: () => speciesCatalogWorkbench.patchFilters({ [field]: toggleArrayValue(filters[field] as string[] | null, v) }),
     });
   }
@@ -44,7 +42,6 @@ function addCatalogChips(
         field.filterKey,
         field.keyPrefix,
         field.valueI18nPrefix,
-        field.color,
       )
       continue
     }
@@ -54,7 +51,6 @@ function addCatalogChips(
       chips.push({
         key: field.filterKey,
         label: t(field.labelI18nKey, field.fallbackLabel),
-        color: field.color,
         onDismiss: () => speciesCatalogWorkbench.patchFilters({ [field.filterKey]: null }),
       })
       continue
@@ -65,7 +61,6 @@ function addCatalogChips(
     chips.push({
       key: field.filterKey,
       label: `${t(field.labelI18nKey, field.fallbackLabel)}: ${value}${field.suffix}`,
-      color: field.color,
       onDismiss: () => speciesCatalogWorkbench.patchFilters({ [field.filterKey]: null }),
     })
   }
@@ -148,27 +143,29 @@ export function ActiveChips() {
   addCatalogChips(chips, filters, plantFilterCatalog.activeChipFields())
 
   for (const ef of extras) {
-    const cat = categoryForField(ef.field);
     const fieldDef = FIELD_REGISTRY.find((f) => f.key === ef.field);
     const label = fieldDef ? t(fieldDef.i18nKey, ef.field) : ef.field;
     chips.push({
       key: `extra-${ef.field}`,
       label: formatExtraFilterDisplay(ef, label, localeOptions),
-      color: cat?.colorToken ?? '--color-primary',
       onDismiss: () => speciesCatalogWorkbench.removeExtraFilter(ef.field),
     });
   }
 
   return (
-    <div className={styles.activeChips} role="list" aria-label={t('filters.activeFilters', 'Active filters')}>
+    <div className={styles.tokens} role="list" aria-label={t('filters.activeFilters', 'Active filters')}>
       {chips.map((chip) => (
-        <FilterChip
-          key={chip.key}
-          label={chip.label}
-          color={chip.color}
-          active
-          onDismiss={chip.onDismiss}
-        />
+        <span key={chip.key} className={styles.token} role="listitem">
+          <span className={styles.tokenLabel}>{chip.label}</span>
+          <button
+            type="button"
+            className={styles.tokenRemove}
+            aria-label={t('plantDb.removeFilter', { label: chip.label })}
+            onClick={chip.onDismiss}
+          >
+            <ControlIcon name="close" />
+          </button>
+        </span>
       ))}
     </div>
   );

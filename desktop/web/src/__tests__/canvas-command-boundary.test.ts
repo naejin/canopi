@@ -1,17 +1,7 @@
 // @vitest-environment node
 
 import { describe, expect, it } from 'vitest'
-import {
-  CANVAS_HISTORY_SHORTCUTS,
-  CANVAS_TOOL_SHORTCUTS,
-  canvasCommandDefinitions,
-  canvasToolShortcutKeys,
-} from '../app/canvas-commands'
-import {
-  EDIT_SHORTCUTS,
-  TOOL_SHORTCUTS,
-  canvasToolKeys,
-} from '../shortcuts/definitions'
+import { canvasCommandDefinitions } from '../app/canvas-commands'
 import {
   createTypeScriptSourceGraph,
   discoverTypeScriptSourceGraph,
@@ -54,10 +44,10 @@ const CANVAS_COMMAND_BOUNDARY_POLICIES = [
     kind: 'require-imports',
     name: 'Canvas command consumers use the neutral catalog',
     from: [
-      'src/shortcuts/definitions.ts',
       'src/commands/graph/catalog.ts',
       'src/commands/graph/shortcuts.ts',
-      'src/web/WebCanvasToolbar.tsx',
+      'src/app/workspace-commands/canvas-actions.ts',
+      'src/app/keyboard/keymap.ts',
     ],
     targets: ['src/app/canvas-commands/index.ts'],
   },
@@ -65,7 +55,7 @@ const CANVAS_COMMAND_BOUNDARY_POLICIES = [
     kind: 'require-imports',
     name: 'Web entry owns the browser Canvas shortcut lifecycle',
     from: ['src/main.web.tsx'],
-    targets: ['src/web/canvas-shortcuts.ts'],
+    targets: ['src/web/browser-shell-commands.ts'],
   },
   {
     kind: 'source-tombstones',
@@ -80,8 +70,8 @@ const CANVAS_COMMAND_BOUNDARY_POLICIES = [
         names: ['TOOL_COMMAND_IDS'],
       },
       {
-        from: ['src/web/WebCanvasToolbar.tsx'],
-        names: ['WEB_TOOLS'],
+        from: ['src/commands/graph/shortcuts.ts'],
+        names: ['canvasShortcutCommand'],
       },
     ],
   },
@@ -149,35 +139,57 @@ describe('Canvas Command Projection boundaries', () => {
     )).toEqual([])
   }, 20_000)
 
-  it('owns shortcut compatibility and every projected command identity exhaustively', () => {
-    expect(EDIT_SHORTCUTS).toBe(CANVAS_HISTORY_SHORTCUTS)
-    expect(TOOL_SHORTCUTS).toBe(CANVAS_TOOL_SHORTCUTS)
-    expect(canvasToolKeys).toBe(canvasToolShortcutKeys)
-
+  it('owns every projected command identity exhaustively', () => {
     const commandIds = canvasCommandDefinitions.map((definition) => definition.commandId)
     expect(new Set(commandIds).size).toBe(commandIds.length)
     expect(commandIds).toEqual([
       'canvas.tool.select',
       'canvas.tool.hand',
-      'canvas.tool.line',
+      'canvas.tool.plantStamp',
+      'canvas.tool.plantSpacing',
+      'canvas.tool.objectStamp',
+      'canvas.tool.polygon',
       'canvas.tool.rectangle',
       'canvas.tool.ellipse',
-      'canvas.tool.polygon',
+      'canvas.tool.line',
       'canvas.tool.text',
       'canvas.tool.measurementGuide',
-      'canvas.tool.objectStamp',
-      'canvas.tool.plantSpacing',
       'edit.undo',
       'edit.redo',
+      'canvas.cut',
+      'canvas.copy',
+      'canvas.paste',
+      'canvas.duplicateSelected',
+      'canvas.deleteSelected',
+      'canvas.selectAll',
+      'canvas.selectSameSpecies',
+      'canvas.clearSelection',
+      'canvas.groupSelected',
+      'canvas.ungroupSelected',
+      'canvas.bringToFront',
+      'canvas.sendToBack',
+      'canvas.rotateSelected',
+      'canvas.lockSelected',
+      'canvas.unlockSelected',
+      'canvas.unlockAll',
+      'canvas.saveSelectionAsStamp',
+      'view.zoomIn',
+      'view.zoomOut',
+      'view.fitToDesign',
+      'view.zoomToSelection',
+      'view.resetNorth',
+      'view.turnViewLeft',
+      'view.turnViewRight',
+      'view.searchPlace',
+      'view.cycleLabels',
       'canvas.toggleGrid',
       'canvas.toggleSnapToGrid',
-      'canvas.toggleRulers',
     ])
   })
 
   it('registers Web shortcut teardown with the Vite HMR lifetime', () => {
     const shortcutLifecycle = sourceGraph()
-      .find((source) => source.path === 'src/web/canvas-shortcuts.ts')
+      .find((source) => source.path === 'src/web/browser-shell-commands.ts')
 
     expect(shortcutLifecycle?.calls.some(
       (call) => call.target === 'import.meta.hot.dispose',

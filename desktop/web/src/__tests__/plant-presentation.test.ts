@@ -1,18 +1,24 @@
 import { describe, expect, it } from 'vitest'
-import type { ScenePlantEntity, SceneViewportState } from '../canvas/runtime/scene'
+import type { ScenePlantEntity } from '../canvas/runtime/scene'
 import {
   buildPlantPresentationEntries,
-  buildPlantPresentationSnapshot,
-  getPlantScreenHitBounds,
+  getStackBadgeSizePx,
+  STACK_BADGE_FONT_SIZE_PX,
+  hitTestPlant,
+  plantStackCounts,
+  resolvePlantBaseColor,
+  type PlantPresentationContext,
 } from '../canvas/runtime/plant-presentation'
+import { getStratumColor } from '../canvas/plants'
 
-function createViewport(overrides: Partial<SceneViewportState> = {}): SceneViewportState {
-  return {
-    x: 0,
-    y: 0,
-    scale: 8,
-    ...overrides,
-  }
+/** The renderer's composition: entries, then the stack counts from them. */
+function buildPlantPresentationSnapshot(
+  plants: readonly ScenePlantEntity[],
+  context: PlantPresentationContext,
+  selectedPlantIds: ReadonlySet<string>,
+) {
+  const entries = buildPlantPresentationEntries(plants, context, selectedPlantIds)
+  return { entries, stackCounts: plantStackCounts(entries) }
 }
 
 function createPlant(overrides: Partial<ScenePlantEntity> = {}): ScenePlantEntity {
@@ -22,11 +28,9 @@ function createPlant(overrides: Partial<ScenePlantEntity> = {}): ScenePlantEntit
     canonicalName: 'Malus domestica',
     commonName: 'Apple',
     color: null,
-    stratum: null,
     canopySpreadM: null,
     position: { x: 10, y: 20 },
     rotationDeg: null,
-    scale: null,
     notes: null,
     plantedDate: null,
     quantity: null,
@@ -43,9 +47,9 @@ describe('plant presentation service', () => {
     }))
     const before = JSON.stringify(plants)
     const presentation = buildPlantPresentationSnapshot(plants, {
-      viewport: createViewport({ scale }), speciesCache: new Map(),
+      pixelsPerMetre: scale, speciesCache: new Map(),
     }, new Set())
-    expect(presentation.stackBadges).toHaveLength(0)
+    expect(presentation.stackCounts.size).toBe(0)
     expect(presentation.entries).toHaveLength(2200)
     for (const entry of presentation.entries) {
       expect(entry.radiusScreenPx * 2).toBeLessThan(.14 * scale)
@@ -61,7 +65,7 @@ describe('plant presentation service', () => {
       createPlant({ id: 'b', position: { x: .27, y: 0 } }),
     ]
     const entries = buildPlantPresentationEntries(plants, {
-      viewport: createViewport({ scale: 10 }), speciesCache: new Map(),
+      pixelsPerMetre: 10, speciesCache: new Map(),
     }, new Set())
     expect(entries[0]!.radiusScreenPx).toBeCloseTo(1.134, 3)
     expect(entries[0]!.radiusScreenPx + entries[1]!.radiusScreenPx).toBeLessThan(2.7)
@@ -79,7 +83,7 @@ describe('plant presentation service', () => {
 
     for (const [scale, expectedRadiusPx] of expectedRadiiByScale) {
       const entry = buildPlantPresentationEntries([createPlant()], {
-        viewport: createViewport({ scale }),
+        pixelsPerMetre: scale,
         speciesCache: new Map(),
       }, new Set())[0]!
 
@@ -96,12 +100,16 @@ describe('plant presentation service', () => {
     ])
 
     const presentation = buildPlantPresentationEntries([plant], {
-      viewport: createViewport(),
+      pixelsPerMetre: 8,
       speciesCache,
     }, new Set())[0]!
 
-    expect(presentation.baseColor).toBe('#C44230')
     expect(presentation.color).toBe('#C44230')
+  })
+
+  it('a plant without its own colour takes its stratum colour from the species cache', () => {
+    expect(resolvePlantBaseColor(createPlant(), new Map([['Malus domestica', { stratum: 'emergent' }]])))
+      .toBe(getStratumColor('emergent'))
   })
 
   it('resolves Plant Symbols without changing the Visual Footprint', () => {
@@ -110,7 +118,7 @@ describe('plant presentation service', () => {
       createPlant({ id: 'species-default', canonicalName: 'Pyrus communis' }),
       createPlant({ id: 'unknown', symbol: 'spiral' }),
     ], {
-      viewport: createViewport(),
+      pixelsPerMetre: 8,
       speciesCache: new Map(),
       plantSpeciesSymbols: {
         'Pyrus communis': 'climber',
@@ -133,40 +141,33 @@ describe('plant presentation service', () => {
     ])
 
     const canopyPresentation = buildPlantPresentationEntries([canopyPlant], {
-      viewport: createViewport({ scale: 16 }),
+      pixelsPerMetre: 16,
       speciesCache,
     }, new Set())[0]!
     const fallbackPresentation = buildPlantPresentationEntries([fallbackPlant], {
-      viewport: createViewport({ scale: 16 }),
+      pixelsPerMetre: 16,
       speciesCache,
     }, new Set())[0]!
 
     expect(canopyPresentation.radiusScreenPx).toBeCloseTo(4.05, 2)
     expect(canopyPresentation.radiusWorld).toBeCloseTo(4.05 / 16, 2)
-    expect(canopyPresentation.usesCanopyRadius).toBe(false)
     expect(fallbackPresentation.radiusScreenPx).toBeCloseTo(4.05, 2)
     expect(fallbackPresentation.radiusWorld).toBeCloseTo(4.05 / 16, 2)
-    expect(fallbackPresentation.usesCanopyRadius).toBe(false)
     expect(fallbackPresentation.symbol).toBe('conifer')
   })
 
-  it('computes screen hit bounds from the resolved Visual Footprint plus interaction padding', () => {
+  it('hit tests the resolved Visual Footprint plus interaction padding', () => {
     const plant = createPlant()
     const context = {
-      viewport: createViewport({ x: 5, y: 7, scale: 8 }),
+      pixelsPerMetre: 8,
       speciesCache: new Map(),
     } as const
     const entry = buildPlantPresentationEntries([plant], context, new Set())[0]!
-    const hitBounds = getPlantScreenHitBounds(plant, context)
-    const expectedHitRadius = entry.radiusScreenPx + 4
+    const hitRadiusMetres = (entry.radiusScreenPx + 4) / context.pixelsPerMetre
+    const at = (distance: number) => ({ x: plant.position.x + distance, y: plant.position.y })
 
-    expect(hitBounds.center).toEqual({ x: 85, y: 167 })
-    expect(hitBounds.radiusPx).toBeCloseTo(expectedHitRadius, 5)
-    expect(hitBounds.bounds.x).toBeCloseTo(85 - expectedHitRadius, 5)
-    expect(hitBounds.bounds.y).toBeCloseTo(167 - expectedHitRadius, 5)
-    expect(hitBounds.bounds.width).toBeCloseTo(expectedHitRadius * 2, 5)
-    expect(hitBounds.bounds.height).toBeCloseTo(expectedHitRadius * 2, 5)
-    expect(entry.hitBoundsScreen).toEqual(hitBounds)
+    expect(hitTestPlant(plant, at(hitRadiusMetres * 0.999), context)).toBe(true)
+    expect(hitTestPlant(plant, at(hitRadiusMetres * 1.001), context)).toBe(false)
   })
 
   it('reserves stack badges for coincident centres and anchors them to the highest-priority member', () => {
@@ -176,33 +177,11 @@ describe('plant presentation service', () => {
       createPlant({ id: 'selected', position: { x: 0, y: 0 } }),
       createPlant({ id: 'nearby', position: { x: .27, y: 0 } }),
     ], {
-      viewport: createViewport({ scale: 8 }),
+      pixelsPerMetre: 8,
       speciesCache: new Map(),
     }, new Set(['selected']))
 
-    const badges = snapshot.stackBadges
-
-    expect(badges).toHaveLength(1)
-    expect(badges[0]).toMatchObject({
-      anchorPlantId: 'selected',
-      memberPlantIds: ['colored', 'default', 'selected'],
-      count: 3,
-      text: '3',
-    })
-  })
-
-  it('anchors stack badge centers from the current Placed Plant Visual Footprint', () => {
-    const snapshot = buildPlantPresentationSnapshot([
-      createPlant({ id: 'plant-a', position: { x: 0, y: 0 } }),
-      createPlant({ id: 'plant-b', position: { x: 0, y: 0 } }),
-    ], {
-      viewport: createViewport({ scale: 1 }),
-      speciesCache: new Map(),
-    }, new Set())
-
-    expect(snapshot.stackBadges).toHaveLength(1)
-    expect(snapshot.stackBadges[0]!.badgeCenterScreenPoint.x).toBeCloseTo(4.22, 2)
-    expect(snapshot.stackBadges[0]!.badgeCenterScreenPoint.y).toBeCloseTo(-4.22, 2)
+    expect(Object.fromEntries(snapshot.stackCounts)).toEqual({ selected: 3 })
   })
 
   it('does not create stack badges for ordinary Visual Footprint overlap', () => {
@@ -210,34 +189,22 @@ describe('plant presentation service', () => {
       createPlant({ id: 'plant-a', position: { x: 0, y: 0 } }),
       createPlant({ id: 'plant-b', position: { x: 0.12, y: 0 } }),
     ], {
-      viewport: createViewport({ scale: 50 }),
+      pixelsPerMetre: 50,
       speciesCache: new Map(),
     }, new Set())
 
-    expect(snapshot.stackBadges).toEqual([])
+    expect(snapshot.stackCounts.size).toBe(0)
   })
+})
 
-  it('returns entries without label fields', () => {
-    const entry = buildPlantPresentationEntries([createPlant()], {
-      viewport: createViewport(),
-      speciesCache: new Map(),
-    }, new Set())[0]!
-
-    expect(entry).toHaveProperty('radiusWorld')
-    expect(entry).toHaveProperty('color')
-    expect(entry).toHaveProperty('screenPoint')
-    expect(entry).not.toHaveProperty('labelText')
-    expect(entry).not.toHaveProperty('labelScreenPoint')
-  })
-
-  it('returns layout with only lod and stackCounts', () => {
-    const snapshot = buildPlantPresentationSnapshot([createPlant()], {
-      viewport: createViewport(),
-      speciesCache: new Map(),
-    }, new Set())
-
-    expect(snapshot.layout).toHaveProperty('lod')
-    expect(snapshot.layout).toHaveProperty('stackCounts')
-    expect(snapshot.layout).not.toHaveProperty('visibleLabelIds')
+describe('stack badge size', () => {
+  it('fits the count at the 12 px floor, a circle for one digit and a pill for more', () => {
+    expect(STACK_BADGE_FONT_SIZE_PX).toBeGreaterThanOrEqual(12)
+    expect(getStackBadgeSizePx('2')).toEqual({ width: 18, height: 18 })
+    const two = getStackBadgeSizePx('12')
+    const three = getStackBadgeSizePx('120')
+    expect(two.width).toBeGreaterThanOrEqual(2 * 0.6 * STACK_BADGE_FONT_SIZE_PX + 6)
+    expect(three.width).toBeGreaterThan(two.width)
+    expect(three.width).toBeGreaterThanOrEqual(3 * 0.6 * STACK_BADGE_FONT_SIZE_PX + 6)
   })
 })

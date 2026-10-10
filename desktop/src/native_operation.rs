@@ -5,11 +5,12 @@ use std::{
 };
 use tokio::sync::{Semaphore, TryAcquireError};
 
-const OPERATION_CLASSES: [NativeOperationClass; 4] = [
+const OPERATION_CLASSES: [NativeOperationClass; 5] = [
     NativeOperationClass::Catalog,
     NativeOperationClass::UserData,
     NativeOperationClass::Local,
     NativeOperationClass::Network,
+    NativeOperationClass::Raster,
 ];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -18,6 +19,10 @@ pub enum NativeOperationClass {
     UserData,
     Local,
     Network,
+    /// LiDAR import, analysis and display preparation (U50(1)): their own
+    /// class, so raster work never fills the Local slots that saves, loads and
+    /// Site data sampling need.
+    Raster,
 }
 
 impl NativeOperationClass {
@@ -27,6 +32,7 @@ impl NativeOperationClass {
             Self::UserData => 1,
             Self::Local => 2,
             Self::Network => 3,
+            Self::Raster => 4,
         }
     }
 
@@ -36,6 +42,7 @@ impl NativeOperationClass {
             Self::UserData => "user-data",
             Self::Local => "local",
             Self::Network => "network",
+            Self::Raster => "raster",
         }
     }
 
@@ -74,7 +81,7 @@ impl NativeOperationClassLimits {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct NativeOperationLimits {
-    classes: [NativeOperationClassLimits; 4],
+    classes: [NativeOperationClassLimits; 5],
 }
 
 impl NativeOperationLimits {
@@ -83,15 +90,16 @@ impl NativeOperationLimits {
         user_data: NativeOperationClassLimits,
         local: NativeOperationClassLimits,
         network: NativeOperationClassLimits,
+        raster: NativeOperationClassLimits,
     ) -> Self {
         Self {
-            classes: [catalog, user_data, local, network],
+            classes: [catalog, user_data, local, network, raster],
         }
     }
 
     #[cfg(test)]
     const fn uniform(limits: NativeOperationClassLimits) -> Self {
-        Self::new(limits, limits, limits, limits)
+        Self::new(limits, limits, limits, limits, limits)
     }
 
     pub const fn production() -> Self {
@@ -100,6 +108,7 @@ impl NativeOperationLimits {
             NativeOperationClassLimits::new(8, 1),
             NativeOperationClassLimits::new(6, 2),
             NativeOperationClassLimits::new(12, 4),
+            NativeOperationClassLimits::new(4, 2),
         )
     }
 
@@ -110,7 +119,7 @@ impl NativeOperationLimits {
 
 #[derive(Clone)]
 pub struct NativeOperationExecutor {
-    classes: [NativeOperationClassExecutor; 4],
+    classes: [NativeOperationClassExecutor; 5],
 }
 
 impl NativeOperationExecutor {
@@ -124,6 +133,10 @@ impl NativeOperationExecutor {
         })
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "the production limits are constants validated by tests"
+    )]
     pub fn production() -> Self {
         Self::new(NativeOperationLimits::production())
             .expect("production native operation limits must be valid")
@@ -174,7 +187,8 @@ impl NativeOperationExecutor {
             .map_err(|_| format!("{label} native operation executor is unavailable"))?;
         let queued_ms = duration_millis(queued_at.elapsed());
 
-        let task = tauri::async_runtime::spawn_blocking(move || {
+        // The closure sits outside the reviewed statement so clippy still checks it.
+        let run = move || {
             tracing::debug!(
                 native_operation_class = class.as_str(),
                 native_operation = label,
@@ -210,7 +224,12 @@ impl NativeOperationExecutor {
                     resume_unwind(panic_payload)
                 }
             }
-        });
+        };
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "the executor owns the blocking pool; every native operation reaches it here"
+        )]
+        let task = tauri::async_runtime::spawn_blocking(run);
 
         match task.await {
             Ok(result) => result,
@@ -306,6 +325,10 @@ mod tests {
         assert_eq!(
             limits.for_class(NativeOperationClass::Network),
             NativeOperationClassLimits::new(12, 4),
+        );
+        assert_eq!(
+            limits.for_class(NativeOperationClass::Raster),
+            NativeOperationClassLimits::new(4, 2),
         );
     }
 
@@ -560,38 +583,76 @@ mod tests {
     }
 
     #[test]
-    fn operation_classes_have_isolated_capacity() {
+    fn a_local_operation_starts_while_raster_is_saturated() {
         tauri::async_runtime::block_on(async {
-            let executor = test_executor(1, 1);
-            let (started_tx, started_rx) = mpsc::sync_channel(1);
-            let (release_tx, release_rx) = mpsc::sync_channel(1);
-            let catalog_executor = executor.clone();
-            let catalog = tauri::async_runtime::spawn(async move {
-                catalog_executor
-                    .run(
-                        NativeOperationClass::Catalog,
-                        "catalog blocker",
-                        move || {
+            let executor = NativeOperationExecutor::production();
+            let raster =
+                NativeOperationLimits::production().for_class(NativeOperationClass::Raster);
+            let (started_tx, started_rx) = mpsc::channel();
+            let mut releases = Vec::new();
+            let mut raster_jobs = Vec::new();
+            let mut start_raster_job = |label: &'static str| {
+                let (release_tx, release_rx) = mpsc::sync_channel(1);
+                releases.push(release_tx);
+                let started_tx = started_tx.clone();
+                let job_executor = executor.clone();
+                raster_jobs.push(tauri::async_runtime::spawn(async move {
+                    job_executor
+                        .run(NativeOperationClass::Raster, label, move || {
                             started_tx.send(()).unwrap();
                             release_rx.recv().unwrap();
                             Ok(())
-                        },
-                    )
-                    .await
-            });
-            started_rx.recv_timeout(WAIT_TIMEOUT).unwrap();
+                        })
+                        .await
+                }));
+            };
 
-            executor
+            for _ in 0..raster.running {
+                start_raster_job("running raster operation");
+            }
+            for _ in 0..raster.running {
+                started_rx.recv_timeout(WAIT_TIMEOUT).unwrap();
+            }
+            for _ in raster.running..raster.admitted {
+                start_raster_job("queued raster operation");
+            }
+            wait_until(|| executor.available_admission_for_test(NativeOperationClass::Raster) == 0);
+
+            let refused = executor
                 .run(
-                    NativeOperationClass::Network,
-                    "isolated network operation",
+                    NativeOperationClass::Raster,
+                    "one raster operation too many",
                     || Ok(()),
                 )
                 .await
-                .unwrap();
+                .unwrap_err();
+            assert_eq!(refused, "Native raster operations are busy; try again");
 
-            release_tx.send(()).unwrap();
-            catalog.await.unwrap().unwrap();
+            let (local_tx, local_rx) = mpsc::sync_channel(1);
+            let local_executor = executor.clone();
+            let local = tauri::async_runtime::spawn(async move {
+                let result = local_executor
+                    .run(
+                        NativeOperationClass::Local,
+                        "save during raster work",
+                        || Ok("saved"),
+                    )
+                    .await;
+                local_tx.send(result).unwrap();
+            });
+            assert_eq!(
+                local_rx.recv_timeout(WAIT_TIMEOUT).unwrap(),
+                Ok("saved"),
+                "a Local operation must not wait behind saturated Raster work",
+            );
+            local.await.unwrap();
+
+            for release in releases {
+                release.send(()).unwrap();
+            }
+            for job in raster_jobs {
+                job.await.unwrap().unwrap();
+            }
         });
     }
 }

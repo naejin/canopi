@@ -7,16 +7,7 @@ import { CanvasPlantLabelResolver } from '../../canvas/runtime/plant-labels'
 import { CanvasSpeciesCache } from '../../canvas/runtime/species-cache'
 import { t } from '../../i18n'
 import type { Settings } from '../../types/settings'
-import {
-  createDefaultLayerLockState,
-  createDefaultLayerOpacity,
-  createDefaultLayerVisibility,
-  gridVisible,
-  layerLockState,
-  layerOpacity,
-  layerVisibility,
-  rulersVisible,
-} from '../canvas-settings/signals'
+import { gridVisible } from '../canvas-settings/signals'
 import { composeDocumentForSave } from '../contracts/document'
 import { setCanvasClean } from '../document-session/store'
 import {
@@ -24,6 +15,7 @@ import {
   resetSettingsProjectionForTests,
 } from '../settings/projection'
 import { locale, theme } from '../settings/state'
+import { createDefaultMapLayers, mapLayers, type MapLayersState } from '../map-layers/state'
 import { createAppCanvasRuntimeAppAdapter } from './app-adapter'
 import { createDesktopCanvasRuntimeAppAdapter } from './desktop-adapter'
 
@@ -36,12 +28,12 @@ describe('Canvas Runtime app adapter composition', () => {
       load: () => baseSettings(),
       save: persistSettings,
     })
-    resetLayerSignals()
+    resetGrid()
   })
 
   afterEach(() => {
     resetSettingsProjectionForTests()
-    resetLayerSignals()
+    resetGrid()
   })
 
   it('preserves the edition capabilities supplied by its composition root', () => {
@@ -65,7 +57,6 @@ describe('Canvas Runtime app adapter composition', () => {
     })
 
     expect(adapter.savedObjectStamps).toBeUndefined()
-    expect('savedObjectStamps' in adapter).toBe(false)
   })
 
   it('delegates clean state, document composition, and translation to app authorities', () => {
@@ -115,11 +106,10 @@ describe('Canvas Runtime app adapter composition', () => {
       theme.value = 'dark'
       locale.value = 'fr'
       gridVisible.value = false
-      rulersVisible.value = false
 
       expect(onTheme).toHaveBeenCalledTimes(2)
       expect(onLocale).toHaveBeenCalledTimes(2)
-      expect(onChromeOverlay).toHaveBeenCalledTimes(3)
+      expect(onChromeOverlay).toHaveBeenCalledTimes(2)
 
       disposeTheme()
       disposeLocale()
@@ -130,7 +120,7 @@ describe('Canvas Runtime app adapter composition', () => {
 
       expect(onTheme).toHaveBeenCalledTimes(2)
       expect(onLocale).toHaveBeenCalledTimes(2)
-      expect(onChromeOverlay).toHaveBeenCalledTimes(3)
+      expect(onChromeOverlay).toHaveBeenCalledTimes(2)
     } finally {
       disposeTheme()
       disposeLocale()
@@ -138,32 +128,37 @@ describe('Canvas Runtime app adapter composition', () => {
     }
   })
 
-  it('projects scene-owned Layers while preserving app-owned map Layers', () => {
+  it('reports the map backdrop the layer store shows, whatever the UI theme', () => {
     const adapter = createAdapter()
+    const onBackdrop = vi.fn()
+    const base = createDefaultMapLayers()
+    const withLayers = (patch: Partial<MapLayersState>): MapLayersState => ({ ...base, ...patch })
+    mapLayers.value = withLayers({ basemap: { ...base.basemap, style: 'liberty', visible: true, opacity: 1 } })
+    const dispose = adapter.settings.subscribeMapBackdrop(onBackdrop)
 
-    adapter.settings.layerProjections.syncFromLayers([
-      { name: 'base', visible: false, locked: true, opacity: 0.2 },
-      { name: 'plants', visible: false, locked: true, opacity: 0.45 },
-    ])
+    try {
+      expect(onBackdrop).toHaveBeenLastCalledWith('basemap')
+      theme.value = 'dark'
+      expect(onBackdrop).toHaveBeenCalledTimes(1)
 
-    expect(layerVisibility.value.base).toBe(true)
-    expect(layerLockState.value.base).toBe(false)
-    expect(layerOpacity.value.base).toBe(1)
-    expect(layerVisibility.value.plants).toBe(false)
-    expect(layerLockState.value.plants).toBe(true)
-    expect(layerOpacity.value.plants).toBe(0.45)
+      mapLayers.value = withLayers({ satellite: { visible: true, opacity: 1 } })
+      expect(onBackdrop).toHaveBeenLastCalledWith('satellite')
+      mapLayers.value = withLayers({ basemap: { ...base.basemap, style: 'dark', visible: true, opacity: 1 } })
+      expect(onBackdrop).toHaveBeenLastCalledWith('dark-basemap')
+      mapLayers.value = withLayers({ basemap: { ...base.basemap, visible: false } })
+      expect(onBackdrop).toHaveBeenLastCalledWith('paper')
+      // A faint background lets the map's paper show through.
+      mapLayers.value = withLayers({ satellite: { visible: true, opacity: 0.3 } })
+      expect(onBackdrop).toHaveBeenLastCalledWith('paper')
 
-    adapter.settings.layerProjections.syncLayer({
-      name: 'zones',
-      visible: false,
-      locked: true,
-      opacity: 0.6,
-    })
-
-    expect(layerVisibility.value.zones).toBe(false)
-    expect(layerLockState.value.zones).toBe(true)
-    expect(layerOpacity.value.zones).toBe(0.6)
-    expect(adapter.settings.layerProjections.isAppOwnedLayerProjection('contours')).toBe(true)
+      dispose()
+      mapLayers.value = withLayers({ satellite: { visible: true, opacity: 1 } })
+      expect(onBackdrop).toHaveBeenLastCalledWith('paper')
+    } finally {
+      dispose()
+      theme.value = 'light'
+      mapLayers.value = base
+    }
   })
 
   it('lets the Desktop root supply native presentation and Saved Stamp capture', () => {
@@ -175,16 +170,47 @@ describe('Canvas Runtime app adapter composition', () => {
   })
 })
 
+describe('reduced motion', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.resetModules()
+  })
+
+  it('the reduced-motion preference is live, and a key turn jumps with it on or off', async () => {
+    // A live prefers-reduced-motion query: on, then turned off while the app runs. It reaches the flights only: every turn jumps (U34).
+    let onChange: ((event: { readonly matches: boolean }) => void) | null = null
+    const query = {
+      matches: true,
+      addEventListener: (_type: string, listener: (event: { readonly matches: boolean }) => void) => { onChange = listener },
+      removeEventListener: vi.fn(),
+    }
+    vi.stubGlobal('matchMedia', vi.fn(() => query))
+    vi.resetModules()
+    const { createAppCanvasRuntimeAppAdapter: createLiveAdapter } = await import('./app-adapter')
+    const { createLiveTestCanvasRuntimeHost } = await import('../../__tests__/support/live-canvas-runtime')
+    const appAdapter = createLiveAdapter({ presentationData: {} })
+    const host = createLiveTestCanvasRuntimeHost({ screen: { width: 800, height: 600 }, appAdapter })
+    const bearing = () => host.surfaces.queries.view.captureView().camera.bearingDeg
+
+    expect(appAdapter.reducedMotion?.value).toBe(true)
+    host.surfaces.commands.viewport.rotateBy(1)
+    expect(bearing()).toBeCloseTo(15, 6)
+
+    query.matches = false
+    onChange!({ matches: false })
+    expect(appAdapter.reducedMotion?.value).toBe(false)
+    host.surfaces.commands.viewport.rotateBy(1)
+    expect(bearing()).toBeCloseTo(30, 6)
+    await host.destroy()
+  })
+})
+
 function createAdapter() {
   return createAppCanvasRuntimeAppAdapter({ presentationData: {} })
 }
 
-function resetLayerSignals(): void {
-  layerVisibility.value = createDefaultLayerVisibility()
-  layerLockState.value = createDefaultLayerLockState()
-  layerOpacity.value = createDefaultLayerOpacity()
+function resetGrid(): void {
   gridVisible.value = true
-  rulersVisible.value = true
 }
 
 function baseSettings(overrides: Partial<Settings> = {}): Settings {
@@ -192,19 +218,29 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     locale: 'en',
     theme: 'light',
     snap_to_grid: true,
-    snap_to_guides: true,
-    auto_save_interval_s: 60,
     side_panel_width: null,
     saved_stamps_frame_height: null,
-    map_layer_visible: true,
-    map_style: 'street',
-    map_opacity: 1,
+    basemap_style: 'liberty',
+    basemap_visible: true,
+    basemap_opacity: 1,
+    satellite_visible: false,
+    satellite_opacity: 1,
     contour_visible: false,
     contour_opacity: 1,
     contour_interval: 0,
     hillshade_visible: false,
     hillshade_opacity: 0.55,
+    soften_background: false,
     plant_spacing_interval_m: 0.5,
+    last_view: null,
+    used_canvas_tools: [],
+    tool_names_visible: null,
+    single_key_shortcuts: true,
+    scroll_wheel: 'zoom',
+    new_design_satellite: false,
+    new_design_symbol_scale: 1,
+    new_design_labels: 'names',
+    satellite_source: null,
     ...overrides,
   }
 }

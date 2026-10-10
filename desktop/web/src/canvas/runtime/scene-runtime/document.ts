@@ -1,4 +1,4 @@
-import type { CanopiFile } from '../../../types/design'
+import type { CanopiFile, SavedViewCamera } from '../../../types/design'
 import { serializeScenePersistedState } from '../scene'
 import type {
   CanvasPersistenceCapture,
@@ -17,7 +17,6 @@ interface SceneRuntimeDocumentBridgeOptions {
   clearHoveredTargets(): void
   clearPanelOriginTargets(): void
   composeDocumentForSave(input: CanvasRuntimeDocumentCompositionInput): CanopiFile
-  syncCanvasSignalsFromDocument(file: CanopiFile): void
 }
 
 export class SceneRuntimeDocumentBridge {
@@ -26,7 +25,6 @@ export class SceneRuntimeDocumentBridge {
   private readonly _clearHoveredTargets: SceneRuntimeDocumentBridgeOptions['clearHoveredTargets']
   private readonly _clearPanelOriginTargets: SceneRuntimeDocumentBridgeOptions['clearPanelOriginTargets']
   private readonly _composeDocumentForSave: SceneRuntimeDocumentBridgeOptions['composeDocumentForSave']
-  private readonly _syncCanvasSignalsFromDocument: SceneRuntimeDocumentBridgeOptions['syncCanvasSignalsFromDocument']
 
   constructor(options: SceneRuntimeDocumentBridgeOptions) {
     this._authority = options.authority
@@ -34,15 +32,12 @@ export class SceneRuntimeDocumentBridge {
     this._clearHoveredTargets = options.clearHoveredTargets
     this._clearPanelOriginTargets = options.clearPanelOriginTargets
     this._composeDocumentForSave = options.composeDocumentForSave
-    this._syncCanvasSignalsFromDocument = options.syncCanvasSignalsFromDocument
   }
 
   loadDocument(file: CanopiFile): void {
     this._clearHoveredTargets()
     this._clearPanelOriginTargets()
-    this._authority.hydrate(file, (hydratedFile) => {
-      this._syncCanvasSignalsFromDocument(hydratedFile)
-    })
+    this._authority.hydrate(file)
   }
 
   replaceDocument(
@@ -57,20 +52,20 @@ export class SceneRuntimeDocumentBridge {
         this._clearHoveredTargets()
         this._clearPanelOriginTargets()
       },
-      syncDocumentSignals: (hydratedFile) => {
-        this._syncCanvasSignalsFromDocument(hydratedFile)
-      },
       finalizeReplacement,
     })
     return { callerFinalizerInvoked }
   }
 
+  /** `mapView`: the view the Design is saved with, a scene-owned field of the canvas part; none writes no `map_view`. */
   captureForPersistence(
     metadata: CanvasRuntimeDocumentMetadata,
     doc: CanopiFile,
+    mapView: SavedViewCamera | null,
   ): CanvasPersistenceCapture {
     const capture = this._authority.capturePersistence()
-    const canvas = serializeScenePersistedState(capture.scene, { now: new Date() })
+    const scene = serializeScenePersistedState(capture.scene, capture.plane, { now: new Date() })
+    const canvas = mapView ? { ...scene, map_view: mapView } : scene
     const content = this._composeDocumentForSave({ metadata, document: doc, canvas })
     return Object.freeze({
       content,

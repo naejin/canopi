@@ -1,34 +1,110 @@
-.chip {
+/* The one top-centre chip slot (CanvasChrome): the overview notice, the highlight chip and the labels chip stack in it
+   instead of covering each other; the found-place chip stays in the Start card's row (SiteOnboarding). Top centre of
+   the visible map, between the tool rail and the panel rail or open dock (`--map-inset-*`, published by
+   app/shell/visible-map-area.ts, where the slot registers as top chrome), and right of the tool card. Its chips wrap
+   when that area is narrow. */
+.topSlot {
   position: absolute;
-  z-index: 5;
-  top: var(--space-7);
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: 60%;
+  z-index: 35;
+  top: var(--chrome-rail-top);
+  right: calc(var(--map-inset-right, 0px) + var(--space-4));
+  /* Right of the tool card while one shows (`--tool-card-reserve`). */
+  left: max(calc(var(--map-inset-left, 0px) + var(--space-4)), var(--tool-card-reserve, 0px));
+  width: fit-content;
+  max-width: 640px;
+  margin-inline: auto;
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-accent);
-  border-radius: var(--radius-sm);
+  pointer-events: none;
+}
+
+.topSlot > * {
+  pointer-events: auto;
+}
+
+/* While the Start card shows, the slot is a flex item of its row (SiteOnboarding): centred in the room right of the card,
+   or on a line of its own below it when the map is too narrow for both. */
+[data-start-row] > .topSlot {
+  position: static;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Status chip for highlighted plants, and the labels chip. */
+.chip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+  min-height: var(--control-size-3xl);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-glass);
+  box-shadow: var(--shadow-float);
+  color: var(--color-text);
+  font-size: var(--text-base);
+}
+
+.text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.text b {
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.button,
+.quiet {
+  position: relative;
+  flex-shrink: 0;
+  min-height: var(--control-size-md);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
   background: var(--color-surface);
   color: var(--color-text);
   font: inherit;
   font-size: var(--text-sm);
+  font-weight: 600;
   cursor: pointer;
 }
-.chip:hover {
+
+.button:hover,
+.quiet:hover {
   background: var(--color-control-hover);
 }
-.chip:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
-.count {
-  color: var(--color-text-muted);
-  font-variant-numeric: tabular-nums;
+
+.primary {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
 }
 
-@media (max-width: 480px) {
-  .chip { top: calc(var(--space-7) + var(--control-size-lg)); }
+.primary:hover {
+  background: var(--color-accent-ink);
+}
+
+.quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.button:focus-visible,
+.quiet:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .topSlot { top: calc(var(--chrome-rail-top) + var(--control-size-3xl) + var(--space-2)); }
 }

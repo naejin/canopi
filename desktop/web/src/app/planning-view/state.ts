@@ -1,8 +1,8 @@
 import { signal, type Signal } from '@preact/signals'
 import { designSessionStore } from '../document-session/store'
+import type { SpeciesQuickFilterValue } from '../plant-finder/quick-filters'
 
 export type BudgetSort = 'name' | 'highest-total' | 'most-plants'
-export type BudgetPriceFilter = 'all' | 'no-price' | 'zero-price'
 export type CalendarCompletionFilter = 'open' | 'completed' | 'all'
 export type CalendarDisplay = 'month' | 'agenda'
 
@@ -13,9 +13,15 @@ export interface ConsortiumListFilter {
 
 export interface PlanningViewState {
   readonly sessionIdentity: object
+  readonly plantsSearch: Signal<string>
+  readonly plantsSelectedOnMap: Signal<boolean>
+  readonly plantsQuickFilters: Signal<SpeciesQuickFilterValue>
+  readonly plantsDisplayOpen: Signal<boolean>
   readonly budgetSearch: Signal<string>
+  readonly budgetSelectedOnMap: Signal<boolean>
+  readonly budgetQuickFilters: Signal<SpeciesQuickFilterValue>
   readonly budgetSort: Signal<BudgetSort>
-  readonly budgetPriceFilter: Signal<BudgetPriceFilter>
+  readonly budgetMissingPriceOnly: Signal<boolean>
   budgetScrollTop: number
   readonly calendarSearch: Signal<string>
   readonly calendarActionType: Signal<string>
@@ -27,6 +33,8 @@ export interface PlanningViewState {
   readonly calendarUnscheduledExpanded: Signal<boolean>
   calendarScrollTop: number
   readonly consortiumSearch: Signal<string>
+  readonly consortiumSelectedOnMap: Signal<boolean>
+  readonly consortiumQuickFilters: Signal<SpeciesQuickFilterValue>
   readonly consortiumFilter: Signal<ConsortiumListFilter | null>
   readonly consortiumExpandedStrata: Signal<ReadonlySet<string>>
   readonly consortiumExpansionInitialized: Signal<boolean>
@@ -58,9 +66,15 @@ function createPlanningViewState(sessionIdentity: object): PlanningViewState {
   const month = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
   return {
     sessionIdentity,
+    plantsSearch: signal(''),
+    plantsSelectedOnMap: signal(false),
+    plantsQuickFilters: signal<SpeciesQuickFilterValue>({ stratum: null, form: null }),
+    plantsDisplayOpen: signal(false),
     budgetSearch: signal(''),
+    budgetSelectedOnMap: signal(false),
+    budgetQuickFilters: signal<SpeciesQuickFilterValue>({ stratum: null, form: null }),
     budgetSort: signal<BudgetSort>('name'),
-    budgetPriceFilter: signal<BudgetPriceFilter>('all'),
+    budgetMissingPriceOnly: signal(false),
     budgetScrollTop: 0,
     calendarSearch: signal(''),
     calendarActionType: signal('all'),
@@ -72,6 +86,8 @@ function createPlanningViewState(sessionIdentity: object): PlanningViewState {
     calendarUnscheduledExpanded: signal(true),
     calendarScrollTop: 0,
     consortiumSearch: signal(''),
+    consortiumSelectedOnMap: signal(false),
+    consortiumQuickFilters: signal<SpeciesQuickFilterValue>({ stratum: null, form: null }),
     consortiumFilter: signal<ConsortiumListFilter | null>(null),
     consortiumExpandedStrata: signal<ReadonlySet<string>>(new Set()),
     consortiumExpansionInitialized: signal(false),

@@ -9,16 +9,19 @@ import { zoneMeasurements } from '../app/canvas-pdf/zone-measurements'
 import { drawMark } from '../app/canvas-pdf/page-drawing'
 import type { PdfOperation } from '../app/canvas-pdf/types'
 import { hits, outlineSegments, rotatedBounds } from '../app/canvas-pdf/field-geometry'
+import { englishPdfLabels } from '../../scripts/pdf-validation/fixtures'
 
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
-const input: PdfInput = { name: 'Garden', locale: 'en', commonNames: {}, canvas: {
+const input: PdfInput = { name: 'Garden', locale: 'en', viewBearingDeg: 0, commonNames: {}, canvas: {
   layers: [{ name: 'plants', visible: true, opacity: 1 }], zones: [], annotations: [], measurements: [],
   plants: [{ id: 'apple', canonicalName: 'Malus domestica', speciesCode: 'MDO', position: { x: 5, y: 5 },
     color: '#218455', symbol: 'round', pinnedName: false,
-    mark: [{ d: 'M1 0 A1 1 0 1 0 -1 0 A1 1 0 1 0 1 0 Z', fill: true, stroke: false, strokeWidth: 0 }] }],
+    mark: [{ d: 'M1 0 A1 1 0 1 0 -1 0 A1 1 0 1 0 1 0 Z', paint: 'symbol' }] }],
 } }
 const draw = (value: PdfInput) => drawField(value, { x: 60, y: 60, width: 400, height: 400 },
-  { x: 0, y: 0, width: 10, height: 10 }, 40, { id: 'detail', width: 595, height: 842 }, text(), fieldReferences(value))
+  { x: 0, y: 0, width: 10, height: 10 }, 40, { id: 'detail', width: 595, height: 842 }, text(), references(value))
+/** North up: the drawn canvas is the plan. */
+const references = (value: PdfInput) => fieldReferences(value, value.canvas, zoneMeasurements(value.canvas.zones))
 
 it('prints overlapping zones transparently beneath artwork on the overview, detail and picker without changing authored fills', () => {
   const source: PdfInput = { ...input, canvas: { ...input.canvas,
@@ -37,7 +40,7 @@ it('prints overlapping zones transparently beneath artwork on the overview, deta
   const before = structuredClone(source)
   const plan = buildPdfPlan(source, { paper: 'A4', layers: ['plants', 'zones', 'annotations', 'measurement-guides'],
     areas: [{ id: 'bed', name: 'Bed', bounds: { x: 0, y: 0, width: 10, height: 10 } }] }, text(),
-    { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
   const pages = [plan.pages[0]!, plan.pages.find(p => p.kind === 'detail')!, plan.pickerPage!]
   for (const page of pages) {
     const zoneIndices = page.operations.flatMap((op, i) => op.kind === 'path' && op.opacity === .43 && op.stroke === '#8b877f' ? [i] : [])
@@ -77,7 +80,7 @@ it('prints the Species Code to the left of its single enclosed key sample', () =
   const drawing = draw(input)
   drawing.legend = [{ ...drawing.legend[0]!, enclosures: ['circle'] }]
   const keys = fieldKey(drawing, 'detail', () => ({ width: 595, height: 842, frame: { x: 28, y: 60, width: 539, height: 720 } }), text(),
-    { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'Plants', actualSize: '100%' }, 1)
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'Plants', actualSize: '100%' }, 1)
   const operations = keys[0]!.operations
   const code = operations.find(op => op.kind === 'text' && op.line.runs.map(r => r.text).join('') === 'MDO')
   expect(code).toBeDefined()
@@ -105,7 +108,7 @@ it('uses the reserved Species Code locally when enclosure choices are exhausted'
 
 it('fits a complete compact key beside a narrow detail without a redundant key page', () => {
   const plan = buildPdfPlan(input, { paper: 'A4', layers: ['plants'], areas: [{ id: 'bed', name: 'Bed', bounds: { x: 4, y: 0, width: 2, height: 10 } }] }, text(),
-    { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'Plants', actualSize: '100%' })
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'Plants', actualSize: '100%' })
   expect(plan.pages.map(p => p.kind)).toEqual(['overview', 'detail'])
   expect(plan.pages[1]!.operations.some(op => op.kind === 'text' && op.line.runs.map(r => r.text).join('') === 'Malus domestica')).toBe(true)
   const destinations = new Set(plan.pages.flatMap(p => [`page:${p.id}`, ...p.destinations?.map(d => d.id) ?? []]))
@@ -114,7 +117,7 @@ it('fits a complete compact key beside a narrow detail without a redundant key p
 
 it('numbers detail sheets consecutively regardless of their physical PDF page indices', () => {
   const plan = buildPdfPlan(input, { paper: 'A4', layers: ['plants'], areas: [0, 1, 2].map(i => ({ id: String(i), name: 'Bed', bounds: { x: 0, y: 0, width: 10, height: 10 } })) }, text(),
-    { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'Plants', actualSize: '100%' })
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'Plants', actualSize: '100%' })
   const details = plan.pages.filter(p => p.kind === 'detail')
   expect(details.map(p => p.detailNumber)).toEqual([1, 2, 3])
   expect(details.map(p => p.number)).toEqual([2, 3, 4])
@@ -125,7 +128,7 @@ it('reports true ellipse diameters on the overview rather than its rotated bound
     bounds: { x: 6.83, y: 16.83, width: 6.34, height: 6.34 }, fill: null,
     geometry: { kind: 'ellipse', center: { x: 10, y: 20 }, radii: { x: 4, y: 2 }, rotation: 45 } }] } }
   const plan = buildPdfPlan(source, { paper: 'A4', layers: ['zones'] }, text(),
-    { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'Plants', actualSize: '100%' })
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'Plants', actualSize: '100%' })
   const words = plan.pages[0]!.operations.flatMap(op => op.kind === 'text' ? op.line.runs.map(r => r.text) : []).join(' ')
   expect(words).toContain('8.00')
   expect(words).toContain('4.00')
@@ -162,7 +165,7 @@ it('reuses enclosure choices for species that never share a detail and favors fr
     ['A', 1], ['B', 2], ['B', 3], ['B', 12], ['B', 13], ['C', 14],
   ].map(([name, x], i) => ({ ...input.canvas.plants[0]!, id: String(i), canonicalName: String(name), position: { x: Number(x), y: 5 } })) } }
   const plan = buildPdfPlan(source, { paper: 'A4', layers: ['plants'], areas: [0, 10].map((x, i) => ({ id: String(i), name: 'Bed', bounds: { x, y: 0, width: 6, height: 10 } })) }, text(),
-    { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'Plants', actualSize: '100%' })
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'Plants', actualSize: '100%' })
   const details = plan.pages.filter(p => p.kind === 'detail')
   for (const detail of details) expect(detail.legend.find(e => e.canonicalName === 'B')!.enclosures).toEqual(['plain'])
   expect(details[0]!.legend.find(e => e.canonicalName === 'A')!.enclosures).toEqual(['circle'])
@@ -174,7 +177,7 @@ it('groups repeated overview guide values by zone while retaining every authored
     bounds: { x: 0, y: 0, width: 4, height: 8 }, fill: null, geometry: { kind: 'rect', points: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 8 }, { x: 0, y: 8 }] } }],
     measurements: [1, 2, 3].map(y => ({ id: `g${y}`, start: { x: 2, y }, end: { x: 2.5, y } })) } }
   const plan = buildPdfPlan(source, { paper: 'A4', layers: ['zones', 'measurement-guides'] }, text(),
-    { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'Plants', actualSize: '100%' })
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'Plants', actualSize: '100%' })
   const overview = plan.pages[0]!
   const words = overview.operations.flatMap(op => op.kind === 'text' ? op.line.runs.map(r => r.text) : [])
   expect(words).toContain('0.5 ×3')
@@ -184,13 +187,13 @@ it('groups repeated overview guide values by zone while retaining every authored
 
 it('retains the authored compact symbol even at small print sizes so the visual key stays meaningful', () => {
   const operations: PdfOperation[] = []
-  drawMark({ ...input.canvas.plants[0]!, symbol: 'square', smallMark: [{ d: 'M-1 -1 H1 V1 H-1 Z', fill: true, stroke: false, strokeWidth: 0 }] }, 10, 20, 1, .7, operations)
+  drawMark({ ...input.canvas.plants[0]!, symbol: 'square', smallMark: [{ d: 'M-1 -1 H1 V1 H-1 Z', paint: 'symbol' }] }, 10, 20, 1, .7, operations)
   expect(operations).toEqual([expect.objectContaining({ kind: 'path', d: 'M-1 -1 H1 V1 H-1 Z', fill: '#218455', opacity: .7 })])
 })
 
 it('gives printed details a clear sheet identity, totals and a ground scale', () => {
   const plan = buildPdfPlan(input, { paper: 'A4', layers: ['plants'], areas: [{ id: 'bed', name: 'Bed', bounds: { x: 4, y: 0, width: 2, height: 10 } }] }, text(),
-    { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: 'Print at 100%' })
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: 'Print at 100%' })
   const words = plan.pages[1]!.operations.flatMap(op => op.kind === 'text' ? op.line.runs.map(r => r.text) : [])
   expect(words).toContain('Detail 1')
   expect(words).toContain('1 plants · 1 species')
@@ -214,7 +217,7 @@ it('moves a slender map across the sheet to fit its full key without reducing dr
   const source = { ...input, canvas: { ...input.canvas, plants: Array.from({ length: 29 }, (_, i) => ({ ...input.canvas.plants[0]!,
     id: String(i), canonicalName: `Species ${i}`, speciesCode: `S${i}`, color: `#${(100000 + i).toString(16).padStart(6, '0')}`, position: { x: 2, y: i / 2 } })) } }
   const plan = buildPdfPlan(source, { paper: 'A4', layers: ['plants'], areas: [{ id: 'bed', name: 'Bed', bounds: { x: 0, y: 0, width: 5, height: 15 } }] }, text(),
-    { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
   expect(plan.pages.map(p => p.kind)).toEqual(['overview', 'detail'])
   expect(plan.pages[1]!.legend).toHaveLength(29)
   expect(plan.pages[1]!.pointsPerMeter).toBeGreaterThan(47)
@@ -235,7 +238,7 @@ it('preserves covered detail notes and omits remote notes instead of relocating 
     { id: 'general', text: 'All varieties may be substituted', position: { x: -20, y: 0 }, fontSize: 16, rotation: 0 },
   ] } }
   const plan = buildPdfPlan(source, { paper: 'A4', layers: ['plants', 'annotations'], areas: [{ id: 'bed', name: 'Bed', bounds: { x: 0, y: 0, width: 10, height: 10 } }] }, text(),
-    { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'Plants', actualSize: '100%' })
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'Plants', actualSize: '100%' })
   const words = (pages: typeof plan.pages) => pages.flatMap(p => p.operations.flatMap(op => op.kind === 'text' ? op.line.runs.map(r => r.text) : [])).join(' ')
   expect(words([plan.pages[0]!])).not.toContain('Protect this cultivar')
   expect(words(plan.pages)).toContain('Protect this cultivar')
@@ -254,7 +257,7 @@ it('keeps full zone sizes on the detail itself when the zone crosses its crop', 
   const source: PdfInput = { ...input, canvas: { ...input.canvas, plants: [], zones: [{ name: 'Long bed', path: 'M0 0 H100 V1 H0 Z', fill: null,
     bounds: { x: 0, y: 0, width: 100, height: 1 }, geometry: { kind: 'rect', points: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 1 }, { x: 0, y: 1 }] } }] } }
   const plan = buildPdfPlan(source, { paper: 'A4', layers: ['zones'], areas: [{ id: 'crop', name: 'Crop', bounds: { x: -1, y: -1, width: 12, height: 4 } }] }, text(),
-    { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'Plants', actualSize: '100%' })
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'Plants', actualSize: '100%' })
   const detail = plan.pages.find(p => p.kind === 'detail')!
   expect(detail.operations.some(op => op.kind === 'text' && op.size === 8 && op.y < 90 && op.line.runs.map(r => r.text).join('').includes('100 × 1 m'))).toBe(true)
 })
@@ -265,7 +268,7 @@ it('fits a field key with both common and botanical names without shrinking the 
   const source: PdfInput = { ...input, commonNames: Object.fromEntries(plants.map((p, i) => [p.canonicalName, `Common name ${i}`])), canvas: { ...input.canvas, plants,
     annotations: [{ id: 'long', text: 'A complete note '.repeat(8), position: { x: 3, y: 5 }, fontSize: 16, rotation: 0 }] } }
   const plan = buildPdfPlan(source, { paper: 'A4', layers: ['plants', 'annotations'], areas: [{ id: 'bed', name: 'Bed', bounds: { x: 0, y: 0, width: 5, height: 15 } }] }, text(),
-    { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
   expect(plan.pages.map(p => p.kind)).toEqual(['overview', 'detail'])
   const words = plan.pages[1]!.operations.flatMap(op => op.kind === 'text' ? op.line.runs.map(r => r.text) : []).join(' ')
   expect(words).toContain('Genus species 28')
@@ -276,13 +279,13 @@ it('labels overview zones on the drawing so their dimension table can be used on
   const source: PdfInput = { ...input, canvas: { ...input.canvas, plants: [], zones: [{ name: 'Z01', path: 'M0 0 H4 V8 H0 Z', fill: null,
     bounds: { x: 0, y: 0, width: 4, height: 8 }, geometry: { kind: 'rect', points: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 8 }, { x: 0, y: 8 }] } }] } }
   const plan = buildPdfPlan(source, { paper: 'A4', layers: ['zones'] }, text(),
-    { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
   const page = plan.pages[0]!
   expect(page.operations.some(op => op.kind === 'text' && op.x < page.frame.x + page.frame.width && op.line.runs.map(r => r.text).join('') === 'Z01')).toBe(true)
 })
 
 it('keeps a note near its authored position by interrupting only a crossing zone outline', () => {
-  const drawing = draw({ ...input, canvas: { ...input.canvas, plants: [], zones: [{ name: 'Bed', path: 'M2 1 H3.5 V8 H2 Z', fill: null,
+  const drawing = draw({ ...input, canvas: { ...input.canvas, plants: [], zones: [{ name: 'Bed', path: 'M2 1 L3.5 1 L3.5 8 L2 8 Z', geometry: { kind: 'rect' as const, points: [{ x: 2, y: 1 }, { x: 3.5, y: 1 }, { x: 3.5, y: 8 }, { x: 2, y: 8 }] }, fill: null,
     bounds: { x: 2, y: 1, width: 1.5, height: 7 } }], annotations: [{ id: 'note', text: 'Keep access clear', fontSize: 16, rotation: 0, position: { x: 2, y: 4 } }] } })
   const note = drawing.operations.find(op => op.kind === 'text' && op.line.runs.map(r => r.text).join('') === 'Keep access clear')!
   expect(note.kind === 'text' && note.x >= 140 && note.x < 142).toBe(true)
@@ -298,7 +301,7 @@ it('keeps a note near its authored position by interrupting only a crossing zone
 it('prints a connected chain of authored overview guides in a readable aligned band', () => {
   const source = { ...input, canvas: { ...input.canvas, plants: [], measurements: [0, 1, 2, 3].map(x => ({ id: `g${x}`, start: { x, y: 5 }, end: { x: x + 1, y: 5 } })) } }
   const plan = buildPdfPlan(source, { paper: 'A4', layers: ['measurement-guides'] }, text(),
-    { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
   const page = plan.pages[0]!
   const labels = page.operations.filter(op => op.kind === 'text' && op.size >= 7 && op.y > page.frame.y + page.frame.height && op.line.runs.map(r => r.text).join('') === '1')
   expect(labels).toHaveLength(4)
@@ -313,7 +316,7 @@ it('paginates only zone dimensions and guide values when an overview with annota
     annotations: [{ id: 'omit', text: 'Uncovered annotation '.repeat(30), position: { x: 45, y: 1 }, fontSize: 16, rotation: 0 }],
   } }
   const plan = buildPdfPlan(source, { paper: 'A4', layers: ['zones', 'measurement-guides', 'annotations'], views: { 'overview:legend:0': { orientation: 'portrait' } } }, text(),
-    { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
   expect(plan.pages.length).toBeGreaterThan(1)
   expect(plan.pages.slice(1).every(p => p.kind === 'legend' && p.sourceId === 'overview')).toBe(true)
   expect(plan.pages[0]!.measurementIds).toHaveLength(90)
@@ -331,10 +334,10 @@ it('paginates only zone dimensions and guide values when an overview with annota
 })
 
 it('keeps local overview notes legible at a large ground extent', () => {
-  const source: PdfInput = { ...input, canvas: { ...input.canvas, plants: [], zones: [{ name: 'Park', path: 'M0 0 H400 V400 H0 Z', fill: null,
+  const source: PdfInput = { ...input, canvas: { ...input.canvas, plants: [], zones: [{ name: 'Park', path: 'M0 0 L400 0 L400 400 L0 400 Z', geometry: { kind: 'rect' as const, points: [{ x: 0, y: 0 }, { x: 400, y: 0 }, { x: 400, y: 400 }, { x: 0, y: 400 }] }, fill: null,
     bounds: { x: 0, y: 0, width: 400, height: 400 } }], annotations: [{ id: 'tree', text: 'Keep this tree', fontSize: 16, rotation: 0, position: { x: 200, y: 200 } }] } }
   const plan = buildPdfPlan(source, { paper: 'A4', layers: ['zones', 'annotations'] }, text(),
-    { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
   expect(plan.pages[0]!.operations.some(op => op.kind === 'text' && op.size >= 7 && op.line.runs.map(r => r.text).join('') === 'Keep this tree')).toBe(true)
 })
 
@@ -342,7 +345,7 @@ it('keeps compact key descenders and enclosed samples clear of row separators', 
   const source: PdfInput = { ...input, commonNames: { 'Malus domestica': 'Young apple' }, canvas: { ...input.canvas, plants: [input.canvas.plants[0]!,
     { ...input.canvas.plants[0]!, id: 'pear', canonicalName: 'Pyrus communis', speciesCode: 'PCO', position: { x: 5, y: 7 } }] } }
   const plan = buildPdfPlan(source, { paper: 'A4', layers: ['plants'], areas: [{ id: 'bed', name: 'Bed', bounds: { x: 4, y: 0, width: 2, height: 10 } }] }, text(),
-    { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
   expect(plan.pages).toHaveLength(2)
   const page = plan.pages[1]!
   const ink = page.operations.flatMap(op => op.kind === 'text' && op.line.ink ? [rotatedBounds(op.line.ink, op.rotation, op)] : [])
@@ -358,7 +361,7 @@ it('keeps a cropped overview guide at its full distance without drawing the chai
     id: `g${i}`, start: { x: i, y: 0 }, end: { x: i + 1, y: 0 },
   })) } }
   const plan = buildPdfPlan(source, { paper: 'A4', layers: ['measurement-guides'], views: { overview: { zoom: 500 } } }, text(),
-    { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
   const words = plan.pages.flatMap(p => p.operations.flatMap(op => op.kind === 'text' ? op.line.runs.map(r => r.text) : [])).join(' ')
   expect(words).toContain('1 m')
   for (const page of plan.pages) for (const op of page.operations) if (op.kind === 'text' && op.line.ink) {
@@ -373,10 +376,10 @@ it('uses direct Species Codes for locally occasional ambiguous plants, regardles
   const plants = Array.from({ length: 12 }, (_, i) => ({ ...input.canvas.plants[0]!, id: `apple-${i}`, position: { x: 3, y: 1 + i * .6 } }))
   const pear = { ...input.canvas.plants[0]!, id: 'pear', canonicalName: 'Pyrus communis', speciesCode: 'PCO', position: { x: 7, y: 5 } }
   const source = { ...input, canvas: { ...input.canvas, plants: [...plants, pear] } }
-  const references = fieldReferences({ ...source, canvas: { ...source.canvas, plants: [...source.canvas.plants,
+  const allPlants = references({ ...source, canvas: { ...source.canvas, plants: [...source.canvas.plants,
     ...Array.from({ length: 100 }, (_, i) => ({ ...pear, id: `outside-${i}`, position: { x: 30, y: i } }))] } })
   const drawing = drawField(source, { x: 60, y: 60, width: 400, height: 400 }, { x: 0, y: 0, width: 10, height: 10 }, 40,
-    { id: 'detail', width: 595, height: 842 }, text(), references)
+    { id: 'detail', width: 595, height: 842 }, text(), allPlants)
   expect(drawing.legend.find(e => e.canonicalName === 'Pyrus communis')!.enclosures).toEqual(['code'])
   expect(drawing.legend.find(e => e.canonicalName === 'Malus domestica')!.enclosures).toEqual(['plain'])
   expect(drawing.operations.some(op => op.kind === 'text' && op.line.runs.map(r => r.text).join('') === 'PCO')).toBe(true)
@@ -409,7 +412,7 @@ it('omits unreadable notes outside chosen details without expanding their covera
     position: { x: 25, y: 5 }, fontSize: 16, rotation: 0 }] } }
   const setup = { paper: 'A4' as const, layers: ['plants', 'annotations'], areas: [{ id: 'chosen', name: 'Chosen', bounds: { x: 0, y: 0, width: 10, height: 10 } }] }
   const before = structuredClone(setup)
-  const plan = buildPdfPlan(source, setup, text(), { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
+  const plan = buildPdfPlan(source, setup, text(), { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
   expect(plan.pages.filter(p => p.kind === 'detail')).toHaveLength(1)
   expect(plan.pages.find(p => p.id === 'area:chosen')!.ground).toEqual(setup.areas[0]!.bounds)
   expect(plan.pages.flatMap(p => p.annotationIds ?? [])).not.toContain('outside')
@@ -433,7 +436,7 @@ it('keeps multi-line zone dimensions and their descenders clear of overview tabl
   const zone = { name: 'Z01', path: 'M0 0 H4 V1 H1 V4 H0 Z', fill: null, bounds: { x: 0, y: 0, width: 4, height: 4 },
     geometry: { kind: 'polygon' as const, points: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 4 }, { x: 0, y: 4 }] } }
   const plan = buildPdfPlan({ ...input, canvas: { ...input.canvas, zones: [zone, { ...zone, name: 'Z02' }] } }, { paper: 'A4', layers: ['zones'] }, text(),
-    { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
   const page = plan.pages[0]!, ink = page.operations.flatMap(op => op.kind === 'text' && op.line.ink ? [rotatedBounds(op.line.ink, op.rotation, op)] : [])
   for (const op of page.operations) if (op.kind === 'path' && op.stroke === '#d8d2c8')
     expect(ink.some(b => outlineSegments(op.d, p => p).some(s => hits(s, b)))).toBe(false)
@@ -456,7 +459,7 @@ it('retains a long covered note in its detail key while omitting a neighbouring 
   const source = { ...input, canvas: { ...input.canvas, annotations: [5, 6].map((x, i) => ({ id: i ? 'deferred' : 'covered', text: 'Complete instruction '.repeat(20),
     position: { x, y: 5 }, fontSize: 16, rotation: 0 })) } }
   const plan = buildPdfPlan(source, { paper: 'A4', layers: ['plants', 'annotations'], areas: [{ id: 'bed', name: 'Bed', bounds: { x: 0, y: 0, width: 5.5, height: 10 } }] }, text(),
-    { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })
   expect(plan.pages.filter(p => p.kind === 'detail').map(p => p.id)).toEqual(['area:bed'])
   expect(plan.pages.flatMap(p => p.annotationIds ?? [])).toEqual(['covered'])
   const detail = plan.pages.find(p => p.id === 'area:bed')!

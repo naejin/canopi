@@ -46,11 +46,30 @@ export function normalizeHexColor(value: string | null | undefined): string | nu
   return /^#[0-9A-F]{6}$/.test(trimmed) ? trimmed : null
 }
 
+/** WCAG relative luminance of a #RRGGBB colour. */
+export function hexLuminance(color: string): number {
+  const rgb = [1, 3, 5].map((offset) => Number.parseInt(color.slice(offset, offset + 2), 16) / 255)
+    .map((channel) => channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4)
+  return rgb[0]! * .2126 + rgb[1]! * .7152 + rgb[2]! * .0722
+}
+
+export function contrastRatio(a: string, b: string): number {
+  const la = hexLuminance(a)
+  const lb = hexLuminance(b)
+  return (Math.max(la, lb) + .05) / (Math.min(la, lb) + .05)
+}
+
+/** Whichever of `light` and `dark` contrasts more with `color`; `dark` when `color` is not #RRGGBB. */
+export function contrastingInk(color: string, light: string, dark: string): string {
+  if (normalizeHexColor(color) === null) return dark
+  return contrastRatio(color, light) >= contrastRatio(color, dark) ? light : dark
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
 
-export function normalizeHslColor(color: HslColor): HslColor {
+function normalizeHslColor(color: HslColor): HslColor {
   const h = ((color.h % 360) + 360) % 360
   return {
     h,
@@ -171,7 +190,7 @@ export function pointerPositionToSaturationLightness(
   }
 }
 
-export function pickPrimaryFlowerColorToken(value: string | null | undefined): string | null {
+function pickPrimaryFlowerColorToken(value: string | null | undefined): string | null {
   if (typeof value !== 'string') return null
   const primary = value
     .split(/[,/]/)[0]

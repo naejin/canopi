@@ -1,6 +1,7 @@
-import type { CanopiFile } from '../../types/design'
-import type { WorkspaceCameraFrameReader, WorkspaceCameraNavigation } from './camera'
-import type { PlantPresentationContext } from './plant-presentation'
+import type { ReadonlySignal } from '@preact/signals'
+import type { CanopiFile, SavedViewCamera } from '../../types/design'
+import { savedViewCameraOf, savedViewZoom } from '../saved-view-framing'
+import { geographicViewOfCamera } from '../session-plane'
 import {
   CanvasAuthorityBusyError,
   CanvasDocumentReplacementNotAdmittedError,
@@ -10,13 +11,14 @@ import {
   type CanvasPersistenceCapture,
   type CanvasRuntimeDocumentMetadata,
 } from './runtime'
-import type { ScenePersistedState } from './scene'
-import type { SceneRuntimeChromeCoordinator } from './scene-runtime/chrome-coordinator'
 import type { SceneRuntimeDocumentBridge } from './scene-runtime/document'
 import type { SceneRuntimeRenderScheduler } from './scene-runtime/render-scheduler'
 import { runCanvasRuntimeCleanups } from './cleanup'
 import type { CanvasInspectionHandle } from '../inspection'
 import type { SceneCanvasInspectionOwner } from './inspection-lens'
+import type { CameraDriverHost } from './view/camera-driver'
+import type { ViewNavigation } from './view/navigation'
+import type { ViewCamera } from './view/types'
 
 interface SceneCanvasDocumentSurfaceOptions {
   readonly inspection: Pick<SceneCanvasInspectionOwner, 'mount' | 'reset' | 'dispose'>
@@ -24,18 +26,15 @@ interface SceneCanvasDocumentSurfaceOptions {
     SceneRuntimeDocumentBridge,
     'loadDocument' | 'replaceDocument' | 'captureForPersistence'
   >
-  readonly camera: Pick<WorkspaceCameraFrameReader, 'viewport'>
-  readonly cameraNavigation: Pick<
-    WorkspaceCameraNavigation,
-    'initialize' | 'resize' | 'zoomToFit' | 'clearTemporaryFocus'
+  /** The runtime's camera: a resize reaches its live driver; a save reads its live frame. */
+  readonly cameraHost: Pick<CameraDriverHost, 'current' | 'frames'>
+  readonly viewNavigation: Pick<ViewNavigation, 'openAt' | 'clearTemporaryFocus'>
+  readonly rendering: Pick<
+    SceneRuntimeRenderScheduler,
+    'container' | 'invalidate' | 'unmount' | 'presented' | 'awaitPresentation'
   >
-  readonly chrome: Pick<SceneRuntimeChromeCoordinator, 'attach' | 'show' | 'hide' | 'destroy'>
-  readonly rendering: Pick<SceneRuntimeRenderScheduler, 'container' | 'invalidate' | 'resize' | 'dispose'>
-  readonly getSceneSnapshot: () => ScenePersistedState
-  readonly createPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
-  readonly invalidateViewport: () => void
-  readonly renderChrome: () => void
-  readonly addGuide: (axis: 'h' | 'v', worldPosition: number) => void
+  /** Shows (true) or hides the Design's canvas chrome: the grid draws only while it shows. */
+  readonly setChromeShown: (shown: boolean) => void
   readonly clearHoveredEntity: () => void
   readonly disposeRuntime: () => void
   readonly disposeInteraction: () => void
@@ -43,61 +42,123 @@ interface SceneCanvasDocumentSurfaceOptions {
   readonly disposeEffects: () => void
 }
 
+/** The runtime's document role: the app's surface, and the open fit's step in the scene render (construction.ts). */
+export interface SceneCanvasDocumentSurface extends CanvasDocumentSurface {
+  /** The scene render's first step (render-scheduler.ts): places the camera for a waiting open fit. */
+  applyPendingOpen(): void
+}
+
 export function createSceneCanvasDocumentSurface(
   options: SceneCanvasDocumentSurfaceOptions,
-): CanvasDocumentSurface {
+): SceneCanvasDocumentSurface {
   return new SceneCanvasDocumentRole(options)
 }
 
-class SceneCanvasDocumentRole implements CanvasDocumentSurface {
+class SceneCanvasDocumentRole implements SceneCanvasDocumentSurface {
   private _documentState: 'absent' | 'settling' | 'loaded' = 'absent'
+  /** The view the open Design's file was saved with (`map_view`), or null. */
+  private _savedMapView: SavedViewCamera | null = null
+  /** The open fit has placed the camera for the open Design: from then on the live view is the Design's view. */
+  private _placed = false
+  /** An open fit waits for the next scene render's publish step. */
+  private _openPending = false
 
   constructor(private readonly options: SceneCanvasDocumentSurfaceOptions) {}
+
+  get presented(): ReadonlySignal<boolean> {
+    return this.options.rendering.presented
+  }
 
   attachInspectionTo(element: HTMLElement): CanvasInspectionHandle {
     return this.options.inspection.mount(element)
   }
 
-  initializeViewport(): void {
-    const container = this.options.rendering.container
-    if (!container) return
-    this.options.cameraNavigation.initialize({
-      width: Math.max(1, container.clientWidth),
-      height: Math.max(1, container.clientHeight),
-    })
-    this.options.rendering.invalidate('scene')
-  }
-
-  attachRulersTo(element: HTMLElement): void {
-    this.options.chrome.attach(element, (axis, worldPosition) => {
-      this.options.addGuide(axis, worldPosition)
-    })
-    this.options.renderChrome()
-  }
-
   showCanvasChrome(): void {
-    this.options.chrome.show()
-    this.options.renderChrome()
+    this.options.setChromeShown(true)
   }
 
   hideCanvasChrome(): void {
-    this.options.chrome.hide()
-    this.options.renderChrome()
+    this.options.setChromeShown(false)
   }
 
+  /**
+   * The open fit: every open path (the first load, a replace, the first generation) ends here, never Fit to Design. A Design
+   * saved with its view (`map_view`, U28) opens at that view's centre and bearing, its framed ground fitted into the whole map
+   * by the saved-view rule; any other opens on the fit at the opening bearing (spec §4.15). An empty scene, and the first
+   * frame before any Design, open north up (openAt). With a renderer mounted the placement waits for the next scene render,
+   * which applies it first (applyPendingOpen), so it frames inside the chrome the opened Design mounts meanwhile and the
+   * camera and the scene land in one frame; with none, nothing draws and it places now.
+   */
   zoomToFit(): void {
-    this.options.cameraNavigation.zoomToFit(this.options.getSceneSnapshot(), {
-      plantContext: this.options.createPlantPresentationContext(this.options.camera.viewport.scale),
-    })
-    this.options.invalidateViewport()
+    if (this.options.rendering.container === null) {
+      this._open()
+      return
+    }
+    this._openPending = true
+    this.options.rendering.invalidate()
+  }
+
+  applyPendingOpen(): void {
+    if (!this._openPending) return
+    this._openPending = false
+    this._open()
+  }
+
+  private _open(): void {
+    if (this._documentState === 'absent') {
+      this.options.viewNavigation.openAt(0)
+      return
+    }
+    // A Design without a saved view opens on the fit at the live bearing: north up on the runtime's first open (spec §4.15).
+    this.options.viewNavigation.openAt(this.options.cameraHost.current().bearingTarget(), this._savedCamera())
+    this._placed = true
+  }
+
+  /** The camera the open Design was saved with, framed for the whole map now; null without one. */
+  private _savedCamera(): ViewCamera | null {
+    const saved = this._savedMapView
+    if (!saved) return null
+    const { screen } = this.options.cameraHost.frames.viewFrame.peek().view
+    return {
+      center: { lon: saved.lon, lat: saved.lat },
+      zoom: savedViewZoom(saved, screen),
+      bearingDeg: saved.bearing,
+      pitchDeg: 0,
+    }
+  }
+
+  /**
+   * The view a save writes (`map_view`): the live view once the open fit has placed the camera on a map with a size, else the
+   * view the file was saved with. A camera move never edits the Design: it reaches the file only with the next save.
+   */
+  private _mapViewForSave(): SavedViewCamera | null {
+    const { view } = this.options.cameraHost.frames.viewFrame.peek()
+    if (!this._placed || view.screen.width <= 0 || view.screen.height <= 0) return this._savedMapView
+    return savedViewCameraOf(geographicViewOfCamera(view.camera), view.screen)
+  }
+
+  private _opened(file: CanopiFile): void {
+    this._documentState = 'loaded'
+    this._savedMapView = file.map_view ?? null
+    this._placed = false
+    this._openPending = false
+    this.options.rendering.awaitPresentation()
+    this.options.viewNavigation.clearTemporaryFocus()
+    this.options.inspection.reset()
   }
 
   loadDocument(file: CanopiFile): void {
+    const previousDocumentState = this._documentState
     this._documentState = 'settling'
-    this.options.documents.loadDocument(file)
-    this._documentState = 'loaded'
-    this.options.cameraNavigation.clearTemporaryFocus()
-    this.options.inspection.reset()
+    try {
+      this.options.documents.loadDocument(file)
+    } catch (error) {
+      // Refused before touching the Scene (an edit still owns it): the
+      // previous document is intact and stays saveable.
+      if (error instanceof CanvasAuthorityBusyError) this._documentState = previousDocumentState
+      throw error
+    }
+    this._opened(file)
   }
 
   replaceDocument(
@@ -109,9 +170,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
     this._documentState = 'settling'
     try {
       const receipt = this.options.documents.replaceDocument(file, token, finalizeReplacement)
-      this._documentState = 'loaded'
-      this.options.cameraNavigation.clearTemporaryFocus()
-      this.options.inspection.reset()
+      this._opened(file)
       return receipt
     } catch (error) {
       if (error instanceof CanvasDocumentReplacementNotAdmittedError) {
@@ -132,12 +191,12 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
     if (this._documentState === 'settling') {
       throw new CanvasAuthorityBusyError('document-settlement')
     }
-    return this.options.documents.captureForPersistence(metadata, doc)
+    return this.options.documents.captureForPersistence(metadata, doc, this._mapViewForSave())
   }
 
+  /** The camera takes the new screen; its frame repaints the layer, which MapLibre has already resized. */
   resize(width: number, height: number): void {
-    this.options.cameraNavigation.resize({ width, height })
-    this.options.rendering.resize(width, height)
+    this.options.cameraHost.current().setScreen({ width, height, devicePixelRatio: window.devicePixelRatio })
   }
 
   destroy(): void {
@@ -146,10 +205,9 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
       () => this.options.disposeRuntime(),
       () => this.options.clearHoveredEntity(),
       () => this.options.disposeInteraction(),
-      () => this.options.chrome.destroy(),
       () => this.options.disposeEffects(),
       () => this.options.disposeCamera(),
-      () => this.options.rendering.dispose(),
+      () => this.options.rendering.unmount(),
     ], 'Scene Canvas document surface disposal failed')
   }
 }

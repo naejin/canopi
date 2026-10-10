@@ -1,31 +1,27 @@
 import { getRevealedAnnotationId } from '../annotation-layout'
-import { projectScenePlantLabels } from '../renderers/viewport-presentation'
-import {
-  resolvePlantCanopySpreadM,
-  resolvePlantStratum,
-  type PlantPresentationContext,
-} from '../plant-presentation'
+import type { PlantPresentationContext } from '../plant-presentation'
 import {
   createDetachedCanvasPlantLabelSource,
   createDetachedCanvasSpeciesPresentationCache,
   type CanvasPlantLabelSource,
   type CanvasSpeciesPresentationCache,
 } from '../presentation-data'
-import type { SceneRendererHoverTarget, SceneRendererSnapshot } from '../renderers/scene-types'
+import type { SceneEditingAids, SceneRendererHoverTarget, SceneRendererSnapshot } from '../renderers/scene-types'
+import type { PlantLabelMode } from '../plant-display'
+import type { SpeciesCacheEntry } from '../species-cache'
 import type {
   SceneDesignObjectTarget,
   ScenePersistedState,
   ScenePlantEntity,
   SceneStateReader,
-  SceneViewportState,
 } from '../scene'
-import { isSceneDesignObjectLocked } from '../scene'
-import { resolveSceneObjectGroupMembers, sceneObjectGroupMemberLayerName } from '../scene'
+import { isSceneDesignObjectLocked, isSceneTargetLayerLocked, sceneContainsTarget } from '../scene'
 import { projectSceneSelectionEntityIds } from './selection'
 
 interface SceneRuntimePresentationControllerOptions {
   sceneStore: SceneStateReader
-  getViewport(): SceneViewportState
+  /** The live frame's scale, for plant presentation contexts (`view.pixelsPerMetre`). */
+  readPixelsPerMetre(): number
   getLocale(): string
   resolveHighlightedTargets(scene: ScenePersistedState): {
     plantIds: readonly string[]
@@ -38,22 +34,14 @@ interface SceneRuntimePresentationControllerOptions {
 
 export interface ScenePresentationRefreshResult {
   changed: boolean
+  /** Advances when plant names or species data loaded: lists and colours that read them refresh on it. */
   plantNamesRevision: number
-  backfills: PlantPresentationBackfill[] | null
   failure: { readonly error: unknown } | null
-}
-
-export interface PlantPresentationBackfill {
-  plantId: string
-  canonicalName: string
-  stratum: string | null
-  canopySpreadM: number | null
-  scale: number | null
 }
 
 export class SceneRuntimePresentationController {
   private readonly _sceneStore: SceneStateReader
-  private readonly _getViewport: () => SceneViewportState
+  private readonly _readPixelsPerMetre: () => number
   private readonly _getLocale: () => string
   private readonly _resolveHighlightedTargets: SceneRuntimePresentationControllerOptions['resolveHighlightedTargets']
   private readonly _onPlantNamesChanged: () => void
@@ -61,10 +49,14 @@ export class SceneRuntimePresentationController {
   private readonly _plantLabels: CanvasPlantLabelSource
   private _preparedPlantNamesRevision = 0
   private _publishedPlantNamesRevision = 0
+  /** Layers a presented story shows; null when nothing is presented. */
+  private _presentedLayerNames: ReadonlySet<string> | null = null
+  /** The workspace's grid (SceneCanvasRuntime's, while the chrome shows and the grid is on); null draws none. */
+  private _editingAids: SceneEditingAids | null = null
 
   constructor(options: SceneRuntimePresentationControllerOptions) {
     this._sceneStore = options.sceneStore
-    this._getViewport = options.getViewport
+    this._readPixelsPerMetre = options.readPixelsPerMetre
     this._getLocale = options.getLocale
     this._resolveHighlightedTargets = options.resolveHighlightedTargets
     this._onPlantNamesChanged = options.onPlantNamesChanged
@@ -72,7 +64,7 @@ export class SceneRuntimePresentationController {
     this._plantLabels = options.plantLabels ?? createDetachedCanvasPlantLabelSource()
   }
 
-  getSpeciesCache() {
+  getSpeciesCache(): ReadonlyMap<string, SpeciesCacheEntry> {
     return this._speciesCache.getCache()
   }
 
@@ -80,31 +72,57 @@ export class SceneRuntimePresentationController {
     return this._plantLabels.getLocaleSnapshot(this._getLocale())
   }
 
+  getEnglishFallbackNames(): ReadonlyMap<string, string> {
+    return this._plantLabels.getEnglishFallbackSnapshot(this._getLocale())
+  }
+
   getSuggestedPlantColor(canonicalName: string): string | null {
     return this._speciesCache.getSuggestedPlantColor(canonicalName)
   }
 
   createPlantPresentationContext(
-    viewportScale = this._getViewport().scale,
+    viewportScale = this._readPixelsPerMetre(),
     plants: readonly ScenePlantEntity[] = this._sceneStore.persisted.plants,
   ): PlantPresentationContext {
     return {
       plants,
-      viewport: {
-        x: 0,
-        y: 0,
-        scale: viewportScale,
-      },
+      pixelsPerMetre: viewportScale,
       speciesCache: this._speciesCache.getCache(),
       localizedCommonNames: this.getLocalizedCommonNames(),
     }
   }
 
+  /**
+   * While a story is presented the map shows only the named Design layers and
+   * no selection, hover or measurement guides; null shows the Design as it is again. Session
+   * presentation only: the Scene, its history and dirty state never change.
+   * Returns whether anything changed.
+   */
+  presentLayers(visibleLayerNames: readonly string[] | null): boolean {
+    const next = visibleLayerNames ? new Set(visibleLayerNames) : null
+    const current = this._presentedLayerNames
+    if (next === null && current === null) return false
+    if (next && current && next.size === current.size && [...next].every((name) => current.has(name))) return false
+    this._presentedLayerNames = next
+    return true
+  }
+
+  /**
+   * The grid the workspace map draws, the pattern of `presentLayers`: only the workspace snapshot carries it, never
+   * the overview, a capture or a presented story. Returns whether it changed, so the caller syncs the scene only then.
+   */
+  setEditingAids(aids: SceneEditingAids | null): boolean {
+    if (editingAidsEqual(this._editingAids, aids)) return false
+    this._editingAids = aids
+    return true
+  }
+
   buildRendererSnapshot(options: { overview?: boolean } = {}): SceneRendererSnapshot {
+    const presented = this._presentedLayerNames
+    if (presented) return this.buildPresentedSnapshot(presented, options.overview === true)
     const scene = this._sceneStore.persisted
     const session = this._sceneStore.session
-    const viewport = this._getViewport()
-    if (options.overview) return buildOverviewRendererSnapshot(scene, session.speciesFocus, viewport)
+    if (options.overview) return buildOverviewRendererSnapshot(scene, session.speciesFocus)
     const hoveredPlant = session.hoveredTarget?.kind === 'plant'
       ? scene.plants.find((plant) => plant.id === session.hoveredTarget?.id)
       : null
@@ -120,7 +138,6 @@ export class SceneRuntimePresentationController {
     return {
       scene,
       speciesFocus: session.speciesFocus,
-      viewport,
       selectionLabelPlantIds,
       revealedAnnotationId: getRevealedAnnotationId(session.selectedTargets),
       ...selectionProjection,
@@ -130,78 +147,82 @@ export class SceneRuntimePresentationController {
       localizedCommonNames,
       hoveredCanonicalName: hoveredPlant?.canonicalName ?? null,
       hoverTarget: getRendererHoverTarget(scene, session.hoveredTarget),
-      ...projectScenePlantLabels({ scene, viewport, localizedCommonNames, selectionLabelPlantIds,
-        speciesCache: this._speciesCache.getCache() }),
+      ...this._editingAids ? { editingAids: this._editingAids } : {},
     }
   }
 
+  private buildPresentedSnapshot(visible: ReadonlySet<string>, overview: boolean): SceneRendererSnapshot {
+    const snapshot = this.buildViewCaptureSnapshot({
+      overview,
+      visibleLayerNames: [...visible],
+      focusedSpecies: this._sceneStore.session.speciesFocus.canonicalName,
+    })
+    // Measurement guides are an editing aid, like the grid, which a presented story never draws.
+    return { ...snapshot, scene: { ...snapshot.scene, measurementGuides: [] } }
+  }
+
+  /**
+   * A snapshot for an off-screen view capture: the persisted scene with only
+   * the requested layers visible, no selection, hover or panel highlight.
+   */
+  buildViewCaptureSnapshot(request: {
+    readonly overview: boolean
+    readonly visibleLayerNames: readonly string[]
+    readonly focusedSpecies: string | null
+    readonly plantLabels?: PlantLabelMode
+  }): SceneRendererSnapshot {
+    const persisted = this._sceneStore.persisted
+    const visible = new Set(request.visibleLayerNames)
+    const scene: ScenePersistedState = {
+      ...persisted,
+      layers: persisted.layers.map((layer) => ({ ...layer, visible: visible.has(layer.name) })),
+    }
+    const speciesFocus = { canonicalName: request.focusedSpecies }
+    if (request.overview) return buildOverviewRendererSnapshot(scene, speciesFocus)
+    const localizedCommonNames = this.getLocalizedCommonNames()
+    const speciesCache = this._speciesCache.getCache()
+    const selectionLabelPlantIds = new Set<string>()
+    return {
+      scene,
+      speciesFocus,
+      selectionLabelPlantIds,
+      revealedAnnotationId: null,
+      selectedPlantIds: new Set(),
+      selectedZoneIds: new Set(),
+      selectedAnnotationIds: new Set(),
+      selectedMeasurementGuideIds: new Set(),
+      highlightedPlantIds: new Set(),
+      highlightedZoneIds: new Set(),
+      speciesCache,
+      localizedCommonNames,
+      hoveredCanonicalName: null,
+      hoverTarget: null,
+      ...request.plantLabels ? { plantLabels: request.plantLabels } : {},
+    }
+  }
+
+  /** Loads names and species data for `canonicalNames`; a load of either is a plant-names revision. */
   async refreshSpeciesCacheEntries(
     canonicalNames: string[],
     activeLocale: string,
   ): Promise<ScenePresentationRefreshResult> {
     const labelsChanged = await this._plantLabels.ensureEntries(canonicalNames, activeLocale)
-    const plantNamesRevision = this._notePreparedPlantNames(labelsChanged)
     try {
       const loaded = await this._speciesCache.ensureEntries(canonicalNames, activeLocale)
-      const backfills = this.derivePresentationBackfills()
-      return {
-        changed: labelsChanged || loaded || backfills !== null,
-        plantNamesRevision,
-        backfills,
-        failure: null,
-      }
+      const changed = labelsChanged || loaded
+      return { changed, plantNamesRevision: this._notePreparedPlantNames(changed), failure: null }
     } catch (error) {
-      return {
-        changed: labelsChanged,
-        plantNamesRevision,
-        backfills: null,
-        failure: { error },
-      }
+      return { changed: labelsChanged, plantNamesRevision: this._notePreparedPlantNames(labelsChanged), failure: { error } }
     }
   }
 
+  /** Loads names and species data for every placed species. */
   async refreshCurrentPresentationData(): Promise<ScenePresentationRefreshResult> {
-    const plants = this._sceneStore.persisted.plants
-    const canonicalNames = [...new Set(plants.map((plant) => plant.canonicalName))]
+    const canonicalNames = [...new Set(this._sceneStore.persisted.plants.map((plant) => plant.canonicalName))]
     if (canonicalNames.length === 0) {
-      return {
-        changed: false,
-        plantNamesRevision: this._preparedPlantNamesRevision,
-        backfills: null,
-        failure: null,
-      }
+      return { changed: false, plantNamesRevision: this._preparedPlantNamesRevision, failure: null }
     }
-
-    const labelsChanged = await this._plantLabels.ensureEntries(canonicalNames, this._getLocale())
-    const plantNamesRevision = this._notePreparedPlantNames(labelsChanged)
-
-    const needsSpeciesCache = plants.some((plant) => plant.stratum === null || plant.canopySpreadM === null)
-    if (!needsSpeciesCache) {
-      return {
-        changed: labelsChanged,
-        plantNamesRevision,
-        backfills: null,
-        failure: null,
-      }
-    }
-
-    try {
-      const loaded = await this._speciesCache.ensureEntries(canonicalNames, this._getLocale())
-      const backfills = this.derivePresentationBackfills()
-      return {
-        changed: labelsChanged || loaded || backfills !== null,
-        plantNamesRevision,
-        backfills,
-        failure: null,
-      }
-    } catch (error) {
-      return {
-        changed: labelsChanged,
-        plantNamesRevision,
-        backfills: null,
-        failure: { error },
-      }
-    }
+    return this.refreshSpeciesCacheEntries(canonicalNames, this._getLocale())
   }
 
   publishRefresh(result: ScenePresentationRefreshResult): boolean {
@@ -215,37 +236,16 @@ export class SceneRuntimePresentationController {
     if (changed) this._preparedPlantNamesRevision += 1
     return this._preparedPlantNamesRevision
   }
+}
 
-  derivePresentationBackfills(): PlantPresentationBackfill[] | null {
-    const speciesCache = this._speciesCache.getCache()
-    const backfills: PlantPresentationBackfill[] = []
-    for (const plant of this._sceneStore.persisted.plants) {
-      const nextStratum = resolvePlantStratum(plant, speciesCache)
-      const nextCanopySpreadM = resolvePlantCanopySpreadM(plant, speciesCache)
-      const nextScale = nextCanopySpreadM ?? plant.scale
-      if (
-        nextStratum === plant.stratum
-        && nextCanopySpreadM === plant.canopySpreadM
-        && nextScale === plant.scale
-      ) {
-        continue
-      }
-      backfills.push({
-        plantId: plant.id,
-        canonicalName: plant.canonicalName,
-        stratum: nextStratum,
-        canopySpreadM: nextCanopySpreadM,
-        scale: nextScale,
-      })
-    }
-    return backfills.length > 0 ? backfills : null
-  }
+function editingAidsEqual(a: SceneEditingAids | null, b: SceneEditingAids | null): boolean {
+  if (a === null || b === null) return a === b
+  return a.grid.ink === b.grid.ink && a.grid.majorInk === b.grid.majorInk
 }
 
 function buildOverviewRendererSnapshot(
   scene: ScenePersistedState,
   speciesFocus: SceneRendererSnapshot['speciesFocus'],
-  viewport: SceneViewportState,
 ): SceneRendererSnapshot {
   return {
     scene: {
@@ -255,10 +255,8 @@ function buildOverviewRendererSnapshot(
       annotations: [],
       measurementGuides: [],
       groups: [],
-      guides: [],
     },
     speciesFocus,
-    viewport,
     selectionLabelPlantIds: new Set(),
     revealedAnnotationId: null,
     selectedPlantIds: new Set(),
@@ -271,8 +269,6 @@ function buildOverviewRendererSnapshot(
     localizedCommonNames: new Map(),
     hoveredCanonicalName: null,
     hoverTarget: null,
-    pinnedPlantNameLabels: [],
-    selectionLabels: [],
   }
 }
 
@@ -280,48 +276,11 @@ function getRendererHoverTarget(
   scene: ScenePersistedState,
   target: SceneDesignObjectTarget | null,
 ): SceneRendererHoverTarget | null {
-  if (!target || !containsHoverTarget(scene, target)) return null
-  const layerLocked = isHoverTargetLayerLocked(scene, target)
-  const state = layerLocked
+  if (!target || !sceneContainsTarget(scene, target)) return null
+  const state = isSceneTargetLayerLocked(scene, target)
     ? 'locked-layer'
     : isSceneDesignObjectLocked(scene, target)
       ? 'locked-design-object'
       : 'hover'
   return { ...target, state }
-}
-
-function containsHoverTarget(
-  scene: ScenePersistedState,
-  target: SceneDesignObjectTarget,
-): boolean {
-  if (target.kind === 'group') return scene.groups.some((group) => group.id === target.id)
-  if (target.kind === 'plant') return scene.plants.some((plant) => plant.id === target.id)
-  if (target.kind === 'zone') return scene.zones.some((zone) => zone.name === target.id)
-  if (target.kind === 'annotation') {
-    return scene.annotations.some((annotation) => annotation.id === target.id)
-  }
-  return scene.measurementGuides.some((guide) => guide.id === target.id)
-}
-
-function isHoverTargetLayerLocked(
-  scene: ScenePersistedState,
-  target: Omit<SceneRendererHoverTarget, 'state'>,
-): boolean {
-  return getHoverTargetLayers(scene, target)
-    .some((layerName) => scene.layers.find((entry) => entry.name === layerName)?.locked === true)
-}
-
-function getHoverTargetLayers(
-  scene: ScenePersistedState,
-  target: Omit<SceneRendererHoverTarget, 'state'>,
-): string[] {
-  if (target.kind === 'group') {
-    const group = scene.groups.find((entry) => entry.id === target.id)
-    if (!group) return []
-    return [...new Set(resolveSceneObjectGroupMembers(scene, group).map(sceneObjectGroupMemberLayerName))]
-  }
-  if (target.kind === 'zone') return ['zones']
-  if (target.kind === 'annotation') return ['annotations']
-  if (target.kind === 'measurement-guide') return ['measurement-guides']
-  return ['plants']
 }

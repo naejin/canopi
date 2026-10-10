@@ -1,5 +1,6 @@
+import { signal } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
-import { CameraController } from './camera'
+import { createTestView, type TestView } from '../../__tests__/support/test-view'
 import { createSceneCanvasDocumentSurface } from './document-surface'
 import {
   CanvasAuthorityBusyError,
@@ -7,39 +8,30 @@ import {
   createCanvasDocumentReplacementToken,
   type CanvasDocumentSurface,
 } from './runtime'
-import { createDefaultScenePersistedState, SceneStore } from './scene'
+import { SceneStore } from './scene'
 
 function createTestDocumentSurface(
   documents: Parameters<typeof createSceneCanvasDocumentSurface>[0]['documents'],
   renderingOverrides: Partial<
     Parameters<typeof createSceneCanvasDocumentSurface>[0]['rendering']
-  > & { invalidate?: (kind: 'scene' | 'viewport' | 'chrome') => void } = {},
-  camera = new CameraController(),
+  > & { invalidate?: () => void } = {},
+  camera: TestView = createTestView(),
 ): CanvasDocumentSurface {
   const rendering = {
     container: null,
+    presented: signal(true),
+    awaitPresentation: vi.fn(),
     invalidate: vi.fn(),
-    resize: vi.fn(),
-    dispose: vi.fn(),
+    unmount: vi.fn(),
     ...renderingOverrides,
   } as Parameters<typeof createSceneCanvasDocumentSurface>[0]['rendering']
   return createSceneCanvasDocumentSurface({
     inspection: { mount: () => { throw new Error('Inspection is not used by this fixture.') }, reset: () => {}, dispose: () => {} },
     documents,
-    camera,
-    cameraNavigation: camera,
-    chrome: {
-      attach: vi.fn(),
-      show: vi.fn(),
-      hide: vi.fn(),
-      destroy: vi.fn(),
-    },
+    cameraHost: camera.host,
+    viewNavigation: camera.navigation,
     rendering,
-    getSceneSnapshot: createDefaultScenePersistedState,
-    createPlantPresentationContext: vi.fn(),
-    invalidateViewport: vi.fn(),
-    renderChrome: vi.fn(),
-    addGuide: vi.fn(),
+    setChromeShown: vi.fn(),
     clearHoveredEntity: vi.fn(),
     disposeRuntime: vi.fn(),
     disposeInteraction: vi.fn(),
@@ -50,8 +42,7 @@ function createTestDocumentSurface(
 
 describe('Scene Canvas document surface lifecycle', () => {
   it('clears a temporary focus after successful load or replacement but retains it when replacement is rejected', () => {
-    const camera = new CameraController()
-    camera.initialize({ width: 400, height: 300 })
+    const camera = createTestView()
     const file = new SceneStore().toCanopiFile()
     const surface = createTestDocumentSurface({
       loadDocument: vi.fn(),
@@ -66,13 +57,13 @@ describe('Scene Canvas document surface lifecycle', () => {
       })),
     }, {}, camera)
 
-    camera.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
+    camera.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
     surface.loadDocument(file)
-    expect(camera.returnFromTemporaryFocus()).toBe(false)
+    expect(camera.navigation.returnFromTemporaryFocus()).toBe(false)
 
-    camera.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
+    camera.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
     surface.replaceDocument(file, createCanvasDocumentReplacementToken(), vi.fn())
-    expect(camera.returnFromTemporaryFocus()).toBe(false)
+    expect(camera.navigation.returnFromTemporaryFocus()).toBe(false)
 
     const rejected = createTestDocumentSurface({
       loadDocument: vi.fn(),
@@ -85,37 +76,14 @@ describe('Scene Canvas document surface lifecycle', () => {
         acknowledgeSaved: () => 'applied' as const,
       })),
     }, {}, camera)
-    camera.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
+    camera.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
     expect(() => rejected.replaceDocument(file, createCanvasDocumentReplacementToken(), vi.fn())).toThrow('not admitted')
-    expect(camera.returnFromTemporaryFocus()).toBe(true)
-  })
-
-  it('routes viewport initialization rendering through contained invalidation', () => {
-    const invalidate = vi.fn()
-    const surface = createTestDocumentSurface({
-      loadDocument: vi.fn(),
-      replaceDocument: vi.fn((_file, _token, finalizeReplacement) => {
-        finalizeReplacement()
-        return { callerFinalizerInvoked: true }
-      }),
-      captureForPersistence: vi.fn((_metadata, document) => ({
-        content: document,
-        isCurrent: () => true,
-        acknowledgeSaved: () => 'applied',
-      })),
-    }, {
-      container: document.createElement('div'),
-      invalidate,
-    })
-
-    surface.initializeViewport()
-
-    expect(invalidate).toHaveBeenCalledWith('scene')
+    expect(camera.navigation.returnFromTemporaryFocus()).toBe(true)
   })
 
   it('continues destroying every owner after interaction disposal fails', () => {
     const calls: string[] = []
-    const camera = new CameraController()
+    const camera = createTestView()
     const surface = createSceneCanvasDocumentSurface({
     inspection: { mount: () => { throw new Error('Inspection is not used by this fixture.') }, reset: () => {}, dispose: () => {} },
       documents: {
@@ -130,31 +98,18 @@ describe('Scene Canvas document surface lifecycle', () => {
           acknowledgeSaved: () => 'applied',
         })),
       },
-      camera,
-      cameraNavigation: camera,
-      chrome: {
-        attach: vi.fn(),
-        show: vi.fn(),
-        hide: vi.fn(),
-        destroy: () => {
-          calls.push('chrome')
-        },
-      },
+      cameraHost: camera.host,
+      viewNavigation: camera.navigation,
       rendering: {
         container: null,
+        presented: signal(true),
+        awaitPresentation: vi.fn(),
         invalidate: vi.fn(),
-        resize: vi.fn(),
-        dispose: () => {
+        unmount: () => {
           calls.push('rendering')
         },
       },
-      getSceneSnapshot: createDefaultScenePersistedState,
-      createPlantPresentationContext: () => {
-        throw new Error('not used by destroy')
-      },
-      invalidateViewport: vi.fn(),
-      renderChrome: vi.fn(),
-      addGuide: vi.fn(),
+      setChromeShown: vi.fn(),
       clearHoveredEntity: () => {
         calls.push('hover')
       },
@@ -174,7 +129,7 @@ describe('Scene Canvas document surface lifecycle', () => {
     })
 
     expect(() => surface.destroy()).toThrow('interaction disposal failed')
-    expect(calls).toEqual(['runtime', 'hover', 'interaction', 'chrome', 'effects', 'camera', 'rendering'])
+    expect(calls).toEqual(['runtime', 'hover', 'interaction', 'effects', 'camera', 'rendering'])
   })
 
   it('keeps first hydration authority-owned and persistence-busy until settlement succeeds', () => {
@@ -210,6 +165,30 @@ describe('Scene Canvas document surface lifecycle', () => {
     failHydration = false
     surface.loadDocument(file)
 
+    expect(() => surface.captureForPersistence({ name: file.name }, file)).not.toThrow()
+    expect(captureForPersistence).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the loaded document saveable when a later load is refused while an edit owns the Scene', () => {
+    const file = new SceneStore().toCanopiFile()
+    const captureForPersistence = vi.fn((_metadata, document) => ({
+      content: document,
+      isCurrent: () => true,
+      acknowledgeSaved: () => 'applied' as const,
+    }))
+    let busy = false
+    const surface = createTestDocumentSurface({
+      loadDocument: vi.fn(() => {
+        if (busy) throw new CanvasAuthorityBusyError('keyboard-nudge')
+      }),
+      replaceDocument: vi.fn(),
+      captureForPersistence,
+    })
+    surface.loadDocument(file)
+    busy = true
+
+    expect(() => surface.loadDocument(file)).toThrow(CanvasAuthorityBusyError)
+    expect(surface.hasLoadedDocument()).toBe(true)
     expect(() => surface.captureForPersistence({ name: file.name }, file)).not.toThrow()
     expect(captureForPersistence).toHaveBeenCalledOnce()
   })

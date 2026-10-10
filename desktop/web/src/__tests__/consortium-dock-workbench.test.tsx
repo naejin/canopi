@@ -23,7 +23,7 @@ function plant(canonicalName = 'Malus domestica'): PlacedPlant {
     canonical_name: canonicalName,
     common_name: 'Apple',
     color: null,
-    position: { x: 0, y: 0 },
+    position: { lon: 13, lat: 23 },
     rotation: null,
     scale: null,
     notes: null,
@@ -35,17 +35,16 @@ function plant(canonicalName = 'Malus domestica'): PlacedPlant {
 
 function design(name: string): CanopiFile {
   return {
-    version: 6,
+    version: 9,
     name,
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [],
     plants: [],
     zones: [],
     annotations: [],
     consortiums: [
-      { target: consortiumTarget('Malus domestica'), stratum: 'legacy-stratum', start_phase: 0, end_phase: 2 },
+      { target: consortiumTarget('Malus domestica'), stratum: 'unknown-stratum', start_phase: 0, end_phase: 2 },
       { target: consortiumTarget('Absent species'), stratum: 'high', start_phase: 0, end_phase: 6 },
     ],
     groups: [],
@@ -88,7 +87,7 @@ describe('Consortium dock workbench', () => {
 
   it('keeps unknown strata visible and validates inclusive phase order before one edit', () => {
     const row = workbench.projection.rows[0]!
-    expect(row.stratum).toBe('legacy-stratum')
+    expect(row.stratum).toBe('unknown-stratum')
 
     act(() => {
       workbench.openEditor(row)
@@ -111,7 +110,7 @@ describe('Consortium dock workbench', () => {
   it('reports a successful move outside the active filter and keeps cancellation clean', () => {
     const row = workbench.projection.rows[0]!
     act(() => {
-      workbench.setFilter({ stratum: 'legacy-stratum', phase: 1 })
+      workbench.setFilter({ stratum: 'unknown-stratum', phase: 1 })
       workbench.openEditor(row)
       workbench.cancelEditor()
     })
@@ -141,6 +140,6 @@ describe('Consortium dock workbench', () => {
 
     expect(workbench.editor).toBeNull()
     expect(workbench.saveEditor()).toBe(false)
-    expect(currentDesign.value?.consortiums[0]?.stratum).toBe('legacy-stratum')
+    expect(currentDesign.value?.consortiums[0]?.stratum).toBe('unknown-stratum')
   })
 })

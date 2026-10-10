@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { CanopiFile } from '../types/design'
+import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
 import { createLiveTestCanvasRuntimeHost } from './support/live-canvas-runtime'
 
 function makeDoc(): CanopiFile {
   return {
-    version: 6,
+    version: CURRENT_CANOPI_FILE_VERSION,
     name: 'Test',
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [],
     plants: [],

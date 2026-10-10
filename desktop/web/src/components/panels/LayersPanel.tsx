@@ -1,31 +1,39 @@
 import { useEffect } from 'preact/hooks'
-import { LayerPanel } from '../canvas/LayerPanel'
-import { LidarLayersSection } from './lidar/LidarLayersSection'
-import { runAppCommand } from '../../commands/registry'
-import {
-  readCanvasLayerPresentation,
-  setCanvasLayerPresentationActiveLayer,
-  setCanvasLayerPresentationVisibility,
-  setCanvasLayerPresentationLocked,
-  setCanvasLayerPresentationOpacity,
-  setCanvasLayerPresentationContourIntervalMeters,
-} from '../../app/canvas-layer-presentation/presentation'
-import { installLidarLibraryObserver } from '../../app/lidar/library-store'
+import { LayerPanel, type SiteDataSummary } from '../canvas/LayerPanel'
+import { readCanvasLayerPresentation } from '../../app/canvas-layer-presentation/presentation'
+import { LAYER_PANEL_ACTIONS } from '../../app/canvas-layer-presentation/panel-actions'
+import { currentDesign } from '../../app/document-session/store'
+import { setSiteDataShown } from '../../app/lidar/actions'
+import { openSiteDataPanel } from '../../app/lidar/library-navigation'
+import { installLidarLibraryObserver, isMissing, readCurrentLidarPresentation } from '../../app/lidar/library-store'
+import { appCommandGraphPanelProjection } from '../../commands/registry'
+import { t } from '../../i18n'
 
-export function LayersPanel({ onLocation = () => runAppCommand('nav.location') }: { onLocation?: () => void } = {}) {
+/**
+ * Desktop Layers: the shared panel with the Site data summary row. Site data
+ * has its own panel; Layers keeps the library snapshot current so the summary
+ * counts what the map can show.
+ */
+export function LayersPanel() {
   useEffect(() => installLidarLibraryObserver(), [])
-  return (
-    <LayerPanel
-      rows={readCanvasLayerPresentation().rows}
-      trailingSection={<LidarLayersSection />}
-      actions={{
-        active: setCanvasLayerPresentationActiveLayer,
-        visibility: setCanvasLayerPresentationVisibility,
-        locked: setCanvasLayerPresentationLocked,
-        opacity: setCanvasLayerPresentationOpacity,
-        contourInterval: setCanvasLayerPresentationContourIntervalMeters,
-        location: onLocation,
-      }}
-    />
-  )
+  return <LayerPanel rows={readCanvasLayerPresentation().rows} actions={LAYER_PANEL_ACTIONS} siteData={desktopSiteDataSummary()} />
+}
+
+function desktopSiteDataSummary(): SiteDataSummary {
+  const items = readCurrentLidarPresentation()
+  const command = appCommandGraphPanelProjection.value.design.find((candidate) => candidate.panel === 'site-data')
+  return {
+    edition: 'desktop',
+    count: items.length,
+    // `shown` folds the own eye with the summary eye; while the library is loading an entry counts by its own eye.
+    shown: items.filter((item) => item.shown && !isMissing(item)).length,
+    visible: currentDesign.value?.lidar?.visible ?? true,
+    command: {
+      label: command?.label ?? t('canvas.layers.siteData'),
+      shortcut: command?.shortcut,
+      ariaShortcut: command?.ariaShortcut,
+    },
+    setVisible: setSiteDataShown,
+    open: openSiteDataPanel,
+  }
 }

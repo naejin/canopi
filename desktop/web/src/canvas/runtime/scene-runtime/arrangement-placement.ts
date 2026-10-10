@@ -16,7 +16,7 @@ import {
 } from '../scene'
 import type { SceneEditCoordinator } from './transactions'
 
-export interface SceneArrangementPrototype<T> {
+interface SceneArrangementPrototype<T> {
   readonly sourceId: string
   readonly entity: T
 }
@@ -29,14 +29,14 @@ export interface SceneArrangementTemplate {
   readonly groups: readonly SceneArrangementPrototype<SceneObjectGroupEntity>[]
 }
 
-export interface SceneArrangementPlacementInput {
+interface SceneArrangementPlacementInput {
   readonly template: SceneArrangementTemplate
   readonly translateBy: ScenePoint
   readonly historyType: string
   readonly onCommitted?: () => void
 }
 
-export interface SceneArrangementPlacementReceipt {
+interface SceneArrangementPlacementReceipt {
   readonly committed: boolean
   readonly createdCount: number
   readonly selectedTopLevelTargets: readonly SceneDesignObjectTarget[]
@@ -105,12 +105,12 @@ function materializeSceneArrangement(
   })
 
   const zones = template.zones.map(({ sourceId, entity }): SceneZoneEntity => {
-    const name = uniqueZoneName(entity.name, reservedIds)
-    reservedIds.add(name)
-    sourceToCloneId.set(sceneObjectGroupMemberKey({ kind: 'zone', id: sourceId }), name)
+    // A copy is a new zone: a new identity, the same display name.
+    const id = allocateUniqueId(reservedIds, () => `zone-${createId()}`)
+    sourceToCloneId.set(sceneObjectGroupMemberKey({ kind: 'zone', id: sourceId }), id)
     return {
       ...entity,
-      name,
+      id,
       locked: false,
       points: translateZonePoints(entity, translateBy),
     }
@@ -198,8 +198,8 @@ function addUngroupedSelection(
     }
   }
   for (const zone of zones) {
-    if (!groupedMemberKeys.has(sceneObjectGroupMemberKey({ kind: 'zone', id: zone.name }))) {
-      selection.push({ kind: 'zone', id: zone.name })
+    if (!groupedMemberKeys.has(sceneObjectGroupMemberKey({ kind: 'zone', id: zone.id }))) {
+      selection.push({ kind: 'zone', id: zone.id })
     }
   }
   for (const annotation of annotations) {
@@ -212,7 +212,7 @@ function addUngroupedSelection(
 function existingSceneIds(scene: ScenePersistedState): Set<string> {
   return new Set([
     ...scene.plants.map((plant) => plant.id),
-    ...scene.zones.map((zone) => zone.name),
+    ...scene.zones.map((zone) => zone.id),
     ...scene.annotations.map((annotation) => annotation.id),
     ...scene.measurementGuides.map((guide) => guide.id),
     ...scene.groups.map((group) => group.id),
@@ -229,24 +229,18 @@ function allocateUniqueId(reservedIds: Set<string>, createId: () => string): str
   throw new Error('Unable to allocate a unique Scene arrangement identity')
 }
 
-function translatePoint(point: ScenePoint, delta: ScenePoint): ScenePoint {
+export function translatePoint(point: ScenePoint, delta: ScenePoint): ScenePoint {
   return { x: point.x + delta.x, y: point.y + delta.y }
 }
 
-function translateZonePoints(zone: SceneZoneEntity, delta: ScenePoint): ScenePoint[] {
+/** Moves a zone's points; an ellipse keeps its radii (the second point) as they are. */
+export function translateZonePoints(
+  zone: Pick<SceneZoneEntity, 'zoneType' | 'points'>,
+  delta: ScenePoint,
+): ScenePoint[] {
   if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
-    return zone.points.map((point, index) => index === 0 ? translatePoint(point, delta) : { ...point })
+    return zone.points.map((point, index) => index === 1 ? { ...point } : translatePoint(point, delta))
   }
   return zone.points.map((point) => translatePoint(point, delta))
 }
 
-function uniqueZoneName(baseName: string, existingNames: ReadonlySet<string>): string {
-  if (!existingNames.has(baseName)) return baseName
-  let index = 2
-  let candidate = `${baseName} copy`
-  while (existingNames.has(candidate)) {
-    candidate = `${baseName} copy ${index}`
-    index += 1
-  }
-  return candidate
-}

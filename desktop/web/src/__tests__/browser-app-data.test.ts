@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  BrowserDraftChangedError,
   createBrowserAppDataStore,
   type BrowserStorageAdapter,
 } from '../web/browser-app-data'
@@ -12,9 +13,6 @@ const V2_KEYS = {
   species: 'canopi:web-app-data:v2:species',
   stamps: 'canopi:web-app-data:v2:saved-object-stamps',
 } as const
-const V2_AUTHORITY_KEY = 'canopi:web-app-data:v2:authority'
-const V2_PROGRESS_KEY = 'canopi:web-app-data:v2:migration-progress'
-const V2_RESERVATION_KEY = 'canopi:web-app-data:v2:authority-reservation'
 
 describe('browser app data store', () => {
   it('persists Browser Drafts as local convenience state without notebook fields', () => {
@@ -32,14 +30,49 @@ describe('browser app data store', () => {
       updatedAt: '2026-07-04T12:00:00.000Z',
     })
     expect(store.listDrafts()).toEqual([saved.value])
-    expect(store.loadDraft(saved.value.id)).toEqual(file)
+    expect(store.loadDraft(saved.value.id)).toEqual({ ...file, extra: {} })
     expect(saved.value).not.toHaveProperty('path')
     expect(saved.value).not.toHaveProperty('sectionId')
-    expect([...storage.values.keys()]).toEqual([
-      V2_PROGRESS_KEY,
-      V2_RESERVATION_KEY,
-      V2_KEYS.drafts,
-    ])
+    expect([...storage.values.keys()]).toEqual([V2_KEYS.drafts])
+  })
+
+  it('refuses a Draft write another tab overtook, and writes a Draft another tab deleted again rather than lose the edit', () => {
+    const store = createBrowserAppDataStore({ storage: memoryStorage() })
+    store.saveDraft({ id: 'draft-x', file: makeDesign({ name: 'X' }), now: '2026-07-04T12:00:00.000Z' })
+    store.saveDraft({ id: 'draft-y', file: makeDesign({ name: 'Y' }), now: '2026-07-04T12:01:00.000Z' })
+
+    const overtaken = store.saveDraft({
+      id: 'draft-y',
+      file: makeDesign({ name: 'Y', description: 'edited' }),
+      now: '2026-07-04T12:06:00.000Z',
+      expectedUpdatedAt: '2026-07-04T11:00:00.000Z',
+    })
+    expect(!overtaken.ok && overtaken.error).toBeInstanceOf(BrowserDraftChangedError)
+
+    store.deleteDraft('draft-x')
+    const edit = store.saveDraft({
+      id: 'draft-x',
+      file: makeDesign({ name: 'X', description: 'edited' }),
+      now: '2026-07-04T13:01:00.000Z',
+      expectedUpdatedAt: '2026-07-04T12:00:00.000Z',
+    })
+    expect(edit.ok).toBe(true)
+    expect(store.listDrafts().map((draft) => draft.id)).toEqual(['draft-x', 'draft-y'])
+  })
+
+  it('stores Draft files in .canopi wire form, keeping unknown fields at the root', () => {
+    const storage = memoryStorage()
+    const store = createBrowserAppDataStore({ storage })
+    const file = { ...makeDesign({ name: 'Wire Draft' }), extra: { future_top_level: { keep: true } } }
+
+    const saved = store.saveDraft({ file, now: '2026-07-04T12:00:00.000Z' })
+    if (!saved.ok) throw new Error('draft should save')
+
+    const stored = JSON.parse(storage.values.get(V2_KEYS.drafts)!) as { draftFiles: Record<string, Record<string, unknown>> }
+    const wire = stored.draftFiles[saved.value.id]!
+    expect(wire).not.toHaveProperty('extra')
+    expect(wire.future_top_level).toEqual({ keep: true })
+    expect(store.loadDraft(saved.value.id)?.extra).toEqual({ future_top_level: { keep: true } })
   })
 
   it('persists browser settings, Species app data, and Saved Object Stamps', () => {
@@ -67,72 +100,197 @@ describe('browser app data store', () => {
       V2_KEYS.settings,
       V2_KEYS.species,
       V2_KEYS.stamps,
-      V2_PROGRESS_KEY,
-      V2_RESERVATION_KEY,
     ].sort())
   })
 
-  it('migrates v1 one written resource at a time and commits v2 only after every partition exists', () => {
+  it('ignores browser data written by an older Canopi', () => {
     const storage = memoryStorage()
     storage.values.set(V1_KEY, JSON.stringify({
-      drafts: [{ id: 'draft-1', name: 'Migrated', updatedAt: '2026-07-04T12:00:00.000Z' }],
-      draftFiles: { 'draft-1': makeDesign({ name: 'Migrated' }) },
-      settings: { locale: 'fr', theme: 'dark' },
+      drafts: [{ id: 'draft-1', name: 'Draft', updatedAt: '2026-07-04T12:00:00.000Z' }],
+      draftFiles: { 'draft-1': makeDesign({ name: 'Draft' }) },
+      settings: { locale: 'fr' },
       favoriteSpecies: ['Malus domestica'],
       recentlyViewedSpecies: ['Pyrus communis'],
       savedObjectStamps: [{ id: 'stamp-1', name: 'Guild', payload: { objects: 2 } }],
     }))
     const store = createBrowserAppDataStore({ storage })
 
-    expect(store.loadSettings()).toEqual({ locale: 'fr', theme: 'dark' })
-    expect(storage.writes).toEqual([])
+    expect(store.listDrafts()).toEqual([])
+    expect(store.loadSettings()).toBeNull()
+    expect(store.listFavoriteSpecies()).toEqual([])
+    expect(store.listSavedObjectStamps()).toEqual([])
+    expect(store.setFavoriteSpecies(['Quercus robur']).ok).toBe(true)
+    expect(storage.reads).not.toContain(V1_KEY)
     expect(storage.values.has(V1_KEY)).toBe(true)
+  })
 
-    expect(store.saveSettings({ locale: 'fr', theme: 'dark' }).ok).toBe(true)
-    expect(store.setFavoriteSpecies(['Malus domestica']).ok).toBe(true)
-    expect(store.saveSavedObjectStamps([
-      { id: 'stamp-1', name: 'Guild', payload: { objects: 2 } },
-    ]).ok).toBe(true)
-    expect(storage.values.has(V1_KEY)).toBe(true)
+  describe('data from before Canopi 2.0', () => {
+    const NOW = '2026-10-02T12:00:00.000Z'
+    const BACKUP = 'canopi:web-app-data:before-2.0-20261002T120000Z'
 
-    expect(store.saveDraft({
-      id: 'draft-1',
-      file: makeDesign({ name: 'Migrated' }),
-      now: '2026-07-04T12:00:00.000Z',
-    }).ok).toBe(true)
+    function seedEarlierData(storage: MemoryStorage) {
+      const v1 = JSON.stringify({
+        drafts: [{ id: 'draft-1', name: 'Draft', updatedAt: '2026-07-04T12:00:00.000Z' }],
+        draftFiles: { 'draft-1': { ...makeDesign({ name: 'Draft' }), version: 6 } },
+        settings: { locale: 'fr' },
+      })
+      storage.values.set(V1_KEY, v1)
+      // The released Web Edition stored Drafts at version 6 with a root
+      // `extra`; a Canopi 2 preview stored version 8.
+      const released = { ...makeDesign({ name: 'Orchard' }), version: 6, extra: {}, spatial_frame: null }
+      const preview = { ...makeDesign({ name: 'Hedge' }), version: 8 }
+      const damaged = { ...makeDesign({ name: 'Pond' }), plants: 'not-an-array' }
+      const newer = { ...makeDesign({ name: 'Future' }), version: 10 }
+      const current = makeDesign({ name: 'Terrace' })
+      const summaries = {
+        orchard: { id: 'orchard', name: 'Orchard', updatedAt: '2026-07-04T12:00:00.000Z' },
+        hedge: { id: 'hedge', name: 'Hedge', updatedAt: '2026-09-20T12:00:00.000Z' },
+        pond: { id: 'pond', name: 'Pond', updatedAt: '2026-07-04T11:00:00.000Z' },
+        future: { id: 'future', name: 'Future', updatedAt: '2026-10-01T11:00:00.000Z' },
+        terrace: { id: 'terrace', name: 'Terrace', updatedAt: '2026-10-01T12:00:00.000Z' },
+      }
+      storage.values.set(V2_KEYS.drafts, JSON.stringify({
+        version: 2,
+        drafts: Object.values(summaries),
+        draftFiles: { orchard: released, hedge: preview, pond: damaged, future: newer, terrace: current },
+      }))
+      return { v1, released, preview, damaged, newer, current, summaries }
+    }
 
-    expect(storage.values.has(V1_KEY)).toBe(false)
-    expect([...storage.values.keys()].sort()).toEqual([
-      ...Object.values(V2_KEYS),
-      V2_AUTHORITY_KEY,
-    ].sort())
-    expect(JSON.parse(storage.values.get(V2_AUTHORITY_KEY) ?? 'null')).toEqual({
-      version: 2,
-      authority: 'v2',
-    })
-    expect(JSON.parse(storage.values.get(V2_KEYS.drafts) ?? 'null')).toMatchObject({ version: 2 })
-    expect(JSON.parse(storage.values.get(V2_KEYS.settings) ?? 'null')).toEqual({
-      version: 2,
-      settings: { locale: 'fr', theme: 'dark' },
-    })
-    expect(JSON.parse(storage.values.get(V2_KEYS.species) ?? 'null')).toEqual({
-      version: 2,
-      favoriteSpecies: ['Malus domestica'],
-      recentlyViewedSpecies: ['Pyrus communis'],
-    })
-    expect(JSON.parse(storage.values.get(V2_KEYS.stamps) ?? 'null')).toEqual({
-      version: 2,
-      savedObjectStamps: [{ id: 'stamp-1', name: 'Guild', payload: { objects: 2 } }],
-    })
-    expect(store.listDrafts()).toEqual([
-      { id: 'draft-1', name: 'Migrated', updatedAt: '2026-07-04T12:00:00.000Z' },
-    ])
-    expect(store.loadDraft('draft-1')?.name).toBe('Migrated')
+    it('moves them to dated backup keys, byte for byte, and keeps the rest in place', () => {
+      const storage = memoryStorage()
+      seedV2Partitions(storage)
+      const seeded = seedEarlierData(storage)
+      const store = createBrowserAppDataStore({ storage })
 
-    storage.writes.length = 0
-    const reopened = createBrowserAppDataStore({ storage })
-    expect(reopened.listFavoriteSpecies()).toEqual(['Malus domestica'])
-    expect(storage.writes).toEqual([])
+      expect(store.setAsideDataFromBefore2_0(NOW)).toEqual({ movedAside: true, keptInPlace: false, error: null })
+
+      expect(storage.values.has(V1_KEY)).toBe(false)
+      expect(storage.values.get(`${BACKUP}:v1`)).toBe(seeded.v1)
+      expect(JSON.parse(storage.values.get(`${BACKUP}:v2:drafts`)!)).toEqual({
+        version: 2,
+        drafts: [seeded.summaries.orchard, seeded.summaries.hedge],
+        draftFiles: { orchard: seeded.released, hedge: seeded.preview },
+      })
+      const kept = JSON.parse(storage.values.get(V2_KEYS.drafts)!) as { drafts: unknown[]; draftFiles: Record<string, unknown> }
+      expect(kept.drafts).toEqual([seeded.summaries.pond, seeded.summaries.future, seeded.summaries.terrace])
+      expect(kept.draftFiles).toEqual({ pond: seeded.damaged, future: seeded.newer, terrace: seeded.current })
+      expect(store.listDrafts().map((draft) => draft.id)).toEqual(['terrace'])
+      expect(store.loadSettings()).toEqual({ locale: 'fr' })
+    })
+
+    it('moves nothing the second time, so the notice shows once', () => {
+      const storage = memoryStorage()
+      seedEarlierData(storage)
+      const store = createBrowserAppDataStore({ storage })
+      expect(store.setAsideDataFromBefore2_0(NOW)).toEqual({ movedAside: true, keptInPlace: false, error: null })
+      const after = new Map(storage.values)
+      storage.writes.length = 0
+
+      expect(store.setAsideDataFromBefore2_0('2026-10-03T12:00:00.000Z')).toEqual({ movedAside: false, keptInPlace: false, error: null })
+      expect(storage.writes).toEqual([])
+      expect(storage.values).toEqual(after)
+    })
+
+    it('writes nothing in a browser without earlier data', () => {
+      const storage = memoryStorage()
+      seedV2Partitions(storage)
+      const store = createBrowserAppDataStore({ storage })
+
+      expect(store.setAsideDataFromBefore2_0(NOW)).toEqual({ movedAside: false, keptInPlace: false, error: null })
+      expect(storage.writes).toEqual([])
+    })
+
+    it('never replaces an earlier backup with the same date', () => {
+      const storage = memoryStorage()
+      const seeded = seedEarlierData(storage)
+      storage.values.set(`${BACKUP}:v1`, 'an earlier backup')
+      const store = createBrowserAppDataStore({ storage })
+
+      expect(store.setAsideDataFromBefore2_0(NOW)).toEqual({ movedAside: true, keptInPlace: false, error: null })
+      expect(storage.values.get(`${BACKUP}:v1`)).toBe('an earlier backup')
+      expect(storage.values.get(`${BACKUP}-1:v1`)).toBe(seeded.v1)
+    })
+
+    it('leaves the data where it is when its backup cannot be written', () => {
+      const storage = memoryStorage()
+      const seeded = seedEarlierData(storage)
+      const draftsBefore = storage.values.get(V2_KEYS.drafts)
+      storage.failWrites = true
+      const store = createBrowserAppDataStore({ storage })
+
+      // The notice marker cannot be written either, so the user is told again next time.
+      expect(store.setAsideDataFromBefore2_0(NOW)).toMatchObject({ movedAside: false, keptInPlace: true, error: expect.any(Error) })
+      expect(storage.values.get(V1_KEY)).toBe(seeded.v1)
+      expect(storage.values.get(V2_KEYS.drafts)).toBe(draftsBefore)
+      expect([...storage.values.keys()].filter((key) => key.includes('before-2.0'))).toEqual([])
+    })
+
+    it('keeps the earlier Drafts in place when their backup lands but the Drafts record cannot be rewritten', () => {
+      const storage = memoryStorage()
+      seedEarlierData(storage)
+      const draftsBefore = storage.values.get(V2_KEYS.drafts)
+      storage.failWriteKeys.add(V2_KEYS.drafts)
+      const store = createBrowserAppDataStore({ storage })
+
+      // The browser data of the released Web Edition still moves and is reported.
+      expect(store.setAsideDataFromBefore2_0(NOW)).toMatchObject({ movedAside: true, keptInPlace: true, error: expect.any(Error) })
+      expect(storage.values.has(V1_KEY)).toBe(false)
+      expect(storage.values.get(V2_KEYS.drafts)).toBe(draftsBefore)
+      expect(storage.values.has(`${BACKUP}:v2:drafts`)).toBe(false)
+    })
+
+    it('says once that earlier Drafts stay in place when the browser has no room for their copy', () => {
+      const storage = memoryStorage()
+      const older = { ...makeDesign({ name: 'x'.repeat(3_000) }), version: 8 }
+      const draftsBefore = JSON.stringify({
+        version: 2,
+        drafts: [{ id: 'hedge', name: 'Hedge', updatedAt: '2026-09-20T12:00:00.000Z' }],
+        draftFiles: { hedge: older },
+      })
+      storage.values.set(V2_KEYS.drafts, draftsBefore)
+      storage.maxTotalLength = 5_000
+      const store = createBrowserAppDataStore({ storage })
+
+      expect(store.setAsideDataFromBefore2_0(NOW)).toMatchObject({ movedAside: false, keptInPlace: true, error: expect.any(Error) })
+      expect(storage.values.get(V2_KEYS.drafts)).toBe(draftsBefore)
+      expect(store.listDrafts()).toEqual([])
+
+      // Told once: the next start, still without room, says nothing.
+      expect(store.setAsideDataFromBefore2_0('2026-10-03T12:00:00.000Z')).toMatchObject({ movedAside: false, keptInPlace: false, error: expect.any(Error) })
+      expect(storage.values.get(V2_KEYS.drafts)).toBe(draftsBefore)
+
+      // Once there is room, the Drafts move aside and that is said too.
+      storage.maxTotalLength = null
+      expect(store.setAsideDataFromBefore2_0('2026-10-04T12:00:00.000Z')).toEqual({ movedAside: true, keptInPlace: false, error: null })
+      expect(JSON.parse(storage.values.get('canopi:web-app-data:before-2.0-20261004T120000Z:v2:drafts')!).draftFiles).toEqual({ hedge: older })
+      expect([...storage.values.keys()].sort()).toEqual([
+        'canopi:web-app-data:before-2.0-20261004T120000Z:v2:drafts',
+        V2_KEYS.drafts,
+      ])
+    })
+
+    it('says once that the 1.x document stays in place when the browser has no room for its copy', () => {
+      const storage = memoryStorage()
+      const v1 = JSON.stringify({ settings: { locale: 'fr' }, padding: 'x'.repeat(3_000) })
+      storage.values.set(V1_KEY, v1)
+      storage.maxTotalLength = 5_000
+      const store = createBrowserAppDataStore({ storage })
+
+      expect(store.setAsideDataFromBefore2_0(NOW)).toMatchObject({ movedAside: false, keptInPlace: true, error: expect.any(Error) })
+      expect(storage.values.get(V1_KEY)).toBe(v1)
+      expect(store.setAsideDataFromBefore2_0('2026-10-03T12:00:00.000Z')).toMatchObject({ movedAside: false, keptInPlace: false })
+      expect(storage.values.get(V1_KEY)).toBe(v1)
+    })
+
+    it('does not claim earlier data stays in place when browser storage cannot be read', () => {
+      const storage = memoryStorage()
+      storage.forbiddenReadKeys.add(V1_KEY)
+      storage.forbiddenReadKeys.add(V2_KEYS.drafts)
+      const store = createBrowserAppDataStore({ storage })
+
+      expect(store.setAsideDataFromBefore2_0(NOW)).toMatchObject({ movedAside: false, keptInPlace: false, error: expect.any(Error) })
+    })
   })
 
   it('saves Settings without reading or serializing the Draft partition', () => {
@@ -150,15 +308,10 @@ describe('browser app data store', () => {
 
     expect(result).toEqual({ ok: true, value: { locale: 'fr', theme: 'dark' } })
     expect(storage.reads).not.toContain(V2_KEYS.drafts)
-    expect(storage.writes).toEqual([
-      V2_PROGRESS_KEY,
-      V2_RESERVATION_KEY,
-      V2_KEYS.settings,
-      V2_PROGRESS_KEY,
-    ])
+    expect(storage.writes).toEqual([V2_KEYS.settings])
   })
 
-  it('reopens a partial migration without reparsing an already-published Draft partition', () => {
+  it('reopens app data without reparsing an already-published Draft partition', () => {
     const storage = memoryStorage()
     const firstStore = createBrowserAppDataStore({ storage })
     expect(firstStore.saveDraft({
@@ -204,376 +357,6 @@ describe('browser app data store', () => {
     )
   })
 
-  it('keeps writes live on v1 when a partition cannot publish and retries on a later write', () => {
-    const storage = memoryStorage()
-    storage.values.set(V1_KEY, JSON.stringify({
-      drafts: [{ id: 'draft-1', name: 'Safe', updatedAt: '2026-07-04T12:00:00.000Z' }],
-      draftFiles: { 'draft-1': makeDesign({ name: 'Safe' }) },
-      settings: { locale: 'fr' },
-      favoriteSpecies: ['Malus domestica'],
-      recentlyViewedSpecies: [],
-      savedObjectStamps: [],
-    }))
-    storage.failWriteKeys.add(V2_KEYS.settings)
-    const store = createBrowserAppDataStore({ storage })
-
-    expect(store.saveSettings({ locale: 'de' })).toEqual({
-      ok: true,
-      value: { locale: 'de' },
-    })
-    expect(storage.values.has(V1_KEY)).toBe(true)
-    expect(storage.values.has(V2_KEYS.settings)).toBe(false)
-    expect(store.loadSettings()).toEqual({ locale: 'de' })
-    expect(store.listDrafts().map((draft) => draft.id)).toEqual(['draft-1'])
-
-    storage.failWriteKeys.clear()
-    expect(store.saveSettings({ locale: 'it' })).toEqual({
-      ok: true,
-      value: { locale: 'it' },
-    })
-    expect(storage.values.has(V2_KEYS.settings)).toBe(true)
-    expect(storage.values.has(V1_KEY)).toBe(true)
-    expect(store.loadSettings()).toEqual({ locale: 'it' })
-  })
-
-  it('does not retry a quota-blocked full-store copy on reads and keeps Settings writable through v1', () => {
-    const storage = memoryStorage()
-    const legacyDraft = makeDesign({ name: 'x'.repeat(10_000) })
-    delete legacyDraft.plant_species_codes
-    storage.values.set(V1_KEY, JSON.stringify({
-      drafts: [{ id: 'large', name: 'Large', updatedAt: '2026-07-04T12:00:00.000Z' }],
-      draftFiles: { large: legacyDraft },
-      settings: { locale: 'fr' },
-      favoriteSpecies: [],
-      recentlyViewedSpecies: [],
-      savedObjectStamps: [],
-    }))
-    storage.maxTotalLength = totalStoredLength(storage) + 8
-    const store = createBrowserAppDataStore({ storage })
-
-    expect(store.loadSettings()).toEqual({ locale: 'fr' })
-    expect(store.loadSettings()).toEqual({ locale: 'fr' })
-    expect(storage.writes).toEqual([])
-
-    expect(store.saveSettings({ locale: 'de' })).toEqual({
-      ok: true,
-      value: { locale: 'de' },
-    })
-    expect(storage.values.has(V2_KEYS.settings)).toBe(false)
-    expect(store.loadSettings()).toEqual({ locale: 'de' })
-    expect(JSON.parse(storage.values.get(V1_KEY)!).draftFiles.large).not.toHaveProperty('plant_species_codes')
-  })
-
-  it('releases admitted progress when reservation quota rejects before falling back to v1', () => {
-    const storage = memoryStorage()
-    seedLegacy(storage)
-    replaceLegacySettings(storage, { locale: 'f' })
-    const progressLength = JSON.stringify({
-      version: 2,
-      state: 'migrating',
-      partitions: '0000',
-    }).length
-    storage.maxTotalLength = totalStoredLength(storage) + progressLength
-    const store = createBrowserAppDataStore({ storage })
-
-    expect(store.saveSettings({ locale: 'de' })).toEqual({
-      ok: true,
-      value: { locale: 'de' },
-    })
-    expect(store.loadSettings()).toEqual({ locale: 'de' })
-    expect(storage.values.has(V2_PROGRESS_KEY)).toBe(false)
-    expect(storage.values.has(V2_RESERVATION_KEY)).toBe(false)
-  })
-
-  it('releases all migration metadata when target publication rejects before v1 fallback', () => {
-    const storage = memoryStorage()
-    seedLegacy(storage)
-    replaceLegacySettings(storage, { locale: 'f' })
-    const progressLength = JSON.stringify({
-      version: 2,
-      state: 'migrating',
-      partitions: '0000',
-    }).length
-    const reservationLength = JSON.stringify({
-      version: 2,
-      reserves: 'v2-authority-tombstone',
-    }).length
-    storage.maxTotalLength = totalStoredLength(storage) + progressLength + reservationLength
-    storage.failWriteKeys.add(V2_KEYS.settings)
-    const store = createBrowserAppDataStore({ storage })
-
-    expect(store.saveSettings({ locale: 'de' })).toEqual({
-      ok: true,
-      value: { locale: 'de' },
-    })
-    expect(store.loadSettings()).toEqual({ locale: 'de' })
-    expect(storage.values.has(V2_PROGRESS_KEY)).toBe(false)
-    expect(storage.values.has(V2_RESERVATION_KEY)).toBe(false)
-  })
-
-  it('keeps published v2 resources authoritative across stale legacy rewrites and recreation', () => {
-    const storage = memoryStorage()
-    storage.values.set(V1_KEY, JSON.stringify({
-      drafts: [{ id: 'draft-old', name: 'Old', updatedAt: '2026-07-04T12:00:00.000Z' }],
-      draftFiles: { 'draft-old': makeDesign({ name: 'Old' }) },
-      settings: { locale: 'fr' },
-      favoriteSpecies: ['Malus domestica'],
-      recentlyViewedSpecies: [],
-      savedObjectStamps: [],
-    }))
-    const store = createBrowserAppDataStore({ storage })
-
-    expect(store.saveSettings({ locale: 'de' }).ok).toBe(true)
-
-    storage.values.set(V1_KEY, JSON.stringify({
-      drafts: [{ id: 'draft-new', name: 'New', updatedAt: '2026-07-04T13:00:00.000Z' }],
-      draftFiles: { 'draft-new': makeDesign({ name: 'New' }) },
-      settings: { locale: 'es' },
-      favoriteSpecies: ['Pyrus communis'],
-      recentlyViewedSpecies: [],
-      savedObjectStamps: [],
-    }))
-
-    expect(store.loadSettings()).toEqual({ locale: 'de' })
-    expect(store.listDrafts().map((draft) => draft.id)).toEqual(['draft-new'])
-
-    expect(store.setFavoriteSpecies(['Pyrus communis']).ok).toBe(true)
-    expect(store.saveSavedObjectStamps([]).ok).toBe(true)
-    expect(store.saveDraft({
-      id: 'draft-new',
-      file: makeDesign({ name: 'New' }),
-      now: '2026-07-04T13:00:00.000Z',
-    }).ok).toBe(true)
-    expect(storage.values.has(V2_AUTHORITY_KEY)).toBe(true)
-
-    storage.values.set(V1_KEY, JSON.stringify({
-      drafts: [],
-      draftFiles: {},
-      settings: { locale: 'it' },
-      favoriteSpecies: [],
-      recentlyViewedSpecies: [],
-      savedObjectStamps: [],
-    }))
-    storage.values.set(V2_PROGRESS_KEY, JSON.stringify({
-      version: 2,
-      state: 'migrating',
-      partitions: '0000',
-    }))
-    const reopened = createBrowserAppDataStore({ storage })
-
-    expect(reopened.loadSettings()).toEqual({ locale: 'de' })
-    expect(reopened.listDrafts().map((draft) => draft.id)).toEqual(['draft-new'])
-    expect(storage.values.has(V2_PROGRESS_KEY)).toBe(false)
-    expect(storage.values.has(V2_RESERVATION_KEY)).toBe(false)
-  })
-
-  it('requires the exact committed tombstone before suppressing v1 fallback', () => {
-    const storage = memoryStorage()
-    seedLegacy(storage)
-    storage.values.set(V2_AUTHORITY_KEY, JSON.stringify({
-      version: 2,
-      authority: 'v2',
-      extra: 'foreign',
-    }))
-    const store = createBrowserAppDataStore({ storage })
-
-    expect(store.loadSettings()).toEqual({ locale: 'fr' })
-    expect(store.listDrafts().map((draft) => draft.id)).toEqual(['draft-1'])
-    expect(storage.values.has(V1_KEY)).toBe(true)
-  })
-
-  it('reserves at least the committed tombstone footprint before publishing partitions', () => {
-    const reservation = JSON.stringify({
-      version: 2,
-      reserves: 'v2-authority-tombstone',
-    })
-    const authority = JSON.stringify({ version: 2, authority: 'v2' })
-
-    expect(V2_RESERVATION_KEY.length + reservation.length).toBeGreaterThanOrEqual(
-      V2_AUTHORITY_KEY.length + authority.length,
-    )
-  })
-
-  it('does not commit an invalid partition over recoverable v1 data', () => {
-    const storage = memoryStorage()
-    seedLegacy(storage)
-    seedV2Partitions(storage)
-    storage.values.set(V2_KEYS.drafts, JSON.stringify({
-      version: 2,
-      drafts: 'not-an-array',
-      draftFiles: {},
-    }))
-    storage.values.set(V2_PROGRESS_KEY, JSON.stringify({
-      version: 2,
-      state: 'migrating',
-      partitions: '1111',
-    }))
-    const store = createBrowserAppDataStore({ storage })
-
-    expect(store.listDrafts().map((draft) => draft.id)).toEqual(['draft-1'])
-    expect(storage.values.has(V1_KEY)).toBe(true)
-    expect(JSON.parse(storage.values.get(V2_PROGRESS_KEY) ?? 'null')).toMatchObject({
-      state: 'migrating',
-    })
-
-    expect(store.saveDraft({
-      id: 'draft-1',
-      file: makeDesign({ name: 'Draft' }),
-      now: '2026-07-04T12:00:00.000Z',
-    }).ok).toBe(true)
-    expect(storage.values.has(V1_KEY)).toBe(false)
-    expect(JSON.parse(storage.values.get(V2_AUTHORITY_KEY) ?? 'null')).toMatchObject({
-      authority: 'v2',
-    })
-  })
-
-  it('recovers a crash after the fourth partition write and before marker finalization', () => {
-    const storage = memoryStorage()
-    seedLegacy(storage)
-    seedV2Partitions(storage)
-    storage.values.set(V2_PROGRESS_KEY, JSON.stringify({
-      version: 2,
-      state: 'migrating',
-      partitions: '1110',
-    }))
-
-    const reopened = createBrowserAppDataStore({ storage })
-
-    expect(reopened.loadSettings()).toEqual({ locale: 'fr' })
-    expect(storage.values.has(V1_KEY)).toBe(false)
-    expect(JSON.parse(storage.values.get(V2_AUTHORITY_KEY) ?? 'null')).toEqual({
-      version: 2,
-      authority: 'v2',
-    })
-  })
-
-  it('recovers the reservation-to-tombstone crash gap', () => {
-    const storage = memoryStorage()
-    seedV2Partitions(storage)
-    storage.values.set(V2_PROGRESS_KEY, JSON.stringify({
-      version: 2,
-      state: 'migrating',
-      partitions: '1111',
-    }))
-
-    const reopened = createBrowserAppDataStore({ storage })
-
-    expect(reopened.loadSettings()).toEqual({ locale: 'fr' })
-    expect(storage.values.has(V1_KEY)).toBe(false)
-    expect(JSON.parse(storage.values.get(V2_AUTHORITY_KEY) ?? 'null')).toEqual({
-      version: 2,
-      authority: 'v2',
-    })
-  })
-
-  it('keeps a committed write successful when legacy removal fails and retries cleanup later', () => {
-    const storage = memoryStorage()
-    seedLegacy(storage)
-    storage.failRemoveKeys.add(V1_KEY)
-    const store = createBrowserAppDataStore({ storage })
-
-    expect(store.saveSettings({ locale: 'fr' }).ok).toBe(true)
-    expect(store.setFavoriteSpecies(['Malus domestica']).ok).toBe(true)
-    expect(store.saveSavedObjectStamps([]).ok).toBe(true)
-    const finalWrite = store.saveDraft({
-      id: 'draft-1',
-      file: makeDesign({ name: 'Draft' }),
-      now: '2026-07-04T12:00:00.000Z',
-    })
-
-    expect(finalWrite.ok).toBe(true)
-    expect(storage.values.has(V1_KEY)).toBe(true)
-    expect(JSON.parse(storage.values.get(V2_AUTHORITY_KEY) ?? 'null')).toMatchObject({
-      authority: 'v2',
-    })
-
-    storage.failRemoveKeys.clear()
-    const reopened = createBrowserAppDataStore({ storage })
-    expect(reopened.loadSettings()).toEqual({ locale: 'fr' })
-    expect(storage.values.has(V1_KEY)).toBe(false)
-  })
-
-  it('rebases a quota fallback when another tab establishes v2 authority', () => {
-    const storage = memoryStorage()
-    seedLegacy(storage)
-    seedV2Partitions(storage)
-    storage.values.delete(V2_KEYS.settings)
-    storage.values.set(V2_PROGRESS_KEY, JSON.stringify({
-      version: 2,
-      state: 'migrating',
-      partitions: '1011',
-    }))
-    storage.failWriteKeys.add(V2_KEYS.settings)
-    const firstTab = createBrowserAppDataStore({ storage })
-    const secondTab = createBrowserAppDataStore({ storage })
-    storage.onRejectedWrite = (key) => {
-      if (key !== V2_KEYS.settings) return
-      storage.onRejectedWrite = null
-      storage.failWriteKeys.delete(V2_KEYS.settings)
-      expect(secondTab.saveSettings({ locale: 'es' }).ok).toBe(true)
-    }
-
-    expect(firstTab.saveSettings({ locale: 'de' })).toEqual({
-      ok: true,
-      value: { locale: 'de' },
-    })
-    expect(firstTab.loadSettings()).toEqual({ locale: 'de' })
-    expect(storage.values.has(V1_KEY)).toBe(false)
-  })
-
-  it('revalidates authority when marker reservation fails during a competing migration', () => {
-    const storage = memoryStorage()
-    seedLegacy(storage)
-    seedV2Partitions(storage)
-    storage.values.delete(V2_KEYS.settings)
-    storage.failWriteKeys.add(V2_PROGRESS_KEY)
-    const firstTab = createBrowserAppDataStore({ storage })
-    const secondTab = createBrowserAppDataStore({ storage })
-    storage.onRejectedWrite = (key) => {
-      if (key !== V2_PROGRESS_KEY) return
-      storage.onRejectedWrite = null
-      storage.failWriteKeys.delete(V2_PROGRESS_KEY)
-      expect(secondTab.saveSettings({ locale: 'es' }).ok).toBe(true)
-    }
-
-    expect(firstTab.saveSettings({ locale: 'de' })).toEqual({
-      ok: true,
-      value: { locale: 'de' },
-    })
-    expect(firstTab.loadSettings()).toEqual({ locale: 'de' })
-
-    const reopened = createBrowserAppDataStore({ storage })
-    expect(reopened.loadSettings()).toEqual({ locale: 'de' })
-    expect(storage.values.has(V1_KEY)).toBe(false)
-  })
-
-  it('rebases a v1 fallback over another tab update to a different legacy resource', () => {
-    const storage = memoryStorage()
-    seedLegacy(storage)
-    storage.failWriteKeys.add(V2_KEYS.settings)
-    const firstTab = createBrowserAppDataStore({ storage })
-    const secondTab = createBrowserAppDataStore({ storage })
-    storage.onRejectedWrite = (key) => {
-      if (key !== V2_KEYS.settings) return
-      storage.onRejectedWrite = null
-      storage.failWriteKeys.add(V2_KEYS.species)
-      expect(secondTab.setFavoriteSpecies(['Pyrus communis'])).toEqual({
-        ok: true,
-        value: ['Pyrus communis'],
-      })
-      storage.failWriteKeys.delete(V2_KEYS.species)
-    }
-
-    expect(firstTab.saveSettings({ locale: 'de' })).toEqual({
-      ok: true,
-      value: { locale: 'de' },
-    })
-
-    const reopened = createBrowserAppDataStore({ storage })
-    expect(reopened.loadSettings()).toEqual({ locale: 'de' })
-    expect(reopened.listFavoriteSpecies()).toEqual(['Pyrus communis'])
-  })
-
   it('reports storage failures without replacing existing readable app data', () => {
     const storage = memoryStorage()
     const store = createBrowserAppDataStore({ storage })
@@ -588,9 +371,43 @@ describe('browser app data store', () => {
     expect(store.loadDraft(saved.value.id)?.name).toBe('Safe Draft')
   })
 
+  it('keeps the stored bytes of Drafts it cannot open when another Draft is saved or deleted', () => {
+    const storage = memoryStorage()
+    // The released Web Edition stored Drafts as in-memory files at version 6
+    // with a root `extra`; this Canopi refuses them but must not erase them.
+    const olderDraft = { ...makeDesign({ name: 'Orchard' }), version: 6, extra: {}, spatial_frame: null }
+    const damagedDraft = { ...makeDesign({ name: 'Pond' }), plants: 'not-an-array' }
+    const olderSummary = { id: 'orchard', name: 'Orchard', updatedAt: '2026-07-04T12:00:00.000Z' }
+    const damagedSummary = { id: 'pond', name: 'Pond', updatedAt: '2026-07-04T11:00:00.000Z' }
+    storage.values.set(V2_KEYS.drafts, JSON.stringify({
+      version: 2,
+      drafts: [olderSummary, damagedSummary],
+      draftFiles: { orchard: olderDraft, pond: damagedDraft },
+    }))
+    const store = createBrowserAppDataStore({ storage })
+    expect(store.listDrafts()).toEqual([])
+
+    const saved = store.saveDraft({ id: 'new', file: makeDesign({ name: 'New' }), now: '2026-07-05T12:00:00.000Z' })
+    expect(saved.ok).toBe(true)
+    expect(store.deleteDraft('new').ok).toBe(true)
+    expect(store.saveDraft({ id: 'next', file: makeDesign({ name: 'Next' }), now: '2026-07-05T13:00:00.000Z' }).ok).toBe(true)
+
+    const stored = JSON.parse(storage.values.get(V2_KEYS.drafts)!) as {
+      drafts: unknown[]
+      draftFiles: Record<string, unknown>
+    }
+    expect(stored.draftFiles.orchard).toEqual(olderDraft)
+    expect(stored.draftFiles.pond).toEqual(damagedDraft)
+    expect(stored.draftFiles).not.toHaveProperty('new')
+    expect(stored.drafts).toEqual(expect.arrayContaining([olderSummary, damagedSummary]))
+    expect(store.listDrafts().map((draft) => draft.id)).toEqual(['next'])
+  })
+
   it('isolates corrupted Drafts without discarding unrelated browser app data', () => {
     const storage = memoryStorage()
-    storage.setItem(V1_KEY, JSON.stringify({
+    seedV2Partitions(storage)
+    storage.values.set(V2_KEYS.drafts, JSON.stringify({
+      version: 2,
       drafts: [
         { id: 'valid', name: 'Valid', updatedAt: '2026-07-04T12:00:00.000Z' },
         { id: 'corrupt', name: 'Corrupt', updatedAt: '2026-07-04T13:00:00.000Z' },
@@ -600,10 +417,10 @@ describe('browser app data store', () => {
         valid: makeDesign({ name: 'Valid' }),
         corrupt: { ...makeDesign({ name: 'Corrupt' }), plants: 'not-an-array' },
       },
+    }))
+    storage.values.set(V2_KEYS.settings, JSON.stringify({
+      version: 2,
       settings: { locale: 'fr', theme: 'dark' },
-      favoriteSpecies: ['Malus domestica'],
-      recentlyViewedSpecies: ['Pyrus communis'],
-      savedObjectStamps: [{ id: 'stamp-1', name: 'Guild', payload: { objects: 2 } }],
     }))
     const store = createBrowserAppDataStore({ storage })
 
@@ -698,31 +515,11 @@ function seedV2Partitions(storage: MemoryStorage): void {
   }))
 }
 
-function seedLegacy(storage: MemoryStorage): void {
-  storage.values.set(V1_KEY, JSON.stringify({
-    drafts: [{ id: 'draft-1', name: 'Draft', updatedAt: '2026-07-04T12:00:00.000Z' }],
-    draftFiles: { 'draft-1': makeDesign({ name: 'Draft' }) },
-    settings: { locale: 'fr' },
-    favoriteSpecies: ['Malus domestica'],
-    recentlyViewedSpecies: ['Pyrus communis'],
-    savedObjectStamps: [],
-  }))
-}
-
-function replaceLegacySettings(
-  storage: MemoryStorage,
-  settings: Record<string, unknown>,
-): void {
-  const legacy = JSON.parse(storage.values.get(V1_KEY) ?? 'null') as Record<string, unknown>
-  storage.values.set(V1_KEY, JSON.stringify({ ...legacy, settings }))
-}
-
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 6,
+    version: 9,
     name: 'Draft',
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     plant_species_symbols: {},
     plant_species_codes: {},
@@ -736,9 +533,10 @@ function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
     timeline: [],
     budget: [],
     budget_currency: 'EUR',
+    views: [],
+    stories: [],
     created_at: '2026-07-04T00:00:00.000Z',
     updated_at: '2026-07-04T00:00:00.000Z',
-    extra: {},
     ...overrides,
   }
 }

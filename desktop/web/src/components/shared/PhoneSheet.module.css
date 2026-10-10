@@ -1,0 +1,178 @@
+/* The phone panel sheet (board WebPhone). Portrait: across the bottom edge,
+   resting at its handle and tabs (peek), half the workspace, or up to the top
+   bar (full). Landscape: a side sheet at the right, below the top bar. */
+.sheet {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 36;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 calc(var(--space-2) + env(safe-area-inset-right)) calc(var(--space-1) + env(safe-area-inset-bottom)) calc(var(--space-2) + env(safe-area-inset-left));
+  border: 1px solid var(--color-border);
+  border-bottom: 0;
+  border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-float);
+}
+
+.sheet[data-phone-sheet="half"] {
+  height: 50%;
+}
+
+.sheet[data-phone-sheet="full"] {
+  top: var(--chrome-rail-top);
+}
+
+/* While a finger drags the handle the inline height leads, not the resting stop. */
+.sheet[data-dragging="true"] {
+  top: auto;
+}
+
+.handle {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: calc(var(--control-size-touch) * 2);
+  height: var(--control-size-touch);
+  margin-bottom: calc(var(--space-2) * -1);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.grip {
+  width: var(--control-size-lg);
+  height: var(--space-1);
+  border-radius: var(--radius-full);
+  background: var(--color-border-strong);
+}
+
+.handle:hover .grip {
+  background: var(--color-text-muted);
+}
+
+.handle:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.tabRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  min-width: 0;
+  padding-bottom: var(--space-2);
+}
+
+.tabs {
+  display: flex;
+  flex: 1 1 auto;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  flex-shrink: 0;
+  min-height: var(--control-size-touch);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-base);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tab[aria-selected="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: 600;
+}
+
+.tab[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.tab[data-sheet-more][aria-expanded="true"] {
+  background: var(--color-control-hover);
+}
+
+.tab[data-sheet-more][data-holds-active] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Icons carry the tabs where the labels would crowd them (French, German). */
+.tabLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  margin: 0 calc(var(--space-2) * -1);
+  overflow: hidden;
+  border-top: 1px solid var(--color-border);
+}
+
+/* Phone fields take 16 px so iOS does not zoom into them. */
+.sheet .panel :is(input, select, textarea) {
+  font-size: var(--text-touch);
+}
+
+/* Landscape: a side sheet on the right. At peek its handle and tabs rest in the
+   bottom right corner; half and full open it from below the top bar to the
+   bottom edge, full wider. */
+.sheet[data-orientation="landscape"] {
+  top: auto;
+  right: calc(var(--chrome-inset) + env(safe-area-inset-right));
+  bottom: calc(var(--chrome-inset) + env(safe-area-inset-bottom));
+  left: auto;
+  width: min(360px, 46%);
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+}
+
+.sheet[data-orientation="landscape"][data-phone-sheet="half"],
+.sheet[data-orientation="landscape"][data-phone-sheet="full"] {
+  top: var(--chrome-rail-top);
+  height: auto;
+}
+
+.sheet[data-orientation="landscape"][data-phone-sheet="full"] {
+  width: min(560px, 70%);
+}
+
+.sheet[data-orientation="landscape"] .handle {
+  cursor: pointer;
+}

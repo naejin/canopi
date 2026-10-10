@@ -1,122 +1,35 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   mapLibreCanvasSurfaceStateEquals,
-  mergeMapLibreCanvasSurfaceState,
-  publishMapDiagnostics,
 } from '../maplibre/canvas-surface-state'
-import {
-  LOCAL_MERCATOR_PROJECTION_ID,
-  LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
-} from '../canvas/projection'
 
 describe('maplibre surface state adapter', () => {
-  afterEach(() => {
-    delete (globalThis as { __CANOPI_MAP_DEBUG__?: unknown }).__CANOPI_MAP_DEBUG__
-  })
-
   it('returns idle defaults from the shared state constant', () => {
     expect(IDLE_MAPLIBRE_CANVAS_SURFACE_STATE).toEqual({
       status: 'idle',
-      errorMessage: null,
       terrainStatus: 'idle',
-      terrainErrorMessage: null,
-      precisionWarning: false,
-      designExtentMeters: null,
+      layerSkipped: false,
+      basemapStatus: 'idle',
+      retryable: false,
     })
   })
 
-  it('merges precision warning data from the current scene extent', () => {
-    const merged = mergeMapLibreCanvasSurfaceState({
-      status: 'ready',
-      errorMessage: null,
-      terrainStatus: 'idle',
-      terrainErrorMessage: null,
-    }, LOCAL_PROJECTION_WARNING_THRESHOLD_METERS + 5)
-
-    expect(merged.precisionWarning).toBe(true)
-    expect(merged.designExtentMeters).toBeGreaterThan(LOCAL_PROJECTION_WARNING_THRESHOLD_METERS)
-  })
-
-  it('detects state equality including terrain and precision fields', () => {
+  it('detects state equality including terrain fields', () => {
     const left = {
       status: 'ready' as const,
-      errorMessage: null,
       terrainStatus: 'error' as const,
-      terrainErrorMessage: 'dem failed',
-      precisionWarning: true,
-      designExtentMeters: 1234,
+      layerSkipped: false,
+      basemapStatus: 'idle' as const,
+      retryable: false,
     }
     const right = { ...left }
-    const different = { ...left, terrainErrorMessage: null }
+    const different = { ...left, terrainStatus: 'ready' as const }
 
     expect(mapLibreCanvasSurfaceStateEquals(left, right)).toBe(true)
     expect(mapLibreCanvasSurfaceStateEquals(left, different)).toBe(false)
-  })
-
-  it('publishes the stable canonical projection diagnostics without backend selection', () => {
-    const frame = {
-      center: [2.3522, 48.8566],
-      zoom: 17,
-      bearing: 12,
-      diagnostics: {
-        projectionId: LOCAL_MERCATOR_PROJECTION_ID,
-        warningThresholdMeters: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
-        viewportCenterWorld: { x: 20, y: -10 },
-        viewportCornerGeo: [
-          { lng: 2.35, lat: 48.86 },
-          { lng: 2.36, lat: 48.86 },
-          { lng: 2.36, lat: 48.85 },
-          { lng: 2.35, lat: 48.85 },
-        ],
-      },
-    } as const
-
-    publishMapDiagnostics(frame, LOCAL_PROJECTION_WARNING_THRESHOLD_METERS)
-    const atThreshold = (globalThis as { __CANOPI_MAP_DEBUG__?: unknown })
-      .__CANOPI_MAP_DEBUG__ as Record<string, unknown>
-    expect(atThreshold).toMatchObject({
-      designExtentMeters: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
-      precisionWarning: false,
-    })
-
-    publishMapDiagnostics(frame, LOCAL_PROJECTION_WARNING_THRESHOLD_METERS + 1)
-    const beyondThreshold = (globalThis as { __CANOPI_MAP_DEBUG__?: unknown })
-      .__CANOPI_MAP_DEBUG__ as Record<string, unknown>
-    expect(beyondThreshold).toMatchObject({
-      projectionId: 'local-mercator',
-      precisionWarningThresholdMeters: 10_000,
-      designExtentMeters: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS + 1,
-      precisionWarning: true,
-    })
-    expect(beyondThreshold).not.toHaveProperty('projectionBackendId')
-  })
-
-  it('publishes precision diagnostics from the canonical scalar policy', () => {
-    const frame = {
-      center: [2.3522, 48.8566],
-      zoom: 17,
-      bearing: 0,
-      diagnostics: {
-        projectionId: LOCAL_MERCATOR_PROJECTION_ID,
-        warningThresholdMeters: 1,
-        viewportCenterWorld: { x: 0, y: 0 },
-        viewportCornerGeo: [
-          { lng: 2.35, lat: 48.86 },
-          { lng: 2.36, lat: 48.86 },
-          { lng: 2.36, lat: 48.85 },
-          { lng: 2.35, lat: 48.85 },
-        ],
-      },
-    } as const
-
-    publishMapDiagnostics(frame, 2)
-
-    expect((globalThis as { __CANOPI_MAP_DEBUG__?: unknown }).__CANOPI_MAP_DEBUG__)
-      .toMatchObject({
-        precisionWarningThresholdMeters: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
-        designExtentMeters: 2,
-        precisionWarning: false,
-      })
+    expect(mapLibreCanvasSurfaceStateEquals(left, { ...left, layerSkipped: true })).toBe(false)
+    expect(mapLibreCanvasSurfaceStateEquals(left, { ...left, basemapStatus: 'failed' })).toBe(false)
+    expect(mapLibreCanvasSurfaceStateEquals(left, { ...left, retryable: true })).toBe(false)
   })
 })

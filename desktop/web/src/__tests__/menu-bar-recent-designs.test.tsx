@@ -22,9 +22,9 @@ vi.mock('../app/document-session/actions', async (importOriginal) => {
 import { getRecentFiles } from '../ipc/design'
 import { openDesignFromPath } from '../app/document-session/actions'
 import { designNotebookWorkbench } from '../app/design-notebook'
-import { MenuBar } from '../components/shared/MenuBar'
+import { TitleBar } from '../components/shared/TitleBar'
 
-describe('MenuBar Recent Designs', () => {
+describe('Title bar menu: Open recent', () => {
   let container: HTMLDivElement
 
   beforeEach(async () => {
@@ -45,7 +45,7 @@ describe('MenuBar Recent Designs', () => {
 
   async function renderAndOpenFileMenu(): Promise<void> {
     await act(async () => {
-      render(<MenuBar />, container)
+      render(<TitleBar />, container)
     })
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
@@ -64,10 +64,10 @@ describe('MenuBar Recent Designs', () => {
     await renderAndOpenFileMenu()
 
     const openRecent = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
-      .find((button) => button.textContent?.includes('Open Recent'))
+      .find((button) => button.textContent?.includes('Open recent'))
     if (!openRecent) throw new Error('Missing Open Recent item')
 
-    expect(openRecent.disabled).toBe(true)
+    expect(openRecent.getAttribute('aria-disabled')).toBe('true')
     expect(openRecent.getAttribute('aria-haspopup')).toBe('menu')
     expect(container.textContent).not.toContain('Forest Edge')
   })
@@ -76,7 +76,7 @@ describe('MenuBar Recent Designs', () => {
     vi.mocked(getRecentFiles)
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
-        { path: '/designs/new.canopi', name: 'Newly Saved', updated_at: '2026-06-25T00:00:00.000Z', plant_count: 1 },
+        { path: '/designs/new.canopi', name: 'Newly Saved', updated_at: '2026-06-25T00:00:00.000Z' },
       ])
 
     await renderAndOpenFileMenu()
@@ -86,11 +86,11 @@ describe('MenuBar Recent Designs', () => {
     })
 
     const openRecent = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
-      .find((button) => button.textContent?.includes('Open Recent'))
+      .find((button) => button.textContent?.includes('Open recent'))
     if (!openRecent) throw new Error('Missing Open Recent item')
 
     expect(getRecentFiles).toHaveBeenCalledTimes(2)
-    expect(openRecent.disabled).toBe(false)
+    expect(openRecent.getAttribute('aria-disabled')).toBeNull()
 
     await act(async () => {
       openRecent.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }))
@@ -101,21 +101,21 @@ describe('MenuBar Recent Designs', () => {
 
   it('opens recent designs from an Open Recent submenu capped to five entries', async () => {
     vi.mocked(getRecentFiles).mockResolvedValue([
-      { path: '/designs/forest.canopi', name: 'Forest Edge', updated_at: '2026-06-20T00:00:00.000Z', plant_count: 4 },
-      { path: '/designs/home.canopi', name: 'Home Guild', updated_at: '2026-06-21T00:00:00.000Z', plant_count: 2 },
-      { path: '/designs/client-a.canopi', name: 'Client A', updated_at: '2026-06-22T00:00:00.000Z', plant_count: 3 },
-      { path: '/designs/client-b.canopi', name: 'Client B', updated_at: '2026-06-23T00:00:00.000Z', plant_count: 1 },
-      { path: '/designs/client-c.canopi', name: 'Client C', updated_at: '2026-06-24T00:00:00.000Z', plant_count: 5 },
-      { path: '/designs/client-d.canopi', name: 'Client D', updated_at: '2026-06-25T00:00:00.000Z', plant_count: 6 },
+      { path: '/designs/forest.canopi', name: 'Forest Edge', updated_at: '2026-06-20T00:00:00.000Z' },
+      { path: '/designs/home.canopi', name: 'Home Guild', updated_at: '2026-06-21T00:00:00.000Z' },
+      { path: '/designs/client-a.canopi', name: 'Client A', updated_at: '2026-06-22T00:00:00.000Z' },
+      { path: '/designs/client-b.canopi', name: 'Client B', updated_at: '2026-06-23T00:00:00.000Z' },
+      { path: '/designs/client-c.canopi', name: 'Client C', updated_at: '2026-06-24T00:00:00.000Z' },
+      { path: '/designs/client-d.canopi', name: 'Client D', updated_at: '2026-06-25T00:00:00.000Z' },
     ])
 
     await renderAndOpenFileMenu()
 
     const openRecent = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
-      .find((button) => button.textContent?.includes('Open Recent'))
+      .find((button) => button.textContent?.includes('Open recent'))
     if (!openRecent) throw new Error('Missing Open Recent item')
 
-    expect(openRecent.disabled).toBe(false)
+    expect(openRecent.getAttribute('aria-disabled')).toBeNull()
     expect(openRecent.getAttribute('aria-haspopup')).toBe('menu')
     expect(container.textContent).not.toContain('Forest Edge')
 
@@ -135,10 +135,10 @@ describe('MenuBar Recent Designs', () => {
 
     await act(async () => {
       openRecent.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }))
-      await new Promise((resolve) => requestAnimationFrame(resolve))
     })
 
-    expect(document.activeElement?.textContent).toContain('Forest Edge')
+    // The submenu moves focus to its first item on the next frame.
+    await vi.waitFor(() => expect(document.activeElement?.textContent).toContain('Forest Edge'))
 
     const forest = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
       .find((button) => button.textContent?.includes('Forest Edge'))

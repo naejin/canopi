@@ -245,6 +245,11 @@ print(f"- Expected DB schema version: {metadata['expected_db_schema_version']}")
 print()
 print("Promoted artifacts were checksum-verified before upload.")
 PY
+  # The GeoLibre CLI sidecar links an AGPL-3.0-or-later component; this is the
+  # written Corresponding Source offer for it (desktop/THIRD_PARTY_NOTICES.md).
+  printf "\n## Corresponding Source\n\n"
+  printf "Canopi is AGPL-3.0 software and its installers ship the GeoLibre CLI sidecar, which links the AGPL-3.0-or-later \`wbspatialstats\` tools. The complete Corresponding Source of this release is the Canopi source at this tag ([%s](https://github.com/%s/archive/refs/tags/%s.tar.gz), commit %s) together with the \`geolibre-rust\` and \`whitebox-wasm\` repositories at the revisions named in \`desktop/THIRD_PARTY_NOTICES.md\` of that source; the sidecar is rebuilt from them by \`scripts/build-geolibre-cli.sh\`.\n" \
+    "$tag" "$repo" "$tag" "$source_sha"
   printf "\n## Download Links\n\n"
   printf -- "-- This section links to assets attached to this release.\n\n"
   for release_file in "${release_files[@]}"; do

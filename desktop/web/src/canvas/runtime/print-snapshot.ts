@@ -1,8 +1,9 @@
 import type { CanvasPrintSnapshot, PrintMarkPath, PrintZone } from '../print'
-import { resolvePlantBaseColor, type PlantPresentationContext } from './plant-presentation'
+import { resolvePlantDisplayColor, type PlantPresentationContext } from './plant-presentation'
 import { resolvePlantSymbolForPlant, type ScenePersistedState } from './scene'
-import { getPlantSymbolShapes, plantSymbolShapePath, type PlantSymbolShape } from './plant-symbol-recipes'
+import { getPlantSymbolArt, plantSymbolPath, type PlantSymbolArt } from './plant-symbol-recipes'
 import { getRectangularZoneCorners, getZoneWorldBounds } from './zone-geometry'
+import { zoneDisplayName } from './zone-identity'
 
 export function buildCanvasPrintSnapshot(
   scene: ScenePersistedState,
@@ -13,9 +14,10 @@ export function buildCanvasPrintSnapshot(
     plants: scene.plants.map((plant) => {
       const symbol = resolvePlantSymbolForPlant(plant, scene.plantSpeciesSymbols)
       return { id: plant.id, canonicalName: plant.canonicalName, speciesCode: scene.plantSpeciesCodes[plant.canonicalName], position: { ...plant.position },
-        color: resolvePlantBaseColor(plant, context.speciesCache), symbol,
-        mark: getPlantSymbolShapes(symbol, 24).map(markPath),
-        smallMark: getPlantSymbolShapes(symbol, 12).map(markPath), pinnedName: plant.pinnedName === true }
+        // Print carries the colour mode, never the stored colour it would override.
+        color: resolvePlantDisplayColor(plant, context.speciesCache), symbol,
+        mark: markPaths(getPlantSymbolArt(symbol, 24)),
+        smallMark: markPaths(getPlantSymbolArt(symbol, 12)), pinnedName: plant.pinnedName === true }
     }),
     zones: scene.zones.flatMap((zone) => {
       const bounds = getZoneWorldBounds(zone)
@@ -28,7 +30,7 @@ export function buildCanvasPrintSnapshot(
       const geometry: PrintZone['geometry'] = zone.zoneType === 'ellipse' && points.length >= 2
         ? { kind: 'ellipse', center: { ...points[0]! }, radii: { x: Math.abs(points[1]!.x), y: Math.abs(points[1]!.y) }, rotation: zone.rotationDeg }
         : { kind: zone.zoneType === 'line' ? 'line' : zone.zoneType === 'rect' ? 'rect' : 'polygon', points: points.map(p => ({ ...p })) }
-      return [{ name: zone.name, path, bounds, geometry, fill: zone.zoneType === 'line' ? null : zone.fillColor }]
+      return [{ name: zoneDisplayName(zone), path, bounds, geometry, fill: zone.zoneType === 'line' ? null : zone.fillColor }]
     }),
     annotations: scene.annotations.map((annotation) => ({ id: annotation.id, position: { ...annotation.position },
       text: annotation.text, fontSize: annotation.fontSize, rotation: annotation.rotationDeg ?? 0 })),
@@ -36,8 +38,9 @@ export function buildCanvasPrintSnapshot(
   }
 }
 
-function markPath(shape: PlantSymbolShape): PrintMarkPath {
-  return { d: plantSymbolShapePath(shape), fill: true, stroke: false, strokeWidth: 0 }
+function markPaths(art: PlantSymbolArt): PrintMarkPath[] {
+  const body: PrintMarkPath = { d: plantSymbolPath(art.body), paint: 'symbol' }
+  return art.cutouts.length > 0 ? [body, { d: plantSymbolPath(art.cutouts), paint: 'cutout' }] : [body]
 }
 
 // Cubic ellipse representation is shared by PDF and preview, including rotation.

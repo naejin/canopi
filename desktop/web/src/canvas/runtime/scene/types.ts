@@ -27,12 +27,10 @@ export interface ScenePlantEntity {
   color: string | null
   symbol?: string | null
   pinnedName?: boolean
-  stratum: string | null
+  /** The catalog width when the plant was placed (the file's `scale`); never filled in later. */
   canopySpreadM: number | null
   position: ScenePoint
   rotationDeg: number | null
-  // Deprecated persisted compatibility mirror for canopySpreadM.
-  scale: number | null
   notes: string | null
   plantedDate: string | null
   quantity: number | null
@@ -40,7 +38,10 @@ export interface ScenePlantEntity {
 
 export interface SceneZoneEntity {
   kind: 'zone'
-  name: string
+  /** Stable identity; targets, groups and saved views refer to it. */
+  id: string
+  /** The name the user gave, or null; labels then use the type and size. */
+  name: string | null
   locked: boolean
   zoneType: string
   points: ScenePoint[]
@@ -78,12 +79,6 @@ export interface SceneObjectGroupEntity {
   members: SceneObjectGroupMember[]
 }
 
-export interface SceneGuide {
-  id: string
-  axis: 'h' | 'v'
-  position: number
-}
-
 export interface ScenePersistedState {
   plantSpeciesColors: Record<string, string>
   plantSpeciesSymbols: Record<string, string>
@@ -94,18 +89,10 @@ export interface ScenePersistedState {
   annotations: SceneAnnotationEntity[]
   measurementGuides: SceneMeasurementGuideEntity[]
   groups: SceneObjectGroupEntity[]
-  guides: SceneGuide[]
-}
-
-export interface SceneViewportState {
-  x: number
-  y: number
-  scale: number
 }
 
 export interface SceneSessionState {
   speciesFocus: SpeciesFocus
   selectedTargets: SceneDesignObjectSelection
   hoveredTarget: SceneDesignObjectTarget | null
-  documentRevision: number
 }

@@ -1,50 +1,34 @@
-import type { MapFrame } from '../canvas/maplibre-camera'
-import { createProjectionPrecisionSnapshot } from '../canvas/projection'
+type MapLibreCanvasSurfaceStatus = 'idle' | 'loading' | 'ready' | 'error'
 
-export type MapLibreCanvasSurfaceStatus = 'idle' | 'loading' | 'ready' | 'error'
+/**
+ * The OpenFreeMap Basemap: `loading` while a style downloads, `failed` from a failed download until a new one
+ * starts, it is hidden or Satellite is chosen.
+ */
+export type MapLibreBasemapStatus = 'idle' | 'loading' | 'ok' | 'failed'
 
+/** Engine text never enters this state: notices are fixed, localized sentences and the cause goes to the log. */
 export interface MapLibreCanvasSurfaceState {
   readonly status: MapLibreCanvasSurfaceStatus
-  readonly errorMessage: string | null
   readonly terrainStatus: MapLibreCanvasSurfaceStatus
-  readonly terrainErrorMessage: string | null
-  readonly precisionWarning: boolean
-  readonly designExtentMeters: number | null
+  /** An optional map contribution (overlay, raster band) was skipped; the map stays editable. */
+  readonly layerSkipped: boolean
+  readonly basemapStatus: MapLibreBasemapStatus
+  /** With status `error`: a user Retry can rebuild the map (WebGL2 present, the runtime alive). */
+  readonly retryable: boolean
 }
-
-export type MapLibreCanvasSurfaceStateInput = Omit<
-  MapLibreCanvasSurfaceState,
-  'precisionWarning' | 'designExtentMeters'
->
 
 export const IDLE_MAPLIBRE_CANVAS_SURFACE_STATE: MapLibreCanvasSurfaceState = {
   status: 'idle',
-  errorMessage: null,
   terrainStatus: 'idle',
-  terrainErrorMessage: null,
-  precisionWarning: false,
-  designExtentMeters: null,
+  layerSkipped: false,
+  basemapStatus: 'idle',
+  retryable: false,
 }
 
-export function precisionSnapshot(designExtentMeters: number | null): Pick<
-  MapLibreCanvasSurfaceState,
-  'precisionWarning' | 'designExtentMeters'
-> {
-  const precision = createProjectionPrecisionSnapshot(designExtentMeters)
-  return {
-    precisionWarning: precision.precisionWarning,
-    designExtentMeters: precision.designExtentMeters,
-  }
-}
-
-export function mergeMapLibreCanvasSurfaceState(
-  next: MapLibreCanvasSurfaceStateInput,
-  designExtentMeters: number | null,
-): MapLibreCanvasSurfaceState {
-  return {
-    ...next,
-    ...precisionSnapshot(designExtentMeters),
-  }
+/** The map cannot be built (no WebGL2), or the canvas runtime that would draw it could not start; no Retry is offered. */
+export const UNAVAILABLE_MAPLIBRE_CANVAS_SURFACE_STATE: MapLibreCanvasSurfaceState = {
+  ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+  status: 'error',
 }
 
 export function mapLibreCanvasSurfaceStateEquals(
@@ -53,31 +37,9 @@ export function mapLibreCanvasSurfaceStateEquals(
 ): boolean {
   return (
     left.status === right.status
-    && left.errorMessage === right.errorMessage
     && left.terrainStatus === right.terrainStatus
-    && left.terrainErrorMessage === right.terrainErrorMessage
-    && left.precisionWarning === right.precisionWarning
-    && left.designExtentMeters === right.designExtentMeters
+    && left.layerSkipped === right.layerSkipped
+    && left.basemapStatus === right.basemapStatus
+    && left.retryable === right.retryable
   )
-}
-
-export function publishMapDiagnostics(
-  frame: MapFrame | null,
-  designExtentMeters: number | null,
-): void {
-  if (!import.meta.env.DEV) return
-  const precision = createProjectionPrecisionSnapshot(designExtentMeters)
-  ;(globalThis as { __CANOPI_MAP_DEBUG__?: unknown }).__CANOPI_MAP_DEBUG__ = frame
-    ? {
-      projectionId: precision.projectionId,
-      precisionWarningThresholdMeters: precision.warningThresholdMeters,
-      center: frame.center,
-      zoom: frame.zoom,
-      bearing: frame.bearing,
-      viewportCenterWorld: frame.diagnostics.viewportCenterWorld,
-      viewportCornerGeo: frame.diagnostics.viewportCornerGeo,
-      designExtentMeters: precision.designExtentMeters,
-      precisionWarning: precision.precisionWarning,
-    }
-    : null
 }

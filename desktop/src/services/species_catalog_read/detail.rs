@@ -1,4 +1,4 @@
-use common_types::species::{SpeciesDetail, SpeciesExternalLink, SpeciesImage, SpeciesUse};
+use common_types::species::{SpeciesDetail, SpeciesImage, SpeciesUse};
 use rusqlite::{Connection, OptionalExtension};
 
 use super::common_names::{get_common_name, translate_composite_value, translate_value};
@@ -78,11 +78,20 @@ pub(super) fn read_detail_projection(
     get_detail(conn, canonical_name, locale)
 }
 
+/// Names one detail batch resolves at most; each costs a full detail
+/// projection on the single Catalog lane.
+pub(crate) const MAX_DETAIL_BATCH_NAMES: usize = 500;
+
 pub(super) fn read_detail_projections(
     conn: &Connection,
     canonical_names: &[String],
     locale: &str,
 ) -> Result<Vec<SpeciesDetail>, String> {
+    if canonical_names.len() > MAX_DETAIL_BATCH_NAMES {
+        return Err(format!(
+            "Batch size exceeds maximum of {MAX_DETAIL_BATCH_NAMES} names"
+        ));
+    }
     let mut results = Vec::with_capacity(canonical_names.len());
     for name in canonical_names {
         if resolve_species_id(conn, name)?.is_none() {
@@ -138,43 +147,6 @@ pub fn get_species_images(
             Ok(item) => Some(item),
             Err(error) => {
                 tracing::warn!("Skipped species image row: {error}");
-                None
-            }
-        })
-        .collect())
-}
-
-pub fn get_species_external_links(
-    conn: &Connection,
-    canonical_name: &str,
-) -> Result<Vec<SpeciesExternalLink>, String> {
-    let Some(species_id) = resolve_species_id(conn, canonical_name)? else {
-        return Ok(vec![]);
-    };
-
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, species_id, link_type, url
-             FROM species_external_links
-             WHERE species_id = ?1
-             ORDER BY link_type",
-        )
-        .map_err(|e| format!("Failed to prepare species external links query: {e}"))?;
-
-    Ok(stmt
-        .query_map([&species_id], |row| {
-            Ok(SpeciesExternalLink {
-                id: row.get(0)?,
-                species_id: row.get(1)?,
-                link_type: row.get(2)?,
-                url: row.get(3)?,
-            })
-        })
-        .map_err(|e| format!("Failed to fetch species external links: {e}"))?
-        .filter_map(|result| match result {
-            Ok(item) => Some(item),
-            Err(error) => {
-                tracing::warn!("Skipped species external link row: {error}");
                 None
             }
         })

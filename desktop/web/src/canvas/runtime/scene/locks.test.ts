@@ -18,11 +18,9 @@ function sceneWithGroup(): ScenePersistedState {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: null,
         position: { x: 10, y: 10 },
         rotationDeg: null,
-        scale: null,
         notes: null,
         plantedDate: null,
         quantity: null,
@@ -31,7 +29,7 @@ function sceneWithGroup(): ScenePersistedState {
     zones: [
       {
         kind: 'zone',
-        name: 'zone-1',
+        id: 'zone-1', name: null,
         locked: false,
         zoneType: 'rect',
         rotationDeg: 0,
@@ -78,7 +76,7 @@ describe('scene design object locks', () => {
   it('locks only the selected kind when Design Object identifiers collide', () => {
     const scene = sceneWithGroup()
     scene.plants[0]!.id = 'shared'
-    scene.zones[0]!.name = 'shared'
+    scene.zones[0]!.id = 'shared'
     scene.annotations[0]!.id = 'shared'
     scene.measurementGuides = [{
       kind: 'measurement-guide',
@@ -140,7 +138,7 @@ function lockMember(scene: ScenePersistedState, id: string): void {
     plant.id === id ? { ...plant, locked: true } : plant,
   )
   scene.zones = scene.zones.map((zone) =>
-    zone.name === id ? { ...zone, locked: true } : zone,
+    zone.id === id ? { ...zone, locked: true } : zone,
   )
   scene.annotations = scene.annotations.map((annotation) =>
     annotation.id === id ? { ...annotation, locked: true } : annotation,

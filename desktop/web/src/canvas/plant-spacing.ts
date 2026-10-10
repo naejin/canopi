@@ -4,8 +4,9 @@ interface PositionedPlant { readonly position: SpacingPoint }
 interface Node { point: SpacingPoint; axis: 'x' | 'y'; left: Node | null; right: Node | null }
 interface SpacingIndex { tree: Node | null; distances: ReadonlyMap<string, number> }
 const indices = new WeakMap<readonly PositionedPlant[], SpacingIndex>()
-// Scene reads clone arrays. Retain only a few recent geometries (including drag
-// previews) so equivalent snapshots can share the expensive tree and distances.
+// Each Scene update copies the plant array, so an edit that moves no plant (a note's text, a lock, a layer
+// toggle) gives a new array with the same positions, as do callers' own arrays. Retain only a few recent
+// geometries (including drag previews) so equal positions share the expensive tree and distances.
 const recentIndices: { positions: readonly SpacingPoint[]; index: SpacingIndex }[] = []
 const MAX_RECENT_GEOMETRIES = 4
 const key = (point: SpacingPoint) => `${point.x}:${point.y}`

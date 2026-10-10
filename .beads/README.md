@@ -4,7 +4,7 @@ Canopi uses `bd` with Dolt as the live issue store. The tracked
 `issues.jsonl` is an exported recovery/interoperability snapshot; local Dolt
 files and runtime state are ignored by Git.
 
-Read [the issue-tracker guide](../docs/agents/issue-tracker.md) for the project
+Read [the workflow guide](../docs/workflow.md) for the project
 workflow and [AGENTS.md](../AGENTS.md) for implementation and handoff rules.
 
 ```bash

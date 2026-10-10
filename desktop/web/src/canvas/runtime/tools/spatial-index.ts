@@ -1,0 +1,83 @@
+// canvas/runtime/tools/spatial-index.ts
+//
+// Owns createToolScene: the ToolScene tools and the ToolHost query (spec §1.2a, §1.4, §4.9). A façade over the linear
+// hit tests (hit-testing.ts) at the frame's pixelsPerMetre, read at every query; nothing is cached, and an index is
+// later work. hitAt without a filter is hitTestTopLevel exactly, object locks included (the tool rejects them);
+// `includeLocked` is hitTestVisibleTopLevel (the host's hover); with `toleranceScreenPx` it answers only the nearest
+// zone edge within that many pixels (hitZoneEdge, "Turn view to this edge"); `fill` falls back to the topmost zone whose
+// fill holds the point (hit-testing.ts), and `fill: 'selected'` to the topmost selected one, past unselected fills above it. hitInQuad tests the band's world quad as a
+// polygon, never its world box. nearestPlant is today's Place plants scan (today's (a4c86d39)
+// interaction/plant-placement-preview.ts): the first plant in scene order wins a tie.
+// tools/tool-host.ts re-exports the factory.
+
+import type { ToolSceneSource } from '../interaction-ports'
+import { buildPlantPresentationEntries, type PlantPresentationContext } from '../plant-presentation'
+import type { ScenePersistedState, ScenePlantEntity } from '../scene/types'
+import type { WorldPoint, WorldQuad } from '../view/types'
+import { hitTestTopLevel, hitTestVisibleTopLevel, hitTestZoneFill, hitZoneEdge, queryQuadTopLevel } from './hit-testing'
+import type { HitFilter, HitTarget, ToolScene } from './tool'
+
+export function createToolScene(source: ToolSceneSource): ToolScene {
+  const persisted = (): ScenePersistedState => source.store.persisted
+
+  function plantContext(pixelsPerMetre: number): PlantPresentationContext {
+    return { ...source.plantContext(pixelsPerMetre), speciesCache: source.speciesCache() }
+  }
+
+  return {
+    get persisted() {
+      return persisted()
+    },
+    hitAt(world: WorldPoint, filter?: HitFilter): HitTarget | null {
+      if (filter?.toleranceScreenPx !== undefined) {
+        const edge = hitZoneEdge(persisted(), world, filter.toleranceScreenPx, source.pixelsPerMetre())
+        return edge ? { kind: 'zone-edge', ...edge } : null
+      }
+      const hitTest = filter?.includeLocked ? hitTestVisibleTopLevel : hitTestTopLevel
+      const hit = hitTest(
+        persisted(),
+        world,
+        source.pixelsPerMetre(),
+        source.speciesCache(),
+        source.plantContext,
+        source.selection(),
+        source.store.session.hoveredTarget,
+      )
+      const target = hit
+        ?? (filter?.fill ? hitTestZoneFill(persisted(), world, filter.fill === 'selected' ? source.selection() : undefined) : null)
+      return target ? { kind: 'object', target } : null
+    },
+    hitInQuad(quad: WorldQuad): readonly HitTarget[] {
+      return queryQuadTopLevel(
+        persisted(),
+        quad,
+        source.pixelsPerMetre(),
+        source.speciesCache(),
+        source.plantContext,
+        source.selection(),
+      ).map((target) => ({ kind: 'object', target }))
+    },
+    nearestPlant(world: WorldPoint) {
+      const scene = persisted()
+      if (scene.layers.find((layer) => layer.name === 'plants')?.visible === false) return null
+      let best: { plant: ScenePlantEntity; distanceM: number } | null = null
+      for (const plant of scene.plants) {
+        const distanceM = Math.hypot(plant.position.x - world.x, plant.position.y - world.y)
+        if (!best || distanceM < best.distanceM) best = { plant, distanceM }
+      }
+      return best
+    },
+    plantPresentation(plant: ScenePlantEntity) {
+      const context = plantContext(source.pixelsPerMetre())
+      const entry = buildPlantPresentationEntries([plant], { ...context, plants: persisted().plants }, new Set())[0]!
+      return {
+        commonName: context.localizedCommonNames?.get(plant.canonicalName) ?? plant.commonName ?? plant.canonicalName,
+        color: entry.color,
+        radiusPx: entry.radiusScreenPx,
+      }
+    },
+    isLayerOpenForCreation: (layer) => source.isLayerOpenForCreation(layer),
+    selection: () => source.selection(),
+    selectionModel: () => source.selectionModel(),
+  }
+}

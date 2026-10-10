@@ -5,18 +5,6 @@ export interface SimpleRect {
   height: number
 }
 
-export function computeSelectionRect(
-  start: { x: number; y: number },
-  end: { x: number; y: number },
-): SimpleRect {
-  return {
-    x: Math.min(start.x, end.x),
-    y: Math.min(start.y, end.y),
-    width: Math.abs(end.x - start.x),
-    height: Math.abs(end.y - start.y),
-  }
-}
-
 export function rectsIntersect(a: SimpleRect, b: SimpleRect): boolean {
   return !(
     a.x + a.width < b.x ||

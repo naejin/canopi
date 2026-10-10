@@ -1,14 +1,16 @@
+import { logMapError } from '../../maplibre/redact-credentials'
 import { effect } from '@preact/signals'
 import { throwCanvasRuntimeCleanupErrors } from '../../canvas/runtime/cleanup'
-import { createCanvas2DSceneRenderer } from '../../canvas/runtime/renderers/canvas2d-scene'
 import type { CanvasRuntimeAppAdapter } from '../../canvas/runtime/app-adapter'
 import type { SceneRuntimePanelTargetAdapter } from '../../canvas/runtime/scene-runtime/panel-target-adapter'
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
+  CanvasKeyboardPort,
   CanvasQuerySurface,
   CanvasRuntimeSurfaces,
 } from '../../canvas/runtime/runtime'
+import { createForwardingCanvasKeyboardPort } from '../../canvas/runtime/keyboard-port'
 import {
   SceneCanvasRuntime,
   type SceneCanvasRuntimeOptions,
@@ -17,30 +19,42 @@ import {
   createSharedMapSceneRendererComposition,
   type SharedMapSceneRendererComposition,
 } from '../../maplibre/shared-scene-renderer'
-import { MapLibreWorkspaceCameraOwner } from '../../maplibre/workspace-camera'
-import type { WorkspaceBasemapPresentation } from '../../maplibre/workspace-map'
+import type { MapBackgroundPresentation } from '../../maplibre/map-background'
 import {
   WorkspaceActivationCoordinator,
   type WorkspaceActivationOptions,
   type WorkspaceActivationOutcome,
   type WorkspaceActivationRuntime,
 } from './workspace-activation'
-import { readWorkspaceActivationSnapshot, readWorkspaceBasemapPresentation } from './workspace-activation-snapshot'
+import { readWorkspaceActivationSnapshot, readWorkspaceBackgroundPresentation } from './workspace-activation-snapshot'
 import { createWorkspaceDocumentSurface } from './workspace-document-surface'
 import {
   WorkspaceGenerationReconciler,
   type WorkspaceGenerationLifecycle,
 } from './workspace-generation-reconciler'
 import { WorkspaceMapControls } from './workspace-map-controls'
+import type { ContributionFeed } from './workspace-map-contributions'
+import { mapAttributionFolded } from '../shell/visible-map-area'
+import { storyPresentationHidesEditingAids } from '../story-presentation/overrides'
+import type { UserLocationReading } from '../../maplibre/user-location-overlay'
 import type { WorkspaceActivationMapControls, WorkspaceActivationSnapshot } from './workspace-activation'
 import type { WorkspaceMapContributionAdapter, WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import type { MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
+import { DEFAULT_NEW_DESIGN_VIEW, geographicViewOfCamera, type GeographicView } from '../../canvas/session-plane'
+import type { CameraDriverHost } from '../../canvas/runtime/view/camera-driver'
+import type { SceneRenderTarget } from '../../canvas/runtime/renderers/scene-types'
 
 export type WorkspaceRuntimeStartOutcome = WorkspaceActivationOutcome | 'no-design'
 
 export interface WorkspaceRuntimeComposition {
   readonly surfaces: CanvasRuntimeSurfaces
   start(): Promise<WorkspaceRuntimeStartOutcome>
+  /**
+   * The map notice's Retry: rebuilds a map that stopped drawing, keeping the Scene, view, selection and
+   * undo, or downloads a basemap that couldn't load again. It can be pressed any number of times; nothing
+   * retries on its own (ADR 0004).
+   */
+  retryMap(): void
   dispose(): Promise<void>
 }
 
@@ -55,6 +69,12 @@ export interface WorkspaceRuntimeMountOptions {
   readonly onFailure?: (error: unknown) => void
 }
 
+/** The geographic view a settled camera shows, for the app's last-view setting. */
+export type WorkspaceSettledView = GeographicView
+
+/** The last view is written this long after the view's settled camera last changed (the frame settles 150 ms after the last move). */
+export const WORKSPACE_VIEW_SETTLE_MS = 600
+
 export interface WorkspaceRuntimeCompositionOptions {
   readonly container: HTMLElement
   readonly appAdapter: CanvasRuntimeAppAdapter
@@ -62,25 +82,38 @@ export interface WorkspaceRuntimeCompositionOptions {
   readonly mapContributions: WorkspaceMapContributionAdapter
   readonly onMapStateChange?: (state: MapLibreCanvasSurfaceState) => void
   readonly onFailure?: (error: unknown) => void
-  readonly readSnapshot?: () => WorkspaceActivationSnapshot | null
-  readonly readBasemapPresentation?: () => ReturnType<typeof readWorkspaceBasemapPresentation>
+  readonly readSnapshot?: (
+    readInitialCenter: () => { readonly lat: number; readonly lon: number },
+  ) => WorkspaceActivationSnapshot | null
+  readonly readBackgroundPresentation?: () => ReturnType<typeof readWorkspaceBackgroundPresentation>
+  /** Called with the settled camera, `WORKSPACE_VIEW_SETTLE_MS` after it last changed, on a Design. */
+  readonly onViewSettled?: (view: WorkspaceSettledView) => void
 }
 
 interface WorkspaceCompositionRuntime extends WorkspaceActivationRuntime {
+  /** The runtime's one target slot, which each map's shared scene layer fills. */
+  connectRenderTarget(target: SceneRenderTarget): () => void
+  /** The runtime's one camera: the activation attaches each map to it, and the map container's resizes reach its live driver. */
+  readonly cameraHost: CameraDriverHost
   readonly commandSurface: CanvasCommandSurface
   readonly querySurface: CanvasQuerySurface
   readonly documentSurface: CanvasDocumentSurface
+  /** The live interaction session's keyboard port, once init created it (null before and after). */
+  readonly keyboardPort?: CanvasKeyboardPort | null
 }
 
 interface WorkspaceCompositionLifecycle extends WorkspaceGenerationLifecycle {
-  updateBasemapPresentation(presentation: WorkspaceBasemapPresentation): void
+  updateBackgroundPresentation(presentation: MapBackgroundPresentation): void
   updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void
+  /** Whether a Retry could rebuild an unavailable map (WorkspaceActivationCoordinator.canRetry). */
+  canRetry(): boolean
 }
 
 /** Constructor-only test seam. Production callers use the default cohesive assembly. */
 interface WorkspaceRuntimeCompositionDependencies {
-  readonly createRendererComposition: () => SharedMapSceneRendererComposition
-  readonly createCamera: () => MapLibreWorkspaceCameraOwner
+  readonly createRendererComposition: (
+    connect: (target: SceneRenderTarget) => () => void,
+  ) => SharedMapSceneRendererComposition
   readonly createRuntime: (options: SceneCanvasRuntimeOptions) => WorkspaceCompositionRuntime
   readonly createControls: (options: ConstructorParameters<typeof WorkspaceMapControls>[0]) => WorkspaceActivationMapControls
   readonly createWorkspace: (options: WorkspaceActivationOptions) => WorkspaceCompositionLifecycle
@@ -89,7 +122,6 @@ interface WorkspaceRuntimeCompositionDependencies {
 
 const DEFAULT_DEPENDENCIES: WorkspaceRuntimeCompositionDependencies = {
   createRendererComposition: createSharedMapSceneRendererComposition,
-  createCamera: () => new MapLibreWorkspaceCameraOwner(),
   createRuntime: (options) => new SceneCanvasRuntime(options),
   createControls: (options) => new WorkspaceMapControls(options),
   createWorkspace: (options) => new WorkspaceActivationCoordinator(options),
@@ -102,38 +134,60 @@ export function createWorkspaceRuntimeComposition(
   dependencyOverrides: Partial<WorkspaceRuntimeCompositionDependencies> = {},
 ): WorkspaceRuntimeComposition {
   const dependencies = { ...DEFAULT_DEPENDENCIES, ...dependencyOverrides }
-  const rendererComposition = dependencies.createRendererComposition()
-  const camera = dependencies.createCamera()
   const runtime = dependencies.createRuntime({
-    camera,
     appAdapter: options.appAdapter,
     targetPresentation: options.targetPresentation,
-    renderer: {
-      backends: [rendererComposition.renderer, createCanvas2DSceneRenderer()],
-    },
   })
+  const rendererComposition = dependencies.createRendererComposition((target) => runtime.connectRenderTarget(target))
+  // The one writer of `retryable`: a map error offers Retry only while the workspace could rebuild the map.
+  // The controls' own state is kept, so Retry appears once the workspace allows it (a failure settled).
+  let mapState: MapLibreCanvasSurfaceState | null = null
+  const publishMapState = (state: MapLibreCanvasSurfaceState) => {
+    mapState = state
+    options.onMapStateChange?.({ ...state, retryable: state.status === 'error' && workspace.canRetry() })
+  }
+  const siteHover = options.mapContributions.readSiteHover ? createContributionFeed<readonly [number, number]>() : null
+  const userLocation = options.mapContributions.readUserLocation ? createContributionFeed<UserLocationReading>() : null
   const controls = dependencies.createControls({
     container: options.container,
+    // The map container's resizes reach the live camera driver's setScreen: the driver is the map's one resize owner (both maps
+    // are built with trackResize: false).
+    setScreen: (screen) => {
+      runtime.cameraHost.current().setScreen(screen)
+    },
     contributions: {
       loadTerrainSupport: options.mapContributions.loadTerrainSupport,
-      installRasterProtocol: options.mapContributions.installRasterProtocol,
-      publishViewBounds: options.mapContributions.publishViewBounds,
-      onStateChange: options.onMapStateChange,
+      createRasterDisplay: options.mapContributions.createRasterDisplay,
+      siteHover: siteHover ?? undefined,
+      userLocation: userLocation ?? undefined,
+      onStateChange: publishMapState,
     },
   })
+  // Read without subscribing: the camera and scene layer call this per frame.
+  const readOrigin = () => {
+    const plane = runtime.querySurface.sessionPlane.peek()
+    return plane
+      ? { lat: plane.origin.lat, lon: plane.origin.lon }
+      : { lat: DEFAULT_NEW_DESIGN_VIEW.lat, lon: DEFAULT_NEW_DESIGN_VIEW.lon }
+  }
   const workspace = dependencies.createWorkspace({
     container: options.container,
     runtime,
-    camera,
+    camera: runtime.cameraHost,
     composition: rendererComposition,
     map: controls,
-    layer: {},
+    readOrigin,
+    // A map error's Retry follows the workspace: offered once a failure settles, withdrawn once it can no longer rebuild.
+    onRetryAvailabilityChange: () => {
+      if (mapState?.status === 'error') publishMapState(mapState)
+    },
   })
   const reconciler = new WorkspaceGenerationReconciler({
     workspace,
-    readSnapshot: options.readSnapshot ?? readWorkspaceActivationSnapshot,
+    readSnapshot: () => options.readSnapshot
+      ? options.readSnapshot(readOrigin)
+      : readWorkspaceActivationSnapshot({ readInitialCenter: readOrigin }),
     onFailure: options.onFailure,
-    onOutcome: (outcome) => initializeViewport(outcome),
   })
   const documents = createWorkspaceDocumentSurface({
     documents: runtime.documentSurface,
@@ -143,25 +197,21 @@ export function createWorkspaceRuntimeComposition(
     commands: runtime.commandSurface,
     queries: runtime.querySurface,
     documents,
+    // A forwarding port: the surfaces exist before runtime.init creates the session (spec §1.2a).
+    keyboard: createForwardingCanvasKeyboardPort(() => runtime.keyboardPort ?? null, options.container),
   }
   let startResult: Promise<WorkspaceRuntimeStartOutcome> | null = null
   let cancelledStartResult: Promise<WorkspaceRuntimeStartOutcome> | null = null
   let disposeResult: Promise<void> | null = null
   let disposePresentationEffect: (() => void) | null = null
-  let viewportInitialized = false
-  let viewportReady = false
-
-  const initializeViewport = (outcome: WorkspaceRuntimeStartOutcome): WorkspaceRuntimeStartOutcome => {
-    if (viewportReady || outcome === 'no-design' || outcome === 'cancelled') return outcome
-    if (!viewportInitialized) {
-      documents.initializeViewport()
-      viewportInitialized = true
-    }
-    if (documents.hasLoadedDocument()) documents.zoomToFit()
-    viewportReady = true
-    return outcome
+  let disposeSettleEffect: (() => void) | null = null
+  let disposeSiteHoverEffect: (() => void) | null = null
+  let disposeUserLocationEffect: (() => void) | null = null
+  let settleTimer: ReturnType<typeof setTimeout> | null = null
+  const clearSettleTimer = () => {
+    if (settleTimer !== null) clearTimeout(settleTimer)
+    settleTimer = null
   }
-
   return {
     surfaces,
     start() {
@@ -175,11 +225,41 @@ export function createWorkspaceRuntimeComposition(
         resolveStart = resolve
       })
       try {
+        if (options.onViewSettled) {
+          const onViewSettled = options.onViewSettled
+          disposeSettleEffect = dependencies.installEffect(() => {
+            const camera = runtime.querySurface.view.settledCamera.value
+            const plane = runtime.querySurface.sessionPlane.value
+            clearSettleTimer()
+            if (!plane) return
+            settleTimer = setTimeout(() => {
+              settleTimer = null
+              // Before a Design is loaded and fitted the camera shows its
+              // default viewport, which is not a view the user chose.
+              if (!documents.hasLoadedDocument()) return
+              onViewSettled(geographicViewOfCamera(camera))
+            }, WORKSPACE_VIEW_SETTLE_MS)
+          })
+        }
+        // The chart hover changes at scrub rate: its own effect feeds the map's hover source, never the contributions read.
+        const readSiteHover = options.mapContributions.readSiteHover
+        if (siteHover && readSiteHover) {
+          disposeSiteHoverEffect = dependencies.installEffect(() => siteHover.publish(readSiteHover()))
+        }
+        // The device location, at fix rate, on its own feed: a story presentation hides it (it shows the story's map only, Q12).
+        const readUserLocation = options.mapContributions.readUserLocation
+        if (userLocation && readUserLocation) {
+          disposeUserLocationEffect = dependencies.installEffect(() => {
+            userLocation.publish(storyPresentationHidesEditingAids.value ? null : readUserLocation())
+          })
+        }
         disposePresentationEffect = dependencies.installEffect(() => {
           workspace.updateMapContributions(options.mapContributions.read(runtime.querySurface))
-          workspace.updateBasemapPresentation(
-            (options.readBasemapPresentation ?? readWorkspaceBasemapPresentation)(),
+          workspace.updateBackgroundPresentation(
+            (options.readBackgroundPresentation ?? readWorkspaceBackgroundPresentation)(),
           )
+          // Whether the map credits fold into their (i) button: the visible map area decides.
+          controls.setAttributionCompact(mapAttributionFolded.value)
         })
         void reconciler.reconcileInitialGeneration().then(
           resolveStart,
@@ -194,6 +274,15 @@ export function createWorkspaceRuntimeComposition(
       }
       return startResult
     },
+    retryMap() {
+      if (disposeResult) return
+      if (mapState?.status !== 'error') {
+        controls.retryBasemap()
+        return
+      }
+      // A refused Retry that can never succeed withdraws the button.
+      if (!reconciler.retry()) publishMapState(mapState)
+    },
     dispose() {
       if (disposeResult) return disposeResult
       let resolveDispose!: () => void
@@ -203,13 +292,22 @@ export function createWorkspaceRuntimeComposition(
         rejectDispose = reject
       })
       const presentationEffect = disposePresentationEffect
+      const settleEffect = disposeSettleEffect
+      const siteHoverEffect = disposeSiteHoverEffect
+      const userLocationEffect = disposeUserLocationEffect
       disposePresentationEffect = null
+      disposeSettleEffect = null
+      disposeSiteHoverEffect = null
+      disposeUserLocationEffect = null
+      clearSettleTimer()
       void (async () => {
         const errors: unknown[] = []
-        try {
-          presentationEffect?.()
-        } catch (error) {
-          errors.push(error)
+        for (const disposeEffect of [settleEffect, siteHoverEffect, userLocationEffect, presentationEffect]) {
+          try {
+            disposeEffect?.()
+          } catch (error) {
+            errors.push(error)
+          }
         }
         try {
           await reconciler.dispose()
@@ -223,14 +321,31 @@ export function createWorkspaceRuntimeComposition(
   }
 }
 
+/** The latest value, none at first, handed to whichever map's contributions are attached (a Retry attaches new ones). */
+function createContributionFeed<T>(): ContributionFeed<T | null> & { publish(value: T | null): void } {
+  let current: T | null = null
+  const listeners = new Set<(value: T | null) => void>()
+  return {
+    current: () => current,
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+    publish(value) {
+      current = value
+      for (const listener of [...listeners]) listener(value)
+    },
+  }
+}
+
 function reportCompositionFailure(
   observer: ((error: unknown) => void) | undefined,
   error: unknown,
 ): void {
   try {
     if (observer) observer(error)
-    else console.error('Shared workspace composition failed:', error)
+    else logMapError('Shared workspace composition failed:', error)
   } catch (observerError) {
-    console.error('Shared workspace failure observer failed:', observerError)
+    logMapError('Shared workspace failure observer failed:', observerError)
   }
 }

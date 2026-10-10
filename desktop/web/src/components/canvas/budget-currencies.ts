@@ -1,9 +1,9 @@
-export interface CurrencyEntry {
+interface CurrencyEntry {
   code: string
   symbol: string
 }
 
-export const CURRENCIES: CurrencyEntry[] = [
+const CURRENCIES: CurrencyEntry[] = [
   { code: 'EUR', symbol: '\u20AC' },
   { code: 'USD', symbol: '$' },
   { code: 'GBP', symbol: '\u00A3' },

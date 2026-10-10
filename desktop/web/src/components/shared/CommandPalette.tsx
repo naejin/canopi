@@ -1,24 +1,34 @@
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { useSignalEffect } from "@preact/signals";
 import { appCommandGraphChromeProjection, commandPaletteOpen } from "../../commands/registry";
+import { saveProblem } from "../../app/document-session/save-problem";
 import { t } from "../../i18n";
+import { useModalLayer } from "./useModalLayer";
 import styles from "./CommandPalette.module.css";
 
+/**
+ * The palette mounts only while open, so it can hold the modal layer like
+ * every other dialog: the chrome behind it is inert, shortcuts and F6 stand
+ * down, and focus goes back to the control that opened it when it closes.
+ */
 export function CommandPalette() {
+  if (!commandPaletteOpen.value) return null;
+  return <CommandPaletteDialog />;
+}
+
+function CommandPaletteDialog() {
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listId = "command-palette-list";
 
-  useSignalEffect(() => {
-    if (!commandPaletteOpen.value) return;
-    // Focus and reset when palette opens — signal subscription is explicit
-    inputRef.current?.focus();
-    setQuery("");
-    setActiveIdx(0);
-  });
+  const releaseModalLayer = useModalLayer();
+  useEffect(() => { inputRef.current?.focus(); }, []);
 
-  if (!commandPaletteOpen.value) return null;
+  // A save problem asks over everything; the palette must not run commands under it.
+  useSignalEffect(() => {
+    if (saveProblem.value !== null) commandPaletteOpen.value = false;
+  });
 
   const commands = appCommandGraphChromeProjection.value.paletteCommands;
   const filtered = commands.filter((cmd) =>
@@ -28,8 +38,12 @@ export function CommandPalette() {
   function execute(idx: number) {
     const cmd = filtered[idx];
     if (!cmd || cmd.disabled()) return;
-    cmd.action();
+    // Release the chrome before the command runs: a command that focuses the
+    // title bar or a panel (Find plants, Search a place) must find it live, and
+    // the palette's unmount must not send focus back over it.
+    releaseModalLayer();
     commandPaletteOpen.value = false;
+    cmd.action();
   }
 
   function onKeyDown(e: KeyboardEvent) {
@@ -43,6 +57,11 @@ export function CommandPalette() {
       e.preventDefault();
       execute(activeIdx);
     } else if (e.key === "Escape") {
+      // The palette takes its Esc: it unmounts and releases the modal layer
+      // before the key router's bubble listener, which would otherwise run the
+      // Esc chain too and close a popover or the inspection under it.
+      e.preventDefault();
+      e.stopPropagation();
       commandPaletteOpen.value = false;
     }
   }
@@ -66,7 +85,7 @@ export function CommandPalette() {
           ref={inputRef}
           className={styles.input}
           type="text"
-          placeholder={t("commands.searchPlaceholder") || "Type a command..."}
+          placeholder={t("commands.searchPlaceholder")}
           value={query}
           onInput={(e) => {
             setQuery((e.target as HTMLInputElement).value);
@@ -80,7 +99,7 @@ export function CommandPalette() {
         />
         <div className={styles.list} role="listbox" id={listId}>
           {filtered.length === 0 ? (
-            <div className={styles.empty}>{t("commands.noResults") || "No commands found"}</div>
+            <div className={styles.empty}>{t("commands.noResults")}</div>
           ) : (
             filtered.map((cmd, i) => (
               <div

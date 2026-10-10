@@ -8,6 +8,5 @@ describe('browser Canvas Runtime composition', () => {
     expect(adapter.presentationData?.plantLabels).toBeDefined()
     expect(adapter.presentationData?.speciesCache).toBeDefined()
     expect(adapter.savedObjectStamps).toBeUndefined()
-    expect('savedObjectStamps' in adapter).toBe(false)
   })
 })

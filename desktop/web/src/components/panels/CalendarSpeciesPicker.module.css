@@ -1,0 +1,134 @@
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.chosenLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.chosenLine b {
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--color-accent-ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.link:hover,
+.link[aria-pressed="true"] {
+  text-decoration: underline;
+}
+
+.unavailable {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1-5);
+}
+
+.token {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--control-size-md);
+  padding: 0 var(--space-1) 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.token small {
+  color: var(--color-warning);
+  font-size: var(--text-2xs);
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.menuHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  max-height: 232px;
+  overflow-y: auto;
+}
+
+.options [role="option"] {
+  min-height: var(--control-size-3xl);
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.options [role="option"]:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.checkbox {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: var(--radius-xs);
+  background: var(--color-surface);
+  color: var(--color-on-accent);
+}
+
+.checkbox[data-checked="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.empty {
+  margin: 0;
+  padding: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.link:focus-visible,
+.token:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

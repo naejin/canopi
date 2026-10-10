@@ -2,23 +2,24 @@ import { describe, expect, it } from 'vitest'
 import {
   upsertLidarEntry,
   patchLidarEntryById,
+  reconcileLidarEntryNames,
   removeLidarEntries,
-  readLidarEntries,
-  moveLidarEntry,
+  setLidarEntryOrders,
+  setSiteDataVisible,
 } from '../app/design-edit/lidar'
+import { currentDesign, designSessionStore } from '../app/document-session/store'
 import {
+  designSessionFixture,
+  nonCanvasRevision,
   replaceCurrentDesignState,
-  currentDesign,
-  designSessionStore,
-} from '../app/document-session/store'
+} from './support/design-session-state'
 import type { CanopiFile } from '../types/design'
 
 function design(name: string): CanopiFile {
   return {
-    version: 6,
+    version: 9,
     name,
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     plant_species_symbols: {},
     plant_species_codes: {},
@@ -38,6 +39,10 @@ function design(name: string): CanopiFile {
   }
 }
 
+function readLidarEntries(file: CanopiFile) {
+  return file.lidar?.entries ?? []
+}
+
 /** Entries in the order the panel displays them, lowest order first. */
 function displayOrder(file: CanopiFile) {
   return [...readLidarEntries(file)].sort((left, right) => left.order - right.order)
@@ -48,21 +53,21 @@ describe('LiDAR presentation entries through the Design Edit seam', () => {
     const base = design('Garden')
     replaceCurrentDesignState(base, null, 'Garden')
 
-    upsertLidarEntry('Source', 'lyr-1')
+    upsertLidarEntry('Source', 'lyr-1', 'Terrain')
     const afterAdd = currentDesign.value
     expect(afterAdd).not.toBe(base)
     expect(afterAdd?.lidar).not.toBeNull()
     expect(readLidarEntries(afterAdd as CanopiFile)).toEqual([
-      { kind: 'Source', id: 'lyr-1', visible: true, opacity: 1, order: 0, style: null },
+      { kind: 'Source', id: 'lyr-1', name: 'Terrain', visible: true, opacity: 1, order: 0, ramp: null, reversed: false, range: null },
     ])
 
     patchLidarEntryById('lyr-1', { visible: false, opacity: 0.5 })
     const afterPatch = currentDesign.value
     expect(readLidarEntries(afterPatch as CanopiFile)).toEqual([
-      { kind: 'Source', id: 'lyr-1', visible: false, opacity: 0.5, order: 0, style: null },
+      { kind: 'Source', id: 'lyr-1', name: 'Terrain', visible: false, opacity: 0.5, order: 0, ramp: null, reversed: false, range: null },
     ])
     // Second entry receives the next order value.
-    upsertLidarEntry('Analysis', 'adef-1')
+    upsertLidarEntry('Derived', 'adef-1', 'Slope')
     const entries = readLidarEntries(currentDesign.value as CanopiFile)
     expect(entries).toHaveLength(2)
     expect(entries[1]?.order).toBe(1)
@@ -70,11 +75,11 @@ describe('LiDAR presentation entries through the Design Edit seam', () => {
 
   it('keeps the design reference identical when nothing changes', () => {
     replaceCurrentDesignState(design('No-op'), null, 'No-op')
-    upsertLidarEntry('Source', 'lyr-2')
+    upsertLidarEntry('Source', 'lyr-2', 'LYR-2')
     const before = currentDesign.value
     const dirtyBefore = designSessionStore.designDirty.value
 
-    upsertLidarEntry('Source', 'lyr-2')
+    upsertLidarEntry('Source', 'lyr-2', 'LYR-2')
     patchLidarEntryById('lyr-2', { visible: true })
 
     expect(currentDesign.value).toBe(before)
@@ -83,8 +88,8 @@ describe('LiDAR presentation entries through the Design Edit seam', () => {
 
   it('removes entries and drops the whole section when it empties', () => {
     replaceCurrentDesignState(design('Removal'), null, 'Removal')
-    upsertLidarEntry('Source', 'lyr-3')
-    upsertLidarEntry('Analysis', 'adef-3')
+    upsertLidarEntry('Source', 'lyr-3', 'LYR-3')
+    upsertLidarEntry('Derived', 'adef-3', 'Slope')
 
     removeLidarEntries(['adef-3'])
     expect(readLidarEntries(currentDesign.value as CanopiFile)).toHaveLength(1)
@@ -95,7 +100,7 @@ describe('LiDAR presentation entries through the Design Edit seam', () => {
 
   it('preserves unavailable entries so library deletions never rewrite documents', () => {
     replaceCurrentDesignState(design('Stale'), null, 'Stale')
-    upsertLidarEntry('Source', 'lyr-gone')
+    upsertLidarEntry('Source', 'lyr-gone', 'Terrain')
     const before = currentDesign.value
 
     // A library snapshot without the referenced entity does not mutate the
@@ -104,44 +109,94 @@ describe('LiDAR presentation entries through the Design Edit seam', () => {
     expect(currentDesign.value).toBe(before)
   })
 
-  it('reorders presentation entries and renumbers them densely', () => {
+  it('saves new orders in one edit and keeps display settings', () => {
     replaceCurrentDesignState(design('Order'), null, 'Order')
-    upsertLidarEntry('Source', 'lyr-a')
-    upsertLidarEntry('Analysis', 'adef-b')
-    upsertLidarEntry('Source', 'lyr-c')
+    upsertLidarEntry('Source', 'lyr-a', 'Terrain')
+    upsertLidarEntry('Derived', 'adef-b', 'Slope')
+    upsertLidarEntry('Source', 'lyr-c', 'Terrain')
+    patchLidarEntryById('lyr-a', { opacity: 0.4 })
     expect(displayOrder(currentDesign.value as CanopiFile).map((e) => e.id))
       .toEqual(['lyr-a', 'adef-b', 'lyr-c'])
 
-    // Moving the topmost entry up is a no-op: no history entry for nothing.
-    const beforeTopMove = currentDesign.value
-    moveLidarEntry('lyr-a', 'up')
-    expect(currentDesign.value).toBe(beforeTopMove)
+    // Orders already saved are a no-op: no history entry for nothing.
+    const before = currentDesign.value
+    setLidarEntryOrders(new Map([['lyr-a', 0], ['adef-b', 1]]))
+    expect(currentDesign.value).toBe(before)
 
-    const beforeBottomMove = currentDesign.value
-    moveLidarEntry('lyr-c', 'down')
-    expect(currentDesign.value).toBe(beforeBottomMove)
-
-    // A real move swaps neighbours and keeps order values contiguous. The
-    // stored array keeps its own insertion order; `order` is what the panel
-    // sorts by, so the assertion reads display order rather than array order.
-    moveLidarEntry('lyr-c', 'up')
+    setLidarEntryOrders(new Map([['lyr-c', 0], ['lyr-a', 1], ['adef-b', 2]]))
     const reordered = displayOrder(currentDesign.value as CanopiFile)
-    expect(reordered.map((entry) => entry.id)).toEqual(['lyr-a', 'lyr-c', 'adef-b'])
-    expect(reordered.map((entry) => entry.order)).toEqual([0, 1, 2])
-
-    // Display settings travel with the entry rather than being reset.
-    patchLidarEntryById('lyr-a', { opacity: 0.4 })
-    moveLidarEntry('lyr-a', 'down')
-    const afterSwap = displayOrder(currentDesign.value as CanopiFile)
-    expect(afterSwap.map((entry) => entry.id)).toEqual(['lyr-c', 'lyr-a', 'adef-b'])
-    expect(afterSwap.find((entry) => entry.id === 'lyr-a')?.opacity).toBe(0.4)
+    expect(reordered.map((entry) => entry.id)).toEqual(['lyr-c', 'lyr-a', 'adef-b'])
+    expect(reordered.find((entry) => entry.id === 'lyr-a')?.opacity).toBe(0.4)
   })
 
-  it('ignores a reorder for an entry that is not presented', () => {
+  it('ignores orders for entries that are not presented', () => {
     replaceCurrentDesignState(design('Unknown'), null, 'Unknown')
-    upsertLidarEntry('Source', 'lyr-known')
+    upsertLidarEntry('Source', 'lyr-known', 'Terrain')
     const before = currentDesign.value
-    moveLidarEntry('lyr-absent', 'down')
+    setLidarEntryOrders(new Map([['lyr-absent', 3]]))
     expect(currentDesign.value).toBe(before)
+  })
+
+  it('stores display settings, comparing a range by value', () => {
+    replaceCurrentDesignState(design('Display'), null, 'Display')
+    upsertLidarEntry('Derived', 'slope', 'Slope')
+
+    patchLidarEntryById('slope', { ramp: 'Magma', reversed: true, range: { mode: 'Custom', min: 0, max: 30 } })
+    const styled = currentDesign.value
+    expect(readLidarEntries(styled as CanopiFile)[0]).toMatchObject({
+      ramp: 'Magma', reversed: true, range: { mode: 'Custom', min: 0, max: 30 },
+    })
+
+    // The same choice again, as a fresh object, is no edit.
+    patchLidarEntryById('slope', { ramp: 'Magma', range: { mode: 'Custom', min: 0, max: 30 } })
+    expect(currentDesign.value).toBe(styled)
+
+    // Back to the kind's defaults: null ramp and range.
+    patchLidarEntryById('slope', { ramp: null, reversed: false, range: null })
+    expect(readLidarEntries(currentDesign.value as CanopiFile)[0]).toMatchObject({
+      ramp: null, reversed: false, range: null,
+    })
+  })
+
+  it('folds the Site data eye into the section and keeps each entry eye', () => {
+    replaceCurrentDesignState(design('Eye'), null, 'Eye')
+    setSiteDataVisible(false)
+    expect(currentDesign.value?.lidar ?? null).toBeNull()
+
+    upsertLidarEntry('Source', 'lyr-eye', 'Terrain')
+    expect(currentDesign.value?.lidar?.visible).toBe(true)
+    designSessionFixture.nonCanvasSavedRevision = nonCanvasRevision.value
+    expect(designSessionStore.designDirty.value).toBe(false)
+
+    setSiteDataVisible(false)
+    expect(currentDesign.value?.lidar?.visible).toBe(false)
+    expect(readLidarEntries(currentDesign.value as CanopiFile)[0]?.visible).toBe(true)
+    expect(designSessionStore.designDirty.value).toBe(true)
+
+    const hidden = currentDesign.value
+    setSiteDataVisible(false)
+    expect(currentDesign.value).toBe(hidden)
+  })
+
+  it('refreshes stored names from the library without dirtying the Design, once', () => {
+    replaceCurrentDesignState(design('Names'), null, 'Names')
+    upsertLidarEntry('Source', 'lyr-n', 'Old name')
+    upsertLidarEntry('Derived', 'slope-n', 'Slope')
+    designSessionFixture.nonCanvasSavedRevision = nonCanvasRevision.value
+    expect(designSessionStore.designDirty.value).toBe(false)
+
+    // Names the library lists; an id the Design does not present is ignored.
+    const names = new Map([['lyr-n', 'Renamed'], ['slope-n', 'Slope'], ['absent', 'Absent']])
+    reconcileLidarEntryNames(names)
+    const renamed = currentDesign.value
+    expect(readLidarEntries(renamed as CanopiFile).map((entry) => entry.name)).toEqual(['Renamed', 'Slope'])
+    expect(designSessionStore.designDirty.value).toBe(false)
+
+    // The effect that calls it runs again on the new Design: nothing left to do.
+    reconcileLidarEntryNames(names)
+    expect(currentDesign.value).toBe(renamed)
+    // An empty library name never replaces a stored one.
+    reconcileLidarEntryNames(new Map([['lyr-n', '  ']]))
+    expect(currentDesign.value).toBe(renamed)
   })
 })

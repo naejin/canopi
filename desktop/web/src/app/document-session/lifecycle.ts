@@ -1,13 +1,12 @@
 import {
   getCurrentCanvasSession,
-  setCanvasRuntimeSurfaces,
+  setCurrentCanvasSession,
 } from "../../canvas/session";
 import type { CanvasDocumentSurface, CanvasRuntimeSurfaces } from "../../canvas/runtime/runtime";
 import {
   CanvasRuntimeCleanupError,
   runCanvasRuntimeCleanups,
 } from "../../canvas/runtime/cleanup";
-import { autoSaveIntervalMs } from "../settings/state";
 import { flushSettingsProjection } from "../settings/projection";
 import {
   createDesktopWorkspaceRuntimeComposition,
@@ -16,9 +15,9 @@ import type {
   WorkspaceRuntimeComposition,
   WorkspaceRuntimeMountOptions,
 } from "../canvas-map-surface/workspace-runtime-composition";
+import { UNAVAILABLE_MAPLIBRE_CANVAS_SURFACE_STATE } from "../../maplibre/canvas-surface-state";
 import {
   abortFailedAttachedDesignSessionStart,
-  autosaveDesignSession,
   consumeQueuedDocumentLoad,
   startAttachedDesignSession,
   teardownAttachedDesignSession,
@@ -27,7 +26,6 @@ import {
 interface DesignSessionLifecycleHost {
   readonly canvasArea: HTMLElement;
   readonly container: HTMLElement;
-  readonly rulerOverlay: HTMLElement | null;
   readonly onMapStateChange?: WorkspaceRuntimeMountOptions['onMapStateChange'];
 }
 
@@ -44,26 +42,25 @@ interface DesignSessionLifecycleDeps {
   readonly createResizeObserver: (
     callback: ResizeObserverCallback,
   ) => DesignSessionResizeObserver | null;
-  readonly readInitialAutosaveInterval: () => number;
   readonly logError: (message?: unknown, ...optionalParams: unknown[]) => void;
   readonly onInitializationFailure: () => void;
 }
 
 const DEFAULT_LIFECYCLE_DEPS: DesignSessionLifecycleDeps = {
   createRuntimeComposition: createDesktopWorkspaceRuntimeComposition,
-  publishSurfaces: setCanvasRuntimeSurfaces,
+  publishSurfaces: setCurrentCanvasSession,
   createResizeObserver: (callback) => {
     if (typeof ResizeObserver === "undefined") return null;
     return new ResizeObserver(callback);
   },
-  readInitialAutosaveInterval: () => autoSaveIntervalMs.value,
   logError: (message, ...optionalParams) => console.error(message, ...optionalParams),
   onInitializationFailure: () => {},
 };
 
 export interface DesignSessionLifecycle {
   start(): void;
-  updateAutosaveInterval(intervalMs: number): void;
+  /** The map notice's Retry (WorkspaceRuntimeComposition.retryMap). */
+  retryMap(): void;
   dispose(): Promise<void>;
 }
 
@@ -85,7 +82,6 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
   private runtimeInitialized = false;
   private cancelQueuedLoad = () => {};
   private resizeObserver: DesignSessionResizeObserver | null = null;
-  private autosaveTimer: ReturnType<typeof setInterval> | null = null;
   private disposePromise: Promise<void> | null = null;
 
   constructor(
@@ -102,8 +98,6 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
   }
 
   start(): void {
-    this.updateAutosaveInterval(this.deps.readInitialAutosaveInterval());
-
     void this.runtime.start().then(async (outcome) => {
       if (this.cancelled) return;
 
@@ -111,10 +105,6 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
         throw new Error('Shared workspace initialization was cancelled.');
       }
       this.runtimeInitialized = true;
-      if (this.host.rulerOverlay) {
-        this.documents.attachRulersTo(this.host.rulerOverlay);
-        if (this.cancelled) return;
-      }
 
       const result = await startAttachedDesignSession(this.documents);
       if (this.cancelled) return;
@@ -148,6 +138,8 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
     }).catch((error: unknown) => {
       if (this.cancelled) return;
       this.deps.logError("Failed to initialize scene canvas runtime:", error);
+      // Nothing will draw: an open Design shows at once, over the map notice (design-reveal.ts).
+      this.host.onMapStateChange?.(UNAVAILABLE_MAPLIBRE_CANVAS_SURFACE_STATE);
       try {
         this.deps.onInitializationFailure();
       } catch (cleanupError) {
@@ -159,11 +151,9 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
     });
   }
 
-  updateAutosaveInterval(intervalMs: number): void {
-    this.clearAutosaveTimer();
-    this.autosaveTimer = setInterval(() => {
-      this.autosave();
-    }, intervalMs);
+  retryMap(): void {
+    if (this.cancelled) return;
+    this.runtime.retryMap();
   }
 
   dispose(): Promise<void> {
@@ -176,7 +166,6 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
     let synchronousCleanupError: unknown = null;
     try {
       runCanvasRuntimeCleanups([
-        () => this.clearAutosaveTimer(),
         () => this.cancelPendingDocumentLoad(),
         () => this.disconnectResizeObserver(),
       ], "Design Session lifecycle cleanup failed");
@@ -221,12 +210,6 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
     }
   }
 
-  private clearAutosaveTimer(): void {
-    if (this.autosaveTimer === null) return;
-    clearInterval(this.autosaveTimer);
-    this.autosaveTimer = null;
-  }
-
   private disconnectResizeObserver(): void {
     const observer = this.resizeObserver;
     this.resizeObserver = null;
@@ -245,16 +228,6 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
     } catch (error) {
       this.deps.logError("Failed to disconnect a late Canvas resize observer:", error);
     }
-  }
-
-  private autosave(): void {
-    void autosaveDesignSession({
-      session: this.documents,
-      runtimeInitialized: this.runtimeInitialized,
-      logError: this.deps.logError,
-    }).catch((error: unknown) => {
-      this.deps.logError("Autosave failed:", error);
-    });
   }
 
   private teardownDocumentSession(): void {

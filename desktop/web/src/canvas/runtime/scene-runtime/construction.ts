@@ -1,33 +1,18 @@
 import type { SpeciesFocus } from '../species-key'
-import { signal, type Signal } from '@preact/signals'
+import { effect, signal, untracked, type ReadonlySignal, type Signal } from '@preact/signals'
 import {
   createDetachedCanvasRuntimeAppAdapter,
   type CanvasRuntimeAppAdapter,
 } from '../app-adapter'
-import {
-  CameraController,
-  type WorkspaceCameraFrameReader,
-  type WorkspaceCameraNavigation,
-  type WorkspaceCameraOwner,
-} from '../camera'
 import { createSceneCanvasCommandSurface } from '../command-surface'
-import { createSceneCanvasDocumentSurface } from '../document-surface'
-import { createSceneCanvasQuerySurface } from '../query-surface'
+import { createSceneCanvasDocumentSurface, type SceneCanvasDocumentSurface } from '../document-surface'
+import { createSceneCanvasQuerySurface, type SceneCanvasQuerySurface } from '../query-surface'
 import { SceneCanvasInspectionOwner } from '../inspection-lens'
-import { RendererHost } from '../renderers'
-import { createCanvas2DSceneRenderer } from '../renderers/canvas2d-scene'
-import { createPixiSceneRenderer } from '../renderers/pixi-scene'
-import type { SceneRendererContext, SceneRendererInstance } from '../renderers/scene-types'
-import type { RendererHostOptions } from '../renderers/types'
-import type {
-  CanvasPlantLabelSource,
-  CanvasSpeciesPresentationCache,
-} from '../presentation-data'
+import type { ToolId } from '../interaction-types'
 import type {
   CanvasCommandSurface,
-  CanvasDocumentSurface,
+  CanvasPlantRowSpacingField,
   CanvasQueryRevision,
-  CanvasQuerySurface,
 } from '../runtime'
 import {
   SceneStore,
@@ -37,18 +22,17 @@ import {
   type SceneStateReader,
 } from '../scene'
 import { SceneHistory } from '../scene-history'
-import { SceneRuntimeChromeCoordinator } from './chrome-coordinator'
 import { SceneRuntimeDocumentBridge } from './document'
 import {
   createDetachedSceneRuntimePanelTargetAdapter,
   type SceneRuntimePanelTargetAdapter,
 } from './panel-target-adapter'
 import { SceneRuntimeMutationController } from './mutations'
+import { SceneRuntimeReoriginController } from './reorigin'
+import { DEFAULT_NEW_DESIGN_VIEW } from '../../session-plane'
+import { mapZoomToStageScale } from '../../projection'
 import { SceneRuntimePresentationController } from './presentation'
 import { SceneRuntimeRenderScheduler } from './render-scheduler'
-import {
-  syncCanvasSignalsFromDocument,
-} from './scene-sync'
 import {
   SceneRuntimeEditCoordinator,
   type SceneCommandAdmission,
@@ -56,19 +40,21 @@ import {
   type SettledSceneReader,
 } from './transactions'
 import { runCanvasRuntimeCleanups } from '../cleanup'
+import { getRevealedAnnotationId } from '../annotation-layout'
+import { sceneExtentPoints, selectionExtentPoints } from '../scene-extent'
+import { createViewNavigation, type ViewNavigation } from '../view/navigation'
+import type { CameraDriverHost } from '../view/camera-driver'
+import { createCameraDriverHost } from '../view/driver-host'
+import type { ViewFrameSource } from '../view/types'
 
-type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
+/** A detached runtime has no platform preference: it flies. */
+const NO_REDUCED_MOTION: ReadonlySignal<boolean> = signal(false)
+/** The closest a new or empty Design opens: about one country wide. */
+const NEW_DESIGN_OVERVIEW_MAX_ZOOM = 5
 
 export interface SceneRuntimeConstructionOptions {
   appAdapter?: CanvasRuntimeAppAdapter
-  camera?: WorkspaceCameraOwner
   targetPresentation?: SceneRuntimePanelTargetAdapter
-  speciesCache?: CanvasSpeciesPresentationCache
-  plantLabels?: CanvasPlantLabelSource
-  renderer?: Pick<
-    RendererHostOptions<SceneRendererContext, SceneRendererInstance>,
-    'backends' | 'capabilities' | 'onBackendFailure' | 'onBackendChange'
-  >
 }
 
 export interface SceneRuntimeConstructionCallbacks {
@@ -80,10 +66,10 @@ export interface SceneRuntimeConstructionCallbacks {
   readonly prepareForDocumentReplacement: () => void
   readonly syncHoveredCanvasTargets: (target: SceneDesignObjectTarget | null) => void
   readonly syncCanvasSignalsFromScene: () => void
-  readonly invalidate: (kind: RuntimeInvalidationKind) => void
+  readonly invalidate: () => void
   readonly incrementSceneRevision: () => void
-  readonly renderChrome: () => void
-  readonly addGuide: (axis: 'h' | 'v', worldPosition: number) => void
+  /** The Design's canvas chrome shows (true) or hides: the grid draws only while it shows. */
+  readonly setChromeShown: (shown: boolean) => void
   readonly setHoveredTarget: (
     target: SceneDesignObjectTarget | null,
     options?: { invalidate?: boolean },
@@ -93,33 +79,34 @@ export interface SceneRuntimeConstructionCallbacks {
   readonly canRedoTransientHistory: () => boolean
   readonly undoTransientHistory: () => boolean
   readonly redoTransientHistory: () => boolean
-  readonly setInteractionTool: (name: string) => void
+  readonly setInteractionTool: (id: ToolId) => void
+  readonly readInteractionTool: () => ToolId | null
+  readonly plantRowSpacing: CanvasPlantRowSpacingField
   readonly disposeInteraction: () => void
+  /** The interaction session's re-origin hold (ToolHost.holdsReorigin); false with no session mounted. */
+  readonly holdsReorigin: () => boolean
 }
 
 export interface SceneRuntimeConstruction {
   readonly sceneState: SceneStateReader
   readonly sceneSession: SceneSessionWriter
-  readonly camera: WorkspaceCameraFrameReader
-  readonly cameraNavigation: WorkspaceCameraNavigation
+  /** The runtime's one camera: headless until the workspace activation attaches a map driver (ADR 0016). */
+  readonly cameraHost: CameraDriverHost
+  /** The camera driver host's frames and the navigation over it, which the interaction session hands its ToolHost (0B). */
+  readonly frames: ViewFrameSource
+  readonly viewNavigation: ViewNavigation
   readonly sceneRevision: Signal<number>
   readonly plantNamesQueryRevision: Signal<number>
   readonly transientHistoryRevision: Signal<number>
-  readonly revision: CanvasQueryRevision
-  readonly rendererHost: RendererHost<SceneRendererContext, SceneRendererInstance>
-  readonly replaceRendererHost: (
-    rendererHost: RendererHost<SceneRendererContext, SceneRendererInstance>,
-  ) => void
   readonly rendering: SceneRuntimeRenderScheduler
   readonly presentation: SceneRuntimePresentationController
   readonly inspection: SceneCanvasInspectionOwner
-  readonly chrome: SceneRuntimeChromeCoordinator
   readonly appAdapter: CanvasRuntimeAppAdapter
   readonly commandSurface: CanvasCommandSurface
   readonly sceneCommands: SceneEditCoordinator & SceneCommandAdmission
   readonly settledReader: SettledSceneReader
-  readonly documentSurface: CanvasDocumentSurface
-  readonly querySurface: CanvasQuerySurface
+  readonly documentSurface: SceneCanvasDocumentSurface
+  readonly querySurface: SceneCanvasQuerySurface
   readonly panelTargetAdapter: SceneRuntimePanelTargetAdapter
   readonly disposeEffects: Array<() => void>
 }
@@ -128,10 +115,28 @@ export function createSceneRuntimeConstruction(
   options: SceneRuntimeConstructionOptions,
   callbacks: SceneRuntimeConstructionCallbacks,
 ): SceneRuntimeConstruction {
-  const sceneStore = new SceneStore()
-  const cameraOwner = options.camera ?? new CameraController()
-  const camera = cameraOwner.frame
-  const cameraNavigation = cameraOwner.navigation
+  const appAdapter = options.appAdapter ?? createDetachedCanvasRuntimeAppAdapter()
+  // A new or empty Design opens at the last view's centre, zoomed out to at most country level, so "Where is your site?"
+  // appears over an overview, never at the previous Design's site scale; the world default without a last view.
+  const readEmptyDesignView = () => {
+    const last = appAdapter.settings.readLastView?.()
+    return last ? { lon: last.lon, lat: last.lat, zoom: Math.min(last.zoom, NEW_DESIGN_OVERVIEW_MAX_ZOOM) } : DEFAULT_NEW_DESIGN_VIEW
+  }
+  const sceneStore = new SceneStore(() => {
+    const view = readEmptyDesignView()
+    return { lon: view.lon, lat: view.lat }
+  })
+  // Fitting an empty Design shows the new-Design overview: its centre is the plane origin.
+  const readEmptySceneScale = () => mapZoomToStageScale(
+    readEmptyDesignView().zoom,
+    sceneStore.sessionPlane.origin.lat,
+  )
+  // The runtime's one camera, on the Scene's plane: the policy takes that plane's latitude.
+  const cameraHost = createCameraDriverHost({
+    reducedMotion: appAdapter.reducedMotion ?? NO_REDUCED_MOTION,
+    plane: () => sceneStore.sessionPlane,
+  })
+  const readViewScale = () => cameraHost.frames.viewFrame.peek().view.pixelsPerMetre
   const sceneRevision = signal(0)
   const plantNamesQueryRevision = signal(0)
   const transientHistoryRevision = signal(0)
@@ -139,21 +144,10 @@ export function createSceneRuntimeConstruction(
   const revision: CanvasQueryRevision = {
     scene: sceneRevision,
     plantNames: plantNamesQueryRevision,
+    transientHistory: transientHistoryRevision,
   }
-  let rendererHost = new RendererHost<SceneRendererContext, SceneRendererInstance>(
-    options.renderer ?? {
-      backends: [
-        createPixiSceneRenderer(),
-        createCanvas2DSceneRenderer(),
-      ],
-    },
-  )
-  const appAdapter = options.appAdapter ?? createDetachedCanvasRuntimeAppAdapter()
   const history = new SceneHistory({
     reportCleanState: (clean) => appAdapter.cleanState.setCanvasClean(clean),
-    reserveSequence: appAdapter.coordinatedHistory?.reserveSequence,
-    announceBranch: appAdapter.coordinatedHistory?.announceBranch,
-    subscribeToBranches: appAdapter.coordinatedHistory?.subscribeToBranches,
   })
   const sceneEdits = new SceneRuntimeEditCoordinator({
     sceneStore,
@@ -169,36 +163,64 @@ export function createSceneRuntimeConstruction(
   const presentationData = appAdapter.presentationData
   const presentation = new SceneRuntimePresentationController({
     sceneStore,
-    getViewport: () => camera.viewport,
+    readPixelsPerMetre: readViewScale,
     getLocale: () => appAdapter.settings.readLocale(),
     resolveHighlightedTargets: callbacks.resolveHighlightedTargets,
     onPlantNamesChanged: callbacks.incrementPlantNamesRevision,
-    speciesCache: options.speciesCache ?? presentationData?.speciesCache,
-    plantLabels: options.plantLabels ?? presentationData?.plantLabels,
+    speciesCache: presentationData?.speciesCache,
+    plantLabels: presentationData?.plantLabels,
   })
-  const chrome = new SceneRuntimeChromeCoordinator()
+  const viewNavigation = createViewNavigation({
+    driver: cameraHost,
+    policy: cameraHost.driverDeps.policy,
+    readSceneExtent: () => ({
+      extentPoints: sceneExtentPoints(sceneStore.persisted, presentation.createPlantPresentationContext(readViewScale())),
+      emptySceneScale: readEmptySceneScale(),
+    }),
+    readSelectionPoints: () => {
+      const scale = readViewScale()
+      // The objects the selection model frames (editable and locked), by their outlines at the live scale.
+      const { editableTargets, lockedTargets } = querySurface.getDesignObjectSelection()
+      return selectionExtentPoints(sceneStore.persisted, [...editableTargets, ...lockedTargets], {
+        plantContext: presentation.createPlantPresentationContext(scale),
+        revealedAnnotationId: getRevealedAnnotationId(sceneStore.session.selectedTargets),
+      })(scale)
+    },
+  })
   const disposeEffects: Array<() => void> = []
-  disposeEffects.push(() => history.dispose())
+  // Every later Scene plane change reaches the camera. A re-origin, and any plane change while a map is attached (a hydration
+  // on a mount-existing start), re-express the live driver in the new plane: headless, the placement keeps its ground; attached,
+  // the map stays put. A detached hydration keeps the plane placement (followPlane). The first run returns before it reads the
+  // re-origin controller, declared below.
+  let planeFollowed = false
+  disposeEffects.push(effect(() => {
+    const plane = sceneStore.sessionPlaneSignal.value
+    if (!planeFollowed) {
+      planeFollowed = true
+      return
+    }
+    if (!plane) return
+    untracked(() => {
+      if (reorigin.reoriginating || cameraHost.frames.viewFrame.peek().attached) cameraHost.current().planeChanged(plane)
+      else cameraHost.followPlane(plane)
+    })
+  }))
   const rendering = new SceneRuntimeRenderScheduler({
-    getRendererHost: () => rendererHost,
-    getViewport: () => camera.viewport,
     prepareSceneRender: async () => {
-      if (camera.snapshot.peek().mode === 'overview') {
+      if (cameraHost.frames.viewFrame.peek().mode === 'overview') {
         return {
           publish: () => presentation.buildRendererSnapshot({ overview: true }),
         }
       }
-      const ticket = sceneEdits.issueTicket()
       const refresh = await presentation.refreshCurrentPresentationData()
       return {
         publish: () => {
           presentation.publishRefresh(refresh)
-          if (!refresh.failure) sceneEdits.applyBackfills(ticket, refresh.backfills)
           return presentation.buildRendererSnapshot()
         },
       }
     },
-    renderChrome: callbacks.renderChrome,
+    placeOpenedDesign: () => documentSurface.applyPendingOpen(),
   })
   const documents = new SceneRuntimeDocumentBridge({
     authority: sceneEdits,
@@ -206,34 +228,28 @@ export function createSceneRuntimeConstruction(
     clearHoveredTargets: () => callbacks.syncHoveredCanvasTargets(null),
     clearPanelOriginTargets: () => panelTargetAdapter.clearPanelOriginTargets(),
     composeDocumentForSave: (input) => appAdapter.document.composeDocumentForSave(input),
-    syncCanvasSignalsFromDocument: (file) =>
-      syncCanvasSignalsFromDocument(file, appAdapter.settings.layerProjections),
   })
   const inspection = new SceneCanvasInspectionOwner({
-    camera, revision,
+    frames: cameraHost.frames,
+    revision,
+    readSessionPlane: () => sceneStore.sessionPlane,
     getSnapshot: () => presentation.buildRendererSnapshot(),
     setHoveredTarget: callbacks.setHoveredTarget,
   })
   const documentSurface = createSceneCanvasDocumentSurface({
     inspection,
     documents,
-    camera,
-    cameraNavigation,
-    chrome,
+    cameraHost,
+    viewNavigation,
     rendering,
-    getSceneSnapshot: () => sceneStore.persisted,
-    createPlantPresentationContext: (viewportScale) =>
-      presentation.createPlantPresentationContext(viewportScale),
-    invalidateViewport: () => callbacks.invalidate('viewport'),
-    renderChrome: callbacks.renderChrome,
-    addGuide: callbacks.addGuide,
+    setChromeShown: callbacks.setChromeShown,
     clearHoveredEntity: () => callbacks.setHoveredTarget(null, { invalidate: false }),
     disposeRuntime: () => {
       runtimeActive = false
       sceneEdits.disposePersistence()
     },
     disposeInteraction: callbacks.disposeInteraction,
-    disposeCamera: () => cameraOwner.dispose(),
+    disposeCamera: () => cameraHost.dispose(),
     disposeEffects: () => {
       runCanvasRuntimeCleanups(
         disposeEffects.splice(0),
@@ -250,35 +266,51 @@ export function createSceneRuntimeConstruction(
     commandAdmission: sceneEdits,
     settledReader,
     presentation: {
-      getViewportScale: () => camera.viewport.scale,
+      getViewportScale: readViewScale,
       createPlantPresentationContext: (viewportScale) =>
         presentation.createPlantPresentationContext(viewportScale),
       getLocalizedCommonNames: () => presentation.getLocalizedCommonNames(),
       getSuggestedPlantColor: (canonicalName) =>
         presentation.getSuggestedPlantColor(canonicalName),
     },
-    invalidateScene: () => callbacks.invalidate('scene'),
+    invalidateScene: () => callbacks.invalidate(),
   })
-  const updateSpeciesFocus = (change: Partial<SpeciesFocus>) => {
+  const reorigin = new SceneRuntimeReoriginController({
+    sceneState: sceneStore,
+    authority: sceneEdits,
+    commandAdmission: sceneEdits,
+    held: callbacks.holdsReorigin,
+  })
+  // Each frame that moved the placement, screen or mode re-reads the live frame's centre (the controller filters the rest).
+  disposeEffects.push(effect(() => {
+    const frame = cameraHost.frames.viewFrame.value
+    untracked(() => reorigin.observe(frame))
+  }))
+  // A hold ends in a tool call (a release, a dropped transient) or with the text entry's close, and each bumps the transient
+  // history revision: the live frame is observed then if the hold turned one away.
+  disposeEffects.push(effect(() => {
+    void transientHistoryRevision.value
+    untracked(() => reorigin.resume(cameraHost.frames.viewFrame.peek()))
+  }))
+  disposeEffects.push(() => reorigin.dispose())
+  const focusSpecies = (canonicalName: string | null) => {
     if (!runtimeActive) return
     const current = sceneStore.session.speciesFocus
-    const next = { ...current, ...change }
-    if (change.canonicalName !== undefined && next.canonicalName !== null && !sceneStore.persisted.plants.some((plant) => plant.canonicalName === next.canonicalName)) return
-    if (current.canonicalName === next.canonicalName && current.showCodes === next.showCodes) return
+    const next: SpeciesFocus = { canonicalName }
+    if (canonicalName !== null && !sceneStore.persisted.plants.some((plant) => plant.canonicalName === canonicalName)) return
+    if (current.canonicalName === next.canonicalName) return
     sceneStore.updateSession((draft) => { draft.speciesFocus = next })
     callbacks.incrementSceneRevision()
-    callbacks.invalidate('scene')
+    callbacks.invalidate()
   }
   const commandSurface = createSceneCanvasCommandSurface({
     speciesFocus: {
-      focus: (canonicalName) => updateSpeciesFocus({ canonicalName }),
-      showCodes: (showCodes) => updateSpeciesFocus({ showCodes }),
+      focus: focusSpecies,
     },
     sceneStore,
-    camera,
-    cameraNavigation,
+    viewNavigation,
+    readViewScale,
     history: sceneEdits,
-    coordinatedHistory: appAdapter.coordinatedHistory,
     commandAdmission: sceneEdits,
     settledReader,
     savedObjectStamps: appAdapter.savedObjectStamps,
@@ -291,18 +323,19 @@ export function createSceneRuntimeConstruction(
     },
     mutations,
     sceneEdits,
-    presentationMaintenance: sceneEdits,
     presentation,
     settings: appAdapter.settings,
     setInteractionTool: callbacks.setInteractionTool,
+    readInteractionTool: callbacks.readInteractionTool,
+    plantRowSpacing: callbacks.plantRowSpacing,
     invalidate: callbacks.invalidate,
     isRuntimeActive: () => runtimeActive,
-    isSpatialEditingEnabled: () => camera.snapshot.peek().mode === 'site',
+    isSpatialEditingEnabled: () => cameraHost.frames.viewFrame.peek().mode === 'site',
   })
   const querySurface = createSceneCanvasQuerySurface({
     revision,
     sceneStore,
-    camera,
+    frames: cameraHost.frames,
     settledReader,
     mutations,
     presentation,
@@ -312,21 +345,14 @@ export function createSceneRuntimeConstruction(
     inspection,
     sceneState: sceneStore,
     sceneSession: sceneStore,
-    camera,
-    cameraNavigation,
+    cameraHost,
+    frames: cameraHost.frames,
+    viewNavigation,
     sceneRevision,
     plantNamesQueryRevision,
     transientHistoryRevision,
-    revision,
-    get rendererHost() {
-      return rendererHost
-    },
-    replaceRendererHost(nextRendererHost) {
-      rendererHost = nextRendererHost
-    },
     rendering,
     presentation,
-    chrome,
     appAdapter,
     commandSurface,
     sceneCommands: sceneEdits,

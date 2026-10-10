@@ -1,6 +1,5 @@
-import { useEffect, useRef } from "preact/hooks";
+import { useCallback, useEffect, useRef } from "preact/hooks";
 import { acquireCanvasRuntimeLifecycle } from "../../canvas/runtime/lifecycle-owner";
-import { autoSaveIntervalMs } from "../settings/state";
 import { createDesignSessionLifecycle, type DesignSessionLifecycle } from "./lifecycle";
 import type { WorkspaceRuntimeMountOptions } from '../canvas-map-surface/workspace-runtime-composition'
 
@@ -11,8 +10,12 @@ interface MutableDomRef<T> {
 interface CanvasDocumentSessionRefs {
   canvasAreaRef: MutableDomRef<HTMLDivElement>;
   containerRef: MutableDomRef<HTMLDivElement>;
-  rulerOverlayRef: MutableDomRef<HTMLDivElement>;
   onMapStateChange?: WorkspaceRuntimeMountOptions['onMapStateChange'];
+}
+
+interface CanvasDocumentSession {
+  /** The map notice's Retry: rebuilds a map that stopped drawing, or downloads a basemap that couldn't load. */
+  readonly retryMap: () => void;
 }
 
 /**
@@ -22,10 +25,10 @@ interface CanvasDocumentSessionRefs {
 export function useCanvasDocumentSession({
   canvasAreaRef,
   containerRef,
-  rulerOverlayRef,
   onMapStateChange,
-}: CanvasDocumentSessionRefs): void {
+}: CanvasDocumentSessionRefs): CanvasDocumentSession {
   const lifecycleRef = useRef<DesignSessionLifecycle | null>(null);
+  const retryMap = useCallback(() => lifecycleRef.current?.retryMap(), []);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -66,7 +69,6 @@ export function useCanvasDocumentSession({
           lifecycle = createDesignSessionLifecycle({
             canvasArea,
             container,
-            rulerOverlay: rulerOverlayRef.current,
             onMapStateChange,
           }, {
             onInitializationFailure: release,
@@ -97,8 +99,5 @@ export function useCanvasDocumentSession({
     };
   }, []);
 
-  const intervalMs = autoSaveIntervalMs.value;
-  useEffect(() => {
-    lifecycleRef.current?.updateAutosaveInterval(intervalMs);
-  }, [intervalMs]);
+  return { retryMap };
 }

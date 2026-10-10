@@ -4,52 +4,89 @@
   background: var(--color-surface);
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
-.toggleBtn:hover,
+/* One list, top to bottom; an open row's settings show under it. There is no footer. */
+.scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.section + .section {
+  border-top: 1px solid var(--color-border);
+}
+
 .lockBtn:hover,
 .layerName:hover {
   background: var(--color-control-hover);
 }
 
-.toggleBtn:focus-visible,
 .lockBtn:focus-visible,
-.layerName:focus-visible,
-.locationActionButton:focus-visible,
-.mapSlider:focus-visible {
-  outline: 2px solid var(--color-accent);
+.layerName:focus-visible {
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 
-.layerRow {
+.item {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.layerRow,
+.summaryRow {
   display: grid;
   grid-template-columns: var(--control-size-sm) minmax(0, 1fr) var(--control-size-sm);
   align-items: center;
   gap: var(--space-1);
   padding: var(--space-1) var(--space-2);
-  border-bottom: 1px solid var(--color-border);
-  border-left: 2px solid transparent;
   background: var(--color-surface);
-  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+/* The Site data summary row: the glyph and name over its caption; the whole name area opens Site data. */
+.summaryRow {
   padding-top: var(--space-2);
   padding-bottom: var(--space-2);
 }
 
-.layerRow[data-active="true"] {
-  background: var(--color-control-active);
-  border-left-color: var(--color-primary);
+.summaryRow[data-edition="web"] {
+  grid-template-columns: minmax(0, 1fr);
+  padding-left: var(--space-3);
 }
 
-.layerRow[data-hidden="true"] .layerName,
-.layerRow[data-hidden="true"] .toggleBtn {
+.summaryName {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The name and caption truncate themselves, so the button clips nothing: its shortcut tooltip opens below it. */
+.layerName.summaryName {
+  overflow: visible;
+}
+
+.glyph {
+  display: inline-flex;
+  flex-shrink: 0;
   color: var(--color-text-muted);
 }
 
-.layerRow[data-hidden="true"] .layerName { font-weight: 400; }
+.glyph svg {
+  width: 16px;
+  height: 16px;
+}
+
+.subHeading {
+  margin: 0;
+  padding: var(--space-3) var(--space-3) var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
 
 
-.toggleBtn,
 .lockBtn,
 .layerName {
   border: 1px solid transparent;
@@ -60,14 +97,12 @@
   transition: background-color var(--transition-fast);
 }
 
-.toggleBtn,
 .lockBtn,
 .lockSlot {
   width: var(--control-size-sm);
   height: var(--control-size-sm);
 }
 
-.toggleBtn,
 .lockBtn {
   position: relative;
   display: inline-flex;
@@ -85,19 +120,48 @@
   text-align: left;
   padding: var(--space-1);
   font-size: var(--text-sm);
-  font-weight: 600;
+  font-weight: 400;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.backgroundChoice {
+  display: flex;
+  flex-direction: column;
+}
+
+.backgroundOption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-size-lg);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.backgroundOption:hover {
+  background: var(--color-control-hover);
+}
+
+.backgroundOption input {
+  flex-shrink: 0;
+  margin: 0;
+  accent-color: var(--color-accent);
+}
+
+.backgroundOption input:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
 .layerDetail {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-1) var(--space-3) var(--space-3) var(--space-8);
   background: var(--color-surface);
 }
 
@@ -116,95 +180,6 @@
   gap: var(--space-2);
 }
 
-.locationCard {
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-0-5);
-}
-
-.locationCard[data-has-location="true"] {
-  border-color: var(--color-primary);
-  background: var(--color-primary-bg);
-}
-
-.locationCard[data-has-location="false"] {
-  border-color: var(--color-warning);
-  background: var(--color-warning-bg);
-}
-
-.locationCardLabel {
-  font-size: var(--text-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-text-muted);
-}
-
-.locationCard[data-has-location="true"] .locationCardLabel {
-  color: var(--color-text);
-}
-
-.locationCard[data-has-location="false"] .locationCardLabel {
-  color: var(--color-warning);
-}
-
-.locationCardText {
-  font-size: var(--text-sm);
-  color: var(--color-text);
-  line-height: 1.4;
-}
-
-.locationActionButton {
-  width: 100%;
-  min-height: var(--control-size-md);
-  padding: 0 var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  color: var(--color-text);
-  cursor: pointer;
-  font-size: var(--text-xs);
-  font-weight: 600;
-  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
-}
-
-.locationActionButton:hover {
-  background: var(--color-control-hover);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
-.mapSlider {
-  width: 100%;
-  -webkit-appearance: none;
-  appearance: none;
-  height: var(--slider-track-size);
-  background: var(--color-border-strong);
-  border-radius: var(--radius-full);
-  outline: none;
-}
-
-.mapSlider:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.mapSlider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: var(--slider-thumb-size);
-  height: var(--slider-thumb-size);
-  border-radius: var(--radius-full);
-  background: var(--color-primary);
-  border: 1px solid var(--color-primary);
-  cursor: pointer;
-  margin-top: calc((var(--slider-thumb-size) - var(--slider-track-size)) / -2);
-}
-
 .numericInput {
   width: 100%;
   border: 1px solid var(--color-border);
@@ -218,23 +193,77 @@
 }
 
 .numericInput:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 
-.opacityValue { font-variant-numeric: tabular-nums; color: var(--color-text); font-size: var(--text-xs); }
-
-.layerRow[data-active="true"] .layerName { color: var(--color-primary); }
 
 
-.inspector { margin-top: var(--space-4); border-top: 1px solid var(--color-border); }
 
-.groupHeading, .inspectorHeading { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3); }
-.groupHeading h3, .inspectorHeading h3 { margin: 0; font-size: var(--text-xs); font-weight: 600; }
-.groupHeading span, .inspectorHeading span { margin-left: auto; font-size: var(--text-xs); color: var(--color-text-muted); }
-.layerName { display: flex; align-items: center; gap: var(--space-2); }
+
+.groupHeading { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3); }
+.groupHeading h3 { margin: 0; font-size: var(--text-xs); font-weight: 600; }
+.layerName { position: relative; display: flex; align-items: center; gap: var(--space-2); }
 .layerName svg { flex-shrink: 0; color: var(--color-text-muted); }
 .layerName span { overflow: hidden; text-overflow: ellipsis; }
 .layerName .count { margin-left: auto; flex-shrink: 0; font-size: var(--text-xs); font-weight: 400; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
-.referenceHint { margin: 0; padding: var(--space-2) var(--space-3); font-size: var(--text-xs); color: var(--color-text-muted); }
-.inspectorHeading { flex-wrap: wrap; }
+.nameText { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.nameText > span { overflow: hidden; text-overflow: ellipsis; }
+.caption { font-size: var(--text-xs); font-weight: 400; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; }
+
+.layerNote {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+.keyForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.keyInput {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: var(--space-1) var(--space-2);
+  font-family: inherit;
+  font-size: var(--text-xs);
+}
+
+.keyInput:focus-visible,
+.keyButton:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.keyActions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.keyButton {
+  min-height: var(--control-size-sm);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.keyButton:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.keyButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

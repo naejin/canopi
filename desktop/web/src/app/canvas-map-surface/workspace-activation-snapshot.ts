@@ -1,54 +1,37 @@
-import { readCanvasMapLayerPresentation } from '../canvas-layer-presentation/presentation'
 import { designSessionStore, type DesignSessionStore } from '../document-session/store'
-import { basemapStyle } from '../settings/state'
-import type { BasemapStyle } from '../../generated/contracts'
-import {
-  captureWorkspaceBasemapPresentation,
-  type WorkspaceBasemapPresentation,
-} from '../../maplibre/workspace-map'
+import { locale } from '../settings/state'
+import type { MapLayersState } from '../map-layers/state'
+import { backgroundPresentationOf } from '../map-layers/background-presentation'
+import { presentedMapLayers } from '../story-presentation/overrides'
+import type { MapBackgroundPresentation } from '../../maplibre/map-background'
 import type { WorkspaceActivationSnapshot } from './workspace-activation'
 
 export interface WorkspaceActivationSnapshotReaderOptions {
-  readonly store?: Pick<DesignSessionStore,
-    'hasCurrentDesign' | 'readMetadata' | 'sessionIdentity'>
-  readonly readBasemapStyle?: () => BasemapStyle
-  readonly readMapLayerPresentation?: () => {
-    readonly layerVisibility: Readonly<Record<string, boolean>>
-    readonly layerOpacity: Readonly<Record<string, number>>
-  }
+  readonly store?: Pick<DesignSessionStore, 'hasCurrentDesign' | 'sessionIdentity'>
+  readonly readMapLayers?: () => MapLayersState
 }
 
-/** Reads only Design-session spatial authority and app settings projections. */
-export function readWorkspaceBasemapPresentation(
+/** The background band as the map layer store (or a presented story step) and locale describe it. */
+export function readWorkspaceBackgroundPresentation(
   options: WorkspaceActivationSnapshotReaderOptions = {},
-): WorkspaceBasemapPresentation {
-  const readPresentation = options.readMapLayerPresentation ?? readCanvasMapLayerPresentation
-  return captureWorkspaceBasemapPresentation({
-    basemapStyle: (options.readBasemapStyle ?? (() => basemapStyle.value))(),
-    basemapVisible: readPresentation().layerVisibility.base ?? true,
-    basemapOpacity: readPresentation().layerOpacity.base ?? 1,
-  })
+): MapBackgroundPresentation {
+  return backgroundPresentationOf((options.readMapLayers ?? presentedMapLayers)(), locale.value)
 }
 
 export function readWorkspaceActivationSnapshot(
-  options: WorkspaceActivationSnapshotReaderOptions = {},
+  options: WorkspaceActivationSnapshotReaderOptions & {
+    /** Initial map centre: the runtime's session plane origin. */
+    readonly readInitialCenter: () => { readonly lat: number; readonly lon: number }
+  },
 ): WorkspaceActivationSnapshot | null {
   const store = options.store ?? designSessionStore
   if (!store.hasCurrentDesign()) return null
-  const spatialFrame = store.readMetadata().spatialFrame
-  if (!spatialFrame) throw new Error('Current Design is missing its required spatial frame.')
-  const presentation = readWorkspaceBasemapPresentation(options)
+  const center = options.readInitialCenter()
   return Object.freeze({
     sessionIdentity: store.sessionIdentity.peek(),
     map: Object.freeze({
-      anchor: Object.freeze({
-        lat: spatialFrame.anchor_latitude_deg,
-        lon: spatialFrame.anchor_longitude_deg,
-      }),
-      northBearingDeg: spatialFrame.north_bearing_deg,
-      placementStatus: spatialFrame.placement_status,
-      ...presentation,
+      initialCenter: Object.freeze({ lat: center.lat, lon: center.lon }),
+      background: readWorkspaceBackgroundPresentation(options),
     }),
-    maximumWorldExtentMeters: undefined,
   })
 }

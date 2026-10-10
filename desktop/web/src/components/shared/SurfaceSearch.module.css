@@ -2,15 +2,26 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: var(--control-size-md);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: 0 var(--space-2);
+  min-height: var(--control-size-xl);
+  padding: 0 var(--space-1) 0 calc(var(--space-2) + var(--space-0-5));
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
   background: var(--color-surface);
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
+}
+
+/* Text fields show focus on the whole field. */
+.search:focus-within {
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 2px var(--color-focus);
+}
+
+.icon {
+  flex-shrink: 0;
 }
 
 .search input {
+  flex: 1 1 auto;
   width: 100%;
   min-width: 0;
   border: 0;
@@ -18,28 +29,52 @@
   background: transparent;
   color: var(--color-text);
   font: inherit;
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
+}
+
+.search input::placeholder {
+  color: var(--color-text-muted);
 }
 
 .search input::-webkit-search-cancel-button {
   display: none;
 }
 
-.search:focus-within {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 1px;
-}
-
-.search button {
+.clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--control-size-sm);
+  height: var(--control-size-sm);
+  padding: 0;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--color-text-muted);
-  min-width: var(--control-size-sm);
-  min-height: var(--control-size-sm);
   cursor: pointer;
 }
 
-.search svg {
+.clear:hover {
+  background: var(--color-control-hover);
+  color: var(--color-text);
+}
+
+.clear:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 0;
+}
+
+.hint {
   flex-shrink: 0;
+  margin-right: var(--space-1);
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-alt);
+  color: var(--color-text-secondary);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--line-height);
+  white-space: nowrap;
 }

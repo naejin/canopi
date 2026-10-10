@@ -1,46 +1,19 @@
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import type { TemplateMeta } from '../../types/community'
-import {
-  type MapLibreApi,
-} from '../../maplibre/host'
-import {
-  createMapLibreSurfaceAdapter,
-  type MapLibreSurfaceAdapter,
-} from '../../maplibre/surface-adapter'
+import type { MapLibreApi } from '../../maplibre/loader'
+import { MapLibreSurface } from '../../maplibre/surface'
 import {
   createWorldMapBounds,
   createWorldMapLibreMap,
   createWorldMapMarker,
-  readWorldMapViewState,
   type WorldMapLibreMap,
   type WorldMapMarker,
 } from '../../maplibre/world-map'
-import { basemapStyle } from '../../app/settings/state'
-import {
-  mapStyleReadiness,
-  mountBasemapLifecycle,
-} from '../../maplibre/basemap-bind'
+import { effect } from '@preact/signals'
+import { readWorkspaceBackgroundPresentation } from '../../app/canvas-map-surface/workspace-activation-snapshot'
+import { mountMapBackground, type MapBackgroundMap } from '../../maplibre/map-background'
 import { BasemapTileAuth } from '../../maplibre/basemap-tile-auth'
-import type {
-  BasemapViewport,
-} from '../../maplibre/basemap-provider-session'
 import styles from './WorldMapSurface.module.css'
-
-/** The provider viewport for a live map, or a whole-world fallback before one exists. */
-function readWorldMapViewport(map: WorldMapLibreMap | null): BasemapViewport {
-  const bounds = map?.getBounds?.()
-  const zoom = map?.getZoom?.()
-  if (!bounds || typeof zoom !== 'number') {
-    return { west: -180, south: -85, east: 180, north: 85, zoom: 0 }
-  }
-  return {
-    west: bounds.getWest(),
-    south: bounds.getSouth(),
-    east: bounds.getEast(),
-    north: bounds.getNorth(),
-    zoom,
-  }
-}
 
 export function WorldMapSurface({
   templates,
@@ -52,7 +25,7 @@ export function WorldMapSurface({
   onSelect: (template: TemplateMeta) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const surfaceRef = useRef<MapLibreSurfaceAdapter<WorldMapLibreMap> | null>(null)
+  const [surface] = useState(() => new MapLibreSurface<WorldMapLibreMap>())
   const markersRef = useRef<WorldMapMarker[]>([])
   const lastTemplateLayoutKeyRef = useRef<string>('')
   const templatesRef = useRef(templates)
@@ -61,73 +34,51 @@ export function WorldMapSurface({
   templatesRef.current = templates
   selectedIdRef.current = selectedId
   onSelectRef.current = onSelect
-  if (!surfaceRef.current) surfaceRef.current = createMapLibreSurfaceAdapter()
-  const tileAuthRef = useRef<BasemapTileAuth | null>(null)
-  if (!tileAuthRef.current) tileAuthRef.current = new BasemapTileAuth()
-
-  const preferredBasemapStyle = basemapStyle.value
 
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
-    const surface = surfaceRef.current
-    if (!surface) return
 
-    surface.attach(container)
     // Created before the map, because MapLibre takes its request transform as a
     // construction option.
-    const tileAuth = tileAuthRef.current ?? new BasemapTileAuth()
-    surface.requestMap({
-      // Deliberately independent of the provider: a basemap change is
-      // reconciled into the live map by the binding below, so it cannot reset
-      // the camera, the scene or any other layer.
-      key: 'world-map',
-      createMap: (maplibre, target, preservedView) => createWorldMapLibreMap(
-        maplibre,
-        target,
-        {
-          basemapStyle: preferredBasemapStyle,
-          center: preservedView?.center ?? [0, 14],
-          zoom: preservedView?.zoom ?? 1.15,
-          transformRequest: tileAuth.transformRequest,
-        },
-      ),
-      captureViewState: (context) => readWorldMapViewState(context.map),
+    const tileAuth = new BasemapTileAuth()
+    // One map for the surface's life: a basemap change is reconciled into the live map by the background mount below,
+    // so it cannot reset the camera, the markers or any other layer.
+    surface.open(container, {
+      createMap: (maplibre, target) => createWorldMapLibreMap(maplibre, target, tileAuth.transformRequest),
+      // The World map has no camera driver: its request owns the map's resize (spec §1.1 "Resize").
+      onResize: (context) => context.map.resize(),
       onCreate: (context) => {
-        // One basemap mount owns provider, observers, binding and credits.
-        // tileAuth already carries the request transform installed at map
-        // construction; the mount never installs a second transform.
-        const basemapMount = mountBasemapLifecycle({
-            map: context.map,
-            tileAuth,
-            readStyle: () => basemapStyle.value,
-            readViewport: () => readWorldMapViewport(surfaceRef.current?.map ?? null),
-            readVisible: () => true,
-            styleReady: mapStyleReadiness(context.map, context.lifetime),
-            maplibre: context.maplibre,
-            mapControls: context.map,
-            events: context.lifetime,
-          })
-        context.lifetime.addCleanup(() => basemapMount.dispose())
+        // The same background band owner as the workspace map: Basemap or
+        // Satellite from the map layer store, with their attribution.
+        const background = mountMapBackground({
+          map: context.map as unknown as MapBackgroundMap,
+          maplibre: context.maplibre,
+          tileAuth,
+          lifetime: context.lifetime,
+        })
+        const stopBackground = effect(() => background.update(readWorkspaceBackgroundPresentation()))
+        context.lifetime.addCleanup(() => {
+          stopBackground()
+          background.dispose()
+        })
         context.lifetime.addCleanup(clearMarkers)
         syncTemplateMarkers(context.map, context.maplibre)
         syncMarkerSelection()
-        if (!context.preservedViewState) flyToSelectedTemplate(context.map)
+        flyToSelectedTemplate(context.map)
       },
     })
 
     return () => {
       surface.destroy()
     }
-    // Only the surface's own structural key belongs here. The basemap style is
-    // applied through the provider observer installed above.
+    // Runs once: the background band follows the map layer store through the
+    // effect installed above.
   }, [])
 
-  // Markers are rebuilt when the map is recreated, so the map itself is the
-  // signal here rather than the basemap style.
+  // The live map gets new markers when the templates change; the map's creation places the first ones.
   useEffect(() => {
-    const map = surfaceRef.current?.map
-    const maplibre = surfaceRef.current?.maplibre
+    const { map, maplibre } = surface
     if (map && maplibre) syncTemplateMarkers(map, maplibre)
   }, [templates])
 
@@ -136,7 +87,7 @@ export function WorldMapSurface({
   }, [selectedId, templates])
 
   useEffect(() => {
-    const map = surfaceRef.current?.map
+    const map = surface.map
     if (map) flyToSelectedTemplate(map)
   }, [selectedId, templates])
 
@@ -203,5 +154,7 @@ export function WorldMapSurface({
     markersRef.current = []
   }
 
-  return <div ref={containerRef} className={styles.map} />
+  // MapLibre's keyboard handler pans this map with the arrows: the container owns them, so Shift+arrows on it never
+  // turn or reset the workspace view (spec §1.6, fixture H26).
+  return <div ref={containerRef} className={styles.map} data-owns-keys="arrows" />
 }

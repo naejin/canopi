@@ -1,7 +1,10 @@
 import type { ComponentType } from 'preact'
 import { Suspense } from 'preact/compat'
-import { useEffect, useMemo } from 'preact/hooks'
+import { useEffect, useMemo, useRef } from 'preact/hooks'
 import { usePlanningViewState } from '../../app/planning-view/state'
+import { phoneLayout } from '../../app/shell/phone-layout'
+import { siteLocateOpen } from '../../app/site-onboarding/state'
+import { storyPresentationActive } from '../../app/story-presentation'
 import type { ShellPanelBarProjection } from '../../app/shell-commands'
 import {
   activePanel,
@@ -12,7 +15,15 @@ import {
   type SidePanel,
 } from '../../app/shell/state'
 import { CanvasPdfDialog } from '../canvas-pdf/CanvasPdfDialog'
+import { SavedViewDialogs } from '../shared/SavedViewDialogs'
+import { StoryPresenter } from '../stories/StoryPresenter'
+import { RenameZoneDialog } from '../canvas/RenameZoneDialog'
+import { RotateSelectionDialog } from '../canvas/RotateSelectionDialog'
+import { GettingStartedDialog } from '../shared/GettingStartedDialog'
+import type { PanelRailCommand } from '../shared/PanelRail'
+import { PhoneSheet } from '../shared/PhoneSheet'
 import { SidePanelDock } from '../shared/SidePanelDock'
+import { useModalInertRegion } from '../shared/useModalLayer'
 import styles from './WorkspaceComposition.module.css'
 
 type PrimaryPanel = Exclude<Panel, SidePanel>
@@ -34,10 +45,16 @@ export function WorkspaceComposition({
   panelProjection,
   surfaces,
   responsive = false,
+  phoneTabs,
 }: {
   readonly panelProjection: WorkspacePanelProjection
   readonly surfaces: WorkspaceSurfaces
   readonly responsive?: boolean
+  /**
+   * The side panel commands as the phone sheet's tabs. An edition that passes
+   * them shows its panels in the phone sheet while `phoneLayout` is set.
+   */
+  readonly phoneTabs?: readonly PanelRailCommand[]
 }) {
   const registrations = useMemo(
     () => validateWorkspaceSurfaces(panelProjection, surfaces),
@@ -48,14 +65,32 @@ export function WorkspaceComposition({
   const primary = registrations.primary.has(currentPrimary)
     ? currentPrimary as PrimaryPanel
     : 'canvas'
+  // "Where is your site?" is the one task: the dock steps aside, as the tool
+  // rail does, and comes back once the site is found or skipped.
+  const locating = siteLocateOpen.value
+  // A presented story fills the window; the dock comes back when it ends.
+  const presenting = storyPresentationActive.value
   const mountedSide = primary === 'canvas'
+    && !locating
+    && !presenting
     && requestedSide
     && registrations.side.has(requestedSide)
       ? requestedSide
       : null
   const planningView = usePlanningViewState()
+  // The map, its chrome and the dock sit behind every modal dialog.
+  const root = useRef<HTMLDivElement>(null)
+  useModalInertRegion(root)
   const PrimarySurface = surfaces.primary[primary]
   const SideSurface = mountedSide ? surfaces.side[mountedSide] : undefined
+  const phone = phoneTabs ? phoneLayout.value : null
+  const sidePanelContent = mountedSide && SideSurface ? (
+    <div className={styles.sidePanel} data-workspace-side-panel={mountedSide}>
+      <Suspense fallback={<WorkspaceLoading />}>
+        <SideSurface />
+      </Suspense>
+    </div>
+  ) : null
 
   useEffect(() => {
     if (
@@ -71,7 +106,8 @@ export function WorkspaceComposition({
 
   return (
     <div
-      className={`${styles.root} ${responsive ? styles.responsive : ''} ${responsive && mountedSide ? styles.responsiveOpen : ''}`}
+      ref={root}
+      className={styles.root}
       data-workspace-composition
       data-workspace-primary-panel={primary}
       data-workspace-sidebar-open={mountedSide ? 'true' : undefined}
@@ -81,18 +117,19 @@ export function WorkspaceComposition({
           <PrimarySurface />
         </Suspense>
       </div>
-      {mountedSide && SideSurface ? (
+      {phone && phoneTabs ? (
+        // The phone sheet stands in for the dock and the panel rail; it steps aside with the dock.
+        !locating && !presenting && (
+          <PhoneSheet layout={phone} tabs={phoneTabs}>{sidePanelContent}</PhoneSheet>
+        )
+      ) : mountedSide && sidePanelContent ? (
         <SidePanelDock
           responsive={responsive}
-          responsiveSize={isPlanningPanel(mountedSide) ? 'large' : 'default'}
+          wide={isWidePanel(mountedSide)}
           expanded={mountedSide === 'calendar' && planningView.calendarExpanded.value}
           onManualResize={() => { planningView.calendarExpanded.value = false }}
         >
-          <div className={styles.sidePanel} data-workspace-side-panel={mountedSide}>
-            <Suspense fallback={<WorkspaceLoading />}>
-              <SideSurface />
-            </Suspense>
-          </div>
+          {sidePanelContent}
         </SidePanelDock>
       ) : null}
     </div>
@@ -100,7 +137,16 @@ export function WorkspaceComposition({
 }
 
 export function WorkspaceDialogs() {
-  return <CanvasPdfDialog />
+  return (
+    <>
+      <StoryPresenter />
+      <CanvasPdfDialog />
+      <SavedViewDialogs />
+      <RotateSelectionDialog />
+      <RenameZoneDialog />
+      <GettingStartedDialog />
+    </>
+  )
 }
 
 export function validateWorkspaceSurfaces(
@@ -109,7 +155,7 @@ export function validateWorkspaceSurfaces(
 ): { readonly primary: ReadonlySet<Panel>; readonly side: ReadonlySet<SidePanel> } {
   const primary = projectedPanels(panelProjection.primary, 'primary')
   const side = projectedPanels(
-    [...panelProjection.design, ...panelProjection.side],
+    [...panelProjection.design, ...panelProjection.planning],
     'side',
   )
   const primarySurfaces = new Set(Object.keys(surfaces.primary) as PrimaryPanel[])
@@ -158,8 +204,9 @@ function assertSamePanels(
   throw new Error(`Workspace ${group} registrations disagree with shell capabilities (${details}).`)
 }
 
-function isPlanningPanel(panel: SidePanel): boolean {
-  return panel === 'calendar' || panel === 'budget' || panel === 'consortium'
+/** Site data, Budget, Consortium and Stories open at 440 px; every other panel at 380 px. */
+function isWidePanel(panel: SidePanel): boolean {
+  return panel === 'site-data' || panel === 'budget' || panel === 'consortium' || panel === 'stories'
 }
 
 function WorkspaceLoading() {

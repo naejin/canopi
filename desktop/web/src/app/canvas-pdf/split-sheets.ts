@@ -1,8 +1,9 @@
-import type { PrintBounds, PrintPlant } from '../../canvas/print'
+import type { PrintBounds, PrintPlant, PrintPoint } from '../../canvas/print'
 import { contains } from './field-geometry'
+import { areaFromFrame, type PageFrame } from './page-frame'
 
 /** Previewable coverage partition. Coincident plants cannot be separated by cropping. */
-export function splitFieldBounds(bounds: PrintBounds, plants: readonly PrintPlant[]): PrintBounds[] {
+function splitFieldBounds(bounds: PrintBounds, plants: readonly PrintPlant[]): PrintBounds[] {
   const result: PrintBounds[] = []
   const partition = (ground: PrintBounds, depth: number) => {
     const positions = new Set(plants.filter(p => contains(ground, p.position)).map(p => `${p.position.x},${p.position.y}`))
@@ -19,4 +20,15 @@ export function splitFieldBounds(bounds: PrintBounds, plants: readonly PrintPlan
   }
   partition(bounds, 0)
   return result
+}
+
+/**
+ * Splits a page's ground (in the layout frame) by the turned plants, as Print Areas in plan metres that turn together
+ * about one pivot: the split's centre, or `pivot` when the page is itself a split sheet. At any later angle they then
+ * tile the ground turned about that pivot, as the area they replace would be.
+ */
+export function splitPrintArea(ground: PrintBounds, plants: readonly PrintPlant[], frame: PageFrame, pivot?: PrintPoint): { bounds: PrintBounds; pivot: PrintPoint }[] {
+  const turned = frame.angleDeg ? plants.map(plant => ({ ...plant, position: frame.toFrame(plant.position) })) : plants
+  const about = pivot ?? frame.fromFrame({ x: ground.x + ground.width / 2, y: ground.y + ground.height / 2 })
+  return splitFieldBounds(ground, turned).map(bounds => ({ bounds: areaFromFrame(frame, bounds, about), pivot: about }))
 }
