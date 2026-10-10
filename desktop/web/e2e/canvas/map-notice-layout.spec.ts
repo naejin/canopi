@@ -3,8 +3,9 @@
 // the Web zoom group wider, so at iPad-landscape widths the group covered Retry. Each layout below opens a Design,
 // then checks with a real hit test that Retry is what a click at its centre reaches and that the notice shares no pixel
 // with the zoom group or the view chip (offline there are no map credits; map-container.spec.ts keeps the notice clear
-// of them). Where the notice rises above the row, it stays bottom chrome on the visible-map-area seam: with everything
-// selected, the selection chip sits above it and Retry still takes the click. Both engines; no baselines.
+// of them). The notice is bottom chrome on the visible-map-area seam: with everything selected, the selection chip sits
+// above it and Retry still takes the click. In the bottom row it never moves the opening framing: the Design opens in
+// the same frame as with the basemap hidden, when no notice shows. Both engines; no baselines.
 import { fileURLToPath } from 'node:url'
 import type { Locator, Page } from '@playwright/test'
 import { designMap, expectCanvasDrawn, pressMod } from '../support/canvas'
@@ -18,7 +19,7 @@ const WIDE_LAYOUTS = [
   { width: 1024, height: 768 },
   { width: 1060, height: 800 },
   { width: 1400, height: 900 },
-  // The narrowest window that keeps the wide layout: the notice rises there in every edition.
+  // The narrowest window that keeps the wide layout: the notice stands above the bottom row there (max-width 760px).
   { width: 700, height: 500 },
 ] as const
 
@@ -40,7 +41,7 @@ for (const viewport of WIDE_LAYOUTS) {
       }
     })
 
-    test('the selection chip and the visible map frame clear the notice, risen above the row or not', async ({ page }) => {
+    test('the selection chip and the visible map frame clear the notice', async ({ page }) => {
       await openBaseFixture(page)
       const { notice, retry } = await expectNoticeWithRetry(page)
       await designMap(page).focus()
@@ -52,15 +53,40 @@ for (const viewport of WIDE_LAYOUTS) {
       const noticeBox = await boxOf(notice)
       expect(overlap(noticeBox, await boxOf(selection)), 'the notice clears the selection chip').toBe(false)
       // The notice is bottom chrome on the visible-map-area seam wherever it shows: framing and chips avoid it.
-      const frameBottom = await page.evaluate(() => {
-        const area = document.querySelector<HTMLElement>('[style*="--map-inset-bottom"]')
-        if (!area) throw new Error('no map area publishes its insets')
-        return area.getBoundingClientRect().bottom - parseFloat(area.style.getPropertyValue('--map-inset-bottom'))
-      })
+      const frameBottom = (await visibleMapFrame(page)).bottom
       expect(frameBottom, 'the visible map frame ends above the notice').toBeLessThanOrEqual(Math.ceil(noticeBox.y))
     })
   })
 }
+
+test.describe('1024x768 opening framing', () => {
+  test.use({ viewport: { width: 1024, height: 768 } })
+
+  test('the notice in the bottom row leaves the Design’s opening frame as it is with no notice', async ({ page, context }) => {
+    // input-probe.spec.ts and touch.spec.ts tap fixed places of the opening camera at 1024x768, with the notice showing.
+    await openBaseFixture(page)
+    const { notice } = await expectNoticeWithRetry(page)
+    const zoomGroup = await boxOf(page.getByRole('group', { name: 'Zoom' }))
+    expect((await boxOf(notice)).y, 'the notice stands no higher than the zoom group').toBeGreaterThanOrEqual(zoomGroup.y - 0.5)
+    const withNotice = await visibleMapFrame(page)
+    // WebKit opens no file chooser from a page behind another: the second open runs alone.
+    await page.close()
+
+    const quiet = await context.newPage()
+    await quiet.bringToFront()
+    await quiet.addInitScript(() => {
+      // A fresh browser (the first open's draft would reopen with its camera), whose Web Edition settings record
+      // (web/browser-app-data.ts) hides the basemap: no notice shows.
+      localStorage.clear()
+      localStorage.setItem('canopi:web-app-data:v2:settings', JSON.stringify({ version: 2, settings: { basemap_visible: false } }))
+    })
+    await openBaseFixture(quiet)
+    await expect(quiet.getByRole('group', { name: 'Zoom' }).getByRole('button', { name: 'Show my location' })).toBeVisible()
+    await quiet.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    await expect(quiet.locator('[data-map-notice]')).toHaveCount(0)
+    expect(withNotice, 'the visible map frame the Design opens into').toEqual(await visibleMapFrame(quiet))
+  })
+})
 
 test.describe('phone portrait', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true })
@@ -111,6 +137,17 @@ async function expectRetryHit(retry: Locator): Promise<void> {
     return top !== null && button.contains(top)
   }, centre)
   expect(hit, `a click at Retry's centre (${centre.x}, ${centre.y}) reaches Retry`).toBe(true)
+}
+
+/** The visible map frame the seam publishes on the map area (`--map-inset-*`), in page pixels. */
+async function visibleMapFrame(page: Page): Promise<{ top: number, right: number, bottom: number, left: number }> {
+  return await page.evaluate(() => {
+    const area = document.querySelector<HTMLElement>('[style*="--map-inset-bottom"]')
+    if (!area) throw new Error('no map area publishes its insets')
+    const box = area.getBoundingClientRect()
+    const inset = (edge: string) => parseFloat(area.style.getPropertyValue(`--map-inset-${edge}`))
+    return { top: box.top + inset('top'), right: box.right - inset('right'), bottom: box.bottom - inset('bottom'), left: box.left + inset('left') }
+  })
 }
 
 async function boxOf(locator: Locator): Promise<Box> {

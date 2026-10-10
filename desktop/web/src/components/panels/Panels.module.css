@@ -72,18 +72,28 @@
   pointer-events: none;
 }
 
-/* Map status: a quiet chip at the bottom centre, between the view chip and the zoom group. */
+/* Map status: a quiet chip in the bottom row, between the view chip and the zoom group (with the folded credits' (i)
+   beside it), read from the widths they publish. It sits at the canvas centre while that leaves it room either side,
+   otherwise as near the centre as the room allows, and wraps its sentence when the room is narrower than it. It never
+   leaves the row, so its box (bottom chrome on the visible-map-area seam) never moves the Design's opening framing. */
 .basemapFeedback {
+  --map-notice-room-left: calc(var(--chrome-inset) + var(--view-chip-width, 0px) + var(--space-2));
+  --map-notice-room-right: calc(var(--chrome-inset) + var(--zoom-group-width, 0px) + var(--space-2) + var(--control-size-sm) + var(--space-2));
+  --map-notice-max-width: min(480px, calc(100% - var(--map-notice-room-left) - var(--map-notice-room-right)));
   position: absolute;
   bottom: var(--chrome-inset);
-  left: 50%;
+  left: clamp(
+    calc(var(--map-notice-room-left) + var(--map-notice-max-width) / 2),
+    50%,
+    calc(100% - var(--map-notice-room-right) - var(--map-notice-max-width) / 2)
+  );
   z-index: 18;
   display: inline-flex;
   align-items: center;
   gap: var(--space-1-5);
-  /* max-content: centred at left 50%, the chip would otherwise wrap at half the canvas width. */
+  /* max-content: centred by its left edge, the chip would otherwise wrap at the room right of that edge. */
   width: max-content;
-  max-width: min(480px, calc(100% - 2 * var(--chrome-inset)));
+  max-width: var(--map-notice-max-width);
   min-height: var(--control-size-lg);
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--color-border);
@@ -161,8 +171,11 @@
   }
 }
 
+/* A narrow window stands the notice above the bottom row, centred on the canvas. */
 @media (max-width: 760px) {
   .basemapFeedback {
+    --map-notice-room-left: var(--chrome-inset);
+    --map-notice-room-right: var(--chrome-inset);
     bottom: calc(2 * var(--chrome-inset) + var(--control-size-3xl));
   }
 }
@@ -206,5 +219,7 @@
 }
 
 :global([data-phone-layout]) .basemapFeedback {
+  --map-notice-room-left: var(--chrome-inset);
+  --map-notice-room-right: var(--chrome-inset);
   bottom: max(calc(var(--map-inset-bottom, 0px) + var(--space-2)), calc(var(--chrome-inset) + env(safe-area-inset-bottom)));
 }
