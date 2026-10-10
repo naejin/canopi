@@ -2196,14 +2196,15 @@ const CANVAS_V2_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'P41 canvas imports no native or edition code',
+    name: 'P41 canvas imports no native code',
     from: ['src/canvas/**'],
     exceptFrom: [
       // The Desktop species cache moves to app/canvas-runtime/ in 2.1 (S26, canopi-f47t.52.18).
       'src/canvas/runtime/species-cache.ts',
       ...TEST_SOURCE_PATTERNS,
     ],
-    targets: ['src/ipc/**', '@tauri-apps/**', 'src/web/**', 'src/platform/**'],
+    // Web and platform code are P40's targets.
+    targets: ['src/ipc/**', '@tauri-apps/**'],
   },
   {
     kind: 'forbid-imports',
@@ -3625,7 +3626,7 @@ describe('canvas v2 policies, end of 0B', () => {
 
 const P39 = '[P39 production modules form no value import cycle]'
 const P40 = '[P40 foundation layers import no app, component or edition code]'
-const P41 = '[P41 canvas imports no native or edition code]'
+const P41 = '[P41 canvas imports no native code]'
 const P42 = '[P42 shared app code imports no Web edition module]'
 const P43 = '[P43 the input core stays camera-free and app-free]'
 const P44 = '[P44 settings and map-layer signals are written only by the projection]'
@@ -3701,16 +3702,12 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
     ])
   })
 
-  it('P41 rejects canvas imports of IPC, Tauri, Web and platform code, but not the named species cache', () => {
+  it('P41 rejects canvas imports of IPC and Tauri code, but not the named species cache', () => {
     const graph = createTypeScriptSourceGraph([
       plantedSource('src/ipc/species.ts', ['export const species = 1']),
-      plantedSource('src/web/browser-app-data.ts', ['export const data = 1']),
-      plantedSource('src/platform/desktop.ts', ['export const desktop = 1']),
       plantedSource('src/canvas/runtime/planted.ts', [
         "import { species } from '../../ipc/species'",
         "import { invoke } from '@tauri-apps/api/core'",
-        "import type { data } from '../../web/browser-app-data'",
-        "import { desktop } from '../../platform/desktop'",
       ]),
       plantedSource('src/canvas/runtime/species-cache.ts', ["import { species } from '../../ipc/species'"]),
       plantedSource('src/canvas/runtime/planted.test.ts', ["import { species } from '../../ipc/species'"]),
@@ -3719,8 +3716,6 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
     expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P41'))).toEqual([
       `${P41} src/canvas/runtime/planted.ts:1:1 imports src/ipc/species.ts via "../../ipc/species" (static)`,
       `${P41} src/canvas/runtime/planted.ts:2:1 imports @tauri-apps/api/core via "@tauri-apps/api/core" (static)`,
-      `${P41} src/canvas/runtime/planted.ts:3:1 imports src/web/browser-app-data.ts via "../../web/browser-app-data" (static)`,
-      `${P41} src/canvas/runtime/planted.ts:4:1 imports src/platform/desktop.ts via "../../platform/desktop" (static)`,
     ])
   })
 
