@@ -242,7 +242,6 @@
     "src/app/saved-object-stamps/workbench.ts#exportSavedObjectStampFile",
     "src/app/saved-views/snapshot.ts#VIEW_SNAPSHOT_DEFAULT_TIMEOUT_MS",
     "src/app/saved-views/snapshot.ts#disposeViewSnapshots",
-    "src/app/saved-views/snapshot.ts#savedViewBackgroundPresentation",
     "src/app/saved-views/thumbnails.ts#createSavedViewThumbnailCache",
     "src/app/settings/projection.ts#hydrateSettingsProjectionForTests",
     "src/app/settings/projection.ts#resetSettingsProjectionForTests",
