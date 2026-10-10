@@ -1,9 +1,7 @@
-// The location trust boundary (canopi-f47t.53; canvas v2 plan section 5, P52 and P53; design check A12).
-// A device fix is the user's whereabouts: one session owns it, one module calls the browser's geolocation, and the
-// reading (dot, accuracy, time) never reaches a Design, Draft, export, snapshot, log or diagnostics. The policies live
-// here, not in frontend-architecture-policies.test.ts, so that file keeps one owner; this file therefore runs the
-// path-drift and unused-exemption checks over its own list. The browser half (the saved .canopi, the Draft record and
-// the saved-view path carry no fix) is e2e/canvas/my-location.spec.ts.
+// The location trust boundary (canopi-f47t.53; canvas v2 plan section 5; design check A12): a device fix is the user's
+// whereabouts, and its reading (dot, accuracy, time) never reaches a log, even when the map refuses it. Who may import
+// the session and call the browser's geolocation is P52 and P53 in frontend-architecture-policies.test.ts; the browser
+// half (the saved .canopi, the Draft record and the saved-view path carry no fix) is e2e/canvas/my-location.spec.ts.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { WorkspaceMapContributions } from '../app/canvas-map-surface/workspace-map-contributions'
@@ -11,113 +9,6 @@ import type { WorkspaceMapContributionSnapshot } from '../app/canvas-map-surface
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import type { MapLibreApi, MapLibreMapInstance } from '../maplibre/loader'
 import type { UserLocationReading } from '../maplibre/user-location-overlay'
-import {
-  createTypeScriptSourceGraph,
-  discoverTypeScriptSourceGraph,
-} from './support/architecture/source-facts'
-import {
-  collectArchitecturePolicyViolations,
-  collectPolicyPathDriftViolations,
-  collectUnusedExemptionViolations,
-  type ArchitecturePolicy,
-} from './support/architecture/policy-harness'
-
-const TEST_SOURCE_PATTERNS = [
-  'src/__tests__/**',
-  'src/**/*.test.ts',
-  'src/**/*.test.tsx',
-] as const
-
-const P52 = 'P52 only the location button and the Web wiring import the location session'
-const P53 = 'P53 only the geolocation module calls watchPosition, getCurrentPosition or clearWatch'
-
-const MY_LOCATION_TRUST_POLICIES = [
-  {
-    kind: 'confine-importers',
-    name: P52,
-    targets: ['src/app/my-location/session.ts'],
-    allowedFrom: [
-      'src/components/canvas/MyLocationButton.tsx',
-      'src/web/browser-workspace-map-contribution-adapter.ts',
-      ...TEST_SOURCE_PATTERNS,
-    ],
-  },
-  {
-    kind: 'forbid-calls',
-    name: P53,
-    from: ['src/**'],
-    exceptFrom: ['src/app/my-location/geolocation.ts', ...TEST_SOURCE_PATTERNS],
-    properties: ['watchPosition', 'getCurrentPosition', 'clearWatch'],
-  },
-] satisfies readonly ArchitecturePolicy[]
-
-function plantedSource(path: string, lines: readonly string[]) {
-  return { path, source: lines.join('\n') }
-}
-
-let sourceGraphCache: ReturnType<typeof discoverTypeScriptSourceGraph> | null = null
-
-function discoveredSourceGraph() {
-  sourceGraphCache ??= discoverTypeScriptSourceGraph(new URL('../', import.meta.url), 'src')
-  return sourceGraphCache
-}
-
-describe('location trust policies on the real source graph', () => {
-  it('hold with no violation', () => {
-    expect(collectArchitecturePolicyViolations(discoveredSourceGraph(), MY_LOCATION_TRUST_POLICIES)).toEqual([])
-  }, 20_000)
-
-  it('name only existing sources', () => {
-    expect(collectPolicyPathDriftViolations(discoveredSourceGraph(), MY_LOCATION_TRUST_POLICIES)).toEqual([])
-  }, 20_000)
-
-  it('name only exemptions that excuse a real file', () => {
-    expect(collectUnusedExemptionViolations(discoveredSourceGraph(), MY_LOCATION_TRUST_POLICIES, TEST_SOURCE_PATTERNS)).toEqual([])
-  }, 20_000)
-})
-
-describe('location trust policies on planted sources', () => {
-  const SESSION = plantedSource('src/app/my-location/session.ts', ['export function startMyLocation() {}'])
-
-  it('P52 rejects a session importer outside the button, the Web wiring and tests', () => {
-    const graph = createTypeScriptSourceGraph([
-      SESSION,
-      plantedSource('src/components/canvas/MyLocationButton.tsx', ["import { startMyLocation } from '../../app/my-location/session'"]),
-      plantedSource('src/web/browser-workspace-map-contribution-adapter.ts', ["import { startMyLocation } from '../app/my-location/session'"]),
-      plantedSource('src/app/my-location/session.test.ts', ["import { startMyLocation } from './session'"]),
-      plantedSource('src/app/document-session/store.ts', ["import { startMyLocation } from '../my-location/session'"]),
-      plantedSource('src/components/panels/ViewsPanel.tsx', ["import type { startMyLocation } from '../../app/my-location/session'"]),
-    ])
-
-    expect(collectArchitecturePolicyViolations(graph, MY_LOCATION_TRUST_POLICIES)).toEqual([
-      expect.stringMatching(/^\[P52 [^\]]+\] src\/app\/document-session\/store\.ts:1:1 imports src\/app\/my-location\/session\.ts /),
-      expect.stringMatching(/^\[P52 [^\]]+\] src\/components\/panels\/ViewsPanel\.tsx:1:1 imports src\/app\/my-location\/session\.ts /),
-    ])
-  })
-
-  it('P53 rejects a geolocation call outside the geolocation module and tests, through optional chains, ! and brackets', () => {
-    const graph = createTypeScriptSourceGraph([
-      SESSION,
-      plantedSource('src/app/my-location/geolocation.ts', [
-        'export const watch = (on: PositionCallback) => navigator.geolocation.watchPosition(on)',
-        'export const stop = (id: number) => navigator.geolocation.clearWatch(id)',
-      ]),
-      plantedSource('src/app/my-location/geolocation.test.ts', ['navigator.geolocation.getCurrentPosition(() => {})']),
-      plantedSource('src/app/my-location/follow.ts', [
-        'navigator.geolocation.watchPosition(() => {})',
-        'globalThis.navigator?.geolocation?.getCurrentPosition(() => {})',
-        "geo!['clearWatch'](3)",
-        'surface.watch(() => {})',
-      ]),
-    ])
-
-    expect(collectArchitecturePolicyViolations(graph, MY_LOCATION_TRUST_POLICIES)).toEqual([
-      `[${P53}] src/app/my-location/follow.ts:1 calls navigator.geolocation.watchPosition`,
-      `[${P53}] src/app/my-location/follow.ts:2 calls globalThis.navigator?.geolocation?.getCurrentPosition`,
-      `[${P53}] src/app/my-location/follow.ts:3 calls geo!['clearWatch']`,
-    ])
-  })
-})
 
 /** The fix every trust case plants: its digits must never leave the session's reading. */
 const FIX: UserLocationReading = { lon: 12.3456789, lat: 45.6789012, accuracy: 30, timestamp: 1_760_000_000_000, stale: false }

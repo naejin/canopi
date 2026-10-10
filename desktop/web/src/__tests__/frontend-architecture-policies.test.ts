@@ -2309,6 +2309,25 @@ const CANVAS_V2_POLICIES = [
       ...TEST_SOURCE_PATTERNS,
     ],
   },
+  {
+    // The location trust boundary (canopi-f47t.53; design check A12): one session owns a device fix, and one module asks
+    // the browser for it. my-location-trust.test.ts checks that the reading reaches no log.
+    kind: 'confine-importers',
+    name: 'P52 only the location button and the Web wiring import the location session',
+    targets: ['src/app/my-location/session.ts'],
+    allowedFrom: [
+      'src/components/canvas/MyLocationButton.tsx',
+      'src/web/browser-workspace-map-contribution-adapter.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+  },
+  {
+    kind: 'forbid-calls',
+    name: 'P53 only the geolocation module calls watchPosition, getCurrentPosition or clearWatch',
+    from: ['src/**'],
+    exceptFrom: ['src/app/my-location/geolocation.ts', ...TEST_SOURCE_PATTERNS],
+    properties: ['watchPosition', 'getCurrentPosition', 'clearWatch'],
+  },
 ] satisfies readonly ArchitecturePolicy[]
 
 /**
@@ -3615,6 +3634,8 @@ const P46 = '[P46 the Google key has reviewed readers]'
 const P47 = '[P47 components never hold the canvas document lifecycle]'
 const P48 = '[P48 the tool host is the only canvas-menu opener]'
 const P49 = '[P49 only IPC transports invoke native commands]'
+const P52 = '[P52 only the location button and the Web wiring import the location session]'
+const P53 = '[P53 only the geolocation module calls watchPosition, getCurrentPosition or clearWatch]'
 
 describe('2.0 guard policies (canopi-f47t.52.17)', () => {
   it('P39 rejects a production value cycle; type-only, dynamic and test cycles pass', () => {
@@ -3923,6 +3944,45 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
       `${P49} src/app/planted.ts contains confined symbol invoke; allowed sources: ${allowed}`,
       `${P49} src/components/Planted.tsx contains confined symbol invoke; allowed sources: ${allowed}`,
       `${P49} src/web/planted.ts contains confined symbol invoke; allowed sources: ${allowed}`,
+    ])
+  })
+
+  it('P52 rejects a location session importer outside the button, the Web wiring and tests', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/app/my-location/session.ts', ['export function startMyLocation() {}']),
+      plantedSource('src/components/canvas/MyLocationButton.tsx', ["import { startMyLocation } from '../../app/my-location/session'"]),
+      plantedSource('src/web/browser-workspace-map-contribution-adapter.ts', ["import { startMyLocation } from '../app/my-location/session'"]),
+      plantedSource('src/app/my-location/session.test.ts', ["import { startMyLocation } from './session'"]),
+      plantedSource('src/app/document-session/store.ts', ["import { startMyLocation } from '../my-location/session'"]),
+      plantedSource('src/components/panels/ViewsPanel.tsx', ["import type { startMyLocation } from '../../app/my-location/session'"]),
+    ])
+
+    const allowed = `src/components/canvas/MyLocationButton.tsx, src/web/browser-workspace-map-contribution-adapter.ts, ${TEST_SOURCES}`
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P52'))).toEqual([
+      `${P52} src/app/document-session/store.ts:1:1 imports src/app/my-location/session.ts via "../my-location/session" (static); allowed importers: ${allowed}`,
+      `${P52} src/components/panels/ViewsPanel.tsx:1:1 imports src/app/my-location/session.ts via "../../app/my-location/session" (static); allowed importers: ${allowed}`,
+    ])
+  })
+
+  it('P53 rejects a geolocation call outside the geolocation module and tests, through optional chains, ! and brackets', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/app/my-location/geolocation.ts', [
+        'export const watch = (on: PositionCallback) => navigator.geolocation.watchPosition(on)',
+        'export const stop = (id: number) => navigator.geolocation.clearWatch(id)',
+      ]),
+      plantedSource('src/app/my-location/geolocation.test.ts', ['navigator.geolocation.getCurrentPosition(() => {})']),
+      plantedSource('src/app/my-location/follow.ts', [
+        'navigator.geolocation.watchPosition(() => {})',
+        'globalThis.navigator?.geolocation?.getCurrentPosition(() => {})',
+        "geo!['clearWatch'](3)",
+        'surface.watch(() => {})',
+      ]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P53'))).toEqual([
+      `${P53} src/app/my-location/follow.ts:1 calls navigator.geolocation.watchPosition`,
+      `${P53} src/app/my-location/follow.ts:2 calls globalThis.navigator?.geolocation?.getCurrentPosition`,
+      `${P53} src/app/my-location/follow.ts:3 calls geo!['clearWatch']`,
     ])
   })
 })
