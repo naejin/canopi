@@ -101,7 +101,7 @@ describe('MapNotice over the map credits', () => {
       [zoom, { left: 900, top: 744, width: 368, height: 44 }],
     ])
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      const box = boxes.get(this) ?? (this.hasAttribute('data-map-notice') ? { left: 460, top: 748, width: 360, height: 40 } : { left: 0, top: 0, width: 0, height: 0 })
+      const box = boxes.get(this) ?? (this.hasAttribute('data-map-notice-place') ? { left: 460, top: 748, width: 360, height: 40 } : { left: 0, top: 0, width: 0, height: 0 })
       return { ...box, x: box.left, y: box.top, right: box.left + box.width, bottom: box.top + box.height, toJSON: () => ({}) } as DOMRect
     })
     const releases = [registerMapArea(area), registerMapOccluder(viewChip, 'bottom'), registerMapOccluder(zoom, 'bottom')]
