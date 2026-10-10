@@ -528,7 +528,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   /** The input: recognised, routed, and the recogniser's and the host's effects applied to the event. */
   private _route(input: RawInput): void {
     const result = recognise(this._recogniser, input, this._config)
-    this._recogniser = result.state
+    this._takeRecogniser(result.state)
     const wheel = input.kind === 'wheel'
     if (wheel) {
       // Today's _onWheel prevented a wheel the map takes, and closed the canvas menu, before it moved the camera: a zoom
@@ -563,7 +563,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     // A refused press ends its session, whichever input resolved it (a held touch press resolves on a move or an up).
     if (outcome.rejectSession && press?.kind === 'press') {
       const rejected = recognise(this._recogniser, { kind: 'reject', t: input.t, id: press.id }, this._config)
-      this._recogniser = rejected.state
+      this._takeRecogniser(rejected.state)
       this._source.apply(rejected.effects)
     }
     if (this._releasesOutsideTool(input, result.gestures)) this._toolHost.released()
@@ -591,7 +591,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   /** Raw input that does not come from an event (configure, key state, Esc), routed as an event's would be. */
   private _feed(input: RawInput): readonly Gesture[] {
     const result = recognise(this._recogniser, input, this._config)
-    this._recogniser = result.state
+    this._takeRecogniser(result.state)
     for (const gesture of result.gestures) {
       this._followNavigation(gesture)
       this._router.route(gesture)
@@ -647,12 +647,18 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   private _pointerSessionLive(): boolean {
-    for (const session of this._recogniser.sessions.values()) {
-      // WebKit holds a twist session from every pinch's gesturestart: it is live only once it turns the view (past 10°),
-      // so a plain pinch-zoom keeps Esc, the arrows and the Menu key.
-      if (session.navigation !== 'trackpad-twist' || session.slopPassed) return true
-    }
-    return this._toolHost.hasLiveGesture()
+    return sessionsLive(this._recogniser) || this._toolHost.hasLiveGesture()
+  }
+
+  /**
+   * Takes the recogniser's next state. A navigation session that only gestures drive (a macOS trackpad twist) can begin
+   * and end with no tool call, so when the recogniser's live sessions start or stop holding Cut and Delete, the hold's
+   * readers hear it through the transient history, as they hear a tool call (the menu bar would otherwise keep them grey).
+   */
+  private _takeRecogniser(next: RecogniserState): void {
+    const wasLive = sessionsLive(this._recogniser)
+    this._recogniser = next
+    if (sessionsLive(next) !== wasLive) this._deps.notifyTransientHistoryChange()
   }
 
   /** Esc with a pointer session live: the recogniser cancels it; a pointer pan or turn it ends runs today's cancellation
@@ -715,7 +721,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
    */
   private _endPressesAfterFailedSwitch(): void {
     const result = recognise(this._recogniser, this._configureInput(), this._config)
-    this._recogniser = result.state
+    this._takeRecogniser(result.state)
     for (const gesture of result.gestures) {
       this._followNavigation(gesture)
       if (gesture.kind === 'rotate') this._router.route(gesture)
@@ -953,6 +959,15 @@ function clearToolSource(tool: ToolId): void {
 function endsPointerNavigation(gesture: Gesture): boolean {
   if (gesture.kind === 'pan') return gesture.phase === 'end' && gesture.source !== 'wheel'
   if (gesture.kind === 'rotate') return (gesture.phase === 'end' || gesture.phase === 'cancel') && gesture.source !== 'trackpad-twist'
+  return false
+}
+
+/** Whether a recogniser session is live. WebKit holds a twist session from every pinch's gesturestart: it is live only
+ *  once it turns the view (past 10°), so a plain pinch-zoom keeps Esc, the arrows and the Menu key. */
+function sessionsLive(recogniser: RecogniserState): boolean {
+  for (const session of recogniser.sessions.values()) {
+    if (session.navigation !== 'trackpad-twist' || session.slopPassed) return true
+  }
   return false
 }
 

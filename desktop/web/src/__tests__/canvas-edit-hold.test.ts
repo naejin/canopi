@@ -148,4 +148,51 @@ describe('Edit › Cut and Delete during a draft (U39)', () => {
     session.dispose()
     setCurrentCanvasSession(null)
   })
+
+  it('a trackpad twist that ends without a tool call un-greys Cut and Delete as its hold ends', async () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 200, y: 200 })]
+    })
+    const queries = createTestCanvasQuerySurface({ selection: [plantTarget('plant-1')] })
+    const deps = { ...createInteractionDeps(container, store, testView), platform: { os: 'mac', gestureEvents: true } as const }
+    deps.notifyTransientHistoryChange = () => queries.bumpTransientHistory()
+    const session = createTestSession(deps)
+    setCurrentCanvasSession({
+      commands: createTestCanvasCommandSurface(),
+      queries,
+      documents: createTestCanvasDocumentSurface(),
+      keyboard: session.keyboard,
+    })
+    deps.setSelection([plantTarget('plant-1')])
+    session.setTool('select')
+    // The menu bar reads the projection throughout, as a rendered Edit menu does.
+    const greyed = () => Object.fromEntries(workspaceCanvasCommandProjection.value.editActions
+      .filter((command) => ['cut', 'delete'].includes(command.id))
+      .map((command) => [command.id, command.disabled]))
+    let shown = greyed()
+    const stop = effect(() => { shown = greyed() })
+    const gesture = (type: string, rotation: number) => {
+      container.dispatchEvent(Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
+        clientX: 200, clientY: 150, scale: 1, rotation, shiftKey: false, ctrlKey: false, altKey: false, metaKey: false,
+      }))
+    }
+    // The cursor rests on the map, so each camera frame of the twist re-emits its hover: a tool call while the twist holds.
+    events.pointerMove({ x: 200, y: 150 })
+
+    gesture('gesturestart', 0)
+    gesture('gesturechange', 14)
+    gesture('gesturechange', 40)
+    expect(session.keyboard.holdsSelectionDeletes()).toBe(true)
+    expect(shown).toEqual({ cut: true, delete: true })
+
+    // Ended 40° from north: the view keeps its turn, so no camera frame and no tool call follow the end.
+    gesture('gestureend', 40)
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(session.keyboard.holdsSelectionDeletes()).toBe(false)
+    expect(shown).toEqual({ cut: false, delete: false })
+    stop()
+    session.dispose()
+    setCurrentCanvasSession(null)
+  })
 })
