@@ -253,7 +253,8 @@ let activeKeyRouter: KeyRouterHandle | null = null
 
 /**
  * The Web Edition key router (spec §1.6): its shell rows, less the shortcuts a browser keeps, then the canvas rows. A
- * shell shortcut takes its key even when its command is disabled; a canvas command takes it only when it ran.
+ * shell shortcut takes its key even when its command is disabled; a canvas command takes it when it ran, or when it is
+ * an Edit command while the map has a selection (dispatchWorkspaceCanvasIntent).
  * Installing again replaces the router; main.web.tsx installs it once, on the browser's own platform, which also
  * names the mod key in every shortcut label (Cmd on a Mac).
  */
