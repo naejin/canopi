@@ -23,7 +23,7 @@ Boundaries of the Preact frontend in `desktop/web/src/`. Related: [design system
 FAP = `__tests__/frontend-architecture-policies.test.ts`, policies named as quoted.
 
 - `components/**` never imports `ipc/**` or `@tauri-apps/**`; `app/**` never imports `components/**` (FAP "Components reach native capabilities through app actions", "App modules do not import components").
-- `ipc/**` imports nothing from `app/**` but the types of a port it implements; gates and encoders stay app-side (FAP "IPC transports import nothing from app"; `ipc/design.ts` excepted until canopi-m4v0).
+- `ipc/**` imports nothing from `app/**` but the types of a port it implements; gates and encoders stay app-side (FAP "P40 foundation layers import no app, component or edition code"; `ipc/design.ts` excepted until canopi-m4v0).
 - `app/*/controller.ts` modules are leaves; cross-concern orchestration lives in workflow modules with `installX()` / `disposeX()` (FAP "App controllers stay leaves").
 - Command consumers read the registry and its projections, never `commands/graph/**` or canvas state (FAP "Command consumers do not bypass the registry", "Command consumers do not bypass their projections", "Tool Rail renders its projection without reading Canvas state", "Menu Bar renders the shared workspace menu model").
 - The right-click menu runs only its request's scene-edit commands (FAP "The right-click menu runs only its request’s scene edits"; `canvas-context-menu-entries.test.ts`).
