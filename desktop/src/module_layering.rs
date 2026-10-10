@@ -154,7 +154,10 @@ impl Breach {
             Self::DomainNamesServices | Self::ServicesNameCommands => {
                 format!(
                     "crate::{}",
-                    name.resolved.as_deref().unwrap_or_default().join("::")
+                    name.resolved
+                        .as_deref()
+                        .expect("forbidden() names a crate path only once resolved")
+                        .join("::")
                 )
             }
         }
