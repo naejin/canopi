@@ -1,12 +1,11 @@
-// The map notice keeps clear of the bottom row's chrome in every layout (live-bugs step, item 3). Offline, the Web
-// Edition shows "Basemap couldn't load" with Retry. A window whose bottom row holds the widest notice (480 px) between
-// the view chip and the zoom group, Show my location included, places it in the row; a narrower one stands it above the
-// row, centred. Either way it is at most two lines tall (never a tower of single words), Retry is what a click at its
-// centre reaches, and the notice shares no pixel with the zoom group or the view chip (offline there are no map credits;
-// map-container.spec.ts keeps the notice clear of them). The notice is status chrome on the visible-map-area seam,
-// registered with frames: false: with everything selected the selection chip sits above it, but it never moves the
-// camera's framing, so a Design opened while the notice shows opens in the same frame as one opened with the basemap
-// hidden, when no notice shows. Both engines; no baselines.
+// The map notice keeps clear of the other chrome in every layout (live-bugs step, item 3). Offline, the Web Edition
+// shows "Basemap couldn't load" with Retry. The notice stands above the bottom row, centred in the part of the map the
+// other chrome leaves visible (the visible-map-area seam's framing frame), so the zoom group, the view chip, the rails
+// and an open dock or bottom sheet never cover it: it is at most two lines tall with no panel open (never a tower of
+// single words), Retry is what a click at its centre reaches, and it shares no pixel with that chrome. The notice is
+// status chrome on the seam, registered with frames: false: with everything selected the selection chip sits above it,
+// but it never moves the camera's framing, so a Design opened while the notice shows opens in the same frame as one
+// opened with the basemap hidden, when no notice shows. Both engines; no baselines.
 import { fileURLToPath } from 'node:url'
 import type { Locator, Page } from '@playwright/test'
 import { pressMod } from '../support/canvas'
@@ -20,29 +19,27 @@ const NOTICE_MAX_WIDTH_PX = 480
 const CHROME_INSET_PX = 12
 
 interface Box { readonly x: number, readonly y: number, readonly width: number, readonly height: number }
-type Place = 'row' | 'above'
 
-const LAYOUTS: ReadonlyArray<{ readonly width: number, readonly height: number, readonly place: Place, readonly locale?: string }> = [
-  { width: 1400, height: 900, place: 'row' },
-  // The narrowest window whose bottom row holds the widest notice beside the zoom group, in German too.
-  { width: 1200, height: 800, place: 'row' },
-  { width: 1200, height: 800, place: 'row', locale: 'de' },
-  { width: 1100, height: 800, place: 'above' },
-  { width: 1024, height: 768, place: 'above' },
-  { width: 1024, height: 768, place: 'above', locale: 'de' },
-  // The band where the in-row notice became a tower of single words (761 to about 1000 px).
-  { width: 900, height: 700, place: 'above' },
-  { width: 800, height: 700, place: 'above' },
-  { width: 761, height: 700, place: 'above' },
-  // The narrowest window that keeps the wide layout.
-  { width: 700, height: 500, place: 'above' },
+const LAYOUTS: ReadonlyArray<{ readonly width: number, readonly height: number, readonly locale?: string }> = [
+  { width: 1400, height: 900 },
+  { width: 1200, height: 800 },
+  { width: 1200, height: 800, locale: 'de' },
+  { width: 1100, height: 800 },
+  { width: 1024, height: 768 },
+  { width: 1024, height: 768, locale: 'de' },
+  // The band where a notice in the bottom row became a tower of single words (761 to about 1000 px).
+  { width: 900, height: 700 },
+  { width: 800, height: 700 },
+  { width: 761, height: 700 },
+  // The narrowest window that keeps the wide layout; an open panel is a bottom sheet there.
+  { width: 700, height: 500 },
 ]
 
-for (const { width, height, place, locale = 'en' } of LAYOUTS) {
+for (const { width, height, locale = 'en' } of LAYOUTS) {
   test.describe(`${width}x${height} ${locale}`, () => {
     test.use({ viewport: { width, height } })
 
-    test(`the notice stands ${place === 'row' ? 'in' : 'above'} the bottom row, at most two lines tall, and Retry takes the click at its centre`, async ({ page }) => {
+    test('the notice stands above the bottom row, centred in the visible map, at most two lines tall, and Retry takes the click at its centre', async ({ page }) => {
       await openBaseFixture(page, { locale })
       const { notice, retry } = await expectNoticeWithRetry(page)
       await expectRetryHit(retry)
@@ -53,13 +50,23 @@ for (const { width, height, place, locale = 'en' } of LAYOUTS) {
         expect(overlap(noticeBox, chrome), `the notice clears ${name}`).toBe(false)
       }
       expect(await lineCount(notice), 'the sentence takes at most two lines').toBeLessThanOrEqual(2)
-      if (place === 'row') {
-        expect(noticeBox.y + noticeBox.height, 'the notice sits in the bottom row').toBeCloseTo(zoomGroup.y + zoomGroup.height, 0)
-      } else {
-        expect(noticeBox.y + noticeBox.height, 'the notice stands above the bottom row').toBeLessThanOrEqual(Math.min(zoomGroup.y, viewChip.y) + 0.5)
-        expect(noticeBox.width, 'the notice keeps its inset from both edges').toBeLessThanOrEqual(Math.min(NOTICE_MAX_WIDTH_PX, width - 2 * CHROME_INSET_PX) + 0.5)
-        expect(noticeBox.x + noticeBox.width / 2, 'the notice is centred on the canvas').toBeCloseTo(width / 2, 0)
-      }
+      expect(noticeBox.y + noticeBox.height, 'the notice stands above the bottom row').toBeLessThanOrEqual(Math.min(zoomGroup.y, viewChip.y) + 0.5)
+      // The rails cover the map's sides; the notice's bottom raises only the chips' bottom inset, not their sides.
+      const frame = await chipFrame(page)
+      expect(noticeBox.x, 'the notice keeps its inset from the tool rail').toBeGreaterThanOrEqual(frame.left + CHROME_INSET_PX - 0.5)
+      expect(noticeBox.x + noticeBox.width, 'the notice keeps its inset from the panel rail').toBeLessThanOrEqual(frame.right - CHROME_INSET_PX + 0.5)
+      expect(noticeBox.width, 'the notice is no wider than its widest place').toBeLessThanOrEqual(NOTICE_MAX_WIDTH_PX + 0.5)
+      expect(Math.abs(noticeBox.x + noticeBox.width / 2 - (frame.left + frame.right) / 2), 'the notice is centred in the visible map').toBeLessThanOrEqual(1)
+    })
+
+    test('with a panel open, the notice stands clear of the dock and Retry takes the click at its centre', async ({ page }) => {
+      await openBaseFixture(page, { locale })
+      await page.locator('[data-panel-rail] [data-panel]').first().click()
+      const dock = page.locator('[data-key-region="dock"]')
+      await expect(dock).toBeVisible()
+      const { notice, retry } = await expectNoticeWithRetry(page)
+      await expectRetryHit(retry)
+      expect(overlap(await boxOf(notice), await boxOf(dock)), 'the notice clears the dock').toBe(false)
     })
 
     test('the selection chip and the chips\' visible map frame clear the notice', async ({ page }) => {

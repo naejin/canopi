@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { signal } from '@preact/signals'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -415,41 +414,6 @@ describe('visible map area', () => {
       releaseArea()
     }
     expect(mapAttributionFolded.value).toBe(false)
-  })
-
-  it('a centred bottom notice takes the credits\' room', () => {
-    // The credits sit right of the band's middle, beside the zoom group, so a notice centred on the map bounds them on
-    // the left: only the room between the notice and the zoom group is theirs.
-    const viewChip = { rect: rect({ left: 12, top: 744, width: 280, height: 44 }), side: 'bottom' as const }
-    const notice = { rect: rect({ left: 460, top: 748, width: 360, height: 40 }), side: 'bottom' as const }
-    expect(measureBottomBandRoom(rect(WINDOW), [viewChip, { rect: rect(ZOOM_GROUP), side: 'bottom' }, notice])).toBe(80)
-    // A wide window leaves the credits their one line beside the notice.
-    const wide = { left: 0, top: 0, width: 1920, height: 800 }
-    expect(measureBottomBandRoom(rect(wide), [
-      viewChip,
-      { rect: rect({ left: 1540, top: 744, width: 368, height: 44 }), side: 'bottom' },
-      { rect: rect({ left: 780, top: 748, width: 360, height: 40 }), side: 'bottom' },
-    ])).toBe(400)
-  })
-
-  it('in a wide window the map notice stays in the bottom row, placed from the widths the zoom group and the view chip publish', () => {
-    // jsdom has no layout (e2e/canvas/map-notice-layout.spec.ts hit-tests Retry and measures both places in both
-    // engines): a window wide enough for the widest notice keeps it in the row, clear of the zoom group (with the folded
-    // credits' (i) beside it) and the view chip; a narrower one stands it above the row.
-    const css = readFileSync('src/components/panels/Panels.module.css', 'utf8')
-    const notice = /\n\.basemapFeedback\s*\{(?<body>[^}]*)\}/.exec(css)?.groups?.body ?? ''
-    expect(notice).toMatch(/bottom:\s*var\(--chrome-inset\);/)
-    expect(css).toMatch(/@media \(max-width: 1199px\) \{\s*\.basemapFeedback \{[^}]*bottom: calc\(2 \* var\(--chrome-inset\) \+ var\(--control-size-3xl\)\);/)
-    expect(notice).toMatch(/var\(--zoom-group-width/)
-    expect(notice).toMatch(/var\(--view-chip-width/)
-    expect(notice).toMatch(/left:\s*clamp\(/)
-    // Placed left of the middle, the notice bounds the credits on the left: they fold into (i) beside the zoom group.
-    const viewChip = { rect: rect({ left: 12, top: 716, width: 182, height: 40 }), side: 'bottom' as const }
-    const zoomGroup = { rect: rect({ left: 622, top: 716, width: 390, height: 40 }), side: 'bottom' as const }
-    const placed = { rect: rect({ left: 215, top: 722, width: 350, height: 34 }), side: 'bottom' as const }
-    const map = rect({ left: 0, top: 0, width: 1024, height: 768 })
-    expect(measureBottomBandRoom(map, [viewChip, zoomGroup, placed])).toBe(622 - 565)
-    expect(measureVisibleMapFrame(map, [viewChip, zoomGroup, placed]).bottom).toBe(768 - 716)
   })
 
   it('measures the room the panel rail has above the chrome under its column', () => {

@@ -72,29 +72,24 @@
   pointer-events: none;
 }
 
-/* Map status: a quiet chip in the bottom row, between the view chip and the zoom group (with the folded credits' (i)
-   beside it), read from the widths they publish. It sits at the canvas centre while that leaves it room either side,
-   otherwise as near the centre as the room allows. A window too narrow for the widest notice in that row stands it
-   above the row instead (the media rule below). Its box is status chrome on the visible-map-area seam (frames: false):
-   the selection chip stands above it, and it never moves the Design's framing. */
+/* Map status: a quiet chip above the bottom row, centred in the part of the map the other chrome leaves visible
+   (`--map-framing-inset-*`, published by app/shell/visible-map-area.ts), so the bottom row, the rails and an open dock
+   or bottom sheet never cover it, in every window and locale; on a phone it keeps clear of the home indicator. Its own
+   box is status chrome on that seam (frames: false): the selection chip stands above it, and it never moves the
+   Design's framing. */
 .basemapFeedback {
-  --map-notice-room-left: calc(var(--chrome-inset) + var(--view-chip-width, 0px) + var(--space-2));
-  --map-notice-room-right: calc(var(--chrome-inset) + var(--zoom-group-width, 0px) + var(--space-2) + var(--control-size-sm) + var(--space-2));
-  --map-notice-max-width: min(480px, calc(100% - var(--map-notice-room-left) - var(--map-notice-room-right)));
+  --map-notice-room-left: calc(var(--map-framing-inset-left, 0px) + var(--chrome-inset));
+  --map-notice-room-right: calc(var(--map-framing-inset-right, 0px) + var(--chrome-inset));
   position: absolute;
-  bottom: var(--chrome-inset);
-  left: clamp(
-    calc(var(--map-notice-room-left) + var(--map-notice-max-width) / 2),
-    50%,
-    calc(100% - var(--map-notice-room-right) - var(--map-notice-max-width) / 2)
-  );
+  bottom: max(calc(var(--map-framing-inset-bottom, 0px) + var(--space-2)), calc(var(--chrome-inset) + env(safe-area-inset-bottom)));
+  left: calc(var(--map-notice-room-left) + (100% - var(--map-notice-room-left) - var(--map-notice-room-right)) / 2);
   z-index: 18;
   display: inline-flex;
   align-items: center;
   gap: var(--space-1-5);
-  /* max-content: centred by its left edge, the chip would otherwise wrap at the room right of that edge. */
+  /* max-content: centred at its left edge, the chip would otherwise wrap at the room right of that edge. */
   width: max-content;
-  max-width: var(--map-notice-max-width);
+  max-width: min(480px, calc(100% - var(--map-notice-room-left) - var(--map-notice-room-right)));
   min-height: var(--control-size-lg);
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--color-border);
@@ -172,17 +167,6 @@
   }
 }
 
-/* Below 1200 px the bottom row cannot hold the widest notice (480 px, two lines of German) beside the Web zoom group
-   with Show my location and a German view chip (e2e/canvas/map-notice-layout.spec.ts): the notice stands above the
-   row, centred on the canvas, rather than wrap into a tower of single words. */
-@media (max-width: 1199px) {
-  .basemapFeedback {
-    --map-notice-room-left: var(--chrome-inset);
-    --map-notice-room-right: var(--chrome-inset);
-    bottom: calc(2 * var(--chrome-inset) + var(--control-size-3xl));
-  }
-}
-
 /* The map attribution pill sits immediately left of the zoom group, bottom
    aligned with it, between the view chip and the zoom group. When that band
    has too little room for one line (app/shell/visible-map-area.ts), the
@@ -213,16 +197,10 @@
   padding: var(--space-0-5) var(--space-2);
 }
 
-/* Web on phones: the credits and map status keep above the panel sheet and
-   left of the side sheet, clear of the home indicator. */
+/* Web on phones: the credits keep above the panel sheet and left of the side
+   sheet, clear of the home indicator. */
 :global([data-phone-layout]) .canvasArea :global(.maplibregl-ctrl-bottom-right) {
   right: max(calc(var(--map-inset-right, 0px) + var(--space-2)), calc(var(--chrome-inset) + env(safe-area-inset-right)));
   bottom: max(calc(var(--map-inset-bottom, 0px) + var(--space-2)), calc(var(--chrome-inset) + env(safe-area-inset-bottom)));
   max-width: calc(100% - var(--map-inset-left, 0px) - var(--map-inset-right, 0px) - 2 * var(--chrome-inset));
-}
-
-:global([data-phone-layout]) .basemapFeedback {
-  --map-notice-room-left: var(--chrome-inset);
-  --map-notice-room-right: var(--chrome-inset);
-  bottom: max(calc(var(--map-inset-bottom, 0px) + var(--space-2)), calc(var(--chrome-inset) + env(safe-area-inset-bottom)));
 }
