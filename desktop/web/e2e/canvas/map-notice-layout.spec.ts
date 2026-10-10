@@ -29,7 +29,7 @@ for (const viewport of WIDE_LAYOUTS) {
     test('Retry takes the click at its centre and the notice clears the zoom group and the view chip', async ({ page }) => {
       await openBaseFixture(page)
       const { notice, retry } = await expectNoticeWithRetry(page)
-      await expectRetryHit(page, retry)
+      await expectRetryHit(retry)
       const noticeBox = await boxOf(notice)
       for (const [name, chrome] of [
         ['the zoom group', page.getByRole('group', { name: 'Zoom' })],
@@ -48,7 +48,7 @@ for (const viewport of WIDE_LAYOUTS) {
       const selection = page.locator('[data-selection-chip]')
       await expect(selection).toBeVisible()
       await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
-      await expectRetryHit(page, retry)
+      await expectRetryHit(retry)
       const noticeBox = await boxOf(notice)
       expect(overlap(noticeBox, await boxOf(selection)), 'the notice clears the selection chip').toBe(false)
       // The notice is bottom chrome on the visible-map-area seam wherever it shows: framing and chips avoid it.
@@ -68,7 +68,7 @@ test.describe('phone portrait', () => {
   test('Retry takes the tap at its centre and the notice clears the zoom column and the panel sheet', async ({ page }) => {
     await openBaseFixture(page)
     const { notice, retry } = await expectNoticeWithRetry(page)
-    await expectRetryHit(page, retry)
+    await expectRetryHit(retry)
     const noticeBox = await boxOf(notice)
     for (const [name, chrome] of [
       ['the zoom column', page.getByRole('group', { name: 'Zoom' })],
@@ -103,7 +103,7 @@ async function expectNoticeWithRetry(page: Page): Promise<{ notice: Locator, ret
   return { notice, retry }
 }
 
-async function expectRetryHit(page: Page, retry: Locator): Promise<void> {
+async function expectRetryHit(retry: Locator): Promise<void> {
   const box = await boxOf(retry)
   const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
   const hit = await retry.evaluate((button, at) => {
