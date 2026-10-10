@@ -680,6 +680,11 @@
       "northUp": "북쪽이 위",
       "hint": "클릭하면 북쪽을 위로 맞춥니다. 링을 드래그하여 보기를 회전하고, Shift를 누르면 15°씩 회전합니다."
     },
+    "myLocation": {
+      "show": "내 위치 표시",
+      "blocked": "위치 접근이 차단되었습니다. 브라우저 설정에서 이 사이트에 허용하세요.",
+      "unavailable": "지금은 위치를 확인할 수 없습니다. 계속 시도하는 중입니다."
+    },
     "selectionChip": {
       "label": "선택",
       "selected_one": "{{count, number}}개 선택됨",

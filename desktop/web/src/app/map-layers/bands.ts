@@ -5,6 +5,7 @@ import {
 import { MAPLIBRE_SHARED_SCENE_LAYER_ID } from '../../maplibre/shared-scene-layer'
 import { panelTargetMapOverlayIds } from '../../maplibre/panel-target-overlay-sync'
 import { siteMapOverlayIds } from '../../maplibre/site-overlay'
+import { userLocationOverlayIds } from '../../maplibre/user-location-overlay'
 import {
   TERRAIN_CONTOUR_LAYER_IDS,
   TERRAIN_HILLSHADE_LAYER_ID,
@@ -32,13 +33,15 @@ const GEOGRAPHIC_REFERENCE_LAYER_IDS = [
   ...TERRAIN_CONTOUR_LAYER_IDS,
 ] as const
 
-// The Site data pin, profile line and chart hover ring draw above the panel highlights.
+// The Site data pin, profile line and chart hover ring draw above the panel highlights, and the user location's
+// accuracy and dot above them all.
 const SITE_OVERLAY_IDS = siteMapOverlayIds()
 const INTERACTION_OVERLAY_LAYER_IDS = [
   ...panelTargetMapOverlayIds('selection').layerIds,
   ...panelTargetMapOverlayIds('hover').layerIds,
   ...SITE_OVERLAY_IDS.layerIds,
   ...SITE_OVERLAY_IDS.hover.layerIds,
+  ...userLocationOverlayIds().layerIds,
 ] as const
 
 const MAP_LAYER_BAND_ORDER: Readonly<Record<MapLayerBand, number>> = {

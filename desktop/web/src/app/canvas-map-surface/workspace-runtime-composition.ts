@@ -33,8 +33,10 @@ import {
   type WorkspaceGenerationLifecycle,
 } from './workspace-generation-reconciler'
 import { WorkspaceMapControls } from './workspace-map-controls'
-import type { SiteHoverFeed } from './workspace-map-contributions'
+import type { ContributionFeed } from './workspace-map-contributions'
 import { mapAttributionFolded } from '../shell/visible-map-area'
+import { storyPresentationHidesEditingAids } from '../story-presentation/overrides'
+import type { UserLocationReading } from '../my-location/session'
 import type { WorkspaceActivationMapControls, WorkspaceActivationSnapshot } from './workspace-activation'
 import type { WorkspaceMapContributionAdapter, WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import type { MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
@@ -144,7 +146,8 @@ export function createWorkspaceRuntimeComposition(
     mapState = state
     options.onMapStateChange?.({ ...state, retryable: state.status === 'error' && workspace.canRetry() })
   }
-  const siteHover = options.mapContributions.readSiteHover ? createSiteHoverFeed() : null
+  const siteHover = options.mapContributions.readSiteHover ? createContributionFeed<readonly [number, number] | null>(null) : null
+  const userLocation = options.mapContributions.readUserLocation ? createContributionFeed<UserLocationReading | null>(null) : null
   const controls = dependencies.createControls({
     container: options.container,
     // The map container's resizes reach the live camera driver's setScreen: the driver is the map's one resize owner (both maps
@@ -156,6 +159,7 @@ export function createWorkspaceRuntimeComposition(
       loadTerrainSupport: options.mapContributions.loadTerrainSupport,
       createRasterDisplay: options.mapContributions.createRasterDisplay,
       siteHover: siteHover ?? undefined,
+      userLocation: userLocation ?? undefined,
       onStateChange: publishMapState,
     },
   })
@@ -202,6 +206,7 @@ export function createWorkspaceRuntimeComposition(
   let disposePresentationEffect: (() => void) | null = null
   let disposeSettleEffect: (() => void) | null = null
   let disposeSiteHoverEffect: (() => void) | null = null
+  let disposeUserLocationEffect: (() => void) | null = null
   let settleTimer: ReturnType<typeof setTimeout> | null = null
   const clearSettleTimer = () => {
     if (settleTimer !== null) clearTimeout(settleTimer)
@@ -240,6 +245,13 @@ export function createWorkspaceRuntimeComposition(
         const readSiteHover = options.mapContributions.readSiteHover
         if (siteHover && readSiteHover) {
           disposeSiteHoverEffect = dependencies.installEffect(() => siteHover.publish(readSiteHover()))
+        }
+        // The device location, at fix rate, on its own feed: a story presentation hides it (it shows the story's map only, Q12).
+        const readUserLocation = options.mapContributions.readUserLocation
+        if (userLocation && readUserLocation) {
+          disposeUserLocationEffect = dependencies.installEffect(() => {
+            userLocation.publish(storyPresentationHidesEditingAids.value ? null : readUserLocation())
+          })
         }
         disposePresentationEffect = dependencies.installEffect(() => {
           workspace.updateMapContributions(options.mapContributions.read(runtime.querySurface))
@@ -282,13 +294,15 @@ export function createWorkspaceRuntimeComposition(
       const presentationEffect = disposePresentationEffect
       const settleEffect = disposeSettleEffect
       const siteHoverEffect = disposeSiteHoverEffect
+      const userLocationEffect = disposeUserLocationEffect
       disposePresentationEffect = null
       disposeSettleEffect = null
       disposeSiteHoverEffect = null
+      disposeUserLocationEffect = null
       clearSettleTimer()
       void (async () => {
         const errors: unknown[] = []
-        for (const disposeEffect of [settleEffect, siteHoverEffect, presentationEffect]) {
+        for (const disposeEffect of [settleEffect, siteHoverEffect, userLocationEffect, presentationEffect]) {
           try {
             disposeEffect?.()
           } catch (error) {
@@ -307,19 +321,19 @@ export function createWorkspaceRuntimeComposition(
   }
 }
 
-/** The latest chart hover, handed to whichever map's contributions are attached (a Retry attaches new ones). */
-function createSiteHoverFeed(): SiteHoverFeed & { publish(hover: readonly [number, number] | null): void } {
-  let current: readonly [number, number] | null = null
-  const listeners = new Set<(hover: readonly [number, number] | null) => void>()
+/** The latest value, handed to whichever map's contributions are attached (a Retry attaches new ones). */
+function createContributionFeed<T>(initial: T): ContributionFeed<T> & { publish(value: T): void } {
+  let current = initial
+  const listeners = new Set<(value: T) => void>()
   return {
     current: () => current,
     subscribe(listener) {
       listeners.add(listener)
       return () => { listeners.delete(listener) }
     },
-    publish(hover) {
-      current = hover
-      for (const listener of [...listeners]) listener(hover)
+    publish(value) {
+      current = value
+      for (const listener of [...listeners]) listener(value)
     },
   }
 }

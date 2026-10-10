@@ -10,6 +10,7 @@ import {
 } from '../../maplibre/config'
 import { MAPLIBRE_SHARED_SCENE_LAYER_ID } from '../../maplibre/shared-scene-layer'
 import { siteHoverOverlayContract, siteMapOverlayContract } from '../../maplibre/site-overlay'
+import { userLocationOverlayIds } from '../../maplibre/user-location-overlay'
 
 class FakeOrderMap {
   readonly moveLayer = vi.fn((id: string, beforeId?: string) => {
@@ -112,7 +113,8 @@ describe('Map layer stack reconciliation', () => {
       .layers.map((layer) => layer.id)
     const hover = siteHoverOverlayContract([2.35, 48.85]).layers.map((layer) => layer.id)
     const interaction = descriptors.filter((descriptor) => descriptor.band === 'interaction-overlay').map((descriptor) => descriptor.id)
-    expect(interaction.slice(-(site.length + hover.length))).toEqual([...site, ...hover])
+    const location = userLocationOverlayIds().layerIds
+    expect(interaction.slice(-(site.length + hover.length + location.length), -location.length)).toEqual([...site, ...hover])
     expect(interaction.indexOf(site[0]!)).toBeGreaterThan(interaction.indexOf('panel-target-hover-plants'))
 
     // A pin added late (below the highlights and the scene) is moved back on top.
@@ -132,6 +134,34 @@ describe('Map layer stack reconciliation', () => {
       'site-profile-line',
       'site-pin-core',
       'site-hover-ring',
+    ])
+  })
+
+  it('draws the user location above every other overlay, so the dot is never under a highlight or the Site data pin', () => {
+    const descriptors = createMapLayerStackDescriptors([])
+    const location = userLocationOverlayIds().layerIds
+    const interaction = descriptors.filter((descriptor) => descriptor.band === 'interaction-overlay').map((descriptor) => descriptor.id)
+    expect(interaction.slice(-location.length)).toEqual([...location])
+
+    // A dot added before the scene layer (a rebuilt map adds the scene after its first drain) is moved back on top.
+    const map = new FakeOrderMap([
+      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+      'user-location-accuracy',
+      'user-location-ring',
+      'user-location-core',
+      MAPLIBRE_SATELLITE_LAYER_ID,
+      MAPLIBRE_SHARED_SCENE_LAYER_ID,
+      'site-pin-core',
+    ])
+    reconcileMapLayerStack(map, descriptors)
+    expect(map.order).toEqual([
+      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+      MAPLIBRE_SATELLITE_LAYER_ID,
+      MAPLIBRE_SHARED_SCENE_LAYER_ID,
+      'site-pin-core',
+      'user-location-accuracy',
+      'user-location-ring',
+      'user-location-core',
     ])
   })
 })

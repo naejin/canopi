@@ -680,6 +680,11 @@
       "northUp": "Norden ist oben",
       "hint": "Klicken, um nach Norden auszurichten. Ring ziehen, um die Ansicht zu drehen; Umschalt gedrückt halten für 15°-Schritte."
     },
+    "myLocation": {
+      "show": "Meinen Standort anzeigen",
+      "blocked": "Der Standort ist blockiert. Erlauben Sie ihn für diese Website in den Einstellungen Ihres Browsers.",
+      "unavailable": "Ihr Standort ist gerade nicht verfügbar; es wird weiter versucht."
+    },
     "selectionChip": {
       "label": "Auswahl",
       "selected_one": "{{count, number}} ausgewählt",

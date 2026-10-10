@@ -152,6 +152,17 @@ describe('createWorkspaceRuntimeComposition', () => {
     expect(read).not.toHaveBeenCalled()
   })
 
+  it('gives the map no user location feed for an edition without one (Desktop)', async () => {
+    let contributions: { readonly userLocation?: unknown } | undefined
+    const fixture = compositionFixture({
+      readSnapshot: () => workspaceSnapshot(),
+      createControls: (options) => { contributions = options.contributions },
+    })
+    await fixture.composition.start()
+    expect(contributions).toBeDefined()
+    expect(contributions!.userLocation).toBeUndefined()
+  })
+
   it('publishes memoized disposal before cleanup, joins teardown, and aggregates failures', async () => {
     const presentationEffectError = new Error('presentation effect cleanup failed')
     const effectErrors = [presentationEffectError]
@@ -306,6 +317,8 @@ interface CompositionFixtureOptions {
   readonly initiallyLoaded?: boolean
   readonly zoomToFit?: () => void
   readonly onViewSettled?: (view: WorkspaceSettledView) => void
+  /** Sees the options the composition builds the map controls with. */
+  readonly createControls?: (options: { readonly contributions: { readonly userLocation?: unknown } }) => void
 }
 
 function compositionFixture(options: CompositionFixtureOptions) {
@@ -368,7 +381,10 @@ function compositionFixture(options: CompositionFixtureOptions) {
   const dependencies = {
     createRendererComposition,
     createRuntime,
-    createControls: () => controls,
+    createControls: (controlOptions: { readonly contributions: { readonly userLocation?: unknown } }) => {
+      options.createControls?.(controlOptions)
+      return controls
+    },
     createWorkspace,
     ...(options.installEffect ? { installEffect: options.installEffect } : {}),
   }

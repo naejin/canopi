@@ -7,6 +7,7 @@ import type { TerrainLayerState, TerrainProtocolSupport } from '../../maplibre/t
 import type { RasterDisplay, RasterDisplayLayer, RasterDisplayMap, RasterDisplayOptions } from '../../maplibre/raster-display/adapter'
 import type { CanvasMapSurfaceOverlaySnapshot } from './overlays'
 import type { SiteMapOverlay } from '../../maplibre/site-overlay'
+import type { UserLocationReading } from '../../maplibre/user-location-overlay'
 
 export interface WorkspaceMapContributionSnapshot {
   readonly sessionIdentity: object
@@ -32,6 +33,12 @@ export interface WorkspaceMapContributionAdapter {
    * the coarse rule below: it never rides `read`, and the composition feeds it straight to the map's hover source.
    */
   readonly readSiteHover?: () => readonly [number, number] | null
+  /**
+   * Web only: Show my location's device reading (app/my-location/session.ts). Like the chart hover it changes at its own
+   * rate and never rides `read`: the composition feeds it to the map's dot, hidden during a story presentation. Optional,
+   * so the adapter factories keep their signatures and an edition without location (Desktop in 2.0) leaves it undefined.
+   */
+  readonly readUserLocation?: () => UserLocationReading | null
 }
 
 /** What an edition adds to the shared contributions: its LiDAR band and terrain, and Desktop's Site data pin and line. */

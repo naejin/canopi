@@ -680,6 +680,11 @@
       "northUp": "Le nord est en haut",
       "hint": "Cliquez pour rétablir le nord. Faites glisser l’anneau pour tourner la vue ; maintenez Maj pour des pas de 15°."
     },
+    "myLocation": {
+      "show": "Afficher ma position",
+      "blocked": "La localisation est bloquée. Autorisez-la pour ce site dans les réglages de votre navigateur.",
+      "unavailable": "Votre position est indisponible pour le moment ; nouvelle tentative en cours."
+    },
     "selectionChip": {
       "label": "Sélection",
       "selected_one": "{{count, number}} sélectionné",

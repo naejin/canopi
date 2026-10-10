@@ -267,9 +267,12 @@ async function panBy(page: Page, centre: Point, by: { readonly dx: number, reado
   await page.mouse.up({ button: 'middle' })
 }
 
-interface Pixels { readonly x: number, readonly y: number, readonly width: number, readonly height: number, readonly data: number[] }
+interface Pixels { readonly x: number, readonly y: number, readonly width: number, readonly height: number, readonly data: Uint8Array }
 
-/** The page's pixels in a square around `at`, decoded in the page from a screenshot. */
+/**
+ * The page's pixels in a square around `at`, decoded in the page from a screenshot. They come back as one base64
+ * string: as an array of numbers, a 524 px square took WebKit 18.6 s to serialise on two cores, past the poll's timeout.
+ */
 async function pixelsAround(page: Page, at: Point, half: number): Promise<Pixels> {
   const viewport = page.viewportSize()!
   const x = Math.max(0, Math.round(at.x - half))
@@ -285,9 +288,14 @@ async function pixelsAround(page: Page, at: Point, half: number): Promise<Pixels
     canvas.height = image.naturalHeight
     const context = canvas.getContext('2d')!
     context.drawImage(image, 0, 0)
-    return { width: canvas.width, height: canvas.height, data: Array.from(context.getImageData(0, 0, canvas.width, canvas.height).data) }
+    const bytes = context.getImageData(0, 0, canvas.width, canvas.height).data
+    let binary = ''
+    for (let start = 0; start < bytes.length; start += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(start, start + 0x8000))
+    }
+    return { width: canvas.width, height: canvas.height, data: btoa(binary) }
   }, png.toString('base64'))
-  return { x, y, ...decoded }
+  return { x, y, width: decoded.width, height: decoded.height, data: new Uint8Array(Buffer.from(decoded.data, 'base64')) }
 }
 
 function pixel(pixels: Pixels, x: number, y: number): readonly [number, number, number] {

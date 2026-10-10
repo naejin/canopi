@@ -24,6 +24,7 @@ export const GALLERY_SURFACES = {
   notebook: 'Design notebook',
   lens: 'Inspection lens',
   snapshots: 'View snapshots',
+  location: 'Location button',
 } as const
 
 export type GallerySurface = keyof typeof GALLERY_SURFACES
@@ -31,6 +32,18 @@ export type GallerySurface = keyof typeof GALLERY_SURFACES
 export function parseGallerySurface(value: string | null): GallerySurface {
   if (value && value in GALLERY_SURFACES) return value as GallerySurface
   return 'color'
+}
+
+/**
+ * `surface=location&location=<state>`: the Web zoom group's Show my location in one state (canopi-f47t.53), drawn from
+ * the state alone, with no device location. `stale` is Following with the position unavailable.
+ */
+export const GALLERY_LOCATION_STATES = ['off', 'following', 'moved-away', 'blocked', 'stale'] as const
+
+export type GalleryLocationState = typeof GALLERY_LOCATION_STATES[number]
+
+export function parseGalleryLocationState(value: string | null): GalleryLocationState {
+  return GALLERY_LOCATION_STATES.find((state) => state === value) ?? 'following'
 }
 
 export function selectGalleryPanel(surface: GallerySurface): void {
