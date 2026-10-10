@@ -32,23 +32,45 @@ import { armCanvasTool } from '../keyboard/arming'
  * state read from the live canvas session, and runCanvasIntent, which runs
  * each command on the command surface current at dispatch time.
  */
+
+/** The re-origin hold, the key guard's own predicate, so the greyed state and the run-time guards agree (U39). */
+function canvasHoldsSelectionDeletes(): boolean {
+  return currentCanvasKeyboardPort()?.holdsSelectionDeletes() ?? false
+}
+
+/**
+ * The hold as reactive readers see it (S3b): re-read on each move of the transient history, which every tool call
+ * makes, a hover included, but its readers re-run only when it flips, not at pointer rate.
+ */
+const projectedHold = computed(() => {
+  void currentCanvasQuerySurface.value?.revision.transientHistory.value
+  return canvasHoldsSelectionDeletes()
+})
+
+/** The state the projection and the palette grey with. */
 export function readWorkspaceCanvasProjectionState(): CanvasCommandProjectionState {
+  return readCanvasState(projectedHold.value)
+}
+
+/** The state the run-time guards read: the hold live, so one that began after the menu drew (a press) still counts. */
+function readLiveCanvasState(): CanvasCommandProjectionState {
+  return readCanvasState(canvasHoldsSelectionDeletes())
+}
+
+function readCanvasState(held: boolean): CanvasCommandProjectionState {
   const surface = currentCanvasCommandSurface.value
   const queries = currentCanvasQuerySurface.value
   void currentCanvasSelection.value
   const hasSelection = currentCanvasHasSelection.value
   // Locks change with scene edits; the snapshot below is read on each one.
   void queries?.revision.scene.value
-  // The hold changes only with tool calls, settling commits and teardown, and each moves the transient history (S3b).
-  void queries?.revision.transientHistory.value
   const selection = hasSelection ? queries?.getDesignObjectSelection() ?? null : null
   return {
     activeTool: currentCanvasTool.value,
     canvasAvailable: surface !== null,
     spatialEditingAvailable: queries?.view.mode.value !== 'overview',
     selection: selection === null ? null : selectionCommandAvailability(selection),
-    // The guard's own predicate, so the greyed state and the run-time guard agree, a live press included (U39).
-    held: currentCanvasKeyboardPort()?.holdsSelectionDeletes() ?? false,
+    held,
     lockedObjectsPresent: queries !== null && sceneHasLockedDesignObjects(queries.getSceneSnapshot()),
     canUndo: surface?.history.canUndo.value ?? false,
     canRedo: surface?.history.canRedo.value ?? false,
@@ -65,7 +87,7 @@ function withCanvas(run: (canvas: CanvasCommandSurface) => void): void {
 function runCanvasEditAction(action: CanvasEditAction): void {
   // The table the menu bar greys with, read live: a hold that began after the menu drew (a press) still refuses Cut and
   // Delete, as the keys and the canvas menu do (U39).
-  if (isCanvasCommandDisabled({ type: 'edit', action }, readWorkspaceCanvasProjectionState())) return
+  if (isCanvasCommandDisabled({ type: 'edit', action }, readLiveCanvasState())) return
   withCanvas(({ sceneEdits }) => {
     switch (action) {
       case 'cut':
@@ -148,9 +170,14 @@ export function runCanvasIntent(intent: CanvasCommandIntent, from: CanvasCommand
   }
 }
 
-/** Dispatch one intent unless the live state disables it; true when it ran. */
+/**
+ * Dispatch one intent unless the live state disables it; true when its key is spent: it ran, or it is an Edit command
+ * while the map has a selection. A disabled Group or Duplicate on one plant or a locked one still keeps Ctrl+G and
+ * Ctrl+D from the browser's find bar and bookmark dialog; with nothing selected, Copy leaves its key to the page.
+ */
 export function dispatchWorkspaceCanvasIntent(intent: CanvasCommandIntent, from: CanvasCommandFrom): boolean {
-  if (isCanvasCommandDisabled(intent, readWorkspaceCanvasProjectionState())) return false
+  const state = readLiveCanvasState()
+  if (isCanvasCommandDisabled(intent, state)) return intent.type === 'edit' && state.selection !== null
   runCanvasIntent(intent, from)
   return true
 }

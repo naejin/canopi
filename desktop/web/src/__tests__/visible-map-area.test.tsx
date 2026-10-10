@@ -179,6 +179,39 @@ describe('visible map area', () => {
     expect(area.style.getPropertyValue('--map-inset-left')).toBe('')
   })
 
+  it('status chrome registered with frames: false moves the chips\' insets, never the camera\'s framing', () => {
+    // The map notice comes and goes with load state; were it framing chrome, a Design opened while it shows would be
+    // fitted shorter than one opened after it goes.
+    const surfaces = createTestCanvasRuntimeSurfaces()
+    const setFramingInsets = vi.spyOn(surfaces.commands.viewport, 'setFramingInsets')
+    setCurrentCanvasSession(surfaces)
+    const area = element(WINDOW)
+    const releaseArea = registerMapArea(area)
+    const releaseZoom = registerMapOccluder(element(ZOOM_GROUP), 'bottom')
+    try {
+      expect(setFramingInsets).toHaveBeenLastCalledWith({ top: 0, right: 0, bottom: 56, left: 0 })
+      const calls = setFramingInsets.mock.calls.length
+      // A two-line notice standing above the bottom row, 98 px from the map's bottom edge.
+      const releaseNotice = registerMapOccluder(element({ left: 400, top: 702, width: 480, height: 50 }), 'bottom', { frames: false })
+      expect(area.style.getPropertyValue('--map-inset-bottom')).toBe('98px')
+      expect(visibleMapFrame.value.bottom).toBe(98)
+      // The notice places itself in the framing frame, published apart, so it never stands on its own box.
+      expect(area.style.getPropertyValue('--map-framing-inset-bottom')).toBe('56px')
+      releaseNotice()
+      expect(area.style.getPropertyValue('--map-inset-bottom')).toBe('56px')
+      expect(setFramingInsets, 'the notice coming and going never reframes').toHaveBeenCalledTimes(calls)
+      // Framing chrome still frames: the dock opening beside it moves the camera's framing, and the notice keeps left of it.
+      const releaseDock = registerMapOccluder(element(DOCK))
+      expect(setFramingInsets).toHaveBeenLastCalledWith({ top: 0, right: 456, bottom: 56, left: 0 })
+      expect(area.style.getPropertyValue('--map-framing-inset-right')).toBe('456px')
+      releaseDock()
+    } finally {
+      releaseZoom()
+      releaseArea()
+    }
+    expect(area.style.getPropertyValue('--map-framing-inset-right')).toBe('')
+  })
+
   it('the open inspection lens covers the map\'s left edge, so Home and Fit frame the Design right of it', async () => {
     const view = lensView({ width: 430, height: 390 })
     const surfaces = createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ attachInspectionTo: () => view }) })
@@ -381,21 +414,6 @@ describe('visible map area', () => {
       releaseArea()
     }
     expect(mapAttributionFolded.value).toBe(false)
-  })
-
-  it('a centred bottom notice takes the credits\' room', () => {
-    // The credits sit right of the band's middle, beside the zoom group, so a notice centred on the map bounds them on
-    // the left: only the room between the notice and the zoom group is theirs.
-    const viewChip = { rect: rect({ left: 12, top: 744, width: 280, height: 44 }), side: 'bottom' as const }
-    const notice = { rect: rect({ left: 460, top: 748, width: 360, height: 40 }), side: 'bottom' as const }
-    expect(measureBottomBandRoom(rect(WINDOW), [viewChip, { rect: rect(ZOOM_GROUP), side: 'bottom' }, notice])).toBe(80)
-    // A wide window leaves the credits their one line beside the notice.
-    const wide = { left: 0, top: 0, width: 1920, height: 800 }
-    expect(measureBottomBandRoom(rect(wide), [
-      viewChip,
-      { rect: rect({ left: 1540, top: 744, width: 368, height: 44 }), side: 'bottom' },
-      { rect: rect({ left: 780, top: 748, width: 360, height: 40 }), side: 'bottom' },
-    ])).toBe(400)
   })
 
   it('measures the room the panel rail has above the chrome under its column', () => {

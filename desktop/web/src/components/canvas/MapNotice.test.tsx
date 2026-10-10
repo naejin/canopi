@@ -3,7 +3,9 @@ import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MapNoticeReadModel } from '../../app/canvas-map-surface/map-notice'
 import { locale } from '../../app/settings/state'
-import { mapAttributionFolded, registerMapArea, registerMapOccluder } from '../../app/shell/visible-map-area'
+import { registerMapArea, registerMapOccluder } from '../../app/shell/visible-map-area'
+import { setCurrentCanvasSession } from '../../canvas/session'
+import { createTestCanvasRuntimeSurfaces } from '../../__tests__/support/canvas-runtime-surfaces'
 import { MapNotice } from './MapNotice'
 
 const failed: MapNoticeReadModel = {
@@ -88,34 +90,40 @@ describe('MapNotice', () => {
   })
 })
 
-describe('MapNotice over the map credits', () => {
-  it('folds the credits into (i) while it shows, as bottom chrome on the visible-map-area seam', async () => {
+describe('MapNotice on the visible-map-area seam', () => {
+  it('raises the chips\' bottom inset above itself, but never moves the camera\'s framing', async () => {
+    // Standing above the bottom row, the notice is under the selection chip's inset; it comes and goes with load state,
+    // so a Design opened while it shows is framed as one opened after it goes, and it stands in that framing frame.
+    const surfaces = createTestCanvasRuntimeSurfaces()
+    const setFramingInsets = vi.spyOn(surfaces.commands.viewport, 'setFramingInsets')
+    setCurrentCanvasSession(surfaces)
     const container = document.createElement('div')
     const area = document.createElement('div')
-    const viewChip = document.createElement('div')
     const zoom = document.createElement('div')
-    document.body.append(area, viewChip, zoom, container)
+    document.body.append(area, zoom, container)
     const boxes = new Map<Element, { left: number; top: number; width: number; height: number }>([
-      [area, { left: 0, top: 0, width: 1280, height: 800 }],
-      [viewChip, { left: 12, top: 744, width: 280, height: 44 }],
-      [zoom, { left: 900, top: 744, width: 368, height: 44 }],
+      [area, { left: 0, top: 0, width: 900, height: 700 }],
+      [zoom, { left: 498, top: 644, width: 390, height: 44 }],
     ])
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      const box = boxes.get(this) ?? (this.hasAttribute('data-map-notice') ? { left: 460, top: 748, width: 360, height: 40 } : { left: 0, top: 0, width: 0, height: 0 })
+      const box = boxes.get(this) ?? (this.hasAttribute('data-map-notice') ? { left: 210, top: 586, width: 480, height: 50 } : { left: 0, top: 0, width: 0, height: 0 })
       return { ...box, x: box.left, y: box.top, right: box.left + box.width, bottom: box.top + box.height, toJSON: () => ({}) } as DOMRect
     })
-    const releases = [registerMapArea(area), registerMapOccluder(viewChip, 'bottom'), registerMapOccluder(zoom, 'bottom')]
+    const releases = [registerMapArea(area), registerMapOccluder(zoom, 'bottom')]
     const canvasRef = { current: area }
     try {
-      // 608 px between the view chip and the zoom group: the credits fit on one line.
-      expect(mapAttributionFolded.value).toBe(false)
+      expect(setFramingInsets).toHaveBeenLastCalledWith({ top: 0, right: 0, bottom: 56, left: 0 })
+      const calls = setFramingInsets.mock.calls.length
       await act(async () => { render(<MapNotice notice={failed} onRetry={() => {}} canvasRef={canvasRef} />, container) })
-      expect(mapAttributionFolded.value).toBe(true)
+      expect(area.style.getPropertyValue('--map-inset-bottom')).toBe('114px')
+      expect(area.style.getPropertyValue('--map-framing-inset-bottom')).toBe('56px')
       await act(async () => { render(<MapNotice notice={hidden} onRetry={() => {}} canvasRef={canvasRef} />, container) })
-      expect(mapAttributionFolded.value).toBe(false)
+      expect(area.style.getPropertyValue('--map-inset-bottom')).toBe('56px')
+      expect(setFramingInsets, 'the notice coming and going never reframes').toHaveBeenCalledTimes(calls)
     } finally {
       await act(async () => { render(null, container) })
       for (const release of releases.reverse()) release()
+      setCurrentCanvasSession(null)
       vi.restoreAllMocks()
       document.body.innerHTML = ''
     }

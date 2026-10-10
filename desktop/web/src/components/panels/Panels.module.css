@@ -72,18 +72,26 @@
   pointer-events: none;
 }
 
-/* Map status: a quiet chip at the bottom centre, between the view chip and the zoom group. */
+/* Map status: a quiet chip above the bottom row, centred in the part of the map the other chrome leaves visible
+   (`--map-framing-inset-*`, published by app/shell/visible-map-area.ts), so the bottom row, the rails and an open dock
+   or bottom sheet never cover it, in every window and locale; on a phone it keeps clear of the home indicator. Beside
+   an open dock in a narrow window that map is narrower than the notice's widest place: Retry then wraps below the
+   sentence rather than squeeze it into a tower of single words. Its own box is status chrome on that seam
+   (frames: false): the selection chip stands above it, and it never moves the Design's framing. */
 .basemapFeedback {
+  --map-notice-room-left: calc(var(--map-framing-inset-left, 0px) + var(--chrome-inset));
+  --map-notice-room-right: calc(var(--map-framing-inset-right, 0px) + var(--chrome-inset));
   position: absolute;
-  bottom: var(--chrome-inset);
-  left: 50%;
+  bottom: max(calc(var(--map-framing-inset-bottom, 0px) + var(--space-2)), calc(var(--chrome-inset) + env(safe-area-inset-bottom)));
+  left: calc(var(--map-notice-room-left) + (100% - var(--map-notice-room-left) - var(--map-notice-room-right)) / 2);
   z-index: 18;
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1-5);
-  /* max-content: centred at left 50%, the chip would otherwise wrap at half the canvas width. */
+  /* max-content: centred at its left edge, the chip would otherwise wrap at the room right of that edge. */
   width: max-content;
-  max-width: min(480px, calc(100% - 2 * var(--chrome-inset)));
+  max-width: min(480px, calc(100% - var(--map-notice-room-left) - var(--map-notice-room-right)));
   min-height: var(--control-size-lg);
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--color-border);
@@ -93,6 +101,15 @@
   box-shadow: var(--shadow-float);
   transform: translateX(-50%);
   pointer-events: none;
+}
+
+/* The dot and the sentence: Retry stays beside them while they keep this width, and wraps below them otherwise. */
+.basemapFeedbackLead {
+  display: flex;
+  flex: 1 1 15em;
+  align-items: center;
+  gap: var(--space-1-5);
+  min-width: 0;
 }
 
 .basemapFeedbackDot {
@@ -161,12 +178,6 @@
   }
 }
 
-@media (max-width: 760px) {
-  .basemapFeedback {
-    bottom: calc(2 * var(--chrome-inset) + var(--control-size-3xl));
-  }
-}
-
 /* The map attribution pill sits immediately left of the zoom group, bottom
    aligned with it, between the view chip and the zoom group. When that band
    has too little room for one line (app/shell/visible-map-area.ts), the
@@ -197,14 +208,10 @@
   padding: var(--space-0-5) var(--space-2);
 }
 
-/* Web on phones: the credits and map status keep above the panel sheet and
-   left of the side sheet, clear of the home indicator. */
+/* Web on phones: the credits keep above the panel sheet and left of the side
+   sheet, clear of the home indicator. */
 :global([data-phone-layout]) .canvasArea :global(.maplibregl-ctrl-bottom-right) {
   right: max(calc(var(--map-inset-right, 0px) + var(--space-2)), calc(var(--chrome-inset) + env(safe-area-inset-right)));
   bottom: max(calc(var(--map-inset-bottom, 0px) + var(--space-2)), calc(var(--chrome-inset) + env(safe-area-inset-bottom)));
   max-width: calc(100% - var(--map-inset-left, 0px) - var(--map-inset-right, 0px) - 2 * var(--chrome-inset));
-}
-
-:global([data-phone-layout]) .basemapFeedback {
-  bottom: max(calc(var(--map-inset-bottom, 0px) + var(--space-2)), calc(var(--chrome-inset) + env(safe-area-inset-bottom)));
 }
