@@ -212,7 +212,7 @@ async function presentSecondStep(page: Page) {
   const presentation = page.getByRole('dialog', { name: 'Presenting Tour' })
   await expect(presentation).toBeVisible()
   await page.keyboard.press('ArrowRight')
-  await expect(presentation.getByRole('status')).toHaveText('Step 2 of 2: Step 2')
+  await expect(presentation.getByRole('status').filter({ hasText: /^Step \d/ })).toHaveText('Step 2 of 2: Step 2')
   // The same pointer place in every capture: inside the smaller window, away from the story card, the chrome and the notice.
   await page.mouse.move(SMALLER.width - 8, SMALLER.height / 2)
   return presentation
