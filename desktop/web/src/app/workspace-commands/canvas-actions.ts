@@ -62,8 +62,7 @@ function readCanvasState(held: boolean): CanvasCommandProjectionState {
   const queries = currentCanvasQuerySurface.value
   void currentCanvasSelection.value
   const hasSelection = currentCanvasHasSelection.value
-  // Locks change with scene edits; the snapshot below is read on each one.
-  void queries?.revision.scene.value
+  // Locks change with Scene edits: the getSceneSnapshot() read below follows them, so a lock change re-projects.
   const selection = hasSelection ? queries?.getDesignObjectSelection() ?? null : null
   return {
     activeTool: currentCanvasTool.value,
