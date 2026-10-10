@@ -29,7 +29,7 @@ const RECT_EDGE = { x: 311, y: 285 }
 
 const TABLET: Layout = {
   viewport: { width: 1024, height: 768 },
-  ground: { x: 560, y: 640 },
+  ground: { x: 560, y: 590 },
   apple: { x: 353, y: 265 },
 }
 
@@ -447,14 +447,14 @@ test.describe('Chromium touch', () => {
     await page.waitForTimeout(600)
     await fingers.tap({ x: 720, y: 560 })
     await page.waitForTimeout(600)
-    await fingers.tap({ x: 620, y: 690 })
-    await fingers.tap({ x: 620, y: 700 })
+    await fingers.tap({ x: 620, y: 632 })
+    await fingers.tap({ x: 620, y: 642 })
 
     await expect(selectionChip(page), 'the double tap finished the shape').toHaveText(/^Polygon zone/)
     const rename = page.getByRole('group', { name: 'Selection' }).getByRole('button', { name: 'Rename…' })
     const box = await rename.boundingBox()
     if (!box) throw new Error('the finished zone\'s chip shows no Rename')
-    expect(box.x <= 620 && 620 <= box.x + box.width && box.y <= 700 && 700 <= box.y + box.height, 'Rename is under the finger').toBe(true)
+    expect(box.x <= 620 && 620 <= box.x + box.width && box.y <= 642 && 642 <= box.y + box.height, 'Rename is under the finger').toBe(true)
     await page.waitForTimeout(300)
     await expect(page.getByRole('dialog', { name: 'Rename zone' }), 'the lift opens no dialog').toHaveCount(0)
   })

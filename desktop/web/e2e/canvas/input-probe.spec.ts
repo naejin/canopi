@@ -18,7 +18,7 @@ const FIXTURE = fileURLToPath(new URL('../fixtures/canvas-base.canopi', import.m
 interface Point { readonly x: number, readonly y: number }
 
 /** The base fixture at its opening camera at 1024x768 (as touch.spec.ts): empty ground and the Apple. */
-const GROUND: Point = { x: 560, y: 640 }
+const GROUND: Point = { x: 560, y: 590 }
 const APPLE: Point = { x: 353, y: 265 }
 /** Corners of a new polygon on empty ground, clear of the chip the finished zone brings up. */
 const POLYGON = [{ x: 860, y: 560 }, { x: 940, y: 560 }, { x: 940, y: 620 }] as const
