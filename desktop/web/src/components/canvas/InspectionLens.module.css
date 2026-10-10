@@ -69,7 +69,7 @@
 /* Web on phones: beside the top of the zoom column, which stands midway down
    the right of the visible map (ZoomControls.module.css `.phone`). */
 :global([data-phone-layout]) .launcher {
-  top: calc((var(--chrome-rail-top) + 100% - var(--map-inset-bottom, 0px)) / 2 - var(--control-size-touch) * 1.5 - var(--space-2));
+  top: calc((var(--chrome-rail-top) + 100% - var(--map-framing-inset-bottom, 0px)) / 2 - var(--control-size-touch) * 1.5 - var(--space-2));
   right: calc(max(calc(var(--map-inset-right, 0px) + var(--space-2)), calc(var(--chrome-inset) + env(safe-area-inset-right))) + var(--control-size-touch) + var(--space-4));
   bottom: auto;
   width: var(--control-size-touch);
