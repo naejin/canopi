@@ -1,6 +1,7 @@
 // Edit › Cut and Delete from the menu bar and the palette (runCanvasIntent) honour the re-origin hold as the keys and the
 // canvas menu do (U39): while a draft is live they delete nothing, and the menu bar shows them disabled (S3b). The hold
 // comes from a real interaction session, whose tool calls move the query revision's transient history as the runtime's do.
+import { effect } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
 import { SceneStore } from '../canvas/runtime/scene'
 import { setCurrentCanvasSession } from '../canvas/session'
@@ -107,6 +108,43 @@ describe('Edit › Cut and Delete during a draft (U39)', () => {
     // Esc ends the draft and leaves the selection: only the transient history tells the menu bar.
     events.keyDown({ key: 'Escape', target: container })
     expect(greyed()).toEqual({ cut: false, copy: false, delete: false })
+    session.dispose()
+    setCurrentCanvasSession(null)
+  })
+
+  it('a hover over the map moves the transient history but leaves the menu bar\'s projection alone', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 200, y: 200 })]
+    })
+    const queries = createTestCanvasQuerySurface({ selection: [plantTarget('plant-1')] })
+    const deps = createInteractionDeps(container, store, testView)
+    let historyMoves = 0
+    deps.notifyTransientHistoryChange = () => {
+      historyMoves += 1
+      queries.bumpTransientHistory()
+    }
+    const session = createTestSession(deps)
+    setCurrentCanvasSession({
+      commands: createTestCanvasCommandSurface(),
+      queries,
+      documents: createTestCanvasDocumentSurface(),
+      keyboard: session.keyboard,
+    })
+    deps.setSelection([plantTarget('plant-1')])
+    session.setTool('select')
+    let projections = 0
+    const stop = effect(() => {
+      void workspaceCanvasCommandProjection.value
+      projections += 1
+    })
+    const before = { projections, historyMoves }
+
+    for (let step = 0; step < 20; step += 1) events.pointerMove({ x: 20 + step * 5, y: 40 })
+
+    // Each hover is a tool call, so the history moves at pointer rate; the hold never flips, so nothing re-projects.
+    expect(historyMoves).toBeGreaterThan(before.historyMoves)
+    expect(projections).toBe(before.projections)
+    stop()
     session.dispose()
     setCurrentCanvasSession(null)
   })
