@@ -7,7 +7,8 @@
 // with it. Any other camera move (a pan) is Moved away: the dot stays where the fix is and the button is not pressed; a
 // click re-centres and follows again. A click while Following turns location off (no dot). Without permission the
 // request fails with code 1 and design check A4's rule applies to the permission state the engine reports: 'denied'
-// is Blocked (aria-disabled; Playwright WebKit), anything else is Off (Chromium reports 'prompt'). The dot's core is platform blue #1A73E8 (U54 Q11)
+// is Blocked (aria-disabled; Playwright WebKit), anything else is Off (Chromium reports 'prompt'). A touch screen has no
+// hover, so a tap while Blocked shows the tooltip's reason for a few seconds (Q16). The dot's core is platform blue #1A73E8 (U54 Q11)
 // over an accuracy polygon of the fix's accuracy radius.
 // Chromium sends a code 2 error to a running watch before each setGeolocation fix (design check §6); every check after a
 // new fix polls until that fix's longitude has been delivered (a count would pass on an earlier second read), and a
@@ -164,6 +165,35 @@ test('without permission the click gives Blocked when the permission is denied, 
     await expect(locationButton(page), `a '${permission}' permission is Off, not Blocked (A4)`).not.toHaveAttribute('aria-disabled', 'true')
   }
   await expectNoDot(page, await mapCentre(page), 'no fix, no dot')
+})
+
+test.describe('phone portrait, touch', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+
+  test('a tap while Blocked shows the tooltip\'s reason for a few seconds, inside the window (Q16)', async ({ page }) => {
+    // Both engines answer the refused request with code 1; the permission reads 'denied' here in both, so it is Blocked.
+    await page.addInitScript(() => {
+      const query = Permissions.prototype.query
+      Permissions.prototype.query = function (this: Permissions, descriptor: PermissionDescriptor) {
+        if (descriptor.name !== 'geolocation') return query.call(this, descriptor)
+        return Promise.resolve(Object.assign(new EventTarget(), { name: 'geolocation', state: 'denied', onchange: null }) as unknown as PermissionStatus)
+      }
+    })
+    await openBaseFixture(page)
+    const tooltip = locationButton(page).locator('[role="tooltip"]')
+    await locationButton(page).tap()
+    await expect(locationButton(page), 'a denied permission is Blocked (A4)').toHaveAttribute('aria-disabled', 'true')
+    await expect(tooltip, 'the reason leaves after a few seconds, though the tap left the button hovered').toBeHidden({ timeout: 8_000 })
+
+    // A Blocked button is aria-disabled, which Playwright's actionability wait reads as disabled; a finger still taps it.
+    await locationButton(page).tap({ force: true })
+    await expect(tooltip).toBeVisible()
+    await expect(tooltip).toContainText('Location is blocked')
+    const box = await boxOf(tooltip)
+    expect(box.x, 'the reason starts in the window').toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width, 'the reason ends in the window').toBeLessThanOrEqual(390)
+    await expect(tooltip, 'and leaves again').toBeHidden({ timeout: 8_000 })
+  })
 })
 
 /** Records the fixes' longitudes and the error codes the page's geolocation delivers, without changing them. */

@@ -47,10 +47,16 @@ button:focus-visible .tooltip {
   transition-delay: var(--transition-delay-tooltip);
 }
 
+/* A reason a tap asked for, shown for a few seconds whatever the hover. */
+.tooltipShown {
+  opacity: 1;
+  visibility: visible;
+}
+
 /* Touch screens: a tap leaves the button hovered, so its tooltip would stay over
-   the button above; only keyboard focus shows it there. */
+   the button above; only keyboard focus or a tap's reason shows it there. */
 @media (hover: none) {
-  button:hover:not(:focus-visible) .tooltip {
+  button:hover:not(:focus-visible) .tooltip:not(.tooltipShown) {
     opacity: 0;
     visibility: hidden;
   }

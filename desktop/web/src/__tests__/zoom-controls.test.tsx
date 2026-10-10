@@ -9,8 +9,8 @@ import type { ViewReadSurface } from '../canvas/runtime/view/read-surface'
 import { createViewReadSurface } from '../canvas/runtime/view/frame-source'
 import { createSessionPlane } from '../canvas/session-plane'
 import { ZoomControls } from '../components/canvas/ZoomControls'
-import { MyLocationButton } from '../components/canvas/MyLocationButton'
-import { myLocation } from '../app/my-location/session'
+import { MyLocationButton, MyLocationButtonView } from '../components/canvas/MyLocationButton'
+import { myLocation, type MyLocationMode } from '../app/my-location/session'
 import { phoneLayout } from '../app/shell/phone-layout'
 import { registerMapArea, visibleMapFrame } from '../app/shell/visible-map-area'
 import { createTestCanvasQuerySurface, createTestViewReadSurface } from './support/canvas-query-surface'
@@ -259,6 +259,10 @@ describe('ZoomControls', () => {
     afterEach(() => {
       if (myLocation.mode.peek() === 'following') myLocation.press()
       if (myLocation.mode.peek() === 'moved-away') { myLocation.press(); myLocation.press() }
+      if (myLocation.mode.peek() === 'blocked') {
+        permission.state = 'prompt'
+        permission.dispatchEvent(new Event('change'))
+      }
       for (const [name, descriptor] of Object.entries(descriptors)) {
         const target = name === 'isSecureContext' ? window : navigator
         if (descriptor) Object.defineProperty(target, name, descriptor)
@@ -332,6 +336,70 @@ describe('ZoomControls', () => {
       })
       expect(location().hasAttribute('aria-disabled')).toBe(false)
       expect(myLocation.mode.peek()).toBe('off')
+    })
+
+    /** A finger's tap: the pointer press the browser sends before the click. */
+    const tap = async (target: HTMLElement) => {
+      await act(async () => {
+        target.dispatchEvent(Object.assign(new MouseEvent('pointerdown', { bubbles: true }), { pointerType: 'touch' }))
+        target.click()
+      })
+    }
+    const tooltipShown = () => location().querySelector('[role="tooltip"]')!.className.includes('tooltipShown')
+
+    it('a tap while Blocked shows the tooltip with its reason for a few seconds, since touch screens have no hover (A4, Q16)', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      try {
+        permission.state = 'denied'
+        await mountWithLocation()
+        await act(async () => { location().click() })
+        await act(async () => {
+          failure!({ code: 1, message: 'User denied Geolocation' } as GeolocationPositionError)
+          for (let i = 0; i < 5; i += 1) await Promise.resolve()
+        })
+        expect(tooltipShown()).toBe(false)
+        await tap(location())
+        expect(tooltipShown()).toBe(true)
+        expect(tooltip()).toContain('Location is blocked')
+        expect(success).toBeNull()
+        await act(async () => { vi.advanceTimersByTime(4000) })
+        expect(tooltipShown()).toBe(false)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('a mouse click while Blocked leaves the tooltip to hover', async () => {
+      permission.state = 'denied'
+      await mountWithLocation()
+      await act(async () => { location().click() })
+      await act(async () => {
+        failure!({ code: 1, message: 'User denied Geolocation' } as GeolocationPositionError)
+        for (let i = 0; i < 5; i += 1) await Promise.resolve()
+      })
+      await act(async () => {
+        location().dispatchEvent(Object.assign(new MouseEvent('pointerdown', { bubbles: true }), { pointerType: 'mouse' }))
+        location().click()
+      })
+      expect(tooltipShown()).toBe(false)
+    })
+
+    it('a tap while the reading is stale re-centres and shows that location is unavailable; a tap with nothing to say shows no tooltip', async () => {
+      const onPress = vi.fn()
+      const mount = async (mode: MyLocationMode, unavailable: boolean) => {
+        await act(async () => { render(<MyLocationButtonView mode={mode} unavailable={unavailable} onPress={onPress} />, container) })
+      }
+      await mount('moved-away', true)
+      await tap(location())
+      expect(onPress).toHaveBeenCalledTimes(1)
+      expect(tooltipShown()).toBe(true)
+      expect(tooltip()).toContain('Your location is unavailable right now')
+
+      render(null, container)
+      await mount('moved-away', false)
+      await tap(location())
+      expect(onPress).toHaveBeenCalledTimes(2)
+      expect(tooltipShown()).toBe(false)
     })
   })
 })
