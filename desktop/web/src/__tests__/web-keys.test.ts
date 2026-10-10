@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { currentCanvasTool } from '../canvas/session-state'
+import { currentCanvasSelection, currentCanvasTool } from '../canvas/session-state'
 import { placeSearchFocusRequest } from '../app/geocoding/place-search-ui'
 import { keyboardShortcutsDialogOpen } from '../app/shell/dialogs'
 import { activePanel, sidePanel } from '../app/shell/state'
@@ -20,6 +20,7 @@ import {
   createTestCanvasCommandSurface,
   createTestCanvasRuntimeSurfaces,
 } from './support/canvas-runtime-surfaces'
+import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 
 let keys: KeyRouterHandle | null = null
 
@@ -49,6 +50,7 @@ describe('Web keys', () => {
     keys?.dispose()
     keys = null
     setCurrentCanvasSession(null)
+    currentCanvasSelection.value = new Set()
     activePanel.value = 'canvas'
     sidePanel.value = null
     currentCanvasTool.value = 'select'
@@ -270,6 +272,38 @@ describe('Web keys', () => {
     expect(redoShortcut.defaultPrevented).toBe(false)
     expect(undo).not.toHaveBeenCalled()
     expect(redo).not.toHaveBeenCalled()
+  })
+
+  it('keeps a selection edit\'s key from the browser while the map has a selection, and leaves Copy with none to the page', () => {
+    const groupSelected = vi.fn()
+    const duplicateSelected = vi.fn()
+    const copy = vi.fn()
+    const queries = createTestCanvasQuerySurface({ selection: [{ kind: 'plant', id: 'plant-1' }] })
+    let locked = false
+    const base = queries.getDesignObjectSelection
+    queries.getDesignObjectSelection = () => {
+      const selection = base()
+      return locked ? { ...selection, editableTargets: [], lockedTargets: selection.editableTargets } : selection
+    }
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      commands: createTestCanvasCommandSurface({ sceneEdits: { groupSelected, duplicateSelected, copy } }),
+      queries,
+    }))
+    installWebKeys()
+    currentCanvasSelection.value = new Set(['plant-1'])
+
+    // One plant cannot be grouped, yet Ctrl+G is the canvas's, not the browser's find bar.
+    expect(dispatchShortcut({ key: 'g', ctrlKey: true }).defaultPrevented).toBe(true)
+    expect(groupSelected).not.toHaveBeenCalled()
+    // A locked plant cannot be duplicated, yet Ctrl+D is the canvas's, not the browser's bookmark dialog.
+    locked = true
+    expect(dispatchShortcut({ key: 'd', ctrlKey: true }).defaultPrevented).toBe(true)
+    expect(duplicateSelected).not.toHaveBeenCalled()
+
+    // With nothing selected, Copy leaves its key to the page.
+    currentCanvasSelection.value = new Set()
+    expect(dispatchShortcut({ key: 'c', ctrlKey: true }).defaultPrevented).toBe(false)
+    expect(copy).not.toHaveBeenCalled()
   })
 
   it('replaces its key router on a second install and disposes it once', () => {
