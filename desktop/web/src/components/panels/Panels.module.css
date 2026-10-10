@@ -72,10 +72,23 @@
   pointer-events: none;
 }
 
-/* Map status: a quiet chip at the bottom centre, between the view chip and the zoom group. */
+/* Map status: a quiet chip at the bottom centre, between the view chip and the zoom group. The row keeps it only while
+   its widest form fits either side of the centre, clear of the zoom group (with the folded credits' (i) beside it) and
+   of the view chip, from the widths they publish; otherwise it rises above the row. Both readings stay in this rule,
+   so a window, a locale or Show my location that widens the zoom group can never put it over Retry. */
 .basemapFeedback {
+  --map-notice-max-width: 480px;
+  --map-notice-row-clearance: max(
+    calc(var(--chrome-inset) + var(--zoom-group-width, 0px) + var(--space-2) + var(--control-size-sm) + var(--space-2)),
+    calc(var(--chrome-inset) + var(--view-chip-width, 0px) + var(--space-2))
+  );
   position: absolute;
-  bottom: var(--chrome-inset);
+  /* A step, not a slide: any shortfall of room, times 10000, reaches the risen place. */
+  bottom: clamp(
+    var(--chrome-inset),
+    calc(var(--chrome-inset) + (var(--map-notice-max-width) - (100cqw - 2 * var(--map-notice-row-clearance))) * 10000),
+    calc(2 * var(--chrome-inset) + var(--control-size-3xl))
+  );
   left: 50%;
   z-index: 18;
   display: inline-flex;
@@ -83,7 +96,7 @@
   gap: var(--space-1-5);
   /* max-content: centred at left 50%, the chip would otherwise wrap at half the canvas width. */
   width: max-content;
-  max-width: min(480px, calc(100% - 2 * var(--chrome-inset)));
+  max-width: min(var(--map-notice-max-width), calc(100% - 2 * var(--chrome-inset)));
   min-height: var(--control-size-lg);
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--color-border);
@@ -158,12 +171,6 @@
 @media (prefers-reduced-motion: reduce) {
   .basemapFeedback[data-tone="loading"] .basemapFeedbackDot {
     animation: none;
-  }
-}
-
-@media (max-width: 760px) {
-  .basemapFeedback {
-    bottom: calc(2 * var(--chrome-inset) + var(--control-size-3xl));
   }
 }
 
