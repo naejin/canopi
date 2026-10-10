@@ -170,9 +170,14 @@ export function runCanvasIntent(intent: CanvasCommandIntent, from: CanvasCommand
   }
 }
 
-/** Dispatch one intent unless the live state disables it; true when it ran. */
+/**
+ * Dispatch one intent unless the live state disables it; true when its key is spent: it ran, or it is an Edit command
+ * while the map has a selection. A disabled Group or Duplicate on one plant or a locked one still keeps Ctrl+G and
+ * Ctrl+D from the browser's find bar and bookmark dialog; with nothing selected, Copy leaves its key to the page.
+ */
 export function dispatchWorkspaceCanvasIntent(intent: CanvasCommandIntent, from: CanvasCommandFrom): boolean {
-  if (isCanvasCommandDisabled(intent, readLiveCanvasState())) return false
+  const state = readLiveCanvasState()
+  if (isCanvasCommandDisabled(intent, state)) return intent.type === 'edit' && state.selection !== null
   runCanvasIntent(intent, from)
   return true
 }

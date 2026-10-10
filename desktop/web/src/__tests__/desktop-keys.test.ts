@@ -341,6 +341,36 @@ describe('Desktop keys', () => {
     expect(copy).toHaveBeenCalledOnce()
   })
 
+  it('keeps a selection edit\'s key from the browser while the map has a selection, even one the edit cannot change', () => {
+    const groupSelected = vi.fn()
+    const duplicateSelected = vi.fn()
+    const queries = createTestCanvasQuerySurface({ selection: [{ kind: 'plant', id: 'plant-1' }] })
+    let locked = false
+    const base = queries.getDesignObjectSelection
+    queries.getDesignObjectSelection = () => {
+      const selection = base()
+      return locked ? { ...selection, editableTargets: [], lockedTargets: selection.editableTargets } : selection
+    }
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      commands: createTestCanvasCommandSurface({ sceneEdits: { groupSelected, duplicateSelected } }),
+      queries,
+    }))
+    currentCanvasSelection.value = new Set(['plant-1'])
+    const press = (init: KeyboardEventInit) => {
+      const event = new KeyboardEvent('keydown', { ...init, bubbles: true, cancelable: true })
+      window.dispatchEvent(event)
+      return event
+    }
+
+    // One plant cannot be grouped, yet Ctrl+G is the canvas's, not the browser's find bar.
+    expect(press({ key: 'g', ctrlKey: true }).defaultPrevented).toBe(true)
+    expect(groupSelected).not.toHaveBeenCalled()
+    // A locked plant cannot be duplicated, yet Ctrl+D is the canvas's, not the browser's bookmark dialog.
+    locked = true
+    expect(press({ key: 'd', ctrlKey: true }).defaultPrevented).toBe(true)
+    expect(duplicateSelected).not.toHaveBeenCalled()
+  })
+
   it('opens Rotate… with Ctrl Alt R only for a selection that can turn', () => {
     const rotateSelected = vi.fn()
     const queries = createTestCanvasQuerySurface()
