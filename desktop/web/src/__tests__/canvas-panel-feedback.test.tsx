@@ -5,6 +5,7 @@ import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultMapLayers, mapLayers, type MapLayersState } from '../app/map-layers/state'
 import { setStoryPresentationOverrides } from '../app/story-presentation/overrides'
+import { storyPresentationActive } from '../app/story-presentation'
 import { t } from '../i18n'
 import { CanvasPanel } from '../components/panels/CanvasPanel'
 import { WebCanvasWorkspace } from '../web/WebCanvasWorkspace'
@@ -17,7 +18,7 @@ import type { WorkspaceRuntimeComposition } from '../app/canvas-map-surface/work
 import { designSessionFixture } from './support/design-session-state'
 import type { CanopiFile } from '../types/design'
 import { locale } from '../app/settings/state'
-import { signal } from '@preact/signals'
+import { signal, type Signal } from '@preact/signals'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { createTestCanvasDocumentSurface, createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 
@@ -33,6 +34,12 @@ vi.mock('../components/canvas/CanvasChrome', () => ({
     return <div data-testid="canvas-chrome" />
   },
 }))
+
+// Whether a story is presented: the real controller needs a Design with a story and a map; the notice reads only this.
+vi.mock('../app/story-presentation', async (importOriginal) => {
+  const { signal: presentationSignal } = await import('@preact/signals')
+  return { ...await importOriginal<typeof import('../app/story-presentation')>(), storyPresentationActive: presentationSignal(false) }
+})
 
 vi.mock('../components/canvas/LayerPanel', () => ({
   LayerPanel: () => <div data-testid="layer-panel" />,
@@ -78,10 +85,10 @@ describe('CanvasPanel basemap feedback', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
-    setStoryPresentationOverrides(null)
+    leavePresentation()
   })
 
-  it('shows the basemap failure with Retry while a story step shows Street map over the user\'s None', async () => {
+  it('shows the basemap failure without Retry while a story step shows Street map over the user\'s None: the presenter would cover it', async () => {
     designSessionFixture.file = demoDesign()
     mapLayers.value = mapLayersShowing('none')
     presentStepShowing('basemap')
@@ -93,10 +100,12 @@ describe('CanvasPanel basemap feedback', () => {
 
     const notice = container.querySelector<HTMLElement>('[data-map-notice]')
     expect(notice?.querySelector('[role="status"]')?.textContent).toBe(t('canvas.layers.basemapFailed'))
-    const retry = [...notice!.querySelectorAll('button')].find((button) => button.textContent === t('canvas.layers.retryMap'))
-    await act(async () => { retry!.click() })
-    expect(retryMap).toHaveBeenCalledOnce()
+    expect(notice!.querySelector('button')).toBeNull()
     expect(container.querySelector('[data-map-active="true"]')).not.toBeNull()
+
+    // Leaving the presentation shows the user's None again: no notice; over a visible basemap Retry is back (below).
+    await act(async () => { leavePresentation() })
+    expect(container.querySelector('[data-map-notice]')).toBeNull()
   })
 
   it('shows no basemap notice while a story step shows None over the user\'s visible basemap', async () => {
@@ -436,7 +445,7 @@ describe('WebCanvasWorkspace map notice', () => {
     await act(async () => { render(null, container) })
     container.remove()
     designSessionFixture.file = null
-    setStoryPresentationOverrides(null)
+    leavePresentation()
   })
 
   function failingBasemapComposition(retry: () => void) {
@@ -451,7 +460,7 @@ describe('WebCanvasWorkspace map notice', () => {
     })
   }
 
-  it('shows the basemap failure with Retry while a story step shows Street map over the user\'s None', async () => {
+  it('shows the basemap failure without Retry while a story step shows Street map over the user\'s None: the presenter would cover it', async () => {
     mapLayers.value = mapLayersShowing('none')
     presentStepShowing('basemap')
     const retry = vi.fn()
@@ -464,9 +473,11 @@ describe('WebCanvasWorkspace map notice', () => {
 
     const notice = container.querySelector<HTMLElement>('[data-map-notice]')
     expect(notice?.querySelector('[role="status"]')?.textContent).toBe(t('canvas.layers.basemapFailed'))
-    const button = [...notice!.querySelectorAll('button')].find((candidate) => candidate.textContent === t('canvas.layers.retryMap'))
-    await act(async () => { button!.click() })
-    expect(retry).toHaveBeenCalledOnce()
+    expect(notice!.querySelector('button')).toBeNull()
+
+    await act(async () => { leavePresentation() })
+    expect(container.querySelector('[data-map-notice]')).toBeNull()
+    expect(retry).not.toHaveBeenCalled()
   })
 
   it('shows no basemap notice while a story step shows None over the user\'s visible basemap', async () => {
@@ -562,12 +573,18 @@ function mapLayersShowing(background: 'basemap' | 'none'): MapLayersState {
 
 /** A presented story step whose view shows the given background. */
 function presentStepShowing(background: 'basemap' | 'none'): void {
+  ;(storyPresentationActive as Signal<boolean>).value = true
   setStoryPresentationOverrides({
     mapLayers: mapLayersShowing(background),
     siteDataIds: new Set(),
     plantLabels: 'none',
     targets: [],
   })
+}
+
+function leavePresentation(): void {
+  ;(storyPresentationActive as Signal<boolean>).value = false
+  setStoryPresentationOverrides(null)
 }
 
 function demoDesign(): CanopiFile {
