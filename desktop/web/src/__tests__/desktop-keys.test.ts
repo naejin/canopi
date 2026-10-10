@@ -371,6 +371,47 @@ describe('Desktop keys', () => {
     expect(duplicateSelected).not.toHaveBeenCalled()
   })
 
+  it('on a selection mixing locked and unlocked objects, Delete, Ctrl+X, Ctrl+C and Ctrl+D do nothing and keep their key (U55)', () => {
+    // User decision 2026-10-10: one table for every selection command; a selection with any locked object is not edited,
+    // copied or duplicated in part, and the key is still the canvas's, not the browser's.
+    const deleteSelected = vi.fn()
+    const copy = vi.fn()
+    const duplicateSelected = vi.fn()
+    const queries = createTestCanvasQuerySurface({ selection: [{ kind: 'plant', id: 'plant-1' }, { kind: 'plant', id: 'plant-2' }] })
+    const base = queries.getDesignObjectSelection
+    queries.getDesignObjectSelection = () => {
+      const selection = base()
+      return {
+        ...selection,
+        editableTargets: selection.editableTargets.filter((target) => target.id === 'plant-1'),
+        lockedTargets: selection.editableTargets.filter((target) => target.id === 'plant-2'),
+      }
+    }
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      commands: createTestCanvasCommandSurface({ sceneEdits: { deleteSelected, copy, duplicateSelected } }),
+      queries,
+    }))
+    currentCanvasSelection.value = new Set(['plant-1', 'plant-2'])
+    const press = (init: KeyboardEventInit) => {
+      const event = new KeyboardEvent('keydown', { ...init, bubbles: true, cancelable: true })
+      window.dispatchEvent(event)
+      return event
+    }
+
+    for (const init of [
+      { key: 'Delete' },
+      { key: 'Backspace' },
+      { key: 'x', ctrlKey: true },
+      { key: 'c', ctrlKey: true },
+      { key: 'd', ctrlKey: true },
+    ]) {
+      expect(press(init).defaultPrevented, `${JSON.stringify(init)} is the canvas's`).toBe(true)
+    }
+    expect(deleteSelected).not.toHaveBeenCalled()
+    expect(copy).not.toHaveBeenCalled()
+    expect(duplicateSelected).not.toHaveBeenCalled()
+  })
+
   it('opens Rotate… with Ctrl Alt R only for a selection that can turn', () => {
     const rotateSelected = vi.fn()
     const queries = createTestCanvasQuerySurface()
