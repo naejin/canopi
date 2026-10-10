@@ -177,6 +177,7 @@ const currentFollowView = computed<FollowView | null>(() => {
     settledCamera: queries.view.settledCamera,
     captureCamera: () => queries.view.captureView().camera,
     showPlace: (place, zoom, options) => commands.showPlace(place, zoom, options),
+    showCamera: (camera, options) => commands.showCamera(camera, options),
   }
 })
 

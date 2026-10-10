@@ -1,11 +1,11 @@
 // Follow mode's camera half (canopi-f47t.53; design check A3; U54 Q13–Q15, Q17, Q12). Following centres the camera on
 // each fix through the view's showPlace jump, the one camera writer's command (ADR 0016; MapLibre's GeolocateControl,
-// which calls fitBounds itself, is reference only, A2). Any other move ends it, from the click on: the settled camera is
-// compared with the camera at the click until the first jump, then with each jump's read-back, and the live camera again
-// on each fix before jumping, with a tolerance of about one pixel on the ground (lon/lat), so a re-origin, which moves
-// the session plane and not the ground, keeps following. A Design activation and the start of a story presentation end
-// it explicitly. The session (session.ts) owns the mode.
-
+// which calls fitBounds itself, is reference only, A2). The click holds the camera where it is: that jump stops a flight
+// still under way (a saved view, a place), whose landing would otherwise read as a move. Any other move ends follow,
+// from the click on: the settled camera is compared with the camera at the click until the first jump, then with each
+// jump's read-back, and the live camera again on each fix before jumping, with a tolerance of about one pixel on the
+// ground (lon/lat), so a re-origin, which moves the session plane and not the ground, keeps following. A Design
+// activation and the start of a story presentation end it explicitly. The session (session.ts) owns the mode.
 import { effect, type ReadonlySignal } from '@preact/signals'
 import type { GeoPoint, ViewCamera } from '../../canvas/runtime/view/types'
 import { PLACE_SEARCH_ZOOM } from '../geocoding/place-search-ui'
@@ -17,6 +17,7 @@ export interface FollowView {
   /** The live frame's camera. */
   captureCamera(): ViewCamera
   showPlace(place: GeoPoint, zoom: number, options: { readonly motion: 'jump' }): boolean
+  showCamera(camera: ViewCamera, options: { readonly motion: 'jump' }): void
 }
 
 interface CameraFollowOptions {
@@ -47,6 +48,7 @@ const FOLLOW_TOLERANCE_PX = 1
 export function startCameraFollow(options: CameraFollowOptions): CameraFollow {
   let live = true
   const atClick = options.view.peek()
+  atClick?.showCamera(atClick.captureCamera(), { motion: 'jump' })
   /**
    * Where the camera should be: the centre at the click until the first jump, then the jump's read-back and fix (a queued
    * jump reads back the old frame).

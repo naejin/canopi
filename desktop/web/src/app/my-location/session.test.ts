@@ -74,7 +74,7 @@ function fakeView() {
     live = { ...live, center: { ...place }, zoom }
     return true
   })
-  const view: FollowView = { settledCamera, captureCamera: () => live, showPlace }
+  const view: FollowView = { settledCamera, captureCamera: () => live, showPlace, showCamera: (camera) => { live = { ...camera } } }
   return {
     view, showPlace,
     pan() { live = { ...live, center: { lon: live.center.lon + 0.01, lat: live.center.lat } }; settledCamera.value = live },

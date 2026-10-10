@@ -1,8 +1,14 @@
 // Follow mode's camera half (canopi-f47t.53; design check A3; U54 Q13–Q15, Q17, Q12): the jumps through showPlace and
 // the exits on outside moves, a Design activation and a story presentation.
 import { signal } from '@preact/signals'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { Camera as SourceCameraClass } from 'maplibre-gl-source/ui/camera.ts'
+import { restoreNow, setNow } from 'maplibre-gl-source/util/time_control.ts'
+import { createTestView, type TestView } from '../../__tests__/support/test-view'
+import { createViewReadSurface, SETTLE_MS } from '../../canvas/runtime/view/frame-source'
 import type { GeoPoint, ViewCamera } from '../../canvas/runtime/view/types'
+import { createSessionPlane } from '../../canvas/session-plane'
+import { createMapLibreCameraDriver, type MapLibreCameraDriverMap } from '../../maplibre/camera-driver'
 import { startCameraFollow, type FollowView } from './follow'
 
 const FIX: GeoPoint = { lon: 12.3456789, lat: 45.6789012 }
@@ -16,7 +22,8 @@ function fakeView(start: ViewCamera = { center: { lon: 3.87, lat: 43.61 }, zoom:
     live = { ...live, center: { ...place }, zoom }
     return true
   })
-  const view: FollowView = { settledCamera, captureCamera: () => live, showPlace }
+  const showCamera = vi.fn((camera: ViewCamera, _options: { readonly motion: 'jump' }) => { live = { ...camera } })
+  const view: FollowView = { settledCamera, captureCamera: () => live, showPlace, showCamera }
   return {
     view,
     showPlace,
@@ -145,6 +152,7 @@ describe('camera follow', () => {
       settledCamera,
       captureCamera: () => live,
       showPlace: (place, zoom) => { queued.push({ ...live, center: { ...place }, zoom }); return true },
+      showCamera: () => {},
     }
     const f = setup({ view, showPlace: vi.fn(), live: () => live, move: () => {}, settle: () => {} })
     f.follow.follow(FIX, true)
@@ -187,5 +195,120 @@ describe('camera follow', () => {
     f.designIdentity.value = {}
     expect(f.onEnd).not.toHaveBeenCalled()
     expect(f.follow.follow(MOVED, false)).toBe(false)
+  })
+})
+
+/**
+ * MapLibre 6.10.0's own Camera (the test-only `maplibre-gl-source` alias) with no WebGL, under the real MapLibre camera
+ * driver, navigation, frame source and read surface: the view follow reads and moves in the app. Animation frames are
+ * queued and run by `step`, at MapLibre's own clock set to the step's time.
+ */
+function mapLibreView() {
+  vi.useFakeTimers()
+  setNow(0)
+  const screen = { width: 900, height: 600 }
+  const frames: Array<() => void> = []
+  const camera = new (SourceCameraClass as new (options: object) => {
+    transform: { resize(width: number, height: number): void; setConstrainOverride(constrain: unknown): void }
+    jumpTo(options: object): void
+    flyTo(options: object): void
+    stop(): void
+    on(type: string, listener: () => void): void
+    off(type: string, listener: () => void): void
+    getCenter(): { lng: number; lat: number }
+    getZoom(): number
+    getBearing(): number
+    getPitch(): number
+  })({
+    minZoom: 0, maxZoom: 27, minPitch: 0, maxPitch: 60, bearingSnap: 0, zoomSnap: 0, renderWorldCopies: false,
+    centerClampedToGround: true, terrain: null, transformConstrain: null, transformCameraUpdate: null,
+    requestRenderFrame: (frame: () => void) => frames.push(frame),
+    cancelRenderFrame: () => { frames.length = 0 },
+  })
+  camera.transform.resize(screen.width, screen.height)
+  const map: MapLibreCameraDriverMap = {
+    jumpTo: (options) => { camera.jumpTo(options) },
+    flyTo: (options) => { camera.flyTo(options) },
+    stop: () => { camera.stop() },
+    resize: () => {},
+    on: (type, listener) => { camera.on(type, listener) },
+    off: (type, listener) => { camera.off(type, listener) },
+    getCenter: () => camera.getCenter() as ReturnType<MapLibreCameraDriverMap['getCenter']>,
+    getZoom: () => camera.getZoom(),
+    getBearing: () => camera.getBearing(),
+    getPitch: () => camera.getPitch(),
+    setTransformConstrain: (constrain) => { camera.transform.setConstrainOverride(constrain) },
+    getCanvas: () => ({ clientWidth: screen.width, clientHeight: screen.height, width: screen.width }) as HTMLCanvasElement,
+  }
+  const plane = createSessionPlane({ lon: 3.87, lat: 43.61 })
+  const test: TestView = createTestView({ plane, screen: { ...screen, devicePixelRatio: 1 }, camera: { center: plane.origin, zoom: 14 } })
+  mapLibreViews.push(test)
+  test.host.attach(createMapLibreCameraDriver(map, plane, test.host.driverDeps))
+  vi.advanceTimersByTime(SETTLE_MS)
+  const read = createViewReadSurface(test.frames)
+  const view: FollowView = {
+    settledCamera: read.settledCamera,
+    captureCamera: () => read.captureView().camera,
+    showPlace: (place, zoom, options) => test.navigation.showPlace(place, zoom, options),
+    showCamera: (camera, options) => test.navigation.showCamera(camera, options),
+  }
+  return {
+    view,
+    navigation: test.navigation,
+    live: () => read.captureView().camera,
+    /** MapLibre's clock reaches `ms` and every queued animation frame runs. */
+    step(ms: number) {
+      setNow(ms)
+      for (const frame of frames.splice(0)) frame()
+    },
+  }
+}
+
+const mapLibreViews: TestView[] = []
+
+describe('camera follow on MapLibre\'s own camera', () => {
+  afterEach(() => {
+    for (const view of mapLibreViews.splice(0)) view.dispose()
+    restoreNow()
+    vi.useRealTimers()
+  })
+
+  const SAVED_VIEW: ViewCamera = { center: { lon: 3.95, lat: 43.66 }, zoom: 16, bearingDeg: 0, pitchDeg: 0 }
+  const NEAR_FIX: GeoPoint = { lon: 3.9, lat: 43.62 }
+
+  /** A saved view's flight, caught halfway: the camera is neither where it started nor where it is going. */
+  function midFlight() {
+    const map = mapLibreView()
+    map.navigation.showCamera(SAVED_VIEW, { motion: 'fly' })
+    map.step(1)
+    map.step(400)
+    const live = map.live()
+    expect(live.center.lon).toBeGreaterThan(3.87)
+    expect(live.center.lon).toBeLessThan(SAVED_VIEW.center.lon)
+    const onEnd = vi.fn()
+    const follow = startCameraFollow({ view: signal(map.view), designIdentity: signal({}), presenting: signal(false), onEnd })
+    return { map, follow, onEnd }
+  }
+
+  it('a click mid-flight stops the flight: a fix after the camera settles is followed, not Moved away', () => {
+    const { map, follow, onEnd } = midFlight()
+    map.step(60_000)
+    vi.advanceTimersByTime(SETTLE_MS)
+    expect(onEnd).not.toHaveBeenCalled()
+    expect(follow.follow(NEAR_FIX, true)).toBe(true)
+    expect(map.live().center.lon).toBeCloseTo(NEAR_FIX.lon, 6)
+    expect(map.live().center.lat).toBeCloseTo(NEAR_FIX.lat, 6)
+    expect(map.live().zoom).toBeCloseTo(17, 6)
+  })
+
+  it('a click mid-flight with a fix a few frames later jumps to the fix, and the flight never lands', () => {
+    const { map, follow, onEnd } = midFlight()
+    map.step(700)
+    expect(follow.follow(NEAR_FIX, true)).toBe(true)
+    map.step(60_000)
+    vi.advanceTimersByTime(SETTLE_MS)
+    expect(onEnd).not.toHaveBeenCalled()
+    expect(map.live().center.lon).toBeCloseTo(NEAR_FIX.lon, 6)
+    expect(map.live().center.lat).toBeCloseTo(NEAR_FIX.lat, 6)
   })
 })
