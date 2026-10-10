@@ -1,6 +1,6 @@
 # Agent operating contract
 
-Rules for agents working in Canopi. Optimise for user work preserved, reviewable changes and reliable handoff. A rule that matters has a test; a rule without one is marked (advice). Architecture: [`docs/architecture.md`](docs/architecture.md). Decisions and their reasons: [`docs/adr/`](docs/adr/). Documentation map: [`docs/README.md`](docs/README.md).
+Rules for agents in Canopi. Optimise for user work preserved, reviewable changes and reliable handoff. A rule that matters has a test; a rule without one is marked (advice). Architecture: [`docs/architecture.md`](docs/architecture.md). Decisions and their reasons: [`docs/adr/`](docs/adr/).
 
 ## Read first
 
@@ -10,14 +10,14 @@ Rules for agents working in Canopi. Optimise for user work preserved, reviewable
 
 ## Rules
 
-- **Preserve user work.** Run `git status --short --branch` before editing; pre-existing dirty or untracked files are the user's. Never stage, revert or stash them, and never run `reset --hard` or `checkout -- <file>` unless asked. The git stash stack is shared with the user; if you must set work aside, make a WIP commit.
+- **Preserve user work.** Run `git status --short --branch` before editing; pre-existing dirty or untracked files are the user's. Never stage, revert or stash them, and never run `reset --hard` or `checkout -- <file>` unless asked. The stash stack is shared with the user; to set work aside, make a WIP commit.
 - **Behavioural test first, then the fix.** Bug fixes carry a regression test. A seam change (renderer, camera, map, input) also gets a test through the real implementation or browser, since fakes hid seam bugs (advice; user, 2026-10-03). Tests sit beside their module (frontend `*.test.ts(x)` or in `desktop/web/src/__tests__/`).
 - **Gates run on the changed area** (table below). A gate you cannot run goes in the bead and handoff with its command, reason and residual risk. Coverage floors (`desktop/web/vite.config.ts`, `.cargo/config.toml`) are raised at milestones, never lowered; on a merge conflict keep the higher number.
 - **Authorities are exclusive.** The scene runtime owns design objects and mutates through runtime transactions; Design Edit (`app/design-edit/`) owns budget, timeline, consortiums, views, stories and `extra`; the map layer store owns map layers; settings own device state. Panels read canvas state through read-only runtime queries. Enforced by `frontend-architecture-policies.test.ts`.
 - **Coordinates.** Files store WGS84 lon/lat; runtime geometry is metres in the session plane; camera moves never move objects (ADR 0001).
 - **Native execution.** Every `#[tauri::command]` is executor-backed async or a reviewed bounded synchronous command; no blocking filesystem, SQLite, network, process or unbounded CPU work in one. Enforced by `native_command_policy::tests` and `clippy.toml`.
 - **Secrets.** The Google Maps key never reaches Designs, exports, snapshots, logs, diagnostics or the page markup while masked; map errors go through `maplibre/redact-credentials.ts`. The location reading (dot, accuracy, time) never reaches a Design, Draft, export, snapshot, saved view, log or diagnostics. Enforced by `settings-sections.test.tsx`, `map-background.test.ts`, `map-error-redaction.test.ts`, `workspace-map-controls.test.ts`, `problem-report-diagnostics.test.ts`, `my-location-trust.test.ts` and `e2e/canvas/my-location.spec.ts`.
-- **Layering and chrome.** Popups use the stacking scale in `global.css`; floating chrome registers with the visible-map-area seam so framing and chips avoid it. Enforced by `stacking-order.test.ts`, `canvas-chrome-layering.test.ts` and `visible-map-area.test.tsx`.
+- **Layering and chrome.** Popups use the stacking scale in `global.css`; floating chrome registers with the visible-map-area seam so framing and chips avoid it; status chrome that comes and goes with load state registers with `frames: false`, so only chips avoid it. Enforced by `stacking-order.test.ts`, `canvas-chrome-layering.test.ts` and `visible-map-area.test.tsx`.
 - **Localisation.** Every user-facing string exists in all 11 locales; English is sentence case and placeholders fit their field. Enforced by `i18n-completeness.test.ts` and `i18n-copy.test.ts`. The glossary's terms and `Intl` for numbers, dates and units (advice).
 - **Data.** Never change the plant catalog's data (`canopi-core.db`; user rule). The `.canopi` format and local data may change unasked when that improves the project; name each change in the handoff (ADR 0021, user 2026-10-02). Canopi 2.0 has no migrations: an older `.canopi` is refused with the typed message and left unchanged, older local data is handled as ADR 0021 says, and a LiDAR catalogue bump keeps `source_meta.rs` complete. After 2.0, refuse or migrate is decided per change.
 - **Reuse before writing** (ADR 0002): a geo feature's design check studies GeoLibre's design and crates first, follows them or says why not (user, 2026-10-04). Depend on light GeoLibre packages or copy its framework-free modules with attribution, never its React code. A new runtime dependency needs a bead with the reason.
@@ -49,9 +49,9 @@ Docs-only changes skip code gates; say so in the handoff.
 
 ## Documentation
 
-Documents answer four questions: what must never change and why (this file, ADRs); what the finished thing looks like (`.interface-design/`, its boards, the UI gallery); where an area's boundary is (one guide per area); what changed for users (release notes). Wiring is not documented in prose; it lives in module comments and policy tests.
+Documents answer four questions: what must never change and why (this file, ADRs); what the finished thing looks like (`.interface-design/`, its boards, the UI gallery); where an area's boundary is (one guide per area); what changed for users (release notes). Wiring lives in module comments and policy tests, not prose.
 
-A guide changes when a rule or boundary changes, and the section is rewritten, not appended; `check_docs.py` enforces the size budgets. Plans for unbuilt work sit in `docs/plans/` with a `Status:` line and are deleted when built. Docs are reviewed against the code once per release.
+A guide changes when a rule or boundary changes, and the section is rewritten, not appended; `check_docs.py` enforces size budgets. Plans for unbuilt work sit in `docs/plans/` with a `Status:` line and are deleted when built. Docs are reviewed against the code each release.
 
 ## Handoff
 
