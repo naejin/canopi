@@ -400,20 +400,22 @@ describe('visible map area', () => {
   })
 
   it('the map notice keeps clear of the zoom group\'s published width in the wide layout, rising above the row without room', () => {
-    // jsdom has no layout (e2e/canvas/map-notice-layout.spec.ts hit-tests Retry in both engines): the chip's rule must
+    // jsdom has no layout (e2e/canvas/map-notice-layout.spec.ts hit-tests Retry in both engines): the notice's rule must
     // place it from the widths the zoom group and the view chip publish, not from the window's width.
     const css = readFileSync('src/components/panels/Panels.module.css', 'utf8')
-    const rule = (name: string) => new RegExp(`\\.${name}\\s*\\{(?<body>[^}]*)\\}`).exec(css)?.groups?.body ?? ''
-    expect(rule('basemapFeedback')).toMatch(/var\(--zoom-group-width/)
-    expect(rule('basemapFeedback')).toMatch(/var\(--view-chip-width/)
-    expect(rule('basemapFeedbackChip')).toMatch(/bottom:\s*clamp\([^;]*100cqw[^;]*--map-notice-row-clearance/)
+    const notice = /\.basemapFeedback\s*\{(?<body>[^}]*)\}/.exec(css)?.groups?.body ?? ''
+    expect(notice).toMatch(/var\(--zoom-group-width/)
+    expect(notice).toMatch(/var\(--view-chip-width/)
+    expect(notice).toMatch(/bottom:\s*clamp\(/)
     expect(css, 'no window-width rule moves the notice').not.toMatch(/@media \(max-width:[^)]*\)\s*\{\s*\.basemapFeedback/)
-    // The seam reads the notice's place in the row, not where the chip rose to: framing stays at the row's top.
+    // Risen above the row, the notice takes none of the credits' room between the view chip and the zoom group, and the
+    // visible map frame ends above it, so framing and the selection chip keep clear of it.
+    const map = rect({ left: 0, top: 0, width: 1024, height: 768 })
     const viewChip = { rect: rect({ left: 12, top: 716, width: 280, height: 40 }), side: 'bottom' as const }
     const zoomGroup = { rect: rect({ left: 622, top: 716, width: 390, height: 40 }), side: 'bottom' as const }
-    const noticeInRow = { rect: rect({ left: 347, top: 716, width: 330, height: 40 }), side: 'bottom' as const }
-    expect(measureVisibleMapFrame(rect({ left: 0, top: 0, width: 1024, height: 768 }), [viewChip, zoomGroup, noticeInRow]).bottom)
-      .toBe(52)
+    const risen = { rect: rect({ left: 347, top: 664, width: 330, height: 40 }), side: 'bottom' as const }
+    expect(measureBottomBandRoom(map, [viewChip, zoomGroup, risen])).toBe(622 - 292)
+    expect(measureVisibleMapFrame(map, [viewChip, zoomGroup, risen]).bottom).toBe(768 - 664)
   })
 
   it('measures the room the panel rail has above the chrome under its column', () => {

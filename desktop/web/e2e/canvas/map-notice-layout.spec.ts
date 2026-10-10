@@ -3,10 +3,11 @@
 // the Web zoom group wider, so at iPad-landscape widths the group covered Retry. Each layout below opens a Design,
 // then checks with a real hit test that Retry is what a click at its centre reaches and that the notice shares no pixel
 // with the zoom group or the view chip (offline there are no map credits; map-container.spec.ts keeps the notice clear
-// of them). Both engines; no baselines.
+// of them). Where the notice rises above the row, it stays bottom chrome on the visible-map-area seam: with everything
+// selected, the selection chip sits above it and Retry still takes the click. Both engines; no baselines.
 import { fileURLToPath } from 'node:url'
 import type { Locator, Page } from '@playwright/test'
-import { designMap, expectCanvasDrawn } from '../support/canvas'
+import { designMap, expectCanvasDrawn, pressMod } from '../support/canvas'
 import { expect, test } from '../support/offline'
 
 const FIXTURE = fileURLToPath(new URL('../fixtures/canvas-base.canopi', import.meta.url))
@@ -17,6 +18,8 @@ const WIDE_LAYOUTS = [
   { width: 1024, height: 768 },
   { width: 1060, height: 800 },
   { width: 1400, height: 900 },
+  // The narrowest window that keeps the wide layout: the notice rises there in every edition.
+  { width: 700, height: 500 },
 ] as const
 
 for (const viewport of WIDE_LAYOUTS) {
@@ -35,11 +38,26 @@ for (const viewport of WIDE_LAYOUTS) {
         await expect(chrome).toBeVisible()
         expect(overlap(noticeBox, await boxOf(chrome)), `the notice clears ${name}`).toBe(false)
       }
-      // The seam reads the notice's place in the bottom row, which stays there when the chip rises, so the Design's
-      // framing never moves for the notice.
-      const place = await boxOf(page.locator('[data-map-notice-place]'))
-      const zoom = await boxOf(page.getByRole('group', { name: 'Zoom' }))
-      expect(Math.round(place.y + place.height), 'the notice\'s place ends with the bottom row').toBe(Math.round(zoom.y + zoom.height))
+    })
+
+    test('the selection chip and the visible map frame clear the notice, risen above the row or not', async ({ page }) => {
+      await openBaseFixture(page)
+      const { notice, retry } = await expectNoticeWithRetry(page)
+      await designMap(page).focus()
+      await pressMod(page, 'a')
+      const selection = page.locator('[data-selection-chip]')
+      await expect(selection).toBeVisible()
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+      await expectRetryHit(page, retry)
+      const noticeBox = await boxOf(notice)
+      expect(overlap(noticeBox, await boxOf(selection)), 'the notice clears the selection chip').toBe(false)
+      // The notice is bottom chrome on the visible-map-area seam wherever it shows: framing and chips avoid it.
+      const frameBottom = await page.evaluate(() => {
+        const area = document.querySelector<HTMLElement>('[style*="--map-inset-bottom"]')
+        if (!area) throw new Error('no map area publishes its insets')
+        return area.getBoundingClientRect().bottom - parseFloat(area.style.getPropertyValue('--map-inset-bottom'))
+      })
+      expect(frameBottom, 'the visible map frame ends above the notice').toBeLessThanOrEqual(Math.ceil(noticeBox.y))
     })
   })
 }
