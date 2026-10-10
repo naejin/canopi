@@ -159,6 +159,20 @@ describe('the location session', () => {
     expect(s.session.mode.value).toBe('moved-away')
   })
 
+  it('a pan while waiting for the first fix is Moved away: the fix shows the dot without moving the camera, and a click re-centres', () => {
+    const s = setup()
+    s.session.press()
+    s.view.pan()
+    expect(s.session.mode.value).toBe('moved-away')
+    geolocation.fix(FIX)
+    expect(s.session.reading.value?.lon).toBe(12.3456789)
+    expect(s.view.showPlace).not.toHaveBeenCalled()
+
+    s.session.press()
+    expect(s.session.mode.value).toBe('following')
+    expect(s.view.showPlace).toHaveBeenLastCalledWith({ lon: 12.3456789, lat: 45.6789012 }, 17, { motion: 'jump' })
+  })
+
   it('codes 2 and 3 mark the reading stale and location unavailable, keep the watch and follow; the next fix clears them (Q16)', () => {
     const s = setup()
     s.session.press()

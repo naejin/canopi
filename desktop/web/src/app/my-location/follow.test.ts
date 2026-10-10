@@ -90,6 +90,30 @@ describe('camera follow', () => {
     expect(f.view.live().center).toEqual({ lon: FIX.lon, lat: FIX.lat + 0.001 })
   })
 
+  it('waits for the first fix from the camera at the click: an outside move then ends follow, and the fix jumps nothing', () => {
+    const settledPan = setup()
+    settledPan.view.move({ center: { lon: 4.5, lat: 44 }, zoom: 15 })
+    settledPan.view.settle()
+    expect(settledPan.onEnd).toHaveBeenCalledOnce()
+    expect(settledPan.follow.follow(FIX, true)).toBe(false)
+    expect(settledPan.view.showPlace).not.toHaveBeenCalled()
+
+    const livePan = setup()
+    livePan.view.move({ center: { lon: 4.5, lat: 44 } })
+    expect(livePan.follow.follow(FIX, true)).toBe(false)
+    expect(livePan.onEnd).toHaveBeenCalledOnce()
+    expect(livePan.view.live().center).toEqual({ lon: 4.5, lat: 44 })
+  })
+
+  it('a settle due when the click came, mid-pan, is no outside move', () => {
+    const view = fakeView()
+    view.move({ center: { lon: 3.9, lat: 43.61 } })
+    const f = setup(view)
+    view.settle()
+    expect(f.onEnd).not.toHaveBeenCalled()
+    expect(f.follow.follow(FIX, true)).toBe(true)
+  })
+
   it('has a tolerance of about one pixel: rounding and a re-origin\'s round trip through the plane keep following', () => {
     const f = setup()
     f.follow.follow(FIX, true)

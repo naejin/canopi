@@ -1,9 +1,10 @@
 // Follow mode's camera half (canopi-f47t.53; design check A3; U54 Q13–Q15, Q17, Q12). Following centres the camera on
 // each fix through the view's showPlace jump, the one camera writer's command (ADR 0016; MapLibre's GeolocateControl,
-// which calls fitBounds itself, is reference only, A2). Any other move ends it: the settled camera is compared with the
-// read-back after follow's own jump, and the live camera again on each fix before jumping, with a tolerance of about one
-// pixel on the ground (lon/lat), so a re-origin, which moves the session plane and not the ground, keeps following. A
-// Design activation and the start of a story presentation end it explicitly. The session (session.ts) owns the mode.
+// which calls fitBounds itself, is reference only, A2). Any other move ends it, from the click on: the settled camera is
+// compared with the camera at the click until the first jump, then with each jump's read-back, and the live camera again
+// on each fix before jumping, with a tolerance of about one pixel on the ground (lon/lat), so a re-origin, which moves
+// the session plane and not the ground, keeps following. A Design activation and the start of a story presentation end
+// it explicitly. The session (session.ts) owns the mode.
 
 import { effect, type ReadonlySignal } from '@preact/signals'
 import type { GeoPoint, ViewCamera } from '../../canvas/runtime/view/types'
@@ -33,7 +34,7 @@ export interface CameraFollow {
   /**
    * Centres the camera on the fix, keeping its bearing. `recentre` is the click that starts or resumes following: it also
    * zooms in to max(zoom, 17), the place-search zoom (Q15); later fixes keep the zoom. False once follow has ended,
-   * including when this fix finds the camera moved away since follow's last jump.
+   * including when this fix finds the camera moved away since the click or follow's last jump.
    */
   follow(fix: GeoPoint, recentre: boolean): boolean
   /** Stops watching without calling `onEnd`. */
@@ -45,10 +46,14 @@ const FOLLOW_TOLERANCE_PX = 1
 
 export function startCameraFollow(options: CameraFollowOptions): CameraFollow {
   let live = true
-  /** Where follow's last jump left the camera centre: the read-back and the fix (a queued jump reads back the old frame). */
-  let centres: readonly GeoPoint[] = []
-  /** The settled camera when follow last jumped; it shows the frame before the jump, so it is no outside move. */
-  let settledAtJump: ViewCamera | null = null
+  const atClick = options.view.peek()
+  /**
+   * Where the camera should be: the centre at the click until the first jump, then the jump's read-back and fix (a queued
+   * jump reads back the old frame).
+   */
+  let centres: readonly GeoPoint[] = atClick ? [atClick.captureCamera().center] : []
+  /** The settled camera at the click or the last jump; it shows the frame before either, so it is no outside move. */
+  let settledAtJump: ViewCamera | null = atClick?.settledCamera.peek() ?? null
   const disposers: (() => void)[] = []
 
   const end = () => {
@@ -86,7 +91,7 @@ export function startCameraFollow(options: CameraFollowOptions): CameraFollow {
       const view = options.view.peek()
       if (!view) return true
       const camera = view.captureCamera()
-      if (!recentre && movedAway(camera)) {
+      if (movedAway(camera)) {
         end()
         return false
       }
