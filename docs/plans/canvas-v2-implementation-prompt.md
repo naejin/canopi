@@ -1,10 +1,10 @@
-Status: in progress. Phases 0, F, 1, 2, 3 and R, the 2.0 bug fixes, the 2.0 cleanup, the U-crs redesign, the 2.0 polish batch and the Layers redesign are done (2026-10-02 to 2026-10-09). Next (U53, U54): the step "2.0 live bugs, guards and location", planned and built in one session and pushed by Mon 12 October, then the release close on Tue 13 – Wed 14. The architecture refactors (U52) are the first step of 2.1, planned after 2.0 ships. Deleted with the plan at the release close.
+Status: in progress. Phases 0, F, 1, 2, 3 and R, the 2.0 bug fixes, the 2.0 cleanup, the U-crs redesign, the 2.0 polish batch, the Layers redesign and the step "2.0 live bugs, guards and location" are done (2026-10-02 to 2026-10-10). Next: the release close (plan section 4, "2.0 release close") on Tue 13 – Wed 14 October. The architecture refactors (U52) are the first step of 2.1, planned after 2.0 ships. Deleted with the plan at the release close.
 
 # Canvas v2: session brief
 
-Trimmed at the docs cleanup of 2026-10-09 to what the next session needs; the text before it, with the sections now owned elsewhere, is at `fc4f556f` (earlier trims: `7f3baadd`, `f2db5e1a`, `c453bb21`, `bfbdf053`, `e45053ea`, `62a5bacb`).
+Trimmed at the docs cleanup of 2026-10-09 to what the next session needs; the text before it, with the sections now owned elsewhere, is at `fc4f556f` (earlier trims: `7f3baadd`, `f2db5e1a`, `c453bb21`, `bfbdf053`, `e45053ea`, `62a5bacb`, `7d92abf5`).
 
-You are the main agent finishing Canopi's canvas v2 in the integration worktree. What remains is the step "2.0 live bugs, guards and location" and the release close, then the hand-over to the release. Everything ships together as 2.0 (U1); no step is a release candidate on its own.
+You are the main agent finishing Canopi's canvas v2 in the integration worktree. What remains is the release close, then the hand-over to the release. Everything ships together as 2.0 (U1); no step is a release candidate on its own.
 
 ## 1. Where the rules live
 
@@ -13,27 +13,27 @@ One owner per rule; point agents at these instead of restating them.
 - [`AGENTS.md`](../../AGENTS.md): the operating contract, the gates table, data and locale rules, the handoff.
 - [`docs/guides/agentic-delivery.md`](../guides/agentic-delivery.md): Canopi's places, gate commands, review triggers, live and Web checks, tracker, models and tools.
 - The user-level `phased-agentic-delivery` skill: the procedure (design check, one question batch, amendment, commit 0, streams, verified reviews, serial merges, real-environment check, pre-push review, usefulness pass, receipt and retrospective) and the workflow templates and gotchas.
-- [`canvas-v2-plan.md`](canvas-v2-plan.md): section 1 indexes the user's decisions (U1–U53) and where each lives; section 4 holds each step's goal, items and exit; section 7 the open beads.
+- [`canvas-v2-plan.md`](canvas-v2-plan.md): section 1 indexes the user's decisions (U1–U56) and where each lives; section 4 holds each step's goal, items and exit; section 7 the open beads.
 - ADRs 0015–0020 (canvas) and 0021 (stored data); [`canvas-v2-spec.md`](canvas-v2-spec.md) for contracts, read by section only when a step touches it.
 
-## 2. Read path for the 2.0 live bugs, guards and location step
+## 2. Read path for the 2.0 release close
 
 About 12k tokens; nothing else is read up front.
 
 1. `AGENTS.md`.
 2. `docs/guides/agentic-delivery.md`.
 3. The `phased-agentic-delivery` skill (`SKILL.md`, then `references/review-protocol.md` when the step reaches it).
-4. Plan section 1, the lines for U50 and U53.
-5. Plan section 4, "2.0 live bugs, guards and location": the items, their contracts table, the procedure and the Exit.
-6. `bd show` for canopi-f47t.52.1–.52.4, .52.17, canopi-ne8c and canopi-f47t.53; ADR 0002 before the location's reuse check.
+4. Plan section 1, the lines for U33, U41, U53 and U54.
+5. Plan section 4, "2.0 release close": the goal, entry, steps 1–10, the exit and the definition of done; the "Changed for users" and "For the release close" lines of each done step, read at steps 2 and 5.
+6. `bd show` for canopi-f47t.29, canopi-k94s, canopi-f47t.52.23, canopi-er58, canopi-2v5a and canopi-fxil.12.
 
-The release review's synthesis and area reports are local evidence in `.rq-scratch/tools/release-arch-review/`. Plan section 4, "2.1 architecture", is not read until 2.1's planning.
+Plan section 4, "2.1 architecture", is not read until 2.1's planning.
 
 ## 3. Phase order
 
 ```
 phase 0 ─▶ F ─▶ 1 ─▶ 2.0 bug fixes ─▶ 2.0 cleanup ─▶ U-crs ─▶ 2 ─▶ 3 ─▶ R ─▶ polish (f47t.30) ─▶ Layers (f47t.42)   all done
-  ─▶ 2.0 live bugs, guards and location (.52.1–.52.4, .52.17, canopi-f47t.53) ─▶ 2.0 release close ─▶ hand-over to canopi-2v5a, canopi-fxil.12
+  ─▶ 2.0 live bugs, guards and location (.52.1–.52.4, .52.17, canopi-f47t.53)   done ─▶ 2.0 release close ─▶ hand-over to canopi-2v5a, canopi-fxil.12
   ─▶ (2.1) 2.1 architecture (.52.5–.52.16, canopi-f47t.37) ─▶ hydrology (canopi-5ys2.1), P5 with its prototype and canopi-j9ry, canopi-224j
 ```
 
@@ -43,22 +43,18 @@ What each done step shipped and changed for users is in plan section 4 under its
 
 Read with `bd show`, `bd dep tree canopi-f47t`, `bd list --parent canopi-f47t` and `bd ready`; the slots are plan section 7. Subagents make no `bd` writes.
 
-- **2.0 live bugs, guards and location (U53):** canopi-f47t.52.1–.52.4, .52.17 (with canopi-ne8c, related), canopi-f47t.53 (Show my location, P1).
-- **2.1 architecture (first step of 2.1):** canopi-f47t.52 with .52.5–.52.16 and canopi-f47t.37 (S16); each item kept or dropped by its planning against the target ADR.
-- **Release close:** canopi-f47t.29 (1) and (4); canopi-k94s with P10; P34 asked in its question batch; canopi-f47t.11 gets spec §6's last paragraph (R3).
+- **2.1 architecture (first step of 2.1):** canopi-f47t.52 with .52.5–.52.16, .52.18–.52.22 and canopi-f47t.37 (S16); each item kept or dropped by its planning against the target ADR; canopi-f47t.13, .15, .16 and .31 (U54); canopi-a1n2 (Desktop location).
+- **Release close:** canopi-f47t.29 (1) and (4); canopi-k94s with P10; P34 asked in its question batch; canopi-f47t.11 gets spec §6's last paragraph (R3); canopi-f47t.52.23 (the exception ratchet, or 2.1) and canopi-er58 (touch flake).
 - **Done, close if still open:** canopi-f47t.42 and .43 (the Layers receipt).
 - **In progress:** canopi-f47t.19, the usefulness items placed per step in plan section 4.
-- **No slot in the plan yet:** canopi-f47t.13, .14, .15, .16 and .31; slot them (2.0 or 2.1) in the next step's question batch.
 - **Gate nothing:** canopi-f47t.6.2 (Windows panel drops, U20); the phone or tablet hand check (U41), the user's when possible.
 - **After 2.0:** canopi-f47t.9, .10, .32–.36, .38, .44–.47, .49, .50; canopi-p32r and canopi-wx8w (a production-build measurement and profiling); canopi-j9ry with P5 (U43), plus its known-issue line in the 2.0 release notes; canopi-3uaj; the U-crs follow-ups canopi-yox6, canopi-bhwt, canopi-yyjq, canopi-9m01, canopi-qh03, canopi-1aj4 (a later bug batch); canopi-x6qc, canopi-7ve0, canopi-h4ec; hydrology 2.1 (canopi-5ys2.1); canopi-224j.
 
 ## 5. What to do first
 
-1. **Plan and build "2.0 live bugs, guards and location" in one session.** Orientation, read-only in the user's checkout: `git -C /home/daylon/projects/canopi status --short --branch` (the user's `.beads.gate.lock` is expected), `df -h /`. In the integration worktree: `git status --short --branch` (clean), `git fetch`, rebase if behind (the guide's Places); check CI on the last pushed commit (`gh run list --branch feature/geolibre-adoption --limit 3`).
-   Then read section 2's path. The design check and the questions are done: the user answered all 23 on 2026-10-09 (U54; `/home/daylon/projects/canopi/.rq-scratch/tools/live-bugs-location-answers.md`, beside the design check), and the amendment wrote them into plan section 4 with the owners and expected-fail files in `.rq-scratch/tools/`.
-   Next: commit 0 (S30's union, `quiet-gates.sh`'s ownership, the `myLocation` slot, the 3 failing tests), then streams C, B, A and D in that merge order, each item one commit with its test first; reviews per the skill (two rounds for location), the Web check, the native live check (S3b's palette, no Desktop location button), the pre-push review, one push, the close against the step's Exit.
-2. **Then the release close** (plan section 4, "2.0 release close"): design check, one question batch (P34 among them), amendment, its steps 1–10 and the definition of done.
-3. **2.1 architecture comes after 2.0 ships** (plan section 4, "2.1 architecture"); the user reviews the list of future changes first.
+1. **Run the release close** (plan section 4, "2.0 release close"). Orientation, read-only in the user's checkout: `git -C /home/daylon/projects/canopi status --short --branch` (the user's `.beads.gate.lock` is expected), `df -h /`. In the integration worktree: `git status --short --branch` (clean), `git fetch`, rebase if behind (the guide's Places); check CI on the last pushed commit (`gh run list --branch feature/geolibre-adoption --limit 3`).
+   Then read section 2's path, and run the design check, one question batch (P34 among them), the amendment, its steps 1–10 and the definition of done; the hand-over to canopi-2v5a and canopi-fxil.12 is its last step.
+2. **2.1 architecture comes after 2.0 ships** (plan section 4, "2.1 architecture"); the user reviews the list of future changes first.
 
 At each close: the receipt and retrospective of the skill, with Canopi's additions below; merged worktrees and review profiles removed; the finished parts of the plan, the spec and this brief trimmed.
 

@@ -14,26 +14,28 @@ Paths are relative to `/home/daylon/projects/canopi`; use them absolute in comma
 
 ## Gates
 
-- **Affected**, after a build or fix agent's last commit: `BASE=<branch it builds on> .rq-scratch/tools/quiet-gates.sh <worktree> affected`: tsc, `check:ui`, `vitest related` on the changed files and the policy tests; from a step's commit 0 always every source-text policy test (lr-z's `scene-runtime-boundaries` failure passed a selection that skipped it), the locale tests and the stream's own Playwright specs in Chromium and WebKit. **Quick** (the whole suite) is for a worktree with no base.
+- **Affected**, after a build or fix agent's last commit: `BASE=<branch it builds on> .rq-scratch/tools/quiet-gates.sh <worktree> affected`: tsc, `check:ui`, `vitest related` on the changed files and the policy tests; from a step's commit 0 always every source-text policy test (a related-files selection once skipped a failing one), the locale tests and the stream's own Playwright specs in Chromium and WebKit. **Quick** (the whole suite) is for a worktree with no base.
 - **Gate lines** count only from a run started after the last commit; the shell is zsh with noclobber, so overwrite a log with `>|`.
 - **Slots**: build agents per `free -g` available, one per 6 GiB above a 4 GiB reserve, at most 4 (8 CPUs), re-checked per slot; under 8 GiB, `VITEST_WORKERS=2`.
-- **Ownership** (built in a step's commit 0): `.rq-scratch/tools/<step>-owners.tsv` (path, stream) from the amendment commit; a stream's gate fails a diff outside its rows, and the plan check fails a needed file nobody owns. Known reds go in `<step>-expected-fail.tsv` (owner, bead), empty before push.
+- **Ownership** (built in a step's commit 0): `.rq-scratch/tools/<step>-owners.tsv` (path, stream) from the amendment commit; a stream's gate fails a diff outside its rows, and the plan check fails a needed file nobody owns. Known reds go in `<step>-expected-fail.tsv` (owner, bead), empty before push, read-only (`chmod 444`) and written by the main agent alone (agents rewrote it twice mid-step).
 - **Full**, at each merge and before a push: `.rq-scratch/tools/quiet-gates.sh <worktree> full`, the Frontend row of `AGENTS.md` (tsc, coverage as the suite, the policy tests, check:ui, both builds, docs). Add the Rust and shared-contract rows of `AGENTS.md` when those areas change.
 - **Web check** on any merge touching the renderer, camera, input or map: `cd desktop/web && npm run build:web`, then from the worktree root `docker run --rm --ipc=host -v "$PWD":/work -w /work/desktop/web --user $(id -u):$(id -g) -e HOME=/tmp mcr.microsoft.com/playwright:v1.63.0-noble npx playwright test e2e/canvas --reporter=line`.
 - **CI**: `Build & Test` and `Web Edition browsers` on every push; a push whose changes since the branch's last successful push run touch only `docs/`, `.beads/`, `.interface-design/` or Markdown runs only the `docs` job and skips the browsers; a newer push cancels the branch's older run (main always finishes), so check the newest commit's: `gh run list --branch feature/geolibre-adoption --event push`, then poll `gh run view <id> --json status,conclusion`.
 - **CI jobs**: `docs` always; `lint` on code; on a v2 push the Rust jobs (`lint-rust`, `test-rust`, `lidar-native`, `platform-tests`) and packaging run only when a Rust-side path changed, and `test-frontend` when that or `desktop/web/` changed; the path filter in `.github/workflows/build.yml` is the list. Main, PRs and an unknown base run all. Rust caches are saved only from pushes to main and the v2 branch.
-- **PRs**: a same-repo PR from main or the v2 branch runs neither workflow; the push run's checks on its head commit show on the PR, so nothing tests v2 merged with main before the merge lands: merge main into v2 and push first.
-- **Packaging targets**: a v2 push packages Linux `.deb` and macOS arm, and adds Windows NSIS and Intel macOS (with their sidecar smoke and Common Controls check) when it changes a packaging input (the filter in `build.yml`). Main, other same-repo PRs and Release Candidate package all four in every format; fork PRs package nothing.
+- **PRs**: a scratch CI run needs a draft PR into the v2 branch (branch pushes run none); close or merge it at the step's push and delete the branch. A PR from main or the v2 branch runs neither workflow and shows its head's push checks, so nothing tests v2 merged with main: merge main into v2 and push first.
+- **Packaging targets**: a v2 push packages Linux `.deb` and macOS arm, and adds Windows NSIS and Intel macOS (with their sidecar smoke and Common Controls check) when a packaging input changes (the `build.yml` filter). Main, other same-repo PRs and Release Candidate package all four in every format; fork PRs package nothing.
 
 ## Design check
 
 A planned cut or behaviour whose design-check entry says users notice nothing names the screen surfaces it touches (ghosts and previews, Esc layers, field sizes, menus, focus) and gets a live-check scenario; a planned interaction is checked against what that screen draws; an entry that says "no code" names, per pointer kind or input it covers, the existing path delivering it.
 
+An element added to a chrome row gets, in commit 0, a Playwright matrix of its row's neighbours per layout width and locale, both engines (the location button pushed the zoom group over the notice's Retry on tablets: three fix rounds).
+
 Each stream's first commit probes its riskiest platform assumption in WebKitGTK and Chromium (phase R's untested font assumption cost four fix rounds).
 
-A colour offered in a question carries its contrast on every surface it is drawn on (light and dark map, PDF paper, grayscale print) beside its colour-vision distance: the polish batch's no-stratum grey was chosen on distance alone, printed at 2.25:1 and cost a held review round (U48).
+A colour offered in a question carries its contrast on every surface it is drawn on (light and dark map, PDF paper, grayscale print) beside its colour-vision distance (the polish batch's grey, chosen on distance alone, printed at 2.25:1; U48).
 
-Commit 0 writes each user path's Playwright test (Layers' g3, g5) failing, naming its owner stream and every file its pass needs: in Layers all 7 merge-time gallery failures and 9 of 10 stream holds traced to files no stream owned.
+Commit 0 writes each user path's Playwright test (Layers' g3, g5) failing, naming its owner stream and every file its pass needs (in Layers 16 merge failures and stream holds traced to files no stream owned).
 
 ## Review lenses
 
@@ -57,7 +59,7 @@ A stored-format version (the LiDAR catalogue, the user DB, `.canopi`) bumps once
 - Launch from the worktree's `desktop/` with its own identifier and Vite port (else the single-instance plugin hands off to the user's app): `XDG_CONFIG_HOME=$R/config XDG_DATA_HOME=$R/data XDG_CACHE_HOME=$R/cache CARGO_TARGET_DIR=/home/daylon/projects/canopi/.rq-scratch/shared-build/target cargo tauri dev -f mcp-bridge --config '{"identifier":"com.canopi.review","build":{"devUrl":"http://localhost:1431","beforeDevCommand":{"script":"npx vite --port 1431 --strictPort","cwd":"web"}}}' >| $R/app.log 2>&1`.
 - The bridge works only in debug-profile builds (`desktop/build.rs`). Before driving, check (`ss -ltnp`, `/proc/<pid>/exe`) that its port (9223 or the next free) is that process's. Drive with the Tauri MCP tools; wheels and drags are DOM events on the map host (`.rq-scratch/screenshots/phase-0/drag-helper.js`), not WebKitGTK's native order; Space is `"Space"`; count IPC by wrapping `fetch` for `ipc://localhost`; native file dialogs `x11-dialog.py`. The only "Close" button quits the app (canopi-pj62). Record which host drove each step; stop processes by PID, never `pkill -f`.
 - Launch once, then drive each scenario group with a fresh agent; assert with `webview_execute_js` values; save screenshots, opening them only to judge visuals (phase R's one long agent used 30 % of its input).
-- Frame times count only from a production build in a focused window or the Web build traced in Playwright: in the DEV build every Scene write freezes and the bridge's frame loop runs near 30 Hz; the unfocused review window's `requestAnimationFrame` runs near 9 Hz (Layers).
+- Frame times count only from a production build in a focused window or the Web build traced in Playwright (the DEV build freezes on each Scene write; an unfocused window's `requestAnimationFrame` runs near 9 Hz).
 
 ## Tracker
 
@@ -69,12 +71,12 @@ Opus at high effort for design checks, complex code, bug reviews, verification a
 
 ## Tools
 
-In `.rq-scratch/tools/`: `mkwt.sh`, `quiet-gates.sh`, `journal.py <run-id> [--full LABEL]` (a run's results by label), `wf-usage.py <run-id>...` (measured cost per stage, for receipts), `imgdiff.py` (pixel diff), `x11-dialog.py`, and `layers-build-results/` (one result file per stage run).
+In `.rq-scratch/tools/`: `mkwt.sh`, `quiet-gates.sh`, `journal.py <run-id> [--full LABEL]` (a run's results by label), `wf-usage.py <run-id>...` (measured cost per stage, for receipts), `imgdiff.py` (pixel diff), and `x11-dialog.py`.
 
 ## Workflows and measured cost
 
-One workflow per stage, from the skill's `workflow-step.js`; never resume after a parallel stage: Layers' two resumes cost 326M tokens (13.8 % of 2.36B), 458 agent-minutes and 3.9 h.
+One workflow per stage, from the skill's `workflow-step.js`; never resume after a parallel stage: Layers' two resumes cost 326M tokens (14 %) and 3.9 h.
 
 When a usage limit stops agents, schedule no check-in to resume them: the user types "Resume". Never stop a running workflow on your own initiative; the user decides.
 
-Layers by stage: design check 19 %, commit 0 15 %, builds 16 %, reviews and verifiers 9 %, pre-push 3 % (3 findings nothing else caught). The release architecture review cost about 41M for 46 findings, 6 of them live or latent bugs; once the target ADR lands it becomes a metrics script plus targeted reading.
+Live bugs, guards and location: 682M input over 22 stage runs and 220 agents; build 42 %, reviews 39 %, fixes 10 %, usefulness 4 %; the notice detour about 15 %.
