@@ -3676,6 +3676,11 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
         "import { desktop } from '../platform/desktop'",
       ]),
       plantedSource('src/ipc/planted.ts', ["import { desktop } from '../platform/desktop'"]),
+      // A transport may implement an app port's interface: only its types cross.
+      plantedSource('src/ipc/transport.ts', [
+        "import { locale } from '../app/settings/state'",
+        "import type { Locale } from '../app/settings/state'",
+      ]),
       plantedSource('src/i18n/planted.ts', ["import { locale } from '../app/settings/state'"]),
       plantedSource('src/types/planted.ts', ["import { locale } from '../app/settings/state'"]),
       plantedSource('src/generated/planted.ts', ["import { locale } from '../app/settings/state'"]),
@@ -3695,6 +3700,7 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
       `${P40} src/canvas/edition.ts:1:1 imports src/web/browser-app-data.ts via "../web/browser-app-data" (static)`,
       `${P40} src/canvas/edition.ts:2:1 imports src/platform/desktop.ts via "../platform/desktop" (static)`,
       `${P40} src/ipc/planted.ts:1:1 imports src/platform/desktop.ts via "../platform/desktop" (static)`,
+      `${P40} src/ipc/transport.ts:1:1 imports src/app/settings/state.ts via "../app/settings/state" (static)`,
       `${P40} src/i18n/planted.ts:1:1 imports src/app/settings/state.ts via "../app/settings/state" (static)`,
       `${P40} src/types/planted.ts:1:1 imports src/app/settings/state.ts via "../app/settings/state" (static)`,
       `${P40} src/generated/planted.ts:1:1 imports src/app/settings/state.ts via "../app/settings/state" (static)`,
