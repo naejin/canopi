@@ -15,7 +15,7 @@ use syn::{
 };
 
 use crate::module_layering::module_path_of;
-use crate::native_command_policy::rust_sources_under;
+use crate::native_command_policy::crate_rust_sources;
 
 const LANE_JOB: &str = "lidar-native";
 const LOCAL_FIXTURE_PREFIX: &str = "local fixture: ";
@@ -53,7 +53,7 @@ fn parse_lane(workflow: &str) -> Result<Lane, String> {
     let mut filters = Vec::new();
     let mut cargo_words = cargo_words.iter().skip(2);
     while let Some(word) = cargo_words.next() {
-        if matches!(*word, "-p" | "--package" | "--features" | "-F" | "--target") {
+        if matches!(*word, "-p" | "--package") {
             cargo_words.next();
         } else if !word.starts_with('-') {
             filters.push((*word).to_owned());
@@ -221,21 +221,7 @@ fn ignore_reason(attributes: &[Attribute]) -> Option<Option<String>> {
 fn audit_repository() -> Vec<String> {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let workflow = fs::read_to_string(manifest.join("../.github/workflows/build.yml")).unwrap();
-    let mut paths = Vec::new();
-    rust_sources_under(&manifest.join("src"), &mut paths);
-    paths.sort();
-    let owned = paths
-        .into_iter()
-        .map(|path| {
-            let relative = path
-                .strip_prefix(manifest)
-                .unwrap()
-                .to_string_lossy()
-                .replace('\\', "/");
-            let source = fs::read_to_string(&path).unwrap();
-            (relative, source)
-        })
-        .collect::<Vec<_>>();
+    let owned = crate_rust_sources();
     let sources = owned
         .iter()
         .map(|(path, source)| (path.as_str(), source.as_str()))

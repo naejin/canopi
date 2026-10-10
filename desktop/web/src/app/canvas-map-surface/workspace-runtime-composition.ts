@@ -36,7 +36,7 @@ import { WorkspaceMapControls } from './workspace-map-controls'
 import type { ContributionFeed } from './workspace-map-contributions'
 import { mapAttributionFolded } from '../shell/visible-map-area'
 import { storyPresentationHidesEditingAids } from '../story-presentation/overrides'
-import type { UserLocationReading } from '../my-location/session'
+import type { UserLocationReading } from '../../maplibre/user-location-overlay'
 import type { WorkspaceActivationMapControls, WorkspaceActivationSnapshot } from './workspace-activation'
 import type { WorkspaceMapContributionAdapter, WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import type { MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
@@ -146,8 +146,8 @@ export function createWorkspaceRuntimeComposition(
     mapState = state
     options.onMapStateChange?.({ ...state, retryable: state.status === 'error' && workspace.canRetry() })
   }
-  const siteHover = options.mapContributions.readSiteHover ? createContributionFeed<readonly [number, number] | null>(null) : null
-  const userLocation = options.mapContributions.readUserLocation ? createContributionFeed<UserLocationReading | null>(null) : null
+  const siteHover = options.mapContributions.readSiteHover ? createContributionFeed<readonly [number, number]>() : null
+  const userLocation = options.mapContributions.readUserLocation ? createContributionFeed<UserLocationReading>() : null
   const controls = dependencies.createControls({
     container: options.container,
     // The map container's resizes reach the live camera driver's setScreen: the driver is the map's one resize owner (both maps
@@ -321,10 +321,10 @@ export function createWorkspaceRuntimeComposition(
   }
 }
 
-/** The latest value, handed to whichever map's contributions are attached (a Retry attaches new ones). */
-function createContributionFeed<T>(initial: T): ContributionFeed<T> & { publish(value: T): void } {
-  let current = initial
-  const listeners = new Set<(value: T) => void>()
+/** The latest value, none at first, handed to whichever map's contributions are attached (a Retry attaches new ones). */
+function createContributionFeed<T>(): ContributionFeed<T | null> & { publish(value: T | null): void } {
+  let current: T | null = null
+  const listeners = new Set<(value: T | null) => void>()
   return {
     current: () => current,
     subscribe(listener) {

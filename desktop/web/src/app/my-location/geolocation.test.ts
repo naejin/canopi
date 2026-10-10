@@ -62,7 +62,6 @@ describe('the browser geolocation module', () => {
     expect(errors).toEqual([2, 3, 1])
 
     stop()
-    stop()
     expect(geolocation.clearWatch).toHaveBeenCalledOnce()
     expect(geolocation.clearWatch).toHaveBeenCalledWith(7)
     expect(geolocation.getCurrentPosition).not.toHaveBeenCalled()

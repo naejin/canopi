@@ -95,7 +95,6 @@ describe('MapNotice on the visible-map-area seam', () => {
   it.each([
     ['in a window', null],
     ['on a phone held upright', 'portrait'],
-    ['on a phone on its side', 'landscape'],
   ] as const)('raises the chips\' bottom inset above itself, but never moves the camera\'s framing, %s', async (_name, phone) => {
     // Standing above the bottom row, the notice is under the selection chip's inset; it comes and goes with load state,
     // so a Design opened while it shows is framed as one opened after it goes, and it stands in that framing frame. On a

@@ -38,8 +38,8 @@ const VIEW_ACTION_ICONS: Readonly<Record<string, ControlIconName>> = {
  */
 export function ZoomControls({ viewActions, myLocation: MyLocation }: {
   readonly viewActions: readonly CanvasToolbarActionCommand[]
-  /** Show my location, rendered before the compass; editions without it pass none. */
-  readonly myLocation?: FunctionComponent
+  /** Show my location, rendered before the compass with the group's button class; editions without it pass none. */
+  readonly myLocation?: FunctionComponent<{ readonly className: string | undefined }>
 }) {
   const zoomIn = viewCommand(viewActions, 'zoom-in')
   const zoomOut = viewCommand(viewActions, 'zoom-out')
@@ -66,7 +66,7 @@ export function ZoomControls({ viewActions, myLocation: MyLocation }: {
         <ZoomButton command={zoomIn} disabled={zoomIn.disabled || atMaximum} />
         <ZoomButton command={zoomOut} disabled={zoomOut.disabled || atMinimum} />
         <ZoomButton command={fit} disabled={fit.disabled} />
-        {MyLocation && <MyLocation />}
+        {MyLocation && <MyLocation className={styles.button} />}
         <Compass command={resetNorth} className={styles.button} />
       </div>
     )
@@ -86,7 +86,7 @@ export function ZoomControls({ viewActions, myLocation: MyLocation }: {
       <ZoomButton command={zoomIn} disabled={zoomIn.disabled || atMaximum} />
       <ZoomButton command={fit} disabled={fit.disabled} />
       <span className={styles.rule} aria-hidden="true" />
-      {MyLocation && <MyLocation />}
+      {MyLocation && <MyLocation className={styles.button} />}
       <Compass command={resetNorth} className={styles.button} />
     </div>
   )

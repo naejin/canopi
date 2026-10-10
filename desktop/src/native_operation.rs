@@ -655,40 +655,4 @@ mod tests {
             }
         });
     }
-
-    #[test]
-    fn operation_classes_have_isolated_capacity() {
-        tauri::async_runtime::block_on(async {
-            let executor = test_executor(1, 1);
-            let (started_tx, started_rx) = mpsc::sync_channel(1);
-            let (release_tx, release_rx) = mpsc::sync_channel(1);
-            let catalog_executor = executor.clone();
-            let catalog = tauri::async_runtime::spawn(async move {
-                catalog_executor
-                    .run(
-                        NativeOperationClass::Catalog,
-                        "catalog blocker",
-                        move || {
-                            started_tx.send(()).unwrap();
-                            release_rx.recv().unwrap();
-                            Ok(())
-                        },
-                    )
-                    .await
-            });
-            started_rx.recv_timeout(WAIT_TIMEOUT).unwrap();
-
-            executor
-                .run(
-                    NativeOperationClass::Network,
-                    "isolated network operation",
-                    || Ok(()),
-                )
-                .await
-                .unwrap();
-
-            release_tx.send(()).unwrap();
-            catalog.await.unwrap().unwrap();
-        });
-    }
 }

@@ -47,12 +47,7 @@ export function watchDevicePosition(
     (error) => onError(error.code as GeolocationErrorCode),
     WATCH_OPTIONS,
   )
-  let watching = true
-  return () => {
-    if (!watching) return
-    watching = false
-    geolocation.clearWatch(id)
-  }
+  return () => geolocation.clearWatch(id)
 }
 
 /** The geolocation permission's live status, or null when the browser cannot say (no Permissions API, or it throws). */

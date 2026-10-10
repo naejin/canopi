@@ -51,15 +51,15 @@ function pixelDegreesLon(zoom: number): number {
 describe('camera follow', () => {
   it('jumps to the fix at max(zoom, 17) on the click, keeping the bearing to the driver, and at the current zoom on later fixes', () => {
     const f = setup()
-    expect(f.follow.follow(FIX, true)).toBe(true)
+    f.follow.follow(FIX, true)
     expect(f.view.showPlace).toHaveBeenLastCalledWith(FIX, 17, { motion: 'jump' })
     f.view.settle()
     f.view.move({ zoom: 18.5 })
     f.view.settle()
-    expect(f.follow.follow(MOVED, false)).toBe(true)
+    f.follow.follow(MOVED, false)
     expect(f.view.showPlace).toHaveBeenLastCalledWith(MOVED, 18.5, { motion: 'jump' })
     f.view.settle()
-    expect(f.follow.follow(FIX, true)).toBe(true)
+    f.follow.follow(FIX, true)
     expect(f.view.showPlace).toHaveBeenLastCalledWith(FIX, 18.5, { motion: 'jump' })
     expect(f.onEnd).not.toHaveBeenCalled()
   })
@@ -83,7 +83,7 @@ describe('camera follow', () => {
     f.view.settle()
     expect(f.onEnd).toHaveBeenCalledOnce()
     const jumps = f.view.showPlace.mock.calls.length
-    expect(f.follow.follow(MOVED, false)).toBe(false)
+    f.follow.follow(MOVED, false)
     expect(f.view.showPlace).toHaveBeenCalledTimes(jumps)
   })
 
@@ -92,7 +92,7 @@ describe('camera follow', () => {
     f.follow.follow(FIX, true)
     f.view.settle()
     f.view.move({ center: { lon: FIX.lon, lat: FIX.lat + 0.001 } })
-    expect(f.follow.follow(MOVED, false)).toBe(false)
+    f.follow.follow(MOVED, false)
     expect(f.onEnd).toHaveBeenCalledOnce()
     expect(f.view.live().center).toEqual({ lon: FIX.lon, lat: FIX.lat + 0.001 })
   })
@@ -102,12 +102,12 @@ describe('camera follow', () => {
     settledPan.view.move({ center: { lon: 4.5, lat: 44 }, zoom: 15 })
     settledPan.view.settle()
     expect(settledPan.onEnd).toHaveBeenCalledOnce()
-    expect(settledPan.follow.follow(FIX, true)).toBe(false)
+    settledPan.follow.follow(FIX, true)
     expect(settledPan.view.showPlace).not.toHaveBeenCalled()
 
     const livePan = setup()
     livePan.view.move({ center: { lon: 4.5, lat: 44 } })
-    expect(livePan.follow.follow(FIX, true)).toBe(false)
+    livePan.follow.follow(FIX, true)
     expect(livePan.onEnd).toHaveBeenCalledOnce()
     expect(livePan.view.live().center).toEqual({ lon: 4.5, lat: 44 })
   })
@@ -118,7 +118,9 @@ describe('camera follow', () => {
     const f = setup(view)
     view.settle()
     expect(f.onEnd).not.toHaveBeenCalled()
-    expect(f.follow.follow(FIX, true)).toBe(true)
+    f.follow.follow(FIX, true)
+    expect(f.view.showPlace).toHaveBeenLastCalledWith(FIX, 17, { motion: 'jump' })
+    expect(f.onEnd).not.toHaveBeenCalled()
   })
 
   it('has a tolerance of about one pixel: rounding and a re-origin\'s round trip through the plane keep following', () => {
@@ -182,7 +184,7 @@ describe('camera follow', () => {
 
     const f = setup()
     f.current.value = null
-    expect(f.follow.follow(FIX, true)).toBe(true)
+    f.follow.follow(FIX, true)
     expect(f.view.showPlace).not.toHaveBeenCalled()
   })
 
@@ -194,7 +196,8 @@ describe('camera follow', () => {
     f.view.settle()
     f.designIdentity.value = {}
     expect(f.onEnd).not.toHaveBeenCalled()
-    expect(f.follow.follow(MOVED, false)).toBe(false)
+    f.follow.follow(MOVED, false)
+    expect(f.view.showPlace).toHaveBeenCalledOnce()
   })
 })
 
@@ -295,7 +298,7 @@ describe('camera follow on MapLibre\'s own camera', () => {
     map.step(60_000)
     vi.advanceTimersByTime(SETTLE_MS)
     expect(onEnd).not.toHaveBeenCalled()
-    expect(follow.follow(NEAR_FIX, true)).toBe(true)
+    follow.follow(NEAR_FIX, true)
     expect(map.live().center.lon).toBeCloseTo(NEAR_FIX.lon, 6)
     expect(map.live().center.lat).toBeCloseTo(NEAR_FIX.lat, 6)
     expect(map.live().zoom).toBeCloseTo(17, 6)
@@ -304,7 +307,7 @@ describe('camera follow on MapLibre\'s own camera', () => {
   it('a click mid-flight with a fix a few frames later jumps to the fix, and the flight never lands', () => {
     const { map, follow, onEnd } = midFlight()
     map.step(700)
-    expect(follow.follow(NEAR_FIX, true)).toBe(true)
+    follow.follow(NEAR_FIX, true)
     map.step(60_000)
     vi.advanceTimersByTime(SETTLE_MS)
     expect(onEnd).not.toHaveBeenCalled()

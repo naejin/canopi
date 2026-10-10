@@ -20,6 +20,8 @@ import {
   createTestCanvasDocumentSurface,
 } from './support/canvas-runtime-surfaces'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import { createLiveTestCanvasRuntimeHost } from './support/live-canvas-runtime'
+import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
 
 describe('Edit › Cut and Delete during a draft (U39)', () => {
   let container: HTMLDivElement
@@ -194,5 +196,54 @@ describe('Edit › Cut and Delete during a draft (U39)', () => {
     stop()
     session.dispose()
     setCurrentCanvasSession(null)
+  })
+})
+
+describe('Edit › Lock and Unlock follow the Scene', () => {
+  it('re-projects when only the Scene changes: Unlock all greys once nothing is locked, with the selection still empty', () => {
+    const host = createLiveTestCanvasRuntimeHost()
+    const { commands, documents } = host.surfaces
+    documents.loadDocument({
+      version: CURRENT_CANOPI_FILE_VERSION,
+      name: 'Locks',
+      description: null,
+      plant_species_colors: {},
+      layers: [],
+      plants: [{
+        id: 'plant-1', canonical_name: 'Malus domestica', common_name: null, color: null, position: { lon: 0, lat: 0 },
+        rotation: null, scale: null, notes: null, planted_date: null, quantity: 1, locked: false,
+      }],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      budget_currency: 'EUR',
+      created_at: '2026-10-10T00:00:00.000Z',
+      updated_at: '2026-10-10T00:00:00.000Z',
+      extra: {},
+    })
+    setCurrentCanvasSession(host.surfaces)
+    commands.sceneEdits.selectAll()
+    // The Edit menu reads the projection as a rendered menu does: through an effect, which re-runs only on a change.
+    const read = () => Object.fromEntries(workspaceCanvasCommandProjection.value.editActions
+      .filter((command) => ['lock', 'unlock', 'unlock-all'].includes(command.id))
+      .map((command) => [command.id, command.disabled]))
+    let shown = read()
+    const stop = effect(() => { shown = read() })
+    expect(shown).toEqual({ lock: false, unlock: true, 'unlock-all': true })
+
+    // Lock clears the selection, so the selection alone re-projects this one.
+    runCanvasIntent({ type: 'edit', action: 'lock' }, 'menu')
+    expect(shown).toEqual({ lock: true, unlock: true, 'unlock-all': false })
+
+    // Unlock all leaves the empty selection as it was: the menu learns of it from the Scene edit.
+    runCanvasIntent({ type: 'edit', action: 'unlock-all' }, 'menu')
+    expect(host.surfaces.queries.getSceneSnapshot().plants[0]?.locked).toBe(false)
+    expect(shown).toEqual({ lock: true, unlock: true, 'unlock-all': true })
+    stop()
+    setCurrentCanvasSession(null)
+    void host.destroy()
   })
 })

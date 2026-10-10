@@ -1364,22 +1364,7 @@ fn audit_repository() -> Vec<String> {
         STATE_ACCESS_ALLOWLIST,
     );
 
-    let mut rust_paths = Vec::new();
-    rust_sources_under(&source_root, &mut rust_paths);
-    rust_paths.sort();
-    let owned_rust_sources = rust_paths
-        .into_iter()
-        .map(|path| {
-            // The allowlist names paths with '/', as on Windows too.
-            let relative = path
-                .strip_prefix(manifest)
-                .unwrap()
-                .to_string_lossy()
-                .replace('\\', "/");
-            let source = fs::read_to_string(path).unwrap();
-            (relative, source)
-        })
-        .collect::<Vec<_>>();
+    let owned_rust_sources = crate_rust_sources();
     let rust_sources = owned_rust_sources
         .iter()
         .map(|(path, source)| (path.as_str(), source.as_str()))
@@ -1445,7 +1430,28 @@ fn path_to_string(path: &SynPath) -> String {
         .join("::")
 }
 
-pub(crate) fn rust_sources_under(path: &Path, sources: &mut Vec<PathBuf>) {
+/// Every Rust source under the crate's `src/`, sorted, as (path relative to the crate with '/', as on Windows too,
+/// source text): what the repository audits read.
+pub(crate) fn crate_rust_sources() -> Vec<(String, String)> {
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut paths = Vec::new();
+    rust_sources_under(&manifest.join("src"), &mut paths);
+    paths.sort();
+    paths
+        .into_iter()
+        .map(|path| {
+            let relative = path
+                .strip_prefix(manifest)
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/");
+            let source = fs::read_to_string(&path).unwrap();
+            (relative, source)
+        })
+        .collect()
+}
+
+fn rust_sources_under(path: &Path, sources: &mut Vec<PathBuf>) {
     for entry in fs::read_dir(path).unwrap() {
         let path = entry.unwrap().path();
         if path.is_dir() {

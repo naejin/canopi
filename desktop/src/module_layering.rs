@@ -7,7 +7,7 @@
 //! `#[cfg(test)]` modules. Each current breach is a named exception with its 2.1 bead; an exception
 //! that excuses nothing fails, so a fixed breach must leave the list.
 
-use std::{collections::BTreeSet, fs, path::Path};
+use std::collections::BTreeSet;
 
 use syn::{
     Attribute, Expr, ImplItem, Item, ItemMod, ItemUse, Macro, Stmt, TraitItem, UseTree,
@@ -16,7 +16,7 @@ use syn::{
     visit::{self, Visit},
 };
 
-use crate::native_command_policy::{TestModuleFiles, has_cfg_test_attribute, rust_sources_under};
+use crate::native_command_policy::{TestModuleFiles, crate_rust_sources, has_cfg_test_attribute};
 
 #[derive(Clone, Copy)]
 struct LayerException {
@@ -154,7 +154,10 @@ impl Breach {
             Self::DomainNamesServices | Self::ServicesNameCommands => {
                 format!(
                     "crate::{}",
-                    name.resolved.as_deref().unwrap_or_default().join("::")
+                    name.resolved
+                        .as_deref()
+                        .expect("forbidden() names a crate path only once resolved")
+                        .join("::")
                 )
             }
         }
@@ -424,22 +427,7 @@ fn expression_attributes(expression: &Expr) -> &[Attribute] {
 }
 
 fn audit_repository() -> Vec<String> {
-    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut paths = Vec::new();
-    rust_sources_under(&manifest.join("src"), &mut paths);
-    paths.sort();
-    let owned = paths
-        .into_iter()
-        .map(|path| {
-            let relative = path
-                .strip_prefix(manifest)
-                .unwrap()
-                .to_string_lossy()
-                .replace('\\', "/");
-            let source = fs::read_to_string(&path).unwrap();
-            (relative, source)
-        })
-        .collect::<Vec<_>>();
+    let owned = crate_rust_sources();
     let sources = owned
         .iter()
         .map(|(path, source)| (path.as_str(), source.as_str()))

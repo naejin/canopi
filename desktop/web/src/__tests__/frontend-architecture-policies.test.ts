@@ -72,16 +72,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'IPC transports import nothing from app',
-    from: ['src/ipc/**'],
-    // ipc/design.ts still composes Design write admission and dialogs for app/document-session (canopi-m4v0).
-    exceptFrom: ['src/ipc/design.ts'],
-    targets: ['src/app/**'],
-    // A transport may implement an app port's interface (GeoJsonFileAdapter); only types cross.
-    allowTypeOnlyTargets: ['src/app/**'],
-  },
-  {
-    kind: 'forbid-imports',
     name: 'Components reach native capabilities through app actions',
     from: ['src/components/**'],
     exceptFrom: [...TEST_SOURCE_PATTERNS],
@@ -2196,14 +2186,15 @@ const CANVAS_V2_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'P41 canvas imports no native or edition code',
+    name: 'P41 canvas imports no native code',
     from: ['src/canvas/**'],
     exceptFrom: [
       // The Desktop species cache moves to app/canvas-runtime/ in 2.1 (S26, canopi-f47t.52.18).
       'src/canvas/runtime/species-cache.ts',
       ...TEST_SOURCE_PATTERNS,
     ],
-    targets: ['src/ipc/**', '@tauri-apps/**', 'src/web/**', 'src/platform/**'],
+    // Web and platform code are P40's targets.
+    targets: ['src/ipc/**', '@tauri-apps/**'],
   },
   {
     kind: 'forbid-imports',
@@ -2308,6 +2299,25 @@ const CANVAS_V2_POLICIES = [
       'src/app/canvas-pdf/platform.desktop.ts',
       ...TEST_SOURCE_PATTERNS,
     ],
+  },
+  {
+    // The location trust boundary (canopi-f47t.53; design check A12): one session owns a device fix, and one module asks
+    // the browser for it. my-location-trust.test.ts checks that the reading reaches no log.
+    kind: 'confine-importers',
+    name: 'P52 only the location button and the Web wiring import the location session',
+    targets: ['src/app/my-location/session.ts'],
+    allowedFrom: [
+      'src/components/canvas/MyLocationButton.tsx',
+      'src/web/browser-workspace-map-contribution-adapter.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+  },
+  {
+    kind: 'forbid-calls',
+    name: 'P53 only the geolocation module calls watchPosition, getCurrentPosition or clearWatch',
+    from: ['src/**'],
+    exceptFrom: ['src/app/my-location/geolocation.ts', ...TEST_SOURCE_PATTERNS],
+    properties: ['watchPosition', 'getCurrentPosition', 'clearWatch'],
   },
 ] satisfies readonly ArchitecturePolicy[]
 
@@ -3606,7 +3616,7 @@ describe('canvas v2 policies, end of 0B', () => {
 
 const P39 = '[P39 production modules form no value import cycle]'
 const P40 = '[P40 foundation layers import no app, component or edition code]'
-const P41 = '[P41 canvas imports no native or edition code]'
+const P41 = '[P41 canvas imports no native code]'
 const P42 = '[P42 shared app code imports no Web edition module]'
 const P43 = '[P43 the input core stays camera-free and app-free]'
 const P44 = '[P44 settings and map-layer signals are written only by the projection]'
@@ -3615,6 +3625,8 @@ const P46 = '[P46 the Google key has reviewed readers]'
 const P47 = '[P47 components never hold the canvas document lifecycle]'
 const P48 = '[P48 the tool host is the only canvas-menu opener]'
 const P49 = '[P49 only IPC transports invoke native commands]'
+const P52 = '[P52 only the location button and the Web wiring import the location session]'
+const P53 = '[P53 only the geolocation module calls watchPosition, getCurrentPosition or clearWatch]'
 
 describe('2.0 guard policies (canopi-f47t.52.17)', () => {
   it('P39 rejects a production value cycle; type-only, dynamic and test cycles pass', () => {
@@ -3649,7 +3661,16 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
       ]),
       plantedSource('src/maplibre/planted.ts', ["import { data } from '../web/browser-app-data'"]),
       plantedSource('src/canvas/planted.ts', ["import { registry } from '../commands/registry'"]),
+      plantedSource('src/canvas/edition.ts', [
+        "import type { data } from '../web/browser-app-data'",
+        "import { desktop } from '../platform/desktop'",
+      ]),
       plantedSource('src/ipc/planted.ts', ["import { desktop } from '../platform/desktop'"]),
+      // A transport may implement an app port's interface: only its types cross.
+      plantedSource('src/ipc/transport.ts', [
+        "import { locale } from '../app/settings/state'",
+        "import type { Locale } from '../app/settings/state'",
+      ]),
       plantedSource('src/i18n/planted.ts', ["import { locale } from '../app/settings/state'"]),
       plantedSource('src/types/planted.ts', ["import { locale } from '../app/settings/state'"]),
       plantedSource('src/generated/planted.ts', ["import { locale } from '../app/settings/state'"]),
@@ -3666,7 +3687,10 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
       `${P40} src/utils/planted.ts:3:1 imports src/components/shared/Chip.tsx via "../components/shared/Chip" (static)`,
       `${P40} src/maplibre/planted.ts:1:1 imports src/web/browser-app-data.ts via "../web/browser-app-data" (static)`,
       `${P40} src/canvas/planted.ts:1:1 imports src/commands/registry.ts via "../commands/registry" (static)`,
+      `${P40} src/canvas/edition.ts:1:1 imports src/web/browser-app-data.ts via "../web/browser-app-data" (static)`,
+      `${P40} src/canvas/edition.ts:2:1 imports src/platform/desktop.ts via "../platform/desktop" (static)`,
       `${P40} src/ipc/planted.ts:1:1 imports src/platform/desktop.ts via "../platform/desktop" (static)`,
+      `${P40} src/ipc/transport.ts:1:1 imports src/app/settings/state.ts via "../app/settings/state" (static)`,
       `${P40} src/i18n/planted.ts:1:1 imports src/app/settings/state.ts via "../app/settings/state" (static)`,
       `${P40} src/types/planted.ts:1:1 imports src/app/settings/state.ts via "../app/settings/state" (static)`,
       `${P40} src/generated/planted.ts:1:1 imports src/app/settings/state.ts via "../app/settings/state" (static)`,
@@ -3674,16 +3698,12 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
     ])
   })
 
-  it('P41 rejects canvas imports of IPC, Tauri, Web and platform code, but not the named species cache', () => {
+  it('P41 rejects canvas imports of IPC and Tauri code, but not the named species cache', () => {
     const graph = createTypeScriptSourceGraph([
       plantedSource('src/ipc/species.ts', ['export const species = 1']),
-      plantedSource('src/web/browser-app-data.ts', ['export const data = 1']),
-      plantedSource('src/platform/desktop.ts', ['export const desktop = 1']),
       plantedSource('src/canvas/runtime/planted.ts', [
         "import { species } from '../../ipc/species'",
         "import { invoke } from '@tauri-apps/api/core'",
-        "import type { data } from '../../web/browser-app-data'",
-        "import { desktop } from '../../platform/desktop'",
       ]),
       plantedSource('src/canvas/runtime/species-cache.ts', ["import { species } from '../../ipc/species'"]),
       plantedSource('src/canvas/runtime/planted.test.ts', ["import { species } from '../../ipc/species'"]),
@@ -3692,8 +3712,6 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
     expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P41'))).toEqual([
       `${P41} src/canvas/runtime/planted.ts:1:1 imports src/ipc/species.ts via "../../ipc/species" (static)`,
       `${P41} src/canvas/runtime/planted.ts:2:1 imports @tauri-apps/api/core via "@tauri-apps/api/core" (static)`,
-      `${P41} src/canvas/runtime/planted.ts:3:1 imports src/web/browser-app-data.ts via "../../web/browser-app-data" (static)`,
-      `${P41} src/canvas/runtime/planted.ts:4:1 imports src/platform/desktop.ts via "../../platform/desktop" (static)`,
     ])
   })
 
@@ -3923,6 +3941,45 @@ describe('2.0 guard policies (canopi-f47t.52.17)', () => {
       `${P49} src/app/planted.ts contains confined symbol invoke; allowed sources: ${allowed}`,
       `${P49} src/components/Planted.tsx contains confined symbol invoke; allowed sources: ${allowed}`,
       `${P49} src/web/planted.ts contains confined symbol invoke; allowed sources: ${allowed}`,
+    ])
+  })
+
+  it('P52 rejects a location session importer outside the button, the Web wiring and tests', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/app/my-location/session.ts', ['export function startMyLocation() {}']),
+      plantedSource('src/components/canvas/MyLocationButton.tsx', ["import { startMyLocation } from '../../app/my-location/session'"]),
+      plantedSource('src/web/browser-workspace-map-contribution-adapter.ts', ["import { startMyLocation } from '../app/my-location/session'"]),
+      plantedSource('src/app/my-location/session.test.ts', ["import { startMyLocation } from './session'"]),
+      plantedSource('src/app/document-session/store.ts', ["import { startMyLocation } from '../my-location/session'"]),
+      plantedSource('src/components/panels/ViewsPanel.tsx', ["import type { startMyLocation } from '../../app/my-location/session'"]),
+    ])
+
+    const allowed = `src/components/canvas/MyLocationButton.tsx, src/web/browser-workspace-map-contribution-adapter.ts, ${TEST_SOURCES}`
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P52'))).toEqual([
+      `${P52} src/app/document-session/store.ts:1:1 imports src/app/my-location/session.ts via "../my-location/session" (static); allowed importers: ${allowed}`,
+      `${P52} src/components/panels/ViewsPanel.tsx:1:1 imports src/app/my-location/session.ts via "../../app/my-location/session" (static); allowed importers: ${allowed}`,
+    ])
+  })
+
+  it('P53 rejects a geolocation call outside the geolocation module and tests, through optional chains, ! and brackets', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/app/my-location/geolocation.ts', [
+        'export const watch = (on: PositionCallback) => navigator.geolocation.watchPosition(on)',
+        'export const stop = (id: number) => navigator.geolocation.clearWatch(id)',
+      ]),
+      plantedSource('src/app/my-location/geolocation.test.ts', ['navigator.geolocation.getCurrentPosition(() => {})']),
+      plantedSource('src/app/my-location/follow.ts', [
+        'navigator.geolocation.watchPosition(() => {})',
+        'globalThis.navigator?.geolocation?.getCurrentPosition(() => {})',
+        "geo!['clearWatch'](3)",
+        'surface.watch(() => {})',
+      ]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P53'))).toEqual([
+      `${P53} src/app/my-location/follow.ts:1 calls navigator.geolocation.watchPosition`,
+      `${P53} src/app/my-location/follow.ts:2 calls globalThis.navigator?.geolocation?.getCurrentPosition`,
+      `${P53} src/app/my-location/follow.ts:3 calls geo!['clearWatch']`,
     ])
   })
 })
