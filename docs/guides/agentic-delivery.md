@@ -71,7 +71,7 @@ Opus at high effort for design checks, complex code, bug reviews, verification a
 
 ## Tools
 
-In `.rq-scratch/tools/`: `mkwt.sh`, `quiet-gates.sh`, `journal.py <run-id> [--full LABEL]` (a run's results by label), `wf-usage.py <run-id>...` (measured cost per stage, for receipts), `imgdiff.py` (pixel diff), and `x11-dialog.py`.
+In `.rq-scratch/tools/` (a local git repo; commit tool edits there): `mkwt.sh`, `quiet-gates.sh` with `gate-classify.py`, `journal.py <run> [--full LABEL]`, `wf-usage.py <run>...` (cost per stage), `imgdiff.py`, `x11-dialog.py`.
 
 ## Workflows and measured cost
 
