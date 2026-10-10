@@ -4,13 +4,15 @@
 // nowhere else, never into a Design, Draft, export, snapshot, log or diagnostics. A camera saved while following is a
 // view the user chose, saved like any other (Q10).
 //
+// Location runs only while a Design is open, as its button does: closing the Design turns it off.
+//
 // Modes: Off; Following (each fix centres the camera; a click turns location off); Moved away (any other camera move, a
 // Design activation or a story presentation ended follow; fixes still move the dot, and a click re-centres and follows);
 // Blocked (code 1 with the permission denied: the button is disabled until the permission changes). Codes 2 and 3 keep
 // the watch and the mode: the last reading turns stale and location reads unavailable until the next fix. Every other
 // code 1 answer (a dismissed prompt, the OS location off, no Permissions API) goes back to Off (GeoLibre's rule, A4).
 
-import { computed, signal, type ReadonlySignal } from '@preact/signals'
+import { computed, effect, signal, type ReadonlySignal } from '@preact/signals'
 import { currentCanvasQuerySurface, currentCanvasViewportCommandSurface } from '../../canvas/session'
 import type { UserLocationReading } from '../../maplibre/user-location-overlay'
 import { designSessionStore } from '../document-session/store'
@@ -27,6 +29,8 @@ interface MyLocationSessionOptions {
   readonly view: ReadonlySignal<FollowView | null>
   /** Changes when another Design becomes current: follow ends, location goes on (Q17). */
   readonly designIdentity: ReadonlySignal<unknown>
+  /** Whether a Design is open: closing it turns location off, since the button goes with it. */
+  readonly designOpen: ReadonlySignal<boolean>
   /** True while a story is presented: follow ends (Q12). */
   readonly presenting: ReadonlySignal<boolean>
 }
@@ -47,6 +51,7 @@ export class MyLocationSession {
   /** The next fix re-centres (the click's jump, at max(zoom, 17)). */
   private recentrePending = false
   private leaveBlocked: (() => void) | null = null
+  private leaveDesign: (() => void) | null = null
 
   constructor(private readonly options: MyLocationSessionOptions) {}
 
@@ -66,6 +71,13 @@ export class MyLocationSession {
     this.currentMode.value = 'following'
     this.recentrePending = true
     this.beginFollow()
+    // The press came from the button, which shows only with a Design open, so only a later close counts.
+    let opened = true
+    this.leaveDesign = effect(() => {
+      const open = this.options.designOpen.value
+      if (opened) opened = false
+      else if (!open) this.stop()
+    })
     const stop = watchDevicePosition(
       (fix) => { if (generation === this.generation) this.onFix(fix) },
       (code) => { if (generation === this.generation) this.onError(code) },
@@ -92,6 +104,8 @@ export class MyLocationSession {
     this.follow = null
     this.leaveBlocked?.()
     this.leaveBlocked = null
+    this.leaveDesign?.()
+    this.leaveDesign = null
     this.recentrePending = false
     this.currentReading.value = null
     this.currentUnavailable.value = false
@@ -170,6 +184,7 @@ const currentFollowView = computed<FollowView | null>(() => {
 export const myLocation = new MyLocationSession({
   view: currentFollowView,
   designIdentity: designSessionStore.sessionIdentity,
+  designOpen: computed(() => designSessionStore.currentDesign.value !== null),
   // The presentation hides the map's editing aids for its whole run; it ends follow and hides the dot.
   presenting: storyPresentationHidesEditingAids,
 })

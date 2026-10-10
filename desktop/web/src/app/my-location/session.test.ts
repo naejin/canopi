@@ -4,7 +4,9 @@ import { signal } from '@preact/signals'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GeoPoint, ViewCamera } from '../../canvas/runtime/view/types'
 import type { FollowView } from './follow'
-import { MyLocationSession } from './session'
+import type { CanopiFile } from '../../types/design'
+import { designSessionStore } from '../document-session/store'
+import { MyLocationSession, myLocation } from './session'
 
 const FIX = { coords: { longitude: 12.3456789, latitude: 45.6789012, accuracy: 25 }, timestamp: 1_760_000_000_000 }
 const MOVED = { coords: { longitude: 12.3476789, latitude: 45.6789012, accuracy: 50 }, timestamp: 1_760_000_001_000 }
@@ -85,8 +87,9 @@ function setup() {
   const view = fakeView()
   const designIdentity = signal<object>({})
   const presenting = signal(false)
-  const session = new MyLocationSession({ view: signal(view.view), designIdentity, presenting })
-  return { session, view, designIdentity, presenting }
+  const designOpen = signal(true)
+  const session = new MyLocationSession({ view: signal(view.view), designIdentity, designOpen, presenting })
+  return { session, view, designIdentity, designOpen, presenting }
 }
 
 async function settlePermission() {
@@ -157,6 +160,24 @@ describe('the location session', () => {
     expect(s.session.mode.value).toBe('following')
     s.presenting.value = true
     expect(s.session.mode.value).toBe('moved-away')
+  })
+
+  it('closing the Design turns location off, so no watch outlives the button; opening one later leaves it off', () => {
+    for (const mode of ['following', 'moved-away'] as const) {
+      const s = setup()
+      s.session.press()
+      geolocation.fix(FIX)
+      if (mode === 'moved-away') s.designIdentity.value = {}
+      expect(s.session.mode.value).toBe(mode)
+      s.designIdentity.value = {}
+      s.designOpen.value = false
+      expect(s.session.mode.value).toBe('off')
+      expect(s.session.reading.value).toBeNull()
+      expect(geolocation.watching).toBe(false)
+      s.designOpen.value = true
+      expect(s.session.mode.value).toBe('off')
+      expect(geolocation.watching).toBe(false)
+    }
   })
 
   it('a pan while waiting for the first fix is Moved away: the fix shows the dot without moving the camera, and a click re-centres', () => {
@@ -262,5 +283,24 @@ describe('the location session', () => {
     s.session.press()
     permission.set('prompt')
     expect(s.session.mode.value).toBe('following')
+  })
+})
+
+describe('the app\'s location session', () => {
+  it('turns off when the Design session store closes the Design (File › Close)', () => {
+    const design = { version: 9, name: 'Here', layers: [], plants: [], zones: [], annotations: [] } as unknown as CanopiFile
+    designSessionStore.replaceCurrentDesignState(design, null, 'Here')
+    try {
+      myLocation.press()
+      geolocation.fix(FIX)
+      expect(myLocation.mode.value).toBe('following')
+      designSessionStore.clearCurrentDesign()
+      expect(myLocation.mode.value).toBe('off')
+      expect(myLocation.reading.value).toBeNull()
+      expect(geolocation.clearWatch).toHaveBeenCalledOnce()
+    } finally {
+      if (myLocation.mode.peek() !== 'off') myLocation.press()
+      designSessionStore.clearCurrentDesign()
+    }
   })
 })
