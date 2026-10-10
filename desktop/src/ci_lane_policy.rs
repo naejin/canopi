@@ -53,7 +53,7 @@ fn parse_lane(workflow: &str) -> Result<Lane, String> {
     let mut filters = Vec::new();
     let mut cargo_words = cargo_words.iter().skip(2);
     while let Some(word) = cargo_words.next() {
-        if matches!(*word, "-p" | "--package" | "--features" | "-F" | "--target") {
+        if matches!(*word, "-p" | "--package") {
             cargo_words.next();
         } else if !word.starts_with('-') {
             filters.push((*word).to_owned());
