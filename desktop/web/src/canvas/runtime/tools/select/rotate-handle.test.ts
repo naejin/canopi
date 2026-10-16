@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createToolHarness,
   createToolSceneSource,
+  measurementGuide,
   plantEntity,
   rectZone,
   type ToolHarness,
@@ -217,6 +218,22 @@ describe('Select rotation handle', () => {
       expect(at.x).toBeCloseTo(expected.x, 6)
       expect(at.y).toBeCloseTo(expected.y, 6)
     })
+  })
+
+  it('a lone measurement guide shows the handle, and a quarter turn turns its ends (canopi-xjym)', () => {
+    const h = harness({ scene: { measurementGuides: [measurementGuide('guide', { x: 20, y: 110 }, { x: 120, y: 110 })] } })
+    h.select({ kind: 'measurement-guide', id: 'guide' })
+
+    expect(h.chrome.handles.find((handle) => handle.id === ROTATE_HANDLE_ID)).toMatchObject({ anchor: { x: 70, y: 110 } })
+    h.press({ x: 70, y: 82 }, { target: ROTATE })
+    h.move(aroundPivot(0, 28))
+    h.release(aroundPivot(0, 28))
+
+    const guide = h.store.persisted.measurementGuides[0]!
+    expect(guide.start.x).toBeCloseTo(70)
+    expect(guide.start.y).toBeCloseTo(60)
+    expect(guide.end.x).toBeCloseTo(70)
+    expect(guide.end.y).toBeCloseTo(160)
   })
 
   it('Shift steps 15 degrees from the press angle', () => {

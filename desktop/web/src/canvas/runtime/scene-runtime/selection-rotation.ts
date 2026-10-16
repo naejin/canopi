@@ -12,7 +12,7 @@ import {
 
 /**
  * Rotating a selection about a pivot: the rotation handle's drag and the
- * Rotate… command share this, so both turn plants, notes and zones alike.
+ * Rotate… command share this, so both turn plants, notes, zones and guides alike.
  * Positive degrees turn clockwise on the map (the session plane's y grows
  * southward). Only editable targets move; a selection with a locked or
  * otherwise blocked object does not rotate at all.
@@ -21,12 +21,14 @@ type RotatableTarget =
   | { readonly kind: 'plant'; readonly id: string }
   | { readonly kind: 'zone'; readonly id: string }
   | { readonly kind: 'annotation'; readonly id: string }
+  | { readonly kind: 'measurement-guide'; readonly id: string }
   | { readonly kind: 'group'; readonly id: string }
 
 export interface RotationTransformState {
   readonly plants: Map<string, ScenePoint>
   readonly zones: Map<string, ZoneRotationStart>
   readonly annotations: Map<string, AnnotationRotationStart>
+  readonly measurementGuides: Map<string, MeasurementGuideRotationStart>
 }
 
 interface ZoneRotationStart {
@@ -40,15 +42,18 @@ interface AnnotationRotationStart {
   readonly rotationDeg: number
 }
 
+interface MeasurementGuideRotationStart {
+  readonly start: ScenePoint
+  readonly end: ScenePoint
+}
+
 export function isRotatableSelection(selection: CanvasDesignObjectSelectionModel): selection is CanvasDesignObjectSelectionModel & {
   readonly bounds: SceneBounds
   readonly editableTargets: readonly RotatableTarget[]
 } {
   if (!selection.bounds || selection.blockedTargets.length > 0 || selection.editableTargets.length === 0) return false
-  if (selection.editableTargets.some((target) => target.kind === 'measurement-guide')) return false
-  if (selection.editableTargets.length > 1) return true
-  const target = selection.editableTargets[0]!
-  return target.kind === 'zone' || target.kind === 'annotation' || target.kind === 'group'
+  // A lone plant has nothing to turn: its symbol stays upright (ADR 0019).
+  return selection.editableTargets.length > 1 || selection.editableTargets[0]!.kind !== 'plant'
 }
 
 export function captureRotationTransformState(
@@ -62,6 +67,7 @@ export function captureRotationTransformState(
     state.plants.size === 0
     && state.zones.size === 0
     && state.annotations.size === 0
+    && state.measurementGuides.size === 0
   ) {
     return null
   }
@@ -73,6 +79,7 @@ function createRotationTransformState(): RotationTransformState {
     plants: new Map(),
     zones: new Map(),
     annotations: new Map(),
+    measurementGuides: new Map(),
   }
 }
 
@@ -85,6 +92,11 @@ function captureTopLevelTarget(
     const group = scene.groups.find((entry) => entry.id === target.id)
     if (!group) return
     for (const member of resolveSceneObjectGroupMembers(scene, group)) captureMemberTarget(scene, state, member)
+    return
+  }
+  if (target.kind === 'measurement-guide') {
+    const guide = scene.measurementGuides.find((entry) => entry.id === target.id)
+    if (guide) state.measurementGuides.set(guide.id, { start: { ...guide.start }, end: { ...guide.end } })
     return
   }
   captureMemberTarget(scene, state, target)
@@ -165,6 +177,15 @@ export function applyRotationTransformToDraft(
     return rotateZone(zone, start, pivot, deltaDeg)
   })
 
+  draft.measurementGuides = draft.measurementGuides.map((guide) => {
+    const start = state.measurementGuides.get(guide.id)
+    if (!start) return guide
+    return {
+      ...guide,
+      start: rotateByDegrees(start.start, pivot, deltaDeg),
+      end: rotateByDegrees(start.end, pivot, deltaDeg),
+    }
+  })
 }
 
 /**

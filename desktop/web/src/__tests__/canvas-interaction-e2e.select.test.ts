@@ -952,7 +952,7 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('shows a Rotation Handle for one eligible rotatable selection but not for a Placed Plant', () => {
+  it('shows a Rotation Handle for a Zone or a Measurement Guide (canopi-xjym) but not for a lone Placed Plant', () => {
     store.updatePersisted((draft) => {
       draft.zones = [makeRectZone('zone-1', [
         { x: 20, y: 40 },
@@ -984,12 +984,12 @@ describe('SceneInteractionSession', () => {
     deps.setSelection([measurementGuideTarget('measurement-guide-1')])
     session.refreshMeasurements()
 
-    expect(rotationHandle(container)).toBeNull()
+    expect(rotationHandle(container)).not.toBeNull()
 
     deps.setSelection([plantTarget('plant-1'), measurementGuideTarget('measurement-guide-1')])
     session.refreshMeasurements()
 
-    expect(rotationHandle(container)).toBeNull()
+    expect(rotationHandle(container)).not.toBeNull()
     session.dispose()
   })
 
@@ -4734,15 +4734,13 @@ describe('SceneInteractionSession', () => {
       const session = createTestSession(deps)
       session.setTool('select')
       session.refreshMeasurements()
-      // A zone turns, so its rotation handle shows once the selection is settled; a guide does not.
-      const settledRotationHandle = kind === 'Zone'
       const handle = kind === 'Zone'
         ? zoneControlPoint(container, 'rect-corner', 0)!
         : measurementGuideControlPoint(container, 1)!
       const start = kind === 'Zone'
         ? zoneControlPointCenter(container, 'rect-corner', 0)
         : measurementGuideControlPointCenter(container, 1)
-      expect(rotationHandle(container) !== null).toBe(settledRotationHandle)
+      expect(rotationHandle(container)).not.toBeNull()
 
       events.pointerDown(start, { pointerId: 22, target: handle })
       events.pointerMove({ x: 90, y: 70 }, { pointerId: 22 })
@@ -4756,7 +4754,7 @@ describe('SceneInteractionSession', () => {
 
       expect(errors).toHaveLength(1)
       expect(errors[0]).toEqual(expect.objectContaining({ message: `${kind} cancellation render failed` }))
-      expect(rotationHandle(container) !== null).toBe(settledRotationHandle)
+      expect(rotationHandle(container)).not.toBeNull()
       session.dispose()
     },
   )
@@ -4794,9 +4792,7 @@ describe('SceneInteractionSession', () => {
       session.setTool('select')
       session.refreshMeasurements()
       const persistedBefore = store.persisted
-      // A zone turns, so its rotation handle shows once the selection is settled; a guide does not.
-      const settledRotationHandle = kind !== 'Measurement Guide Control Point'
-      expect(rotationHandle(container) !== null).toBe(settledRotationHandle)
+      expect(rotationHandle(container)).not.toBeNull()
 
       let handle: HTMLElement
       let start: ScenePoint
@@ -4827,7 +4823,7 @@ describe('SceneInteractionSession', () => {
       expect(errors[0]).toEqual(expect.objectContaining({ message: `${kind} commit failed` }))
       expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
       expect(store.persisted).toEqual(persistedBefore)
-      expect(rotationHandle(container) !== null).toBe(settledRotationHandle)
+      expect(rotationHandle(container)).not.toBeNull()
       // No handle is left marked as dragged, and the rotation handle has its resting cursor again.
       expect(container.querySelector('[data-canvas-handle-active]')).toBeNull()
       if (kind === 'Rotation Handle') expect(rotationHandle(container)?.style.cursor).toBe('grab')

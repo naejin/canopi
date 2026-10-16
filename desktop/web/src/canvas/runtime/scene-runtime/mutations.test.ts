@@ -738,6 +738,31 @@ describe('scene runtime mutation controller', () => {
     expect(sceneStore.persisted.zones[0]!.rotationDeg).toBeCloseTo(330)
   })
 
+  it('turns a measurement guide\'s ends with the rest of the selection (canopi-xjym)', () => {
+    const file = makeFile()
+    file.measurement_guides = [{ id: 'guide-1', start: geoAt(0, 0), end: geoAt(4, 0), locked: false }]
+    const { controller, sceneStore, state } = createController(file)
+    sceneStore.setSelection([{ kind: 'measurement-guide', id: 'guide-1' }])
+    const { start, end } = sceneStore.persisted.measurementGuides[0]!
+    const centre = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
+
+    controller.rotateSelected(90)
+
+    // Clockwise on the map (the plane's y grows southward): a west-east guide turns north-south.
+    const turned = sceneStore.persisted.measurementGuides[0]!
+    expect(turned.start.x).toBeCloseTo(centre.x)
+    expect(turned.start.y).toBeCloseTo(centre.y - (end.x - start.x) / 2)
+    expect(turned.end.x).toBeCloseTo(centre.x)
+    expect(turned.end.y).toBeCloseTo(centre.y + (end.x - start.x) / 2)
+    expect(state.dirtyTypes).toEqual(['rotate-selected'])
+
+    sceneStore.setSelection([{ kind: 'measurement-guide', id: 'guide-1' }, { kind: 'plant', id: 'plant-1' }])
+    const plantBefore = { ...sceneStore.persisted.plants[0]!.position }
+    controller.rotateSelected(45)
+    expect(sceneStore.persisted.plants[0]!.position).not.toEqual(plantBefore)
+    expect(sceneStore.persisted.measurementGuides[0]!.start).not.toEqual(turned.start)
+  })
+
   it('never rotates locked objects, and ignores a zero or non-finite angle', () => {
     const file = makeFile()
     file.plants[1] = { ...file.plants[1]!, locked: true }
