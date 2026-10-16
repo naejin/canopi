@@ -2,16 +2,10 @@
 // from a new Design through place search, the plant catalog, a drawn zone, a download and a reload.
 import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
+import { collectPageProblems } from './page-problems'
 
 test('a deployed Web Edition creates, edits, downloads and keeps a Design', async ({ page }) => {
-  const problems: string[] = []
-  page.on('pageerror', (error) => problems.push(`page error: ${error.message}`))
-  page.on('console', (message) => {
-    if (message.type() === 'error') problems.push(`console error: ${message.text().slice(0, 300)}`)
-  })
-  page.on('response', (response) => {
-    if (response.status() >= 400) problems.push(`${response.status()} ${response.url()}`)
-  })
+  const problems = collectPageProblems(page)
 
   await page.goto('/', { waitUntil: 'networkidle' })
 
